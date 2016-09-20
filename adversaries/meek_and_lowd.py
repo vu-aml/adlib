@@ -5,6 +5,7 @@ from learners.learner import InitialPredictor
 from data_reader import operations
 from copy import deepcopy
 from itertools import filterfalse
+from math import sqrt
 
 '''Meek and Lowd IMAC.
 
@@ -56,6 +57,7 @@ class Adversary(AdversaryStrategy):
 		self.positive_instance = next((x for x in instances if x.get_label() == 1), None)
 		self.negative_instance = next((x for x in instances if x.get_label() == -1), None)
 
+  # This is a uniform adversarial cost function, should we add a weight parameter?
 	def feature_difference(self, y: FeatureVector, xa: FeatureVector) -> List:
 		y_array = y.get_csr_matrix()
 		xa_array = xa.get_csr_matrix()
@@ -94,3 +96,48 @@ class Adversary(AdversaryStrategy):
 
 			if operations.fv_equals(y, y_prev):
 				return Instance(1, y)
+
+  # W: list of search vectors of unit cost
+  # C_plus = initial lower bound on cost
+  # C_minus = initial upper bound on cost
+  def multi_line_search(self, W, cost_plus, cost_minus, instance, epsilon):
+		x_minus = self.negative_instance.get_feature_vector()
+    x_star = deepcopy(x_minus)
+    # x_a subset of positive instances
+    x_a = instance.get_feature_vector()
+    # Don't think I acutally need t
+    t = 0
+    while cost_minus / cost_plus > 1 + epsilon:
+      cost_t = math.sqrt(cost_plus * cost_minus)
+      is_negative_vertex_found = False
+      for e in W:
+        # looks like we're assuming that y and e have the same dimensions
+        if self.learn_model.predict(Instance(0, y + cost_t * e)) == -1:
+          x_star = y + cost_t * e
+          is_negative_vertex_found = True
+          # Prune all costs that result in positive prediction
+          for i in W:
+            if self.learn_model.predict(Instance(0, y + cost_t * i)) == 1:
+              # deleting from a list when you iterate through it may cause bugs
+              W.delete(i)
+          break
+      cost_next_plus = cost_plus
+      cost_next_minus = cost_minus
+    if is_negative_vertex_found:
+      cost_next_minus = cost_t
+    else:
+      cost_next_plus = cost_t
+    t += 1
+    return x_star
+
+  def convex_set_search(self, instance):
+    return None
+
+  # TODO: figure out if I need to implement these
+  # TODO: fix parameters
+  def find_continuous_weights(self, instances):
+    return None
+
+  # TODO: fix parameters
+  def find_continuous_IMAC(self, instances):
+    return None

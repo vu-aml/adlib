@@ -100,13 +100,11 @@ class Adversary(AdversaryStrategy):
   # W: list of search vectors of unit cost
   # C_plus = initial lower bound on cost
   # C_minus = initial upper bound on cost
-  def multi_line_search(self, W, cost_plus, cost_minus, instance, epsilon):
+  def multi_line_search(self, W, cost_plus, cost_minus, epsilon, instance):
 		x_minus = self.negative_instance.get_feature_vector()
     x_star = deepcopy(x_minus)
     # x_a subset of positive instances
     x_a = instance.get_feature_vector()
-    # Don't think I acutally need t
-    t = 0
     while cost_minus / cost_plus > 1 + epsilon:
       cost_t = math.sqrt(cost_plus * cost_minus)
       is_negative_vertex_found = False
@@ -127,12 +125,56 @@ class Adversary(AdversaryStrategy):
       cost_next_minus = cost_t
     else:
       cost_next_plus = cost_t
-    t += 1
     return x_star
 
-  def convex_set_search(self, instance):
-    return None
+  # I think the algorithm expects you to pass in a cost vector for each feature
+  # But in feature difference we assume a uniform adversarial cost function
+  # I'm not sure what value epsilon is supposed to be (or cost_min)
+  def convex_set_search(self, cost_vector, epsilon, cost_min, instance):
+    x_a = instance.get_feature_vector()
+    x_minus = self.negative_instance.get_feature_vector()
+    dimension = len(x_a)
+    cost_max =  feature_difference(x_minux, x_a);
+    search_set = set()
+    for i in range(dimension):
+      element = 1/(cost_vector[i]) * x_a[i] # Not sure about this
+      search_set.add(element)
+      search_set.add(-element)
+    return multi_line_search(search_set, cost_min, cost_max, epsilon, instance)
 
+  def k_step_multi_line_search(self, search_set, cost_min, cost_max, epsilon, k, instance):
+    x_a = instance.get_feature_vector()
+    x_star = self.negative_instance.get_feature_vector()
+    while cost_max / cost_min > 1 + epsilon:
+      e = search_set.pop() # pop removes an element which might not be what we want to do
+      temp_min_cost = cost_min
+      temp_max_cost = cost_max
+      for i in range(k):
+        temp_cost = math.sqrt(temp_min_cost * temp_max_cost)
+        query_result = self.learn_model.predict(Instance(0, x_a + temp_cost * e))
+        if query_result == 1:
+          temp_min_cost = temp_cost
+        else:
+          temp_max_cost = temp_cost
+          x_star = x_a + temp_cost * e
+      positive_directions = set()
+      for i in search_set: # we know i != e because e was removed
+        query_result = self.learn_model.predict(Instance(0, x_a + temp_min_cost * i))
+        if query_result == -1:
+          x_star = x_a + temp_min_cost * i
+          # Proon positive directions
+          for k in positive_directions:
+            search_set.remove(k)
+          break
+        else:
+          positive_directions.add(i)
+      cost_max = temp_max_cost
+      if len(positive_directions) > 0:
+        cost_min = temp_min_cost
+    return x_star
+
+
+    return None
   # TODO: figure out if I need to implement these
   # TODO: fix parameters
   def find_continuous_weights(self, instances):

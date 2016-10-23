@@ -11,6 +11,9 @@ class InitialPredictor(object):
 	around the underlying methods.
 
     """
+  # Static variables for positive/negative classiciation so we don't have to use hard coded values
+  positive_classification = 1
+  negative_classification = -1
 
 	def __init__(self):
 		"""New generic initial learner with no specified learning model.

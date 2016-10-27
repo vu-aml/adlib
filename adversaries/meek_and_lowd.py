@@ -10,51 +10,53 @@ from math import sqrt
 '''Meek and Lowd IMAC.
 
 Concept:
-	Given an ideal adversarial instance A and an instance classified as
-	non adversarial X, finds the feature set difference between A and X
-	and iteratively applies those features to A, rolling each change back
-	if it results in an adversarial classification under the learner's model.
+  Given an ideal adversarial instance A and an instance classified as
+  non adversarial X, finds the feature set difference between A and X
+  and iteratively applies those features to A, rolling each change back
+  if it results in an adversarial classification under the learner's model.
 '''
 
 class ReverseEngineerClassifier:
 
-
+  def __init__(self, adversary):
+    self.adversary = adversary
+  
   def execute(self):
     # Document
-		raise NotImplementedError
+    raise NotImplementedError
 
 class FindBooleanIMAC(ReverseEngineerClassifier):
 
   def execute(self, instance):
-		x_minus = self.negative_instance.get_feature_vector()
-		y = deepcopy(x_minus)
-		xa = instance.get_feature_vector()
-		while True:
-			y_prev = deepcopy(y)
-			C_y = self.feature_difference(y, xa)
+    x_minus = self.adversary.negative_instance.get_feature_vector()
+    y = deepcopy(x_minus)
+    xa = instance.get_feature_vector()
+    while True:
+      y_prev = deepcopy(y)
+      C_y = self.adversary.feature_difference(y, xa)
 
-			for index in C_y:
-				y.flip_bit(index)
-				if self.learn_model.predict(Instance(0,y)) == 1:
-					y.flip_bit(index)
+      for index in C_y:
+        y.flip_bit(index)
+        if self.adversary.learn_model.predict(Instance(0,y)) == 1:
+          y.flip_bit(index)
 
-			C_y = self.feature_difference(y, xa)
-			not_C_y = list(filterfalse(lambda x: x in C_y, range(0, y.feature_count)))
+      C_y = self.adversary.feature_difference(y, xa)
+      not_C_y = list(filterfalse(lambda x: x in C_y, range(0, y.feature_count)))
 
-			for index1 in C_y:
-				for index2 in C_y:
-					if index2 <= index1: continue
-					for index3 in not_C_y:
-						y.flip_bit(index1)
-						y.flip_bit(index2)
-						y.flip_bit(index3)
-						if self.learn_model.predict(Instance(0,y)) == 1:
-							y.flip_bit(index1)
-							y.flip_bit(index2)
-							y.flip_bit(index3)
+      for index1 in C_y:
+        for index2 in C_y:
+          if index2 <= index1: continue
+          for index3 in not_C_y:
+            y.flip_bit(index1)
+            y.flip_bit(index2)
+            y.flip_bit(index3)
+            if self.adversary.learn_model.predict(Instance(0,y)) == 1:
+              y.flip_bit(index1)
+              y.flip_bit(index2)
+              y.flip_bit(index3)
 
-			if operations.fv_equals(y, y_prev):
-				return Instance(1, y)
+      if operations.fv_equals(y, y_prev):
+        return Instance(1, y)
 
 class ConvexClassifierSearch:
 

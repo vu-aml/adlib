@@ -9,146 +9,155 @@ Some warning about pickle and opening unsafe files.
 
 
 class FeatureVector(object):
-	"""Feature vector data structure.
+  """Feature vector data structure.
 
-	Contains sparse representation of boolean features.
-	Defines basic methods for manipulation and data format changes.
+  Contains sparse representation of boolean features.
+  Defines basic methods for manipulation and data format changes.
 
     """
 
-	def __init__(self, num_features: int, feature_indices: List[int]):
-		"""Create a feature vector given a set of known features.
+  def __init__(self, num_features: int, feature_indices: List[int]):
+  	"""Create a feature vector given a set of known features.
 
-		Args:
-		    num_features (int): Total number of features.
-		    feature_indices (List[int]): Indices of each feature present in instance.
-
-        """
-		self.indptr = [0, len(feature_indices)]  # type: List[int]
-		self.feature_count = num_features        # type: int
-		self.data = [1] * len(feature_indices)   # type: List[int]
-		self.indices = feature_indices           # type: List[int]
-
-	def get_feature_count(self):
-		"""Return static number of features.
+  	Args:
+  	    num_features (int): Total number of features.
+  	    feature_indices (List[int]): Indices of each feature present in instance.
 
         """
-		return self.feature_count
+  	self.indptr = [0, len(feature_indices)]  # type: List[int]
+  	self.feature_count = num_features        # type: int
+  	self.data = [1] * len(feature_indices)   # type: List[int]
+  	self.indices = feature_indices           # type: List[int]
 
-	def get_feature(self, index: int) -> int:
-		"""Return value of feature at index
+  def __iter__(self):
+    return iter(self.indices)
+
+  def __len__(self):
+    return len(self.indices)
+
+  def __getitem__(self, key):
+    return self.indices[key]
+
+  def get_feature_count(self):
+  	"""Return static number of features.
+
+        """
+  	return self.feature_count
+
+  def get_feature(self, index: int) -> int:
+    """Return value of feature at index
 
         Args:
             index (int): Feature index.
 
-        """
-		if index in self.indices:
-			return 1
-		else:
-			return 0
+    """
+    if index in self.indices:
+      return 1
+    else:
+      return 0
 
-	def add_feature(self, index, feature):
-		"""Add feature at given index.
+  def add_feature(self, index, feature):
+    """Add feature at given index.
 
-		Switches the current value at the index to the specified value.
+    Switches the current value at the index to the specified value.
 
         Args:
             index (int): Index of feature update.
             feature (int): Boolean, (0/1)
 
-        """
-		if feature == 0:
-			self.feature_count += 1
-			if index in self.indices:
-				self.indices.remove(index)
-			return
-		if feature == 1:
-			if index in self.indices:
-				return
-			self.indices.append(index)
-			self.indices.sort()
-			self.feature_count += 1
-			return
+    """
+    if feature == 0:
+      self.feature_count += 1
+      if index in self.indices:
+        self.indices.remove(index)
+      return
+    if feature == 1:
+      if index in self.indices:
+        return
+      self.indices.append(index)
+      self.indices.sort()
+      self.feature_count += 1
+    return
 
-	def remove_feature(self, index):
-		"""Remove feature at given index.
+  def remove_feature(self, index):
+    """Remove feature at given index.
 
-		If the feature at [index] is 0, no action is taken.
+    If the feature at [index] is 0, no action is taken.
 
         Args:
             index (int): Index of feature to remove.
 
         """
-		if index not in self.indices:
-			self.feature_count -= 1
-		else:
-			self.indices.remove(index)
-			self.feature_count -= 1
+    if index not in self.indices:
+      self.feature_count -= 1
+    else:
+      self.indices.remove(index)
+      self.feature_count -= 1
 
-	def flip_bit(self, index):
-		"""Flip feature at given index.
+  def flip_bit(self, index):
+    """Flip feature at given index.
 
-		Switches the current value at the index to the opposite value.
-		{0 --> 1, 1 --> 0}
+    Switches the current value at the index to the opposite value.
+    {0 --> 1, 1 --> 0}
 
-        Args:
-            index (int): Index of feature update.
+    Args:
+      index (int): Index of feature update.
+
+    """
+    if index in self.indices:
+      self.indices.remove(index)
+    else:
+      self.indices.append(index)
+      self.indices.sort()
+
+  def get_csr_matrix(self) -> csr_matrix:
+    """Return feature vector represented by sparse matrix.
 
         """
-		if index in self.indices:
-			self.indices.remove(index)
-		else:
-			self.indices.append(index)
-			self.indices.sort()
-
-	def get_csr_matrix(self) -> csr_matrix:
-		"""Return feature vector represented by sparse matrix.
-
-        """
-		data = [1] * len(self.indices)
-		indices = self.indices
-		indptr = [0, len(self.indices)]
-		return csr_matrix((data, indices, indptr), shape=(1, self.feature_count))
+    data = [1] * len(self.indices)
+    indices = self.indices
+    indptr = [0, len(self.indices)]
+    return csr_matrix((data, indices, indptr), shape=(1, self.feature_count))
 
 
 class Instance(object):
-	"""Instance data structure.
+  """Instance data structure.
 
-	Container for feature vector and mapped label.
+  Container for feature vector and mapped label.
 
-    """
+  """
 
-	def __init__(self, label: int, feature_vector: FeatureVector):
-		"""Create an instance from an existing feature vector.
+  def __init__(self, label: int, feature_vector: FeatureVector):
+  	"""Create an instance from an existing feature vector.
 
-		Args:
-		    label (int): Classification (-1/1).
-		    feature_vector (FeatureVector): Underlying sparse feature representation.
-
-        """
-		self.label = label                    # type: int
-		self.feature_vector = feature_vector  # type: FeatureVector
-
-	def get_label(self):
-		"""Return current classification label.
+  	Args:
+  	    label (int): Classification (-1/1).
+  	    feature_vector (FeatureVector): Underlying sparse feature representation.
 
         """
-		return self.label
+  	self.label = label                    # type: int
+  	self.feature_vector = feature_vector  # type: FeatureVector
 
-	def set_label(self, val):
-		"""Set classification to new value.
-
-		Args:
-		    val (int): New classification label.
+  def get_label(self):
+  	"""Return current classification label.
 
         """
-		self.label = val
+  	return self.label
 
-	def get_feature_vector(self) -> FeatureVector:
-		"""Return underlying feature vector.
+  def set_label(self, val):
+  	"""Set classification to new value.
+
+  	Args:
+  	    val (int): New classification label.
 
         """
-		return self.feature_vector
+  	self.label = val
+
+  def get_feature_vector(self) -> FeatureVector:
+  	"""Return underlying feature vector.
+
+        """
+  	return self.feature_vector
 
 
 def load_instances(data: List) -> List[Instance]:

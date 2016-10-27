@@ -87,16 +87,19 @@ class Adversary(AdversaryStrategy):
 
       prev_message = deepcopy(curr_message)
       word_removed = False
-      for index in range(len(curr_message)):
+      for index in curr_message:
         # if the word occurs in curr_message but not in spam_message
-        if curr_message[index] == 1 and spam_message[index] == 0:
+        #if curr_message[index] == 1 and spam_message[index] == 0:
+        if index in curr_message and index not in spam_message:
           # remove word from curr_message
           curr_message.flip_bit(index)
           word_removed = True
           break
       if not word_removed:
-        for index in range(len(spam_message)):
-          if curr_message[index] == 0 and spam_message[index] == 1:
+        #for index in range(len(spam_message)):
+        for index in spam_message:
+          #if curr_message[index] == 0 and spam_message[index] == 1:
+          if index not in curr_message and index in spam_message:
             curr_message.flip_bit(index)
     return (curr_message, prev_message)
 
@@ -106,6 +109,9 @@ class Adversary(AdversaryStrategy):
     barely_spam_message, barely_legit_message = self.find_witness()
     # use the feature vector of the negative instance just to iterate over all the indices in a
     # feature vector, the actual values do not matter
+
+    # this doesn't iterate over all possible features because of the current feature vector
+    # implementation
     for index in self.get_all_word_indices():
       if spam_message[index] == 0:
         spam_message.flip_bit(index)

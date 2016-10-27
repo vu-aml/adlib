@@ -133,7 +133,6 @@ class Adversary(AdversaryStrategy):
         positive_weight_word_indices = self.build_word_set(legit_message, InitialPredictor.positive_classification)
         negative_weight_word_indices = self.build_word_set(spam_message, InitialPredictor.negative_classification)
         best_n_word_indices = set()
->>>>>>> 0861b4c... finish good word
         iterations_without_change = 0
         max_iterations_without_change = 10
         for spammy_word_index in positive_weight_word_indices:

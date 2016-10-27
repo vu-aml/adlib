@@ -29,9 +29,12 @@ def create_data():
 def create_new_environment():
   learning_model = svm.SVC(probability=True, kernel='linear')
   test_env = adversarial_environment.Environment('100_instance_debug')
+  #test_env.create('meek_and_lowd', learning_model, name='demo', save_state=True)
   test_env.create('good_word', learning_model, name='demo', save_state=True)
   return test_env
 
+# Battle(attack, impr_learner)
+# k
 
 def load_environment():
   test_env = adversarial_environment.Environment('100_instance_debug')
@@ -45,14 +48,19 @@ def set_params(test_env):
   # every adversary returns something different for get_available_params
   #params['lambda_val'] = -99
   params['n'] = 200
+  #params['attack_model_type'] = 'multi_line_search'
   test_env.set_params(adversarial_environment.Environment.ADVERSARY, params)
 
 
 def adversarial_moves(test_env):
   test_env.train_learner()
+  print('trained learner')
   test_env.adversary_react(output_transformed_data=True)
+  print('adversary react')
   test_env.improve_learner()
+  print('improved learner')
   test_env.test_learner(adversarial_environment.Environment.IMPROVED_LEARNER, output_predictions=True)
+  print('tested learner')
 
 
 def main(argv):

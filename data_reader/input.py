@@ -29,6 +29,9 @@ class FeatureVector(object):
         self.data = [1] * len(feature_indices)     # type: List[int]
         self.indices = feature_indices                     # type: List[int]
 
+    def copy(self, feature_vector):
+        return FeatureVector(feature_vector.feature_count, feature_vector.indices)
+
     def __iter__(self):
         return iter(self.indices)
     

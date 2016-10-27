@@ -39,10 +39,11 @@ class FeatureVector(object):
     return self.indices[key]
 
   def get_feature_count(self):
-  	"""Return static number of features.
+    """Return static number of features.
 
         """
-  	return self.feature_count
+    #return self.feature_count
+    return len(self.indices)
 
   def get_feature(self, index: int) -> int:
     """Return value of feature at index
@@ -50,11 +51,12 @@ class FeatureVector(object):
         Args:
             index (int): Feature index.
 
-    """
-    if index in self.indices:
-      return 1
-    else:
-      return 0
+        """
+    #if index in self.indices:
+    #  return 1
+    #else:
+    #  return 0
+    return self.indices[index]
 
   def add_feature(self, index, feature):
     """Add feature at given index.
@@ -65,19 +67,20 @@ class FeatureVector(object):
             index (int): Index of feature update.
             feature (int): Boolean, (0/1)
 
-    """
-    if feature == 0:
-      self.feature_count += 1
-      if index in self.indices:
-        self.indices.remove(index)
-      return
-    if feature == 1:
-      if index in self.indices:
-        return
-      self.indices.append(index)
-      self.indices.sort()
-      self.feature_count += 1
-    return
+        """
+    #if feature == 0:
+    #  self.feature_count += 1
+    #  if index in self.indices:
+    #    self.indices.remove(index)
+    #  return
+    #if feature == 1:
+    #  if index in self.indices:
+    #    return
+    #  self.indices.append(index)
+    #  self.indices.sort()
+    #  self.feature_count += 1
+    #  return
+    self.indices[index] = feature
 
   def remove_feature(self, index):
     """Remove feature at given index.
@@ -88,11 +91,12 @@ class FeatureVector(object):
             index (int): Index of feature to remove.
 
         """
-    if index not in self.indices:
-      self.feature_count -= 1
-    else:
-      self.indices.remove(index)
-      self.feature_count -= 1
+    #if index not in self.indices:
+    #  self.feature_count -= 1
+    #else:
+    #  self.indices.remove(index)
+    #  self.feature_count -= 1
+    self.indices[index] = 0
 
   def flip_bit(self, index):
     """Flip feature at given index.
@@ -103,12 +107,13 @@ class FeatureVector(object):
     Args:
       index (int): Index of feature update.
 
-    """
-    if index in self.indices:
-      self.indices.remove(index)
-    else:
-      self.indices.append(index)
-      self.indices.sort()
+        """
+    #if index in self.indices:
+    #  self.indices.remove(index)
+    #else:
+    #  self.indices.append(index)
+    #  self.indices.sort()
+    self.indices[index] = 1 if self.indices[index] == 0 else 0
 
   def get_csr_matrix(self) -> csr_matrix:
     """Return feature vector represented by sparse matrix.
@@ -161,82 +166,82 @@ class Instance(object):
 
 
 def load_instances(data: List) -> List[Instance]:
-	"""Load data from a specified file.
+  """Load data from a specified file.
 
-	Args:
-	    data (List[str]):
+  Args:
+      data (List[str]):
 
-	        data[0]: Data set name.
-	        data[1]: Category path (train or test).
+          data[0]: Data set name.
+          data[1]: Category path (train or test).
 
-	Returns:
-	    instances as List[Instance]
+  Returns:
+      instances as List[Instance]
 
     """
-	path = './data_reader/data/' + data[1] + '/' + data[0]
+  path = './data_reader/data/' + data[1] + '/' + data[0]
 
-	instances = []
-	max_index = 0
-	try:
-		with open(path, 'r') as infile:
-			for line in infile:
-				line = line.replace(',', '')
-				instance_data = line.split(' ')
-				if '\n' in instance_data[0]:
-					break
-				label = int(float(instance_data[0].strip(':')))
-				index_list = []
-				for feature in instance_data[1:]:
-					if feature == '\n':
-						continue
-					index_list.append(int(feature))
-				if index_list[-1] > max_index:
-					max_index = index_list[-1]
-				instances.append((label, index_list))
+  instances = []
+  max_index = 0
+  try:
+    with open(path, 'r') as infile:
+      for line in infile:
+        line = line.replace(',', '')
+        instance_data = line.split(' ')
+        if '\n' in instance_data[0]:
+          break
+        label = int(float(instance_data[0].strip(':')))
+        index_list = []
+        for feature in instance_data[1:]:
+          if feature == '\n':
+            continue
+          index_list.append(int(feature))
+        if index_list[-1] > max_index:
+          max_index = index_list[-1]
+        instances.append((label, index_list))
 
-	except FileNotFoundError:
-		return None
+  except FileNotFoundError:
+    return None
 
-	num_indices = max_index + 1
+  num_indices = max_index + 1
 
-	created_instances = []
-	for instance in instances:
-		feature_vector = FeatureVector(num_indices, instance[1])
-		created_instances.append(Instance(instance[0], feature_vector))
+  created_instances = []
+  for instance in instances:
+    feature_vector = FeatureVector(num_indices, instance[1])
+    created_instances.append(Instance(instance[0], feature_vector))
 
-	return created_instances
+  return created_instances
 
 
 # def open_transformed_instances(battle_name: str, data: str) -> List[Instance]:
-# 	path = './data_reader/data/transformed/' + data + '.' + battle_name
-# 	with open(path, 'r') as infile:
-# 		instances = json.load(infile)
-# 	return instances
+#   path = './data_reader/data/transformed/' + data + '.' + battle_name
+#   with open(path, 'r') as infile:
+#     instances = json.load(infile)
+#   return instances
 
 
 def open_battle(battle_name: str):
-	"""Load in saved battle.
+  """Load in saved battle.
 
-	Args:
-	    battle_name (str): User-specified name of battle.
+  Args:
+      battle_name (str): User-specified name of battle.
 
     """
-	path = './data_reader/data/battles/' + battle_name
-	with open(path, 'rb') as infile:
-		battle = pickle.load(infile)
-	return battle
+  path = './data_reader/data/battles/' + battle_name
+  with open(path, 'rb') as infile:
+    battle = pickle.load(infile)
+  return battle
 
 
 def open_predictions(battle_name: str, data: str) -> List:
-	"""Load Learner predictions.
+  """Load Learner predictions.
 
-	Args:
-	    battle_name (str): User-specified name of battle.
-	    data (str): dataset used to generate predictions.
+  Args:
+      battle_name (str): User-specified name of battle.
+      data (str): dataset used to generate predictions.
 
     """
-	path = './data_reader/data/predictions/' + data + '.' + battle_name
-	with open(path, 'r') as infile:
-		predictions = json.load(infile)
-	return predictions
+  path = './data_reader/data/predictions/' + data + '.' + battle_name
+  with open(path, 'r') as infile:
+    predictions = json.load(infile)
+  return predictions
 

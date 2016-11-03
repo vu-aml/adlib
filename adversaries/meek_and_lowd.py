@@ -20,7 +20,7 @@ class ReverseEngineerClassifier:
 
   def __init__(self, adversary):
     self.adversary = adversary
-  
+
   def execute(self):
     # Document
     raise NotImplementedError
@@ -183,7 +183,7 @@ class Adversary(AdversaryStrategy):
     self.learn_model = None        # type: InitialPredictor
     self.positive_instance = None  # type: Instance
     self.negative_instance = None  # type: Instance
-    self.adversary_costs = None  # type: Array 
+    self.adversary_costs = None  # type: Array
     self.epsilon = None  # type: Double?
     self.cost_min = None  # type: Double?
     self.k = None  # type: integer
@@ -223,19 +223,19 @@ class Adversary(AdversaryStrategy):
   def set_params(self, params: Dict):
     if params['attack_model_type'] is not None:
       self.attack_model_type = params['attack_model_type']
-    
+
     if params['adversary_costs'] is not None:
       self.adversary_costs = params['adversary_costs']
 
     if params['epsilon'] is not None:
       self.epsilon = params['epsilon']
-    
+
     if params['cost_min'] is not None:
       self.cost_min = params['cost_min']
-    
+
     if params['k'] is not None:
       self.k = params['k']
-    
+
     return None
 
   def feature_difference(self, y: FeatureVector, xa: FeatureVector) -> List:

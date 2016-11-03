@@ -307,7 +307,6 @@ class Environment(object):
         to filesystem.
   
     """
-    import pdb; pdb.set_trace()
     adversary_instances = self.battle.stage_2(self.train_instances, self.test_instances)
     self.transformed_instances = adversary_instances
   
@@ -349,6 +348,5 @@ class Environment(object):
         self.transformed_instances = input.load_instances([self.data+self.name, 'transformed'])
   
       predictions = self.battle.get_improved_learner().predict(self.transformed_instances)
-  
     if output_predictions:
       output.save_predictions(self.name, self.data, predictions)

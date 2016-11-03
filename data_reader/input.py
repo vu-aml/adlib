@@ -38,6 +38,9 @@ class FeatureVector(object):
     def __getitem__(self, key):
         return self.indices[key]
     
+    def __len__(self):
+      return len(self.indices)
+
     def get_feature_count(self):
         """Return static number of features.
 

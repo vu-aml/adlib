@@ -61,6 +61,10 @@ class Adversary(AdversaryStrategy):
             (x for x in instances if x.get_label() == InitialPredictor.negative_classification),
             None
         )
+        self.feature_space = set()
+        for instance in train_instances:
+          self.feature_space.update(instance.get_feature_vector())
+        import pdb; pdb.set_trace()
 
     # This is a uniform adversarial cost function, should we add a weight parameter?
     def feature_difference(self, y: FeatureVector, xa: FeatureVector) -> List:
@@ -112,16 +116,16 @@ class Adversary(AdversaryStrategy):
 
         # this doesn't iterate over all possible features because of the current feature vector
         # implementation
-        for index in self.positive_instance.get_feature_vector():
-            if spam_message.get_feature(index) == 0:
-                spam_message.flip_bit(index)
+        for feature in self.feature_space:
+            if spam_message.get_feature(feature) == 0:
+                spam_message.flip_bit(feature)
                 prediction_result = self.learn_model.predict(Instance(0, spam_message))
                 if prediction_result == InitialPredictor.negative_classification:
-                    negative_weight_word_indices.add(index)
-                if negative_instance.size() == self.n:
+                    negative_weight_word_indices.add(feature)
+                if len(self.negative_instance.get_feature_vector()) == self.n:
                     return negative_weight_word_indices
                 # remove word from message so spam_message stays the same for each iteration
-                spam_message.flip_bit(index)
+                spam_message.flip_bit(feature)
         return negative_weight_word_indices
 
     def best_n_words(self, spam_message, legit_message):
@@ -158,7 +162,7 @@ class Adversary(AdversaryStrategy):
 
     def build_word_set(self, message, intended_classification, indices_to_check = None):
         # if no specific indices are passed in, defaults to checking every index
-        indices_to_check = indices_to_check or self.get_all_word_indices()
+        indices_to_check = indices_to_check or self.feature_space
         result = set()
         for index in indices_to_check:
             if message.get_feature(index) == 0:
@@ -168,6 +172,3 @@ class Adversary(AdversaryStrategy):
                     result.add(index)
                 message.flip_bit(index)
         return result
-
-    def get_all_word_indices(self):
-        return range(len(self.negative_instance.get_feature_vector()))

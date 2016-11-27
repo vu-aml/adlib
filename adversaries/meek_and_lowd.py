@@ -25,34 +25,23 @@ class ReverseEngineerClassifier:
         # Document
         raise NotImplementedError
 
-    def get_feature_cost(self, cost_vector, index):
-        if cost_vector and index in cost_vector:
-            return cost_vector[index]
-        return 1
-
-    def get_feature_vector_cost(self, feature_vector, goal_vector, cost_vector):
-        feature_difference = self.adversary.feature_difference(feature_vector, goal_vector)
-        sum = 0
-        for index in feature_difference:
-            sum += index * self.get_feature_cost(cost_vector, index) 
-        return sum
-
 class FindBooleanIMAC(ReverseEngineerClassifier):
 
     def execute(self, instance):
         x_minus = self.adversary.negative_instance.get_feature_vector()
         y = deepcopy(x_minus)
+        # assume that instance is the target instance
         xa = instance.get_feature_vector()
         while True:
             y_prev = deepcopy(y)
-            C_y = self.adversary.feature_difference(y, xa)
+            C_y = y.feature_difference(xa)
 
             for index in C_y:
                 y.flip_bit(index)
                 if self.adversary.learn_model.predict(Instance(0,y)) == 1:
                     y.flip_bit(index)
 
-            C_y = self.adversary.feature_difference(y, xa)
+            C_y = y.feature_difference(xa)
             not_C_y = list(filterfalse(lambda x: x in C_y, range(0, y.feature_count)))
             # in testing, this iterates through over 2 mill combinations and is very slow 
             for index1 in C_y:
@@ -73,18 +62,19 @@ class FindBooleanIMAC(ReverseEngineerClassifier):
 class MultiLineSearch(ReverseEngineerClassifier):
 
     def execute(self, instance):
-        search_set, cost_min, cost_max, epsilon, instance = self.convex_set_search(
+        search_set, cost_max = self.convex_set_search(
             self.adversary.cost_vector,
-            self.adversary.epsilon,
-            self.adversary.cost_min,
             instance
         )
-        search_set, cost_min, cost_max = self.spiral_search(search_set, cost_max, instance)
-        return self.multi_line_search(search_set, cost_min, cost_max, epsilon, instance)
+        # use spiral search to generate narrower bounds and prune search set
+        #search_set, cost_min, cost_max = self.spiral_search(search_set, cost_max, instance)
+        cost_min = 1
+        return self.multi_line_search(search_set, cost_min, cost_max, self.adversary.epsilon, instance)
 
     # W: list of search vectors of unit cost
     # C_plus = initial lower bound on cost
     # C_minus = initial upper bound on cost
+    # x_a is the ideal minimum cost instance
     def multi_line_search(self, W, cost_plus, cost_minus, epsilon, instance):
         x_minus = self.adversary.negative_instance.get_feature_vector()
         x_star = deepcopy(x_minus)
@@ -93,24 +83,29 @@ class MultiLineSearch(ReverseEngineerClassifier):
         while cost_minus / cost_plus > 1 + epsilon:
             cost_t = sqrt(cost_plus * cost_minus)
             negative_vertex_found = False
+            print('min cost', cost_plus, 'max cost', cost_minus, 'ratio: ', cost_minus / cost_plus)
             for e in W:
                 # looks like we're assuming that y and e have the same dimensions
                 # TODO: incorporate cost_t
                 new_feature_vector = FeatureVector(x_a.feature_count, x_a.indices)
                 new_feature_vector.flip_bit(e)
-                if self.adversary.learn_model.predict(Instance(0, new_feature_vector)) == -1:
+                query_result = self.adversary.learn_model.predict(Instance(0, new_feature_vector))
+                print('changed feature: %s, classified as: %s' % (e, query_result))
+                if query_result == InitialPredictor.negative_classification:
                     x_star = new_feature_vector
                     negative_vertex_found = True
                     # Prune all costs that result in positive prediction
+                    new_W = set(W)
                     for i in W:
                         tmp_feature_vector = FeatureVector(x_star.feature_count, x_star.indices)
                         tmp_feature_vector.flip_bit(i)
                         if self.adversary.learn_model.predict(Instance(0, tmp_feature_vector)) == 1:
                             # deleting from a list when you iterate through it may cause bugs
-                            W.delete(i)
+                            new_W.remove(i)
                     break
             cost_next_plus = cost_plus
             cost_next_minus = cost_minus
+            W = new_W
         if negative_vertex_found:
             cost_next_minus = cost_t
         else:
@@ -120,18 +115,18 @@ class MultiLineSearch(ReverseEngineerClassifier):
     # I think the algorithm expects you to pass in a cost vector for each feature
     # But in feature difference we assume a uniform adversarial cost function
     # I'm not sure what value epsilon is supposed to be (or cost_min)
-    def convex_set_search(self, cost_vector, epsilon, cost_min, instance):
+    def convex_set_search(self, cost_vector, instance):
         x_a = instance.get_feature_vector()
         x_minus = self.adversary.negative_instance.get_feature_vector()
         dimension = len(x_a)
-        cost_max = self.get_feature_vector_cost(x_minus, x_a, cost_vector);
+        cost_max = self.adversary.negative_instance.get_feature_vector_cost(x_a, cost_vector);
         search_set = set()
         for i in range(dimension):
             # TODO: x_a[i] is wrong, its actually [0,0,0,..,1,..,0] where 1 is the ith feature
-            element = 1/(self.get_feature_cost(cost_vector, i)) * x_a[i] # Not sure about this
+            element = 1/(instance.get_feature_cost(cost_vector, i)) * x_a[i] # Not sure about this
             search_set.add(element)
             search_set.add(-element)
-        return (search_set, cost_min, cost_max, epsilon, instance)
+        return (search_set, cost_max)
 
     # search_set: set()
     # cost_max: int
@@ -263,14 +258,6 @@ class Adversary(AdversaryStrategy):
             self.cost_vector = params['cost_vector']
         
         return None
-
-    def feature_difference(self, y: FeatureVector, xa: FeatureVector) -> List:
-        y_array = y.get_csr_matrix()
-        xa_array = xa.get_csr_matrix()
-
-        C_y = (y_array - xa_array).indices
-
-        return C_y
 
     def set_adversarial_params(self, learner, train_instances):
         self.learn_model = learner

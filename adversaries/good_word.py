@@ -64,7 +64,6 @@ class Adversary(AdversaryStrategy):
         self.feature_space = set()
         for instance in train_instances:
           self.feature_space.update(instance.get_feature_vector())
-        import pdb; pdb.set_trace()
 
     # This is a uniform adversarial cost function, should we add a weight parameter?
     def feature_difference(self, y: FeatureVector, xa: FeatureVector) -> List:

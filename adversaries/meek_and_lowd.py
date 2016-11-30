@@ -83,33 +83,29 @@ class MultiLineSearch(ReverseEngineerClassifier):
         while cost_minus / cost_plus > 1 + epsilon:
             cost_t = sqrt(cost_plus * cost_minus)
             negative_vertex_found = False
-            print('min cost', cost_plus, 'max cost', cost_minus, 'ratio: ', cost_minus / cost_plus)
+            positive_vertices = set()
+            #print('min cost', cost_plus, 'max cost', cost_minus, 'ratio: ', cost_minus / cost_plus)
             for e in W:
                 # looks like we're assuming that y and e have the same dimensions
                 # TODO: incorporate cost_t
                 new_feature_vector = FeatureVector(x_a.feature_count, x_a.indices)
                 new_feature_vector.flip_bit(e)
                 query_result = self.adversary.learn_model.predict(Instance(0, new_feature_vector))
-                print('changed feature: %s, classified as: %s' % (e, query_result))
+                #print('changed feature: %s, classified as: %s' % (e, query_result))
                 if query_result == InitialPredictor.negative_classification:
                     x_star = new_feature_vector
                     negative_vertex_found = True
                     # Prune all costs that result in positive prediction
-                    new_W = set(W)
-                    for i in W:
-                        tmp_feature_vector = FeatureVector(x_star.feature_count, x_star.indices)
-                        tmp_feature_vector.flip_bit(i)
-                        if self.adversary.learn_model.predict(Instance(0, tmp_feature_vector)) == 1:
-                            # deleting from a list when you iterate through it may cause bugs
-                            new_W.remove(i)
+                    new_W = W - positive_vertices
+                    positive_vertices.clear()
                     break
-            cost_next_plus = cost_plus
-            cost_next_minus = cost_minus
+                else:
+                    positive_vertices.add(e)
             W = new_W
-        if negative_vertex_found:
-            cost_next_minus = cost_t
-        else:
-            cost_next_plus = cost_t
+            if negative_vertex_found:
+                cost_minus = cost_t
+            else:
+                cost_plus = cost_t
         return Instance(1, x_star)
     
     # I think the algorithm expects you to pass in a cost vector for each feature
@@ -117,15 +113,13 @@ class MultiLineSearch(ReverseEngineerClassifier):
     # I'm not sure what value epsilon is supposed to be (or cost_min)
     def convex_set_search(self, cost_vector, instance):
         x_a = instance.get_feature_vector()
-        x_minus = self.adversary.negative_instance.get_feature_vector()
-        dimension = len(x_a)
+        dimension = x_a.feature_count
         cost_max = self.adversary.negative_instance.get_feature_vector_cost(x_a, cost_vector);
         search_set = set()
-        for i in range(dimension):
-            # TODO: x_a[i] is wrong, its actually [0,0,0,..,1,..,0] where 1 is the ith feature
-            element = 1/(instance.get_feature_cost(cost_vector, i)) * x_a[i] # Not sure about this
-            search_set.add(element)
-            search_set.add(-element)
+        for index in range(dimension):
+            #element = 1/(instance.get_feature_cost(cost_vector, i)) * index # Not sure about this
+            search_set.add(index)
+            #search_set.add(-element)
         return (search_set, cost_max)
 
     # search_set: set()
@@ -155,6 +149,7 @@ class MultiLineSearch(ReverseEngineerClassifier):
 
 class KStepMultiLineSearch(MultiLineSearch):
 
+    # should we handle case with infinite loop?
     def multi_line_search(self, search_set, cost_min, cost_max, epsilon, instance):
         x_a = instance.get_feature_vector()
         x_star = self.adversary.negative_instance.get_feature_vector()
@@ -166,27 +161,29 @@ class KStepMultiLineSearch(MultiLineSearch):
                 tmp_feature_vector = FeatureVector(x_a.feature_count, x_a.indices)
                 tmp_feature_vector.flip_bit(e)
                 temp_cost = sqrt(temp_min_cost * temp_max_cost)
+                # need to add in the cost somehow
                 query_result = self.adversary.learn_model.predict(Instance(0, tmp_feature_vector))
-                if query_result == 1:
+                if query_result == InitialPredictor.positive_classification:
                     temp_min_cost = temp_cost
                 else:
                     temp_max_cost = temp_cost
-                    x_star = x_a + temp_cost * e
+                    x_star.flip_bit(e)
             positive_directions = set()
+            negative_vertex_found = False
             for i in search_set: # we know i != e because e was removed
                 tmp_feature_vector = FeatureVector(x_a.feature_count, x_a.indices)
                 tmp_feature_vector.flip_bit(i)
                 query_result = self.adversary.learn_model.predict(Instance(0, tmp_feature_vector))
-                if query_result == -1:
-                    x_star = x_a + temp_min_cost * i
+                if query_result == InitialPredictor.negative_classification:
+                    x_star.flip_bit(i)
+                    negative_vertex_found = True
                     # Proon positive directions
-                    for k in positive_directions:
-                        search_set.remove(k)
+                    search_set = search_set - positive_directions
                     break
                 else:
                     positive_directions.add(i)
             cost_max = temp_max_cost
-            if len(positive_directions) > 0:
+            if negative_vertex_found:
                 cost_min = temp_min_cost
         return Instance(1, x_star)
 

@@ -50,7 +50,6 @@ class Model(BaseModel):
             (y, X) = sparsify(instances)
             predictions = self.learner.predict(X)
         else:
-            # import pdb; pdb.set_trace()
             predictions = self.learner.predict(instances.get_feature_vector().get_csr_matrix())[0]
         return predictions
 

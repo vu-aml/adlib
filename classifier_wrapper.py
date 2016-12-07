@@ -1,10 +1,11 @@
 from data_reader import input
+from data_reader.input import Instance
 from adversaries.adversary import AdversaryStrategy
 from learners.learner import InitialPredictor, ImprovedPredictor
 from learners.models.model import BaseModel
 from learners.models import sklearner
 import factories
-from typing import Dict
+from typing import Dict, List
 
 
 def set_train_instances(data):
@@ -115,6 +116,7 @@ class Classifier(object):
         self.data = data_name
         self.train_instances = set_train_instances(data_name)
         self.test_instances = set_test_instances(data_name)
+        self.num_features = self.train_instances[0].feature_vector.feature_count
         self.predictions = None
         self.defence_strategy = defence_strategy
         self.model = set_model(model_alg)
@@ -123,18 +125,35 @@ class Classifier(object):
         self.simulated_defence = None
 
         if self.defence_strategy is not None:
-            self.simulated_learner = set_simulated_learner(defence_strategy)
+            self.simulated_learner = set_simulated_learner(defence_strategy[0])
             self.simulated_learner.set_model(self.model)
-            self.simulated_adversary = set_adversary(defence_strategy)
-            self.simulated_defence = set_learner_improve(defence_strategy)
+            self.simulated_adversary = set_adversary(defence_strategy[1])
+            self.simulated_defence = set_learner_improve(defence_strategy[0])
 
-    def set_training_data(self, data_name):
+    def set_train_data(self, data_name):
         """
         set training data instances
         Args:
             data_name: file name of training data
         """
         self.train_instances = set_train_instances(data_name)
+
+    def set_test_data(self, data_name):
+        """
+        set testing data instances
+        Args:
+            data_name: file name of testing data
+        """
+        self.test_instances = set_test_instances(data_name)
+
+    def set_num_features(self, num_features):
+        """
+
+        Args:
+            num_features: new count of features for a feature vecto
+
+        """
+        self.num_features = num_features
 
     def train(self,):
         """
@@ -150,20 +169,55 @@ class Classifier(object):
                                                           self.simulated_adversary)
             self.simulated_defence.improve(self.train_instances)
 
-    def predict(self):
+    def predict(self, instances=None):
         """
-        predict classification result of test instances
-        Returns: list of binary classified result
+        returns prediction labels for specified instances,
+        if no instances specified return prediction for self.test_instances
+        Args:
+            instances: optional List[instance] to be predicted
+
+        Returns: List of class label as predictions
 
         """
-        if self.defence_strategy is None:
-            return self.model.predict(self.test_instances)
+        if instances is None:
+            if self.defence_strategy is None:
+                return self.model.predict(self.test_instances)
+            else:
+                return self.simulated_defence.predict(self.test_instances)
         else:
-            return self.simulated_defence.predict(self.test_instances)
+            if self.defence_strategy is None:
+                return self.model.predict(instances)
+            else:
+                return self.simulated_defence.predict(instances)
 
-    def retrain(self):
-        # TODO refactor learners.retraining and move it here
-        raise NotImplementedError
+    def predict_proba(self, instances=None):
+        """
+        returns prediction probability values for specified instances,
+        (i.e. the probability for a instance to be benign)
+        if no instances specified return prediction for self.test_instances
+        Args:
+            instances: optional List[instance] to be predicted
+
+        Returns: List of probability values as predictions
+
+        """
+        if instances is None:
+            if self.defence_strategy is None:
+                return self.model.predict_proba_adversary(self.test_instances)
+            else:
+                return self.simulated_defence.predict_proba(self.test_instances)
+        else:
+            if self.defence_strategy is None:
+                return self.model.predict_proba_adversary(instances)
+            else:
+                return self.simulated_defence.predict_proba(instances)
+
+    def decision_function(self, instances: List[Instance]):
+        if self.defence_strategy is None:
+            return self.model.decision_function_adversary(instances)
+        else:
+            return self.simulated_defence.decision_function(instances)
+
 
     """
     a series of setter methods that configs model and attack simulation
@@ -171,6 +225,9 @@ class Classifier(object):
 
     def set_model_params(self, params: Dict):
         self.model.set_params(params)
+
+    def set_simulated_learner_params(self, params: Dict):
+        self.simulated_learner.set_params(params)
 
     def set_simulated_adversary_params(self, params: Dict):
         self.simulated_adversary.set_params(params)

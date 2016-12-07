@@ -68,6 +68,7 @@ class Adversary(AdversaryStrategy):
             return float('inf'), None
         minCost = float('inf')
         minList = []
+        # need to figure out what I'm calling the domain of a given feature
         for xi_prime in self.Xdomain[i]:
             delta_log_odds = log_odds(i, xi_prime) - log_odds(i, self.Xc[i])
             if delta_log_odds >= 0:
@@ -86,7 +87,7 @@ class Adversary(AdversaryStrategy):
         input: feature vector x
         return: log P(+|x) / P(-|x)
         '''
-        log_prob = learner.predict_log_proba(x)
+        log_prob = self.learn_model.predict_log_proba(x)
         return log_prob[0,1]/log_prob[0,0]
 
     def gap(self, x):
@@ -103,10 +104,10 @@ class Adversary(AdversaryStrategy):
         return (Uc[0][0] - Uc[1][0]) / (Uc[1][1] - Uc[0][1])
 
     def A(x):
-        W = self.gap(x)
+        W = self.gap(x) # discretized
         minCost,minList = find_mcc(len(x),W)
         if minCost < self.delta_Ua:
             new_x = x
             for i,xi_prime in minList:
-
-    def
+                x[i] = xi_prime
+        return x

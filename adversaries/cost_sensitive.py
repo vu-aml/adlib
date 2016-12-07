@@ -53,7 +53,7 @@ class Adversary(AdversaryStrategy):
         self.Xc = train_instances
         self.positive_instances = [x for x in train_instances if x.get_label() == InitialPredictor.positive_classification]
         self.delta_Ua = self.Ua[0][1] - self.Ua[1][1]
-
+        self.Xdomain = [0,1]
 
     def find_mcc(self,i, w):
         '''
@@ -102,6 +102,7 @@ class Adversary(AdversaryStrategy):
 
     def log_threshold(self, Uc = self.Uc):
         return (Uc[0][0] - Uc[1][0]) / (Uc[1][1] - Uc[0][1])
+
 
     def A(x):
         W = self.gap(x) # discretized

@@ -34,13 +34,13 @@ class FeatureVector(object):
 
     def __iter__(self):
         return iter(self.indices)
-    
+
     def __iter__(self):
         return iter(self.indices)
-    
+
     def __getitem__(self, key):
         return self.indices[key]
-    
+
     def __len__(self):
       return len(self.indices)
 
@@ -125,7 +125,7 @@ class FeatureVector(object):
         indices = self.indices
         indptr = [0, len(self.indices)]
         return csr_matrix((data, indices, indptr), shape=(1, self.feature_count))
-    
+
     def feature_difference(self, xa) -> List:
         y_array = self.get_csr_matrix()
         xa_array = xa.get_csr_matrix()
@@ -172,8 +172,8 @@ class Instance(object):
 
                 """
         return self.feature_vector
-    
-    # cost of altering feature at given index 
+
+    # cost of altering feature at given index
     def get_feature_cost(self, cost_vector, index):
         if cost_vector and index in cost_vector:
             return cost_vector[index]
@@ -183,7 +183,7 @@ class Instance(object):
         feature_difference = self.get_feature_vector().feature_difference(goal_vector)
         sum = 0
         for index in feature_difference:
-            sum += self.get_feature_cost(cost_vector, index) 
+            sum += self.get_feature_cost(cost_vector, index)
         return sum
 
 def load_instances(data: List) -> List[Instance]:
@@ -265,4 +265,3 @@ def open_predictions(battle_name: str, data: str) -> List:
     with open(path, 'r') as infile:
         predictions = json.load(infile)
     return predictions
-

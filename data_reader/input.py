@@ -134,6 +134,149 @@ class FeatureVector(object):
 
         return C_y
 
+#TODO: Work out the relationship between this and FeatureVector, currently don't call super().
+class WeightedFeatureVector(FeatureVector):
+    """Non-binary feature vector data structure.
+
+    Contains sparse representation of features.
+    Defines basic methods for manipulation and data format changes.
+
+        """
+    #Could also store feature frequencies in an array of tuples or non-sparse array
+    #Could call super and accept a non sparse list instead of feature_frequencies
+    def __init__(self, num_features: int, feature_frequencies: Dict[int]):
+        """Create a feature vector given a set of known features and their frequencies.
+
+        Args:
+                num_features (int): Total number of features.
+                feature_indices (List[int]): Indices of each feature present in instance.
+
+                """
+        self.indptr = [0, len(feature_indices)]    # type: List[int]
+        self.feature_count = num_features                # type: int
+        self.data = [1] * len(feature_indices)     # type: List[int]
+        self.feature_values = feature_frequencies
+        self.indices = list(self.feature_values.keys())    # type: List[int]
+        # could maybe store as dictionary to be more sparse
+
+    def copy(self, feature_vector):
+        return FeatureVector(feature_vector.feature_count, feature_vector.indices)
+
+    def __iter__(self):
+        return iter(self.indices)
+
+    def __iter__(self):
+        return iter(self.indices)
+
+    def __getitem__(self, key):
+        return self.feature_values[key]
+
+    def __len__(self):
+      return len(self.indices)
+
+    def get_feature_count(self):
+        """Return static number of features.
+
+                """
+        return self.feature_count
+
+    def get_feature(self, index: int) -> int:
+        """Return value of feature at index
+
+                Args:
+                        index (int): Feature index.
+
+                """
+        if index in self.indices:
+            return self.feature_values.get(index)
+        else:
+            return 0
+
+    def add_feature(self, index, feature):
+        """Add feature at given index.
+
+        Switches the current value at the index to the specified value.
+
+                Args:
+                        index (int): Index of feature update.
+                        feature (int): Boolean, (0/1)
+
+                """
+        if feature == 0:
+            # should this be -=?
+            self.feature_count+=1
+            if index in self.indices:
+                if self.feature_values.get(index) > 1:
+                    self.feature_values[index]-=1
+                else:
+                    self.indices.remove(index)
+            #is this necessary?
+            else:
+                self.feature_values[index] = 0
+
+            return
+        if feature == 1:
+            if index in self.indices:
+                self.feature_values[index]+=1
+            else:
+                self.feature_values[index] = 1
+                self.indices.append(index)
+                self.indices.sort()
+                self.feature_count += 1
+            return
+
+    def remove_feature(self, index):
+        """Remove feature at given index.
+
+        If the feature at [index] is 0, no action is taken.
+
+                Args:
+                        index (int): Index of feature to remove.
+
+                """
+        if index not in self.indices:
+            self.feature_count -= 1
+        else:
+            self.indices.remove(index)
+            del self.feature_values[index]
+            self.feature_count -= 1
+
+    #Currently undecided on implementation for weighted version
+    #TODO: decide how to handle this for non-binary domains
+    # def flip_bit(self, index):
+    #     """Flip feature at given index.
+    #
+    #     Switches the current value at the index to the opposite value.
+    #     {0 --> 1, 1 --> 0}
+    #
+    #             Args:
+    #                     index (int): Index of feature update.
+    #
+    #             """
+        # if index in self.indices:
+        #     self.indices.remove(index)
+        # else:
+        #     self.indices.append(index)
+        #     self.indices.sort()
+
+    # should this be coo or dok for weighted feature vec?
+    def get_csr_matrix(self) -> csr_matrix:
+        """Return feature vector represented by sparse matrix.
+
+                """
+        data = list(self.feature_values.values())
+        indices = list(self.feature_values.keys())
+        indptr = [0, len(self.indices)]
+        return csr_matrix((data, indices, indptr), shape=(1, self.feature_count))
+
+    def feature_difference(self, xa) -> List:
+        y_array = self.get_csr_matrix()
+        xa_array = xa.get_csr_matrix()
+
+        C_y = (y_array - xa_array).indices
+
+        return C_y
+
 class Instance(object):
     """Instance data structure.
 
@@ -186,6 +329,7 @@ class Instance(object):
             sum += self.get_feature_cost(cost_vector, index)
         return sum
 
+#TODO: this also needs to be implemented for loading non-binary instances
 def load_instances(data: List) -> List[Instance]:
     """Load data from a specified file.
 

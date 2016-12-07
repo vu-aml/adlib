@@ -24,33 +24,40 @@ Concept:
 
 class Learner(InitialPredictor):
 
-	def __init__(self):
-		InitialPredictor.__init__(self)
+    def __init__(self):
+        InitialPredictor.__init__(self)
+
+    def decision_function(self, instances):
+        return self.get_model().decision_function_adversary(instances)
+
 
 class ImprovedLearner(ImprovedPredictor):
 
-	def __init__(self):
-		ImprovedPredictor.__init__(self)
+    def __init__(self):
+        ImprovedPredictor.__init__(self)
 
-	def improve(self, instances):
-		X = instances
-		I_bad = [x for x in instances if self.initial_learner.predict([x])[0] == 1]
-		N = []
-		while True:
-			new = []
-			for instance in I_bad:
-				transform_instance = self.adversary.change_instances([instance])[0]
-				new_instance = True
-				for old_instance in N:
-					if fv_equals(transform_instance.get_feature_vector(),
-					             old_instance.get_feature_vector()):
-						new_instance = False
-				if new_instance:
-					new.append(transform_instance)
-					N.append(transform_instance)
-			if len(new) == 0:
-				break
-			self.initial_learner.train(X+N)
-			self.adversary.set_adversarial_params(self.initial_learner, X+N)
+    def improve(self, instances):
+        X = instances
+        I_bad = [x for x in instances if self.initial_learner.predict([x])[0] == 1]
+        N = []
+        while True:
+            new = []
+            for instance in I_bad:
+                transform_instance = self.adversary.change_instances([instance])[0]
+                new_instance = True
+                for old_instance in N:
+                    if fv_equals(transform_instance.get_feature_vector(),
+                                 old_instance.get_feature_vector()):
+                        new_instance = False
+                if new_instance:
+                    new.append(transform_instance)
+                    N.append(transform_instance)
+            if len(new) == 0:
+                break
+            self.initial_learner.train(X+N)
+            self.adversary.set_adversarial_params(self.initial_learner, X+N)
+            break
 
+    def decision_function(self, instances):
+        return self.initial_learner.get_model().decision_function_adversary(instances)
 

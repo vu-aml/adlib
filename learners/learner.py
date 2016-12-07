@@ -78,27 +78,33 @@ class InitialPredictor(object):
         """
         return self.model.get_available_params()
 
-class ImprovedPredictor(object):
-	"""Base class for improved learning methods.
+    def prediction_proba(self, instances):
+        return self.model.predict_proba_adversary(instances)
 
-	Defines the bare-minimum functionality for improved learning
-	strategies. Specified learning algorithms can create wrappers
-	around the underlying methods.
+    def decision_function(self, instances):
+        raise NotImplementedError
+
+class ImprovedPredictor(object):
+    """Base class for improved learning methods.
+
+    Defines the bare-minimum functionality for improved learning
+    strategies. Specified learning algorithms can create wrappers
+    around the underlying methods.
 
     """
 
-	def __init__(self):
-		self.initial_learner = None   # type: InitialPredictor
-		self.adversary = None         # type: AdversaryStrategy
+    def __init__(self):
+        self.initial_learner = None   # type: InitialPredictor
+        self.adversary = None         # type: AdversaryStrategy
 
-	def improve(self, instances):
-		"""Improve default behavior (do nothing)
+    def improve(self, instances):
+        """Improve default behavior (do nothing)
 
         """
-		return
+        return
 
-	def predict(self, instances):
-		"""Predict classification labels for the set of instances using the old model.
+    def predict(self, instances):
+        """Predict classification labels for the set of instances using the old model.
 
         Args:
             instances (List[Instance]) or (Instance): training or test instances.
@@ -107,25 +113,31 @@ class ImprovedPredictor(object):
             label classifications (List(int))
 
         """
-		return self.initial_learner.predict(instances)
+        return self.initial_learner.predict(instances)
 
-	# for future use, if learner improve strategies need more parameters
-	def set_params(self, params:Dict):
-		return
+    # for future use, if learner improve strategies need more parameters
+    def set_params(self, params:Dict):
+        return
 
-	def get_available_params(self) -> Dict:
-		return
+    def get_available_params(self) -> Dict:
+        return
 
-	def set_adversarial_params(self, learner: InitialPredictor, adversary: AdversaryStrategy):
-		"""Default behavior when given knowledge of initial learner and adversary.
+    def set_adversarial_params(self, learner: InitialPredictor, adversary: AdversaryStrategy):
+        """Default behavior when given knowledge of initial learner and adversary.
 
         Args:
             learner (InitialPredictor): Learner used in initial training.
             adversary (AdversaryStrategy): Adversary used to transform instances.
 
         """
-		self.initial_learner = learner
-		self.adversary = adversary
+        self.initial_learner = learner
+        self.adversary = adversary
+
+    def predict_proba(self, instances):
+        raise NotImplementedError
+
+    def decision_function(self, instances):
+        raise NotImplementedError
 
 """
 Default learner and improved learner. Useful for wrapping
@@ -134,11 +146,11 @@ a non-responsive learner).
 """
 class Learner(InitialPredictor):
 
-	def __init__(self):
-		InitialPredictor.__init__(self)
+    def __init__(self):
+        InitialPredictor.__init__(self)
 
 
 class ImprovedLearner(ImprovedPredictor):
 
-	def __init__(self):
-		ImprovedPredictor.__init__(self)
+    def __init__(self):
+        ImprovedPredictor.__init__(self)

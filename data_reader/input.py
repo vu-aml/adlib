@@ -134,7 +134,7 @@ class FeatureVector(object):
 
         return C_y
 
-#TODO: Work out the relationship between this and FeatureVector, currently don't call super().
+#TODO: Work out the relationship between this and FeatureVector.
 class WeightedFeatureVector(FeatureVector):
     """Non-binary feature vector data structure.
 
@@ -144,23 +144,24 @@ class WeightedFeatureVector(FeatureVector):
         """
     #Could also store feature frequencies in an array of tuples or non-sparse array
     #Could call super and accept a non sparse list instead of feature_frequencies
-    def __init__(self, num_features: int, feature_frequencies: Dict[int]):
+    def __init__(self, num_features: int, feature_indices: List[int], feature_frequencies: Dict[int]):
+        super().__init__(num_features, feature_indices)
+
         """Create a feature vector given a set of known features and their frequencies.
 
         Args:
                 num_features (int): Total number of features.
                 feature_indices (List[int]): Indices of each feature present in instance.
+                feature_frequencies (Dict[int]): Frequencies (value) of each feature (key)
 
                 """
-        self.indptr = [0, len(feature_indices)]    # type: List[int]
-        self.feature_count = num_features                # type: int
-        self.data = [1] * len(feature_indices)     # type: List[int]
+        self.data = feature_indices   # type: List[int]
         self.feature_values = feature_frequencies
         self.indices = list(self.feature_values.keys())    # type: List[int]
         # could maybe store as dictionary to be more sparse
 
     def copy(self, feature_vector):
-        return FeatureVector(feature_vector.feature_count, feature_vector.feature_values)
+        return WeightedFeatureVector(feature_vector.feature_count, feature_vector.feature_values)
 
     def __iter__(self):
         return iter(self.indices)
@@ -204,15 +205,17 @@ class WeightedFeatureVector(FeatureVector):
                 """
         if feature == 0:
             # should this be -=?
-            self.feature_count+=1
+            #self.feature_count+=1
             if index in self.indices:
                 if self.feature_values.get(index) > 1:
                     self.feature_values[index]-=1
                 else:
                     self.indices.remove(index)
+                    self.feature_count-=1
             #is this necessary?
             else:
                 self.feature_values[index] = 0
+                self.feature_count+=1
 
             return
         if feature == 1:
@@ -241,23 +244,26 @@ class WeightedFeatureVector(FeatureVector):
             del self.feature_values[index]
             self.feature_count -= 1
 
-    #Currently undecided on implementation for weighted version
-    #TODO: decide how to handle this for non-binary domains
-    # def flip_bit(self, index):
-    #     """Flip feature at given index.
-    #
-    #     Switches the current value at the index to the opposite value.
-    #     {0 --> 1, 1 --> 0}
-    #
-    #             Args:
-    #                     index (int): Index of feature update.
-    #
-    #             """
-        # if index in self.indices:
-        #     self.indices.remove(index)
-        # else:
-        #     self.indices.append(index)
-        #     self.indices.sort()
+    def swap_feature(self, index, new_feature_value):
+        """Change feature at given index. Index here refers to index of self.data a list
+            representing all n-gram instances in the 'original vector' (includes repeats).
+
+        If the feature at [index] is the same as the new value, no action is taken.
+        Otherwise, replace value at index and update counts of both feature values.
+
+                Args:
+                        index (int): Index of feature to replace.
+                        new_feature_value (int): index in domain of feature at index: index
+
+                """
+        if self.data[index] == new_feature_value:
+            return
+        old_value = self.data[index]
+        self.data[index] = new_feature_value
+        self.add_feature(old_value, 0)
+        self.add_feature(new_feature_value, 1)
+
+    #TODO: decide how to handle flip_bit for non-binary domains
 
     # should this be coo or dok for weighted feature vec?
     def get_csr_matrix(self) -> csr_matrix:

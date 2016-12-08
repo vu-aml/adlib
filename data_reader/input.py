@@ -143,7 +143,7 @@ class WeightedFeatureVector(FeatureVector):
         """
     #Could also store feature frequencies in an array of tuples or non-sparse array
     #Could call super and accept a non sparse list instead of feature_frequencies
-    def __init__(self, num_features: int, feature_indices: List[int], feature_weights: Dict[int]):
+    def __init__(self, num_features: int, feature_indices: List[int], feature_weights: Dict[int, float]):
         super().__init__(num_features, feature_indices)
 
         """Create a feature vector given a set of known features and their frequencies.
@@ -151,7 +151,7 @@ class WeightedFeatureVector(FeatureVector):
         Args:
                 num_features (int): Total number of features.
                 feature_indices (List[int]): Indices of each feature present in instance.
-                feature_frequencies (Dict[int]): Frequencies (value) of each feature (key)
+                feature_frequencies (Dict[int,int]): Frequencies (value) of each feature (key)
 
                 """
         self.feature_weights = feature_frequencies
@@ -207,6 +207,7 @@ class WeightedFeatureVector(FeatureVector):
             if index in self.feature_weights:
                 del self.feature_weights[index]
             return
+
         if feature == 1:
             if index in self.indices:
                 return
@@ -256,7 +257,7 @@ class WeightedFeatureVector(FeatureVector):
 
     def set_feature_weight(self, index, new_weight):
         """Change feature at given index. Index here refers to index of self.data a list
-            representing all n-gram instances in the 'original vector' (includes repeats).
+            representing all n-grams in the 'original vector' (includes repeats).
 
         If the feature at [index] is the same as the new value, no action is taken.
         Otherwise, replace value at index and update counts of both feature values.

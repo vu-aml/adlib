@@ -160,7 +160,7 @@ class WeightedFeatureVector(FeatureVector):
         # could maybe store as dictionary to be more sparse
 
     def copy(self, feature_vector):
-        return FeatureVector(feature_vector.feature_count, feature_vector.indices)
+        return FeatureVector(feature_vector.feature_count, feature_vector.feature_values)
 
     def __iter__(self):
         return iter(self.indices)

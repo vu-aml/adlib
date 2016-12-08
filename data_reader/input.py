@@ -216,8 +216,8 @@ class WeightedFeatureVector(FeatureVector):
             else:
                 self.feature_values[index] = 0
                 self.feature_count+=1
-
             return
+            
         if feature == 1:
             if index in self.indices:
                 self.feature_values[index]+=1
@@ -298,7 +298,7 @@ class Instance(object):
                 feature_vector (FeatureVector): Underlying sparse feature representation.
 
                 """
-        self.label = label                                        # type: int
+        self.label = label                      # type: int
         self.feature_vector = feature_vector    # type: FeatureVector
 
     def get_label(self):

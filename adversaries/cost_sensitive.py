@@ -3,12 +3,30 @@ from typing import List, Dict
 from data_reader.input import Instance, FeatureVector
 import numpy as np
 from learners.learner import InitialPredictor
-import math
+from math import log
+
+'''Adversarial Classification based on paper by:
+    Dalvi, Domingos, Mausam, Sanghai, and Verma
+    University of Washington
+
+Concept:
+    Given complete information about initial classifier C and an instance X, adversary
+    finds a feature change strategy A(x) that maximizes its own utility Ua.
+    By modeling the problem as a COP, which can be formulated as an integer
+    linear program, the adversary finds the minimum cost camoflauge (MCC),
+    or smallest cost of feature changes that covers the log odds gap between
+    classifier classifying the instance as positive and classifying it as a
+    false negative.  Only changes instances the classifier classified as
+    positive and that can be changed without costing so much that it
+    outweighs the utility that would be gained by C falsely classifying the instance as
+    negative.  Runs in pseudo linear time.
+
+    TODO: Extend compatibility beyond probability classifier models
+'''
 
 class Adversary(AdversaryStrategy):
     def __init__(self):
         self.Ua = None
-        self.optim_strategy = None
         self.Vi = None
         self.Uc = None
         self.Wi = None
@@ -17,6 +35,7 @@ class Adversary(AdversaryStrategy):
         self.Xdomain = None
         self.positive_instances = None
         self.delta_Ua = None
+        self.num_features = None
 
     def change_instances(self, instances) -> List[Instance]:
         for instance in instances:
@@ -26,7 +45,6 @@ class Adversary(AdversaryStrategy):
 			else:
 				transformed_instances.append(transformed_instance)
 		return transformed_instances
-
 
     def set_params(self, params: Dict):
         if params['measuring_cost'] is not None:
@@ -49,18 +67,25 @@ class Adversary(AdversaryStrategy):
 		return params
 
     def set_adversarial_params(self, learner, train_instances):
+
         self.learn_model = learner
         self.Xc = train_instances
+        self.num_features = train_instances[0].get_feature_vector.get_feature_count()
         self.positive_instances = [x for x in train_instances if x.get_label() == InitialPredictor.positive_classification]
         self.delta_Ua = self.Ua[0][1] - self.Ua[1][1]
-        self.Xdomain = [0,1]
 
     def find_mcc(self,i, w):
         '''
-        input: 1) number of features to be considered and 2) gap to be filled
-               such that classifier will classify positive instance as negative
-        return: 1) minimum cost to transform the instance and 2) a list of pairs
-                of original feature indices and their corresponding transformations
+        Given number of features to be considered and the gap to be filled such
+        that classifier will classify given positive instance as negative, recursively
+        compute the minimum cost and changes to be made to transform the instance
+        feature by feature such that the gap is filled.
+
+        Args: i (int): number of features to be considered
+              w (int): gap to be filled
+        return: 1) minimum cost to transform the instance
+                2) a list of pairs of original feature indices and their
+                   corresponding transformations
         '''
         if w<=0:
             return 0,[]
@@ -74,7 +99,6 @@ class Adversary(AdversaryStrategy):
             if delta_log_odds >= 0:
                 curCost, curList = self.find_mcc(i-1, w - delta_log_odds)
                 curCost += self.Wi(self.Xc[i], xi_prime)
-                # maybe implement curList as a dictionary instead
                 curList += [(i,xi_prime)]
                 if curCost < minCost:
                     minCost = curCost
@@ -84,10 +108,15 @@ class Adversary(AdversaryStrategy):
     # should I be passing an index here as well or just the feature vector...
     def log_odds(self, x):
         '''
-        input: feature vector x
+        Args: x (Instance)
         return: log P(+|x) / P(-|x)
         '''
-        log_prob = self.learn_model.predict_log_proba(x)
+        try:
+            log_prob = self.learn_model.predict_log_proba(x)
+        except:
+            print("This adversary currently only supports probability models")
+            raise
+
         return log_prob[0,1]/log_prob[0,0]
 
     def gap(self, x):
@@ -95,20 +124,27 @@ class Adversary(AdversaryStrategy):
         The gap is defined as the difference between the log odds of the instance
         and the log threshold that needs to be reached for the classifier to
         classify the positive instance as negative
-        input: instance x
+
+        Args: x (Instance)
         return: LOc(x) - LT(Uc)
         '''
-        return math.log(self.log_odds(x) - self.log_threshold(self.Uc))
+        return log(self.log_odds(x) - self.log_threshold(self.Uc))
 
     def log_threshold(self, Uc = self.Uc):
         return (Uc[0][0] - Uc[1][0]) / (Uc[1][1] - Uc[0][1])
 
-
     def A(x):
+        '''
+        Change instance x only if the minimum cost to effectively fool C is
+        less than delta_Ua: the user defined utility gained by fooling
+        classifier
+
+        Args: x (Instance)
+        return: possible
+        '''
         W = self.gap(x) # discretized
         minCost,minList = find_mcc(len(x),W)
         if minCost < self.delta_Ua:
-            new_x = x
             for i,xi_prime in minList:
-                x[i] = xi_prime
+                x.get_feature_vector().swap_feature(i,xi_prime)
         return x

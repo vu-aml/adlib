@@ -61,4 +61,3 @@ class Adversary(AdversaryStrategy):
             if change > self.max_change:
                 break
         return instance
-

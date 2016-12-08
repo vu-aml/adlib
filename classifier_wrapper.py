@@ -103,7 +103,7 @@ class Classifier(object):
     Provides basic interface for classification.
     Allows declaration  of internal defence strategy that trains model against evasion attacks
     """
-    def __init__(self, model_alg, data_name=None, defence_strategy=None):
+    def __init__(self, model_alg, data_name=None, defence_strategy=None, test_fraction=None):
         """
 
         Args:
@@ -123,7 +123,7 @@ class Classifier(object):
         self.simulated_learner = None
         self.simulated_adversary = None
         self.simulated_defence = None
-
+        self.test_fraction = None
         if self.defence_strategy is not None:
             self.simulated_learner = set_simulated_learner(defence_strategy[0])
             self.simulated_learner.set_model(self.model)
@@ -155,7 +155,7 @@ class Classifier(object):
         """
         self.num_features = num_features
 
-    def train(self,):
+    def train(self):
         """
         Trains internal model, if a defence_strategy is declared, then improve learner
         """
@@ -234,6 +234,3 @@ class Classifier(object):
 
     def set_defence_params(self, params: Dict):
         self.simulated_defence.set_params(params)
-
-
-

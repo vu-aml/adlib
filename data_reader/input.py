@@ -246,7 +246,7 @@ class WeightedFeatureVector(FeatureVector):
 
     def swap_feature(self, index, new_feature_value):
         """Change feature at given index. Index here refers to index of self.data a list
-            representing all n-gram instances in the 'original vector' (includes repeats).
+            representing all n-grams in the 'original vector' (includes repeats).
 
         If the feature at [index] is the same as the new value, no action is taken.
         Otherwise, replace value at index and update counts of both feature values.

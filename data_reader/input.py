@@ -143,6 +143,9 @@ class WeightedFeatureVector(FeatureVector):
         """
     #Could also store feature frequencies in an array of tuples or non-sparse array
     #Could call super and accept a non sparse list instead of feature_frequencies
+
+    DEFAULT_WEIGHT = 1
+
     def __init__(self, num_features: int, feature_indices: List[int], feature_weights: Dict[int, float]):
         super().__init__(num_features, feature_indices)
 
@@ -154,11 +157,25 @@ class WeightedFeatureVector(FeatureVector):
                 feature_frequencies (Dict[int,int]): Frequencies (value) of each feature (key)
 
                 """
-        self.feature_weights = feature_frequencies
+        self.feature_weights = feature_weights
         # could maybe store as dictionary to be more sparse
 
-    def copy(self, feature_vector):
-        return WeightedFeatureVector(feature_vector.feature_count, feature_vector.feature_values)
+    @staticmethod 
+    def copy(feature_vector):
+        return WeightedFeatureVector(
+            feature_vector.feature_count,
+            feature_vector.indices,
+            feature_vector.feature_weights
+        )
+
+    @staticmethod
+    def cast(feature_vector):
+        feature_weights = {index: WeightedFeatureVector.DEFAULT_WEIGHT for index in feature_vector}
+        return WeightedFeatureVector(
+            feature_vector.feature_count,
+            feature_vector.indices,
+            feature_weights
+        )
 
     def __iter__(self):
         return iter(self.indices)
@@ -167,7 +184,7 @@ class WeightedFeatureVector(FeatureVector):
         return iter(self.indices)
 
     def __getitem__(self, key):
-        return self.feature_values[key]
+        return self.indices[key]
 
     def __len__(self):
       return len(self.indices)
@@ -186,11 +203,11 @@ class WeightedFeatureVector(FeatureVector):
 
                 """
         if index in self.indices:
-            return self.feature_values.get(index)
+            return self.feature_weights.get(index)
         else:
             return 0
 
-    def add_feature(self, index, feature, weight=1):
+    def add_feature(self, index, feature, weight=DEFAULT_WEIGHT):
         """Add feature at given index.
 
         Switches the current value at the index to the specified value.
@@ -246,9 +263,6 @@ class WeightedFeatureVector(FeatureVector):
                         index (int): Index of feature update.
 
                 """
-        if index not in self.feature_weights:
-            msg = 'Feature Weight Unknown: Add feature with add_feature(index, feature, weight)'
-            raise ValueError(msg)
         if index in self.indices:
             self.indices.remove(index)
         else:
@@ -280,7 +294,7 @@ class WeightedFeatureVector(FeatureVector):
         """Return feature vector represented by sparse matrix.
 
                 """
-        data = [get_feature_weight(index) for index in self.indices]
+        data = [self.get_feature_weight(index) for index in self.indices]
         indices = self.indices
         indptr = [0, len(self.indices)]
         return csr_matrix((data, indices, indptr), shape=(1, self.feature_count))

@@ -158,7 +158,7 @@ class WeightedFeatureVector(FeatureVector):
         # could maybe store as dictionary to be more sparse
 
     def copy(self, feature_vector):
-        return WeightedFeatureVector(feature_vector.feature_count, feature_vector.feature_values)
+        return WeightedFeatureVector(feature_vector.feature_count, feature_vector.feature_weights)
 
     def __iter__(self):
         return iter(self.indices)
@@ -167,7 +167,7 @@ class WeightedFeatureVector(FeatureVector):
         return iter(self.indices)
 
     def __getitem__(self, key):
-        return self.feature_values[key]
+        return self.indices[key]
 
     def __len__(self):
       return len(self.indices)
@@ -186,7 +186,7 @@ class WeightedFeatureVector(FeatureVector):
 
                 """
         if index in self.indices:
-            return self.feature_values.get(index)
+            return self.feature_weights.get(index)
         else:
             return 0
 

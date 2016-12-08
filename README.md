@@ -7,3 +7,11 @@ files, use git add -f
 We use py.test for unit testing. Install with `pip install -U pytest`.
 
 To run tests, run `pytest tests`.
+### Installation
+Dependencies:
+* Python3 
+* SciPy
+* NumPy
+* Matplotlib
+* Scikit-learn
+* Jupyter Notebook (optional for notebook demo) 

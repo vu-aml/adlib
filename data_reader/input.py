@@ -144,7 +144,7 @@ class WeightedFeatureVector(FeatureVector):
         """
     #Could also store feature frequencies in an array of tuples or non-sparse array
     #Could call super and accept a non sparse list instead of feature_frequencies
-    def __init__(self, num_features: int, feature_indices: List[int], feature_frequencies: Dict[int]):
+    def __init__(self, num_features: int, feature_indices: List[int], feature_frequencies: Dict[int,int]):
         super().__init__(num_features, feature_indices)
 
         """Create a feature vector given a set of known features and their frequencies.
@@ -152,7 +152,7 @@ class WeightedFeatureVector(FeatureVector):
         Args:
                 num_features (int): Total number of features.
                 feature_indices (List[int]): Indices of each feature present in instance.
-                feature_frequencies (Dict[int]): Frequencies (value) of each feature (key)
+                feature_frequencies (Dict[int,int]): Frequencies (value) of each feature (key)
 
                 """
         self.data = feature_indices   # type: List[int]
@@ -217,7 +217,7 @@ class WeightedFeatureVector(FeatureVector):
                 self.feature_values[index] = 0
                 self.feature_count+=1
             return
-            
+
         if feature == 1:
             if index in self.indices:
                 self.feature_values[index]+=1

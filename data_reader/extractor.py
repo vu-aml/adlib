@@ -124,20 +124,16 @@ class CreateData(object):
         indptr = tfidf_matrix.indptr
         indices = tfidf_matrix.indices
         weights = tfidf_matrix.data
+        corpus_weights = {}
 
         for i in range(0, self.num_instances):
+            instances.append([self.labels[i]]+indices[indptr[i]:indptr[i+1]].tolist())
             if isContinuous:
-                curr_indices = indices[indptr[i]:indptr[i+1]].tolist()
                 curr_weights = weights[indptr[i]:indptr[i+1]].tolist()
-                instances.append(
-                    [self.labels[i],
-                    {index: weight for index, weight in zip(curr_indices, curr_weights)}
-                ])
-            else:
-                instances.append([self.labels[i]]+indices[indptr[i]:indptr[i+1]].tolist())
+                corpus_weights = dict(corpus_weights, **curr_weights)
 
         if category == 'all_categories':
-            output.save_data('train', self.name, instances, isContinuous)
-            output.save_data('test', self.name, instances, isContinuous)
+            output.save_data('train', self.name, instances, corpus_weights)
+            output.save_data('test', self.name, instances, corpus_weights)
         else:
-            output.save_data(category, self.name, instances, isContinuous)
+            output.save_data(category, self.name, instances, corpus_weights)

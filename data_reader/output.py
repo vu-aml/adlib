@@ -21,7 +21,7 @@ def save_transformed_instances(battle_name: str, data: str, instances: List[Inst
 			outfile.write(instance_str+'\n')
 
 
-def save_data(category: str, name: str, instances: List[List[int]], isContinuous):
+def save_data(category: str, name: str, instances: List[List[int]], corpus_weights=None):
     """Save instances extracted from corpus.
     
     Args:
@@ -30,22 +30,20 @@ def save_data(category: str, name: str, instances: List[List[int]], isContinuous
         instances (List[List[int]): Raw data to save.
     
     """
-    path = './data_reader/data/' + category
-    if isContinuous:
-        path += '/continuous'
-    path += '/' + name
+    path = './data_reader/data/' + category + '/' + name
     with open(path, 'w') as outfile:
     	for instance in instances:
-            write_instance_to_file(outfile, instance, isContinuous)
+            write_instance_to_file(outfile, instance)
+    path += '_corpus_weights'
+    with open(path, 'w') as outfile:
+        write_weights_to_file(outfile, corpus_weights)
 
-def write_instance_to_file(outfile, instance, isContinuous):
-    instance_str = ''
-    if isContinuous:
-        instance_str = str(instance[0]).strip('[]') + ': ' + str(instance[1]).strip('{},').replace(': ',':')
-    else:
-        instance_str = str(instance[0]).strip('[]') + ': ' + str(instance[1:]).strip('[],')
-    
+def write_instance_to_file(outfile, instance):
+    instance_str = str(instance[0]).strip('[]') + ': ' + str(instance[1:]).strip('[],')
     outfile.write(instance_str+'\n')
+
+def write_weights_to_file(outfile, weights):
+    pickle.dump(weights, outfile)
 
 def save_battle(battle, battle_name):
 	"""Save battle at a given state of execution.

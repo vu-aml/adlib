@@ -217,21 +217,19 @@ class WeightedFeatureVector(FeatureVector):
                         feature (int): Boolean, (0/1)
 
                 """
+        self.feature_count += 1
+        if index not in self.feature_weights:
+            self.feature_weights[index] = weight
+        
         if feature == 0:
-            self.feature_count += 1
             if index in self.indices:
                 self.indices.remove(index)
-            if index in self.feature_weights:
-                del self.feature_weights[index]
             return
 
         if feature == 1:
-            if index in self.indices:
-                return
-            self.feature_weights[index] = weight
+            if index in self.indices: return
             self.indices.append(index)
             self.indices.sort()
-            self.feature_count += 1
             return
 
     def remove_feature(self, index):
@@ -248,6 +246,7 @@ class WeightedFeatureVector(FeatureVector):
         else:
             self.indices.remove(index)
             self.feature_count -= 1
+
         if index in self.feature_weights:
             del self.feature_count[index]
 
@@ -361,7 +360,7 @@ class Instance(object):
         return sum
 
 #TODO: this also needs to be implemented for loading non-binary instances
-def load_instances(data: List, isContinuous) -> List[Instance]:
+def load_instances(data: List, isContinuous=False) -> List[Instance]:
     """Load data from a specified file.
 
     Args:
@@ -376,12 +375,9 @@ def load_instances(data: List, isContinuous) -> List[Instance]:
         """
     path = './data_reader/data/' + data[1]
     
-    if isContinuous:
-        path += '/continuous'
     path += '/' + data[0]
 
     instances = []
-    import pdb; pdb.set_trace()
     try:
         with open(path, 'r') as infile:
             for line in infile:
@@ -395,6 +391,16 @@ def load_instances(data: List, isContinuous) -> List[Instance]:
     except FileNotFoundError:
         return None
 
+    corpus_weights = {}
+    if isContinuous:
+        try:
+            path += '_corpus_weights' 
+            with open(path, 'r') as infile:
+                corpus_weights = pickle.load(infile)
+
+        except FileNotFoundError:
+            return None
+
     num_indices = max_index + 1
     import pdb; pdb.set_trace()
     created_instances = []
@@ -402,7 +408,7 @@ def load_instances(data: List, isContinuous) -> List[Instance]:
         feature_vector = None
         # should have buildFV method
         if isContinuous:
-            feature_vector = WeightedFeatureVector(num_indices, instance[1])
+            feature_vector = WeightedFeatureVector(num_indices, instance[1], corpus_weights)
         else:
             feature_vector = FeatureVector(num_indices, instance[1])
         created_instances.append(Instance(instance[0], feature_vector))
@@ -413,28 +419,14 @@ def load_instances(data: List, isContinuous) -> List[Instance]:
 def read_instance_from_line(instance_data, isContinuous):
     label = int(float(instance_data[0].strip(':')))
     max_index = 0
-    if isContinuous:
-        # info is (indices, weight dict)
-        index_info = {}
-        for feature in instance_data[1:]:
-            if feature == '\n':
-                continue
-            feature = feature.split(':')
-            index = int(feature[0])
-            weight = float(feature[1])
-            index_info[index] = weight
-            if index > max_index:
-                max_index = index
-        return (label, index_info, max_index)
-    else:
-        index_list = []
-        for feature in instance_data[1:]:
-            if feature == '\n':
-                continue
-            index_list.append(int(feature))
-        if index_list[-1] > max_index:
-            max_index = index_list[-1]
-        return (label, index_list, max_index)
+    index_list = []
+    for feature in instance_data[1:]:
+        if feature == '\n':
+            continue
+        index_list.append(int(feature))
+    if index_list[-1] > max_index:
+        max_index = index_list[-1]
+    return (label, index_list, max_index)
 
 # def open_transformed_instances(battle_name: str, data: str) -> List[Instance]:
 #     path = './data_reader/data/transformed/' + data + '.' + battle_name

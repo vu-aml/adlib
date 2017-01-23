@@ -14,13 +14,13 @@ def main(argv):
 
     # create an naive classifier using classifier_wrapper
     learning_model = svm.SVC(probability=True, kernel='linear')
-    #clf = Classifier(learning_model, "100_instance_debug")
-    clf = Classifier(learning_model, "100_instance_debug_continuous", isContinuousFeatures=True)
+    clf = Classifier(learning_model, "100_instance_debug")
+    #clf = Classifier(learning_model, "100_instance_debug_continuous", isContinuousFeatures=False)
     clf.train()
 
     # launch attack on the classifier using a AdversarialStrategy
-    #instances = input.load_instances(["100_instance_debug", 'test'])
-    instances = input.load_instances(["100_instance_debug_continuous", 'test'], isContinuous=True)
+    instances = input.load_instances(["100_instance_debug", 'test'])
+    #instances = input.load_instances(["100_instance_debug_continuous", 'test'], isContinuous=False)
     adv = adversaries.simple_optimize.Adversary()
     adv.set_params({'lambda_val': -100, 'max_change': 65})
     adv.set_adversarial_params(clf, instances)
@@ -45,7 +45,7 @@ def main(argv):
 
     # launch attack on the robust classifier using a AdversarialStrategy
     #instances2 = input.load_instances(["100_instance_debug", 'test'])
-    instances2 = input.load_instances(["100_instance_debug", 'test'], isContinuous=True)
+    instances2 = input.load_instances(["100_instance_debug", 'test'], isContinuous=False)
     adv = adversaries.simple_optimize.Adversary()
     adv.set_params({'lambda_val': -100, 'max_change': 65})
     adv.set_adversarial_params(clf2, instances2)

@@ -361,7 +361,7 @@ class Instance(object):
         return sum
 
 #TODO: this also needs to be implemented for loading non-binary instances
-def load_instances(data: List) -> List[Instance]:
+def load_instances(data: List, isContinuous) -> List[Instance]:
     """Load data from a specified file.
 
     Args:
@@ -374,10 +374,14 @@ def load_instances(data: List) -> List[Instance]:
             instances as List[Instance]
 
         """
-    path = './data_reader/data/' + data[1] + '/' + data[0]
+    path = './data_reader/data/' + data[1]
+    
+    if isContinuous:
+        path += '/continuous'
+    path += '/' + data[0]
 
     instances = []
-    max_index = 0
+    import pdb; pdb.set_trace()
     try:
         with open(path, 'r') as infile:
             for line in infile:
@@ -385,28 +389,52 @@ def load_instances(data: List) -> List[Instance]:
                 instance_data = line.split(' ')
                 if '\n' in instance_data[0]:
                     break
-                label = int(float(instance_data[0].strip(':')))
-                index_list = []
-                for feature in instance_data[1:]:
-                    if feature == '\n':
-                        continue
-                    index_list.append(int(feature))
-                if index_list[-1] > max_index:
-                    max_index = index_list[-1]
+                label, index_list, max_index = read_instance_from_line(instance_data, isContinuous)
                 instances.append((label, index_list))
 
     except FileNotFoundError:
         return None
 
     num_indices = max_index + 1
-
+    import pdb; pdb.set_trace()
     created_instances = []
     for instance in instances:
-        feature_vector = FeatureVector(num_indices, instance[1])
+        feature_vector = None
+        # should have buildFV method
+        if isContinuous:
+            feature_vector = WeightedFeatureVector(num_indices, instance[1])
+        else:
+            feature_vector = FeatureVector(num_indices, instance[1])
         created_instances.append(Instance(instance[0], feature_vector))
 
+    import pdb; pdb.set_trace()
     return created_instances
 
+def read_instance_from_line(instance_data, isContinuous):
+    label = int(float(instance_data[0].strip(':')))
+    max_index = 0
+    if isContinuous:
+        # info is (indices, weight dict)
+        index_info = {}
+        for feature in instance_data[1:]:
+            if feature == '\n':
+                continue
+            feature = feature.split(':')
+            index = int(feature[0])
+            weight = float(feature[1])
+            index_info[index] = weight
+            if index > max_index:
+                max_index = index
+        return (label, index_info, max_index)
+    else:
+        index_list = []
+        for feature in instance_data[1:]:
+            if feature == '\n':
+                continue
+            index_list.append(int(feature))
+        if index_list[-1] > max_index:
+            max_index = index_list[-1]
+        return (label, index_list, max_index)
 
 # def open_transformed_instances(battle_name: str, data: str) -> List[Instance]:
 #     path = './data_reader/data/transformed/' + data + '.' + battle_name

@@ -15,12 +15,12 @@ from learners.models.model import BaseModel
         instances of type List[Instance]
 
 '''
-def set_train_instances(data):
-    return input.load_instances([data, 'train'])
+def set_train_instances(data, isContinuous=False):
+    return input.load_instances([data, 'train'], isContinuous)
 
 
-def set_test_instances(data):
-    return input.load_instances([data, 'test'])
+def set_test_instances(data, isContinuous=False):
+    return input.load_instances([data, 'test'], isContinuous)
 
 
 '''Collection of static methods for finding and instantiating key objects.
@@ -181,7 +181,7 @@ class Environment(object):
     ADVERSARY = 'adversary'
     IMPROVED_LEARNER = 'improved_learner'
 
-    def __init__(self, data):
+    def __init__(self, data, isContinuous=False):
         """Create a new environment.
 
         Notes:
@@ -193,8 +193,8 @@ class Environment(object):
 
         """
         self.data = data
-        self.train_instances = set_train_instances(data)
-        self.test_instances = set_test_instances(data)
+        self.train_instances = set_train_instances(data, isContinuous)
+        self.test_instances = set_test_instances(data, isContinuous)
         self.transformed_instances = None
         self.predictions = None
 
@@ -345,7 +345,8 @@ class Environment(object):
 
         elif learner_type == self.IMPROVED_LEARNER:
             if self.transformed_instances is None:
-                self.transformed_instances = input.load_instances([self.data+self.name, 'transformed'])
+                self.transformed_instances = input.load_instances([self.data+self.name,
+                'transformed'], isContinuous=False)
 
             predictions = self.battle.get_improved_learner().predict(self.transformed_instances)
         if output_predictions:

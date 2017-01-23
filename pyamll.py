@@ -15,7 +15,8 @@ Main components:
 """
 
 def create_data():
-  dr = extractor.CreateData('demo_data')
+  #dr = extractor.CreateData('demo_data')
+  dr = extractor.CreateData('100_instance_debug_continuous')
 
   dr.create_corpus('full')
   dr.tf_idf()
@@ -23,12 +24,12 @@ def create_data():
   dr.create_corpus('ham25')
   # either create distinct test and train sets, or allow adversary
   # to transform training to test during execution.
-  dr.create_instances('all_categories') # test and train instances
+  dr.create_instances('all_categories', continuous=True) # test and train instances
 
 
 def create_new_environment():
   learning_model = svm.SVC(probability=True, kernel='linear')
-  test_env = adversarial_environment.Environment('100_instance_debug')
+  test_env = adversarial_environment.Environment('100_instance_debug_continuous', isContinuous=True)
   #test_env.create('meek_and_lowd', learning_model, name='demo', save_state=True)
   test_env.create('good_word', learning_model, name='demo', save_state=True)
   return test_env
@@ -37,7 +38,7 @@ def create_new_environment():
 # k
 
 def load_environment():
-  test_env = adversarial_environment.Environment('100_instance_debug')
+  test_env = adversarial_environment.Environment('100_instance_debug_continuous', isContinuous=True)
   test_env.load_environment('demo', save_state=False)
   return test_env
 
@@ -66,7 +67,7 @@ def adversarial_moves(test_env):
 def main(argv):
   print(argv)
   print('creating enviro')
-  #create_data() #: Only uncomment when testing demo of data creation; takes a very long time.
+  create_data() #: Only uncomment when testing demo of data creation; takes a very long time.
   test_env = create_new_environment()
   print('setting params')
   #test_env = load_environment()

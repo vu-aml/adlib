@@ -8,7 +8,7 @@ import factories
 from typing import Dict, List
 
 
-def set_train_instances(data):
+def set_train_instances(data, isContinuous=False):
     """
     Returns a list of Instance given data file name
     Args:
@@ -17,10 +17,10 @@ def set_train_instances(data):
     Returns: List of Instance
 
     """
-    return input.load_instances([data, 'train'])
+    return input.load_instances([data, 'train'], isContinuous)
 
 
-def set_test_instances(data):
+def set_test_instances(data, isContinuous=False):
     """
     Returns a list of Instance given data file name
     Args:
@@ -29,7 +29,7 @@ def set_test_instances(data):
     Returns: List of Instance
 
     """
-    return input.load_instances([data, 'test'])
+    return input.load_instances([data, 'test'], isContinuous)
 
 
 def set_model(model_alg) -> BaseModel:
@@ -103,7 +103,7 @@ class Classifier(object):
     Provides basic interface for classification.
     Allows declaration  of internal defence strategy that trains model against evasion attacks
     """
-    def __init__(self, model_alg, data_name=None, defence_strategy=None, test_fraction=None):
+    def __init__(self, model_alg, data_name=None, defence_strategy=None, test_fraction=None, isContinuousFeatures=False):
         """
 
         Args:
@@ -114,8 +114,9 @@ class Classifier(object):
                         (currently only support nash and stackelberg)
         """
         self.data = data_name
-        self.train_instances = set_train_instances(data_name)
-        self.test_instances = set_test_instances(data_name)
+        self.isContinuousFeatures = isContinuousFeatures
+        self.train_instances = set_train_instances(data_name, self.isContinuousFeatures)
+        self.test_instances = set_test_instances(data_name, self.isContinuousFeatures)
         self.num_features = self.train_instances[0].feature_vector.feature_count
         self.predictions = None
         self.defence_strategy = defence_strategy
@@ -136,7 +137,7 @@ class Classifier(object):
         Args:
             data_name: file name of training data
         """
-        self.train_instances = set_train_instances(data_name)
+        self.train_instances = set_train_instances(data_name, self.isContinuousFeatures)
 
     def set_test_data(self, data_name):
         """
@@ -144,7 +145,7 @@ class Classifier(object):
         Args:
             data_name: file name of testing data
         """
-        self.test_instances = set_test_instances(data_name)
+        self.test_instances = set_test_instances(data_name, self.isContinuousFeatures)
 
     def set_num_features(self, num_features):
         """

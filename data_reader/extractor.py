@@ -129,8 +129,11 @@ class CreateData(object):
         for i in range(0, self.num_instances):
             instances.append([self.labels[i]]+indices[indptr[i]:indptr[i+1]].tolist())
             if isContinuous:
+                curr_indices = indices[indptr[i]:indptr[i+1]].tolist()
                 curr_weights = weights[indptr[i]:indptr[i+1]].tolist()
-                corpus_weights = dict(corpus_weights, **curr_weights)
+                for index, weight in zip(curr_indices, curr_weights):
+                    if index in corpus_weights: continue
+                    corpus_weights[index] = weight
 
         if category == 'all_categories':
             output.save_data('train', self.name, instances, corpus_weights)

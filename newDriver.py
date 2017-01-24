@@ -2,7 +2,7 @@ import sys
 from sklearn import svm
 import adversaries.coordinate_greedy
 import adversaries.simple_optimize
-from data_reader import input, output
+from data_reader import input, output, extractor
 from classifier_wrapper import Classifier
 from evasion_metrics import EvasionMetrics
 

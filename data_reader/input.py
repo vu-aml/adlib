@@ -373,9 +373,7 @@ def load_instances(data: List, isContinuous=False) -> List[Instance]:
             instances as List[Instance]
 
         """
-    path = './data_reader/data/' + data[1]
-    
-    path += '/' + data[0]
+    path = './data_reader/data/' + data[1] + '/' + data[0]
 
     instances = []
     try:
@@ -395,14 +393,13 @@ def load_instances(data: List, isContinuous=False) -> List[Instance]:
     if isContinuous:
         try:
             path += '_corpus_weights' 
-            with open(path, 'r') as infile:
+            with open(path, 'rb') as infile:
                 corpus_weights = pickle.load(infile)
 
         except FileNotFoundError:
             return None
 
     num_indices = max_index + 1
-    import pdb; pdb.set_trace()
     created_instances = []
     for instance in instances:
         feature_vector = None
@@ -413,7 +410,6 @@ def load_instances(data: List, isContinuous=False) -> List[Instance]:
             feature_vector = FeatureVector(num_indices, instance[1])
         created_instances.append(Instance(instance[0], feature_vector))
 
-    import pdb; pdb.set_trace()
     return created_instances
 
 def read_instance_from_line(instance_data, isContinuous):

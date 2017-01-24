@@ -161,9 +161,9 @@ class Classifier(object):
         Trains internal model, if a defence_strategy is declared, then improve learner
         """
         if self.defence_strategy is None:
-            self.model.train(self.train_instances)
+            self.model.train(self.train_instances, self.isContinuousFeatures)
         else:
-            self.simulated_learner.train(self.train_instances)
+            self.simulated_learner.train(self.train_instances)#, self.isContinuousFeatures)
             self.simulated_adversary.set_adversarial_params(self.simulated_learner,
                                                             self.train_instances)
             self.simulated_defence.set_adversarial_params(self.simulated_learner,

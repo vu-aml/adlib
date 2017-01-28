@@ -144,7 +144,6 @@ class FeatureVector(object):
     def get_feature_weight(self, index):
         if self.feature_weights and index in self.feature_weights:
             return self.feature_weights[index]
-        # defaults to 1, do we want this? 
         return FeatureVector.DEFAULT_WEIGHT
 
     def get_feature_values(self):

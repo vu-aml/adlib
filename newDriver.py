@@ -28,13 +28,13 @@ def main(argv):
 
     # create an naive classifier using classifier_wrapper
     learning_model = svm.SVC(probability=True, kernel='linear')
-    #clf = Classifier(learning_model, "100_instance_debug")
-    clf = Classifier(learning_model, "100_instance_debug", isContinuousFeatures=True)
+    clf = Classifier(learning_model, "100_instance_debug")
+    #clf = Classifier(learning_model, "100_instance_debug", isContinuousFeatures=True)
     clf.train()
 
     # launch attack on the classifier using a AdversarialStrategy
-    #instances = input.load_instances(["100_instance_debug", 'test'])
-    instances = input.load_instances(["100_instance_debug", 'test'], isContinuous=True)
+    instances = input.load_instances(["100_instance_debug", 'test'])
+    #instances = input.load_instances(["100_instance_debug", 'test'], isContinuous=True)
     adv = adversaries.simple_optimize.Adversary()
     adv.set_params({'lambda_val': -100, 'max_change': 65})
     adv.set_adversarial_params(clf, instances)
@@ -53,14 +53,14 @@ def main(argv):
 
     # create a robust classifier(classifier with a internal mechanism to protect against attack)
     learning_model2 = svm.SVC(probability=True, kernel='linear')
-    #clf2 = Classifier(learning_model2, "100_instance_debug", ["retraining", "simple_optimize"])
-    clf2 = Classifier(learning_model2, "100_instance_debug", ["retraining", "simple_optimize"], isContinuousFeatures=True)
+    clf2 = Classifier(learning_model2, "100_instance_debug", ["retraining", "simple_optimize"])
+    #clf2 = Classifier(learning_model2, "100_instance_debug", ["retraining", "simple_optimize"], isContinuousFeatures=True)
     clf2.set_simulated_adversary_params({'lambda_val': -100, 'max_change': 65})
     clf2.train()
     
     # launch attack on the robust classifier using a AdversarialStrategy
-    #instances2 = input.load_instances(["100_instance_debug", 'test'])
-    instances2 = input.load_instances(["100_instance_debug", 'test'], isContinuous=True)
+    instances2 = input.load_instances(["100_instance_debug", 'test'])
+    #instances2 = input.load_instances(["100_instance_debug", 'test'], isContinuous=True)
     adv = adversaries.simple_optimize.Adversary()
     adv.set_params({'lambda_val': -100, 'max_change': 65})
     adv.set_adversarial_params(clf2, instances2)

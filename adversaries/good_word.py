@@ -12,28 +12,30 @@ Concept:
 '''
 
 class Adversary(AdversaryStrategy):
+    
+    BEST_N = 'best_n'
+    FIRST_N = 'first_n'
 
     def __init__(self):
         self.learn_model = None                # type: InitialPredictor
         self.positive_instance = None    # type: Instance
         self.negative_instance = None    # type: Instance
         self.n = None
+        self.num_queries = 0
 
     def change_instances(self, instances: List[Instance]) -> List[Instance]:
-        first_n_word_indices = self.first_n_words(
-            self.positive_instance.get_feature_vector(),
-            self.negative_instance.get_feature_vector()
-        )
+        word_indices = self.get_n_words()
         transformed_instances = []
 
         for instance in instances:
             transformed_instance = deepcopy(instance)
             if instance.get_label() == InitialPredictor.positive_classification:
                 transformed_instances.append(
-                    self.add_words_to_instance(transformed_instance, first_n_word_indices)
+                    self.add_words_to_instance(transformed_instance, word_indices)
                 )
             else:
                 transformed_instances.append(transformed_instance)
+        print('Number of queries issued:', self.num_queries)
         return transformed_instances
 
     def get_available_params(self):
@@ -44,8 +46,10 @@ class Adversary(AdversaryStrategy):
         }
 
     def set_params(self, params: Dict):
-        if params['n'] is not None:
+        if 'n' in params:
             self.n = params['n']
+        if 'attack_model_type' in params:
+            self.attack_model_type = params['attack_model_type']
         else:
             raise ValueError('Must specify n')
         return None
@@ -76,7 +80,7 @@ class Adversary(AdversaryStrategy):
 
     def add_words_to_instance(self, instance, word_indices):
         for index in word_indices:
-            instance.add_feature(index)
+            instance.get_feature_vector().flip_bit(index)
         return instance
 
     # Find a spam and legit message that only differ by 1 word
@@ -84,25 +88,22 @@ class Adversary(AdversaryStrategy):
         curr_message = deepcopy(self.negative_instance.get_feature_vector())
         curr_message_words = set(curr_message)
         spam_message = self.positive_instance.get_feature_vector()
+        spam_message_words = set(spam_message)
+        prev_message = None
         # loop until current message is classified as spam
-        while (self.learn_model.predict(Instance(0,curr_message)) !=
+        while (self.predict_and_record(curr_message) !=
             InitialPredictor.positive_classification):
 
             prev_message = deepcopy(curr_message)
             word_removed = False
             for index in curr_message:
-                # if the word occurs in curr_message but not in spam_message
-                #if curr_message[index] == 1 and spam_message[index] == 0:
-                if index not in spam_message:
-                    # remove word from curr_message
+                if index in spam_message_words:
                     curr_message.flip_bit(index)
                     word_removed = True
                     break
             if not word_removed:
-                #for index in range(len(spam_message)):
                 for index in spam_message:
-                    #if curr_message[index] == 0 and spam_message[index] == 1:
-                    if index not in curr_message:
+                    if index not in curr_message_words:
                         curr_message.flip_bit(index)
         return (curr_message, prev_message)
 
@@ -118,7 +119,7 @@ class Adversary(AdversaryStrategy):
         for feature in self.feature_space:
             if spam_message.get_feature(feature) == 0:
                 spam_message.flip_bit(feature)
-                prediction_result = self.learn_model.predict(Instance(0, spam_message))
+                prediction_result = self.predict_and_record(spam_message)
                 if prediction_result == InitialPredictor.negative_classification:
                     negative_weight_word_indices.add(feature)
                 if len(self.negative_instance.get_feature_vector()) == self.n:
@@ -129,23 +130,25 @@ class Adversary(AdversaryStrategy):
 
     def best_n_words(self, spam_message, legit_message):
         barely_spam_message, barely_legit_message = self.find_witness()
-        positive_weight_word_indices = self.build_word_set(legit_message, InitialPredictor.positive_classification)
-        negative_weight_word_indices = self.build_word_set(spam_message, InitialPredictor.negative_classification)
+        positive_weight_word_indices = self.build_word_set(barely_legit_message, InitialPredictor.positive_classification)
+        negative_weight_word_indices = self.build_word_set(barely_spam_message, InitialPredictor.negative_classification)
         best_n_word_indices = set()
         iterations_without_change = 0
         max_iterations_without_change = 10
         for spammy_word_index in positive_weight_word_indices:
+            barely_spam_message.flip_bit(spammy_word_index),
             small_weight_word_indices = self.build_word_set(
-                barely_spam_message.flip_bit(spammy_word_index),
+                barely_spam_message,
                 InitialPredictor.positive_classification,
                 negative_weight_word_indices
             )
             large_weight_word_indices = self.build_word_set(
-                barely_spam_message.flip_bit(spammy_word_index),
+                barely_spam_message,
                 InitialPredictor.negative_classification,
                 negative_weight_word_indices
             )
-            if best_n_word_indices.size() + large_weight_word_indices.size() > self.n:
+            barely_spam_message.flip_bit(spammy_word_index)
+            if len(best_n_word_indices) + len(large_weight_word_indices) > self.n:
                 negative_weight_word_indices = negative_weight_word_indices - large_weight_word_indices
                 best_n_word_indices = best_n_word_indices.union(large_weight_word_indices)
                 iterations_without_change = 0
@@ -153,7 +156,7 @@ class Adversary(AdversaryStrategy):
                 negative_weight_word_indices = negative_weight_word_indices - small_weight_word_indices
                 iterations_without_change += 1
             if iterations_without_change == max_iterations_without_change:
-                for i in range(n - best_n_word_indices.size()):
+                for i in range(n - len(best_n_word_indices)):
                     best_n_word_indices.add(negative_weight_word_indices.pop())
                 return best_n_word_indices
         return best_n_word_indices
@@ -165,8 +168,26 @@ class Adversary(AdversaryStrategy):
         for index in indices_to_check:
             if message.get_feature(index) == 0:
                 message.flip_bit(index)
-                prediction_result = self.learn_model.predict(Instance(0, spam_message))
+                prediction_result = self.predict_and_record(message)
                 if prediction_result == intended_classification:
                     result.add(index)
                 message.flip_bit(index)
         return result
+
+    def predict_and_record(self, message):
+        self.num_queries += 1
+        return self.learn_model.predict(Instance(0, message))
+
+    def get_n_words(self):
+        if self.attack_model_type == Adversary.FIRST_N:
+            return self.first_n_words(
+                self.positive_instance.get_feature_vector(),
+                self.negative_instance.get_feature_vector()
+            )
+        if self.attack_model_type == Adversary.BEST_N:
+            return self.best_n_words(
+                self.positive_instance.get_feature_vector(),
+                self.negative_instance.get_feature_vector()
+            )
+        else:
+            raise ValueError('Unknown attack model type')

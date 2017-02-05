@@ -24,7 +24,7 @@ class Model(BaseModel):
         """
         self.learner = sklearn_object
 
-    def train(self, instances: List[Instance]):
+    def train(self, instances: List[Instance], isContinuousFeatures=False):
         """Train on the set of training instances using the underlying
         sklearn object.
 
@@ -32,7 +32,7 @@ class Model(BaseModel):
             instances (List[Instance]): training instances.
 
         """
-        (y, X) = sparsify(instances)
+        (y, X) = sparsify(instances, isContinuousFeatures)
         self.learner.fit(X,y)
 
     def predict(self, instances):

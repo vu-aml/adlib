@@ -15,8 +15,9 @@ class FeatureVector(object):
     Defines basic methods for manipulation and data format changes.
 
         """
+    DEFAULT_WEIGHT = 1
 
-    def __init__(self, num_features: int, feature_indices: List[int]):
+    def __init__(self, num_features: int, feature_indices: List[int], feature_weights = None):
         """Create a feature vector given a set of known features.
 
         Args:
@@ -24,10 +25,11 @@ class FeatureVector(object):
                 feature_indices (List[int]): Indices of each feature present in instance.
 
                 """
+        self.feature_weights = feature_weights
+        self.indices = feature_indices                     # type: List[int]
         self.indptr = [0, len(feature_indices)]    # type: List[int]
         self.feature_count = num_features                # type: int
-        self.data = [1] * len(feature_indices)     # type: List[int]
-        self.indices = feature_indices                     # type: List[int]
+        self.data = self.get_feature_values()     # type: List[int]
 
     def copy(self, feature_vector):
         return FeatureVector(feature_vector.feature_count, feature_vector.indices)
@@ -58,11 +60,11 @@ class FeatureVector(object):
 
                 """
         if index in self.indices:
-            return 1
+            return self.get_feature_weight(index)
         else:
             return 0
 
-    def add_feature(self, index, feature):
+    def add_feature(self, index, feature, weight=DEFAULT_WEIGHT):
         """Add feature at given index.
 
         Switches the current value at the index to the specified value.
@@ -72,6 +74,9 @@ class FeatureVector(object):
                         feature (int): Boolean, (0/1)
 
                 """
+        if self.feature_weights:
+            self.feature_weights[index] = weight
+        
         if feature == 0:
             self.feature_count += 1
             if index in self.indices:
@@ -99,6 +104,9 @@ class FeatureVector(object):
         else:
             self.indices.remove(index)
             self.feature_count -= 1
+
+        if self.feature_weights and index in self.feature_weights:
+            del self.feature_count[index]
 
     def flip_bit(self, index):
         """Flip feature at given index.
@@ -120,7 +128,7 @@ class FeatureVector(object):
         """Return feature vector represented by sparse matrix.
 
                 """
-        data = [1] * len(self.indices)
+        data = self.get_feature_values()
         indices = self.indices
         indptr = [0, len(self.indices)]
         return csr_matrix((data, indices, indptr), shape=(1, self.feature_count))
@@ -132,181 +140,16 @@ class FeatureVector(object):
         C_y = (y_array - xa_array).indices
 
         return C_y
-
-#TODO: Work out the relationship between this and FeatureVector.
-class WeightedFeatureVector(FeatureVector):
-    """Non-binary feature vector data structure.
-
-    Contains sparse representation of features.
-    Defines basic methods for manipulation and data format changes.
-
-        """
-    #Could also store feature frequencies in an array of tuples or non-sparse array
-    #Could call super and accept a non sparse list instead of feature_frequencies
-
-    DEFAULT_WEIGHT = 1
-
-    def __init__(self, num_features: int, feature_indices: List[int], feature_weights: Dict[int, float]):
-        super().__init__(num_features, feature_indices)
-
-        """Create a feature vector given a set of known features and their frequencies.
-
-        Args:
-                num_features (int): Total number of features.
-                feature_indices (List[int]): Indices of each feature present in instance.
-                feature_frequencies (Dict[int,int]): Frequencies (value) of each feature (key)
-
-                """
-        self.feature_weights = feature_weights
-        # could maybe store as dictionary to be more sparse
-
-    @staticmethod 
-    def copy(feature_vector):
-        return WeightedFeatureVector(
-            feature_vector.feature_count,
-            feature_vector.indices,
-            feature_vector.feature_weights
-        )
-
-    @staticmethod
-    def cast(feature_vector):
-        feature_weights = {index: WeightedFeatureVector.DEFAULT_WEIGHT for index in feature_vector}
-        return WeightedFeatureVector(
-            feature_vector.feature_count,
-            feature_vector.indices,
-            feature_weights
-        )
-
-    def __iter__(self):
-        return iter(self.indices)
-
-    def __iter__(self):
-        return iter(self.indices)
-
-    def __getitem__(self, key):
-        return self.indices[key]
-
-    def __len__(self):
-      return len(self.indices)
-
-    def get_feature_count(self):
-        """Return static number of features.
-
-                """
-        return self.feature_count
-
-    def get_feature(self, index: int) -> int:
-        """Return value of feature at index
-
-                Args:
-                        index (int): Feature index.
-
-                """
-        if index in self.indices:
-            return self.feature_weights.get(index)
-        else:
-            return 0
-
-    def add_feature(self, index, feature, weight=DEFAULT_WEIGHT):
-        """Add feature at given index.
-
-        Switches the current value at the index to the specified value.
-
-                Args:
-                        index (int): Index of feature update.
-                        feature (int): Boolean, (0/1)
-
-                """
-        if feature == 0:
-            self.feature_count += 1
-            if index in self.indices:
-                self.indices.remove(index)
-            if index in self.feature_weights:
-                del self.feature_weights[index]
-            return
-
-        if feature == 1:
-            if index in self.indices:
-                return
-            self.feature_weights[index] = weight
-            self.indices.append(index)
-            self.indices.sort()
-            self.feature_count += 1
-            return
-
-    def remove_feature(self, index):
-        """Remove feature at given index.
-
-        If the feature at [index] is 0, no action is taken.
-
-                Args:
-                        index (int): Index of feature to remove.
-
-                """
-        if index not in self.indices:
-            self.feature_count -= 1
-        else:
-            self.indices.remove(index)
-            self.feature_count -= 1
-        if index in self.feature_weights:
-            del self.feature_count[index]
-
-    #tentative flip bit implementation
-    def flip_bit(self, index):
-        """Flip feature at given index.
-
-        Does not remove the weight from the dictionary
-        Switches the current value at the index to the opposite value.
-        {0 --> weight, weight --> 0}
-
-                Args:
-                        index (int): Index of feature update.
-
-                """
-        if index in self.indices:
-            self.indices.remove(index)
-        else:
-            self.indices.append(index)
-            self.indices.sort()
-
-    def set_feature_weight(self, index, new_weight):
-        """Change feature at given index. Index here refers to index of self.data a list
-            representing all n-grams in the 'original vector' (includes repeats).
-
-        If the feature at [index] is the same as the new value, no action is taken.
-        Otherwise, replace value at index and update counts of both feature values.
-
-                Args:
-                        index (int): Index of feature to replace.
-                        new_feature_value (int): index in domain of feature at index: index
-
-                """
-        self.feature_weights[index] == new_weight
-
+    
     def get_feature_weight(self, index):
-        if index in self.feature_weights:
+        if self.feature_weights and index in self.feature_weights:
             return self.feature_weights[index]
-        # defaults to 1, do we want this? 
-        return 1
+        return FeatureVector.DEFAULT_WEIGHT
 
-    # should this be coo or dok for weighted feature vec?
-    def get_csr_matrix(self) -> csr_matrix:
-        """Return feature vector represented by sparse matrix.
-
-                """
-        data = [self.get_feature_weight(index) for index in self.indices]
-        indices = self.indices
-        indptr = [0, len(self.indices)]
-        return csr_matrix((data, indices, indptr), shape=(1, self.feature_count))
-
-
-    def feature_difference(self, xa) -> List:
-        y_array = self.get_csr_matrix()
-        xa_array = xa.get_csr_matrix()
-
-        C_y = (y_array - xa_array).indices
-
-        return C_y
+    def get_feature_values(self):
+        if not self.feature_weights: return [FeatureVector.DEFAULT_WEIGHT for index in self.indices]
+        # defaults to 1 if index not in feature_weights
+        return [self.feature_weights.get(index, FeatureVector.DEFAULT_WEIGHT) for index in self.indices]
 
 class Instance(object):
     """Instance data structure.
@@ -361,7 +204,7 @@ class Instance(object):
         return sum
 
 #TODO: this also needs to be implemented for loading non-binary instances
-def load_instances(data: List) -> List[Instance]:
+def load_instances(data: List, isContinuous=False) -> List[Instance]:
     """Load data from a specified file.
 
     Args:
@@ -377,7 +220,6 @@ def load_instances(data: List) -> List[Instance]:
     path = './data_reader/data/' + data[1] + '/' + data[0]
 
     instances = []
-    max_index = 0
     try:
         with open(path, 'r') as infile:
             for line in infile:
@@ -385,28 +227,42 @@ def load_instances(data: List) -> List[Instance]:
                 instance_data = line.split(' ')
                 if '\n' in instance_data[0]:
                     break
-                label = int(float(instance_data[0].strip(':')))
-                index_list = []
-                for feature in instance_data[1:]:
-                    if feature == '\n':
-                        continue
-                    index_list.append(int(feature))
-                if index_list[-1] > max_index:
-                    max_index = index_list[-1]
+                label, index_list, max_index = read_instance_from_line(instance_data, isContinuous)
                 instances.append((label, index_list))
 
     except FileNotFoundError:
         return None
 
-    num_indices = max_index + 1
+    corpus_weights = None
+    if isContinuous:
+        try:
+            path += '_corpus_weights' 
+            with open(path, 'rb') as infile:
+                corpus_weights = pickle.load(infile)
 
+        except FileNotFoundError:
+            print('Corpus weights file not found')
+            return None
+
+    num_indices = max_index + 1
     created_instances = []
     for instance in instances:
-        feature_vector = FeatureVector(num_indices, instance[1])
+        feature_vector = FeatureVector(num_indices, instance[1], corpus_weights)
         created_instances.append(Instance(instance[0], feature_vector))
 
     return created_instances
 
+def read_instance_from_line(instance_data, isContinuous):
+    label = int(float(instance_data[0].strip(':')))
+    max_index = 0
+    index_list = []
+    for feature in instance_data[1:]:
+        if feature == '\n':
+            continue
+        index_list.append(int(feature))
+    if index_list[-1] > max_index:
+        max_index = index_list[-1]
+    return (label, index_list, max_index)
 
 # def open_transformed_instances(battle_name: str, data: str) -> List[Instance]:
 #     path = './data_reader/data/transformed/' + data + '.' + battle_name

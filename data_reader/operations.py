@@ -5,24 +5,24 @@ from data_reader.input import Instance, FeatureVector
 
 
 def fv_equals(fv1: FeatureVector, fv2: FeatureVector):
-	return fv1.indices == fv2.indices
+    return fv1.indices == fv2.indices
 
 
-def sparsify(instances: List[Instance], binary = True):
-	num_features = instances[0].get_feature_vector().feature_count
-	labels = []
-	indptr = [0]
-	indices = []
-	ind_ = 0
-	data = []
-	for instance in instances:
-		labels.append(instance.get_label())
-		fv = instance.get_feature_vector()
-		indptr.append(indptr[ind_]+len(fv.indices))
-		ind_ += 1
-		indices += fv.indices
-		if not binary:
-			data+=list(fv.feature_values)
-	if binary:
-		data = [1]*len(indices)
-	return (labels, csr_matrix((data, indices, indptr), shape=(len(instances), num_features)))
+def sparsify(instances: List[Instance], isContinuousFeatures = False):
+    num_features = instances[0].get_feature_vector().feature_count
+    labels = []
+    indptr = [0]
+    indices = []
+    ind_ = 0
+    data = []
+    for instance in instances:
+        labels.append(instance.get_label())
+        fv = instance.get_feature_vector()
+        indptr.append(indptr[ind_]+len(fv.indices))
+        ind_ += 1
+        indices += fv.indices
+        if isContinuousFeatures:
+            data+=list(fv.get_feature_values())
+    if not isContinuousFeatures:
+        data = [1]*len(indices)
+    return (labels, csr_matrix((data, indices, indptr), shape=(len(instances), num_features)))

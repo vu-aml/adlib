@@ -9,7 +9,7 @@ We use py.test for unit testing. Install with `pip install -U pytest`.
 To run tests, run `pytest tests`.
 
 ## Installation
-Dependencies:
+### Dependencies
 * Python3 
 * SciPy
 * NumPy

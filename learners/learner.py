@@ -22,7 +22,7 @@ class InitialPredictor(object):
         self.model = None  # type: BaseModel
 
     def get_model(self):
-        """Return the existing model used buy the initial learner
+        """Return the existing model used by the initial learner
 
         """
         return self.model
@@ -40,7 +40,7 @@ class InitialPredictor(object):
 
         Args:
             instances (List[Instance]): training instances.
-  
+
         """
         self.model.train(instances)
 
@@ -49,10 +49,10 @@ class InitialPredictor(object):
 
         Args:
             instances (List[Instance]) or (Instance): training or test instances.
-  
+
         Returns:
             label classifications (List(int))
-  
+
         """
         return self.model.predict(instances)
 
@@ -63,7 +63,7 @@ class InitialPredictor(object):
 
         Args:
             params (Dict): set of available params with updated values.
-  
+
         """
         self.model.set_params(params)
 
@@ -74,7 +74,7 @@ class InitialPredictor(object):
 
         Returns:
             dictionary mapping param names to current values
-  
+
         """
         return self.model.get_available_params()
 

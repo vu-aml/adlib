@@ -2,7 +2,6 @@ from learners.learner import InitialPredictor, ImprovedPredictor
 from data_reader.input import Instance, FeatureVector
 from typing import List, Dict
 import numpy as np
-import numpy.matlib.repmat
 import cvxpy as cvx
 
 OPT_INSTALLED = True
@@ -77,11 +76,11 @@ class ImprovedLearner(ImprovedPredictor):
         t = cvx.Variable(row_sum)
         u = cvx.Variable(row_sum,col_neg)
         v = cvx.Variable(row_sum,col_neg)
-        
+
         constraints = [xi0>=0,
                        xi0 >=1-self.pnl*(np.dot(self.pn,w)+b)+t,
                        t>=np.dot((u*self.Mk),self.ones_col),
-                       (-u+v)*self.TMk==0.5*repmat((1+self.pnl),1,col_neg)*repmat(w.T,row_sum,1),
+                       (-u+v)*self.TMk==0.5*np.tile((1+self.pnl),(1,col_neg))*np.tile(w.T,(row_sum,1)),
                        u>=0,
                        v>=0]
         # Objective

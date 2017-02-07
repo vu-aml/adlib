@@ -130,7 +130,8 @@ class Classifier(object):
             self.simulated_learner.set_model(self.model)
             self.simulated_adversary = set_adversary(defense_strategy[1])
             self.simulated_defense = set_learner_improve(defense_strategy[0])
-
+            
+    #TODO: split the data between training and testing portions in these setters
     def set_train_data(self, instances: List[Instance]):
         """
         set training data instances

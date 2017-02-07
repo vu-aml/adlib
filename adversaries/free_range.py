@@ -14,7 +14,7 @@ class FreeRange(Adversary):
         self.innocuous_target              # need to figure out how to get a non malicious instance
         self.num_features = None           # type: int
         self.binary = binary               # type: bool True means binary features
-        self.learner=learner	#type: Classifier
+        self.learn_model=learner	#type: Classifier
 
 
     def attack(self, instances: List[Instance]) -> List[Instance]:
@@ -49,7 +49,7 @@ class FreeRange(Adversary):
         return params
 
     def set_adversarial_params(self, learner, train_instances: List[Instance]):
-        self.learner = learner
+        self.learn_model = learner
         self.num_features = train_instances[0].get_feature_vector().get_feature_count()
         self.innocuous_target = next(
             (x for x in instances if x.get_label() == InitialPredictor.negative_classification),

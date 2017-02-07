@@ -16,11 +16,11 @@ class GoodWord(Adversary):
     BEST_N = 'best_n'
     FIRST_N = 'first_n'
 
-    def __init__(self):
-        self.learn_model = None                # type: InitialPredictor
+    def __init__(self, n = 100, learner =  None):
+        self.learn_model = learner                # type: InitialPredictor
         self.positive_instance = None    # type: Instance
         self.negative_instance = None    # type: Instance
-        self.n = None
+        self.n = n
         self.num_queries = 0
 
     def attack(self, instances: List[Instance]) -> List[Instance]:
@@ -179,12 +179,12 @@ class GoodWord(Adversary):
         return self.learn_model.predict(Instance(0, message))
 
     def get_n_words(self):
-        if self.attack_model_type == Adversary.FIRST_N:
+        if self.attack_model_type == GoodWord.FIRST_N:
             return self.first_n_words(
                 self.positive_instance.get_feature_vector(),
                 self.negative_instance.get_feature_vector()
             )
-        if self.attack_model_type == Adversary.BEST_N:
+        if self.attack_model_type == GoodWord.BEST_N:
             return self.best_n_words(
                 self.positive_instance.get_feature_vector(),
                 self.negative_instance.get_feature_vector()

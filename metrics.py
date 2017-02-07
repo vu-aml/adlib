@@ -1,6 +1,6 @@
 from data_reader.input import Instance
 from typing import List
-from classifier_wrapper import Classifier
+from classifier import Classifier
 from sklearn import metrics
 from data_reader.operations import sparsify
 import matplotlib.pyplot as plt

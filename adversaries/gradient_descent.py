@@ -21,7 +21,7 @@ class GradientDescent(Adversary):
         self.max_iteration = max_iteration
         self.step = step
         self.gradient_function = self.loss_function = getattr(self, 'linear_gradient')
-        self.learner = learner   #type: SVC
+        self.learn_model = learner   #type: SVC
 
 
     def attack(self, instances) -> List[Instance]:
@@ -56,7 +56,7 @@ class GradientDescent(Adversary):
         return params
 
     def set_adversarial_params(self, learner, train_instances):
-        self.learner = learner.get_learner().get_alg()
+        self.learn_model = learner.get_learner().get_alg()
 
     def gradient_descent(self, instance: Instance, instances: List[Instance]):
         features = instance.get_feature_vector().get_csr_matrix().toarray()[0]
@@ -67,7 +67,7 @@ class GradientDescent(Adversary):
             dg = np.linalg.norm(gradient)**-1
             gradient = np.multiply(1/np.linalg.norm(gradient), gradient)
             new_features = np.subtract(features, np.multiply(self.step, gradient))
-            if self.learner.decision_function(new_features)[0] - self.learner.decision_function(features)[0] < .1:
+            if self.learn_model.decision_function(new_features)[0] - self.learn_model.decision_function(features)[0] < .1:
                 break
             features = new_features
 
@@ -76,11 +76,11 @@ class GradientDescent(Adversary):
         return transformed_instance
 
     def linear_gradient(self, features, other_features):
-        return self.learner.coef_.toarray()
+        return self.learn_model.coef_.toarray()
 
     def rbf_gradient(self, features, other_features):
-        alphas = self.learner.dual_coef_[0]
-        gamma = self.learner.get_params()['gamma']
+        alphas = self.learn_model.dual_coef_[0]
+        gamma = self.learn_model.get_params()['gamma']
         if gamma is 'auto':
             gamma = 1/len(features)
         sum_ = np.zeros(len(features))

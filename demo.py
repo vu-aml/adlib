@@ -1,10 +1,9 @@
 import sys
 from sklearn import svm
-import adversaries.coordinate_greedy
-import adversaries.simple_optimize
+import adversaries as ad
 from data_reader import input, output, extractor
-from classifier_wrapper import Classifier
-from evasion_metrics import EvasionMetrics
+from classifier import Classifier
+from metrics import EvasionMetrics
 
 # debugging
 import time
@@ -26,20 +25,22 @@ def main(argv):
         # to transform training to test during execution.
         dr.create_instances('all_categories', continuous=True) # test and train instances
 
-    # create an naive classifier using classifier_wrapper
+    # create an naive classifier using classifier
     learning_model = svm.SVC(probability=True, kernel='linear')
-    clf = Classifier(learning_model, "100_instance_debug")
+
+    instances = input.load_instances('./data_reader/data/test/100_instance_debug')
+    #instances = input.load_instances(["100_instance_debug", 'test'], isContinuous=True)
+    clf = Classifier(learning_model, instances)
     #clf = Classifier(learning_model, "100_instance_debug", isContinuousFeatures=True)
     clf.train()
 
     # launch attack on the classifier using a AdversarialStrategy
-    instances = input.load_instances(["100_instance_debug", 'test'])
-    #instances = input.load_instances(["100_instance_debug", 'test'], isContinuous=True)
-    adv = adversaries.simple_optimize.Adversary()
+
+    adv = ad.SimpleOptimize()
     adv.set_params({'lambda_val': -100, 'max_change': 65})
     adv.set_adversarial_params(clf, instances)
     instances_post_attack = adv.attack(instances)
-    
+
     # obtain metrics of classification performance both pre- and post- attack
     metrics = EvasionMetrics(clf, instances, instances_post_attack)
     preAccuracy = metrics.getAccuracy(True)
@@ -53,19 +54,21 @@ def main(argv):
 
     # create a robust classifier(classifier with a internal mechanism to protect against attack)
     learning_model2 = svm.SVC(probability=True, kernel='linear')
-    clf2 = Classifier(learning_model2, "100_instance_debug", ["retraining", "simple_optimize"])
+
+    instances2 = input.load_instances('./data_reader/data/test/100_instance_debug')
+    #instances2 = input.load_instances(["100_instance_debug", 'test'], isContinuous=True)
+    clf2 = Classifier(learning_model2, instances2, ["retraining", ad.SimpleOptimize()])
     #clf2 = Classifier(learning_model2, "100_instance_debug", ["retraining", "simple_optimize"], isContinuousFeatures=True)
     clf2.set_simulated_adversary_params({'lambda_val': -100, 'max_change': 65})
     clf2.train()
-    
+
     # launch attack on the robust classifier using a AdversarialStrategy
-    instances2 = input.load_instances(["100_instance_debug", 'test'])
-    #instances2 = input.load_instances(["100_instance_debug", 'test'], isContinuous=True)
-    adv = adversaries.simple_optimize.Adversary()
+
+    adv = ad.SimpleOptimize()
     adv.set_params({'lambda_val': -100, 'max_change': 65})
     adv.set_adversarial_params(clf2, instances2)
     instances_post_attack2 = adv.attack(instances2)
-    
+
     # obtain metrics of classification performance both pre- and post- attack
     metrics2 = EvasionMetrics(clf2, instances, instances_post_attack2)
     preAccuracy2 = metrics2.getAccuracy(True)

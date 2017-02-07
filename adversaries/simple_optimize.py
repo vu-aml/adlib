@@ -3,7 +3,7 @@ from data_reader.input import Instance, FeatureVector
 from typing import List, Dict
 from learners.learner import InitialPredictor
 from learners.models.model import BaseModel
-from classifier_wrapper import Classifier
+from classifier import Classifier
 from copy import deepcopy
 from math import exp
 
@@ -20,7 +20,7 @@ class SimpleOptimize(Adversary):
         self.lambda_val = lambda_val                     # type: float
         self.max_change = max_change                     # type: float
         self.num_features = None                         # type: int
-        self.learner = learner  	                     #type: Classifier
+        self.learn_model = learner  	                 #type: Classifier
 
 
     def attack(self, instances: List[Instance]) -> List[Instance]:
@@ -47,16 +47,16 @@ class SimpleOptimize(Adversary):
         return params
 
     def set_adversarial_params(self, learner, train_instances: List[Instance]):
-        self.learner = learner
+        self.learn_model = learner
         self.num_features = train_instances[0].get_feature_vector().get_feature_count()
 
     def optimize(self, instance: Instance):
         change = 0
         for i in range(0, self.num_features):
-            orig_prob = self.learner.decision_function([instance])[0]
+            orig_prob = self.learn_model.decision_function([instance])[0]
             instance.get_feature_vector().flip_bit(i)
             change += 1
-            new_prob = self.learner.decision_function([instance])[0]
+            new_prob = self.learn_model.decision_function([instance])[0]
             if new_prob >= (orig_prob-exp(self.lambda_val)):
                 instance.get_feature_vector().flip_bit(i)
                 change -= 1
@@ -80,4 +80,5 @@ class SimpleOptimize(Adversary):
         return new_a
 
     def clone(self):
+        """return a custom deepcopy of the adversary."""
         return deepcopy(self)

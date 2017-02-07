@@ -36,7 +36,7 @@ class CostSensitive(Adversary):
         self.positive_instances = None
         self.delta_Ua = None
         self.num_features = None
-        self.learner = learner    #type: Classifier
+        self.learn_model = learner    #type: Classifier
 
     def attack(self, instances) -> List[Instance]:
         for instance in instances:
@@ -69,7 +69,7 @@ class CostSensitive(Adversary):
 
     def set_adversarial_params(self, learner, train_instances):
 
-        self.learner = learner
+        self.learn_model = learner
         self.Xc = train_instances
         self.num_features = train_instances[0].get_feature_vector.get_feature_count()
         self.positive_instances = [x for x in train_instances if x.get_label() == InitialPredictor.positive_classification]
@@ -113,7 +113,7 @@ class CostSensitive(Adversary):
         return: log P(+|x) / P(-|x)
         '''
         try:
-            log_prob = self.learner.predict_log_proba(x)
+            log_prob = self.learn_model.predict_log_proba(x)
         except:
             print("This adversary currently only supports probability models")
             raise

@@ -20,7 +20,7 @@ class CoordinateGreedy(Adversary):
         self.lambda_val = lambda_val
         self.epsilon = epsilon
         self.num_features = None
-        self.learner = learner         #type: Classifier
+        self.learn_model = learner         #type: Classifier
 
 
     def attack(self, instances) -> List[Instance]:
@@ -46,7 +46,7 @@ class CoordinateGreedy(Adversary):
         return params
 
     def set_adversarial_params(self, learner, train_instances: List[Instance]):
-        self.learner = learner
+        self.learn_model = learner
         self.num_features = train_instances[0].get_feature_vector().get_feature_count()
 
     def coordinate_greedy(self, instance: Instance, instances: List[Instance]):
@@ -66,7 +66,7 @@ class CoordinateGreedy(Adversary):
                     suboptimal = False
                     break
 
-        if self.learner.decision_function([final]) >= 0:
+        if self.learn_model.decision_function([final]) >= 0:
             final = deepcopy(initial)
 
         indices = [x for x in range(0,self.num_features) if final[x] == 1]
@@ -78,7 +78,7 @@ class CoordinateGreedy(Adversary):
         return x0
 
     def transform_cost(self, x: np.array, xi: np.array):
-        return self.learner.decision_function([x])[0] + self.quadratic_cost(x, xi)
+        return self.learn_model.decision_function([x])[0] + self.quadratic_cost(x, xi)
 
     def quadratic_cost(self, x: np.array, xi: np.array):
         cost = self.lambda_val/2 * np.linalg.norm(np.subtract(x, xi))**2

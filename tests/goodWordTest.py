@@ -3,8 +3,8 @@ from sklearn import svm
 from sklearn import linear_model
 import adversaries as ad
 from data_reader import input, output, extractor
-from classifier_wrapper import Classifier
-from evasion_metrics import EvasionMetrics
+from classifier import Classifier
+from metrics import EvasionMetrics
 from copy import deepcopy
 # debugging
 import time
@@ -16,7 +16,7 @@ def main(argv):
     against a logistic regression classfier (aka maxent)
     """
 
-    # create an naive classifier using classifier_wrapper
+    # create an naive classifier using classifier
     learning_model = linear_model.LogisticRegressionCV()
     instances = input.load_instances('./data_reader/data/test/100_instance_debug')
     clf = Classifier(learning_model, instances)
@@ -60,7 +60,7 @@ def main(argv):
     postAccuracy2 = metrics2.getAccuracy(False)
     print ("Pre-attack Accuracy (robust classifier): " + str(preAccuracy2))
     print ("Post-attack Accuracy: (robust classifier): " + str(postAccuracy2))
-
+    metrics.plotROC(True)
 
 
 

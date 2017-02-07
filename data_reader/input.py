@@ -76,7 +76,7 @@ class FeatureVector(object):
                 """
         if self.feature_weights:
             self.feature_weights[index] = weight
-        
+
         if feature == 0:
             self.feature_count += 1
             if index in self.indices:
@@ -140,7 +140,7 @@ class FeatureVector(object):
         C_y = (y_array - xa_array).indices
 
         return C_y
-    
+
     def get_feature_weight(self, index):
         if self.feature_weights and index in self.feature_weights:
             return self.feature_weights[index]
@@ -203,8 +203,8 @@ class Instance(object):
             sum += self.get_feature_cost(cost_vector, index)
         return sum
 
-#TODO: this also needs to be implemented for loading non-binary instances
-def load_instances(data: List, isContinuous=False) -> List[Instance]:
+#TODO: need to change this so that the path to the data is passed rather than
+def load_instances(data, continuous=False) -> List[Instance]:
     """Load data from a specified file.
 
     Args:
@@ -217,7 +217,7 @@ def load_instances(data: List, isContinuous=False) -> List[Instance]:
             instances as List[Instance]
 
         """
-    path = './data_reader/data/' + data[1] + '/' + data[0]
+    path = data
 
     instances = []
     try:
@@ -227,16 +227,16 @@ def load_instances(data: List, isContinuous=False) -> List[Instance]:
                 instance_data = line.split(' ')
                 if '\n' in instance_data[0]:
                     break
-                label, index_list, max_index = read_instance_from_line(instance_data, isContinuous)
+                label, index_list, max_index = read_instance_from_line(instance_data, continuous)
                 instances.append((label, index_list))
 
     except FileNotFoundError:
         return None
 
     corpus_weights = None
-    if isContinuous:
+    if continuous:
         try:
-            path += '_corpus_weights' 
+            path += '_corpus_weights'
             with open(path, 'rb') as infile:
                 corpus_weights = pickle.load(infile)
 
@@ -252,7 +252,7 @@ def load_instances(data: List, isContinuous=False) -> List[Instance]:
 
     return created_instances
 
-def read_instance_from_line(instance_data, isContinuous):
+def read_instance_from_line(instance_data, continuous):
     label = int(float(instance_data[0].strip(':')))
     max_index = 0
     index_list = []

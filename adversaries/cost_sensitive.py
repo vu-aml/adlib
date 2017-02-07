@@ -1,9 +1,10 @@
-from adversaries.adversary import AdversaryStrategy
+from adversaries.adversary import Adversary
 from typing import List, Dict
 from data_reader.input import Instance, FeatureVector
 import numpy as np
 from learners.learner import InitialPredictor
 from math import log
+from copy import deepcopy
 
 '''Adversarial Classification based on paper by:
     Dalvi, Domingos, Mausam, Sanghai, and Verma
@@ -24,51 +25,51 @@ Concept:
     TODO: Extend compatibility beyond probability classifier models
 '''
 
-class Adversary(AdversaryStrategy):
-    def __init__(self):
-        self.Ua = None
-        self.Vi = None
-        self.Uc = None
-        self.Wi = None
-        self.learn_model = None
+class CostSensitive(Adversary):
+    def __init__(self, learner=None):
+        self.Ua = Ua or None
+        self.Vi = Vi or None
+        self.Uc = Uc or None
+        self.Wi = Wi or None
         self.Xc = None
         self.Xdomain = None
         self.positive_instances = None
         self.delta_Ua = None
         self.num_features = None
+        self.learner = learner    #type: Classifier
 
-    def change_instances(self, instances) -> List[Instance]:
+    def attack(self, instances) -> List[Instance]:
         for instance in instances:
-			transformed_instance = deepcopy(instance)
-			if instance.get_label() == InitialPredictor.positive_classification:
-				transformed_instances.append(self.A(transformed_instance))
-			else:
-				transformed_instances.append(transformed_instance)
-		return transformed_instances
+            transformed_instance = deepcopy(instance)
+            if instance.get_label() == InitialPredictor.positive_classification:
+                transformed_instances.append(self.a(transformed_instance))
+            else:
+                transformed_instances.append(transformed_instance)
+        return transformed_instances
 
     def set_params(self, params: Dict):
         if params['measuring_cost'] is not None:
-			self.Vi = params['measuring_cost']
+            self.Vi = params['measuring_cost']
 
-		if params['adversary_utility'] is not None:
-			self.Ua = params['adversary_utility']
+        if params['adversary_utility'] is not None:
+            self.Ua = params['adversary_utility']
 
-		if params['transform_cost'] is not None:
-			self.Wi = params['transform_cost']
+        if params['transform_cost'] is not None:
+            self.Wi = params['transform_cost']
 
         if params['scenario'] is not None:
-    		self.scenario = params['scenario']
+            self.scenario = params['scenario']
 
     def get_available_params(self) -> Dict:
         params = {'measuring_cost': self.Vi,
-		          'adversary_utility': self.Ua,
-		          'transform_cost': self.Wi,
-		          'scenario': 'All_Word'}
-		return params
+                  'adversary_utility': self.Ua,
+                  'transform_cost': self.Wi,
+                  'scenario': 'All_Word'}
+        return params
 
     def set_adversarial_params(self, learner, train_instances):
 
-        self.learn_model = learner
+        self.learner = learner
         self.Xc = train_instances
         self.num_features = train_instances[0].get_feature_vector.get_feature_count()
         self.positive_instances = [x for x in train_instances if x.get_label() == InitialPredictor.positive_classification]
@@ -112,7 +113,7 @@ class Adversary(AdversaryStrategy):
         return: log P(+|x) / P(-|x)
         '''
         try:
-            log_prob = self.learn_model.predict_log_proba(x)
+            log_prob = self.learner.predict_log_proba(x)
         except:
             print("This adversary currently only supports probability models")
             raise
@@ -130,10 +131,10 @@ class Adversary(AdversaryStrategy):
         '''
         return log(self.log_odds(x) - self.log_threshold(self.Uc))
 
-    def log_threshold(self, Uc = self.Uc):
+    def log_threshold(self, Uc):
         return (Uc[0][0] - Uc[1][0]) / (Uc[1][1] - Uc[0][1])
 
-    def A(x):
+    def a(x):
         '''
         Change instance x only if the minimum cost to effectively fool C is
         less than delta_Ua: the user defined utility gained by fooling

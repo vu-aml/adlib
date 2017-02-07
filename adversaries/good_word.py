@@ -1,5 +1,5 @@
 from typing import List, Dict
-from adversaries.adversary import AdversaryStrategy
+from adversaries.adversary import Adversary
 from data_reader.input import Instance, FeatureVector
 from learners.learner import InitialPredictor
 from data_reader import operations
@@ -11,8 +11,8 @@ from itertools import filterfalse
 Concept:
 '''
 
-class Adversary(AdversaryStrategy):
-    
+class GoodWord(Adversary):
+
     BEST_N = 'best_n'
     FIRST_N = 'first_n'
 
@@ -23,7 +23,7 @@ class Adversary(AdversaryStrategy):
         self.n = None
         self.num_queries = 0
 
-    def change_instances(self, instances: List[Instance]) -> List[Instance]:
+    def attack(self, instances: List[Instance]) -> List[Instance]:
         word_indices = self.get_n_words()
         transformed_instances = []
 

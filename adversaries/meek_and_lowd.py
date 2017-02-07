@@ -1,5 +1,5 @@
 from typing import List, Dict
-from adversaries.adversary import AdversaryStrategy
+from adversaries.adversary import Adversary
 from data_reader.input import Instance, FeatureVector
 from learners.learner import InitialPredictor
 from data_reader import operations
@@ -20,7 +20,7 @@ class ReverseEngineerClassifier:
 
     def __init__(self, adversary):
         self.adversary = adversary
-    
+
     def execute(self):
         # Document
         raise NotImplementedError
@@ -43,7 +43,7 @@ class FindBooleanIMAC(ReverseEngineerClassifier):
 
             C_y = y.feature_difference(xa)
             not_C_y = list(filterfalse(lambda x: x in C_y, range(0, y.feature_count)))
-            # in testing, this iterates through over 2 mill combinations and is very slow 
+            # in testing, this iterates through over 2 mill combinations and is very slow
             for index1 in C_y:
                 for index2 in C_y:
                     if index2 <= index1: continue
@@ -107,7 +107,7 @@ class MultiLineSearch(ReverseEngineerClassifier):
             else:
                 cost_plus = cost_t
         return Instance(1, x_star)
-    
+
     # I think the algorithm expects you to pass in a cost vector for each feature
     # But in feature difference we assume a uniform adversarial cost function
     # I'm not sure what value epsilon is supposed to be (or cost_min)
@@ -187,7 +187,7 @@ class KStepMultiLineSearch(MultiLineSearch):
                 cost_min = temp_min_cost
         return Instance(1, x_star)
 
-class Adversary(AdversaryStrategy):
+class MeekAndLowd(Adversary):
 
     FIND_BOOLEAN_IMAC = 'find_boolean_IMAC'
     MULTI_LINE_SEARCH = 'multi_line_search'
@@ -197,14 +197,14 @@ class Adversary(AdversaryStrategy):
         self.learn_model = None                # type: InitialPredictor
         self.positive_instance = None    # type: Instance
         self.negative_instance = None    # type: Instance
-        self.adversary_costs = None    # type: Array 
+        self.adversary_costs = None    # type: Array
         self.epsilon = None    # type: Double?
         self.cost_min = None    # type: Double?
         self.k = None    # type: integer
         self.attack_model_type = Adversary.FIND_BOOLEAN_IMAC
         self.cost_vector = None
 
-    def change_instances(self, instances: List[Instance]) -> List[Instance]:
+    def attack(self, instances: List[Instance]) -> List[Instance]:
         '''Change adversarial instances by finding boolean IMAC.
 
         used to transform all test instances, assuming that each instance classified as
@@ -213,7 +213,7 @@ class Adversary(AdversaryStrategy):
         adversarially preferred instances.
 
         'ideal' instance refers to the test vector that makes the best argument for the
-        adversaries intention. E.g. spam filtering, email that the adversary classifies as being
+        ad intention. E.g. spam filtering, email that the adversary classifies as being
         most useful to their efforts
         '''
         transformed_instances = []
@@ -239,21 +239,21 @@ class Adversary(AdversaryStrategy):
     def set_params(self, params: Dict):
         if params['attack_model_type'] is not None:
             self.attack_model_type = params['attack_model_type']
-        
+
         if params['adversary_costs'] is not None:
             self.adversary_costs = params['adversary_costs']
 
         if params['epsilon'] is not None:
             self.epsilon = params['epsilon']
-        
+
         if params['cost_min'] is not None:
             self.cost_min = params['cost_min']
-        
+
         if params['k'] is not None:
             self.k = params['k']
         if params['cost_vector'] is not None:
             self.cost_vector = params['cost_vector']
-        
+
         return None
 
     def set_adversarial_params(self, learner, train_instances):

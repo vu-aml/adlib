@@ -1,4 +1,4 @@
-from adversaries.adversary import AdversaryStrategy
+from adversaries.adversary import Adversary
 from data_reader.input import Instance, FeatureVector
 from typing import List, Dict
 from types import FunctionType
@@ -256,7 +256,7 @@ class AntagonisticLossEquilibrium(Game):
 		return t
 
 
-class Adversary(AdversaryStrategy):
+class NashEq(Adversary):
 
 	CONVEX_LOSS = 'convex_loss'
 	ANTAGONISTIC_LOSS = 'antagonistic_loss'
@@ -274,7 +274,7 @@ class Adversary(AdversaryStrategy):
 		self.perturbation_vector = None                        # type: np.array
 		self.learner_perturbation_vector = None                # type: np.array
 
-	def change_instances(self, instances) -> List[Instance]:
+	def attack(self, instances) -> List[Instance]:
 		transformed_instances = []
 		for instance in instances:
 			transformed_instance = deepcopy(instance)

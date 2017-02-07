@@ -2,7 +2,7 @@ from data_reader.input import Instance
 from typing import List, Dict
 
 
-class AdversaryStrategy(object):
+class Adversary(object):
 	"""Abstract base class for adversarial data transformation methods.
 
 	Declares the bare-minimum functionality for adversarial
@@ -11,7 +11,7 @@ class AdversaryStrategy(object):
 
     """
 
-	def change_instances(self, instances) -> List[Instance]:
+	def attack(self, instances) -> List[Instance]:
 		"""Transform the set of instances using an adversarial algorithm.
 
         Args:
@@ -57,4 +57,6 @@ class AdversaryStrategy(object):
 
         """
 		raise NotImplementedError
-
+	# def clone(self):
+	# 	"""Return a new copy of the adversary with same initial params."""
+	# 	raise NotImplementedError

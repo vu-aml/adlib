@@ -1,5 +1,5 @@
 from typing import List, Dict
-from adversaries.adversary import AdversaryStrategy
+from adversaries.adversary import Adversary
 from learners.models.model import BaseModel
 
 
@@ -95,7 +95,7 @@ class ImprovedPredictor(object):
 
     def __init__(self):
         self.initial_learner = None   # type: InitialPredictor
-        self.adversary = None         # type: AdversaryStrategy
+        self.adversary = None         # type: Adversary
 
     def improve(self, instances):
         """Improve default behavior (do nothing)
@@ -122,12 +122,12 @@ class ImprovedPredictor(object):
     def get_available_params(self) -> Dict:
         return
 
-    def set_adversarial_params(self, learner: InitialPredictor, adversary: AdversaryStrategy):
+    def set_adversarial_params(self, learner: InitialPredictor, adversary: Adversary):
         """Default behavior when given knowledge of initial learner and adversary.
 
         Args:
             learner (InitialPredictor): Learner used in initial training.
-            adversary (AdversaryStrategy): Adversary used to transform instances.
+            adversary (Adversary): Adversary used to transform instances.
 
         """
         self.initial_learner = learner

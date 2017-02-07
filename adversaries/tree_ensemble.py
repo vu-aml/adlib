@@ -3,9 +3,9 @@ from data_reader.input import Instance
 from typing import List, Dict
 
 
-class AdversaryStrategy(object):
+class Adversary(object):
 
-	def change_instances(self, instances) -> List[Instance]:
+	def attack(self, instances) -> List[Instance]:
 		raise NotImplementedError
 
 	def set_params(self, params: Dict):
@@ -16,4 +16,3 @@ class AdversaryStrategy(object):
 
 	def set_adversarial_params(self, learner, train_instances):
 		raise NotImplementedError
-

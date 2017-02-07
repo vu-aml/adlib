@@ -1,5 +1,5 @@
 from learners.learner import InitialPredictor, ImprovedPredictor
-from adversaries.adversary import AdversaryStrategy
+from adversaries.adversary import Adversary
 from typing import Dict, List
 from types import FunctionType
 import numpy as np
@@ -43,7 +43,7 @@ class ImprovedLearner(ImprovedPredictor):
         while True:
             new = []
             for instance in I_bad:
-                transform_instance = self.adversary.change_instances([instance])[0]
+                transform_instance = self.adversary.attack([instance])[0]
                 new_instance = True
                 for old_instance in N:
                     if fv_equals(transform_instance.get_feature_vector(),

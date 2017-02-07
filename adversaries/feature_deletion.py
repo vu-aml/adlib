@@ -1,12 +1,12 @@
 from data_reader.input import Instance, FeatureVector
-from adversaries.adversary import AdversaryStrategy
+from adversaries.adversary import Adversary
 from typing import List, Dict
 from cvxopt import matrix, solvers
 import numpy as np
 from copy import deepcopy
 
 
-class Adversary(AdversaryStrategy):
+class FeatureDeletion(Adversary):
 
     def __init__(self):
         self.train_instances = None  # type: List[Instance]
@@ -15,7 +15,7 @@ class Adversary(AdversaryStrategy):
         self.max_feature_deletion = None  # type: int
         self.weight_vector = None  # type: np.array
 
-    def change_instances(self, instances: List[Instance]) -> List[Instance]:
+    def attack(self, instances: List[Instance]) -> List[Instance]:
         raise NotImplementedError
 
     def optimize(self):
@@ -93,4 +93,3 @@ class Adversary(AdversaryStrategy):
 
     def predict_instance(self, fv: np.array, a_learner: np.array) -> float:
         return np.dot(self.weight_vector, fv)
-

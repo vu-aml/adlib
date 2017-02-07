@@ -1,6 +1,6 @@
 from typing import Dict
 import factories
-from adversaries.adversary import AdversaryStrategy
+from adversaries.adversary import Adversary
 from data_reader import input, output
 from learners.learner import InitialPredictor, ImprovedPredictor
 from learners.models import sklearner
@@ -43,7 +43,7 @@ def set_learn_initial(learner_model_alg) -> InitialPredictor:
     return factory.get_class()
 
 
-def set_adversary(adversary_alg) -> AdversaryStrategy:
+def set_adversary(adversary_alg) -> Adversary:
     if adversary_alg is None:
         return None
     else:
@@ -78,12 +78,12 @@ class Battle(object):
 
         Args:
                 learner (InitialPredictor): Initial learning capabilities.
-                adversary (AdversaryStrategy): Adversarial response.
+                adversary (Adversary): Adversarial response.
                 improved_learner (ImprovedPredictor): Improved learning methods.
 
         """
         self.learner = learner                    # type: InitialPredictor
-        self.adversary = adversary                # type: AdversaryStrategy
+        self.adversary = adversary                # type: Adversary
         self.improved_learner = improved_learner  # type: ImprovedPredictor
 
         #: Generalized stage awareness for error state handling.
@@ -94,7 +94,7 @@ class Battle(object):
     def get_learner(self) -> InitialPredictor:
         return self.learner
 
-    def get_adversary(self) -> AdversaryStrategy:
+    def get_adversary(self) -> Adversary:
         return self.adversary
 
     def get_improved_learner(self) -> ImprovedPredictor:
@@ -133,7 +133,7 @@ class Battle(object):
 
         else:
             self.adversary.set_adversarial_params(self.learner, train_instances)
-            adversary_instances = self.adversary.change_instances(test_instances)
+            adversary_instances = self.adversary.attack(test_instances)
 
             self.stage_completed['2'] = True
             return adversary_instances

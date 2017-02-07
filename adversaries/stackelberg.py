@@ -1,5 +1,5 @@
 from data_reader.input import Instance, FeatureVector
-from adversaries.adversary import AdversaryStrategy
+from adversaries.adversary import Adversary
 from learners.learner import InitialPredictor
 from typing import List, Dict
 from types import FunctionType
@@ -191,7 +191,7 @@ class LogisticLoss(SPG):
         return np.log(1 + np.exp(z))
 
 
-class Adversary(AdversaryStrategy):
+class Stackelberg(Adversary):
     LINEAR_LOSS = 'linear_loss'
     WORST_CASE_LOSS = 'worst_case_loss'
     LOGISTIC_LOSS = 'logistic_loss'
@@ -212,7 +212,7 @@ class Adversary(AdversaryStrategy):
         self.tau_factors = None  # type: List[]
         self.weight_vector = None  # type: np.array
 
-    def change_instances(self, instances: List[Instance]) -> List[Instance]:
+    def attack(self, instances: List[Instance]) -> List[Instance]:
         transformed_instances = []
         current_instance = 0
         for instance in self.train_instances:

@@ -38,7 +38,7 @@ def main(argv):
     adv = adversaries.simple_optimize.Adversary()
     adv.set_params({'lambda_val': -100, 'max_change': 65})
     adv.set_adversarial_params(clf, instances)
-    instances_post_attack = adv.change_instances(instances)
+    instances_post_attack = adv.attack(instances)
     
     # obtain metrics of classification performance both pre- and post- attack
     metrics = EvasionMetrics(clf, instances, instances_post_attack)
@@ -64,7 +64,7 @@ def main(argv):
     adv = adversaries.simple_optimize.Adversary()
     adv.set_params({'lambda_val': -100, 'max_change': 65})
     adv.set_adversarial_params(clf2, instances2)
-    instances_post_attack2 = adv.change_instances(instances2)
+    instances_post_attack2 = adv.attack(instances2)
     
     # obtain metrics of classification performance both pre- and post- attack
     metrics2 = EvasionMetrics(clf2, instances, instances_post_attack2)

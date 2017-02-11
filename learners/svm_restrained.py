@@ -1,5 +1,6 @@
 from learners.learner import InitialPredictor, ImprovedPredictor
 from data_reader.input import Instance, FeatureVector
+from adversaries.adversary import Adversary
 from typing import List, Dict
 import numpy as np
 import cvxpy as cvx
@@ -36,13 +37,16 @@ class ImprovedLearner(ImprovedPredictor):
         self.c = 10
         # self.atk_f = 0.5 # this parameter can be tweaked
         #TODO: add this to __init__:
+        num_instances = len(instances)
+        Xn_list = [ins.feature_vector for ins in instances if ins.get_label()== InitialPredictor.negative_classification]
+        Xp_list = [ins.feature_vector for ins in instances if ins.get_label()== InitialPredictor.positive_classification]
+        y_list = [ins.label for ins in instances]
         self.c_delta = 0.5 # this parameter can be tweaked
-        self.neg_i = np.fromiter(i for i in instances if \
-                     i.get_label() == InitialPredictor.negative_classification)
-        self.pos_i = np.fromiter(i for i in instances if \
-                     i.get_label() == InitialPredictor.positive_classification)
+        self.neg_i = np.array([i.get_feature_values() for i in Xn_list])
+        self.pos_i = np.array([i.get_feature_values() for i in Xp_list])
+        
         # centroid can be computed in multiple ways (might need to specify axis = 0)
-        self.n_centroid = np.mean(neg_i)
+        self.n_centroid = np.mean(self.neg_i)
         Mk_ = ((1- self.cdelta*np.fabs(self.n_centroid - self.pos_i)/
               (np.fabs(self.n_centroid)+np.fabs(self.pos_i)))*
               ((self.n_centroid-self.pos_i)**2))

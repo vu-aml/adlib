@@ -63,22 +63,4 @@ class SimpleOptimize(Adversary):
             if change > self.max_change:
                 break
         return instance
-
-    def __copy__(self):
-        adv = type(self)()
-        adv.__dict__.update(self.__dict__)
-        return adv
-
-    def __deepcopy__(self, memo):
-        deepcopy_method = self.__deepcopy__
-        self.__deepcopy__ = None
-        new_a = deepcopy(self, memo)
-        self.__deepcopy__ = deepcopy_method
-
-        new_a.learner = None
-        new_a.num_features = None
-        return new_a
-
-    def clone(self):
-        """return a custom deepcopy of the adversary."""
-        return deepcopy(self)
+        

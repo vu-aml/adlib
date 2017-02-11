@@ -183,7 +183,12 @@ class Instance(object):
 
                 """
         self.label = val
-
+        
+    def get_vector(self):
+        """Return the underlying data as a list."""
+        
+        return self.feature_vector.get_feature_values()
+    
     def get_feature_vector(self) -> FeatureVector:
         """Return underlying feature vector.
 

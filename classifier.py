@@ -167,6 +167,7 @@ class Classifier(object):
             self.simulated_learner.train(self.train_instances)#, self.continuous)
             self.simulated_adversary.set_adversarial_params(self.simulated_learner,
                                                             self.train_instances)
+            self.simulated_defense.set_params(self.train_instances)
             self.simulated_defense.set_adversarial_params(self.simulated_learner,
                                                           self.simulated_adversary)
             self.simulated_defense.improve(self.train_instances)

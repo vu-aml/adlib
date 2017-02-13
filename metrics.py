@@ -5,7 +5,15 @@ from sklearn import metrics
 from data_reader.operations import sparsify
 import matplotlib.pyplot as plt
 
+
 class EvasionMetrics(object):
+    """
+    Metrics class for classifier performance evaluation
+    Current supported metrics:
+        precision, recall, accuracy, ROC, area under ROC curve
+
+    """
+
     def __init__(self, clf: Classifier, pre: List[Instance], post: List[Instance]):
         self.classifier = clf
         self.pre_attack_instances = pre     # Type: List[Instance]

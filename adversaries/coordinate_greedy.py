@@ -17,10 +17,11 @@ Concept:
 class CoordinateGreedy(Adversary):
 
     def __init__(self, lambda_val=1.0, epsilon=0.1, learner=None):
+        Adversary.__init__(self)
         self.lambda_val = lambda_val
         self.epsilon = epsilon
         self.num_features = None
-        self.learn_model = learner         #type: Classifier
+        self.learn_model = learner
 
 
     def attack(self, instances) -> List[Instance]:

@@ -37,9 +37,6 @@ class FeatureVector(object):
     def __iter__(self):
         return iter(self.indices)
 
-    def __iter__(self):
-        return iter(self.indices)
-
     def __getitem__(self, key):
         return self.indices[key]
 
@@ -106,6 +103,7 @@ class FeatureVector(object):
             self.feature_count -= 1
 
         if self.feature_weights and index in self.feature_weights:
+            # TODO: bug here?
             del self.feature_count[index]
 
     def flip_bit(self, index):
@@ -213,7 +211,7 @@ def load_instances(data, continuous=False) -> List[Instance]:
     """Load data from a specified file.
 
     Args:
-            data (List[str]):
+            data (str):
 
                     data[0]: Data set name.
                     data[1]: Category path (train or test).
@@ -225,6 +223,7 @@ def load_instances(data, continuous=False) -> List[Instance]:
     path = data
 
     instances = []
+    max_index = 0
     try:
         with open(path, 'r') as infile:
             for line in infile:
@@ -232,8 +231,9 @@ def load_instances(data, continuous=False) -> List[Instance]:
                 instance_data = line.split(' ')
                 if '\n' in instance_data[0]:
                     break
-                label, index_list, max_index = read_instance_from_line(instance_data, continuous)
+                label, index_list, num_index = read_instance_from_line(instance_data, continuous)
                 instances.append((label, index_list))
+                max_index = max(num_index,max_index)
 
     except FileNotFoundError:
         return None

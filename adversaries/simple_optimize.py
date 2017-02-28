@@ -1,9 +1,8 @@
 from adversaries.adversary import Adversary
 from data_reader.input import Instance, FeatureVector
 from typing import List, Dict
-from learners.learner import InitialPredictor
-from learners.models.model import BaseModel
-from classifier import Classifier
+# from learners.models.model import BaseModel
+# from classifier import Classifier
 from copy import deepcopy
 from math import exp
 
@@ -14,18 +13,19 @@ Concept:
     that lower the probability of being classified adversarial.
 '''
 
+
 class SimpleOptimize(Adversary):
 
     def __init__(self, lambda_val=-100,max_change=1000,learner=None):
+        Adversary.__init__(self)
         self.lambda_val = lambda_val                     # type: float
         self.max_change = max_change                     # type: float
         self.num_features = None                         # type: int
-        self.learn_model = learner  	                 #type: Classifier
-
+        self.learn_model = learner
 
     def attack(self, instances: List[Instance]) -> List[Instance]:
         transformed_instances = []
-        if self.num_features == None:
+        if self.num_features is None:
             self.num_features = instances[0].get_feature_vector().get_feature_count()
         for instance in instances:
             transformed_instance = deepcopy(instance)
@@ -53,10 +53,10 @@ class SimpleOptimize(Adversary):
     def optimize(self, instance: Instance):
         change = 0
         for i in range(0, self.num_features):
-            orig_prob = self.learn_model.decision_function([instance])[0]
+            orig_prob = self.learn_model.predict_proba([instance])[0]
             instance.get_feature_vector().flip_bit(i)
             change += 1
-            new_prob = self.learn_model.decision_function([instance])[0]
+            new_prob = self.learn_model.predict_proba([instance])[0]
             if new_prob >= (orig_prob-exp(self.lambda_val)):
                 instance.get_feature_vector().flip_bit(i)
                 change -= 1

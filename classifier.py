@@ -1,7 +1,6 @@
 from data_reader import input
 from data_reader.input import Instance, FeatureVector
 from adversaries.adversary import Adversary
-from learners.learner import InitialPredictor, ImprovedPredictor
 from learners.models.model import BaseModel
 from learners.models import sklearner
 import factories

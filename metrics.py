@@ -1,6 +1,6 @@
 from data_reader.input import Instance
 from typing import List
-from classifier import Classifier
+from learners.learner import RobustLearner
 from sklearn import metrics
 from data_reader.operations import sparsify
 import matplotlib.pyplot as plt
@@ -14,7 +14,7 @@ class EvasionMetrics(object):
 
     """
 
-    def __init__(self, clf: Classifier, pre: List[Instance], post: List[Instance]):
+    def __init__(self, clf: RobustLearner, pre: List[Instance], post: List[Instance]):
         self.classifier = clf
         self.pre_attack_instances = pre     # Type: List[Instance]
         self.post_attack_instances = post   # Type: List[Instance]

@@ -1,8 +1,8 @@
-from learners.learner import InitialPredictor, ImprovedPredictor
+from learners.learner import RobustLearner
 from data_reader.input import Instance, FeatureVector
 from typing import List, Dict
 import numpy as np
-import numpy.matlib.repmat as repmat
+from numpy.matlib import repmat
 import cvxpy as cvx
 
 OPT_INSTALLED = True
@@ -11,14 +11,7 @@ try:
 except ImportError:
     OPT_INSTALLED = False
 
-
-class Learner(InitialPredictor):
-    """Scikit-learn SVM."""
-
-    def __init__(self):
-        InitialPredictor.__init__(self)
-
-class ImprovedLearner(ImprovedPredictor):
+class SVMFreeRange(RobustLearner):
     """Solves asymmetric dual problem: :math:`argmin (1/2)*⎜⎜w⎟⎟^2 + C*∑(xi0)`
 
     By solving the convex optimization, optimal weight and bias matrices are
@@ -35,10 +28,10 @@ class ImprovedLearner(ImprovedPredictor):
     """
 
     def __init__(self):
-        ImprovedPredictor.__init__(self)
+        RobustLearner.__init__(self)
         self.weight_vector = None
 
-    def set_params(self, instances: List[Instance]):
+    def set_params(self, params: Dict):
         self.c = 10
         # self.atk_f = 0.5 # adversary parameter
         #TODO: add these to __init__:
@@ -46,25 +39,24 @@ class ImprovedLearner(ImprovedPredictor):
         self.x_min = 0.0
         self.x_max = 1.0
 
-        self.neg_i = np.fromiter(i for i in instances if \
-                     i.get_label() == InitialPredictor.negative_classification)
-        self.pos_i = np.fromiter(i for i in instances if \
-                     i.get_label() == InitialPredictor.positive_classification)
-        self.ones_col = np.ones((self.neg_i.shape[1],1))
-        self.pn = np.stack((self.pos_i,self.neg_i))
-        self.pl = np.ones((self.pos_i[0],1))
-        self.nl = -np.ones((self.neg_i[0],1))
-        self.pnl = np.stack((self.pl,self.nl))
-        self.xj_min = np.empty_like(self.pn).fill(self.x_min)
-        self.xj_max = np.empty_like(self.pn).fill(self.x_max)
-        self.ones_mat = np.ones_like(self.pnl)
-        #self.set_adversarial_params()
+        if params['instances'] is not None:
+            self.neg_i = np.fromiter(i for i in instances if \
+                         i.get_label() == InitialPredictor.negative_classification)
+            self.pos_i = np.fromiter(i for i in instances if \
+                         i.get_label() == InitialPredictor.positive_classification)
+            self.ones_col = np.ones((self.neg_i.shape[1],1))
+            self.pn = np.stack((self.pos_i,self.neg_i))
+            self.pl = np.ones((self.pos_i[0],1))
+            self.nl = -np.ones((self.neg_i[0],1))
+            self.pnl = np.stack((self.pl,self.nl))
+            self.xj_min = np.empty_like(self.pn).fill(self.x_min)
+            self.xj_max = np.empty_like(self.pn).fill(self.x_max)
+            self.ones_mat = np.ones_like(self.pnl)
+            #self.set_adversarial_params()
 
-        #TODO: Refactor to not rely on this function
-    def set_adversarial_params(self, learner: Learner, adversary: Adversary):
-        params = self.cvx_optimize(self.neg_i.size[1],self.pos_i.size[0]+self.neg_i.size[0])
-        self.weight_vector = params.weight
-        self.bias = params.bias
+            params = self.cvx_optimize(self.neg_i.size[1],self.pos_i.size[0]+self.neg_i.size[0])
+            self.weight_vector = params.weight
+            self.bias = params.bias
 
     def cvx_optimize(self, col_neg: int, row_sum: int):
         """Optimize the asymmetric dual problem and return optimal w and b.
@@ -96,6 +88,10 @@ class ImprovedLearner(ImprovedPredictor):
         else:
             prob.solve()
         return {'weight':w.value,'bias':b.value}
+
+    def train(self):
+        # this needs to be implemented
+        raise NotImplementedError
 
     def predict(self, instances: List[Instance]):
         predictions = []

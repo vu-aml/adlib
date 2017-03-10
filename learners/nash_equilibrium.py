@@ -62,11 +62,11 @@ class NashEquilibrium(RobustLearner):
 
         """
         if params['adversary'] is not None:
-		    self.weight_vector = params['adversary'].get_learner_params()
+            self.weight_vector = params['adversary'].get_learner_params()
 
     # not sure we need these	
     def loss_function(self, z: float, y: int):
-		return np.log(1 + np.exp(-1 * y * z))
+        return np.log(1 + np.exp(-1 * y * z))
 
-	def get_loss_function(self) -> FunctionType:
-		return getattr(self, 'loss_function')
+    def get_loss_function(self) -> FunctionType:
+        return getattr(self, 'loss_function')

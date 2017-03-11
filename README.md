@@ -6,7 +6,7 @@ files, use git add -f
 ## Unit Testing
 We use py.test for unit testing. Install with `pip install -U pytest`.
 
-To run tests, run `pytest tests`.
+To run tests, run `python -m pytest tests/<path to test>` from the root directory.
 
 ## Installation
 ### Dependencies

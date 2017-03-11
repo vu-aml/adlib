@@ -1,7 +1,7 @@
 from typing import List, Dict
 from adversaries.adversary import Adversary
 from data_reader.input import Instance, FeatureVector
-from learners.learner import InitialPredictor
+from learners.learner import RobustLearner
 from data_reader import operations
 from copy import deepcopy
 from itertools import filterfalse
@@ -17,7 +17,7 @@ class GoodWord(Adversary):
     FIRST_N = 'first_n'
 
     def __init__(self, n = 100, learner =  None):
-        self.learn_model = learner                # type: InitialPredictor
+        self.learn_model = learner                # type: RobustLearner
         self.positive_instance = None    # type: Instance
         self.negative_instance = None    # type: Instance
         self.n = n
@@ -29,7 +29,7 @@ class GoodWord(Adversary):
 
         for instance in instances:
             transformed_instance = deepcopy(instance)
-            if instance.get_label() == InitialPredictor.positive_classification:
+            if instance.get_label() == RobustLearner.positive_classification:
                 transformed_instances.append(
                     self.add_words_to_instance(transformed_instance, word_indices)
                 )
@@ -45,24 +45,27 @@ class GoodWord(Adversary):
             'negative_instance': self.negative_instance,
         }
 
+    # throw error for unrecognized parameters?
     def set_params(self, params: Dict):
         if 'n' in params:
             self.n = params['n']
         if 'attack_model_type' in params:
+            if not self.is_valid_attack_model_type(params['attack_model_type']):
+                raise ValueError('Invalid attack model type')
             self.attack_model_type = params['attack_model_type']
-        else:
-            raise ValueError('Must specify n')
-        return None
+
+    def is_valid_attack_model_type(self, model_type):
+        return (model_type in [GoodWord.BEST_N, GoodWord.FIRST_N])
 
     def set_adversarial_params(self, learner, train_instances):
         self.learn_model = learner
         instances = train_instances # type: List[Instance]
         self.positive_instance = next(
-            (x for x in instances if x.get_label() == InitialPredictor.positive_classification),
+            (x for x in instances if x.get_label() == RobustLearner.positive_classification),
             None
         )
         self.negative_instance = next(
-            (x for x in instances if x.get_label() == InitialPredictor.negative_classification),
+            (x for x in instances if x.get_label() == RobustLearner.negative_classification),
             None
         )
         self.feature_space = set()
@@ -92,7 +95,7 @@ class GoodWord(Adversary):
         prev_message = None
         # loop until current message is classified as spam
         while (self.predict_and_record(curr_message) !=
-            InitialPredictor.positive_classification):
+            RobustLearner.positive_classification):
 
             prev_message = deepcopy(curr_message)
             word_removed = False
@@ -120,7 +123,7 @@ class GoodWord(Adversary):
             if spam_message.get_feature(feature) == 0:
                 spam_message.flip_bit(feature)
                 prediction_result = self.predict_and_record(spam_message)
-                if prediction_result == InitialPredictor.negative_classification:
+                if prediction_result == RobustLearner.negative_classification:
                     negative_weight_word_indices.add(feature)
                 if len(self.negative_instance.get_feature_vector()) == self.n:
                     return negative_weight_word_indices
@@ -130,8 +133,8 @@ class GoodWord(Adversary):
 
     def best_n_words(self, spam_message, legit_message):
         barely_spam_message, barely_legit_message = self.find_witness()
-        positive_weight_word_indices = self.build_word_set(barely_legit_message, InitialPredictor.positive_classification)
-        negative_weight_word_indices = self.build_word_set(barely_spam_message, InitialPredictor.negative_classification)
+        positive_weight_word_indices = self.build_word_set(barely_legit_message, RobustLearner.positive_classification)
+        negative_weight_word_indices = self.build_word_set(barely_spam_message, RobustLearner.negative_classification)
         best_n_word_indices = set()
         iterations_without_change = 0
         max_iterations_without_change = 10
@@ -139,12 +142,12 @@ class GoodWord(Adversary):
             barely_spam_message.flip_bit(spammy_word_index),
             small_weight_word_indices = self.build_word_set(
                 barely_spam_message,
-                InitialPredictor.positive_classification,
+                RobustLearner.positive_classification,
                 negative_weight_word_indices
             )
             large_weight_word_indices = self.build_word_set(
                 barely_spam_message,
-                InitialPredictor.negative_classification,
+                RobustLearner.negative_classification,
                 negative_weight_word_indices
             )
             barely_spam_message.flip_bit(spammy_word_index)

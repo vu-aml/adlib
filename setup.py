@@ -15,5 +15,6 @@ setup(
         'scipy>=0.15',
         'sklearn>=0.18',
         'matplotlib>=2.0.0',
+        'cvxpy>=0.4.8'
     ]
 )

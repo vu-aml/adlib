@@ -1,4 +1,5 @@
 from learners.learner import RobustLearner
+from learners.models import sklearner
 from typing import Dict
 
 class SimpleLearner(RobustLearner):
@@ -9,8 +10,11 @@ class SimpleLearner(RobustLearner):
 
     def __init__(self, model = None, training_instances = None):
         RobustLearner.__init__(self)
-        self.model = model
+        if model: self.set_model(model)
         self.training_instances = training_instances
+
+    def set_model(self, model):
+        self.model = sklearner.Model(model)
 
     def train(self):
         if not self.model:
@@ -25,4 +29,4 @@ class SimpleLearner(RobustLearner):
     # should we also set the model params?
     def set_params(self, params: Dict):
         if params['model'] is not None:
-            self.model = params['model']
+            self.model = self.set_model(params['model'])

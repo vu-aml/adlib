@@ -16,8 +16,8 @@ class GoodWord(Adversary):
     BEST_N = 'best_n'
     FIRST_N = 'first_n'
 
-    def __init__(self, n = 100, learner =  None):
-        self.learn_model = learner                # type: RobustLearner
+    def __init__(self, n = 100):
+        self.learn_model = None
         self.positive_instance = None    # type: Instance
         self.negative_instance = None    # type: Instance
         self.n = n
@@ -82,8 +82,10 @@ class GoodWord(Adversary):
         return C_y
 
     def add_words_to_instance(self, instance, word_indices):
+        feature_vector = instance.get_feature_vector()
         for index in word_indices:
-            instance.get_feature_vector().flip_bit(index)
+            if index not in feature_vector:
+                feature_vector.flip_bit(index)
         return instance
 
     # Find a spam and legit message that only differ by 1 word
@@ -100,20 +102,28 @@ class GoodWord(Adversary):
             prev_message = deepcopy(curr_message)
             word_removed = False
             for index in curr_message:
-                if index in spam_message_words:
+                if index not in spam_message_words:
                     curr_message.flip_bit(index)
                     word_removed = True
                     break
-            if not word_removed:
-                for index in spam_message:
-                    if index not in curr_message_words:
-                        curr_message.flip_bit(index)
+            if word_removed: continue
+
+            word_added = False
+            for index in spam_message:
+                if index not in curr_message_words:
+                    curr_message.flip_bit(index)
+                    curr_message_words.add(index)
+                    word_added = True
+                    break
+            # curr_message and prev_message will not change for any more iterations
+            if not word_added:
+                raise Exception('Could not find witness')
         return (curr_message, prev_message)
 
     def first_n_words(self, spam_message, legit_message):
         if not self.n: raise ValueError('Must specify n')
         negative_weight_word_indices = set()
-        barely_spam_message, barely_legit_message = self.find_witness()
+        spam_message, _ = self.find_witness()
         # use the feature vector of the negative instance just to iterate over all the indices in a
         # feature vector, the actual values do not matter
 
@@ -125,7 +135,7 @@ class GoodWord(Adversary):
                 prediction_result = self.predict_and_record(spam_message)
                 if prediction_result == RobustLearner.negative_classification:
                     negative_weight_word_indices.add(feature)
-                if len(self.negative_instance.get_feature_vector()) == self.n:
+                if len(negative_weight_word_indices) == self.n:
                     return negative_weight_word_indices
                 # remove word from message so spam_message stays the same for each iteration
                 spam_message.flip_bit(feature)
@@ -179,7 +189,10 @@ class GoodWord(Adversary):
 
     def predict_and_record(self, message):
         self.num_queries += 1
-        return self.learn_model.predict(Instance(0, message))
+        return self.predict(Instance(0, message))
+
+    def predict(self, instance):
+        return self.learn_model.predict(instance)
 
     def get_n_words(self):
         if self.attack_model_type == GoodWord.FIRST_N:

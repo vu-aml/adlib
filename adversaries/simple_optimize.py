@@ -6,7 +6,7 @@ from typing import List, Dict
 from copy import deepcopy
 from math import exp
 
-'''Simple optimization of adversarial instance.
+'''Simple optimization of adversarial instance with binary valued feature vector.
 
 Concept:
     Iterates through features in the adversarial instance, flipping features

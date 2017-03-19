@@ -56,7 +56,7 @@ class RobustLearner(object):
     def predict_proba(self, instances):
         raise NotImplementedError
 
-    def decision_function(self, instances):
+    def decision_function(self):
         raise NotImplementedError
 
 

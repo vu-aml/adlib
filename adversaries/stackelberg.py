@@ -1,10 +1,8 @@
 from data_reader.input import Instance, FeatureVector
 from adversaries.adversary import Adversary
-from learners.learner import InitialPredictor
 from typing import List, Dict
 from types import FunctionType
 import numpy as np
-import learners
 from scipy import optimize
 from copy import deepcopy
 
@@ -26,8 +24,8 @@ Concept:
 class SPG(object):
     def __init__(self, learner_loss_function, adversary_costs, learner_costs, feature_mapping,
                  density_weight, learner_density_weight, max_iterations):
-        self.weight_vector = None
-        self.tau_factors = None
+        self.weight_vector = None       # type: np.array()
+        self.tau_factors = None         # type: np.array()
 
         self.max_iterations = max_iterations
         self.learner_loss_function = learner_loss_function  # type: FunctionType
@@ -197,8 +195,8 @@ class Stackelberg(Adversary):
     LOGISTIC_LOSS = 'logistic_loss'
 
     def __init__(self):
-
-        self.game = Adversary.LINEAR_LOSS
+        Adversary.__init__(self)
+        self.game = Stackelberg.LOGISTIC_LOSS
         self.max_iterations = 10
 
         self.train_instances = None  # type: List[Instance]
@@ -270,7 +268,7 @@ class Stackelberg(Adversary):
         self.train_instances = train_instances
         self.num_features = self.train_instances[0].get_feature_vector().get_feature_count()
 
-        if self.game is Adversary.LINEAR_LOSS:
+        if self.game is Stackelberg.LINEAR_LOSS:
             solution = LinearLoss(learner_loss_function, self.adversary_costs, self.learner_costs, self.feature_mapping,
                                   self.density_weight, learner_density_weight, self.max_iterations)
             transforms = solution.optimize(self.train_instances, self.num_features)
@@ -278,7 +276,7 @@ class Stackelberg(Adversary):
             self.weight_vector = transforms['weight_vector']
 
 
-        elif self.game is Adversary.WORST_CASE_LOSS:
+        elif self.game is Stackelberg.WORST_CASE_LOSS:
             solution = WorstCaseLoss(learner_loss_function, self.adversary_costs, self.learner_costs,
                                      self.feature_mapping,
                                      self.density_weight, learner_density_weight, self.max_iterations)
@@ -286,7 +284,7 @@ class Stackelberg(Adversary):
             self.perturbation_vector = transforms['adversary']
             self.learner_perturbation_vector = transforms['learner']
 
-        elif self.game is Adversary.LOGISTIC_LOSS:
+        elif self.game is Stackelberg.LOGISTIC_LOSS:
             solution = LogisticLoss(learner_loss_function, self.adversary_costs, self.learner_costs,
                                     self.feature_mapping,
                                     self.density_weight, learner_density_weight, self.max_iterations)

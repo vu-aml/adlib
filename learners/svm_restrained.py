@@ -76,11 +76,11 @@ class SVMRestrained(RobustLearner):
         u = Variable(row_sum,col_neg)
         v = Variable(row_sum,col_neg)
 
-        constraints = [xi0>=0, \
-                       xi0 >= 1-mul(pnl, (pn*w+b))+t, \
-                       t >= mul(Mk,u)*ones_col, \
-                       mul(TMk,(-u+v))==0.5*(1+pnl)*w.T, \
-                       u>=0, \
+        constraints = [xi0>=0,
+                       xi0 >= 1-mul(pnl, (pn*w+b))+t,
+                       t >= mul(Mk,u)*ones_col,
+                       mul(TMk,(-u+v))==0.5*(1+pnl)*w.T,
+                       u>=0,
                        v>=0]
 
         # Objective
@@ -102,7 +102,7 @@ class SVMRestrained(RobustLearner):
             predictions.append(np.sign(self.predict_instance(features)))
         return predictions
 
-    def predict_instance(self, features: FeatureVector):
+    def predict_instance(self, features):
         return self.weight_vector.dot(features.T)[0][0] + self.bias
 
     def predict_proba(self, instances: List[Instance]):

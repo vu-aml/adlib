@@ -6,14 +6,11 @@ import numpy as np
 from cvxpy import *
 
 
-
-
-
 class FeatureDeletion(RobustLearner):
 
     def __init__(self, params=None, training_instances=None):
         RobustLearner.__init__(self)
-        self.weight_vector = None
+        self.weight_vector = None        # type: np.array(shape=(1))
         self.num_features = 0  # type: int
         self.hinge_loss_multiplier = 0.5  # type: float
         self.max_feature_deletion = 30  # type: int
@@ -80,7 +77,7 @@ class FeatureDeletion(RobustLearner):
         prob = Problem(obj, constraints)
         prob.solve()
 
-        self.weight_vector = [np.array(w.value).T][0]   # w.value is of shape [1, self.num_features]
+        self.weight_vector = [np.array(w.value).T][0]   # weight_vector is of shape (1, self.num_features)
         self.bias = b.value
 
 
@@ -97,8 +94,12 @@ class FeatureDeletion(RobustLearner):
         :param features: np.array of shape (1, self.num_features), i.e. [[1, 2, ...]]
         :return: float
         '''
+        print('w shape: '+ str(self.weight_vector.shape))
         return self.weight_vector.dot(features.T)[0][0] + self.bias
 
     def predict_proba(self, instances: List[Instance]):
         return [self.predict_instance(
             ins.get_feature_vector().get_csr_matrix().toarray()) for ins in instances]
+
+    def decision_function(self):
+        return self.weight_vector, self.bias

@@ -9,6 +9,15 @@ def fv_equals(fv1: FeatureVector, fv2: FeatureVector):
 
 
 def sparsify(instances: List[Instance], isContinuousFeatures = False):
+    """
+
+    :param instances: List of input instances of type Instance
+    :param isContinuousFeatures:
+    :return: tuple of list of labels and csr_matrix of shape n*m,
+            with n = num_instance m=feature_vector_length
+    """
+    # TODO change name to densify
+
     num_features = instances[0].get_feature_vector().feature_count
     labels = []
     indptr = [0]

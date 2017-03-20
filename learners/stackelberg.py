@@ -1,75 +1,89 @@
-from learners.learner import InitialPredictor, ImprovedPredictor
+from learners.learner import RobustLearner
 from typing import Dict, List
-from types import FunctionType
 import numpy as np
-from data_reader.input import FeatureVector, Instance
-from adversaries.stackelberg import Adversary
+from data_reader.input import Instance
+from adversaries.stackelberg_new2 import SPG ,LogisticLoss
 from data_reader.operations import sparsify
 
 """Companion class to adversary Stackelberg equilibrium.
 
 Concept:
-	Learner trains (in the usual way) and defines its loss function, costs, and
-	density weight. Improved learner gathers equilibrium solution weight vector
-	(as determined by adversary) and uses it to predict on the transformed data.
+    Learner trains (in the usual way) and defines its loss function, costs, and
+    density weight. Improved learner gathers equilibrium solution weight vector
+    (as determined by adversary) and uses it to predict on the transformed data.
 
 """
 
-class Learner(InitialPredictor):
 
-	def __init__(self):
-		InitialPredictor.__init__(self)
-		self.costs = None # type: List[float]
-		self.density_weight = 1.0
+class StackelbergLearner(RobustLearner):
 
-	def set_params(self, params: Dict):
-		if params['costs'] is not None:
-			self.costs = params['costs']
-		if params['density_weight'] is not None:
-			self.density_weight = params['density_weight']
-		InitialPredictor.set_params(self, params)
-
-	def get_available_params(self) -> Dict:
-		params = InitialPredictor.get_available_params(self)
-		params['costs'] = None
-		params['density_weight'] = self.density_weight
-		return params
-
-	def get_costs(self) -> List[float]:
-		return self.costs
-
-	def get_density_weight(self) -> float:
-		return self.density_weight
-
-	def loss_function(self, z: float, y: int):
-		return np.log(1 + np.exp(-1 * y * z))
-
-	def feature_mapping(self, x: FeatureVector):
-		return x.get_csr_matrix().toarray()[0]
-
-	def get_loss_function(self) -> FunctionType:
-		return getattr(self, 'loss_function')
-
-	def get_feature_mapping(self) -> FunctionType:
-		return getattr(self, 'feature_mapping')
+    def __init__(self, params:Dict=None, training_instances=None):
+        RobustLearner.__init__(self)
+        self.learner_cost_array = None # type: List[float]
+        self.attacker_cost_array = None  # type: List[float]
+        self.learner_regularization_param = 0.2
+        self.attacker_regularization_param = 0.2
+        self.loss_type = SPG.LOGISTIC_LOSS
+        self.game = None
+        self.trained_weight = None
+        if params is not None:
+            self.set_params(params)
+        if training_instances is not None:
+            self.set_training_instances(training_instances)
 
 
-class ImprovedLearner(ImprovedPredictor):
 
-	def __init__(self):
-		ImprovedPredictor.__init__(self)
-		self.costs = None # type: List[float]
-		self.weight_vector = None
-		self.feature_mapping = None
+    def set_params(self, params:Dict):
+        if 'loss_type' in params:
+            self.loss_type = params['loss_type']
+        if 'learner_costs' in params:
+            self.learner_cost_array = params['learner_costs']
+        if 'learner_regularization' in params:
+            self.density_weight = params['learner_regularization']
+        if 'attacker_costs' in params:
+            self.attacker_cost_array = params['attacker_costs']
+        if 'attacker_regularization' in params:
+            self.attacker_regularization_param = params['attacker_regularization']
 
-	def predict(self, instances: List[Instance]):
-		instance_matrix = sparsify(instances)[1]
-		predictions = instance_matrix.dot(self.weight_vector)
-		predictions = np.sign(predictions)
+    def train(self):
 
-		return predictions
+        # if cost not specified, use default value 1/N, N= num_instances
+        if self.learner_cost_array is None:
+            self.learner_cost_array = np.array([1/len(self.training_instances)]*len(self.training_instances))
+        if self.attacker_cost_array is None:
+            self.attacker_cost_array= np.array([1/len(self.training_instances)]*len(self.training_instances))
 
-	def set_adversarial_params(self, learner: Learner, adversary: Adversary):
-		self.costs = learner.get_costs()
-		self.weight_vector = adversary.get_learner_params()
-		self.feature_mapping = learner.get_feature_mapping()
+        if self.loss_type == SPG.LOGISTIC_LOSS:
+            self.game = LogisticLoss(self.attacker_cost_array, self.learner_cost_array,
+                                     self.attacker_regularization_param, self.learner_regularization_param,
+                                     self.training_instances)
+        else:
+            raise NotImplementedError
+
+        self.game.optimize()
+        self.trained_weight = self.game.weight_vector
+
+        print('training completed')
+
+    def predict(self, instances):
+        predictions = []
+        for instance in instances:
+            features = instance.get_feature_vector().get_csr_matrix().toarray()
+            predictions.append(np.sign(self.predict_instance(features)))
+        return predictions
+
+    def predict_instance(self, features):
+        '''
+        predict class for a single instance and return a real value
+        :param features: np.array of shape (1, self.num_features), i.e. [[1, 2, ...]]
+        :return: float
+        '''
+
+        return self.trained_weight.dot(features.T)[0][0]
+
+    def predict_proba(self, instances: List[Instance]):
+        return [self.predict_instance(
+            ins.get_feature_vector().get_csr_matrix().toarray()) for ins in instances]
+
+    def decision_function(self):
+        return self.trained_weight

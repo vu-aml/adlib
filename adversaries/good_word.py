@@ -149,7 +149,8 @@ class GoodWord(Adversary):
         iterations_without_change = 0
         max_iterations_without_change = 10
         for spammy_word_index in positive_weight_word_indices:
-            barely_spam_message.flip_bit(spammy_word_index),
+            is_index_in_spam_msg = barely_spam_message.get_feature(spammy_word_index) == 1
+            if not is_index_in_spam_msg: barely_spam_message.flip_bit(spammy_word_index)
             small_weight_word_indices = self.build_word_set(
                 barely_spam_message,
                 RobustLearner.positive_classification,
@@ -160,23 +161,31 @@ class GoodWord(Adversary):
                 RobustLearner.negative_classification,
                 negative_weight_word_indices
             )
-            barely_spam_message.flip_bit(spammy_word_index)
-            if len(best_n_word_indices) + len(large_weight_word_indices) > self.n:
+            if not is_index_in_spam_msg: barely_spam_message.flip_bit(spammy_word_index)
+
+            if len(best_n_word_indices) + len(large_weight_word_indices) < self.n:
                 negative_weight_word_indices = negative_weight_word_indices - large_weight_word_indices
                 best_n_word_indices = best_n_word_indices.union(large_weight_word_indices)
-                iterations_without_change = 0
+                if len(large_weight_word_indices) == 0:
+                    iterations_without_change += 1
+                else:
+                    iterations_without_change = 0
             else:
                 negative_weight_word_indices = negative_weight_word_indices - small_weight_word_indices
-                iterations_without_change += 1
+                if len(small_weight_word_indices) == 0:
+                    iterations_without_change += 1
+                else:
+                    iterations_without_change = 0
+
             if iterations_without_change == max_iterations_without_change:
-                for i in range(n - len(best_n_word_indices)):
+                for i in range(min(self.n - len(best_n_word_indices), len(negative_weight_word_indices))):
                     best_n_word_indices.add(negative_weight_word_indices.pop())
                 return best_n_word_indices
         return best_n_word_indices
 
     def build_word_set(self, message, intended_classification, indices_to_check = None):
         # if no specific indices are passed in, defaults to checking every index
-        indices_to_check = indices_to_check or self.feature_space
+        indices_to_check = indices_to_check if indices_to_check != None else self.feature_space
         result = set()
         for index in indices_to_check:
             if message.get_feature(index) == 0:

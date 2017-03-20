@@ -88,10 +88,18 @@ def test_find_witness_returns_messages_differing_by_one_word(good_word_with_para
     assert adv.predict(Instance(0, spam_msg)) == RobustLearner.positive_classification
     assert len(legit_msg.feature_difference(spam_msg)) == 1
 
-def test_get_n_words_with_best_n_model(good_word_with_params):
+def test_get_n_words_with_first_n_model(good_word_with_params):
     adv = good_word_with_params
     num_words = 15
     adv.set_params({'n': num_words, 'attack_model_type': GoodWord.FIRST_N})
     words = adv.get_n_words()
     # use mock to assert first_n gets called
+    assert len(words) == num_words
+
+def test_get_n_words_with_best_n_model(good_word_with_params):
+    adv = good_word_with_params
+    num_words = 15
+    adv.set_params({'n': num_words, 'attack_model_type': GoodWord.BEST_N})
+    words = adv.get_n_words()
+    # use mock to assert best_n gets called
     assert len(words) == num_words

@@ -2,7 +2,7 @@ from adversaries.adversary import Adversary
 from typing import List, Dict
 from data_reader.input import Instance, FeatureVector
 import numpy as np
-from learners.learner import InitialPredictor
+from learners.learner import RobustLearner
 from math import log
 
 class FreeRange(Adversary):
@@ -52,7 +52,7 @@ class FreeRange(Adversary):
         self.learn_model = learner
         self.num_features = train_instances[0].get_feature_vector().get_feature_count()
         self.innocuous_target = next(
-            (x for x in instances if x.get_label() == InitialPredictor.negative_classification),
+            (x for x in instances if x.get_label() == RobustLearner.negative_classification),
             None
         )
     # Maybe for the binary case, the f_attack value represents the percentage of features we change?

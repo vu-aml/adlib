@@ -1,7 +1,7 @@
 from typing import List, Dict
 from adversaries.adversary import Adversary
 from data_reader.input import Instance, FeatureVector
-from learners.learner import InitialPredictor
+from learners.learner import RobustLearner
 from data_reader import operations
 from copy import deepcopy
 from itertools import filterfalse
@@ -92,7 +92,7 @@ class MultiLineSearch(ReverseEngineerClassifier):
                 new_feature_vector.flip_bit(e)
                 query_result = self.adversary.learn_model.predict(Instance(0, new_feature_vector))
                 #print('changed feature: %s, classified as: %s' % (e, query_result))
-                if query_result == InitialPredictor.negative_classification:
+                if query_result == RobustLearner.negative_classification:
                     x_star = new_feature_vector
                     negative_vertex_found = True
                     # Prune all costs that result in positive prediction
@@ -139,7 +139,7 @@ class MultiLineSearch(ReverseEngineerClassifier):
             query_result = self.adversary.learn_model.predict(
               Instance(0, new_feature_vector)
             )
-            if query_result == InitialPredictor.negative_classification:
+            if query_result == RobustLearner.negative_classification:
                 search_set.add(element)
                 new_search_set = set()
                 t += 1
@@ -163,7 +163,7 @@ class KStepMultiLineSearch(MultiLineSearch):
                 temp_cost = sqrt(temp_min_cost * temp_max_cost)
                 # need to add in the cost somehow
                 query_result = self.adversary.learn_model.predict(Instance(0, tmp_feature_vector))
-                if query_result == InitialPredictor.positive_classification:
+                if query_result == RobustLearner.positive_classification:
                     temp_min_cost = temp_cost
                 else:
                     temp_max_cost = temp_cost
@@ -174,7 +174,7 @@ class KStepMultiLineSearch(MultiLineSearch):
                 tmp_feature_vector = FeatureVector(x_a.feature_count, x_a.indices)
                 tmp_feature_vector.flip_bit(i)
                 query_result = self.adversary.learn_model.predict(Instance(0, tmp_feature_vector))
-                if query_result == InitialPredictor.negative_classification:
+                if query_result == RobustLearner.negative_classification:
                     x_star.flip_bit(i)
                     negative_vertex_found = True
                     # Proon positive directions
@@ -194,7 +194,7 @@ class MeekAndLowd(Adversary):
     K_STEP_MULTI_LINE_SEARCH = 'k_step_multi_line_search'
 
     def __init__(self):
-        self.learn_model = None                # type: InitialPredictor
+        self.learn_model = None                # type: RobustLearner
         self.positive_instance = None    # type: Instance
         self.negative_instance = None    # type: Instance
         self.adversary_costs = None    # type: Array

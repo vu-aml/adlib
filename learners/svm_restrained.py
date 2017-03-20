@@ -14,7 +14,6 @@ except ImportError:
     OPT_INSTALLED = False
 
 
-
 class SVMRestrained(RobustLearner):
     """Solves asymmetric dual problem: :math:`argmin (1/2)*⎜⎜w⎟⎟^2 + C*∑(xi0)`
 
@@ -41,18 +40,19 @@ class SVMRestrained(RobustLearner):
         if 'c_delta' in params:
             self.c_delta = params['c_delta']
 
+
     def get_available_params(self) -> Dict:
         params = {'c_delta': self.c_delta}
         return params
 
+
     def train(self):
+        '''Optimize the asymmetric dual problem and return optimal w and b.'''
         c = 10
-        num_instances = len(self.training_instances)
         y,X = sparsify(self.training_instances)
         y,X = np.array(y), X.toarray()
         i_neg = np.array([ins[1] for ins in zip(y,X) if ins[0]==self.negative_classification])
         i_pos = np.array([ins[1] for ins in zip(y,X) if ins[0]==self.positive_classification])
-
         # centroid can be computed in multiple ways
         n_centroid = np.mean(i_neg)
         Mk = ((1-self.c_delta * np.fabs(n_centroid - i_pos)/
@@ -63,12 +63,10 @@ class SVMRestrained(RobustLearner):
         TMk = np.concatenate((n_centroid - i_pos,Zks))
         ones_col = np.ones((i_neg.shape[1],1))
         pn = np.concatenate((i_pos,i_neg))
-        pl = np.ones(i_pos.shape[0])
-        nl = -np.ones(i_neg.shape[0])
-        pnl = np.concatenate((pl,nl))
+        pnl = np.concatenate((np.ones(i_pos.shape[0]),-np.ones(i_neg.shape[0])))
         col_neg, row_sum = i_neg.shape[1], i_pos.shape[0] + i_neg.shape[0]
 
-        # constraint cvxpy variables
+        # define cvxpy variables
         w = Variable(col_neg)
         b = Variable()
         xi0 = Variable(row_sum)
@@ -83,7 +81,7 @@ class SVMRestrained(RobustLearner):
                        u>=0,
                        v>=0]
 
-        # Objective
+        # objective
         obj = cvx.Minimize(0.5*(cvx.norm(w)) + c*cvx.sum_entries(xi0))
         prob = cvx.Problem(obj,constraints)
 
@@ -95,6 +93,7 @@ class SVMRestrained(RobustLearner):
         self.weight_vector = [np.array(w.value).T][0]
         self.bias = b.value
 
+
     def predict(self, instances: List[Instance]):
         predictions = []
         for instance in instances:
@@ -102,12 +101,15 @@ class SVMRestrained(RobustLearner):
             predictions.append(np.sign(self.predict_instance(features)))
         return predictions
 
+
     def predict_instance(self, features):
         return self.weight_vector.dot(features.T)[0][0] + self.bias
+
 
     def predict_proba(self, instances: List[Instance]):
         return [self.predict_instance(
             ins.get_feature_vector().get_csr_matrix().toarray()) for ins in instances]
+
 
     def decision_function(self):
         return self.weight_vector, self.bias

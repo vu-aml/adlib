@@ -1,15 +1,18 @@
 from learners.learner import RobustLearner
 from data_reader.input import Instance, FeatureVector
+from data_reader.operations import sparsify
+from adversaries.adversary import Adversary
 from typing import List, Dict
 import numpy as np
-from numpy.matlib import repmat
 import cvxpy as cvx
-
+from cvxpy import Variable as Variable
+from cvxpy import mul_elemwise as mul
 OPT_INSTALLED = True
 try:
     import cvxopt
 except ImportError:
     OPT_INSTALLED = False
+
 
 class SVMFreeRange(RobustLearner):
     """Solves asymmetric dual problem: :math:`argmin (1/2)*⎜⎜w⎟⎟^2 + C*∑(xi0)`
@@ -22,50 +25,58 @@ class SVMFreeRange(RobustLearner):
         c_f (float): aggressiveness assumption c_f ∈ [0.0,1.0]
         Note: 0.0 means no attack and 1.0 is most aggressive. Default:0.5
 
-        x_min (float): smallest value that a feature can take. Default:0.0
-        x_max (float): largest value that a feature can take. Default:1.0
+        xmin (float): smallest value that a feature can take. Default:0.0
+        xmax (float): largest value that a feature can take. Default:1.0
 
     """
 
-    def __init__(self):
+    def __init__(self, params = None, training_instances = None):
         RobustLearner.__init__(self)
         self.weight_vector = None
+        self.bias = 0
+        self.c_f = 0.5
+        self.xmin = 0.0
+        self.xmax = 1.0
+        if params is not None:
+            self.set_params(params)
+        if training_instances is not None:
+            self.set_training_instances(training_instances)
+
 
     def set_params(self, params: Dict):
-        self.c = 10
-        # self.atk_f = 0.5 # adversary parameter
-        #TODO: add these to __init__:
-        self.c_f = 0.5 # this parameter can be tweaked
-        self.x_min = 0.0
-        self.x_max = 1.0
+        if 'c_f' in params:
+            self.c_f = params['c_f']
+        if 'xmin' in params:
+            self.xmin = params['xmin']
+        if 'xmax' in params:
+            self.xmax = params['xmax']
 
-        if params['instances'] is not None:
-            self.neg_i = np.fromiter(i for i in instances if \
-                         i.get_label() == InitialPredictor.negative_classification)
-            self.pos_i = np.fromiter(i for i in instances if \
-                         i.get_label() == InitialPredictor.positive_classification)
-            self.ones_col = np.ones((self.neg_i.shape[1],1))
-            self.pn = np.stack((self.pos_i,self.neg_i))
-            self.pl = np.ones((self.pos_i[0],1))
-            self.nl = -np.ones((self.neg_i[0],1))
-            self.pnl = np.stack((self.pl,self.nl))
-            self.xj_min = np.empty_like(self.pn).fill(self.x_min)
-            self.xj_max = np.empty_like(self.pn).fill(self.x_max)
-            self.ones_mat = np.ones_like(self.pnl)
-            #self.set_adversarial_params()
 
-            params = self.cvx_optimize(self.neg_i.size[1],self.pos_i.size[0]+self.neg_i.size[0])
-            self.weight_vector = params.weight
-            self.bias = params.bias
+    def get_available_params(self) -> Dict:
+        params = {'c_f': self.c_f,
+                  'xmin': self.xmin,
+                  'xmax': self.xmax}
+        return params
 
-    def cvx_optimize(self, col_neg: int, row_sum: int):
-        """Optimize the asymmetric dual problem and return optimal w and b.
 
-        Args:
-            col_neg: int number of columns of negative instances
-            row_sum: int sum of rows of negative and positive instances
-        """
+    def train(self):
+        '''Optimize the asymmetric dual problem and return optimal w and b.'''
+        c=10
+        y,X = sparsify(self.training_instances)
+        y,X = np.array(y), X.toarray()
+        i_neg = np.array([ins[1] for ins in zip(y,X) if ins[0]==self.negative_classification])
+        i_pos = np.array([ins[1] for ins in zip(y,X) if ins[0]==self.positive_classification])
+        ones_col = np.ones((i_neg.shape[1],1))
+        pn = np.concatenate((i_pos,i_neg))
+        pl = np.ones(i_pos.shape[0])
+        nl = -np.ones(i_neg.shape[0])
+        pnl = np.concatenate((pl,nl))
+        xj_min = np.full_like(pn,self.xmin)
+        xj_max = np.full_like(pn,self.xmax)
+        ones_mat = np.ones_like(pnl)
+        col_neg, row_sum = i_neg.shape[1], i_pos.shape[0] + i_neg.shape[0]
 
+        # define cvxpy variables
         w = cvx.Variable(col_neg)
         b = cvx.Variable()
         xi0 = cvx.Variable(row_sum)
@@ -74,31 +85,41 @@ class SVMFreeRange(RobustLearner):
         v = cvx.Variable(row_sum,col_neg)
 
         constraints = [xi0>=0,
-                       xi0 >=1-self.pnl*(np.dot(self.pn,w)+b)+t,
-                       t>=self.c_f*np.dot((v*(self.xj_max-self.pn) - u*(self.xj_min - self.pn)),self.ones_col),
-                       u-v==0.5*repmat((1+self.pnl),1,col_neg)*repmat(w.T,row_sum,1),
+                       xi0 >= 1-mul(pnl, (pn*w+b))+t,
+                       t >= mul(self.c_f,(mul(xj_max-pn, v) \
+                       - mul(xj_min - pn, u))*ones_col),
+                       u-v==0.5*(1+pnl)*w.T,
                        u>=0,
                        v>=0]
         # objective
-        # TODO: Test to see if this should be cvx.sum()
-        obj = cvx.Minimize(0.5*(cvx.norm(w)) + self.c*cvx.sum_entries(xi0))
+        obj = cvx.Minimize(0.5*(cvx.norm(w)) + c*cvx.sum_entries(xi0))
         prob = cvx.Problem(obj,constraints)
+
         if OPT_INSTALLED:
             prob.solve(solver=CVXOPT)
         else:
             prob.solve()
-        return {'weight':w.value,'bias':b.value}
 
-    def train(self):
-        # this needs to be implemented
-        raise NotImplementedError
+        self.weight_vector = [np.array(w.value).T][0]
+        self.bias = b.value
+
 
     def predict(self, instances: List[Instance]):
         predictions = []
         for instance in instances:
-            features = instance.get_feature_vector().get_csr_matrix().toarray()[0]
+            features = instance.get_feature_vector().get_csr_matrix().toarray()
             predictions.append(np.sign(self.predict_instance(features)))
         return predictions
 
+
     def predict_instance(self, features: Instance):
-        return np.dot(features, self.weight_vector) + self.bias
+        return self.weight_vector.dot(features.T)[0][0] + self.bias
+
+
+    def predict_proba(self, instances: List[Instance]):
+        return [self.predict_instance(
+            ins.get_feature_vector().get_csr_matrix().toarray()) for ins in instances]
+
+
+    def decision_function(self):
+        return self.weight_vector, self.bias

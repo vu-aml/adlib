@@ -4,3 +4,4 @@ from .retraining import Retraining
 from .simple_learner import SimpleLearner
 from .stackelberg import StackelbergLearner
 from .svm_restrained import SVMRestrained
+from .svm_freerange import SVMFreeRange

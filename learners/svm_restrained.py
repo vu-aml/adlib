@@ -48,6 +48,8 @@ class SVMRestrained(RobustLearner):
 
     def train(self):
         '''Optimize the asymmetric dual problem and return optimal w and b.'''
+        if not self.training_instances:
+            raise ValueError('Must set training instances before training')
         c = 10
         y,X = sparsify(self.training_instances)
         y,X = np.array(y), X.toarray()

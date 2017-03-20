@@ -3,3 +3,4 @@ from learners.feature_deletion import FeatureDeletion
 from learners.retraining import Retraining
 from learners.simple_learner import SimpleLearner
 from learners.stackelberg import StackelbergLearner
+from learners.nash_equilibrium import NashEquilibrium

@@ -2,7 +2,7 @@ from adversaries.adversary import Adversary
 from typing import List, Dict
 from data_reader.input import Instance, FeatureVector
 import numpy as np
-from learners.learner import InitialPredictor
+from learners.learner import RobustLearner
 from math import log
 from copy import deepcopy
 
@@ -41,7 +41,7 @@ class CostSensitive(Adversary):
     def attack(self, instances) -> List[Instance]:
         for instance in instances:
             transformed_instance = deepcopy(instance)
-            if instance.get_label() == InitialPredictor.positive_classification:
+            if instance.get_label() == RobustLearner.positive_classification:
                 transformed_instances.append(self.a(transformed_instance))
             else:
                 transformed_instances.append(transformed_instance)
@@ -72,7 +72,7 @@ class CostSensitive(Adversary):
         self.learn_model = learner
         self.Xc = train_instances
         self.num_features = train_instances[0].get_feature_vector.get_feature_count()
-        self.positive_instances = [x for x in train_instances if x.get_label() == InitialPredictor.positive_classification]
+        self.positive_instances = [x for x in train_instances if x.get_label() == RobustLearner.positive_classification]
         self.delta_Ua = self.Ua[0][1] - self.Ua[1][1]
 
     def find_mcc(self,i, w):

@@ -98,9 +98,13 @@ class SVMRestrained(RobustLearner):
 
     def predict(self, instances: List[Instance]):
         predictions = []
-        for instance in instances:
-            features = instance.get_feature_vector().get_csr_matrix().toarray()
-            predictions.append(np.sign(self.predict_instance(features)))
+        if isinstance(instances, List):
+            for instance in instances:
+                features = instance.get_feature_vector().get_csr_matrix().toarray()
+                predictions.append(np.sign(self.predict_instance(features)))
+        else:
+            predictions = np.sign(self.predict_instance(
+                instances.get_feature_vector().get_csr_matrix().toarray()))
         return predictions
 
 

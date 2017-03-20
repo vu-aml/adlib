@@ -11,6 +11,7 @@ class SimpleLearner(RobustLearner):
     def __init__(self, model = None, training_instances = None):
         RobustLearner.__init__(self)
         if model: self.set_model(model)
+        else: self.model = None
         self.training_instances = training_instances
 
     def set_model(self, model):

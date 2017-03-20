@@ -25,20 +25,19 @@ def main(argv):
 
     # initialize and train RobustLearner
     clf2 = learner.FeatureDeletion({'hinge_loss_multiplier': 1,
-                                    'max_feature_deletion': 50}, instances2)
+                                    'max_feature_deletion': 0}, instances2)
     clf2.train()
 
     # produce simple metrics
     y_predict = clf2.predict(instances3)
     y_true = sparsify(instances3)[0]
-    score = metrics.precision_score(y_predict,y_true)
+    score = metrics.accuracy_score(y_true, y_predict)
     print("score = "+str(score))
 
     wgt = clf2.decision_function()[0].tolist()[0]
     print(wgt)
     yaxis = [i for i in range(clf2.num_features)]
     plt.plot(yaxis, wgt)
-    plt.axis([0,1000,-1,1])
     plt.show()
 
 

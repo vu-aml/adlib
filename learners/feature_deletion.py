@@ -58,7 +58,7 @@ class FeatureDeletion(RobustLearner):
         t = Variable(num_instances)
         z = Variable(num_instances)
         v = {}
-        loss = sum_entries(pos(1 - mul_elemwise(y, X * w - b) + t))  # loss func
+        loss = sum_entries(pos(1 - mul_elemwise(y, X * w + b) + t))  # loss func
         for i in range(num_instances):
             v[i] = Variable(self.num_features)
         yX = y.dot(X)

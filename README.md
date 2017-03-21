@@ -1,6 +1,6 @@
 # AML
 
-<img align="center" src="https://github.com/yvorobey/aml/blob/newapi/docs/source/_templates/docs-latest-brightgreen.svg"/>
+<img align="center" src="https://github.com/yvorobey/aml/blob/newapi/docs/source/_templates/docs-latest-brightgreen.png"/>
 
 
 data_reader/data is in .gitignore to speed up git. If you need to make a change from one of those

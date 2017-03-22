@@ -6,17 +6,9 @@ import numpy as np
 from copy import deepcopy
 # import matplotlib.pyplot as plt
 
-'''Companion adversary alg to Retraining improved learner.
 
-Concept:
-    Randomly iterates through features in an adversarial instance, to greedily find
-    lowest cost (optimal transform).
 
-    implemented according to "A General Retraining Framework for Scalable Adversarial Classification"
-    Coordinate Greedy method
-'''
-
-class CoordinateGreedy(Adversary):
+class BinaryGreedy(Adversary):
 
     def __init__(self, learner=None, lambda_val=0.05, epsilon=0.0002, step_size=0.05):
         Adversary.__init__(self)
@@ -64,7 +56,7 @@ class CoordinateGreedy(Adversary):
 
         indices = [i for i in range(0, self.num_features)]
 
-        x = xk = instance.get_feature_vector().get_csr_matrix().toarray()[0].astype(float)
+        x = xk = instance.get_feature_vector().get_csr_matrix().toarray()[0]
         # Q = [self.transform_cost(xk,x)]
         # f = [self.learn_model.model.learner.predict(xk.reshape(1,-1))]
         # p = [self.learn_model.model.learner.coef_.dot(xk)+self.learn_model.model.learner.intercept_]
@@ -73,7 +65,7 @@ class CoordinateGreedy(Adversary):
         no_improve_count = 0
         shuffle(indices)
         for i in indices:
-            xkplus1 = self.greedy_improve(xk,i)
+            xkplus1 = self.minimize_transform(xk,i)
             oldQ = self.transform_cost(xk,x)
             newQ = self.transform_cost(xkplus1, x)
             #step_change = np.log(newQ) / np.log(oldQ)
@@ -82,15 +74,19 @@ class CoordinateGreedy(Adversary):
             step_change = newQ-oldQ
             # print('oldQ= '+str(oldQ) + ' newQ= '+str(newQ)+ ' step_change= '+str(step_change))
             # print('xk[i]= ' + str(xk[i]) + ' xk+1[i]= ' + str(xkplus1[i]) + ' x[i]= ' + str(x[i]))
-            # Q.append(newQ)
-            # f.append(self.learn_model.model.learner.predict(xkplus1.reshape(1, -1)))
-            # c.append(self.quadratic_cost(xkplus1,x))
-            # p.append(self.learn_model.model.learner.coef_.dot(xkplus1) + self.learn_model.model.learner.intercept_)
-            xk = xkplus1
+
             if step_change >= 0:
                 no_improve_count += 1
-                if step_change > self.epsilon or no_improve_count >= 100:
+                if no_improve_count >= 800:
                     break
+            else:
+                xk = xkplus1
+
+            # Q.append(self.transform_cost(xk,x))
+            # f.append(self.learn_model.model.learner.predict(xk.reshape(1, -1)))
+            # c.append(self.quadratic_cost(xk,x))
+            # p.append(self.learn_model.model.learner.coef_.dot(xk) + self.learn_model.model.learner.intercept_)
+
         # print('xk shape: '+str(xk.shape))
         if self.learn_model.model.learner.predict(xk.reshape(1,-1)) > 0:
             return instance
@@ -113,28 +109,27 @@ class CoordinateGreedy(Adversary):
         # plt.legend()
         # plt.show()
 
-        # print('mod succeeded')
+        #('mod succeeded')
 
-        # TODO return continuous valued instance
-        indices = [x for x in range(0,self.num_features) if xk[x] == 1]
+        mat_indices = [x for x in range(0,self.num_features) if xk[x] == 1]
         # print('prediction after mod: ' + str(self.learn_model.model.learner.coef_.dot(xk)+
         #                                      self.learn_model.model.learner.intercept_))
-        return Instance(1, FeatureVector(self.num_features, indices))
+        return Instance(1, FeatureVector(self.num_features, mat_indices))
 
-    def greedy_improve(self, xi: np.array, i):
+    def minimize_transform(self, xi: np.array, i):
         xk = np.copy(xi)
         # print('xk shape '+str(xk.shape)+  " i = "+ str(i))
-        # xk[i] -= self.step_size * (self.weight_vector[i] + self.lambda_val * (xk[i] - xi[i]))
+        xk[i] -= self.step_size * (self.weight_vector[i] + self.lambda_val * (xk[i] - xi[i]))
         # print('f\'= '+ str(self.weight_vector[i]) + ' xk[i]= '+str(xk[i]) + ' xi[i]= '+str(xi[i]))
 
-        # newxki = -self.weight_vector[i]/self.lambda_val + xi[i]
+        # newxki = 1 - xi[i]
         # print('minimize_decision= ' + str(newxki))
-        xk[i] = -self.weight_vector[i]/self.lambda_val + xi[i]
+        xk[i] = 1-xi[i]
         # np.put(xk, [i], [newxki])
         # print('new xk[i]= ' +str(xk[i]))
         return xk
 
-    def transform_cost(self, x: np.array, xi    : np.array):
+    def transform_cost(self, x: np.array, xi: np.array):
         return self.weight_vector.dot(x) + self.quadratic_cost(x, xi)
 
     def quadratic_cost(self, x: np.array, xi: np.array):

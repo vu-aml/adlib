@@ -44,16 +44,10 @@ class CoordinateGreedy(Adversary):
         return transformed_instances
 
     def set_params(self, params: Dict):
-        if params['lambda_val'] is not None:
-            self.lambda_val = params['lambda_val']
-
-        if params['epsilon'] is not None:
-            self.epsilon = params['epsilon']
+        raise NotImplementedError
 
     def get_available_params(self) -> Dict:
-        params = {'lambda_val': self.lambda_val,
-                  'epsilon': self.epsilon,}
-        return params
+        raise NotImplementedError
 
     def set_adversarial_params(self, learner, train_instances: List[Instance]):
         self.learn_model = learner

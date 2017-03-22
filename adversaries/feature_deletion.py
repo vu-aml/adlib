@@ -1,95 +1,52 @@
-from data_reader.input import Instance, FeatureVector
 from adversaries.adversary import Adversary
+from data_reader.input import Instance, FeatureVector
 from typing import List, Dict
-from cvxopt import matrix, solvers
+from random import shuffle
 import numpy as np
 from copy import deepcopy
 
-
 class FeatureDeletion(Adversary):
 
-    def __init__(self):
-        self.train_instances = None  # type: List[Instance]
-        self.num_features = None  # type: int
-        self.hinge_loss_multiplier = None  # type: float
-        self.max_feature_deletion = None  # type: int
-        self.weight_vector = None  # type: np.array
+    def __init__(self, learner=None, num_deletion=0, all_malicious=False):
+        Adversary.__init__(self)
+        self.num_features = 0       # type: int
+        self.num_deletion = num_deletion  # type: int
+        self.malicious = all_malicious  # type: bool
+        self.learn_model = learner
+        self.del_index = None   # type: np.array
+        if self.learn_model is not None:
+            self.weight_vector = self.learn_model.model.learner.coef_.toarray()[0]
+        else:
+            self.weight_vector = None # type: np.array
 
-    def attack(self, instances: List[Instance]) -> List[Instance]:
-        raise NotImplementedError
+    def attack(self, instances:List[Instance]) -> List[Instance]:
+        if self.num_features == 0:
+            self.num_features = instances[0].get_feature_vector().get_feature_count()
 
-    def optimize(self):
-        """
-        Opitimize weight vector using FDROP algorithm
-        i.e. formula (6) described in paper
-        Returns: optimized weight vector
+        # TODO: issue err msg when weight is None
 
-        """
-        num_instances = len(self.train_instances)
-        X_list = [ins.feature_vector for ins in self.train_instances]
-        y_list = [ins.label for ins in self.train_instances]
+        if self.malicious:
+            # if malicious, only features that indicates malicious instance are deleted
+            self.del_index = np.flipud(np.argsort(self.weight_vector))[:self.num_deletion]
+        else:
+            self.del_index = np.flipud(np.argsort(np.absolute(self.weight_vector)))[:self.num_deletion]
 
-        xlen = self.num_features + num_instances * 2 + num_instances * self.num_features
-        wi_start = 0
-        ti_start = wi_start + self.num_features
-        zi_start = ti_start + self.num_features
-        v_start = zi_start + self.num_features
-
-        P = np.zeros((xlen, xlen))
-        identity = np.multiply(np.identity(self.num_features), 1 / 2)
-        P[:self.num_features, :self.num_features] = identity
-
-        weight_terms = [sum(y_list[i] * X_list[i][j] for i in range(num_instances)) * self.weight_vector[j]
-                        for j in range(self.num_features)]
-        q_list = weight_terms + [1] * num_instances + [0] * (xlen - num_instances - self.num_features)
-        q = np.array(q_list)
-        np.multiply(q, self.hinge_loss_multiplier)
-
-        G_list = np.array([[0] * xlen])
-        for i in range(num_instances):
-            lst = [0] * xlen
-            lst[ti_start + i] = 1
-            lst[zi_start + i] = -self.max_feature_deletion
-            lst[v_start + i * self.num_features:v_start + (i + 1) * self.num_features] = [1] * self.num_features
-            np.append(G_list, [np.array(lst)])
-        for i in range(v_start, xlen):
-            lst = [0] * xlen
-            lst[i] = 1
-            np.append(G_list, [np.array(lst)])
-        for i in range(num_instances):
-            for j in range(self.num_features):
-                lst = [0] * xlen
-                lst[wi_start + j] = -y_list[i] * X_list[i][j]
-                lst[v_start + i * self.num_features + j] = 1
-                lst[zi_start + i] = 1
-                np.append(G_list, [np.array(lst)])
-        G = G_list[1:]
-
-        h = np.array([0] * len(G))
-
-        sol = solvers.qp(matrix(P), matrix(q), matrix(G), matrix(h))
-
-        return sol[:self.num_features]
+        return [self.change_instance(ins) for ins in instances]
 
     def set_params(self, params: Dict):
-        if params['hinge_loss_multiplier'] is not None:
-            self.hinge_loss_multiplier = params['hinge_loss_multiplier']
+        if 'num_deletion' in params:
+            self.num_deletion = params['num_deletion']
 
-        if params['max_feature_deletion'] is not None:
-            self.max_feature_deletion = params['max_feature_deletion']
+        if 'all_malicious' in params:
+            self.malicious = params['all_malicious']
 
     def get_available_params(self) -> Dict:
-        params = {'hinge_loss_multiplier': self.hinge_loss_multiplier,
-                  'max_feature_deletion': self.max_feature_deletion}
+        params = {'num_deletion': self.num_deletion,
+                  'all_malicious': self.malicious,}
         return params
 
-    def set_adversarial_params(self, learner, train_instances):
-        self.train_instances = train_instances  # type: List[Instance]
-        self.num_features = self.train_instances[0].get_feature_vector().get_feature_count()
-        self.weight_vector = self.optimize()
+    def change_instance(self, instance: Instance) -> Instance:
 
-    def get_learner_params(self):
-        return self.weight_vector
-
-    def predict_instance(self, fv: np.array, a_learner: np.array) -> float:
-        return np.dot(self.weight_vector, fv)
+        x = instance.get_feature_vector().get_csr_matrix().toarray()[0]
+        indices = [i for i in range(0,self.num_features) if x[i] == 1 and i not in self.del_index]
+        return Instance(1, FeatureVector(self.num_features, indices))

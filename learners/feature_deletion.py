@@ -9,6 +9,7 @@ from cvxpy import *
 class FeatureDeletion(RobustLearner):
 
     def __init__(self, params=None, training_instances=None):
+
         RobustLearner.__init__(self)
         self.weight_vector = None        # type: np.array(shape=(1))
         self.num_features = 0  # type: int
@@ -21,7 +22,6 @@ class FeatureDeletion(RobustLearner):
 
         self.set_params(params)
         self.set_training_instances(training_instances)
-        print(self.num_features)
 
     def set_params(self, params: Dict):
         if 'hinge_loss_multiplier' in params:
@@ -94,7 +94,6 @@ class FeatureDeletion(RobustLearner):
         :param features: np.array of shape (1, self.num_features), i.e. [[1, 2, ...]]
         :return: float
         '''
-        print('w shape: '+ str(self.weight_vector.shape))
         return self.weight_vector.dot(features.T)[0][0] + self.bias
 
     def predict_proba(self, instances: List[Instance]):

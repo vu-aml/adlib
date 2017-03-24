@@ -22,6 +22,8 @@ class FeatureDeletion(RobustLearner):
 
         self.set_params(params)
         self.set_training_instances(training_instances)
+        print('feature del: ' + str(self.max_feature_deletion))
+        print('hinge_loss_multiplier ' + str(self.hinge_loss_multiplier))
 
     def set_params(self, params: Dict):
         if 'hinge_loss_multiplier' in params:
@@ -46,7 +48,7 @@ class FeatureDeletion(RobustLearner):
         num_instances = len(self.training_instances)
 
         y_list, X_list = sparsify(self.training_instances)
-        y, X = np.array(y_list), X_list.toarray()
+        y, X = np.array(y_list).reshape((num_instances,1)), X_list.toarray().reshape((num_instances,self.num_features))
 
         C = self.hinge_loss_multiplier
         K = self.max_feature_deletion
@@ -57,22 +59,23 @@ class FeatureDeletion(RobustLearner):
         b = Variable()  # bias term
         t = Variable(num_instances)
         z = Variable(num_instances)
-        v = {}
+        v = Variable(num_instances, self.num_features)
         loss = sum_entries(pos(1 - mul_elemwise(y, X * w + b) + t))  # loss func
-        for i in range(num_instances):
-            v[i] = Variable(self.num_features)
-        yX = y.dot(X)
+        # for i in range(num_instances):
+        #     v[i] = Variable(self.num_features)
 
-        constraints = [t >= K * z + np.dot(X, j_ones)]
+        print('yX shape' + str(y[0]*X[0].shape))
+        # add constraints
+        constraints = [t >= K * z + sum_entries(v,axis=1)]
 
         # add constraints vi >= 0
-        constraints.extend([v[i] >= 0 for i in range(num_instances)])
+        constraints.append(v > 0)
 
         # add constraints zi + vi >= y.dot(X) * w
-        constraints.extend([v[i][j] + z[i] >= yX[j]*w[j] for j in range(self.num_features)
-                                     for i in range(num_instances)])
+        constraints.extend([v[i,:] + z[i]*np.ones(self.num_features).reshape(1,self.num_features)
+                            >= (mul_elemwise(y[i]* X[i].reshape(self.num_features, 1),w)).T for i in range(num_instances)])
 
-        obj = Minimize(0.5*(norm(w)) + C * loss)
+        obj = Minimize(0.5*(sum_squares(w)) + C * loss)
 
         prob = Problem(obj, constraints)
         prob.solve()

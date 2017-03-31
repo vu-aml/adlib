@@ -6,5 +6,6 @@ from .good_word import GoodWord
 from .gradient_descent import GradientDescent
 from .meek_and_lowd import *
 from .nash_eq import *
+from .nash_eq_games import *
 from .simple_optimize import SimpleOptimize
 from .stackelberg import *

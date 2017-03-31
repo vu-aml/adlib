@@ -2,7 +2,7 @@ from learners.learner import RobustLearner
 from typing import List, Dict
 from types import FunctionType
 import numpy as np
-from adversaries import NashEq, Game
+from util import predict_instance
 from data_reader.input import Instance, FeatureVector
 
 
@@ -39,7 +39,7 @@ class NashEquilibrium(RobustLearner):
         predictions = []
         for instance in instances:
             features = instance.get_feature_vector().get_csr_matrix().toarray()[0]
-            predictions.append(np.sign(Game.predict_instance(features, self.weight_vector)))
+            predictions.append(np.sign(predict_instance(features, self.weight_vector)))
         return predictions
 
     def set_params(self, params: Dict):

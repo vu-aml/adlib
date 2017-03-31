@@ -63,6 +63,7 @@ class Adversary(object):
 
         """
         raise NotImplementedError
+
     def clone(self):
         """Return a new copy of the adversary with same initial params."""
         our_type = type(self)

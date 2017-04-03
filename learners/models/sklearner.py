@@ -24,7 +24,7 @@ class Model(BaseModel):
         """
         self.learner = sklearn_object
 
-    def train(self, instances: List[Instance], isContinuousFeatures=False):
+    def train(self, instances: List[Instance]):
         """Train on the set of training instances using the underlying
         sklearn object.
 
@@ -32,7 +32,7 @@ class Model(BaseModel):
             instances (List[Instance]): training instances.
 
         """
-        (y, X) = sparsify(instances, isContinuousFeatures)
+        (y, X) = sparsify(instances)
         self.learner.fit(X,y)
 
     def predict(self, instances):
@@ -53,7 +53,7 @@ class Model(BaseModel):
             predictions = self.learner.predict(instances.get_feature_vector().get_csr_matrix())[0]
         return predictions
 
-    def predict_proba(self, instances):
+    def predict_proba_adversary(self, instances):
         """Use the model to determine probability of adversarial classification.
 
         Args:

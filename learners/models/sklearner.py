@@ -53,7 +53,7 @@ class Model(BaseModel):
             predictions = self.learner.predict(instances.get_feature_vector().get_csr_matrix())[0]
         return predictions
 
-    def predict_proba_adversary(self, instances):
+    def predict_proba(self, instances):
         """Use the model to determine probability of adversarial classification.
 
         Args:

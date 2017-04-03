@@ -186,20 +186,17 @@ class Instance(object):
             sum += self.get_feature_cost(cost_vector, index) 
         return sum
 
-def load_instances(data: List) -> List[Instance]:
+def load_instances(data: str) -> List[Instance]:
     """Load data from a specified file.
 
     Args:
-            data (List[str]):
-
-                    data[0]: Data set name.
-                    data[1]: Category path (train or test).
+            data (str):
 
     Returns:
             instances as List[Instance]
 
         """
-    path = './data_reader/data/' + data[1] + '/' + data[0]
+    path = data
 
     instances = []
     max_index = 0

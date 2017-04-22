@@ -1,5 +1,6 @@
 import json, pickle
 from typing import List, Dict
+import scipy
 from scipy.sparse import csr_matrix, dok_matrix
 
 """

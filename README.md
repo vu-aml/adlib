@@ -1,6 +1,6 @@
 # AML
 
-<img align="center" src="https://github.com/yvorobey/aml/blob/newapi/docs/source/_templates/docs-latest-brightgreen.png"/>
+[![Build Status](https://travis-ci.com/vu-aml/adlib.svg?token=UQbyf6hz4VVL6qGppwSf&branch=master)](https://travis-ci.com/vu-aml/adlib)
 
 
 data_reader/data is in .gitignore to speed up git. If you need to make a change from one of those

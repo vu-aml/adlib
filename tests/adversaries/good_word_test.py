@@ -1,4 +1,5 @@
 import pytest
+from ..common import TEST_NUMPY, TEST_SCIPY, TEST_SKLEARN
 from adversaries import GoodWord
 from sklearn import svm
 from learners import RobustLearner, SimpleLearner

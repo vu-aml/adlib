@@ -1,7 +1,7 @@
 from setuptools import find_packages, setup
 
 setup(
-    name='pyamll',
+    name='adlib',
     version='0.0.1',
     description="Game-theoretic adversarial machine learning library providing a set of learner and adversary modules.",
     url='https://github.com/yvorobey/aml',
@@ -11,10 +11,10 @@ setup(
     platforms=['any'],
     packages=find_packages(),
     install_requires=[
-        'numpy>=1<2',
+        'numpy>=1',
         'scipy>=0.15',
         'sklearn>=0.18',
         'matplotlib>=2.0.0',
         'cvxpy>=0.4.8'
-    ]
+    ],
 )

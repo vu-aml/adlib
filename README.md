@@ -1,4 +1,4 @@
-# AML
+# AdLib
 
 [![Build Status](https://travis-ci.com/vu-aml/adlib.svg?token=UQbyf6hz4VVL6qGppwSf&branch=master)](https://travis-ci.com/vu-aml/adlib)
 

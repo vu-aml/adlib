@@ -186,6 +186,7 @@ class Instance(object):
             sum += self.get_feature_cost(cost_vector, index)
         return sum
 
+
 def load_instances(data: str) -> List[Instance]:
     """Load data from a specified file.
 
@@ -197,7 +198,6 @@ def load_instances(data: str) -> List[Instance]:
 
         """
     path = data
-
     instances = []
     max_index = 0
     try:
@@ -228,13 +228,6 @@ def load_instances(data: str) -> List[Instance]:
         created_instances.append(Instance(instance[0], feature_vector))
 
     return created_instances
-
-
-# def open_transformed_instances(battle_name: str, data: str) -> List[Instance]:
-#     path = './data_reader/data/transformed/' + data + '.' + battle_name
-#     with open(path, 'r') as infile:
-#         instances = json.load(infile)
-#     return instances
 
 
 def open_battle(battle_name: str):

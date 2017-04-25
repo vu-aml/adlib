@@ -32,8 +32,9 @@ class Model(BaseModel):
             instances (List[Instance]): training instances.
 
         """
-        (y, X) = sparsify(instances)
-        self.learner.fit(X,y)
+        # (y, X) = sparsify(instances)
+        (X, y) = instances
+        self.learner.fit(X, y)
 
     def predict(self, instances):
         """Predict classification labels for the set of instances using
@@ -50,7 +51,8 @@ class Model(BaseModel):
             (y, X) = sparsify(instances)
             predictions = self.learner.predict(X)
         else:
-            predictions = self.learner.predict(instances.get_feature_vector().get_csr_matrix())[0]
+            # predictions = self.learner.predict(instances.get_feature_vector().get_csr_matrix())[0]
+            predictions = self.learner.predict(instances)
         return predictions
 
     def predict_proba(self, instances):
@@ -116,6 +118,3 @@ class Model(BaseModel):
 
         """
         return self.learner
-
-
-

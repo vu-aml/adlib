@@ -29,7 +29,7 @@ class BinaryGreedy(Adversary):
         transformed_instances = []
         for instance in instances:
             transformed_instance = deepcopy(instance)
-            if instance.get_label() >0 :
+            if instance.get_label() > 0:
                 transformed_instances.append(self.coordinate_greedy(transformed_instance))
             else:
                 transformed_instances.append(transformed_instance)

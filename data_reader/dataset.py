@@ -78,8 +78,8 @@ class EmailDataset(Dataset):
         else:
             raise AttributeError('Incorrect combination of parameters.')
         self.shape = self.features.shape
-        self.data = namedtuple('EmailDataset', 'features labels')
-        self.data = self.data(self.features, self.labels)
+        self.Data = namedtuple('EmailDataset', 'features labels')
+        self.data = self.Data(self.features, self.labels)
 
     def _create_corpus(self, folder):
         """Generate list of files, one for each future instance and labels
@@ -135,7 +135,7 @@ class EmailDataset(Dataset):
         return labels, files
 
     def __getitem__(self, index):
-        return self.data(self.features[index].toarray(),
+        return self.Data(self.features[index].toarray(),
                          self.labels[index])
 
     def __len__(self):
@@ -159,14 +159,14 @@ class EmailDataset(Dataset):
 
         """
         if sparse:
-            return self.data(self.features[index], self.labels[index])
+            return self.Data(self.features[index], self.labels[index])
 
         else:
             return self.__getitem__(index)
 
     def numpy(self):
         """This is a convenience method for __getitem__[:]"""
-        return self.data(self.features.toarray(), self.labels)
+        return self.Data(self.features.toarray(), self.labels)
 
     def sort(self):
         """Sort the features in place by index"""
@@ -281,5 +281,5 @@ class EmailDataset(Dataset):
             frac = splits[0]/100
         pivot = int(self.__len__()*frac)
         s_feats, s_labels = sklearn.utils.shuffle(self.features, self.labels)
-        return (self.data(s_feats[:pivot, :], s_labels[:pivot]),
-                self.data(s_feats[pivot:, :], s_labels[pivot:]))
+        return (self.Data(s_feats[:pivot, :], s_labels[:pivot]),
+                self.Data(s_feats[pivot:, :], s_labels[pivot:]))

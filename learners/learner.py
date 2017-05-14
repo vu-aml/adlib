@@ -20,8 +20,15 @@ class RobustLearner(object):
         self.training_instances = None
         self.num_features = 0
 
-    def set_training_instances(self, training_instances):
-        self.training_instances = training_instances  # type: List[Instance]
+    def set_training_instances(self, X, y):
+        """
+
+        :param X: feature matrix. shape (num_instances, num_feautres_per_instance)
+        :param y: label array. shape (num_instances, )
+        :return:
+        """
+        self.feature_matrix = X
+        self.labels = y
         self.num_features = self.training_instances[0].get_feature_vector().get_feature_count()
 
     def train(self):

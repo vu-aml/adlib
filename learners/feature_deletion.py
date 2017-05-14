@@ -8,7 +8,7 @@ from cvxpy import *
 
 class FeatureDeletion(RobustLearner):
 
-    def __init__(self, params=None, training_instances=None):
+    def __init__(self, params=None, X=None, y=None):
 
         RobustLearner.__init__(self)
         self.weight_vector = None        # type: np.array(shape=(1))
@@ -21,7 +21,7 @@ class FeatureDeletion(RobustLearner):
         self.bias = 0  # type: int
 
         self.set_params(params)
-        self.set_training_instances(training_instances)
+        self.set_training_instances(X,y)
         print('feature del: ' + str(self.max_feature_deletion))
         print('hinge_loss_multiplier ' + str(self.hinge_loss_multiplier))
 
@@ -45,10 +45,10 @@ class FeatureDeletion(RobustLearner):
         Returns: optimized weight vector
 
         """
-        num_instances = len(self.training_instances)
+        num_instances = len(self.labels)
 
-        y_list, X_list = sparsify(self.training_instances)
-        y, X = np.array(y_list).reshape((num_instances,1)), X_list.toarray().reshape((num_instances,self.num_features))
+        y = self.labels.reshape((num_instances,1))
+        X = self.feature_matrix.reshape((num_instances,self.num_features))
 
         C = self.hinge_loss_multiplier
         K = self.max_feature_deletion
@@ -64,7 +64,6 @@ class FeatureDeletion(RobustLearner):
         # for i in range(num_instances):
         #     v[i] = Variable(self.num_features)
 
-        print('yX shape' + str(y[0]*X[0].shape))
         # add constraints
         constraints = [t >= K * z + sum_entries(v,axis=1)]
 
@@ -84,24 +83,25 @@ class FeatureDeletion(RobustLearner):
         self.bias = b.value
 
 
-    def predict(self, instances: List[Instance]):
+    def predict(self, instances ):
+        """
+
+        :param instances: matrix of feature vectors. shape (num_instances, num_feautres_per_instance)
+        :return:
+        """
         predictions = []
-        for instance in instances:
-            features = instance.get_feature_vector().get_csr_matrix().toarray()
-            predictions.append(np.sign(self.predict_instance(features)))
+        for feature_vec in instances:
+            predictions.append(np.sign(self.predict_instance(feature_vec)))
         return predictions
 
     def predict_instance(self, features):
         '''
         predict class for a single instance and return a real value
-        :param features: np.array of shape (1, self.num_features), i.e. [[1, 2, ...]]
+        :param features: np.array of shape (1, self.num_features)
         :return: float
         '''
         return self.weight_vector.dot(features.T)[0][0] + self.bias
 
-    def predict_proba(self, instances: List[Instance]):
-        return [self.predict_instance(
-            ins.get_feature_vector().get_csr_matrix().toarray()) for ins in instances]
 
     def decision_function(self):
         return self.weight_vector, self.bias

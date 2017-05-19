@@ -8,7 +8,7 @@ from cvxpy import *
 
 class FeatureDeletion(RobustLearner):
 
-    def __init__(self, params=None, X=None, y=None):
+    def __init__(self, X, y, params=None):
 
         RobustLearner.__init__(self)
         self.weight_vector = None        # type: np.array(shape=(1))
@@ -19,11 +19,11 @@ class FeatureDeletion(RobustLearner):
         self.weight_vector = None   # type: np.array
                                     # of shape (1, self.num_features)
         self.bias = 0  # type: int
-
+        self.y = y
+        self.X = X
+        self.num_features = len(X[0])
         self.set_params(params)
-        self.set_training_instances(X,y)
-        print('feature del: ' + str(self.max_feature_deletion))
-        print('hinge_loss_multiplier ' + str(self.hinge_loss_multiplier))
+
 
     def set_params(self, params: Dict):
         if 'hinge_loss_multiplier' in params:
@@ -45,14 +45,10 @@ class FeatureDeletion(RobustLearner):
         Returns: optimized weight vector
 
         """
-        num_instances = len(self.labels)
-
-        y = self.labels.reshape((num_instances,1))
-        X = self.feature_matrix.reshape((num_instances,self.num_features))
-
+        num_instances = len(self.y)
+        y, X = self.y.reshape((num_instances,1)), self.X
         C = self.hinge_loss_multiplier
         K = self.max_feature_deletion
-
 
         i_ones, i_zeroes, j_ones = np.ones(num_instances), np.zeros(num_instances), np.ones(self.num_features)
         w = Variable(self.num_features)  # weight vector
@@ -63,6 +59,7 @@ class FeatureDeletion(RobustLearner):
         loss = sum_entries(pos(1 - mul_elemwise(y, X * w + b) + t))  # loss func
         # for i in range(num_instances):
         #     v[i] = Variable(self.num_features)
+
 
         # add constraints
         constraints = [t >= K * z + sum_entries(v,axis=1)]
@@ -83,25 +80,20 @@ class FeatureDeletion(RobustLearner):
         self.bias = b.value
 
 
-    def predict(self, instances ):
-        """
-
-        :param instances: matrix of feature vectors. shape (num_instances, num_feautres_per_instance)
-        :return:
-        """
+    def predict(self, instances):
         predictions = []
-        for feature_vec in instances:
-            predictions.append(np.sign(self.predict_instance(feature_vec)))
+        for instance in instances:
+            predictions.append(np.sign(self.predict_instance(instance)))
         return predictions
 
     def predict_instance(self, features):
         '''
         predict class for a single instance and return a real value
-        :param features: np.array of shape (1, self.num_features)
+        :param features: np.array of shape (1, self.num_features), i.e. [[1, 2, ...]]
         :return: float
         '''
-        return self.weight_vector.dot(features.T)[0][0] + self.bias
 
+        return self.weight_vector.dot(features.T)[0]+ self.bias
 
     def decision_function(self):
         return self.weight_vector, self.bias

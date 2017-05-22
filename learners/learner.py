@@ -1,5 +1,4 @@
-from typing import List, Dict
-from data_reader.input import Instance
+from typing import Dict
 
 
 class RobustLearner(object):
@@ -17,7 +16,6 @@ class RobustLearner(object):
         """New generic initial learner with no specified learning model.
 
         """
-        self.training_instances = None
         self.num_features = 0
 
     def set_training_instances(self, X, y):
@@ -29,7 +27,7 @@ class RobustLearner(object):
         """
         self.feature_matrix = X
         self.labels = y
-        self.num_features = self.training_instances[0].get_feature_vector().get_feature_count()
+        self.num_features = len(X[0])
 
     def train(self):
         """Train on the set of training instances.
@@ -37,11 +35,11 @@ class RobustLearner(object):
         """
         raise NotImplementedError
 
-    def predict(self, instances):
+    def predict(self, X):
         """Predict classification labels for the set of instances.
 
         Args:
-            instances (List[Instance]) or (Instance): training or test instances.
+            :param X: matrix of instances shape (num_instances, num_feautres_per_instance)
 
         Returns:
             label classifications (List(int))
@@ -60,10 +58,13 @@ class RobustLearner(object):
         """
         raise NotImplementedError
 
-    def predict_proba(self, instances):
+    def predict_proba(self, X):
+        """
+        outputs a list of log probability of prediction
+        :param X: matrix of instances shape (num_instances, num_feautres_per_instance)
+        :return: list of log probability
+        """
         raise NotImplementedError
 
-    def decision_function(self):
-        raise NotImplementedError
 
 

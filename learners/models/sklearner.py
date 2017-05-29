@@ -33,7 +33,7 @@ class Model(BaseModel):
 
         """
         # (y, X) = sparsify(instances)
-        (X, y) = instances
+        (X, y) = instances.numpy()
         self.learner.fit(X, y)
 
     def predict(self, instances):

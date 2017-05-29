@@ -16,7 +16,7 @@ Concept:
 
 class SimpleOptimize(Adversary):
 
-    def __init__(self, lambda_val=-100,max_change=1000,learner=None):
+    def __init__(self, lambda_val=-100, max_change=1000, learner=None):
         Adversary.__init__(self)
         self.lambda_val = lambda_val                     # type: float
         self.max_change = max_change                     # type: float
@@ -25,15 +25,15 @@ class SimpleOptimize(Adversary):
 
     def attack(self, instances: List[Instance]) -> List[Instance]:
         transformed_instances = []
+        data = deepcopy(instances)
         if self.num_features is None:
-            self.num_features = instances[0].get_feature_vector().get_feature_count()
-        for instance in instances:
-            transformed_instance = deepcopy(instance)
-            if instance.get_label() == 1:
-                transformed_instances.append(self.optimize(transformed_instance))
-            else:
-                transformed_instances.append(transformed_instance)
-        return transformed_instances
+            # self.num_features = instances[0].get_feature_vector().get_feature_count()
+            self.num_features = len(data)
+        for idx, label in enumerate(data.labels):
+            # transformed_instance = deepcopy(instance)
+            if label == 1:
+                data.features[idx] = self.optimize(data.features[idx])
+        return data
 
     def set_params(self, params: Dict):
         if 'lambda_val' in params.keys():
@@ -63,4 +63,3 @@ class SimpleOptimize(Adversary):
             if change > self.max_change:
                 break
         return instance
-        

@@ -1,5 +1,6 @@
 import os
 from sklearn.feature_extraction.text import TfidfVectorizer
+import scipy
 from scipy.sparse import csr_matrix, dok_matrix, find
 import sklearn
 import numpy as np
@@ -51,8 +52,8 @@ class EmailDataset(Dataset):
                  binary=False, strip_accents_=None, ngram_range_=(1, 1),
                  max_df_=1.0, min_df_=1, max_features_=1000):
         super(EmailDataset, self).__init__()
-
-        self.base_path = os.path.dirname(path)
+        if path is not None:
+            self.base_path = os.path.dirname(path)
         #: Number of instances within the current corpus
         self.num_instances = 0
         if raw:
@@ -68,8 +69,9 @@ class EmailDataset(Dataset):
             self.vectorizer = self.vectorizer.fit(self.corpus)
             self.features = self.vectorizer.transform(self.corpus)
         elif path is None and features is not None and labels is not None:
-            assert type(features) == 'scipy.sparse.csr.csr_matrix'
-            assert type(labels) == 'numpy.ndarray'
+            assert type(labels) == np.ndarray
+            assert type(features) == scipy.sparse.csr.csr_matrix
+
             self.features = features
             self.labels = labels
         elif path is not None:
@@ -281,5 +283,11 @@ class EmailDataset(Dataset):
             frac = splits[0]/100
         pivot = int(self.__len__()*frac)
         s_feats, s_labels = sklearn.utils.shuffle(self.features, self.labels)
-        return (self.Data(s_feats[:pivot, :], s_labels[:pivot]),
-                self.Data(s_feats[pivot:, :], s_labels[pivot:]))
+        print(type(s_feats))
+        print(type(s_labels))
+        return (self.__class__(raw=False, features=s_feats[:pivot, :],
+                               labels=s_labels[:pivot]),
+                self.__class__(raw=False, features=s_feats[pivot, :],
+                               labels=s_labels[pivot:]))
+        # return (self.Data(s_feats[:pivot, :], s_labels[:pivot]),
+        #         self.Data(s_feats[pivot:, :], s_labels[pivot:]))

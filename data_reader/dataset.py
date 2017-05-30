@@ -287,7 +287,7 @@ class EmailDataset(Dataset):
         print(type(s_labels))
         return (self.__class__(raw=False, features=s_feats[:pivot, :],
                                labels=s_labels[:pivot]),
-                self.__class__(raw=False, features=s_feats[pivot, :],
+                self.__class__(raw=False, features=s_feats[pivot:, :],
                                labels=s_labels[pivot:]))
         # return (self.Data(s_feats[:pivot, :], s_labels[:pivot]),
         #         self.Data(s_feats[pivot:, :], s_labels[pivot:]))

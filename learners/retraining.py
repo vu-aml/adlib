@@ -1,8 +1,8 @@
 from learners.learner import RobustLearner
 from typing import Dict, List
-from data_reader.input import Instance
+from data_reader.dataset import EmailDataset
 from learners.models.sklearner import Model
-from data_reader.operations import fv_equals
+import numpy as np
 
 """Learner retraining.
 
@@ -21,7 +21,7 @@ Concept:
 
 
 class Retraining(RobustLearner):
-    def __init__(self, base_model=None, training_instances=None, params: Dict=None):
+    def __init__(self, base_model=None, training_instances:EmailDataset=None, params: Dict=None):
         RobustLearner.__init__(self)
         self.model = Model(base_model)
         self.attack_alg = None # Type: class
@@ -42,31 +42,33 @@ class Retraining(RobustLearner):
         self.attacker.set_params(self.adv_params)
         self.attacker.set_adversarial_params(self.model,self.training_instances)
         print("training")
-        I_bad = [x for x in self.training_instances if self.model.predict([x])[0] == 1]
-        N = []
-        while True:
-            new = []
-            for instance in I_bad:
-                transformed_instance = self.attacker.attack([instance])[0]
-                new_instance = True
-                for old_instance in N:
-                    if fv_equals(transformed_instance.get_feature_vector(),
-                                 old_instance.get_feature_vector()):
-                        new_instance = False
-                if new_instance:
-                    new.append(transformed_instance)
-                    N.append(transformed_instance)
-            if len(new) == 0:
-                break
-            self.model.train(self.training_instances + N)
-            break
+        malicious_feature_vecs = [x for x in self.training_instances.features if self.model.predict([x])[0] == 1]
+        augmented_feature_vecs = self.training_instances.features
+        augmented_labels = self.training_instances.labels
+
+        for instance in malicious_feature_vecs:
+            transformed_instance = self.attacker.attack([instance])[0]
+            new_instance = True
+            for old_instance in augmented_feature_vecs:
+                if np.array_equal(old_instance, transformed_instance):
+                    new_instance = False
+            if new_instance:
+                np.append(augmented_feature_vecs, transformed_instance, axis=0)
+                np.append(augmented_labels, [1])
+        self.model.train(EmailDataset(raw=False, features=augmented_feature_vecs, labels=augmented_labels))
+
 
     def decision_function(self, instances):
         return self.model.decision_function_adversary(instances)
 
-    def predict(self, instances: List[Instance]):
+    def predict(self, instances):
+        """
+
+        :param instances: matrix of instances shape (num_instances, num_feautres_per_instance)
+        :return: list of labels (int)
+        """
         return self.model.predict(instances)
 
-    def predict_proba(self, instances: List[Instance]):
+    def predict_proba(self, instances):
         return self.model.predict_proba_adversary(instances)
 

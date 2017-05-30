@@ -1,5 +1,5 @@
 from typing import Dict
-
+from data_reader.dataset import EmailDataset
 
 class RobustLearner(object):
     """Base class for initial learning methods.
@@ -17,17 +17,18 @@ class RobustLearner(object):
 
         """
         self.num_features = 0
+        self.training_instances = None  # Type: EmailDataset
 
-    def set_training_instances(self, X, y):
+    def set_training_instances(self, training_data:EmailDataset):
         """
 
-        :param X: feature matrix. shape (num_instances, num_feautres_per_instance)
-        :param y: label array. shape (num_instances, )
-        :return:
+        :param training_data: an dataset object , which when calling numpy() will return
+                X: feature matrix. shape (num_instances, num_feautres_per_instance)
+                y: label array. shape (num_instances, )
         """
-        self.feature_matrix = X
-        self.labels = y
-        self.num_features = len(X[0])
+
+        self.training_instances = training_data
+        self.num_features = len(training_data.labels)
 
     def train(self):
         """Train on the set of training instances.
@@ -35,11 +36,11 @@ class RobustLearner(object):
         """
         raise NotImplementedError
 
-    def predict(self, X):
+    def predict(self, instances):
         """Predict classification labels for the set of instances.
 
         Args:
-            :param X: matrix of instances shape (num_instances, num_feautres_per_instance)
+            :param instances: matrix of instances shape (num_instances, num_feautres_per_instance)
 
         Returns:
             label classifications (List(int))

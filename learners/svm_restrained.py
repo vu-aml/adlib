@@ -1,12 +1,10 @@
 from learners.learner import RobustLearner
-from data_reader.input import Instance, FeatureVector
-from data_reader.operations import sparsify
-from adversaries.adversary import Adversary
 from typing import List, Dict
 import numpy as np
 import cvxpy as cvx
 from cvxpy import Variable as Variable
 from cvxpy import mul_elemwise as mul
+from data_reader.dataset import EmailDataset
 OPT_INSTALLED = True
 try:
     import cvxopt
@@ -25,7 +23,7 @@ class SVMRestrained(RobustLearner):
         c_delta: aggressiveness assumption c_delta ∈ [0.0,1.0]. Default:0.5
     """
 
-    def __init__(self, params = None, training_instances = None):
+    def __init__(self, params=None, training_instances:EmailDataset=None):
         RobustLearner.__init__(self)
         self.weight_vector = None
         self.bias = 0
@@ -35,24 +33,20 @@ class SVMRestrained(RobustLearner):
         if training_instances is not None:
             self.set_training_instances(training_instances)
 
-
     def set_params(self, params: Dict):
         if 'c_delta' in params:
             self.c_delta = params['c_delta']
 
-
     def get_available_params(self) -> Dict:
         params = {'c_delta': self.c_delta}
         return params
-
 
     def train(self):
         '''Optimize the asymmetric dual problem and return optimal w and b.'''
         if not self.training_instances:
             raise ValueError('Must set training instances before training')
         c = 10
-        y,X = sparsify(self.training_instances)
-        y,X = np.array(y), X.toarray()
+        X, y = self.training_instances.numpy()
         i_neg = np.array([ins[1] for ins in zip(y,X) if ins[0]==self.negative_classification])
         i_pos = np.array([ins[1] for ins in zip(y,X) if ins[0]==self.positive_classification])
         # centroid can be computed in multiple ways
@@ -95,27 +89,24 @@ class SVMRestrained(RobustLearner):
         self.weight_vector = [np.array(w.value).T][0]
         self.bias = b.value
 
+    def predict(self, instances:np.ndarray):
+        """
 
-    def predict(self, instances: List[Instance]):
-        predictions = []
-        if isinstance(instances, List):
-            for instance in instances:
-                features = instance.get_feature_vector().get_csr_matrix().toarray()
-                predictions.append(np.sign(self.predict_instance(features)))
-        else:
-            predictions = np.sign(self.predict_instance(
-                instances.get_feature_vector().get_csr_matrix().toarray()))
-        return predictions
+        :param instances: matrix of instances shape (num_instances, num_feautres_per_instance)
+        :return: list of labels (int)
+        """
+        return [np.sign(self.predict_instance(features)) for features in instances]
 
-
-    def predict_instance(self, features):
+    def predict_instance(self, features:np.array):
         return self.weight_vector.dot(features.T)[0][0] + self.bias
 
+    def predict_proba(self, instances):
+        """
 
-    def predict_proba(self, instances: List[Instance]):
-        return [self.predict_instance(
-            ins.get_feature_vector().get_csr_matrix().toarray()) for ins in instances]
-
+        :param instances: matrix of instances shape (num_instances, num_feautres_per_instance)
+        :return: list of probability (int)
+        """
+        return [self.predict_instance(ins) for ins in instances]
 
     def decision_function(self):
         return self.weight_vector, self.bias

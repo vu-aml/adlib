@@ -1,6 +1,5 @@
 from learners.learner import RobustLearner
-from data_reader.input import Instance
-from data_reader.operations import sparsify
+from data_reader.dataset import EmailDataset
 from typing import List, Dict
 import numpy as np
 from cvxpy import *
@@ -8,7 +7,7 @@ from cvxpy import *
 
 class FeatureDeletion(RobustLearner):
 
-    def __init__(self, X, y, params=None):
+    def __init__(self, training_instances:EmailDataset=None, params=None):
 
         RobustLearner.__init__(self)
         self.weight_vector = None        # type: np.array(shape=(1))
@@ -19,10 +18,9 @@ class FeatureDeletion(RobustLearner):
         self.weight_vector = None   # type: np.array
                                     # of shape (1, self.num_features)
         self.bias = 0  # type: int
-        self.y = y
-        self.X = X
-        self.num_features = len(X[0])
         self.set_params(params)
+        if training_instances is not None:
+            self.set_training_instances(training_instances)
 
 
     def set_params(self, params: Dict):
@@ -45,8 +43,9 @@ class FeatureDeletion(RobustLearner):
         Returns: optimized weight vector
 
         """
-        num_instances = len(self.y)
-        y, X = self.y.reshape((num_instances,1)), self.X
+        X, y = self.training_instances.numpy()
+        num_instances = len(y)
+        y, X = y.reshape((num_instances,1)), X
         C = self.hinge_loss_multiplier
         K = self.max_feature_deletion
 
@@ -80,13 +79,15 @@ class FeatureDeletion(RobustLearner):
         self.bias = b.value
 
 
-    def predict(self, instances):
-        predictions = []
-        for instance in instances:
-            predictions.append(np.sign(self.predict_instance(instance)))
-        return predictions
+    def predict(self, instances:np.ndarray):
+        """
 
-    def predict_instance(self, features):
+         :param instances: matrix of instances shape (num_instances, num_feautres_per_instance)
+         :return: list of int labels
+         """
+        return [np.sign(self.predict_instance(instance)) for instance in instances]
+
+    def predict_instance(self, features:np.array):
         '''
         predict class for a single instance and return a real value
         :param features: np.array of shape (1, self.num_features), i.e. [[1, 2, ...]]

@@ -1,5 +1,5 @@
 from typing import List, Dict
-from data_reader.input import Instance
+from data_reader.dataset import EmailDataset
 from learners.models.model import BaseModel
 import numpy as np
 from data_reader.operations import sparsify
@@ -24,7 +24,7 @@ class Model(BaseModel):
         """
         self.learner = sklearn_object
 
-    def train(self, instances: List[Instance]):
+    def train(self, instances: EmailDataset):
         """Train on the set of training instances using the underlying
         sklearn object.
 
@@ -50,6 +50,7 @@ class Model(BaseModel):
         if isinstance(instances, List):
             (y, X) = sparsify(instances)
             predictions = self.learner.predict(X)
+
         else:
             # predictions = self.learner.predict(instances.get_feature_vector().get_csr_matrix())[0]
             predictions = self.learner.predict(instances)

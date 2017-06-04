@@ -7,13 +7,14 @@ import numpy as np
 import cvxpy as cvx
 from cvxpy import Variable as Variable
 from cvxpy import mul_elemwise as mul
+from data_reader.dataset import EmailDataset
+
 OPT_INSTALLED = True
 try:
     import cvxopt
 except ImportError:
     OPT_INSTALLED = False
 
-from data_reader.dataset import EmailDataset
 
 class SVMFreeRange(RobustLearner):
     """Solves asymmetric dual problem: :math:`argmin (1/2)*⎜⎜w⎟⎟^2 + C*∑(xi0)`
@@ -31,7 +32,7 @@ class SVMFreeRange(RobustLearner):
 
     """
 
-    def __init__(self, params=None, training_instances:EmailDataset=None):
+    def __init__(self, params=None, training_instances: EmailDataset=None):
         RobustLearner.__init__(self)
         self.weight_vector = None
         self.bias = 0
@@ -57,22 +58,23 @@ class SVMFreeRange(RobustLearner):
                   'xmax': self.xmax}
         return params
 
-
     def train(self):
         '''Optimize the asymmetric dual problem and return optimal w and b.'''
         if not self.training_instances:
             raise ValueError('Must set training instances before training')
-        c=10
-        X,y = self.training_instances.numpy()
-        i_neg = np.array([ins[1] for ins in zip(y,X) if ins[0]==self.negative_classification])
-        i_pos = np.array([ins[1] for ins in zip(y,X) if ins[0]==self.positive_classification])
-        ones_col = np.ones((i_neg.shape[1],1))
-        pn = np.concatenate((i_pos,i_neg))
+        c = 10
+        X, y = self.training_instances.numpy()
+        i_neg = np.array([ins[1] for ins in zip(y, X) if ins[0] ==
+                          self.negative_classification])
+        i_pos = np.array([ins[1] for ins in zip(y, X) if ins[0] ==
+                          self.positive_classification])
+        ones_col = np.ones((i_neg.shape[1], 1))
+        pn = np.concatenate((i_pos, i_neg))
         pl = np.ones(i_pos.shape[0])
         nl = -np.ones(i_neg.shape[0])
-        pnl = np.concatenate((pl,nl))
-        xj_min = np.full_like(pn,self.xmin)
-        xj_max = np.full_like(pn,self.xmax)
+        pnl = np.concatenate((pl, nl))
+        xj_min = np.full_like(pn, self.xmin)
+        xj_max = np.full_like(pn, self.xmax)
         ones_mat = np.ones_like(pnl)
         col_neg, row_sum = i_neg.shape[1], i_pos.shape[0] + i_neg.shape[0]
 
@@ -81,19 +83,19 @@ class SVMFreeRange(RobustLearner):
         b = cvx.Variable()
         xi0 = cvx.Variable(row_sum)
         t = cvx.Variable(row_sum)
-        u = cvx.Variable(row_sum,col_neg)
-        v = cvx.Variable(row_sum,col_neg)
+        u = cvx.Variable(row_sum, col_neg)
+        v = cvx.Variable(row_sum, col_neg)
 
-        constraints = [xi0>=0,
-                       xi0 >= 1-mul(pnl, (pn*w+b))+t,
-                       t >= mul(self.c_f,(mul(xj_max-pn, v) \
-                       - mul(xj_min - pn, u))*ones_col),
-                       u-v==0.5*(1+pnl)*w.T,
-                       u>=0,
-                       v>=0]
+        constraints = [xi0 >= 0,
+                       xi0 >= 1 - mul(pnl, (pn * w + b)) + t,
+                       t >= mul(self.c_f, (mul(xj_max-pn, v)
+                                - mul(xj_min - pn, u))*ones_col),
+                       u - v == 0.5 * (1 + pnl) * w.T,
+                       u >= 0,
+                       v >= 0]
         # objective
         obj = cvx.Minimize(0.5*(cvx.norm(w)) + c*cvx.sum_entries(xi0))
-        prob = cvx.Problem(obj,constraints)
+        prob = cvx.Problem(obj, constraints)
 
         if OPT_INSTALLED:
             prob.solve(solver='CVXOPT')
@@ -105,19 +107,21 @@ class SVMFreeRange(RobustLearner):
 
     def predict(self, instances):
         """
-
-         :param instances: matrix of instances shape (num_instances, num_feautres_per_instance)
-         :return: list of int labels
+        Args:
+            instances: matrix of instances shape (num_instances,
+                                                  num_feautres_per_instance)
+        Return:
+            list of int labels
          """
-        return [np.sign(self.predict_instance(instance)) for instance in instances]
 
-    def predict_instance(self, features:np.array):
+        return [np.sign(self.predict_instance(instance))
+                for instance in instances]
+
+    def predict_instance(self, features: np.array):
         return self.weight_vector.dot(features.T)[0][0] + self.bias
 
-
-    def predict_proba(self, instances:np.array):
+    def predict_proba(self, instances: np.array):
         return [self.predict_instance(ins) for ins in instances]
-
 
     def decision_function(self):
         return self.weight_vector, self.bias

@@ -67,5 +67,5 @@ class RobustLearner(object):
         """
         raise NotImplementedError
 
-
-
+    def decision_function(self, X):
+        raise NotImplementedError

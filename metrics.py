@@ -21,47 +21,47 @@ class EvasionMetrics(object):
 
     def getPrecision(self, isPreAttack):
         if isPreAttack:
-            y_true = sparsify(self.pre_attack_instances)[0]
-            y_pred = self.classifier.predict(self.pre_attack_instances)
+            y_true = self.pre_attack_instances.labels
+            y_pred = self.classifier.predict(self.pre_attack_instances.features)
         else:
-            y_true = sparsify(self.post_attack_instances)[0]
-            y_pred = self.classifier.predict(self.post_attack_instances)
+            y_true = self.post_attack_instances.labels
+            y_pred = self.classifier.predict(self.post_attack_instances.features)
         return metrics.precision_score(y_true, y_pred)
 
     def getRecall(self, isPreAttack):
         if isPreAttack:
-            y_true = sparsify(self.pre_attack_instances)[0]
-            y_pred = self.classifier.predict(self.pre_attack_instances)
+            y_true = self.pre_attack_instances.labels
+            y_pred = self.classifier.predict(self.pre_attack_instances.features)
         else:
-            y_true = sparsify(self.post_attack_instances)[0]
+            y_true = self.post_attack_instances.labels
             y_pred = self.classifier.predict(self.post_attack_instances)
         return metrics.recall_score(y_true, y_pred)
 
     def getAccuracy(self, isPreAttack):
         if isPreAttack:
-            y_true = sparsify(self.pre_attack_instances)[0]
-            y_pred = self.classifier.predict(self.pre_attack_instances)
+            y_true = self.pre_attack_instances.labels
+            y_pred = self.classifier.predict(self.pre_attack_instances.features)
         else:
-            y_true = sparsify(self.post_attack_instances)[0]
-            y_pred = self.classifier.predict(self.post_attack_instances)
+            y_true = self.post_attack_instances.labels
+            y_pred = self.classifier.predict(self.post_attack_instances.features)
         return metrics.accuracy_score(y_true, y_pred)
 
     def getROC_AUC(self, isPreAttack):
         if isPreAttack:
-            y_true = sparsify(self.pre_attack_instances)[0]
-            score = self.classifier.decision_function(self.pre_attack_instances)
+            y_true = self.pre_attack_instances.labels
+            score = self.classifier.decision_function(self.pre_attack_instances.features)
         else:
-            y_true = sparsify(self.post_attack_instances)[0]
-            score = self.classifier.decision_function(self.post_attack_instances)
+            y_true = self.post_attack_instances.labels
+            score = self.classifier.decision_function(self.post_attack_instances.features)
         return metrics.roc_auc_score(y_true, score)
 
     def plotROC(self, isPreAttack):
         plt.figure()
         if isPreAttack:
-            y_true = sparsify(self.pre_attack_instances)[0]
+            y_true = self.pre_attack_instances.labels
             score = self.classifier.decision_function(self.pre_attack_instances)
         else:
-            y_true = sparsify(self.post_attack_instances)[0]
+            y_true = self.post_attack_instances.labels
             score = self.classifier.decision_function(self.post_attack_instances)
         fpr, tpr, thresholds = metrics.roc_curve(y_true, score)
         roc_auc = metrics.roc_auc_score(y_true, score)

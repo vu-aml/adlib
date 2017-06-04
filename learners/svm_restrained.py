@@ -23,7 +23,7 @@ class SVMRestrained(RobustLearner):
         c_delta: aggressiveness assumption c_delta ∈ [0.0,1.0]. Default:0.5
     """
 
-    def __init__(self, params=None, training_instances:EmailDataset=None):
+    def __init__(self, params=None, training_instances: EmailDataset=None):
         RobustLearner.__init__(self)
         self.weight_vector = None
         self.bias = 0
@@ -47,8 +47,8 @@ class SVMRestrained(RobustLearner):
             raise ValueError('Must set training instances before training')
         c = 10
         X, y = self.training_instances.numpy()
-        i_neg = np.array([ins[1] for ins in zip(y,X) if ins[0]==self.negative_classification])
-        i_pos = np.array([ins[1] for ins in zip(y,X) if ins[0]==self.positive_classification])
+        i_neg = np.array([ins[1] for ins in zip(y, X) if ins[0]==self.negative_classification])
+        i_pos = np.array([ins[1] for ins in zip(y, X) if ins[0]==self.positive_classification])
         # centroid can be computed in multiple ways
         n_centroid = np.mean(i_neg)
         Mk = ((1-self.c_delta * np.fabs(n_centroid - i_pos)/

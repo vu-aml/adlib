@@ -33,8 +33,8 @@ class Model(BaseModel):
 
         """
         # (y, X) = sparsify(instances)
-        (X, y) = instances.numpy()
-        self.learner.fit(X, y)
+        # (X, y) = instances.numpy()
+        self.learner.fit(instances.features, instances.labels)
 
     def predict(self, instances):
         """Predict classification labels for the set of instances using
@@ -66,12 +66,14 @@ class Model(BaseModel):
             probability of adversarial classification (List(int))
 
         """
-        if isinstance(instances, List):
-            (y, X) = sparsify(instances)
-            full_probs = self.learner.predict_proba(X)
-            probs = [x[0] for x in full_probs]
-        else:
-            probs = self.learner.predict_proba(instances.get_feature_vector().get_csr_matrix())[0][0]
+        # if isinstance(instances, List):
+        #     (y, X) = sparsify(instances)
+        #     full_probs = self.learner.predict_proba(X)
+        #     probs = [x[0] for x in full_probs]
+        # else:
+        #     probs = self.learner.predict_proba(instances.get_feature_vector().get_csr_matrix())[0][0]
+        # return probs
+        probs = self.learner.predict_proba(instances)
         return probs
 
     def decision_function_adversary(self, instances):

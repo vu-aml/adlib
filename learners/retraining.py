@@ -40,14 +40,14 @@ class Retraining(RobustLearner):
         self.model.train(self.training_instances)
         self.attacker = self.attack_alg()
         self.attacker.set_params(self.adv_params)
-        self.attacker.set_adversarial_params(self.model,self.training_instances)
+        self.attacker.set_adversarial_params(self.model, self.training_instances)
         print("training")
-        malicious_feature_vecs = [x for x in self.training_instances.features if self.model.predict([x])[0] == 1]
+        malicious_feature_vecs = [x for x in self.training_instances.features if self.model.predict(x)[0] == 1]
         augmented_feature_vecs = self.training_instances.features
         augmented_labels = self.training_instances.labels
 
         for instance in malicious_feature_vecs:
-            transformed_instance = self.attacker.attack([instance])[0]
+            transformed_instance = self.attacker.attack(instance)[0]
             new_instance = True
             for old_instance in augmented_feature_vecs:
                 if np.array_equal(old_instance, transformed_instance):
@@ -71,4 +71,3 @@ class Retraining(RobustLearner):
 
     def predict_proba(self, instances):
         return self.model.predict_proba_adversary(instances)
-

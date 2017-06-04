@@ -1,6 +1,7 @@
 from adversaries.adversary import Adversary
-from data_reader.input import Instance, FeatureVector
+# from data_reader.input import Instance, FeatureVector
 from typing import List, Dict
+from data_reader.dataset import EmailDataset
 # from learners.models.model import BaseModel
 # from classifier import Classifier
 from copy import deepcopy
@@ -23,16 +24,15 @@ class SimpleOptimize(Adversary):
         self.num_features = None                         # type: int
         self.learn_model = learner
 
-    def attack(self, instances: List[Instance]) -> List[Instance]:
-        transformed_instances = []
-        data = deepcopy(instances)
+    def attack(self, data: EmailDataset) -> EmailDataset:
+        # transformed_instances = []
         if self.num_features is None:
             # self.num_features = instances[0].get_feature_vector().get_feature_count()
             self.num_features = len(data)
         for idx, label in enumerate(data.labels):
             # transformed_instance = deepcopy(instance)
             if label == 1:
-                data.features[idx] = self.optimize(data.features[idx])
+                data.features[idx] = self.optimize(data.features.getrow(idx))
         return data
 
     def set_params(self, params: Dict):
@@ -46,19 +46,26 @@ class SimpleOptimize(Adversary):
                   'max_change': self.max_change}
         return params
 
-    def set_adversarial_params(self, learner, train_instances: List[Instance]):
+    def set_adversarial_params(self, learner, train_data: EmailDataset):
         self.learn_model = learner
-        self.num_features = train_instances[0].get_feature_vector().get_feature_count()
+        self.num_features = len(train_data)
 
-    def optimize(self, instance: Instance):
+    def optimize(self, instance):
+        """Flip features that lower the prob. of being classified adversarial.
+        Args:
+            instance: (scipy.sparse.csr_matrix) feature vector
+
+        """
         change = 0
         for i in range(0, self.num_features):
-            orig_prob = self.learn_model.predict_proba([instance])[0]
-            instance.get_feature_vector().flip_bit(i)
+            orig_prob = self.learn_model.predict_proba(instance)[0]
+            instance[0, i] = 0 if instance[0, i] else 1
             change += 1
-            new_prob = self.learn_model.predict_proba([instance])[0]
+            new_prob = self.learn_model.predict_proba(instance)[0]
             if new_prob >= (orig_prob-exp(self.lambda_val)):
-                instance.get_feature_vector().flip_bit(i)
+                # flip the bit
+                # TODO: flipbit method in EmailDataset
+                instance[0, i] = 0 if instance[0, i] else 1
                 change -= 1
             if change > self.max_change:
                 break

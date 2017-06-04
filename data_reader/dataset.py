@@ -29,8 +29,7 @@ class Dataset(object):
 
 
 class EmailDataset(Dataset):
-    """
-    Dataset which loads data from either raw email txt files, a serialized
+    """Dataset which loads data from either raw email txt files, a serialized
     sparse matrix representation of the dataset (either .pkl or .csv), or
     loads preloaded features and labels into an EmailDataset to be used
     with the rest of the library.
@@ -257,7 +256,6 @@ class EmailDataset(Dataset):
             raise AttributeError('The given load format is not currently \
                                  supported.')
 
-    # TODO: Return new instances of the class.
     def split(self, split={'test': 50, 'train': 50}):
         """Split the dataset into test and train sets using
             `sklearn.utils.shuffle()`.

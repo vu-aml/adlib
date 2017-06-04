@@ -9,10 +9,12 @@ class SimpleLearner(RobustLearner):
     strategies.
     """
 
-    def __init__(self, model=None, training_instances:EmailDataset=None):
+    def __init__(self, model=None, training_instances: EmailDataset=None):
         RobustLearner.__init__(self)
-        if model: self.set_model(model)
-        else: self.model = None
+        if model:
+            self.set_model(model)
+        else:
+            self.model = None
         self.training_instances = training_instances
 
     def set_model(self, model):
@@ -24,6 +26,7 @@ class SimpleLearner(RobustLearner):
         if self.training_instances is None:
             raise ValueError('Must set training instances before training')
         self.model.train(self.training_instances)
+
     def predict(self, instances):
         """
 
@@ -31,6 +34,9 @@ class SimpleLearner(RobustLearner):
         :return: array of predicted labels
         """
         return self.model.predict(instances)
+
+    def predict_proba(self, testing_instances):
+        return self.model.predict_proba(testing_instances)[0]
 
     def set_params(self, params: Dict):
         if params['model'] is not None:

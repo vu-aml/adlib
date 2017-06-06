@@ -8,6 +8,7 @@ import csv
 import pickle
 from collections import namedtuple
 import fileinput
+from copy import deepcopy
 
 
 class Dataset(object):
@@ -26,7 +27,6 @@ class Dataset(object):
 
     def save(self):
         raise NotImplementedError
-
 
 class EmailDataset(Dataset):
     """Dataset which loads data from either raw email txt files, a serialized
@@ -51,31 +51,33 @@ class EmailDataset(Dataset):
                  binary=False, strip_accents_=None, ngram_range_=(1, 1),
                  max_df_=1.0, min_df_=1, max_features_=1000):
         super(EmailDataset, self).__init__()
+        self.num_instances = 0
         if path is not None:
             self.base_path = os.path.dirname(path)
         #: Number of instances within the current corpus
-        self.num_instances = 0
-        if raw:
-            self.labels, self.corpus = self._create_corpus(path)
-        # Sklearn module to fit/transform data and resulting feature matrix
-        # Maybe optionally pass this in as a parameter instead.
-            self.vectorizer = \
-                TfidfVectorizer(analyzer='word', strip_accents=strip_accents_,
-                                ngram_range=ngram_range_, max_df=max_df_,
-                                min_df=min_df_, max_features=max_features_,
-                                binary=False, stop_words='english',
-                                use_idf=True, norm=None)
-            self.vectorizer = self.vectorizer.fit(self.corpus)
-            self.features = self.vectorizer.transform(self.corpus)
+            if raw:
+                self.labels, self.corpus = self._create_corpus(path)
+            # Sklearn module to fit/transform data and resulting feature matrix
+            # Maybe optionally pass this in as a parameter instead.
+                self.vectorizer = \
+                    TfidfVectorizer(analyzer='word', strip_accents=strip_accents_,
+                                    ngram_range=ngram_range_, max_df=max_df_,
+                                    min_df=min_df_, max_features=max_features_,
+                                    binary=False, stop_words='english',
+                                    use_idf=True, norm=None)
+                self.vectorizer = self.vectorizer.fit(self.corpus)
+                self.features = self.vectorizer.transform(self.corpus)
+            else:
+                self.labels, self.features = \
+                    self._load(path, os.path.splitext(path)[1][1:], binary)
         elif path is None and features is not None and labels is not None:
-            assert type(labels) == np.ndarray
+            lbl = type(labels)
+            if lbl != np.ndarray and lbl != np.float64 and lbl != int and lbl != float:
+                raise ValueError("Labels must be in the form of a numpy array, a float, or an int")
             assert type(features) == scipy.sparse.csr.csr_matrix
 
             self.features = features
             self.labels = labels
-        elif path is not None:
-            self.labels, self.features = \
-                self._load(path, os.path.splitext(path)[1][1:], binary)
         else:
             raise AttributeError('Incorrect combination of parameters.')
         self.shape = self.features.shape
@@ -136,9 +138,16 @@ class EmailDataset(Dataset):
         return labels, files
 
     def __getitem__(self, index):
-        return self.Data(self.features[index].toarray(),
-                         self.labels[index])
+        if type(index) == tuple:
+            if len(index) > 2:
+                raise ValueError("Email Datasets only support two dimensions.")
+            else:
+                # maybe return emaildataset instance with corresponding label?
+                return self.features[index]
+        return self.Data(features=self.features[index], labels=self.labels[index])
 
+    # def __setitem__(self, index, value):
+    #     self.features[index] = value
     def __len__(self):
         return self.features.shape[0]
 
@@ -172,6 +181,21 @@ class EmailDataset(Dataset):
     def sort(self):
         """Sort the features in place by index"""
         self.features.sort_indices()
+
+    def __eq__(self, other):
+        if isinstance(other, EmailDataset):
+            if self.features.shape == other.features.shape and self.features.dtype == other.features.dtype:
+                if (self.features != other.features).nnz() == 0:
+                    return self.labels == other.labels
+        else:
+            return False
+
+
+
+    def clone(self):
+        """Return a new copy of the dataset with same initial params."""
+
+        return self.Data(features=self.features.copy(), labels=self.labels.copy())
 
     def _csv(self, outfile, save=True):
         # saves [[label, *features]] to standard csv file

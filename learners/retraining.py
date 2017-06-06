@@ -41,21 +41,25 @@ class Retraining(RobustLearner):
         self.attacker = self.attack_alg()
         self.attacker.set_params(self.adv_params)
         self.attacker.set_adversarial_params(self.model, self.training_instances)
-        print("training")
-        malicious_feature_vecs = [x for x in self.training_instances.features if self.model.predict(x)[0] == 1]
-        augmented_feature_vecs = self.training_instances.features
-        augmented_labels = self.training_instances.labels
+        print("==> Training...")
+        malicious_instances = [x for x in self.training_instances if
+                                  self.model.predict(x.features)[0] == 1]
+        augmented_instances = self.training_instances
+        # augmented_labels = self.training_instances.labels
 
-        for instance in malicious_feature_vecs:
-            transformed_instance = self.attacker.attack(instance)[0]
+        for instance in malicious_instances:
+            print(instance)
+            transformed_instance = self.attacker.attack(EmailDataset(features=instance.features, labels=instance.labels))
             new_instance = True
-            for old_instance in augmented_feature_vecs:
-                if np.array_equal(old_instance, transformed_instance):
+            for idx, old_instance in enumerate(augmented_instances):
+                if np.array_equal(old_instance.features.toarray(),
+                                  transformed_instance.features.toarray()):
                     new_instance = False
             if new_instance:
-                np.append(augmented_feature_vecs, transformed_instance, axis=0)
-                np.append(augmented_labels, [1])
-        self.model.train(EmailDataset(raw=False, features=augmented_feature_vecs, labels=augmented_labels))
+                augmented_instances[idx] = transformed_instance
+                augmented_instances.labels = 1
+                # np.append(augmented_labels, [1])
+        self.model.train(EmailDataset(raw=False, features=augmented_instances.features, labels=augmented_instances.labels))
 
 
     def decision_function(self, instances):

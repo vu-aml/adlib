@@ -29,10 +29,11 @@ class SimpleOptimize(Adversary):
         if self.num_features is None:
             # self.num_features = instances[0].get_feature_vector().get_feature_count()
             self.num_features = len(data)
-        for idx, label in enumerate(data.labels):
-            # transformed_instance = deepcopy(instance)
-            if label == 1:
-                data.features[idx] = self.optimize(data.features.getrow(idx))
+        for instance in data:
+            # new_instance = instance.clone()
+            # print(type(new_instance))
+            if instance.labels == 1:
+                instance = self.optimize(instance)
         return data
 
     def set_params(self, params: Dict):
@@ -57,15 +58,18 @@ class SimpleOptimize(Adversary):
 
         """
         change = 0
-        for i in range(0, self.num_features):
-            orig_prob = self.learn_model.predict_proba(instance)[0]
-            instance[0, i] = 0 if instance[0, i] else 1
+        for i in range(self.num_features):
+            orig_prob = self.learn_model.predict_proba(instance.features)[0]
+            # print(instance)
+            # print(type(instance))
+            # print(instance[0, i])
+            instance.features[0, i] = 0 if instance.features[0, i] else 1
             change += 1
-            new_prob = self.learn_model.predict_proba(instance)[0]
+            new_prob = self.learn_model.predict_proba(instance.features)[0]
             if new_prob >= (orig_prob-exp(self.lambda_val)):
                 # flip the bit
                 # TODO: flipbit method in EmailDataset
-                instance[0, i] = 0 if instance[0, i] else 1
+                instance.features[0, i] = 0 if instance.features[0, i] else 1
                 change -= 1
             if change > self.max_change:
                 break

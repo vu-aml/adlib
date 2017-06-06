@@ -22,17 +22,17 @@ class BinaryGreedy(Adversary):
         else:
             self.weight_vector = None # type: np.array
 
-    def attack(self, instances:List[Instance]) -> List[Instance]:
+    def attack(self, data):
         if self.num_features == 0:
-            self.num_features = instances[0].get_feature_vector().get_feature_count()
+            self.num_features = len(data)
 
         transformed_instances = []
-        for instance in instances:
-            transformed_instance = deepcopy(instance)
-            if instance.get_label() > 0:
-                transformed_instances.append(self.coordinate_greedy(transformed_instance))
-            else:
-                transformed_instances.append(transformed_instance)
+        for instance in data:
+            if instance.labels > 0:
+                instance = self.coordinate_greedy(instance)
+                # transformed_instances.append(self.coordinate_greedy(transformed_instance))
+            # else:
+            #     transformed_instances.append(transformed_instance)
         return transformed_instances
 
     def set_params(self, params: Dict):

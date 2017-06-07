@@ -36,7 +36,7 @@ class BaseModel(object):
         """
 		raise NotImplementedError
 
-	def predict_proba_adversary(self, instances):
+	def predict_proba(self, instances):
 		"""Use the model to determine probability of adversarial classification.
 
         Args:

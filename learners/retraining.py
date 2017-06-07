@@ -74,4 +74,4 @@ class Retraining(RobustLearner):
         return self.model.predict(instances)
 
     def predict_proba(self, instances):
-        return self.model.predict_proba_adversary(instances)
+        return self.model.predict_proba(instances)

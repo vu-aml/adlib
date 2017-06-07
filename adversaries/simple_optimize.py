@@ -25,15 +25,12 @@ class SimpleOptimize(Adversary):
         self.learn_model = learner
 
     def attack(self, data: EmailDataset) -> EmailDataset:
-        # transformed_instances = []
         if self.num_features is None:
-            # self.num_features = instances[0].get_feature_vector().get_feature_count()
             self.num_features = len(data)
-        for instance in data:
-            # new_instance = instance.clone()
-            # print(type(new_instance))
+        for idx, instance in enumerate(data):
+            transformed_instance = deepcopy(instance)
             if instance.labels == 1:
-                instance = self.optimize(instance)
+                data[idx] = self.optimize(transformed_instance)
         return data
 
     def set_params(self, params: Dict):
@@ -59,14 +56,11 @@ class SimpleOptimize(Adversary):
         """
         change = 0
         for i in range(self.num_features):
-            orig_prob = self.learn_model.predict_proba(instance.features)[0]
-            # print(instance)
-            # print(type(instance))
-            # print(instance[0, i])
+            orig_prob = self.learn_model.predict_proba(instance.features).squeeze()[0]
             instance.features[0, i] = 0 if instance.features[0, i] else 1
             change += 1
-            new_prob = self.learn_model.predict_proba(instance.features)[0]
-            if new_prob >= (orig_prob-exp(self.lambda_val)):
+            new_prob = self.learn_model.predict_proba(instance.features).squeeze()[0]
+            if new_prob >= orig_prob-exp(self.lambda_val):
                 # flip the bit
                 # TODO: flipbit method in EmailDataset
                 instance.features[0, i] = 0 if instance.features[0, i] else 1

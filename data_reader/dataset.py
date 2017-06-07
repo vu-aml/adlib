@@ -8,7 +8,7 @@ import csv
 import pickle
 from collections import namedtuple
 import fileinput
-from copy import deepcopy
+from copy import copy, deepcopy
 
 
 class Dataset(object):
@@ -146,8 +146,10 @@ class EmailDataset(Dataset):
                 return self.features[index]
         return self.Data(features=self.features[index], labels=self.labels[index])
 
-    # def __setitem__(self, index, value):
-    #     self.features[index] = value
+    def __setitem__(self, index, value):
+        self.features[index] = value.features
+        self.labels[index] = value.labels
+
     def __len__(self):
         return self.features.shape[0]
 
@@ -190,7 +192,19 @@ class EmailDataset(Dataset):
         else:
             return False
 
+    def __copy__(self):
+        cls = self.__class__
+        result = cls.__new__(cls)
+        result.__dict__.update(self.__dict__)
+        return result
 
+    def __deepcopy__(self, memo):
+        cls = self.__class__
+        result = cls.__new__(cls)
+        memo[id(self)] = result
+        for k, v in self.__dict__.items():
+            setattr(result, k, deepcopy(v, memo))
+        return result
 
     def clone(self):
         """Return a new copy of the dataset with same initial params."""

@@ -15,9 +15,6 @@ class BaseModel(object):
 	def train(self, instances):
 		"""Train on the set of training instances.
 
-        Args:
-            instances (List[Instance]): training instances.
-
         Returns:
             None.
 
@@ -26,9 +23,6 @@ class BaseModel(object):
 
 	def predict(self, instances):
 		"""Predict classification labels for the set of instances.
-
-        Args:
-            instances (List[Instance]): training or test instances.
 
         Returns:
             label classifications (List(int))
@@ -39,20 +33,23 @@ class BaseModel(object):
 	def predict_proba(self, instances):
 		"""Use the model to determine probability of adversarial classification.
 
-        Args:
-            instances (List[Instance]): training or test instances.
-
         Returns:
             probability of adversarial classification (List(int))
 
         """
 		raise NotImplementedError
 
+		def predict_log_proba(self, instances):
+			"""Use the model to determine probability of adversarial classification.
+
+	        Returns:
+	            probability of adversarial classification (List(int))
+
+	        """
+			raise NotImplementedError
+
 	def decision_function_adversary(self, instances):
 		"""Use the model to determine the decision function for each instance.
-
-        Args:
-            instances (List[Instance]): training or test instances.
 
         Returns:
             decision values (List(int))

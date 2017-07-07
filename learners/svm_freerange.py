@@ -1,5 +1,5 @@
-from learners.learner import RobustLearner
-from data_reader.input import Instance, FeatureVector
+from learners.learner import learner
+from data_reader.binary_input import Instance
 from data_reader.operations import sparsify
 from adversaries.adversary import Adversary
 from typing import List, Dict
@@ -16,7 +16,7 @@ except ImportError:
     OPT_INSTALLED = False
 
 
-class SVMFreeRange(RobustLearner):
+class SVMFreeRange(learner):
     """Solves asymmetric dual problem: :math:`argmin (1/2)*⎜⎜w⎟⎟^2 + C*∑(xi0)`
 
     By solving the convex optimization, optimal weight and bias matrices are
@@ -32,8 +32,8 @@ class SVMFreeRange(RobustLearner):
 
     """
 
-    def __init__(self, params=None, training_instances: EmailDataset=None):
-        RobustLearner.__init__(self)
+    def __init__(self, params=None, training_instances=None):
+        learner.__init__(self)
         self.weight_vector = None
         self.bias = 0
         self.c_f = 0.5
@@ -63,7 +63,13 @@ class SVMFreeRange(RobustLearner):
         if not self.training_instances:
             raise ValueError('Must set training instances before training')
         c = 10
-        X, y = self.training_instances.numpy()
+
+        if isinstance(self.training_instances, List):
+            y, X = sparsify(self.training_instances)
+            y, X = np.array(y), X.toarray()
+        else:
+            X, y = self.training_instances.numpy()
+
         i_neg = np.array([ins[1] for ins in zip(y, X) if ins[0] ==
                           self.negative_classification])
         i_pos = np.array([ins[1] for ins in zip(y, X) if ins[0] ==
@@ -88,13 +94,13 @@ class SVMFreeRange(RobustLearner):
 
         constraints = [xi0 >= 0,
                        xi0 >= 1 - mul(pnl, (pn * w + b)) + t,
-                       t >= mul(self.c_f, (mul(xj_max-pn, v)
-                                - mul(xj_min - pn, u))*ones_col),
+                       t >= mul(self.c_f, (mul(xj_max - pn, v)
+                                           - mul(xj_min - pn, u)) * ones_col),
                        u - v == 0.5 * (1 + pnl) * w.T,
                        u >= 0,
                        v >= 0]
         # objective
-        obj = cvx.Minimize(0.5*(cvx.norm(w)) + c*cvx.sum_entries(xi0))
+        obj = cvx.Minimize(0.5 * (cvx.norm(w)) + c * cvx.sum_entries(xi0))
         prob = cvx.Problem(obj, constraints)
 
         if OPT_INSTALLED:
@@ -107,15 +113,32 @@ class SVMFreeRange(RobustLearner):
 
     def predict(self, instances):
         """
-        Args:
-            instances: matrix of instances shape (num_instances,
-                                                  num_feautres_per_instance)
-        Return:
-            list of int labels
-         """
 
-        return [np.sign(self.predict_instance(instance))
-                for instance in instances]
+            :param instances: could be a list of instances or a csr_matrix representation.
+                   in the later case, we convert to np.array first.
+            :return: a list of (1/-1)labels
+
+            """
+        predictions = []
+        #list of instances
+        if isinstance(instances, List):
+            for instance in instances:
+                features = instance.get_feature_vector().get_csr_matrix().toarray()
+                predictions.append(np.sign(self.predict_instance(features)))
+        #single instance
+        elif type(instances) == Instance:
+            predictions = np.sign(self.predict_instance(
+            instances.get_feature_vector().get_csr_matrix().toarray()))
+        else:
+        #email data set
+        #return a num if there is a single instance
+            for i in range(0, instances.features.shape[0]):
+                instance = instances.features[i, :].toarray()
+                predictions.append(np.sign(self.predict_instance(instance)))
+            if len(predictions) == 1:
+                return predictions[0]
+        return predictions
+
 
     def predict_instance(self, features: np.array):
         return self.weight_vector.dot(features.T)[0][0] + self.bias

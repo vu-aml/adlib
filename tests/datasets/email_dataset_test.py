@@ -1,9 +1,11 @@
 import pytest
 from learners import SVMRestrained
-from data_reader import input
-from data_reader.input import Instance
+from data_reader import binary_input
+from data_reader.binary_input import Instance
 from random import seed, shuffle
 from data_reader.dataset import EmailDataset
+from learners.simple_learner import SimpleLearner
+from sklearn import svm
 
 
 @pytest.fixture
@@ -13,7 +15,6 @@ def data():
     seed(1)
     training_data, testing_data = dataset.split({'train': 60, 'test': 40})
     return {'training_data': training_data, 'testing_data': testing_data}
-
 
 @pytest.fixture
 def training_data(data):
@@ -30,7 +31,6 @@ def simple_learner(data):
     learning_model = svm.SVC(probability=True, kernel='linear')
     learner = SimpleLearner(learning_model, data['training_data'])
     return learner
-
 
 @pytest.fixture
 def empty_learner():
@@ -62,5 +62,7 @@ def load_serialized():
 
 def test_predict_returns_binary_label(simple_learner, testing_data):
     simple_learner.train()
-    result = simple_learner.predict(testing_data[0])
+    sample_ = testing_data.features
+    result = simple_learner.predict(sample_[0])
     assert result in [SimpleLearner.positive_classification, SimpleLearner.negative_classification]
+    ##assert result == sample_.labels

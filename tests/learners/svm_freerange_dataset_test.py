@@ -12,9 +12,7 @@ def data():
     dataset = EmailDataset(path='./data_reader/data/test/100_instance_debug.csv', raw=False)
     # set a seed so we get the same output every time
     seed(1)
-    training_, testing_ = dataset.split({'train': 60, 'test': 40})
-    training_data = load_dataset(training_)
-    testing_data = load_dataset(testing_)
+    training_data, testing_data = dataset.split({'train': 60, 'test': 40})
     return {'training_data': training_data, 'testing_data': testing_data}
 
 @pytest.fixture
@@ -59,6 +57,5 @@ def test_train_throws_error_when_no_training_instances(empty_learner):
 
 def test_predict_returns_binary_label(freerange_learner, testing_data):
     freerange_learner.train()
-    sample_ = testing_data[0]
-    result = freerange_learner.predict(sample_)
+    result = freerange_learner.predict(testing_data[0])
     assert result in [SVMFreeRange.positive_classification, SVMFreeRange.negative_classification]

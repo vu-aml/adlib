@@ -1,17 +1,19 @@
 from adversaries.adversary import Adversary
 from typing import List, Dict
-from data_reader.input import Instance, FeatureVector
+from data_reader.binary_input import Instance, FeatureVector
+from copy import deepcopy
 import numpy as np
-from learners.learner import RobustLearner
+from learners.learner import learner
 from math import log
 
 class FreeRange(Adversary):
 
-    def __init__(self, xj_min = 0.0, xj_max = 1.0, binary = True, learner=None):
+    def __init__(self, xj_min = 0.0, xj_max = 1.0,f_attack = 0.5, binary = True, learner=None):
         self.xj_min = xj_min               # type: float (depends on feature domain size)
         self.xj_max = xj_max               # type: float (depends on feature domain size)
-        self.f_attack = f_attack           # type: float (value between 0 and 1)
-        self.innocuous_target              # need to figure out how to get a non malicious instance
+        self.f_attack = f_attack           # type: float (between 0 and 1),determining the agressiveness
+                                           # of the attack
+        self.innocuous_target = None       # need to figure out how to get a non malicious instance
         self.num_features = None           # type: int
         self.binary = binary               # type: bool True means binary features
         self.learn_model=learner	#type: Classifier
@@ -42,26 +44,36 @@ class FreeRange(Adversary):
 
 
     def get_available_params(self) -> Dict:
-        params = {'xj_min': self.lambda_val,
-                  'xj_max': self.max_change,
+        params = {'xj_min': self.xj_min,
+                  'xj_max': self.xj_max,
                   'f_attack': self.f_attack,
                   'binary': self.binary}
         return params
 
+
     def set_adversarial_params(self, learner, train_instances: List[Instance]):
         self.learn_model = learner
         self.num_features = train_instances[0].get_feature_vector().get_feature_count()
+        #may take the centroid of innocuous data if the data is not binary
         self.innocuous_target = next(
-            (x for x in instances if x.get_label() == RobustLearner.negative_classification),
+            (x for x in train_instances if x.get_label() == learner.negative_classification),
             None
         )
-    # Maybe for the binary case, the f_attack value represents the percentage of features we change?
+
     def transform(self, instance: Instance):
+        # Maybe for the binary case, the f_attack value represents the percentage of features we change.
+        # If f_attack =1, then the result should be exactly the same as innocuous target.
+        attack_times = (int)(self.f_attack * self.num_features)
+        count = 0
         for i in range(0, self.num_features):
-            delta_ij = self.innocuous_target - instance.get_feature_vector.get_feature(i)
+            delta_ij = self.innocuous_target.get_feature_vector().get_feature(i) \
+                       - instance.get_feature_vector().get_feature(i)
             if delta_ij!=0:
                 if self.binary: # when features are binary
                     instance.get_feature_vector().flip_bit(i)
                 else: # when we have non-binary features
                     instance.set_feature_weight(i,self.f_attack*delta_ij)
+            count += 1
+            if count == attack_times:
+                return instance
         return instance

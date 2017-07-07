@@ -1,4 +1,4 @@
-from data_reader.input import Instance
+from data_reader.binary_input import Instance
 from typing import List, Dict
 import copy
 

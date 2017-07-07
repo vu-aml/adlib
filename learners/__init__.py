@@ -1,4 +1,4 @@
-from .learner import RobustLearner
+from .learner import learner
 from .feature_deletion import FeatureDeletion
 from .retraining import Retraining
 from .simple_learner import SimpleLearner

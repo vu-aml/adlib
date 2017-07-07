@@ -7,7 +7,6 @@ import numpy as np
 import csv
 import pickle
 from collections import namedtuple
-import fileinput
 from copy import copy, deepcopy
 
 
@@ -49,9 +48,9 @@ class EmailDataset(Dataset):
 
     def __init__(self, path=None, raw=True, features=None, labels=None,
                  binary=False, strip_accents_=None, ngram_range_=(1, 1),
-                 max_df_=1.0, min_df_=1, max_features_=1000):
+                 max_df_=1.0, min_df_=1, max_features_=1000, num_instances = 0):
         super(EmailDataset, self).__init__()
-        self.num_instances = 0
+        self.num_instances = num_instances
         if path is not None:
             self.base_path = os.path.dirname(path)
         #: Number of instances within the current corpus
@@ -212,7 +211,8 @@ class EmailDataset(Dataset):
         return self.Data(features=self.features.copy(), labels=self.labels.copy())
 
     def _csv(self, outfile, save=True):
-        # saves [[label, *features]] to standard csv file
+        # load a .csv file where all the data in the file mark the relative postions,
+        # not values if save = true, save [[label, *features]] to standard csv file
         if save:
             with open(outfile, 'w') as fileobj:
                 serialize = csv.writer(fileobj)
@@ -223,6 +223,7 @@ class EmailDataset(Dataset):
         else:
             # TODO: throw exception if FileNotFoundError
             data = np.genfromtxt(outfile, delimiter=',')
+            self.num_instances = data.shape[0]
             labels = data[:, :1]
             feats = data[:, 1:]
             mask = ~np.isnan(feats)
@@ -322,8 +323,8 @@ class EmailDataset(Dataset):
         print(type(s_feats))
         print(type(s_labels))
         return (self.__class__(raw=False, features=s_feats[:pivot, :],
-                               labels=s_labels[:pivot]),
+                               labels=s_labels[:pivot],num_instances = pivot),
                 self.__class__(raw=False, features=s_feats[pivot:, :],
-                               labels=s_labels[pivot:]))
+                               labels=s_labels[pivot:],num_instances = self.num_instances - pivot))
         # return (self.Data(s_feats[:pivot, :], s_labels[:pivot]),
         #         self.Data(s_feats[pivot:, :], s_labels[pivot:]))

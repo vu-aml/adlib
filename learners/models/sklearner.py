@@ -1,4 +1,5 @@
 from typing import List, Dict
+from data_reader.binary_input import Instance
 from data_reader.dataset import EmailDataset
 from learners.models.model import BaseModel
 import numpy as np
@@ -24,23 +25,27 @@ class Model(BaseModel):
         """
         self.learner = sklearn_object
 
-    def train(self, instances: EmailDataset):
+    def train(self, instances):
         """Train on the set of training instances using the underlying
         sklearn object.
 
         Args:
-            instances (List[Instance]): training instances.
+            instances (List[Instance]): training instances or emaildataset
+            object.
 
         """
-        # (y, X) = sparsify(instances)
-        # (X, y) = instances.numpy()
-        self.learner.fit(instances.features, instances.labels)
+        if isinstance(instances, List):
+             (y, X) = sparsify(instances)
+             self.learner.fit(X,y)
+        else:
+             self.learner.fit(instances.data[0], instances.data[1])
 
     def predict(self, instances):
         """Predict classification labels for the set of instances using
         the predict function of the sklearn classifier.
 
         Args:
+            instances should be a Email Dataset
             instances (List[Instance]) or (Instance): training or test instances.
 
         Returns:
@@ -50,30 +55,53 @@ class Model(BaseModel):
         if isinstance(instances, List):
             (y, X) = sparsify(instances)
             predictions = self.learner.predict(X)
-
+        elif type(instances) == Instance:
+            predictions = self.learner.predict(instances.get_feature_vector().get_csr_matrix())[0]
         else:
-            # predictions = self.learner.predict(instances.get_feature_vector().get_csr_matrix())[0]
-            predictions = self.learner.predict(instances)
+            predictions = self.learner.predict(instances.features)
         return predictions
+
 
     def predict_proba(self, instances):
         """Use the model to determine probability of adversarial classification.
 
         Args:
             instances (List[Instance]) or (Instance): training or test instances.
+            instances should be a csr_matrix representation
 
         Returns:
             probability of adversarial classification (List(int))
 
         """
-        # if isinstance(instances, List):
-        #     (y, X) = sparsify(instances)
-        #     full_probs = self.learner.predict_proba(X)
-        #     probs = [x[0] for x in full_probs]
-        # else:
-        #     probs = self.learner.predict_proba(instances.get_feature_vector().get_csr_matrix())[0][0]
-        # return probs
-        probs = self.learner.predict_proba(instances)
+        if isinstance(instances, List):
+            (y, X) = sparsify(instances)
+            full_probs = self.learner.predict_proba(X)
+            probs = [x[0] for x in full_probs]
+        elif type(instances) == Instance:
+            probs = self.learner.predict_proba(instances.get_feature_vector().get_csr_matrix())
+        else:
+            probs = self.learner.predict_proba(instances.features)
+        return probs
+
+    def predict_log_proba(self, instances):
+        """Use the model to determine log probability of adversarial classification.
+
+        Args:
+            instances (List[Instance]) or (Instance): training or test instances.
+            instances should be a csr_matrix representation
+
+        Returns:
+            probability of adversarial classification (List(int))
+
+        """
+        if isinstance(instances, List):
+            (y, X) = sparsify(instances)
+            full_probs = self.learner.predict_log_proba(X)
+            probs = [x[0] for x in full_probs]
+        elif type(instances) == Instance:
+            probs = self.learner.predict_log_proba(instances.get_feature_vector().get_csr_matrix())
+        else:
+            probs = self.learner.predict_log_proba(instances.features)
         return probs
 
     def decision_function_adversary(self, instances):
@@ -89,8 +117,10 @@ class Model(BaseModel):
         if isinstance(instances, List):
             (y, X) = sparsify(instances)
             f = self.learner.decision_function(X)
-        else:
+        elif type(instances) == Instance:
             f = self.learner.decision_function(instances.get_feature_vector().get_csr_matrix())[0]
+        else:
+            self.learner.dicision_function(instances.features)
         return f
 
     def set_params(self, params: Dict):

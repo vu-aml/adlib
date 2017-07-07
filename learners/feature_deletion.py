@@ -1,15 +1,15 @@
-from learners.learner import RobustLearner
+from learners.learner import learner
 from data_reader.dataset import EmailDataset
 from typing import List, Dict
 import numpy as np
 from cvxpy import *
 
 
-class FeatureDeletion(RobustLearner):
+class FeatureDeletion(learner):
 
     def __init__(self, training_instances: EmailDataset=None, params=None):
 
-        RobustLearner.__init__(self)
+        learner.__init__(self)
         self.weight_vector = None         # type: np.array(shape=(1))
         self.num_features = 0             # type: int
         self.hinge_loss_multiplier = 0.5  # type: float

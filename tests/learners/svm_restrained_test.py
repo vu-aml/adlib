@@ -1,17 +1,16 @@
 import pytest
 from learners import SVMRestrained
-from data_reader import input
-from data_reader.input import Instance
+from data_reader import binary_input
+from data_reader.binary_input import Instance
 from random import seed, shuffle
+from data_reader.dataset import EmailDataset
 
 @pytest.fixture
 def data():
-    instances = input.load_instances('./data_reader/data/test/100_instance_debug')
+    dataset = EmailDataset(path='./data_reader/data/test/100_instance_debug.csv', raw=False)
     # set a seed so we get the same output every time
     seed(1)
-    shuffle(instances)
-    training_data = instances[:60]
-    testing_data = instances[60:]
+    training_data, testing_data = dataset.split({'train': 60, 'test': 40})
     return {'training_data': training_data, 'testing_data': testing_data}
 
 @pytest.fixture

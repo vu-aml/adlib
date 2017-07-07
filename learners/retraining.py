@@ -1,4 +1,4 @@
-from learners.learner import RobustLearner
+from learners.learner import learner
 from typing import Dict, List
 from data_reader.dataset import EmailDataset
 from learners.models.sklearner import Model
@@ -20,9 +20,9 @@ Concept:
 """
 
 
-class Retraining(RobustLearner):
+class Retraining(learner):
     def __init__(self, base_model=None, training_instances:EmailDataset=None, params: Dict=None):
-        RobustLearner.__init__(self)
+        learner.__init__(self)
         self.model = Model(base_model)
         self.attack_alg = None # Type: class
         self.adv_params = None

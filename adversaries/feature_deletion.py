@@ -1,5 +1,5 @@
 from adversaries.adversary import Adversary
-from data_reader.input import Instance, FeatureVector
+from data_reader.binary_input import Instance, FeatureVector
 from typing import List, Dict
 from random import shuffle
 import numpy as np

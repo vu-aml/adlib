@@ -5,6 +5,7 @@ from learners import SimpleLearner
 from data_reader import binary_input
 from data_reader.dataset import EmailDataset
 from data_reader.binary_input import Instance
+from data_reader.binary_input import load_dataset
 from random import seed, shuffle
 
 @pytest.fixture
@@ -12,7 +13,9 @@ def data():
     dataset = EmailDataset(path='./data_reader/data/test/100_instance_debug.csv', raw=False)
     # set a seed so we get the same output every time
     seed(1)
-    training_data, testing_data = dataset.split({'train': 60, 'test': 40})
+    training_, testing_ = dataset.split({'train': 60, 'test': 40})
+    training_data = load_dataset(training_)
+    testing_data = load_dataset(testing_)
     return {'training_data': training_data, 'testing_data': testing_data}
 
 @pytest.fixture
@@ -56,5 +59,6 @@ def test_train_throws_error_when_no_training_instances(empty_learner):
 
 def test_predict_returns_binary_label(simple_learner, testing_data):
     simple_learner.train()
-    result = simple_learner.predict(testing_data[0])
+    sample_ = testing_data[0]
+    result = simple_learner.predict(sample_)
     assert result in [SimpleLearner.positive_classification, SimpleLearner.negative_classification]

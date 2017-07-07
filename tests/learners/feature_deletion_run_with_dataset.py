@@ -1,6 +1,6 @@
 import sys
 from sklearn import svm
-from data_reader import input
+from data_reader import binary_input
 from sklearn import metrics
 import learners as learner
 import random

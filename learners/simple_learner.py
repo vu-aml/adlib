@@ -1,16 +1,16 @@
-from learners.learner import RobustLearner
+from learners.learner import learner
 from learners.models import sklearner
 from typing import Dict
 from data_reader.dataset import EmailDataset
 
-class SimpleLearner(RobustLearner):
+class SimpleLearner(learner):
     """Simple Learner for initial learning methods.
     Defines the bare-minimum functionality for initial learning
     strategies.
     """
 
-    def __init__(self, model=None, training_instances: EmailDataset=None):
-        RobustLearner.__init__(self)
+    def __init__(self, model=None, training_instances = None):
+        learner.__init__(self)
         if model:
             self.set_model(model)
         else:
@@ -36,7 +36,10 @@ class SimpleLearner(RobustLearner):
         return self.model.predict(instances)
 
     def predict_proba(self, testing_instances):
-        return self.model.predict_proba(testing_instances)[0]
+        return self.model.predict_proba(testing_instances)
+
+    def predict_log_proba(self,testing_instances):
+        return self.model.predict_log_proba(testing_instances)
 
     def set_params(self, params: Dict):
         if params['model'] is not None:

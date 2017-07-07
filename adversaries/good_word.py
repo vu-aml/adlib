@@ -1,7 +1,7 @@
 from typing import List, Dict
 from adversaries.adversary import Adversary
-from data_reader.input import Instance, FeatureVector
-from learners.learner import RobustLearner
+from data_reader.binary_input import Instance, FeatureVector
+from learners.learner import learner
 from data_reader import operations
 from copy import deepcopy
 from itertools import filterfalse
@@ -29,7 +29,7 @@ class GoodWord(Adversary):
 
         for instance in instances:
             transformed_instance = deepcopy(instance)
-            if instance.get_label() == RobustLearner.positive_classification:
+            if instance.get_label() == learner.positive_classification:
                 transformed_instances.append(
                     self.add_words_to_instance(transformed_instance, word_indices)
                 )
@@ -61,11 +61,11 @@ class GoodWord(Adversary):
         self.learn_model = learner
         instances = train_instances # type: List[Instance]
         self.positive_instance = next(
-            (x for x in instances if x.get_label() == RobustLearner.positive_classification),
+            (x for x in instances if x.get_label() == learner.positive_classification),
             None
         )
         self.negative_instance = next(
-            (x for x in instances if x.get_label() == RobustLearner.negative_classification),
+            (x for x in instances if x.get_label() == learner.negative_classification),
             None
         )
         self.feature_space = set()
@@ -97,7 +97,7 @@ class GoodWord(Adversary):
         prev_message = None
         # loop until current message is classified as spam
         while (self.predict_and_record(curr_message) !=
-            RobustLearner.positive_classification):
+            learner.positive_classification):
 
             prev_message = deepcopy(curr_message)
             word_removed = False
@@ -133,7 +133,7 @@ class GoodWord(Adversary):
             if spam_message.get_feature(feature) == 0:
                 spam_message.flip_bit(feature)
                 prediction_result = self.predict_and_record(spam_message)
-                if prediction_result == RobustLearner.negative_classification:
+                if prediction_result == learner.negative_classification:
                     negative_weight_word_indices.add(feature)
                 if len(negative_weight_word_indices) == self.n:
                     return negative_weight_word_indices
@@ -143,8 +143,8 @@ class GoodWord(Adversary):
 
     def best_n_words(self, spam_message, legit_message):
         barely_spam_message, barely_legit_message = self.find_witness()
-        positive_weight_word_indices = self.build_word_set(barely_legit_message, RobustLearner.positive_classification)
-        negative_weight_word_indices = self.build_word_set(barely_spam_message, RobustLearner.negative_classification)
+        positive_weight_word_indices = self.build_word_set(barely_legit_message, learner.positive_classification)
+        negative_weight_word_indices = self.build_word_set(barely_spam_message, learner.negative_classification)
         best_n_word_indices = set()
         iterations_without_change = 0
         max_iterations_without_change = 10
@@ -153,12 +153,12 @@ class GoodWord(Adversary):
             if not is_index_in_spam_msg: barely_spam_message.flip_bit(spammy_word_index)
             small_weight_word_indices = self.build_word_set(
                 barely_spam_message,
-                RobustLearner.positive_classification,
+                learner.positive_classification,
                 negative_weight_word_indices
             )
             large_weight_word_indices = self.build_word_set(
                 barely_spam_message,
-                RobustLearner.negative_classification,
+                learner.negative_classification,
                 negative_weight_word_indices
             )
             if not is_index_in_spam_msg: barely_spam_message.flip_bit(spammy_word_index)
@@ -185,6 +185,8 @@ class GoodWord(Adversary):
 
     def build_word_set(self, message, intended_classification, indices_to_check = None):
         # if no specific indices are passed in, defaults to checking every index
+        # build list of words by adding dictionary word to the message and sending it through
+        # the filter
         indices_to_check = indices_to_check if indices_to_check != None else self.feature_space
         result = set()
         for index in indices_to_check:
@@ -204,6 +206,7 @@ class GoodWord(Adversary):
         return self.learn_model.predict(instance)
 
     def get_n_words(self):
+        # identify the moel type and get words for attack procedure
         if self.attack_model_type == GoodWord.FIRST_N:
             return self.first_n_words(
                 self.positive_instance.get_feature_vector(),

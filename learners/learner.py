@@ -1,7 +1,9 @@
-from typing import Dict
+from typing import Dict, List
 from data_reader.dataset import EmailDataset
+from data_reader.binary_input import Instance
 
-class RobustLearner(object):
+
+class learner(object):
     """Base class for initial learning methods.
 
     Defines the bare-minimum functionality for initial learning
@@ -17,18 +19,21 @@ class RobustLearner(object):
 
         """
         self.num_features = 0
-        self.training_instances = None  # Type: EmailDataset
+        self.training_instances = None
 
-    def set_training_instances(self, training_data:EmailDataset):
+    def set_training_instances(self, training_data):
         """
 
         :param training_data: an dataset object , which when calling numpy() will return
                 X: feature matrix. shape (num_instances, num_feautres_per_instance)
                 y: label array. shape (num_instances, )
         """
-
-        self.training_instances = training_data
-        self.num_features = len(training_data.labels)
+        if isinstance(training_data, List):
+            self.training_instances = training_data  # type: List[Instance]
+            self.num_features = self.training_instances[0].get_feature_vector().get_feature_count()
+        else:
+            self.training_instances = training_data
+            self.num_features = len(training_data.labels)
 
     def train(self):
         """Train on the set of training instances.

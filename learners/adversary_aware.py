@@ -2,13 +2,19 @@ from typing import Dict, List
 from data_reader.dataset import EmailDataset
 from data_reader.binary_input import Instance
 from learners import learner
+from learners.models.sklearner import Model
 from sklearn.naive_bayes import BernoulliNB
 from adversaries.cost_sensitive import CostSensitive
 
 class AdversaryAware(object):
-    def __init__(self, adversary = None ):
-       self.adversary = adversary
-
+    def __init__(self, base_model=None, training_instances=None, params: Dict = None):
+        learner.__init__(self)
+        self.model = Model(base_model)
+        self.attack_alg = None  # Type: class
+        self.adv_params = None
+        self.attacker = None  # Type: Adversary
+        self.set_training_instances(training_instances)
+        self.set_params(params)
 
     def set_params(self, params: Dict):
         """Set params for the initial learner.

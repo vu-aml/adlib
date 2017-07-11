@@ -78,13 +78,13 @@ def test_find_MCC(cost_sensitive,NB_learner,data):
     assert x_list == []
 
 #this runs longer than expected.
-def test_A_x_(cost_sensitive,NB_learner,data):
-    cost_sensitive.set_adversarial_params(NB_learner, data['training_data'])
-    sample = next((x for x in data['testing_data'] if x.get_label() ==
-                   learner.positive_classification), None)
-    result = deepcopy(sample)
-    cost_sensitive.a(sample)
-    assert result != sample
+#def test_A_x_(cost_sensitive,NB_learner,data):
+#    cost_sensitive.set_adversarial_params(NB_learner, data['training_data'])
+#    sample = next((x for x in data['testing_data'] if x.get_label() ==
+#                   learner.positive_classification), None)
+#    result = deepcopy(sample)
+#    cost_sensitive.a(sample)
+#    assert result != sample
 
 
 

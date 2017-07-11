@@ -92,7 +92,7 @@ def test_get_n_words_with_first_n_model(good_word_with_params):
     words = adv.get_n_words()
     # use mock to assert first_n gets called
     # may throw errors when words found are less than num_words
-    assert len(words) == num_words
+    assert len(words) <= num_words
 
 def test_get_n_words_with_best_n_model(good_word_with_params):
     adv = good_word_with_params
@@ -100,4 +100,4 @@ def test_get_n_words_with_best_n_model(good_word_with_params):
     adv.set_params({'n': num_words, 'attack_model_type': GoodWord.BEST_N})
     words = adv.get_n_words()
     # use mock to assert best_n gets called
-    assert len(words) == num_words
+    assert len(words) <= num_words

@@ -1,23 +1,22 @@
 from learners.learner import learner
-from data_reader.dataset import EmailDataset
+from data_reader.binary_input import Instance
+from data_reader.operations import sparsify
 from typing import List, Dict
 import numpy as np
 from cvxpy import *
 
 
 class FeatureDeletion(learner):
-
-    def __init__(self, training_instances: EmailDataset=None, params=None):
+    def __init__(self, training_instances=None, params=None):
 
         learner.__init__(self)
-        self.weight_vector = None         # type: np.array(shape=(1))
-        self.num_features = 0             # type: int
+        self.weight_vector = None  # type: np.array(shape=(1))
+        self.num_features = 0  # type: int, this is the number of features in
         self.hinge_loss_multiplier = 0.5  # type: float
-        self.max_feature_deletion = 30    # type: int
-
-        self.weight_vector = None         # type: np.array
-        self.bias = 0                     # type: int
-        self.set_params(params)
+        self.max_feature_deletion = 30  # type: int
+        self.bias = 0  # type: int
+        if params is not None:
+            self.set_params(params)
         if training_instances is not None:
             self.set_training_instances(training_instances)
 
@@ -40,21 +39,30 @@ class FeatureDeletion(learner):
         Returns: optimized weight vector
 
         """
-        X, y = self.training_instances.numpy()
-        num_instances = len(y)
-        y, X = y.reshape((num_instances, 1)), X
+        if isinstance(self.training_instances, List):
+            y_list, X_list = sparsify(self.training_instances)
+            num_instances = len(y_list)
+            y, X = np.array(y_list).reshape((num_instances, 1)), X_list.toarray().reshape(
+                (num_instances, self.num_features))
+
+        else:
+            X, y = self.training_instances.numpy()
+            num_instances = len(y)
+            y, X = y.reshape((num_instances, 1)), X
+
         C = self.hinge_loss_multiplier
         K = self.max_feature_deletion
 
         i_ones, i_zeroes, j_ones = np.ones(num_instances), \
-            np.zeros(num_instances), np.ones(self.num_features)
+                                   np.zeros(num_instances), np.ones(self.num_features)
         w = Variable(self.num_features)  # weight vector
         b = Variable()  # bias term
         t = Variable(num_instances)
         z = Variable(num_instances)
         v = Variable(num_instances, self.num_features)
         # loss function
-        loss = sum_entries(pos(1 - mul_elemwise(y, X * w + b) + t))
+        loss_elemwise = [pos(1- y[i] * (X[i] * w + b)) for i in range(num_instances)]
+        loss = sum_entries(loss_elemwise[0])
         # add constraints
         constraints = [t >= K * z + sum_entries(v, axis=1)]
 
@@ -63,13 +71,13 @@ class FeatureDeletion(learner):
 
         # add constraints zi + vi >= y.dot(X) * w
         constraints.extend([v[i, :] +
-                           z[i] * np.ones(
-                               self.num_features).reshape(1, self.num_features)
-                           >= (mul_elemwise(y[i] *
-                               X[i].reshape(self.num_features, 1), w)).T
-                           for i in range(num_instances)])
+                            z[i] * np.ones(
+                                self.num_features).reshape(1, self.num_features)
+                            >= (mul_elemwise(y[i] *
+                                             X[i].reshape(self.num_features, 1), w)).T
+                            for i in range(num_instances)])
 
-        obj = Minimize(0.5*(sum_squares(w)) + C * loss)
+        obj = Minimize(0.5 * (sum_squares(w)) + C * loss)
 
         prob = Problem(obj, constraints)
         prob.solve()
@@ -84,8 +92,24 @@ class FeatureDeletion(learner):
                            num_feautres_per_instance)
          :return: list of int labels
          """
-        return [np.sign(self.predict_instance(instance))
-                for instance in instances]
+        predictions = []
+        #list of instances
+        if isinstance(instances, List):
+            for instance in instances:
+                features = instance.get_feature_vector().get_csr_matrix().toarray()
+                predictions.append(np.sign(self.predict_instance(features)))
+        #single instance
+        elif type(instances) == Instance:
+            predictions = np.sign(self.predict_instance(
+            instances.get_feature_vector().get_csr_matrix().toarray()))
+        else:
+            predictions = []
+            for i in range(0, instances.features.shape[0]):
+                instance = instances.features[i, :].toarray()
+                predictions.append(np.sign(self.predict_instance(instance)))
+            if len(predictions) == 1:
+                return predictions[0]
+        return predictions
 
     def predict_instance(self, features):
         '''
@@ -94,8 +118,7 @@ class FeatureDeletion(learner):
                          i.e. [[1, 2, ...]]
         :return: float
         '''
-
-        return self.weight_vector.dot(features.T)[0] is+ self.bias
+        return self.weight_vector.dot(features.T)[0][0] + self.bias
 
     def decision_function(self):
         return self.weight_vector, self.bias

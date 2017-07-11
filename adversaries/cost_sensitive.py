@@ -32,7 +32,6 @@ class CostSensitive(Adversary):
         self.Ua = Ua
         self.Vi = Vi
         self.Uc = Uc
-        self.Wi = Wi
         self.Xc = None
         self.Xdomain = [0,1]   #all the features are binary, so possible values are either 0 or 1
         self.positive_instances = None
@@ -57,9 +56,6 @@ class CostSensitive(Adversary):
 
         if params['Ua'] is not None:
             self.Ua = params['Ua']
-
-        if params['Wi'] is not None:
-            self.Wi = params['Wi']
 
         if params['scenario'] is not None:
             self.scenario = params['scenario']
@@ -98,23 +94,23 @@ class CostSensitive(Adversary):
         '''
         if w<=0:
             return 0,[]
-        if i==0:
-            return float('inf'), None
+        if i<0:
+            return 0,[]
         minCost = float('inf')
         minList = []
         # need to figure out what I'm calling the domain of a given feature
         for xi_prime in self.Xdomain:
             instance_prime = deepcopy(x)
-            instance_prime.change_bit(i,xi_prime)
-            delta_log_odds = self.log_odds(i,instance_prime) - self.log_odds(i,x)
+            instance_prime.get_feature_vector().change_bit(i,xi_prime)
+            delta_log_odds = self.log_odds(instance_prime) - self.log_odds(x)
             if delta_log_odds >= 0:
-                curCost, curList = self.find_mcc(i-1, w - delta_log_odds)
-                curCost += self.Wi(self.Xc[i], xi_prime)
+                curCost, curList = self.find_mcc(i-1, w - delta_log_odds,x)
+                curCost += self.w(x,instance_prime,i)
                 curList += [(i,xi_prime)]
                 if curCost < minCost:
                     minCost = curCost
                     minList = curList
-        return minCost,minList
+        return minCost , minList
 
     def gap(self,x):
         '''
@@ -151,7 +147,7 @@ class CostSensitive(Adversary):
             return (Uc[0][0] - Uc[1][0]) / (Uc[1][1] - Uc[0][1])
 
 
-    def a(x):
+    def a(self,x):
         '''
         Change instance x only if the minimum cost to effectively fool C is
         less than delta_Ua: the user defined utility gained by fooling
@@ -164,6 +160,10 @@ class CostSensitive(Adversary):
         minCost,minList = self.find_mcc(self.num_features,W, x)
         if minCost < self.delta_Ua:
             for i,xi_prime in minList:
-                x.get_feature_vector().swap_feature(i,xi_prime)
+                x.get_feature_vector().change_bit(i,xi_prime)
         return x
 
+
+    def w(self,x, x_prime,i):
+       w = x.get_feature_vector().get_feature(i) - x_prime.get_feature_vector().get_feature(i)
+       return w

@@ -1,8 +1,10 @@
 from learners.learner import learner
 from typing import Dict, List
 from data_reader.dataset import EmailDataset
+from data_reader.binary_input import Instance
 from learners.models.sklearner import Model
 import numpy as np
+from data_reader.operations import fv_equals
 
 """Learner retraining.
 
@@ -21,13 +23,14 @@ Concept:
 
 
 class Retraining(learner):
-    def __init__(self, base_model=None, training_instances:EmailDataset=None, params: Dict=None):
+    def __init__(self, base_model=None, training_instances=None, params: Dict = None):
         learner.__init__(self)
         self.model = Model(base_model)
-        self.attack_alg = None # Type: class
+        self.attack_alg = None  # Type: class
         self.adv_params = None
-        self.attacker = None # Type: Adversary
+        self.attacker = None  # Type: Adversary
         self.set_training_instances(training_instances)
+        self.iteration_times = 2  # int: control the number of rounds directly
         self.set_params(params)
 
     def set_params(self, params: Dict):
@@ -35,32 +38,51 @@ class Retraining(learner):
             self.attack_alg = params['attack_alg']
         if params['adv_params'] is not None:
             self.adv_params = params['adv_params']
+        if params['iteration_times'] is not None:
+            self.iteration_times = params['iteration_times']
+
+    def get_available_params(self) -> Dict:
+        params = {'attack_alg': self.attack_alg,
+                  'adv_params': self.adv_params,
+                  'iteration_times': self.iteration_times}
+        return params
 
     def train(self):
+        '''
+        This is implemented according to Algorithm 1 in Central Rettraining Framework
+        for Scalable Adversarial Classification. This will iterate between computing
+        a classifier and adding the adversarial instances to the training data that evade
+        the previously computed classifier.
+        :return: None
+        '''
         self.model.train(self.training_instances)
+        iteration = self.iteration_times
         self.attacker = self.attack_alg()
         self.attacker.set_params(self.adv_params)
         self.attacker.set_adversarial_params(self.model, self.training_instances)
+
         print("==> Training...")
         malicious_instances = [x for x in self.training_instances if
-                                  self.model.predict(x.features)[0] == 1]
+                               self.model.predict(x) == 1]
         augmented_instances = self.training_instances
-        # augmented_labels = self.training_instances.labels
 
-        for instance in malicious_instances:
-            print(instance)
-            transformed_instance = self.attacker.attack(EmailDataset(features=instance.features, labels=instance.labels))
-            new_instance = True
-            for idx, old_instance in enumerate(augmented_instances):
-                if np.array_equal(old_instance.features.toarray(),
-                                  transformed_instance.features.toarray()):
-                    new_instance = False
-            if new_instance:
-                augmented_instances[idx] = transformed_instance
-                augmented_instances.labels = 1
-                # np.append(augmented_labels, [1])
-        self.model.train(EmailDataset(raw=False, features=augmented_instances.features, labels=augmented_instances.labels))
-
+        while iteration != 0:
+            new = []
+            transformed_instances = self.attacker.attack(malicious_instances)
+            for instance in transformed_instances:
+                in_list = False
+                for idx, old_instance in enumerate(augmented_instances):
+                    if fv_equals(old_instance.get_feature_vector(),instance.get_feature_vector()):
+                        in_list = True
+                if not in_list:
+                    new.append(instance)
+                augmented_instances.append(Instance(label=1, feature_vector=instance.get_feature_vector()))
+            self.model.train(augmented_instances)
+            malicious_instances = [x for x in augmented_instances if
+                                   self.model.predict(x) == 1]
+            iteration -= 1
+            if new is None:
+                break
 
     def decision_function(self, instances):
         return self.model.decision_function_adversary(instances)

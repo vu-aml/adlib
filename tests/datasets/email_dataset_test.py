@@ -62,7 +62,6 @@ def load_serialized():
 
 def test_predict_returns_binary_label(simple_learner, testing_data):
     simple_learner.train()
-    sample_ = testing_data.features
-    result = simple_learner.predict(sample_[0])
+    result = simple_learner.predict(testing_data[0])
     assert result in [SimpleLearner.positive_classification, SimpleLearner.negative_classification]
     ##assert result == sample_.labels

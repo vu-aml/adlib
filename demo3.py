@@ -17,24 +17,24 @@ def main(argv):
     # pre-process data and randomly partition
     dataset = EmailDataset(path='./data_reader/data/test/100_instance_debug.csv', raw=False)
     training_, testing_ = dataset.split({'train': 60, 'test': 40})
-    instances = load_dataset(dataset)
     training_data = load_dataset(training_)
     testing_data = load_dataset(testing_)
-
-    print(sparsify(instances)[1].toarray())
 
 
     # initialize sklearn model
     learning_model = svm.SVC(probability=True, kernel='linear')
 
     # initialize and train RobustLearner
-    clf2 = learner.Retraining(learning_model,training_data, {'attack_alg': ad.SimpleOptimize,'adv_params':{}})
+    clf2 = learner.Retraining(learning_model,training_data, {'attack_alg': ad.SimpleOptimize,
+                                                             'adv_params':{},'iteration_times':None})
     clf2.train()
 
     # produce simple metrics
     y_predict = clf2.predict(testing_data[0])
-    y_true = sparsify(testing_data[0])
-    score = metrics.precision_score(y_predict,y_true)
+    y,X = sparsify(testing_data)
+    y_true = y[0]
+    print(y_predict,y_true)
+    score = metrics.precision_score([y_predict],[y_true])
     print("score = "+str(score))
 
 

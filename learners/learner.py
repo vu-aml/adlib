@@ -33,7 +33,7 @@ class learner(object):
             self.num_features = self.training_instances[0].get_feature_vector().get_feature_count()
         else:
             self.training_instances = training_data
-            self.num_features = len(training_data.labels)
+            self.num_features = training_data.features.shape[1]
 
     def train(self):
         """Train on the set of training instances.

@@ -4,9 +4,10 @@ import pytest
 import numpy as np
 from learners import learner, SimpleLearner
 from data_reader.dataset import EmailDataset
-from data_reader.binary_input import Instance, load_dataset
+from data_reader.binary_input import Instance,FeatureVector,load_dataset
 from data_reader.operations import sparsify
 from adversaries import CostSensitive
+from copy import deepcopy
 
 
 @pytest.fixture
@@ -32,14 +33,12 @@ def testing_data(data):
 # set the parameters according to the experiments provided
 # UA = [[0,20],[0,0]]
 # Uc = [[1,-1],[-10,1]]
-# Wi = 0
 # Vi = 0
 def cost_sensitive():
     adversary = CostSensitive()
     adversary.set_classifier_utility([[1, -1], [-10, 1]])
     param = {}
     param['Ua'] = [[0, 20], [0, 0]]
-    param['Wi'] = 0
     param['Vi'] = 0
     param['scenario'] = None
     adversary.set_params(param)
@@ -78,6 +77,14 @@ def test_find_MCC(cost_sensitive,NB_learner,data):
     assert y_list == []
     assert x_list == []
 
+#this runs longer than expected.
+def test_A_x_(cost_sensitive,NB_learner,data):
+    cost_sensitive.set_adversarial_params(NB_learner, data['training_data'])
+    sample = next((x for x in data['testing_data'] if x.get_label() ==
+                   learner.positive_classification), None)
+    result = deepcopy(sample)
+    cost_sensitive.a(sample)
+    assert result != sample
 
 
 

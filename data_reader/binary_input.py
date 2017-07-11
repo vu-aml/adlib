@@ -72,17 +72,17 @@ class FeatureVector(object):
             if index not in self.indices:
                 return
             else:
-                self.indices.append(index)
-                self.indices.sort()
-                self.indptr[1] += 1
-                self.data.append(1)
+                self.indices.remove(index)
+                self.indptr[1] -= 1
+                self.data.remove(1)
         if feature == 1:
             if index in self.indices:
                 return
             else:
-                self.indices.remove(index)
-                self.indptr[1] -= 1
-                self.data.remove(1)
+                self.indices.append(index)
+                self.indices.sort()
+                self.indptr[1] += 1
+                self.data.append(1)
 
     def flip_bit(self, index):
         """Flip feature at given index.

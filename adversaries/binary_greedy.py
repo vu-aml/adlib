@@ -4,50 +4,55 @@ from typing import List, Dict
 from random import shuffle
 import numpy as np
 from copy import deepcopy
+
+
 # import matplotlib.pyplot as plt
 
 
 
 class BinaryGreedy(Adversary):
-
-    def __init__(self, learner=None, lambda_val=0.05, epsilon=0.0002, step_size=0.05):
+    def __init__(self, learner=None, max_change = 1000,
+                 lambda_val=0.05, epsilon=0.0002, step_size=0.05):
         Adversary.__init__(self)
         self.lambda_val = lambda_val
         self.epsilon = epsilon
         self.step_size = step_size
         self.num_features = 0
         self.learn_model = learner
+        self.max_change = max_change
         if self.learn_model is not None:
             self.weight_vector = self.learn_model.model.learner.coef_.toarray()[0]
         else:
-            self.weight_vector = None # type: np.array
-
-    def attack(self, data):
-        if self.num_features == 0:
-            self.num_features = len(data)
-
-        transformed_instances = []
-        for instance in data:
-            if instance.labels > 0:
-                instance = self.coordinate_greedy(instance)
-                # transformed_instances.append(self.coordinate_greedy(transformed_instance))
-            # else:
-            #     transformed_instances.append(transformed_instance)
-        return transformed_instances
-
-    def set_params(self, params: Dict):
-        raise NotImplementedError
+            self.weight_vector = None  # type: np.array
 
     def get_available_params(self) -> Dict:
         raise NotImplementedError
 
+    def set_params(self, params: Dict):
+        raise NotImplementedError
+
     def set_adversarial_params(self, learner, train_instances: List[Instance]):
         self.learn_model = learner
-        self.weight_vector = self.learn_model.coef_.toarray()[0]
         self.num_features = train_instances[0].get_feature_vector().get_feature_count()
 
-    def coordinate_greedy(self, instance: Instance) -> Instance:
+    def attack(self, Instances) -> List[Instance]:
+        if self.weight_vector is None and self.learn_model is not None:
+            self.weight_vector = self.learn_model.model.learner.coef_.toarray()[0]
+        if self.num_features == 0:
+            self.num_features = Instances[0].get_feature_vector().get_feature_count()
 
+        if self.weight_vector is None:
+            raise ValueError('Must set learner_model and weight_vector before attack.')
+
+        transformed_instances = []
+        for instance in Instances:
+            if instance.label > 0:
+                transformed_instances.append(self.coordinate_greedy(instance))
+            else:
+                transformed_instances.append(instance)
+        return transformed_instances
+
+    def coordinate_greedy(self, instance: Instance) -> Instance:
         indices = [i for i in range(0, self.num_features)]
 
         x = xk = instance.get_feature_vector().get_csr_matrix().toarray()[0]
@@ -59,30 +64,30 @@ class BinaryGreedy(Adversary):
         no_improve_count = 0
         shuffle(indices)
         for i in indices:
-            xkplus1 = self.minimize_transform(xk,i)
-            oldQ = self.transform_cost(xk,x)
+            xkplus1 = self.minimize_transform(xk, i)
+            oldQ = self.transform_cost(xk, x)
             newQ = self.transform_cost(xkplus1, x)
-            #step_change = np.log(newQ) / np.log(oldQ)
+            # step_change = np.log(newQ) / np.log(oldQ)
             # using difference instead of log ratio for convergence check
 
-            step_change = newQ-oldQ
+            step_change = newQ - oldQ
             # print('oldQ= '+str(oldQ) + ' newQ= '+str(newQ)+ ' step_change= '+str(step_change))
             # print('xk[i]= ' + str(xk[i]) + ' xk+1[i]= ' + str(xkplus1[i]) + ' x[i]= ' + str(x[i]))
 
             if step_change >= 0:
                 no_improve_count += 1
-                if no_improve_count >= 800:
+                if no_improve_count >= self.max_change:
                     break
             else:
                 xk = xkplus1
 
-            # Q.append(self.transform_cost(xk,x))
-            # f.append(self.learn_model.model.learner.predict(xk.reshape(1, -1)))
-            # c.append(self.quadratic_cost(xk,x))
-            # p.append(self.learn_model.model.learner.coef_.dot(xk) + self.learn_model.model.learner.intercept_)
+                # Q.append(self.transform_cost(xk,x))
+                # f.append(self.learn_model.model.learner.predict(xk.reshape(1, -1)))
+                # c.append(self.quadratic_cost(xk,x))
+                # p.append(self.learn_model.model.learner.coef_.dot(xk) + self.learn_model.model.learner.intercept_)
 
         # print('xk shape: '+str(xk.shape))
-        if self.learn_model.model.learner.predict(xk.reshape(1,-1)) > 0:
+        if self.learn_model.model.learner.predict(xk.reshape(1, -1)) > 0:
             return instance
 
         # Q = np.array(Q)
@@ -103,12 +108,13 @@ class BinaryGreedy(Adversary):
         # plt.legend()
         # plt.show()
 
-        #('mod succeeded')
+        # ('mod succeeded')
 
-        mat_indices = [x for x in range(0,self.num_features) if xk[x] == 1]
+        mat_indices = [x for x in range(0, self.num_features) if xk[x] == 1]
         # print('prediction after mod: ' + str(self.learn_model.model.learner.coef_.dot(xk)+
         #                                      self.learn_model.model.learner.intercept_))
         return Instance(1, FeatureVector(self.num_features, mat_indices))
+
 
     def minimize_transform(self, xi: np.array, i):
         xk = np.copy(xi)
@@ -118,7 +124,7 @@ class BinaryGreedy(Adversary):
 
         # newxki = 1 - xi[i]
         # print('minimize_decision= ' + str(newxki))
-        xk[i] = 1-xi[i]
+        xk[i] = 1 - xi[i]
         # np.put(xk, [i], [newxki])
         # print('new xk[i]= ' +str(xk[i]))
         return xk
@@ -127,13 +133,13 @@ class BinaryGreedy(Adversary):
         return self.weight_vector.dot(x) + self.quadratic_cost(x, xi)
 
     def quadratic_cost(self, x: np.array, xi: np.array):
-        return self.lambda_val/2 * sum((x-xi)**2)
+        return self.lambda_val / 2 * sum((x - xi) ** 2)
 
-    # def transform_cost_part_deriv(self, i, x:np.array,xi:np.array):
-    #     return self.decision_func_part_deriv(i)+self.quad_cost_part_deriv(x,xi)
-    #
-    # def decision_func_part_deriv(self, i):
-    #     return self.weight_vector[i]
-    #
-    # def quad_cost_part_deriv(self, j, x:np.array, xi: np.array):
-    #     return self.lambda_val*(x[j]-xi[j])
+        # def transform_cost_part_deriv(self, i, x:np.array,xi:np.array):
+        #     return self.decision_func_part_deriv(i)+self.quad_cost_part_deriv(x,xi)
+        #
+        # def decision_func_part_deriv(self, i):
+        #     return self.weight_vector[i]
+        #
+        # def quad_cost_part_deriv(self, j, x:np.array, xi: np.array):
+        #     return self.lambda_val*(x[j]-xi[j])

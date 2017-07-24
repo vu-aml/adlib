@@ -44,3 +44,9 @@ class SimpleLearner(learner):
     def set_params(self, params: Dict):
         if params['model'] is not None:
             self.model = self.set_model(params['model'])
+
+    def get_weight(self):
+        return self.model.learner.coef_.toarray()[0]
+
+    def get_constant(self):
+        return self.model.learner.intercept_

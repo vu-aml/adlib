@@ -6,6 +6,7 @@ from data_reader import binary_input
 from data_reader.dataset import EmailDataset
 from data_reader.binary_input import Instance
 from random import seed, shuffle
+import numpy as np
 
 @pytest.fixture
 def data():

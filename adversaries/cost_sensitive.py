@@ -1,9 +1,7 @@
 from adversaries.adversary import Adversary
 from typing import List, Dict
-from data_reader.binary_input import Instance, FeatureVector
-import numpy as np
+from data_reader.binary_input import Instance
 from learners.learner import learner
-from math import log
 from copy import deepcopy
 
 '''Adversarial Classification based on paper by:
@@ -28,17 +26,33 @@ Concept:
 #the parameters can be set according to the experiments described in the paper
 # position: (-,-)= (0,0) (-,+) = (0,1) (+,-)= (1,0) (+,+)= (1,1)
 class CostSensitive(Adversary):
-    def __init__(self, Ua = None, Vi = None, Uc = None, Wi = None, learner=None):
+    def __init__(self, Ua = None, Vi = None, Uc = None, Wi = None, learner=None, binary= True,scenario = "Add_Word"):
+        """
+
+        :param Ua: Utility accreued by Adversary when the classifier classifies as yc an instance
+                   of class y. U(-,+) > 0, U(+,+)<0 ,and U(-,-)= U(+,-) = 0
+        :param Vi: Cost of measuring Xi
+        :param Uc: Utility of classifying yc an instance with true class y.
+                   Uc(+,-) <- and Uc(-,+) <0, Uc(+,+) >0, Uc(-,-) >0
+        :param Wi: Cost of changing the ith feature from xi to xi_prime
+        :param learner:
+        :param scenario: can select three spam filtering scenarios: add words, add length, synonym
+        """
         self.Ua = Ua
         self.Vi = Vi
         self.Uc = Uc
         self.Xc = None
-        self.Xdomain = [0,1]   #all the features are binary, so possible values are either 0 or 1
+        self.binary =binary
+        if self.binary:
+             self.Xdomain = [0,1]   # if all the features are binary,the possible values are either 0 or 1
+        else:
+             self.Xdomain = None    # otherwise, we set the Xdomain based on the training data we have
+                                    # observed, or we set it in the set_params function
         self.positive_instances = None
         self.delta_Ua = None
         self.num_features = None
         self.learn_model = learner    #type: Classifier
-        self.scenario = "All_Word"
+        self.scenario = scenario
 
     def attack(self, instances) -> List[Instance]:
         transformed_instances = []
@@ -53,29 +67,28 @@ class CostSensitive(Adversary):
     def set_params(self, params: Dict):
         if params['Vi'] is not None:
             self.Vi = params['Vi']
-
         if params['Ua'] is not None:
             self.Ua = params['Ua']
-
         if params['scenario'] is not None:
             self.scenario = params['scenario']
-
-    def set_classifier_utility(self,Uc):
-        self.Uc = Uc
+        if params['Uc'] is not None:
+            self.Uc = params['Uc']
+        if 'Xdomain' in params.keys():
+            self.Xdomain = params['Xdomain']
 
     def get_available_params(self) -> Dict:
         params = {'measuring_cost': self.Vi,
                   'adversary_utility': self.Ua,
-                  'transform_cost': self.Wi,
                   'classifier_utility':self.Uc,
-                  'scenario': 'All_Word'}
+                  'scenario': self.scenario,
+                  'Xdomain': self.Xdomain
+                  }
         return params
 
     def set_adversarial_params(self, learner, train_instances):
-
         self.learn_model = learner
         self.Xc = train_instances
-        self.num_features = train_instances[0].get_feature_vector().get_feature_count()
+        self.num_features = train_instances[0].get_feature_count()
         self.positive_instances = [x for x in train_instances if x.get_label() == learner.positive_classification]
         self.delta_Ua = self.Ua[0][1] - self.Ua[1][1]
 
@@ -92,16 +105,15 @@ class CostSensitive(Adversary):
                 2) a list of pairs of original feature indices and their
                    corresponding transformations
         '''
-        if w<=0:
+        if w <= 0:
             return 0,[]
-        if i<0:
+        if i < 0:
             return 0,[]
         minCost = float('inf')
         minList = []
-        # need to figure out what I'm calling the domain of a given feature
         for xi_prime in self.Xdomain:
             instance_prime = deepcopy(x)
-            instance_prime.get_feature_vector().change_bit(i,xi_prime)
+            instance_prime.flip(i,xi_prime)
             delta_log_odds = self.log_odds(instance_prime) - self.log_odds(x)
             if delta_log_odds >= 0:
                 curCost, curList = self.find_mcc(i-1, w - delta_log_odds,x)
@@ -157,13 +169,23 @@ class CostSensitive(Adversary):
         return: possible
         '''
         W = self.gap(x) # discretized
+        #note: num_features has to be less than 20, otherwise it will return errors.
         minCost,minList = self.find_mcc(self.num_features,W, x)
         if minCost < self.delta_Ua:
             for i,xi_prime in minList:
-                x.get_feature_vector().change_bit(i,xi_prime)
+                x.flip(i,xi_prime)
         return x
 
 
     def w(self,x, x_prime,i):
-       w = x.get_feature_vector().get_feature(i) - x_prime.get_feature_vector().get_feature(i)
+       """
+       Get feature vector differences between x and x_prime
+       Note: we can also emply the quodratic cost here, and add another lambda as the
+       weight vector.
+       :param x: original
+       :param x_prime: changed instance
+       :param i:
+       :return: float number
+       """
+       w = x.get_feature_vector_cost(x_prime)
        return w

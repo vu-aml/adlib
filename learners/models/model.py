@@ -48,7 +48,7 @@ class BaseModel(object):
 	        """
 			raise NotImplementedError
 
-	def decision_function_adversary(self, instances):
+	def decision_function_(self, instances):
 		"""Use the model to determine the decision function for each instance.
 
         Returns:

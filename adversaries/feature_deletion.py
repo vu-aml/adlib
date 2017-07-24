@@ -1,13 +1,25 @@
 from adversaries.adversary import Adversary
-from data_reader.binary_input import Instance, FeatureVector
+from data_reader.binary_input import Instance
 from typing import List, Dict
-from random import shuffle
 import numpy as np
 from copy import deepcopy
 
+"""
+  Based on Nightmare at Test Time: Robust Learning by Feature Deletion by Amir Globerson
+  and Sam Roweis.
+  
+  Concept: Implementing a typical attacker that tries to delete the features with the least
+           weights by setting the features' value to zero to fool the learning algorithm.
+"""
 
 class AdversaryFeatureDeletion(Adversary):
     def __init__(self, learner=None, num_deletion=0, all_malicious=False):
+        """
+        :param learner: Learner from learners
+        :param num_deletion: the max number that will be deleted in the attack
+        :param all_malicious: if the flag is set, only features that are malicious
+                              will be deleted.
+        """
         Adversary.__init__(self)
         self.num_features = 0  # type: int
         self.num_deletion = num_deletion  # type: int
@@ -15,20 +27,23 @@ class AdversaryFeatureDeletion(Adversary):
         self.learn_model = learner
         self.del_index = None  # type: np.array
         if self.learn_model is not None:
-            self.weight_vector = self.learn_model.model.learner.coef_.toarray()[0]
+            self.weight_vector = self.learn_model.get_weight()
         else:
             self.weight_vector = None  # type: np.array
 
-    def attack(self, instances: List[Instance]) -> List[Instance]:
+    def set_adversarial_params(self, learner, train_instances):
+        self.learn_model = learner
+        self.weight_vector = self.learn_model.get_weight()
 
+
+    def attack(self, instances: List[Instance]) -> List[Instance]:
         if self.weight_vector is None and self.learn_model is not None:
-            self.weight_vector = self.learn_model.model.learner.coef_.toarray()[0]
+            self.weight_vector = self.learn_model.get_weight()
         if self.num_features == 0:
-            self.num_features = instances[0].get_feature_vector().get_feature_count()
+            self.num_features = instances[0].get_feature_count()
         if self.weight_vector is None:
             raise ValueError('Must set learner_model and weight_vector before attack.')
         if self.malicious:
-            # if malicious, only features that indicates malicious instance are deleted
             self.del_index = np.flipud(np.argsort(self.weight_vector))[:self.num_deletion]
         else:
             self.del_index = np.flipud(np.argsort(np.absolute(self.weight_vector)))[:self.num_deletion]
@@ -48,7 +63,13 @@ class AdversaryFeatureDeletion(Adversary):
         return params
 
     def change_instance(self, instance: Instance) -> Instance:
+        instance_prime = deepcopy(instance)
+        #x = instance.get_feature_vector().get_csr_matrix().toarray()[0]
+        for i in range(0, self.num_features):
+            if i in self.del_index:
+                instance_prime.flip(i, 0)
+        return instance_prime
 
-        x = instance.get_feature_vector().get_csr_matrix().toarray()[0]
-        indices = [i for i in range(0, self.num_features) if x[i] == 1 and i not in self.del_index]
-        return Instance(1, FeatureVector(self.num_features, indices))
+        # the return value should not be 1 here, since benign instances can change as well?
+        # indices = [i for i in range(0, self.num_features) if x[i] != 0 and i not in self.del_index]
+        # return Instance(1, FeatureVector(self.num_features, indices))

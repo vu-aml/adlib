@@ -4,7 +4,8 @@ from adversaries import FreeRange
 from sklearn import svm
 from learners import learner, SimpleLearner,SVMFreeRange
 from data_reader.dataset import EmailDataset
-from data_reader.binary_input import Instance,load_dataset
+from data_reader.binary_input import Instance
+from data_reader.operations import load_dataset
 
 @pytest.fixture
 def data():
@@ -31,18 +32,6 @@ def freerange_learner(data):
     return SVMFreeRange({'c_f': 0.7, 'xmin': 0.25, 'xmax': 0.75}, \
                         data['training_data'])
 
-def test_set_get_params(free_range):
-    param = {}
-    param['xj_min'] = 0.25
-    param['xj_max'] = 0.75
-    param['f_attack'] =  0.7
-    param['binary'] = True
-    free_range.set_params(param)
-    val = free_range.get_available_params()
-    assert val['xj_min'] == 0.25
-    assert val['xj_max'] == 0.75
-    assert val['f_attack'] ==  0.7
-    assert val['binary'] == True
 
 def test_set_adversarial_params(free_range,freerange_learner,training_data):
     free_range.set_adversarial_params(freerange_learner,training_data)

@@ -111,17 +111,17 @@ class SVMRestrained(learner):
         if isinstance(instances, List):
             for instance in instances:
                 features = instance.get_feature_vector().get_csr_matrix().toarray()
-                predictions.append(np.sign(self.predict_instance(features)))
+                predictions.append((int)(np.sign(self.predict_instance(features))))
         #single instance
         elif type(instances) == Instance:
-            predictions = np.sign(self.predict_instance(
-            instances.get_feature_vector().get_csr_matrix().toarray()))
+            predictions = (int)(np.sign(self.predict_instance(
+            instances.get_feature_vector().get_csr_matrix().toarray())))
         else:
         #email data set
         #return a num if there is a single instance
             for i in range(0, instances.features.shape[0]):
                 instance = instances.features[i, :].toarray()
-                predictions.append(np.sign(self.predict_instance(instance)))
+                predictions.append((int)(np.sign(self.predict_instance(instance))))
             if len(predictions) == 1:
                 return predictions[0]
         return predictions
@@ -130,12 +130,14 @@ class SVMRestrained(learner):
         return self.weight_vector.dot(features.T)[0][0] + self.bias
 
     def predict_proba(self, instances):
-        """
 
-        :param instances: matrix of instances shape (num_instances, num_feautres_per_instance)
-        :return: list of probability (int)
-        """
-        return [self.predict_instance(ins) for ins in instances]
+        return self.predict(instances)
 
     def decision_function(self):
         return self.weight_vector, self.bias
+
+    def get_weight(self):
+        return self.weight_vector
+
+    def get_constant(self):
+        return self.bias

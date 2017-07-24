@@ -1,6 +1,7 @@
 import sys
 from sklearn import svm
-from data_reader.binary_input import Instance, load_dataset
+from data_reader.binary_input import Instance
+from data_reader.operations import load_dataset
 from sklearn import metrics
 import learners as learner
 import random
@@ -27,8 +28,8 @@ def main(argv):
 
     # produce simple metrics
     y_predict = clf2.predict(testing_data[0])
-    print(y_predict)
     y_true = testing_data[0].label
+    print(y_predict,y_true)
 
     score = metrics.accuracy_score([y_true], [y_predict])
     print("score = "+str(score))

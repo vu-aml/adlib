@@ -1,14 +1,17 @@
 from typing import List, Dict
 from adversaries.adversary import Adversary
-from data_reader.binary_input import Instance, FeatureVector
+from data_reader.binary_input import Instance, BinaryFeatureVector
 from learners.learner import learner
-from data_reader import operations
 from copy import deepcopy
 from itertools import filterfalse
 
-'''Good Word Attack.
+'''Good Word Attack based on Good Word Attacks on Statistical Spam Filters by 
+   Daniel Lowd and Christopher Meek.
 
 Concept:
+   This algorithm tries to measure the weight of each words in the email lists and 
+   attempts to create a list of n good words. The first-n-words and best-n-words are 
+   two methods of discovering the list.
 '''
 
 class GoodWord(Adversary):
@@ -16,12 +19,17 @@ class GoodWord(Adversary):
     BEST_N = 'best_n'
     FIRST_N = 'first_n'
 
-    def __init__(self, n = 100):
+    def __init__(self, n = 100, attack_model_type = BEST_N):
+        """
+        :param n: number of words needed
+        :param attack_model_type: choose the best-n or first-n algorithm
+        """
         self.learn_model = None
         self.positive_instance = None    # type: Instance
         self.negative_instance = None    # type: Instance
         self.n = n
         self.num_queries = 0
+        self.attack_model_type = attack_model_type
 
     def attack(self, instances: List[Instance]) -> List[Instance]:
         word_indices = self.get_n_words()
@@ -31,8 +39,7 @@ class GoodWord(Adversary):
             transformed_instance = deepcopy(instance)
             if instance.get_label() == learner.positive_classification:
                 transformed_instances.append(
-                    self.add_words_to_instance(transformed_instance, word_indices)
-                )
+                    self.add_words_to_instance(transformed_instance, word_indices))
             else:
                 transformed_instances.append(transformed_instance)
         print('Number of queries issued:', self.num_queries)
@@ -73,7 +80,7 @@ class GoodWord(Adversary):
           self.feature_space.update(instance.get_feature_vector())
 
     # This is a uniform adversarial cost function, should we add a weight parameter?
-    def feature_difference(self, y: FeatureVector, xa: FeatureVector) -> List:
+    def feature_difference(self, y: BinaryFeatureVector, xa: BinaryFeatureVector) -> List:
         y_array = y.get_csr_matrix()
         xa_array = xa.get_csr_matrix()
 

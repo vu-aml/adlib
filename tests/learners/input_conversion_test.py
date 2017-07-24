@@ -5,7 +5,7 @@ from learners import SimpleLearner
 from data_reader import binary_input
 from data_reader.dataset import EmailDataset
 from data_reader.binary_input import Instance
-from data_reader.binary_input import load_dataset
+from data_reader.operations import load_dataset
 from random import seed, shuffle
 
 @pytest.fixture

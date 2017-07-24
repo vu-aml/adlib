@@ -1,24 +1,112 @@
 import json, os, pickle
 from typing import List, Dict
 from scipy.sparse import csr_matrix
-from data_reader.binary_input import Instance, FeatureVector
+from data_reader.binary_input import Instance, BinaryFeatureVector
+from data_reader.real_input import RealFeatureVector
+from data_reader.dataset import EmailDataset
 
 
-def fv_equals(fv1: FeatureVector, fv2: FeatureVector):
-    return fv1.indices == fv2.indices
+def fv_equals(fv1, fv2):
+    if fv1.indices != fv2.indices:
+        return False
+    for i in range(len(fv1.data)):
+        if fv1.data[i] != fv2.data[i]:
+            return False
+    return True
+
+
+def find_centroid(instances: List[Instance]) -> Instance:
+    num_features = instances[0].get_feature_vector().feature_count
+    indices = []
+    data = []
+    for i in range(num_features):
+        sum = 0;
+        for instance in instances:
+            if instance.label == -1:
+                sum += instance.get_feature_vector().get_feature(i)
+        sum /= num_features
+        if sum != 0:
+            indices.append(i)
+            data.append(sum)
+    return RealFeatureVector(num_features, indices, data)
+
+
+#note: we temporarily set instances' label to -1, but we do not use
+#the label in real experiment time!
+def find_max(instances:List[Instance]):
+    num_features = instances[0].get_feature_vector().feature_count
+    indices = []
+    data = []
+    for i in range(num_features):
+        max = 0;
+        for instance in instances:
+            value = instance.get_feature_vector().get_feature(i)
+            if value >= max:
+                max = value
+        if max != 0:
+            indices.append(i)
+            data.append(max)
+    return RealFeatureVector(num_features,indices, data)
+
+
+def find_min(instances:List[Instance]):
+    num_features = instances[0].get_feature_vector().feature_count
+    indices = []
+    data = []
+    for i in range(num_features):
+        min = 1000;
+        for instance in instances:
+            value = instance.get_feature_vector().get_feature(i)
+            if value <= min:
+                min = value
+        if min != 0:
+            indices.append(i)
+            data.append(min)
+    return RealFeatureVector(num_features,indices, data)
+
 
 
 def sparsify(instances: List[Instance]):
+    """
+    Return sparse matrix representation of list of instances
+    :param instances: binary or real value instances
+    :return:
+    """
     num_features = instances[0].get_feature_vector().feature_count
     labels = []
     indptr = [0]
     indices = []
     ind_ = 0
+    data = []
     for instance in instances:
         labels.append(instance.get_label())
         fv = instance.get_feature_vector()
         indptr.append(indptr[ind_] + len(fv.indices))
         ind_ += 1
         indices += fv.indices
-    data = [1] * len(indices)
+        data.extend(instance.get_feature_vector().data)
+    a = len(data)
+    b = len(indices)
     return (labels, csr_matrix((data, indices, indptr), shape=(len(instances), num_features)))
+
+
+def load_dataset(emailData: EmailDataset) -> List[Instance]:
+    """
+    Conversion from dataset object into a list of instances
+    :param emailData:
+    """
+
+    instances = []
+    num_features = emailData.shape[1]
+    indptr = emailData.features.indptr
+    indices = emailData.features.indices
+    data = emailData.features.data
+    for i in range(0, emailData.num_instances):
+        if emailData.binary:
+            tmp_vector = BinaryFeatureVector(num_features, indices[indptr[i]:indptr[i + 1]].tolist())
+        else:
+            instance_data = data[indptr[i]:indptr[i + 1]].tolist()
+            tmp_vector = RealFeatureVector(num_features, indices[indptr[i]:indptr[i + 1]].tolist(),
+                                           instance_data)
+        instances.append(Instance(emailData.labels[i], tmp_vector))
+    return instances

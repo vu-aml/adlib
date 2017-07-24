@@ -1,5 +1,5 @@
 from adversaries.adversary import Adversary
-from data_reader.binary_input import Instance, FeatureVector
+from data_reader.binary_input import Instance, BinaryFeatureVector
 from typing import List, Dict
 from data_reader.dataset import EmailDataset
 from data_reader.binary_input import Instance

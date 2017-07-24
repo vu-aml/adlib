@@ -7,7 +7,7 @@ import adversaries as ad
 import random
 from data_reader.operations import sparsify
 from data_reader.dataset import EmailDataset
-from data_reader.binary_input import load_dataset
+from data_reader.operations import load_dataset
 
 def main(argv):
     """
@@ -25,8 +25,10 @@ def main(argv):
     learning_model = svm.SVC(probability=True, kernel='linear')
 
     # initialize and train RobustLearner
-    clf2 = learner.Retraining(learning_model,training_data, {'attack_alg': ad.SimpleOptimize,
-                                                             'adv_params':{},'iteration_times':None})
+    attacker = ad.SimpleOptimize()
+    clf2 = learner.Retraining(learning_model,training_data, {'attacker': attacker,
+                                                             'adv_params':{},'iteration_times':2})
+    attacker.set_adversarial_params(clf2,training_data)
     clf2.train()
 
     # produce simple metrics

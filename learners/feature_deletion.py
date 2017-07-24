@@ -122,3 +122,9 @@ class FeatureDeletion(learner):
 
     def decision_function(self):
         return self.weight_vector, self.bias
+
+    def get_weight(self):
+        return self.weight_vector
+
+    def get_constant(self):
+        return self.bias

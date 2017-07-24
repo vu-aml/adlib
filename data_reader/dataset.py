@@ -47,10 +47,11 @@ class EmailDataset(Dataset):
     """
 
     def __init__(self, path=None, raw=True, features=None, labels=None,
-                 binary=False, strip_accents_=None, ngram_range_=(1, 1),
+                 binary=True, strip_accents_=None, ngram_range_=(1, 1),
                  max_df_=1.0, min_df_=1, max_features_=1000, num_instances = 0):
         super(EmailDataset, self).__init__()
         self.num_instances = num_instances
+        self.binary = binary
         if path is not None:
             self.base_path = os.path.dirname(path)
         #: Number of instances within the current corpus
@@ -68,7 +69,7 @@ class EmailDataset(Dataset):
                 self.features = self.vectorizer.transform(self.corpus)
             else:
                 self.labels, self.features = \
-                    self._load(path, os.path.splitext(path)[1][1:], binary)
+                    self._load(path, os.path.splitext(path)[1][1:])
         elif path is None and features is not None and labels is not None:
             lbl = type(labels)
             if lbl != np.ndarray and lbl != np.float64 and lbl != int and lbl != float:
@@ -323,8 +324,8 @@ class EmailDataset(Dataset):
         print(type(s_feats))
         print(type(s_labels))
         return (self.__class__(raw=False, features=s_feats[:pivot, :],
-                               labels=s_labels[:pivot],num_instances = pivot),
+                               labels=s_labels[:pivot],num_instances = pivot,binary= self.binary),
                 self.__class__(raw=False, features=s_feats[pivot:, :],
-                               labels=s_labels[pivot:],num_instances = self.num_instances - pivot))
+                               labels=s_labels[pivot:],num_instances = self.num_instances - pivot,binary= self.binary))
         # return (self.Data(s_feats[:pivot, :], s_labels[:pivot]),
         #         self.Data(s_feats[pivot:, :], s_labels[pivot:]))

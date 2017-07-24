@@ -1,6 +1,7 @@
 from typing import List, Dict
 from scipy.sparse import csr_matrix, dok_matrix
 from data_reader.dataset import EmailDataset
+from data_reader.real_input import RealFeatureVector
 
 """
 Created Binary FeatureVector and Instance data structures.
@@ -8,7 +9,7 @@ Support converting the emaildataset object(the csr_matrix) into list of instance
 """
 
 
-class FeatureVector(object):
+class BinaryFeatureVector(object):
     """Feature vector data structure.
 
     Contains sparse representation of boolean features.
@@ -30,7 +31,7 @@ class FeatureVector(object):
         self.indices = feature_indices  # type: List[int]
 
     def copy(self, feature_vector):
-        return FeatureVector(feature_vector.feature_count, feature_vector.indices)
+        return BinaryFeatureVector(feature_vector.feature_count, feature_vector.indices)
 
     def __iter__(self):
         return iter(self.indices)
@@ -80,7 +81,7 @@ class FeatureVector(object):
                 return
             else:
                 self.indices.append(index)
-                self.indices.sort()
+                self.indices.sort(reverse=True)
                 self.indptr[1] += 1
                 self.data.append(1)
 
@@ -96,9 +97,11 @@ class FeatureVector(object):
                 """
         if index in self.indices:
             self.indices.remove(index)
+            self.data.remove(1)
         else:
+            self.data.append(1)
             self.indices.append(index)
-            self.indices.sort()
+            self.indices.sort(reverse=True)
 
     def get_csr_matrix(self) -> csr_matrix:
         """Return feature vector represented by sparse matrix.
@@ -125,16 +128,16 @@ class Instance(object):
 
         """
 
-    def __init__(self, label: int, feature_vector: FeatureVector):
+    def __init__(self, label: int, feature_vector):
         """Create an instance from an existing feature vector.
 
         Args:
                 label (int): Classification (-1/1).
-                feature_vector (FeatureVector): Underlying sparse feature representation.
+                feature_vector (BinaryFeatureVector): Underlying sparse feature representation.
 
                 """
         self.label = label  # type: int
-        self.feature_vector = feature_vector  # type: FeatureVector
+        self.feature_vector = feature_vector  # type: BinaryFeatureVector
 
     def get_label(self):
         return self.label
@@ -142,37 +145,50 @@ class Instance(object):
     def set_label(self, val):
         self.label = val
 
-    def get_feature_vector(self) -> FeatureVector:
+    def get_feature_vector(self):
         """Return underlying feature vector.
 
                 """
         return self.feature_vector
 
-    # cost of altering feature at given index
-    def get_feature_cost(self, cost_vector, index):
-        if cost_vector and index in cost_vector:
-            return cost_vector[index]
-        return 1
 
-    def get_feature_vector_cost(self, goal_vector, cost_vector):
-        feature_difference = self.get_feature_vector().feature_difference(goal_vector)
+    def get_feature_count(self):
+        """
+        :return: Number of features in the underlying feature vector
+        """
+        return self.feature_vector.get_feature_count()
+
+
+    def get_csr_matrix(self):
+        """
+        :return: csr_matrix of the underlying feature vector
+        """
+        return self.feature_vector.get_csr_matrix()
+
+
+    def get_feature_vector_cost(self, goal_instance):
+        """
+           Get the feature differences between two instances.
+           Sum all the values up.
+        :param goal_vector:
+        :return:  a val indicating the differences
+        """
+        feature_difference = self.get_feature_vector().feature_difference(goal_instance.get_feature_vector())
         sum = 0
-        for index in feature_difference:
-            sum += self.get_feature_cost(cost_vector, index)
+        for index in range(len(feature_difference)):
+            sum += abs(feature_difference[index])
         return sum
 
 
-def load_dataset(emailData: EmailDataset) -> List[Instance]:
-    """
-    Conversion from dataset object into a list of instances
-    :param emailData:
-    :return: a list of binary representation of the email data
-    """
-    instances = []
-    num_features = emailData.shape[1]
-    indptr = emailData.features.indptr
-    indices = emailData.features.indices
-    for i in range(0, emailData.num_instances):
-        tmp_vector = FeatureVector(num_features, indices[indptr[i]:indptr[i + 1]].tolist())
-        instances.append(Instance(emailData.labels[i], tmp_vector))
-    return instances
+    def flip(self,index,value):
+        """
+          Chnange the bit at given index
+        :param index:
+        :param value:
+        :return:
+        """
+        if type(self.get_feature_vector()) == RealFeatureVector:
+            self.get_feature_vector().flip_val(index,value)
+        else:
+            self.get_feature_vector().change_bit(index,value)
+

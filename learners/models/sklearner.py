@@ -104,7 +104,7 @@ class Model(BaseModel):
             probs = self.learner.predict_log_proba(instances.features)
         return probs
 
-    def decision_function_adversary(self, instances):
+    def decision_function_(self, instances):
         """Use the model to determine the decision function for each instance.
 
         Args:

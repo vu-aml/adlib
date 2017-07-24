@@ -2,7 +2,8 @@ from sklearn import svm
 import pytest
 from learners import learner, SimpleLearner
 from data_reader.dataset import EmailDataset
-from data_reader.binary_input import Instance,FeatureVector,load_dataset
+from data_reader.binary_input import Instance,BinaryFeatureVector
+from data_reader.operations import load_dataset
 from data_reader.operations import sparsify
 from adversaries.binary_greedy import BinaryGreedy
 

@@ -4,6 +4,7 @@ from scipy.sparse import csr_matrix
 from data_reader.binary_input import Instance, BinaryFeatureVector
 from data_reader.real_input import RealFeatureVector
 from data_reader.dataset import EmailDataset
+import math
 
 
 def fv_equals(fv1, fv2):
@@ -20,7 +21,7 @@ def find_centroid(instances: List[Instance]) -> Instance:
     indices = []
     data = []
     for i in range(num_features):
-        sum = 0;
+        sum = 0
         for instance in instances:
             if instance.label == -1:
                 sum += instance.get_feature_vector().get_feature(i)
@@ -31,14 +32,12 @@ def find_centroid(instances: List[Instance]) -> Instance:
     return RealFeatureVector(num_features, indices, data)
 
 
-#note: we temporarily set instances' label to -1, but we do not use
-#the label in real experiment time!
-def find_max(instances:List[Instance]):
+def find_max(instances: List[Instance]):
     num_features = instances[0].get_feature_vector().feature_count
     indices = []
     data = []
     for i in range(num_features):
-        max = 0;
+        max = 0
         for instance in instances:
             value = instance.get_feature_vector().get_feature(i)
             if value >= max:
@@ -46,15 +45,15 @@ def find_max(instances:List[Instance]):
         if max != 0:
             indices.append(i)
             data.append(max)
-    return RealFeatureVector(num_features,indices, data)
+    return RealFeatureVector(num_features, indices, data)
 
 
-def find_min(instances:List[Instance]):
+def find_min(instances: List[Instance]):
     num_features = instances[0].get_feature_vector().feature_count
     indices = []
     data = []
     for i in range(num_features):
-        min = 1000;
+        min = 1000
         for instance in instances:
             value = instance.get_feature_vector().get_feature(i)
             if value <= min:
@@ -62,8 +61,7 @@ def find_min(instances:List[Instance]):
         if min != 0:
             indices.append(i)
             data.append(min)
-    return RealFeatureVector(num_features,indices, data)
-
+    return RealFeatureVector(num_features, indices, data)
 
 
 def sparsify(instances: List[Instance]):
@@ -110,3 +108,24 @@ def load_dataset(emailData: EmailDataset) -> List[Instance]:
                                            instance_data)
         instances.append(Instance(emailData.labels[i], tmp_vector))
     return instances
+
+
+def mean(numbers):
+    return sum(numbers) / float(len(numbers))
+
+
+def stdev(numbers):
+    means = mean(numbers)
+    variance = sum([pow(x - means, 2) for x in numbers]) / float(len(numbers) - 1)
+    return math.sqrt(variance)
+
+
+def summarize(instances):
+    summaries = []
+    for i in range(instances[0].get_feature_count()):
+        data = []
+        for instance in instances:
+            data.append(instance.get_feature_vector().get_feature(i))
+        summaries.append((mean(data),stdev(data)))
+    return summaries
+

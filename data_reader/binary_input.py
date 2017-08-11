@@ -97,10 +97,12 @@ class BinaryFeatureVector(object):
                 """
         if index in self.indices:
             self.indices.remove(index)
+            self.indptr[1] -= 1
             self.data.remove(1)
         else:
             self.data.append(1)
             self.indices.append(index)
+            self.indptr[1] += 1
             self.indices.sort(reverse=True)
 
     def get_csr_matrix(self) -> csr_matrix:

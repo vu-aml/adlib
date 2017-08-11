@@ -66,6 +66,7 @@ class RealFeatureVector(object):
                 return
             self.indices.append(index)
             self.indices.sort(reverse=True)
+            self.indptr[1] += 1
             for i in range(len(self.indices)):
                 if index == self.indices[i]:
                     self.data.insert(i, value)
@@ -78,6 +79,7 @@ class RealFeatureVector(object):
                         return
                     else:
                         self.indices.remove(index)
+                        self.indptr[1] -= 1
                         self.data.pop(i)
                         return
 

@@ -1,5 +1,4 @@
-from sklearn.naive_bayes import BernoulliNB
-from typing import Dict, List
+from sklearn.naive_bayes import GaussianNB
 import pytest
 import numpy as np
 from learners import learner, SimpleLearner
@@ -13,22 +12,11 @@ from copy import deepcopy
 
 @pytest.fixture
 def data():
-    dataset = EmailDataset(path='./data_reader/data/test/100_instance_debug.csv', raw=False)
+    dataset = EmailDataset(path='./data_reader/data/test/test_data', binary=False, raw=True)
     training_, testing_ = dataset.split({'train': 60, 'test': 40})
     training_data = load_dataset(training_)
     testing_data = load_dataset(testing_)
     return {'training_data': training_data, 'testing_data': testing_data}
-
-
-@pytest.fixture
-def training_data(data):
-    return data['training_data']
-
-
-@pytest.fixture
-def testing_data(data):
-    return data['testing_data']
-
 
 @pytest.fixture
 # set the parameters according to the experiments provided
@@ -36,7 +24,7 @@ def testing_data(data):
 # Uc = [[1,-1],[-10,1]]
 # Vi = 0
 def cost_sensitive():
-    adversary = CostSensitive()
+    adversary = CostSensitive(binary= False)
     param = {}
     param['Ua'] = [[0, 20], [0, 0]]
     param['Vi'] = 0
@@ -47,8 +35,8 @@ def cost_sensitive():
 
 @pytest.fixture
 def NB_learner(data):
-    learning_model = BernoulliNB()
-    learner = SimpleLearner(learning_model, data['training_data'])
+    learner_model = GaussianNB()
+    learner = SimpleLearner(model= learner_model,training_instances=data['training_data'])
     learner.train()
     return learner
 
@@ -66,7 +54,8 @@ def test_gap_negative_instances(cost_sensitive,NB_learner,data):
     sample = next( (x for x in data['testing_data'] if x.get_label() ==
                     learner.negative_classification),None)
     #gap(x) <= 0 for all negative_classified instances
-    assert cost_sensitive.gap(sample) <= 0
+    result = cost_sensitive.gap(sample)
+    assert result <= 0
 
 def test_find_MCC(cost_sensitive,NB_learner,data):
     cost_sensitive.set_adversarial_params(NB_learner, data['training_data'])
@@ -84,7 +73,7 @@ def test_A_x_(cost_sensitive,NB_learner,data):
     sample = next((x for x in data['testing_data'] if x.get_label() ==
                    learner.positive_classification), None)
     result = deepcopy(sample)
-    #cost_sensitive.a(result)
+    cost_sensitive.a(result)
     assert result.label == sample.label
 
 

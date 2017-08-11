@@ -46,7 +46,8 @@ class SimpleLearner(learner):
             self.model = self.set_model(params['model'])
 
     def get_weight(self):
-        return self.model.learner.coef_.toarray()[0]
+        weight= self.model.learner.coef_[0]
+        return weight
 
     def get_constant(self):
         return self.model.learner.intercept_

@@ -36,7 +36,7 @@ class Model(BaseModel):
         """
         if isinstance(instances, List):
              (y, X) = sparsify(instances)
-             self.learner.fit(X,y)
+             self.learner.fit(X.toarray() ,y)
         else:
              self.learner.fit(instances.data[0], instances.data[1])
 
@@ -56,7 +56,7 @@ class Model(BaseModel):
             (y, X) = sparsify(instances)
             predictions = self.learner.predict(X)
         elif type(instances) == Instance:
-            predictions = self.learner.predict(instances.get_feature_vector().get_csr_matrix())[0]
+            predictions = self.learner.predict(instances.get_feature_vector().get_csr_matrix().toarray())[0]
         else:
             predictions = self.learner.predict(instances.features)
         return predictions
@@ -99,7 +99,8 @@ class Model(BaseModel):
             full_probs = self.learner.predict_log_proba(X)
             probs = [x[0] for x in full_probs]
         elif type(instances) == Instance:
-            probs = self.learner.predict_log_proba(instances.get_feature_vector().get_csr_matrix())
+            matrix = instances.get_feature_vector().get_csr_matrix()
+            probs = self.learner.predict_log_proba(matrix.toarray())
         else:
             probs = self.learner.predict_log_proba(instances.features)
         return probs

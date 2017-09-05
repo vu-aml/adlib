@@ -12,7 +12,7 @@ import adversaries as ad
 from sklearn import metrics
 
 
-dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/full',binary= False,raw=True)
+dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400',binary= False,raw=True)
 # set a seed so we get the same output every time
 seed(1)
 training_, testing_ = dataset.split({'train': 60, 'test': 40})

@@ -121,6 +121,11 @@ class AdversaryAware(object):
         self.new_list = new_list
 
     def posterior_proba(self,x):
+        """
+        Find the posterior proba given an instance x.
+        :param x:
+        :return:
+        """
         X = x.get_feature_vector().get_csr_matrix().toarray()
         check_array(X)
         check_is_fitted(self.learner.model.learner, "classes_")

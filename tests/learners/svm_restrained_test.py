@@ -7,7 +7,7 @@ from data_reader.dataset import EmailDataset
 
 @pytest.fixture
 def data():
-    dataset = EmailDataset(path='./data_reader/data/test/100_instance_debug.csv', raw=False)
+    dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400',binary= False,raw=True)
     # set a seed so we get the same output every time
     seed(1)
     training_data, testing_data = dataset.split({'train': 60, 'test': 40})

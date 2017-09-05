@@ -9,7 +9,7 @@ from data_reader.operations import load_dataset
 from adversaries.restrained_attack import Restrained
 from adversaries.coordinate_greedy import CoordinateGreedy
 
-dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/full',binary= False,raw=True)
+dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400',binary= False,raw=True)
 training_, testing_ = dataset.split({'train': 60, 'test': 40})
 training_data = load_dataset(training_)
 testing_data = load_dataset(testing_)

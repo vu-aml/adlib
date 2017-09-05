@@ -113,7 +113,7 @@ class CostSensitive(Adversary):
     def find_x_domain(self,i):
         '''
         :param i: the index
-        :return: a list that specifies the
+        :return: list of all the possible values in the x domain
         '''
         if self.binary:
             return [0,1]
@@ -165,7 +165,7 @@ class CostSensitive(Adversary):
         return: possible
         '''
         W = self.gap(x)  # discretized
-        minCost, minList = self.find_mcc(self.num_features - 1, W, x)
+        minCost, minList = self.find_mcc(30, W, x)
         if minCost < self.delta_Ua:
             for i, xi_prime in minList:
                 x.flip(i, xi_prime)
@@ -216,3 +216,5 @@ class CostSensitive(Adversary):
                     minCost = curCost
                     minList = curList
         return minCost, minList
+
+

@@ -12,7 +12,7 @@ from copy import deepcopy
 
 @pytest.fixture
 def data():
-    dataset = EmailDataset(path='./data_reader/data/test/test_data', binary=False, raw=True)
+    dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/full', binary=False, raw=True)
     training_, testing_ = dataset.split({'train': 60, 'test': 40})
     training_data = load_dataset(training_)
     testing_data = load_dataset(testing_)

@@ -75,7 +75,7 @@ class Model(BaseModel):
         """
         if isinstance(instances, List):
             (y, X) = sparsify(instances)
-            full_probs = self.learner.predict_proba(X)
+            full_probs = self.learner.predict_proba(X.toarray())
             probs = [x[0] for x in full_probs]
         elif type(instances) == Instance:
             probs = self.learner.predict_proba(instances.get_feature_vector().get_csr_matrix())

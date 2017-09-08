@@ -25,9 +25,8 @@ def main(argv):
     learning_model = svm.SVC(probability=True, kernel='linear')
 
     # initialize and train RobustLearner
-    attacker = ad.SimpleOptimize()
-    clf2 = learner.Retraining(learning_model,training_data, {'attacker': attacker,
-                                                             'adv_params':{},'iteration_times':2})
+    attacker = ad.BinaryGreedy()
+    clf2 = learner.Retraining(learning_model,training_data,attacker=attacker)
     attacker.set_adversarial_params(clf2,training_data)
     clf2.train()
 

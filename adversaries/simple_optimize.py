@@ -60,11 +60,10 @@ class SimpleOptimize(Adversary):
             orig_prob = self.learn_model.predict_proba([instance])[0]
             new_instance = deepcopy(instance)
             new_instance.get_feature_vector().flip_bit(i)
-            change += 1
             new_prob = self.learn_model.predict_proba([new_instance])[0]
-            if new_prob >= (orig_prob - exp(self.lambda_val)):
+            if new_prob < (orig_prob - exp(self.lambda_val)):
                 instance.get_feature_vector().flip_bit(i)
-                change -= 1
+                change += 1
             if change > self.max_change:
                 break
         return instance

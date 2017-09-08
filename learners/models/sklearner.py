@@ -54,7 +54,7 @@ class Model(BaseModel):
         """
         if isinstance(instances, List):
             (y, X) = sparsify(instances)
-            predictions = self.learner.predict(X)
+            predictions = self.learner.predict(X.toarray())
         elif type(instances) == Instance:
             predictions = self.learner.predict(instances.get_feature_vector().get_csr_matrix().toarray())[0]
         else:

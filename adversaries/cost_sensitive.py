@@ -58,6 +58,7 @@ class CostSensitive(Adversary):
             self.delta_Ua = self.Ua[0][1] - self.Ua[1][1]
         self.learn_model = learner  # type: Classifier
         self.scenario = scenario
+        self.mcc_memo = {}
 
     def attack(self, instances) -> List[Instance]:
         transformed_instances = []
@@ -212,4 +213,4 @@ class CostSensitive(Adversary):
                     minCost = curCost
                     minList = curList
         self.mcc_memo[(i, w)] = (minCost, minList)
-        return minCost, minList   return minCost, minList
+        return minCost, minList

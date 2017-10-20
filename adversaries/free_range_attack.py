@@ -19,7 +19,7 @@ Concept: A generalized attacker algorithm that attempts to move the instances' f
 
 
 class FreeRange(Adversary):
-    def __init__(self, f_attack=0.5, xj_min=0.0, xj_max=0.0, type = 'random',binary=True, learner=None):
+    def __init__(self, f_attack=0.5, xj_min=0.0, xj_max=0.0, type = 'random',binary=False, learner=None):
         """
 
         :param f_attack:  float (between 0 and 1),determining the agressiveness

@@ -23,7 +23,7 @@ def main(argv):
 
     # initialize and train RobustLearner
     clf2 = learner.FeatureDeletion(training_data,{'hinge_loss_multiplier': 1,
-                                    'max_feature_deletion': 0})
+                                    'max_feature_deletion': 30})
     clf2.train()
 
     # produce simple metrics

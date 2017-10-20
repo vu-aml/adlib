@@ -139,7 +139,7 @@ class Instance(object):
 
                 """
         self.label = label  # type: int
-        self.feature_vector = feature_vector  # type: BinaryFeatureVector
+        self.feature_vector = feature_vector
 
     def get_label(self):
         return self.label

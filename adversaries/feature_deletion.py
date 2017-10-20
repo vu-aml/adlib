@@ -3,6 +3,7 @@ from data_reader.binary_input import Instance
 from typing import List, Dict
 import numpy as np
 from copy import deepcopy
+import matplotlib.pyplot as plt
 
 """
   Based on Nightmare at Test Time: Robust Learning by Feature Deletion by Amir Globerson
@@ -13,7 +14,7 @@ from copy import deepcopy
 """
 
 class AdversaryFeatureDeletion(Adversary):
-    def __init__(self, learner=None, num_deletion=0, all_malicious=False):
+    def __init__(self, learner=None, num_deletion=100, all_malicious=True):
         """
         :param learner: Learner from learners
         :param num_deletion: the max number that will be deleted in the attack
@@ -48,6 +49,10 @@ class AdversaryFeatureDeletion(Adversary):
         else:
             self.del_index = np.flipud(np.argsort(np.absolute(self.weight_vector)))[:self.num_deletion]
 
+        # print("checking feature deletion attacker:")
+        # print(self.del_index)
+        # for i in self.del_index:
+        #     print("the number {0} feature weight is {1}".format(i, self.weight_vector[i]))
         return [self.change_instance(ins) for ins in instances]
 
     def set_params(self, params: Dict):

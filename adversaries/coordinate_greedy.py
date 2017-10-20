@@ -11,15 +11,15 @@ from copy import deepcopy
    Based on A General Retraning Framwork for Scalable Adversarial Classification
    paper by Bo Li, Yevgeniy Vorobeychik and Xinyun Chen.
 
-   Concept: the attacker change the training data instances by iteratively choose a 
-            feature, and greedily update this feature by minimizing transform cost. 
-            Update the list of training data.              
+   Concept: the attacker change the training data instances by iteratively choose a
+            feature, and greedily update this feature by minimizing transform cost.
+            Update the list of training data.
 """
 
 
 class CoordinateGreedy(Adversary):
-    def __init__(self, learner=None, max_change=1000,
-                 lambda_val=0.05, epsilon=0.0002, step_size=0.05):
+    def __init__(self, learner=None, max_change=100,
+                 lambda_val=0.05, epsilon=0.0002, step_size=1):
         """
         :param learner: Learner(from learners)
         :param max_change: max times allowed to change the feature
@@ -61,9 +61,14 @@ class CoordinateGreedy(Adversary):
         transformed_instances = []
         for instance in Instances:
             if instance.label > 0:
-                transformed_instances.append(self.coordinate_greedy(instance))
+                 newx = self.coordinate_greedy(instance).get_csr_matrix().toarray().tolist()[0]
+                 oldx = instance.get_csr_matrix().toarray().tolist()[0]
+                 # for i in range(len(oldx)):
+                 #     if abs(newx[i]-oldx[i]) > 0.005:
+                 #         print("index {} has changed by {}".format(i,abs(newx[i]-oldx[i]) ))
+                 transformed_instances.append(self.coordinate_greedy(instance))
             else:
-                transformed_instances.append(instance)
+              transformed_instances.append(instance)
         return transformed_instances
 
     def coordinate_greedy(self, instance: Instance) -> Instance:
@@ -84,6 +89,7 @@ class CoordinateGreedy(Adversary):
         x = xk = instance.get_csr_matrix().toarray()[0]
         no_improve_count = 0
         shuffle(indices)
+        count = 0
         for i in indices:
 
             xkplus1 = self.minimize_transform(xk, x, i)
@@ -100,14 +106,12 @@ class CoordinateGreedy(Adversary):
                     break
             if no_improve_count > self.max_change:
                 break
+            count += 1
         mat_indices = [x for x in range(0, self.num_features) if xk[x] != 0]
         mat_data = [xk[x] for x in range(0, self.num_features) if xk[x] != 0]
         new_instance = Instance(-1, RealFeatureVector(self.num_features, mat_indices, mat_data))
 
-        if self.learn_model.predict(new_instance) == self.learn_model.positive_classification:
-            return instance
-        else:
-            return new_instance
+        return new_instance
 
     def minimize_transform(self, xi: np.array, x: np.array, i):
         xk = np.copy(xi)

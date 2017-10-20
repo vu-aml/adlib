@@ -11,7 +11,7 @@ from copy import deepcopy
 
 
 class BinaryGreedy(Adversary):
-    def __init__(self, learner=None, max_change = 100,
+    def __init__(self, learner=None, max_change = 200,
                  lambda_val=0.05, epsilon=0.0002, step_size=0.05):
         """
         :param learner: Learner(from learners)

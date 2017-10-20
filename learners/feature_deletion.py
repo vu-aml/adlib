@@ -11,7 +11,7 @@ class FeatureDeletion(learner):
 
         learner.__init__(self)
         self.weight_vector = None  # type: np.array(shape=(1))
-        self.num_features = 0  # type: int, this is the number of features in
+        self.num_features = 0  # type: int
         self.hinge_loss_multiplier = 0.5  # type: float
         self.max_feature_deletion = 30  # type: int
         self.bias = 0  # type: int
@@ -51,36 +51,29 @@ class FeatureDeletion(learner):
             y, X = y.reshape((num_instances, 1)), X
 
         C = self.hinge_loss_multiplier
+        print("current C value: {}".format(C))
+        print("current K: {}".format(self.max_feature_deletion))
+        print(X.shape)
         K = self.max_feature_deletion
 
-        i_ones, i_zeroes, j_ones = np.ones(num_instances), \
-                                   np.zeros(num_instances), np.ones(self.num_features)
         w = Variable(self.num_features)  # weight vector
         b = Variable()  # bias term
         t = Variable(num_instances)
         z = Variable(num_instances)
         v = Variable(num_instances, self.num_features)
-        # loss function
-        loss_elemwise = [pos(1- y[i] * (X[i] * w + b)) for i in range(num_instances)]
-        loss = sum_entries(loss_elemwise[0])
-        # add constraints
-        constraints = [t >= K * z + sum_entries(v, axis=1)]
 
-        # add constraints vi >= 0
-        constraints.append(v > 0)
+        loss = sum_entries(pos(1 - mul_elemwise(y, X * w + b) + t))
 
-        # add constraints zi + vi >= y.dot(X) * w
-        constraints.extend([v[i, :] +
-                            z[i] * np.ones(
-                                self.num_features).reshape(1, self.num_features)
-                            >= (mul_elemwise(y[i] *
-                                             X[i].reshape(self.num_features, 1), w)).T
-                            for i in range(num_instances)])
-
+        constraints = [t >= K * z + sum_entries(v, axis=1),
+                       v >= 0]
+        constraints.extend([z[i] + v[i, :] >=
+                            y[i] * mul_elemwise(X[i], w).T for i in range(num_instances)])
         obj = Minimize(0.5 * (sum_squares(w)) + C * loss)
 
         prob = Problem(obj, constraints)
-        prob.solve()
+        prob.solve(solver=SCS)
+        # print("training completed, here is the learned weight vector:")
+
         # weight_vector is of shape (1, self.num_features)
         self.weight_vector = [np.array(w.value).T][0]
         self.bias = b.value

@@ -6,8 +6,6 @@ from data_reader.operations import load_dataset
 from adversaries.coordinate_greedy import CoordinateGreedy
 from sklearn import metrics
 
-# Failing
-
 def summary(y_pred, y_true):
     if len(y_pred) != len(y_true):
         raise ValueError("lengths of two label lists do not match")
@@ -26,7 +24,7 @@ def get_evasion_set(x_test, y_pred):
 
 
 dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400',binary= False,raw=True)
-training_, testing_ = dataset.split({'train': 60, 'test': 40})
+training_, testing_ = dataset.split(0.6)
 training_data = load_dataset(training_)
 testing_data = load_dataset(testing_)
 test_true_label = [x.label for x in testing_data]

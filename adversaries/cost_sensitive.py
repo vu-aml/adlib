@@ -1,4 +1,3 @@
-
 from adversaries.adversary import Adversary
 from typing import List, Dict
 from data_reader.binary_input import Instance
@@ -58,15 +57,19 @@ class CostSensitive(Adversary):
             self.delta_Ua = self.Ua[0][1] - self.Ua[1][1]
         self.learn_model = learner  # type: Classifier
         self.scenario = scenario
-        self.mcc_memo = {}
 
     def attack(self, instances) -> List[Instance]:
         transformed_instances = []
+        asd = 0
         for instance in instances:
+            print(asd)
+            asd += 1
             transformed_instance = deepcopy(instance)
             if instance.get_label() == learner.positive_classification:
+                print("transform")
                 transformed_instances.append(self.a(transformed_instance))
             else:
+                print("intact")
                 transformed_instances.append(transformed_instance)
         return transformed_instances
 
@@ -92,6 +95,7 @@ class CostSensitive(Adversary):
         return params
 
     def set_adversarial_params(self, learner, training_instances):
+        print("still in set_adv_params")
         self.learn_model = learner
         self.training_instances = training_instances
         self.num_features = training_instances[0].get_feature_count()
@@ -161,6 +165,7 @@ class CostSensitive(Adversary):
         return: possible
         '''
         W = self.gap(x)  # discretized
+        print("A is being repeated")
         minCost, minList = self.find_mcc(30, W, x)
         if minCost < self.delta_Ua:
             for i, xi_prime in minList:
@@ -192,12 +197,13 @@ class CostSensitive(Adversary):
                  2) a list of pairs of original feature indices and their
                  corresponding transformations
          '''
+        print("w={0}".format(w))
+        print("Xdomain {0}".format(self.find_x_domain(i)))
+        print("i is {0}".format(i))
         if w <= 0:
             return 0, []
-        if i < 0:
-            return 0, []
-        if (i, w) in self.mcc_memo:
-            return self.mcc_memo[(i, w)]
+        if i <= 0:
+            return float("inf"), []
         minCost = float('inf')
         minList = []
         xdomain = self.find_x_domain(i)
@@ -212,5 +218,4 @@ class CostSensitive(Adversary):
                 if curCost < minCost:
                     minCost = curCost
                     minList = curList
-        self.mcc_memo[(i, w)] = (minCost, minList)
         return minCost, minList

@@ -1,5 +1,6 @@
 import os
 from sklearn.feature_extraction.text import TfidfVectorizer
+import sklearn.utils
 import scipy
 from scipy.sparse import csr_matrix, dok_matrix, find
 import sklearn
@@ -296,36 +297,37 @@ class EmailDataset(Dataset):
             raise AttributeError('The given load format is not currently \
                                  supported.')
 
-    def split(self, split={'test': 50, 'train': 50}):
+    def split(self, fraction=0.5):
         """Split the dataset into test and train sets using
             `sklearn.utils.shuffle()`.
 
         Args:
-            split (Dict, optional): A dictionary specifying the splits between
-                test and trainset.  The values can be floats or ints.
-
+            fraction (float/int, optional): fraction of training data in split
         Returns:
             trainset, testset (namedtuple, namedtuple): Split tuples containing
                 share of shuffled data instances.
 
         """
-        splits = list(split.values())
-        for s in splits:
-            if s < 0:
-                raise ValueError('Split percentages must be positive values')
-        # data = self.features.toarray()
-        frac = 0
-        if splits[0] < 1.0:
-            frac = splits[0]
-        else:
-            frac = splits[0]/100
-        pivot = int(self.__len__()*frac)
+        if fraction < 0:
+            raise ValueError('Split percentages must be positive values')
+        if fraction > 1.0:
+            fraction /= 100
+        pivot = int(self.__len__()*fraction)
         s_feats, s_labels = sklearn.utils.shuffle(self.features, self.labels)
-        print(type(s_feats))
-        print(type(s_labels))
         return (self.__class__(raw=False, features=s_feats[:pivot, :],
-                               labels=s_labels[:pivot],num_instances = pivot,binary= self.binary),
+                               labels=s_labels[:pivot],num_instances=pivot,binary=self.binary),
                 self.__class__(raw=False, features=s_feats[pivot:, :],
-                               labels=s_labels[pivot:],num_instances = self.num_instances - pivot,binary= self.binary))
-        # return (self.Data(s_feats[:pivot, :], s_labels[:pivot]),
-        #         self.Data(s_feats[pivot:, :], s_labels[pivot:]))
+                               labels=s_labels[pivot:],num_instances=self.num_instances - pivot,binary=self.binary))
+
+    def report(self):
+        """
+        return a string that contains information about data set shape, size
+        and positive/negative instance count and percentage
+        """
+        s = "number of instances: {0}\n".format(self.num_instances)
+        s += "instance feature length: {0}\n".format(self.shape[1])
+        pos_cnt = self.labels.tolist().count(1)
+        neg_cnt = self.labels.tolist().count(-1)
+        s += "positive instance count and percentage: {0}, {1}%\n".format(pos_cnt,100*pos_cnt/len(self.labels))
+        s += "negative instance count and percentage: {0}, {1}%\n".format(neg_cnt,100*neg_cnt/len(self.labels))
+        return s

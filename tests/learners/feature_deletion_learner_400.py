@@ -28,7 +28,7 @@ def get_evasion_set(x_test, y_pred):
     return ls, [x.label for x in ls]
 
 dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400',binary= False,raw=True)
-training_, testing_ = dataset.split({'train': 60, 'test': 40})
+training_, testing_ = dataset.split({'train': 6, 'test': 94})
 training_data = load_dataset(training_)
 testing_data = load_dataset(testing_)
 test_true_label = [x.label for x in testing_data]

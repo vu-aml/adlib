@@ -71,12 +71,17 @@ class FeatureDeletion(learner):
         obj = Minimize(0.5 * (sum_squares(w)) + C * loss)
 
         prob = Problem(obj, constraints)
-        prob.solve(solver=SCS)
+        prob.solve(solver=ECOS)
         # print("training completed, here is the learned weight vector:")
 
         # weight_vector is of shape (1, self.num_features)
-        self.weight_vector = [np.array(w.value).T][0]
+        self.weight_vector = [np.array(w.value).T][0][0]
         self.bias = b.value
+        print("final weight vector shape: {}".format(self.weight_vector.shape))
+        top_idx = [i for i in np.argsort(np.absolute(self.weight_vector))[-10:]]
+        print("indices with top 10 absolute value:")
+        for i in top_idx:
+            print("index No.{} with value {}".format(i, self.weight_vector[i]))
 
     def predict(self, instances):
         """
@@ -111,7 +116,7 @@ class FeatureDeletion(learner):
                          i.e. [[1, 2, ...]]
         :return: float
         '''
-        return self.weight_vector.dot(features.T)[0][0] + self.bias
+        return self.weight_vector.dot(features.T)[0] + self.bias
 
     def decision_function(self):
         return self.weight_vector, self.bias

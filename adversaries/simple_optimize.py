@@ -16,12 +16,12 @@ Concept:
 
 
 class SimpleOptimize(Adversary):
-    def __init__(self, lambda_val=-100, max_change=1000, learner=None):
+    def __init__(self, lambda_val=-100, max_change=1000, learn_model=None):
         Adversary.__init__(self)
         self.lambda_val = lambda_val  # type: float
         self.max_change = max_change  # type: float
         self.num_features = None  # type: int
-        self.learn_model = learner
+        self.learn_model = learn_model
 
     def attack(self, instances: List[Instance]) -> List[Instance]:
         transformed_instances = []

@@ -31,6 +31,7 @@ class SVMRestrained(learner):
         self.weight_vector = None
         self.bias = 0
         self.c_delta = 0.5
+        self.c = 1
         if params is not None:
             self.set_params(params)
         if training_instances is not None:
@@ -39,16 +40,17 @@ class SVMRestrained(learner):
     def set_params(self, params: Dict):
         if 'c_delta' in params:
             self.c_delta = params['c_delta']
+        if 'c' in params:
+            self.c = params['c']
 
     def get_available_params(self) -> Dict:
-        params = {'c_delta': self.c_delta}
+        params = {'c_delta': self.c_delta, 'c': self.c}
         return params
 
     def train(self):
         '''Optimize the asymmetric dual problem and return optimal w and b.'''
         if not self.training_instances:
             raise ValueError('Must set training instances before training')
-        c = 10
 
         if isinstance(self.training_instances, List):
             y, X = sparsify(self.training_instances)
@@ -87,15 +89,16 @@ class SVMRestrained(learner):
                        v >= 0]
 
         # objective
-        obj = cvx.Minimize(0.5 * (cvx.norm(w)) + c * cvx.sum_entries(xi0))
+        obj = cvx.Minimize(0.5 * (cvx.norm(w)) + self.c * cvx.sum_entries(xi0))
         prob = cvx.Problem(obj, constraints)
 
         if OPT_INSTALLED:
-            prob.solve(solver='CVXOPT')
+            prob.solve(solver='MOSEK')
         else:
             prob.solve()
 
-        self.weight_vector = [np.array(w.value).T][0]
+        self.weight_vector = np.asarray(w.value.T)[0]
+        print("weight vec calculated in svm restrained learner: {}".format(self.weight_vector.shape))
         self.bias = b.value
 
     def predict(self, instances):
@@ -127,7 +130,7 @@ class SVMRestrained(learner):
         return predictions
 
     def predict_instance(self, features: np.array):
-        return self.weight_vector.dot(features.T)[0][0] + self.bias
+        return self.weight_vector.dot(features.T)[0] + self.bias
 
     def predict_proba(self, instances):
 
@@ -137,6 +140,7 @@ class SVMRestrained(learner):
         return self.weight_vector, self.bias
 
     def get_weight(self):
+        print("weight vec shape returned from Restrained learner: {}".format(self.weight_vector.shape))
         return self.weight_vector
 
     def get_constant(self):

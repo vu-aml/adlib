@@ -18,8 +18,8 @@ from copy import deepcopy
 
 
 class CoordinateGreedy(Adversary):
-    def __init__(self, learner=None, max_change=100,
-                 lambda_val=0.05, epsilon=0.0002, step_size=1):
+    def __init__(self, learn_model=None, max_change=100,
+                 lambda_val=0.01, epsilon=0.0002, step_size=1):
         """
         :param learner: Learner(from learners)
         :param max_change: max times allowed to change the feature
@@ -32,7 +32,7 @@ class CoordinateGreedy(Adversary):
         self.epsilon = epsilon
         self.step_size = step_size
         self.num_features = 0
-        self.learn_model = learner
+        self.learn_model = learn_model
         self.max_change = max_change
         if self.learn_model is not None:
             self.weight_vector = self.learn_model.get_weight()
@@ -43,7 +43,15 @@ class CoordinateGreedy(Adversary):
         raise NotImplementedError
 
     def set_params(self, params: Dict):
-        raise NotImplementedError
+        if 'max_change' in params.keys():
+            self.max_change = params['max_change']
+        if 'lambda_val' in params.keys():
+            self.lambda_val = params['lambda_val']
+        if 'epsilon' in params.keys():
+            self.f_attepsilonack = params['epsilon']
+        if 'step_size' in params.keys():
+            self.step_size = params['step_size']
+
 
     def set_adversarial_params(self, learner, train_instances: List[Instance]):
         self.learn_model = learner
@@ -57,6 +65,7 @@ class CoordinateGreedy(Adversary):
 
         if self.weight_vector is None:
             raise ValueError('Must set learner_model and weight_vector before attack.')
+        print("weight vec before attack: {}".format(self.weight_vector.shape))
 
         transformed_instances = []
         for instance in Instances:
@@ -115,6 +124,13 @@ class CoordinateGreedy(Adversary):
 
     def minimize_transform(self, xi: np.array, x: np.array, i):
         xk = np.copy(xi)
+        # print(xk.shape)
+        # print("the index is {}".format(i))
+        # print("shape of weight vector is {}".format(self.weight_vector.shape))
+        # print("the weight_vector[i] is {}".format(self.weight_vector[i]))
+        # print("the xk[i] is {}".format(xk[i]))
+        # print("the x[i] is {}".format(x[i]))
+
         xk[i] -= self.step_size * (self.weight_vector[i] + self.lambda_val * (xk[i] - x[i]))
         return xk
 

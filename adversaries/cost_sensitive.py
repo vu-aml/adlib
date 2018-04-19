@@ -27,7 +27,7 @@ Concept:
 # the parameters can be set according to the experiments described in the paper
 # position: (-,-)= (0,0) (-,+) = (0,1) (+,-)= (1,0) (+,+)= (1,1)
 class CostSensitive(Adversary):
-    def __init__(self, Ua=None, Vi=None, Uc=None, Wi=None, learner=None, binary=True, scenario="Add_Word",
+    def __init__(self, Ua=None, Vi=None, Uc=None, Wi=None, learn_model=None, binary=True, scenario="Add_Word",
                  Xdomain = None,training_instances = None):
         """
         :param Ua: Utility accreued by Adversary when the classifier classifies as yc an instance
@@ -55,7 +55,7 @@ class CostSensitive(Adversary):
             self.num_features = training_instances[0].get_feature_count()
         if self.Ua is not None:
             self.delta_Ua = self.Ua[0][1] - self.Ua[1][1]
-        self.learn_model = learner  # type: Classifier
+        self.learn_model = learn_model  # type: Classifier
         self.scenario = scenario
 
     def attack(self, instances) -> List[Instance]:

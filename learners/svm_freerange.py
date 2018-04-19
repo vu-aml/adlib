@@ -39,6 +39,7 @@ class SVMFreeRange(learner):
         self.c_f = 0.5
         self.xmin = 0.0
         self.xmax = 1.0
+        self.c = 0.1
         if params is not None:
             self.set_params(params)
         if training_instances is not None:
@@ -51,18 +52,20 @@ class SVMFreeRange(learner):
             self.xmin = params['xmin']
         if 'xmax' in params:
             self.xmax = params['xmax']
+        if 'c' in params:
+            self.c = params['c']
 
     def get_available_params(self) -> Dict:
         params = {'c_f': self.c_f,
                   'xmin': self.xmin,
-                  'xmax': self.xmax}
+                  'xmax': self.xmax,
+                  'c': self.c}
         return params
 
     def train(self):
         '''Optimize the asymmetric dual problem and return optimal w and b.'''
         if not self.training_instances:
             raise ValueError('Must set training instances before training')
-        c = 10
 
         if isinstance(self.training_instances, List):
             y, X = sparsify(self.training_instances)
@@ -100,15 +103,15 @@ class SVMFreeRange(learner):
                        u >= 0,
                        v >= 0]
         # objective
-        obj = cvx.Minimize(0.5 * (cvx.norm(w)) + c * cvx.sum_entries(xi0))
+        obj = cvx.Minimize(0.5 * (cvx.norm(w)) + self.c * cvx.sum_entries(xi0))
         prob = cvx.Problem(obj, constraints)
 
         if OPT_INSTALLED:
-            prob.solve(solver='CVXOPT')
+            prob.solve(solver='MOSEK')
         else:
             prob.solve()
 
-        self.weight_vector = [np.array(w.value).T][0]
+        self.weight_vector = np.asarray(w.value.T)[0]
         self.bias = b.value
 
     def predict(self, instances):
@@ -141,7 +144,7 @@ class SVMFreeRange(learner):
 
 
     def predict_instance(self, features: np.array):
-        return self.weight_vector.dot(features.T)[0][0] + self.bias
+        return self.weight_vector.dot(features.T)[0] + self.bias
 
     def predict_proba(self, instances):
         return self.predict(instances)

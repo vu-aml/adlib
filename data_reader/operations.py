@@ -33,6 +33,11 @@ def find_centroid(instances: List[Instance]) -> Instance:
 
 
 def find_max(instances: List[Instance]):
+    """
+    TODO: find_max and find_min should return an array of length num_features, instead of an object
+    :param instances:
+    :return:
+    """
     num_features = instances[0].get_feature_vector().feature_count
     indices = []
     data = []

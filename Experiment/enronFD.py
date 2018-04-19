@@ -1,5 +1,5 @@
 from sklearn import svm
-from learners import SimpleLearner
+from learners import SVMFreeRange
 import learners as learner
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
@@ -29,8 +29,8 @@ def summary(y_pred, y_true):
     return s
 
 
-dataset = EmailDataset(path='../data_reader/data/enron/enron1/index_dir',binary= False,raw=True)
-training_, testing_ = dataset.split(0.6)
+dataset = EmailDataset(path='../data_reader/data/enron/index_dir',binary= False,raw=True)
+training_, testing_ = dataset.split(0.01)
 training_data = load_dataset(training_)
 testing_data = load_dataset(testing_)
 test_true_label = [x.label for x in testing_data]
@@ -38,7 +38,7 @@ test_true_label = [x.label for x in testing_data]
 
 #test simple learner svm
 learning_model = svm.SVC(probability=True, kernel='linear')
-learner1 = SimpleLearner(learning_model, training_data)
+learner1 = SVMFreeRange(training_instances=training_data)
 learner1.train()
 
 predictions = learner1.predict(testing_data)

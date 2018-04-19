@@ -47,6 +47,9 @@ class SimpleLearner(learner):
 
     def get_weight(self):
         weight= self.model.learner.coef_[0]
+        # print("model.coef_ type: {}".format(self.model.learner.coef_.__class__.__name__))
+        # print("model.coef_ shape: {}".format(self.model.learner.coef_.shape))
+        # print("model.coef_ : {}".format(self.model.learner.coef_))
         return weight
 
     def get_constant(self):

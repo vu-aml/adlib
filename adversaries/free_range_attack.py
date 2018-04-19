@@ -19,11 +19,12 @@ Concept: A generalized attacker algorithm that attempts to move the instances' f
 
 
 class FreeRange(Adversary):
-    def __init__(self, f_attack=0.5, xj_min=0.0, xj_max=0.0, type = 'random',binary=False, learner=None):
+    def __init__(self, f_attack=0.2, manual_bound=True, xj_min=0.0, xj_max=1.0, atk_type='random', binary=False, learn_model=None):
         """
 
         :param f_attack:  float (between 0 and 1),determining the agressiveness
                           of the attack
+        :param manual_bound: bool, if manual_range is False, attacker will call set_boundaries to find x_min/x_max
         :param xj_min:    minimum xj that the feature can have
                           If not specified, it is calculated by going over all training data.
         :param xj_max:    maximum xj that the feature can have
@@ -34,19 +35,21 @@ class FreeRange(Adversary):
         """
         self.xj_min = xj_min
         self.xj_max = xj_max
+        self.manual = manual_bound
         self.f_attack = f_attack
         self.innocuous_target = None
         self.num_features = None
         self.binary = binary
-        self.type = type
-        self.learn_model = learner  # type: Classifier
+        self.type = atk_type
+        self.learn_model = learn_model  # type: Classifier
 
-
-    def set_adversarial_params(self, learner, train_instances: List[Instance]):
-        self.learn_model = learner
+    def set_adversarial_params(self, learn_model, train_instances: List[Instance]):
+        self.learn_model = learn_model
         self.num_features = train_instances[0].get_feature_count()
-        self.set_innocuous_target(train_instances, learner, self.type)
-        self.set_boundaries(train_instances)
+        if self.binary:
+            self.set_innocuous_target(train_instances, learner, self.type)
+        if self.manual:
+            self.set_boundaries(train_instances)
 
     def set_params(self, params: Dict):
         if 'xj_min' in params.keys():
@@ -69,7 +72,6 @@ class FreeRange(Adversary):
                   }
         return params
 
-
     def attack(self, instances: List[Instance]) -> List[Instance]:
         transformed_instances = []
         if self.f_attack == 0:
@@ -89,8 +91,13 @@ class FreeRange(Adversary):
         :param train_instances:
         :return: None
         """
+
+        # warning: find_min and find_max currently not working as intended
         self.x_min = find_min(train_instances)
         self.x_max = find_max(train_instances)
+
+
+
 
     def set_innocuous_target(self, train_instances, learner, type):
         """
@@ -103,14 +110,14 @@ class FreeRange(Adversary):
         """
         if type == 'random':
             self.innocuous_target = next(
-                (x for x in train_instances if x.get_label() == learner.negative_classification),
+                (x for x in train_instances if x.get_label() == -1),
                 None)
         elif type == 'centroid':
             target = find_centroid(train_instances)
             if learner.predict(target) == 1:
                 print("Fail to find centroid of from estimated training data")
                 self.innocuous_target = next(
-                    (x for x in train_instances if x.get_label() == learner.negative_classification),
+                    (x for x in train_instances if x.get_label() == -1),
                     None)
             else:
                 self.innocuous_target = target
@@ -128,7 +135,7 @@ class FreeRange(Adversary):
         :return: instance
         '''
         if self.binary:
-            attack_times = (int)(self.f_attack * self.num_features)
+            attack_times = int(self.f_attack * self.num_features)
             count = 0
             for i in range(0, self.num_features):
                 delta_ij = self.innocuous_target.get_feature_vector().get_feature(i) \
@@ -142,13 +149,12 @@ class FreeRange(Adversary):
         else:
             for i in range(0, self.num_features):
                 xij = instance.get_feature_vector().get_feature(i)
-                if self.xj_min == 0 and self.xj_max == 0:
+                if not self.manual:
                     lower_bound = self.f_attack * (self.x_min.get_feature(i) - xij)
                     upper_bound = self.f_attack * (self.x_max.get_feature(i) - xij)
                 else:
                     lower_bound = self.f_attack * (self.xj_min - xij)
                     upper_bound = self.f_attack * (self.xj_max - xij)
-                # is that ok to just assign a random number between the range???
                 delta_ij = random.uniform(lower_bound, upper_bound)
                 instance.flip(i, xij + delta_ij)
         return instance

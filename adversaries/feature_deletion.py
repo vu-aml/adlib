@@ -50,6 +50,8 @@ class AdversaryFeatureDeletion(Adversary):
             self.del_index = np.flipud(np.argsort(np.absolute(self.weight_vector)))[:self.num_deletion]
 
         # print("checking feature deletion attacker:")
+        # print("printiing self.weight_vector.shape: {}".format(self.weight_vector.shape))
+        # print("printiing self.weight_vector: {}".format(self.weight_vector))
         # print(self.del_index)
         # for i in self.del_index:
         #     print("the number {0} feature weight is {1}".format(i, self.weight_vector[i]))

@@ -95,3 +95,6 @@ class L_infSVM(learner):
         :return: int
         '''
         return int(np.sign(np.asscalar(features.dot(self.weight_vector)) + self.bias))
+
+    def get_weight(self):
+        return np.asarray(self.weight_vector.T)[0]

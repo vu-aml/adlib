@@ -152,3 +152,12 @@ class Model(BaseModel):
 
         """
         return self.learner
+
+    def get_weight(self):
+        """
+        Return the weight vector of the linear classifier
+        :return:
+        """
+        print("weight vec shape from sklearner: {}".format(self.learner.coef_[0]))
+        return self.learner.coef_[0]
+

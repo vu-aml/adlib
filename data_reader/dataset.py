@@ -297,7 +297,7 @@ class EmailDataset(Dataset):
             raise AttributeError('The given load format is not currently \
                                  supported.')
 
-    def split(self, fraction=0.5):
+    def split(self, fraction=0.5, seed=None):
         """Split the dataset into test and train sets using
             `sklearn.utils.shuffle()`.
 
@@ -313,7 +313,11 @@ class EmailDataset(Dataset):
         if fraction > 1.0:
             fraction /= 100
         pivot = int(self.__len__()*fraction)
-        s_feats, s_labels = sklearn.utils.shuffle(self.features, self.labels)
+        if seed:
+            s_feats, s_labels = sklearn.utils.shuffle(self.features, self.labels, random_state=seed)
+        else:
+            s_feats, s_labels = sklearn.utils.shuffle(self.features, self.labels, random_state=scipy.random.seed())
+
         return (self.__class__(raw=False, features=s_feats[:pivot, :],
                                labels=s_labels[:pivot],num_instances=pivot,binary=self.binary),
                 self.__class__(raw=False, features=s_feats[pivot:, :],

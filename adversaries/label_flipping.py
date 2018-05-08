@@ -8,6 +8,32 @@ import numpy as np
 from typing import List, Dict
 
 
+class FeatureVectorWrapper(np.ndarray):
+    """
+    Wraps a feature vector to look like an np.ndarray. This is needed as only
+    np.ndarray and Python lists can be used for CVX, with np.ndarray being
+    preferred. This wraps a dummy array and encapsulates the feature_vector
+    so as to provide an np.ndarray interface to the efficient representation of
+    a feature_vector. Using the [] operator directly on a feature_vector does
+    not return 0/1 for the feature, but directly indexes into the underlying
+    representation. The base code and inspiration for this came from the
+    official numpy documentation.
+    """
+
+    def __new__(cls, feature_vector, info=None):
+        # input_array is an np_array, use a dummy object
+        obj = np.asarray(np.full(1, 0)).view(cls)
+        obj.feature_vector = feature_vector
+        return obj
+
+    def __array_finalize__(self, obj):
+        if obj is None: return
+        self.feature_vector = getattr(obj, 'feature_vector', None)
+
+    def __getitem__(self, key):
+        return self.feature_vector.get_feature(key)
+
+
 class LabelFlipping(Adversary):
 
     def __init__(self, learner, cost: List[float], total_cost: float,

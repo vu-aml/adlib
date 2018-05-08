@@ -7,6 +7,18 @@ import numpy as np
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
 from adversaries.label_flipping import LabelFlipping
+from adversaries.label_flipping import FeatureVectorWrapper
+
+
+def test_feature_vector_wrapper():
+    dataset = EmailDataset(path='../../data_reader/data/raw/trec05p-1/test-400',
+                           binary=True, raw=True)
+    data = load_dataset(dataset)
+    for instance in data:
+        fv = instance.get_feature_vector()
+        fv_wrapper = FeatureVectorWrapper(fv)
+        for i in range(instance.get_feature_count()):
+            assert fv.get_feature(i) == fv_wrapper[i]
 
 
 def test_label_flipping():

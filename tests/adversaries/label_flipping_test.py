@@ -1,3 +1,6 @@
+# label_flipping_test.py
+# Tests the label flipping implementation
+
 from sklearn import svm
 from learners import SimpleLearner
 import numpy as np
@@ -26,3 +29,8 @@ def test_label_flipping():
     total_cost = 0.1 * len(training_data)  # flip at most 10% of labels
     attacker = LabelFlipping(learner, cost, total_cost)
     result = attacker.attack(training_data)
+    print(result)
+
+
+if __name__ == '__main__':
+    test_label_flipping()

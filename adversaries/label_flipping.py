@@ -1,6 +1,8 @@
+# label_flipping.py
+# A label flipping implementation
+
 from adversaries.adversary import Adversary
 from data_reader.binary_input import Instance
-import copy
 import cvxpy as cvx
 import numpy as np
 from typing import List, Dict
@@ -10,7 +12,6 @@ class LabelFlipping(Adversary):
 
     def __init__(self, learner, cost: List[float], total_cost: float,
                  gamma=0.05):
-
         Adversary.__init__(self)
         self.learner = learner
         self.cost = cost
@@ -18,6 +19,9 @@ class LabelFlipping(Adversary):
         self.gamma = gamma
 
     def attack(self, instances) -> List[Instance]:
+        if len(self.cost) != len(instances):
+            raise ValueError('Cost data does not match instances.')
+
         n = len(instances) * 2
         pred_labels = self.learner.predict(instances)
         orig_loss = []
@@ -26,13 +30,11 @@ class LabelFlipping(Adversary):
         orig_loss = np.array(orig_loss + orig_loss)
 
         # Setup CVX
-
-        q = cvx.Variable(n)
-        w = cvx.Variable(n)
+        q = cvx.Int(n)
+        w = cvx.Variable(instances[0].get_feature_count())
         epsilon = cvx.Variable(n)
 
-        func = cvx.sum_entries(cvx.mul_elemwise(q, epsilon - orig_loss))
-        func += n * self.gamma * (cvx.norm(w) ** 2)
+        func = q.T * (epsilon - orig_loss) + n * self.gamma * (cvx.norm(w) ** 2)
 
         feature_vectors = []
         labels = []
@@ -42,21 +44,21 @@ class LabelFlipping(Adversary):
         feature_vectors = np.array(feature_vectors + feature_vectors)
         labels = np.array(labels + labels)
 
-        cost = np.array((self.cost + self.cost)[n])
+        cost = np.concatenate([np.full(int(n / 2), 0), np.array(self.cost)])
 
-        constraints = [
-            cvx.sum_entries(cvx.mul_elemwise(cost, q)) <= self.total_cost]
+        constraints = [cost.T * q <= self.total_cost]
         for i in range(n):
-            constraints.append(1 - labels[i] * cvx.sum_entries(
-                cvx.mul_elemwise(w, feature_vectors[i])) <= epsilon[i])
-            constraints.append(epsilon[i] >= 0)
-            constraints.append(q[i] == 0 or q[i] == 1)
-            if i < (n / 2):
-                constraints.append(q[i] + q[i + (n / 2)] == 1)
+            constraints.append(1 - labels[i] * w.T * feature_vectors[i]
+                               <= epsilon[i])
+            constraints.append(0 <= epsilon[i])
+            constraints.append(0 <= q[i])
+            constraints.append(q[i] <= 1)
+            if i < int(n / 2):
+                constraints.append(q[i] + q[i + int(n / 2)] == 1)
 
         prob = cvx.Problem(cvx.Minimize(func), constraints)
         result = prob.solve()
-        print(result)  #####################
+        print(result)  # ####################
 
     def set_params(self, params: Dict):
         raise NotImplementedError

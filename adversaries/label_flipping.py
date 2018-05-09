@@ -12,13 +12,14 @@ from typing import List, Dict
 class LabelFlipping(Adversary):
 
     def __init__(self, learner, cost: List[float], total_cost: float,
-                 gamma=0.1, num_iterations=10):
+                 gamma=0.1, num_iterations=10, debug=False):
         Adversary.__init__(self)
         self.learner = learner
         self.cost = cost
         self.total_cost = total_cost
         self.gamma = gamma
         self.num_iterations = 2 * num_iterations
+        self.debug = debug
 
     def attack(self, instances) -> List[Instance]:
         if len(instances) == 0 or len(self.cost) != len(instances):
@@ -133,7 +134,7 @@ class LabelFlipping(Adversary):
                     constraints.append(0 <= epsilon[i])
 
                 prob = cvx.Problem(cvx.Minimize(func), constraints)
-                prob.solve(parallel=True)
+                prob.solve(verbose=self.debug, parallel=True)
 
                 old_epsilon = np.copy(np.array(epsilon.value).flatten())
                 old_w = np.copy(np.array(w.value).flatten())
@@ -162,7 +163,7 @@ class LabelFlipping(Adversary):
                 constraints += [cost_for_q <= self.total_cost]
 
                 prob = cvx.Problem(cvx.Minimize(func), constraints)
-                prob.solve(parallel=True)
+                prob.solve(verbose=self.debug, parallel=True)
 
                 q_value = np.array(q.value).flatten()
                 old_q = []

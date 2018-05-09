@@ -7,18 +7,6 @@ import numpy as np
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
 from adversaries.label_flipping import LabelFlipping
-from adversaries.label_flipping import FeatureVectorWrapper
-
-
-def test_feature_vector_wrapper():
-    dataset = EmailDataset(path='../../data_reader/data/raw/trec05p-1/test-400',
-                           binary=True, raw=True)
-    data = load_dataset(dataset)
-    for instance in data:
-        fv = instance.get_feature_vector()
-        fv_wrapper = FeatureVectorWrapper(fv)
-        for i in range(instance.get_feature_count()):
-            assert fv.get_feature(i) == fv_wrapper[i]
 
 
 def test_label_flipping():
@@ -37,11 +25,24 @@ def test_label_flipping():
     learner.train()
 
     # Execute the attack
-    cost = list(np.full(len(training_data), 1))  # cost of flip is constant 1
-    total_cost = 0.1 * len(training_data)  # flip at most 10% of labels
-    attacker = LabelFlipping(learner, cost, total_cost)
+
+    # cost = list(np.full(len(training_data), 1))  # cost of flip is constant 1
+    # total_cost = 0.1 * len(training_data)  # flip at most 10% of labels
+    # cost = list(np.random.normal(1, 0.1, len(training_data))) # cost is normal
+    # total_cost = 0.1 * len(training_data) # flip around 10% of the labels
+    cost = list(np.random.binomial(2, 0.5, len(training_data)))
+    total_cost = 0.3 * len(training_data)  # flip around ~30% of the labels
+    attacker = LabelFlipping(learner, cost, total_cost, num_iterations=2)
     result = attacker.attack(training_data)
-    print(result)
+
+    flip_vector = []  # 0 -> flipped, 1 -> not flipped
+    for i in range(len(result)):
+        if result[i].get_label() != training_data[i].get_label():
+            flip_vector.append(0)
+        else:
+            flip_vector.append(1)
+
+    print(flip_vector)
 
 
 if __name__ == '__main__':

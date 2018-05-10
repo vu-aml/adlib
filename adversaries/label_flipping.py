@@ -20,11 +20,54 @@ class LabelFlipping(Adversary):
         self.gamma = gamma
         self.num_iterations = 2 * num_iterations
         self.verbose = verbose
+        self.old_q = None
+        self.old_epsilon = None
+        self.old_w = None
 
     def attack(self, instances) -> List[Instance]:
         if len(instances) == 0 or len(self.cost) != len(instances):
             raise ValueError('Cost data does not match instances.')
 
+        (half_n,
+         n,
+         orig_loss,
+         feature_vectors,
+         labels,
+         cost) = self._calculate_constants(instances)
+
+        ########################################################################
+        # Using alternating minimization. First fix q then minimize epsilon and
+        # w. Then, fix epsilon and w and minimize q. The first q will be
+        # generated randomly and follow the constraints that the total cost
+        # is less than total_cost.
+        #
+        # Formula: minimize <q, epsilon> + n * self.gamma * (||w||_2 ** 2) -
+        # <q, eta>, where <x,y> is the dot product of x and y. See book for
+        # constraints.
+        ########################################################################
+        # Alternating minimization loop
+
+        q = self._generate_q(half_n)
+        self.old_q = np.copy(q)
+        flip = True
+        for _ in range(self.num_iterations):
+            if flip:  # q is fixed, minimize over w and epsilon
+                self._minimize_w_epsilon(instances, n, orig_loss,
+                                         feature_vectors, labels)
+            else:  # w and epsilon are fixed, minimize over q
+                self._minimize_q(n, half_n, orig_loss, cost)
+            flip = not flip
+
+        ########################################################################
+
+        attacked_instances = deepcopy(instances)
+        for i in range(half_n):
+            if self.old_q[i] == 0:
+                label = attacked_instances[i].get_label()
+                attacked_instances[i].set_label(-1 * label)
+        return attacked_instances
+
+    def _calculate_constants(self, instances: List[Instance]):
         half_n = len(instances)
         n = half_n * 2  # size of new (doubled) input
         pred_labels = self.learner.predict(instances)
@@ -45,17 +88,9 @@ class LabelFlipping(Adversary):
 
         cost = np.concatenate([np.full(half_n, 0), np.array(self.cost)])
 
-        # Using alternating minimization. First fix q then minimize epsilon and
-        # w. Then, fix epsilon and w and minimize q. The first q will be
-        # generated randomly and follow the constraints that the total cost
-        # is less than total_cost.
-        #
-        # Formula: minimize <q, epsilon> + n * self.gamma * (||w||_2 ** 2) -
-        # <q, eta>, where <x,y> is the dot product of x and y. See book for
-        # constraints.
-        ########################################################################
-        # Generate q
+        return half_n, n, orig_loss, feature_vectors, labels, cost
 
+    def _generate_q(self, half_n):
         q = np.random.binomial(1, 0.5, half_n)
         tmp = []
         for i in q:
@@ -65,85 +100,68 @@ class LabelFlipping(Adversary):
                 tmp.append(1)
         q = np.concatenate([q, np.array(tmp)])
 
-        ########################################################################
-        # Alternating minimization loop
-        # TODO: Use parameters so as to not redefine the problem every time
-        # TODO: Use MP to speed up data processing before solving
-        # TODO: If all q = np.full(n, 0) works, then delete the above code
-        # TODO: Probably do that ^ anyway
-        # TODO: Make this more efficient
+        return q
 
-        old_q, old_epsilon, old_w = np.copy(q), None, None
-        flip = True
-        for _ in range(self.num_iterations):
-            if flip:  # q is fixed, minimize over w and epsilon
-                # Setup variables and constants
-                epsilon = cvx.Variable(n)
-                w = cvx.Variable(instances[0].get_feature_count())
-                q = old_q
+    def _minimize_w_epsilon(self, instances, n, orig_loss,
+                            feature_vectors, labels):
+        # Setup variables and constants
+        epsilon = cvx.Variable(n)
+        w = cvx.Variable(instances[0].get_feature_count())
+        q = self.old_q
 
-                # Calculate constants
-                cnst = q.dot(orig_loss)
+        # Calculate constants
+        cnst = q.dot(orig_loss)
 
-                # Setup CVX problem
-                func = self.gamma * n * (cvx.pnorm(w, 2) ** 2) - cnst
-                for i in range(n):
-                    func += q[i] * epsilon[i]
+        # Setup CVX problem
+        func = self.gamma * n * (cvx.pnorm(w, 2) ** 2) - cnst
+        for i in range(n):
+            func += q[i] * epsilon[i]
 
-                constraints = []
-                for i in range(n):
-                    tmp = 0.0
-                    for j in range(instances[0].get_feature_count()):
-                        if feature_vectors[i].get_feature(j) == 1:
-                            tmp += w[j]
-                    constraints.append(1 - labels[i] * tmp <= epsilon)
-                    constraints.append(0 <= epsilon[i])
+        constraints = []
+        for i in range(n):
+            tmp = 0.0
+            for j in range(instances[0].get_feature_count()):
+                if feature_vectors[i].get_feature(j) == 1:
+                    tmp += w[j]
+            constraints.append(1 - labels[i] * tmp <= epsilon)
+            constraints.append(0 <= epsilon[i])
 
-                prob = cvx.Problem(cvx.Minimize(func), constraints)
-                prob.solve(verbose=self.verbose, parallel=True)
+        prob = cvx.Problem(cvx.Minimize(func), constraints)
+        prob.solve(verbose=self.verbose, parallel=True)
 
-                old_epsilon = np.copy(np.array(epsilon.value).flatten())
-                old_w = np.copy(np.array(w.value).flatten())
+        self.old_epsilon = np.copy(np.array(epsilon.value).flatten())
+        self.old_w = np.copy(np.array(w.value).flatten())
 
-                flip = not flip
-            else:  # w and epsilon are fixed, minimize over q
-                # Setup variables and constants
-                epsilon = old_epsilon
-                w = old_w
-                q = cvx.Int(n)
+    def _minimize_q(self, n, half_n, orig_loss, cost):
+        # Setup variables and constants
+        epsilon = self.old_epsilon
+        w = self.old_w
+        q = cvx.Int(n)
 
-                # Calculate constants - see comment above
-                cnst = n * self.gamma * w.dot(w)
-                epsilon_diff_eta = epsilon - orig_loss
+        # Calculate constants - see comment above
+        cnst = n * self.gamma * w.dot(w)
+        epsilon_diff_eta = epsilon - orig_loss
 
-                # Setup CVX problem
-                func = cnst
-                for i in range(n):
-                    func += q[i] * epsilon_diff_eta[i]
+        # Setup CVX problem
+        func = cnst
+        for i in range(n):
+            func += q[i] * epsilon_diff_eta[i]
 
-                constraints = [0 <= q, q <= 1]
-                cost_for_q = 0.0
-                for i in range(half_n):
-                    constraints.append(q[i] + q[i + half_n] == 1)
-                    cost_for_q += cost[i + half_n] * q[i + half_n]
-                constraints += [cost_for_q <= self.total_cost]
-
-                prob = cvx.Problem(cvx.Minimize(func), constraints)
-                prob.solve(verbose=self.verbose, parallel=True)
-
-                q_value = np.array(q.value).flatten()
-                old_q = []
-                for i in range(n):
-                    old_q.append(round(q_value[i]))
-                old_q = np.copy(np.array(old_q, dtype=int))
-                flip = not flip
-
-        attacked_instances = deepcopy(instances)
+        constraints = [0 <= q, q <= 1]
+        cost_for_q = 0.0
         for i in range(half_n):
-            if old_q[i] == 0:
-                label = attacked_instances[i].get_label()
-                attacked_instances[i].set_label(-1 * label)
-        return attacked_instances
+            constraints.append(q[i] + q[i + half_n] == 1)
+            cost_for_q += cost[i + half_n] * q[i + half_n]
+        constraints += [cost_for_q <= self.total_cost]
+
+        prob = cvx.Problem(cvx.Minimize(func), constraints)
+        prob.solve(verbose=self.verbose, parallel=True)
+
+        q_value = np.array(q.value).flatten()
+        self.old_q = []
+        for i in range(n):
+            self.old_q.append(round(q_value[i]))
+        self.old_q = np.copy(np.array(self.old_q, dtype=int))
 
     def set_params(self, params: Dict):
         raise NotImplementedError

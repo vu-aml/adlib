@@ -12,14 +12,14 @@ from typing import List, Dict
 class LabelFlipping(Adversary):
 
     def __init__(self, learner, cost: List[float], total_cost: float,
-                 gamma=0.1, num_iterations=10, debug=False):
+                 gamma=0.1, num_iterations=10, verbose=False):
         Adversary.__init__(self)
         self.learner = learner
         self.cost = cost
         self.total_cost = total_cost
         self.gamma = gamma
         self.num_iterations = 2 * num_iterations
-        self.debug = debug
+        self.verbose = verbose
 
     def attack(self, instances) -> List[Instance]:
         if len(instances) == 0 or len(self.cost) != len(instances):
@@ -52,38 +52,18 @@ class LabelFlipping(Adversary):
         # Formula: minimize <q, epsilon> + n * self.gamma * (||w||_2 ** 2) -
         # <q, eta>, where <x,y> is the dot product of x and y. See book for
         # constraints.
-
         ########################################################################
-        # Generate initial q by choosing self.total_cost / average_cost values
-        # from a uniform distribution and then satisfying constraints
-        #
-        # average_cost = 0.0
-        # for i in self.cost:
-        #     average_cost += i
-        # average_cost /= len(self.cost)
-        # num_to_pick = int(self.total_cost / average_cost)
-        #
-        # q = np.full(n, 0)
-        # tmp = np.random.uniform(0, n // 2, num_to_pick)
-        # picked_indices = []
-        # for i in tmp:
-        #     picked_indices.append(int(i) + n // 2)
-        #
-        # running_cost = 0.0
-        # for i in picked_indices:
-        #     if q[i] != 1:  # Only consider if we have not picked it yet
-        #         if running_cost + cost[i] <= self.total_cost:# cost constraint
-        #             q[i] = 1
-        #             running_cost += cost[i]
-        #
-        # for i in range(n // 2): # Makes sure q[i] + q[i + n // 2] == 1 is True
-        #     if q[i] == 0:
-        #         if q[i + n // 2] == 0:
-        #             q[i] = 1
-        #     else:
-        #         if q[i + n // 2] == 1:
-        #             q[i + n // 2] = 0
-        #
+        # Generate q
+
+        q = np.random.binomial(1, 0.5, n // 2)
+        tmp = []
+        for i in q:
+            if i == 1:
+                tmp.append(0)
+            else:
+                tmp.append(1)
+        q = np.concatenate([q, np.array(tmp)])
+
         ########################################################################
         # Alternating minimization loop
         # TODO: Use parameters so as to not redefine the problem every time
@@ -91,20 +71,6 @@ class LabelFlipping(Adversary):
         # TODO: If all q = np.full(n, 0) works, then delete the above code
         # TODO: Probably do that ^ anyway
         # TODO: Make this more efficient
-
-        q = np.full(n, 0)
-        # q = np.concatenate([np.full(n // 2, 0), np.full(n // 2, 1)]) #  GOOD
-        # q = np.random.binomial(1, 0.5, n // 2)
-        # tmp = []
-        # for i in q:
-        #     if i == 1:
-        #         tmp.append(0)
-        #     else:
-        #         tmp.append(1)
-        # q = np.concatenate([q, np.array(tmp)])
-        #
-        # for i in q:
-        #     assert q[i] + q[i + n // 2] == 1
 
         old_q, old_epsilon, old_w = np.copy(q), None, None
         flip = True
@@ -134,7 +100,7 @@ class LabelFlipping(Adversary):
                     constraints.append(0 <= epsilon[i])
 
                 prob = cvx.Problem(cvx.Minimize(func), constraints)
-                prob.solve(verbose=self.debug, parallel=True)
+                prob.solve(verbose=self.verbose, parallel=True)
 
                 old_epsilon = np.copy(np.array(epsilon.value).flatten())
                 old_w = np.copy(np.array(w.value).flatten())
@@ -163,7 +129,7 @@ class LabelFlipping(Adversary):
                 constraints += [cost_for_q <= self.total_cost]
 
                 prob = cvx.Problem(cvx.Minimize(func), constraints)
-                prob.solve(verbose=self.debug, parallel=True)
+                prob.solve(verbose=self.verbose, parallel=True)
 
                 q_value = np.array(q.value).flatten()
                 old_q = []
@@ -174,7 +140,7 @@ class LabelFlipping(Adversary):
 
         attacked_instances = deepcopy(instances)
         for i in range(n // 2):
-            if q[i] == 0:
+            if old_q[i] == 0:
                 label = attacked_instances[i].get_label()
                 attacked_instances[i].set_label(-1 * label)
         return attacked_instances

@@ -25,7 +25,8 @@ class LabelFlipping(Adversary):
         if len(instances) == 0 or len(self.cost) != len(instances):
             raise ValueError('Cost data does not match instances.')
 
-        n = len(instances) * 2  # size of new (doubled) input
+        half_n = len(instances)
+        n = half_n * 2  # size of new (doubled) input
         pred_labels = self.learner.predict(instances)
         orig_loss = []
         for i in range(len(pred_labels)):
@@ -42,7 +43,7 @@ class LabelFlipping(Adversary):
         feature_vectors = np.array(feature_vectors + feature_vectors)
         labels = np.array(labels + labels_flipped)
 
-        cost = np.concatenate([np.full(n // 2, 0), np.array(self.cost)])
+        cost = np.concatenate([np.full(half_n, 0), np.array(self.cost)])
 
         # Using alternating minimization. First fix q then minimize epsilon and
         # w. Then, fix epsilon and w and minimize q. The first q will be
@@ -55,7 +56,7 @@ class LabelFlipping(Adversary):
         ########################################################################
         # Generate q
 
-        q = np.random.binomial(1, 0.5, n // 2)
+        q = np.random.binomial(1, 0.5, half_n)
         tmp = []
         for i in q:
             if i == 1:
@@ -81,8 +82,7 @@ class LabelFlipping(Adversary):
                 w = cvx.Variable(instances[0].get_feature_count())
                 q = old_q
 
-                # Calculate constants - can possibly ignore this as it only
-                # shifts the function - maybe
+                # Calculate constants
                 cnst = q.dot(orig_loss)
 
                 # Setup CVX problem
@@ -123,9 +123,9 @@ class LabelFlipping(Adversary):
 
                 constraints = [0 <= q, q <= 1]
                 cost_for_q = 0.0
-                for i in range(n // 2):
-                    constraints.append(q[i] + q[i + n // 2] == 1)
-                    cost_for_q += cost[i + n // 2] * q[i + n // 2]
+                for i in range(half_n):
+                    constraints.append(q[i] + q[i + half_n] == 1)
+                    cost_for_q += cost[i + half_n] * q[i + half_n]
                 constraints += [cost_for_q <= self.total_cost]
 
                 prob = cvx.Problem(cvx.Minimize(func), constraints)
@@ -139,20 +139,17 @@ class LabelFlipping(Adversary):
                 flip = not flip
 
         attacked_instances = deepcopy(instances)
-        for i in range(n // 2):
+        for i in range(half_n):
             if old_q[i] == 0:
                 label = attacked_instances[i].get_label()
                 attacked_instances[i].set_label(-1 * label)
         return attacked_instances
 
+    def set_params(self, params: Dict):
+        raise NotImplementedError
 
-def set_params(self, params: Dict):
-    raise NotImplementedError
+    def get_available_params(self):
+        raise NotImplementedError
 
-
-def get_available_params(self):
-    raise NotImplementedError
-
-
-def set_adversarial_params(self, learner, train_instances):
-    raise NotImplementedError
+    def set_adversarial_params(self, learner, train_instances):
+        raise NotImplementedError

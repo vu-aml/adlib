@@ -12,5 +12,6 @@ files, use git add -f
 * Matplotlib
 * Scikit-learn
 * CVXPY
+* Progress
 * CVXOPT (optional as a CVXPY solver)
 * Jupyter Notebook (optional for notebook demo) 

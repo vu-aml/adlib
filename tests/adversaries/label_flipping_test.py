@@ -1,5 +1,6 @@
 # label_flipping_test.py
 # Tests the label flipping implementation
+# Matthew Sedam
 
 from sklearn import svm
 from learners import SimpleLearner

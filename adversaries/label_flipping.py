@@ -7,6 +7,7 @@ from data_reader.binary_input import Instance
 import cvxpy as cvx
 import numpy as np
 from copy import deepcopy
+from progress.bar import Bar
 from typing import List, Dict
 
 
@@ -52,6 +53,8 @@ class LabelFlipping(Adversary):
         if len(instances) == 0 or len(self.cost) != len(instances):
             raise ValueError('Cost data does not match instances.')
 
+        print('Start label flipping attack.\n')
+
         (half_n,
          n,
          orig_loss,
@@ -74,6 +77,10 @@ class LabelFlipping(Adversary):
         q = self._generate_q(half_n)
         self._old_q = np.copy(q)
         flip = True
+        if not self.verbose:
+            bar = Bar('Processing', max=self.num_iterations + 1,
+                      suffix='%(percent)d%%')
+            bar.next()
         for _ in range(self.num_iterations):
             if flip:  # q is fixed, minimize over w and epsilon
                 self._minimize_w_epsilon(instances, n, orig_loss,
@@ -81,6 +88,10 @@ class LabelFlipping(Adversary):
             else:  # w and epsilon are fixed, minimize over q
                 self._minimize_q(n, half_n, orig_loss, cost)
             flip = not flip
+            if not self.verbose:
+                bar.next()
+        if not self.verbose:
+            bar.finish()
 
         ########################################################################
 
@@ -89,6 +100,9 @@ class LabelFlipping(Adversary):
             if self._old_q[i] == 0:
                 label = attacked_instances[i].get_label()
                 attacked_instances[i].set_label(-1 * label)
+
+        print('End label flipping attack.\n')
+
         return attacked_instances
 
     def _calculate_constants(self, instances: List[Instance]):

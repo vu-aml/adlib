@@ -10,9 +10,25 @@ from typing import List, Dict
 
 
 class LabelFlipping(Adversary):
+    """
+    This performs a label flipping attack on a set of Instances by maximizing
+    the utility of the attacker, while minimizing risk and maximizing the
+    amount that the trained model will differ from the original (true) model.
+    """
 
     def __init__(self, learner, cost: List[float], total_cost: float,
                  gamma=0.1, num_iterations=10, verbose=False):
+        """
+        :param learner: the previously-trained SVM learner
+        :param cost: the cost vector, has length of size of instances
+        :param total_cost: the total cost for the attack
+        :param gamma: the gamma rate, default 0.1
+        :param num_iterations: the number of iterations of the alternating
+                               minimization loop, default 10
+        :param verbose: if True, then the solver will be set to verbose mode,
+                        default False
+        """
+
         Adversary.__init__(self)
         self.learner = learner
         self.cost = cost
@@ -25,6 +41,13 @@ class LabelFlipping(Adversary):
         self.old_w = None
 
     def attack(self, instances) -> List[Instance]:
+        """
+        Takes instances and performs a label flipping attack.
+        :param instances: The list of Instances
+        :return: The attacked instances with labels flipped if deemed "good" by
+                 the solver.
+        """
+
         if len(instances) == 0 or len(self.cost) != len(instances):
             raise ValueError('Cost data does not match instances.')
 
@@ -68,6 +91,12 @@ class LabelFlipping(Adversary):
         return attacked_instances
 
     def _calculate_constants(self, instances: List[Instance]):
+        """
+        Calculates constants needed for the alternating minimization loop.
+        :param instances: the list of Instances
+        :return: the constants
+        """
+
         half_n = len(instances)
         n = half_n * 2  # size of new (doubled) input
         pred_labels = self.learner.predict(instances)
@@ -91,6 +120,16 @@ class LabelFlipping(Adversary):
         return half_n, n, orig_loss, feature_vectors, labels, cost
 
     def _generate_q(self, half_n):
+        """
+        Generates a q, where every entry has an equal probability of being 0 or
+        1. Satisfies the q[i] + q[i + half_n] == 1 constraint, but NO cost
+        constraints. If this also satisfied cost constraints, then the solver
+        would most likely return the same initial q generated, which is
+        probabilistically not the optimal one.
+        :param half_n: half of n, the number of Instances
+        :return: the newly-generated q
+        """
+
         q = np.random.binomial(1, 0.5, half_n)
         tmp = []
         for i in q:
@@ -104,6 +143,16 @@ class LabelFlipping(Adversary):
 
     def _minimize_w_epsilon(self, instances, n, orig_loss,
                             feature_vectors, labels):
+        """
+        Minimizes over w and epsilon while keeping q constant. First iteration
+        of the alternating minimization loop.
+        :param instances: the list of Instances
+        :param n: the number of instances
+        :param orig_loss: the original loss calculations
+        :param feature_vectors: the list of feature vectors
+        :param labels: the list of labels
+        """
+
         # Setup variables and constants
         epsilon = cvx.Variable(n)
         w = cvx.Variable(instances[0].get_feature_count())
@@ -133,6 +182,14 @@ class LabelFlipping(Adversary):
         self.old_w = np.copy(np.array(w.value).flatten())
 
     def _minimize_q(self, n, half_n, orig_loss, cost):
+        """
+        Minimize over q while keeping epsilon and w constant.
+        :param n: the number of instances
+        :param half_n: half of n
+        :param orig_loss: the original loss calculations
+        :param cost: cost: the cost vector, has length of size of instances
+        """
+
         # Setup variables and constants
         epsilon = self.old_epsilon
         w = self.old_w

@@ -1,6 +1,8 @@
 # Adversarial Machine Learning Library (AML)
 ## Computational Economics Research Lab at Vanderbilt University
 
+[![Build Status](https://travis-ci.org/vu-aml/adlib.svg?branch=master)](https://travis-ci.org/vu-aml/adlib)
+
 Game-theoretic adversarial machine learning library providing a set of learner and adversary modules.
 
 ### Installation

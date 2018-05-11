@@ -1,7 +1,7 @@
 import pytest
 from adversaries import GoodWord
 from sklearn import svm
-from learners import learner, SimpleLearner
+from adlib.learners import learner, SimpleLearner
 from data_reader.dataset import EmailDataset
 from data_reader.binary_input import Instance
 from data_reader.operations import load_dataset

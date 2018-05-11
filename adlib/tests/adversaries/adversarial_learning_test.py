@@ -1,7 +1,7 @@
 from adversaries.adversarial_learning import AdversarialLearning
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
-from learners.simple_learner import SimpleLearner
+from adlib.learners.simple_learner import SimpleLearner
 from sklearn.linear_model import LinearRegression
 
 dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400',binary= False,raw=True)

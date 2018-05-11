@@ -2,7 +2,7 @@ from typing import Dict
 from sklearn.naive_bayes import GaussianNB
 from adversaries.cost_sensitive import CostSensitive
 from data_reader.operations import fv_equals
-from learners.simple_learner import SimpleLearner
+from adlib.learners.simple_learner import SimpleLearner
 from sklearn.utils.validation import check_array,check_is_fitted
 import numpy as np
 from copy import deepcopy

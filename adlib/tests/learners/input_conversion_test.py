@@ -1,7 +1,7 @@
 import pytest
-from learners.models import sklearner
+from adlib.learners.models import sklearner
 from sklearn import svm
-from learners import SimpleLearner
+from adlib.learners import SimpleLearner
 from data_reader import binary_input
 from data_reader.dataset import EmailDataset
 from data_reader.binary_input import Instance

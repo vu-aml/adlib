@@ -1,5 +1,5 @@
 from sklearn import svm
-from learners import SimpleLearner
+from adlib.learners import SimpleLearner
 import learners as learner
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset

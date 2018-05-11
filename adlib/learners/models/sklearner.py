@@ -1,7 +1,7 @@
 from typing import List, Dict
 from data_reader.binary_input import Instance
 from data_reader.dataset import EmailDataset
-from learners.models.model import BaseModel
+from adlib.learners.models.model import BaseModel
 import numpy as np
 from data_reader.operations import sparsify
 

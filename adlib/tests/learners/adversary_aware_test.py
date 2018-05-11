@@ -1,8 +1,8 @@
 from adversaries.cost_sensitive import CostSensitive
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
-from learners.adversary_aware import AdversaryAware
-from learners.simple_learner import SimpleLearner
+from adlib.learners.adversary_aware import AdversaryAware
+from adlib.learners.simple_learner import SimpleLearner
 from sklearn.naive_bayes import GaussianNB
 
 

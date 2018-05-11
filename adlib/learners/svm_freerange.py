@@ -1,4 +1,4 @@
-from learners.learner import learner
+from adlib.learners.learner import learner
 from data_reader.binary_input import Instance
 from data_reader.operations import sparsify
 from adversaries.adversary import Adversary

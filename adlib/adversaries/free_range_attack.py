@@ -4,7 +4,7 @@ from data_reader.binary_input import Instance
 from data_reader.operations import find_centroid, find_max, find_min
 from copy import deepcopy
 import numpy as np
-from learners.learner import learner
+from adlib.learners.learner import learner
 from math import log
 import random
 

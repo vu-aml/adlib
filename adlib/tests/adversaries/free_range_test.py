@@ -2,7 +2,7 @@ import pytest
 from typing import Dict,List
 from adversaries import FreeRange
 from sklearn import svm
-from learners import learner, SimpleLearner,SVMFreeRange
+from adlib.learners import learner, SimpleLearner,SVMFreeRange
 from data_reader.dataset import EmailDataset
 from data_reader.binary_input import Instance
 from data_reader.operations import load_dataset

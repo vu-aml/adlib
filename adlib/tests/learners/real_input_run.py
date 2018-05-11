@@ -1,12 +1,12 @@
-from learners.models import sklearner
+from adlib.learners.models import sklearner
 from sklearn import svm
-from learners import SimpleLearner
+from adlib.learners import SimpleLearner
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset,sparsify
 from data_reader.binary_input import Instance
 from random import seed, shuffle
-from learners.svm_freerange import SVMFreeRange
-from learners.svm_restrained import SVMRestrained
+from adlib.learners.svm_freerange import SVMFreeRange
+from adlib.learners.svm_restrained import SVMRestrained
 import learners as learner
 import adversaries as ad
 from sklearn import metrics

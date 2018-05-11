@@ -1,5 +1,5 @@
 import pytest
-from learners import SVMRestrained
+from adlib.learners import SVMRestrained
 from data_reader import binary_input
 from data_reader.binary_input import Instance
 from random import seed, shuffle

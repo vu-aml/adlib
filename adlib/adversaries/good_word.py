@@ -1,7 +1,7 @@
 from typing import List, Dict
 from adversaries.adversary import Adversary
 from data_reader.binary_input import Instance, BinaryFeatureVector
-from learners.learner import learner
+from adlib.learners.learner import learner
 from copy import deepcopy
 from itertools import filterfalse
 

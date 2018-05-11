@@ -2,7 +2,7 @@ from sklearn.naive_bayes import BernoulliNB
 from typing import Dict, List
 import pytest
 import numpy as np
-from learners import learner, SimpleLearner
+from adlib.learners import learner, SimpleLearner
 from data_reader.dataset import EmailDataset
 from data_reader.binary_input import Instance,BinaryFeatureVector
 from data_reader.operations import load_dataset

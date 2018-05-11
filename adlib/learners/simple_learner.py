@@ -1,5 +1,5 @@
-from learners.learner import learner
-from learners.models import sklearner
+from adlib.learners.learner import learner
+from adlib.learners.models import sklearner
 from typing import Dict
 from data_reader.dataset import EmailDataset
 

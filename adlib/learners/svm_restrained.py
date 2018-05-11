@@ -1,4 +1,4 @@
-from learners.learner import learner
+from adlib.learners.learner import learner
 from typing import List, Dict
 import numpy as np
 import cvxpy as cvx

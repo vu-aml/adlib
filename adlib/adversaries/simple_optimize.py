@@ -3,7 +3,7 @@ from data_reader.binary_input import Instance, BinaryFeatureVector
 from typing import List, Dict
 from data_reader.dataset import EmailDataset
 from data_reader.binary_input import Instance
-from learners.learner import learner
+from adlib.learners.learner import learner
 from copy import deepcopy
 from math import exp
 

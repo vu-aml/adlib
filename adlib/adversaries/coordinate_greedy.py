@@ -21,7 +21,7 @@ class CoordinateGreedy(Adversary):
     def __init__(self, learner=None, max_change=100,
                  lambda_val=0.05, epsilon=0.0002, step_size=1):
         """
-        :param learner: Learner(from learners)
+        :param learner: Learner(from adlib.learners)
         :param max_change: max times allowed to change the feature
         :param lambda_val: weight in quodratic distances calculation
         :param epsilon: the limit of difference between transform costs of ,xij+1, xij, and orginal x

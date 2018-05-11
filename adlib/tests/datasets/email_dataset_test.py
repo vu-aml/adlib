@@ -1,10 +1,10 @@
 import pytest
-from learners import SVMRestrained
+from adlib.learners import SVMRestrained
 from data_reader import binary_input
 from data_reader.binary_input import Instance
 from random import seed, shuffle
 from data_reader.dataset import EmailDataset
-from learners.simple_learner import SimpleLearner
+from adlib.learners.simple_learner import SimpleLearner
 from sklearn import svm
 
 

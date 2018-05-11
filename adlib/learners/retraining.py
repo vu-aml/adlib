@@ -1,8 +1,8 @@
-from learners.learner import learner
+from adlib.learners.learner import learner
 from typing import Dict, List
 from data_reader.dataset import EmailDataset
 from data_reader.binary_input import Instance
-from learners.models.sklearner import Model
+from adlib.learners.models.sklearner import Model
 import numpy as np
 from data_reader.operations import fv_equals
 

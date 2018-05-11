@@ -2,7 +2,7 @@
 from adversaries.adversary import Adversary
 from typing import List, Dict
 from data_reader.binary_input import Instance
-from learners.learner import learner
+from adlib.learners.learner import learner
 from copy import deepcopy
 from data_reader.operations import find_min,find_max
 import numpy as np

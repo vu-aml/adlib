@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 class AdversaryFeatureDeletion(Adversary):
     def __init__(self, learner=None, num_deletion=100, all_malicious=True):
         """
-        :param learner: Learner from learners
+        :param learner: Learner from adlib.learners
         :param num_deletion: the max number that will be deleted in the attack
         :param all_malicious: if the flag is set, only features that are malicious
                               will be deleted.

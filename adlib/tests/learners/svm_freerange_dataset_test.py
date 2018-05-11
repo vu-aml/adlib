@@ -1,6 +1,6 @@
 import pytest
 import learners
-from learners import SVMFreeRange
+from adlib.learners import SVMFreeRange
 from data_reader import binary_input
 from data_reader.binary_input import Instance
 from random import seed, shuffle

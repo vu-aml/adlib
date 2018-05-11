@@ -127,7 +127,3 @@ def calculate_correct_percentages(orig_labels, attack_labels, instances):
     difference = str(round(difference, 4))
 
     return orig_precent_correct, attack_precent_correct, difference
-
-
-if __name__ == '__main__':
-    test_label_flipping()

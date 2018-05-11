@@ -2,7 +2,7 @@
 # A label flipping implementation
 # Matthew Sedam
 
-from adversaries.adversary import Adversary
+from adlib.adversaries.adversary import Adversary
 from data_reader.binary_input import Instance
 import cvxpy as cvx
 import numpy as np

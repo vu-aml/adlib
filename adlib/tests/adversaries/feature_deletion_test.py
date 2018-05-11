@@ -1,5 +1,5 @@
 import pytest
-from adversaries.feature_deletion import AdversaryFeatureDeletion
+from adlib.adversaries.feature_deletion import AdversaryFeatureDeletion
 from sklearn import svm
 from adlib.learners import SimpleLearner
 from data_reader.dataset import EmailDataset

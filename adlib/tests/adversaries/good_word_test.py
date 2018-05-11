@@ -1,5 +1,5 @@
 import pytest
-from adversaries import GoodWord
+from adlib.adversaries import GoodWord
 from sklearn import svm
 from adlib.learners import learner, SimpleLearner
 from data_reader.dataset import EmailDataset

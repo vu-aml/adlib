@@ -1,10 +1,10 @@
-from adversaries.adversary import Adversary
+from adlib.adversaries.adversary import Adversary
 from data_reader.binary_input import Instance
 from data_reader.real_input import RealFeatureVector
 from typing import List, Dict
 from random import shuffle
 import numpy as np
-import learners as learners
+import adlib.learners as learners
 from copy import deepcopy
 
 """

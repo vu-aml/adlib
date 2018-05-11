@@ -1,9 +1,9 @@
 from sklearn import svm
 from adlib.learners import SimpleLearner
-import learners as learner
+import adlib.learners as learner
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
-from adversaries.free_range_attack import FreeRange
+from adlib.adversaries.free_range_attack import FreeRange
 from sklearn import metrics
 
 

@@ -1,10 +1,10 @@
 from sklearn import svm
 from adlib.learners import SimpleLearner
-import learners as learner
+import adlib.learners as learner
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
 from adlib.learners.feature_deletion import FeatureDeletion
-from adversaries.feature_deletion import AdversaryFeatureDeletion
+from adlib.adversaries.feature_deletion import AdversaryFeatureDeletion
 from sklearn import metrics
 import numpy as np
 from matplotlib import pyplot as plt

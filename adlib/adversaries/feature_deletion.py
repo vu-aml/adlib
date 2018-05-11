@@ -1,4 +1,4 @@
-from adversaries.adversary import Adversary
+from adlib.adversaries.adversary import Adversary
 from data_reader.binary_input import Instance
 from typing import List, Dict
 import numpy as np

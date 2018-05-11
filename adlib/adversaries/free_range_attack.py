@@ -1,4 +1,4 @@
-from adversaries.adversary import Adversary
+from adlib.adversaries.adversary import Adversary
 from typing import List, Dict
 from data_reader.binary_input import Instance
 from data_reader.operations import find_centroid, find_max, find_min

@@ -1,9 +1,9 @@
 from sklearn import svm
 from adlib.learners import SimpleLearner
-import learners as learner
+import adlib.learners as learner
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
-from adversaries.binary_greedy import BinaryGreedy
+from adlib.adversaries.binary_greedy import BinaryGreedy
 from sklearn import metrics
 
 

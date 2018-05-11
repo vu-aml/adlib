@@ -1,5 +1,5 @@
 import pytest
-import learners
+import adlib.learners
 from adlib.learners import SVMFreeRange
 from data_reader import binary_input
 from data_reader.binary_input import Instance

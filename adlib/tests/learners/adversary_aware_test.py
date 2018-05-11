@@ -1,4 +1,4 @@
-from adversaries.cost_sensitive import CostSensitive
+from adlib.adversaries.cost_sensitive import CostSensitive
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
 from adlib.learners.adversary_aware import AdversaryAware

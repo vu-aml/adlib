@@ -1,9 +1,9 @@
 from sklearn import svm
 from adlib.learners import SimpleLearner
-import learners as learner
+import adlib.learners as learner
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
-from adversaries.good_word import GoodWord
+from adlib.adversaries.good_word import GoodWord
 from sklearn import metrics
 
 def summary(y_pred, y_true):

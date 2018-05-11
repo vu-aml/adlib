@@ -7,8 +7,8 @@ from data_reader.binary_input import Instance
 from random import seed, shuffle
 from adlib.learners.svm_freerange import SVMFreeRange
 from adlib.learners.svm_restrained import SVMRestrained
-import learners as learner
-import adversaries as ad
+import adlib.learners as learner
+import adlib.adversaries as ad
 from sklearn import metrics
 
 

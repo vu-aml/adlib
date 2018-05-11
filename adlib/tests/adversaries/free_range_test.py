@@ -1,6 +1,6 @@
 import pytest
 from typing import Dict,List
-from adversaries import FreeRange
+from adlib.adversaries import FreeRange
 from sklearn import svm
 from adlib.learners import learner, SimpleLearner,SVMFreeRange
 from data_reader.dataset import EmailDataset

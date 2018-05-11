@@ -1,4 +1,4 @@
-from adversaries.adversarial_learning import AdversarialLearning
+from adlib.adversaries.adversarial_learning import AdversarialLearning
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
 from adlib.learners.simple_learner import SimpleLearner

@@ -8,7 +8,7 @@ from adlib.learners import SimpleLearner
 import numpy as np
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
-from adversaries.label_flipping import LabelFlipping
+from adlib.adversaries.label_flipping import LabelFlipping
 
 
 def test_label_flipping():

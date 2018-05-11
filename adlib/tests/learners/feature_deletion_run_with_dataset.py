@@ -3,7 +3,7 @@ from sklearn import svm
 from data_reader.binary_input import Instance
 from data_reader.operations import load_dataset
 from sklearn import metrics
-import learners as learner
+import adlib.learners as learner
 import random
 from random import seed, shuffle
 from data_reader.dataset import EmailDataset

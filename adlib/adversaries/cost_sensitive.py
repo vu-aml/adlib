@@ -1,5 +1,5 @@
 
-from adversaries.adversary import Adversary
+from adlib.adversaries.adversary import Adversary
 from typing import List, Dict
 from data_reader.binary_input import Instance
 from adlib.learners.learner import learner

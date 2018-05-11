@@ -4,7 +4,7 @@
 
 from copy import deepcopy
 from sklearn import svm
-from adlib.learners import SimpleLearner
+from learners import SimpleLearner
 import numpy as np
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
@@ -15,7 +15,7 @@ def test_label_flipping():
     # Data processing unit
     # The path is an index of 400 testing samples(raw email data).
     dataset = EmailDataset(
-        path='../../../data_reader/data/raw/trec05p-1/test-400',
+        path='./data_reader/data/raw/trec05p-1/test-400',
         binary=True, raw=True)
     training_data = load_dataset(dataset)
 

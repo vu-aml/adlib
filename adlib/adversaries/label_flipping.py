@@ -177,7 +177,7 @@ class LabelFlipping(Adversary):
         cnst = q.dot(orig_loss)
 
         # Setup CVX problem
-        func = self.gamma * n * (cvx.pnorm(w, 2) ** 2) - cnst
+        func = self.gamma * (cvx.pnorm(w, 2) ** 2) - cnst
         for i in range(n):
             func += q[i] * epsilon[i]
 
@@ -211,7 +211,7 @@ class LabelFlipping(Adversary):
         q = cvx.Int(n)
 
         # Calculate constants - see comment above
-        cnst = n * self.gamma * w.dot(w)
+        cnst = self.gamma * w.dot(w)
         epsilon_diff_eta = epsilon - orig_loss
 
         # Setup CVX problem

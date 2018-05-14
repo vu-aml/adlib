@@ -16,17 +16,65 @@ from typing import List, Dict
 
 
 class KInsertion(Adversary):
-    def __init__(self, learner, poison_instance, alpha, beta):
+    def __init__(self, learner, poison_instance, beta, alpha=1e-3,
+                 number_to_add=1):
         Adversary.__init__(self)
         self.learner = learner
         self.poison_instance = poison_instance
-        self.alpha = alpha
         self.beta = beta
+        self.alpha = alpha
+        self.number_to_add = number_to_add
 
     def attack(self, instances) -> List[Instance]:
         if len(instances) == 0:
             raise ValueError('Need at least one instance.')
-        # TODO: Implement
+
+        # Get constants
+        kernel = self._get_kernel()
+        kernel_derivative = self._get_kernel_derivative()
+
+        # x is value to be added
+        x = np.random.binomial(1, 0.5, instances[0].get_feature_count())
+
+        gradient = np.full(instances[0].get_feature_count(), 0)
+        for i in len(gradient):
+            pass
+
+    def _solve_parial_derivatives_matrix(self, iter: int):
+        learner = self.learner.model.learner
+        size = learner.n_support_[0] + learner.n_support_[1] + 1  # binary
+        solution = np.full((size, size), 0)
+
+        if
+
+
+    def _Q(self, inst_1: Instance, inst_2: Instance):
+        """
+        Calculates Q_ij
+        :param inst_1: the first instance
+        :param inst_2: the second instance
+        :return: Q_ij where i corresponds to inst_1 and j corresponds to inst_2
+        """
+
+        if len(inst_1) != len(inst_2):
+            raise ValueError('Feature vectors need to have same length.')
+
+        kernel = self._get_kernel()
+        fv = [[], []]
+        for i in range(2):
+            if i == 0:
+                inst = inst_1
+            else:
+                inst = inst_2
+
+            for j in range(inst.get_feature_count()):
+                if inst.get_feature_vector().get_feature(j) == 0:
+                    fv[i].append(0)
+                else:
+                    fv[i].append(1)
+
+        return (inst_1.get_label() * inst_2.get_label() *
+                kernel(np.array(fv[0]), np.array(fv[1])))
 
     def _kernel_linear(self, fv_1: np.ndarray, fv_2: np.ndarray):
         """
@@ -180,7 +228,7 @@ class KInsertion(Adversary):
         """
         :return: the appropriate kernel derivative function
         """
-        
+
         if self.learner.kernel == 'linear':
             return self._kernel_derivative_linear
         elif self.learner.kernel == 'poly':

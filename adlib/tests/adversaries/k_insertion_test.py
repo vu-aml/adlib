@@ -22,3 +22,6 @@ def test_k_insertion():
     learning_model = svm.SVC(probability=True, kernel='linear')
     learner = SimpleLearner(learning_model, training_data)
     learner.train()
+
+    attacker = KInsertion(learner, training_data[0])
+    attacker.attack(training_data)

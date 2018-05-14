@@ -15,10 +15,11 @@ from typing import List, Dict
 # TODO: Implement gradient functions
 # TODO: Implement gradient descent for 1 added vector
 # TODO: Implement loop for k vectors using gradient descent
+# TODO: Make save kernel function to self
 
 
 class KInsertion(Adversary):
-    def __init__(self, learner, poison_instance, beta, alpha=1e-3,
+    def __init__(self, learner, poison_instance, beta=0.07, alpha=1e-3,
                  number_to_add=1):
         Adversary.__init__(self)
         self.learner = deepcopy(learner)
@@ -56,8 +57,27 @@ class KInsertion(Adversary):
         self.learner.train()  # Train with newly generated instance
 
         gradient = np.full(instances[0].get_feature_count(), 0)
-        for i in len(gradient):
-            pass  # Do gradient calculations
+        for i in range(len(gradient)):
+            (z_c,
+             partial_b_partial_x_k,
+             partial_z_s_partial_x_k) = self._solve_parial_derivatives_matrix(i)
+
+            for j in range(len(self.orig_instances)):
+                if i in self.learner.model.learner.support_:
+                    q_i_t = self._Q(self.orig_instances[i], self.inst)
+                    partial_z_i_partial_x_k = partial_z_s_partial_x_k[
+                        self.learner.model.learner.support_.index(i)]
+                    gradient[i] += q_i_t * partial_z_i_partial_x_k
+
+            gradient[i] += self._Q(self.instances[-1], self.inst, True, i) * z_c
+
+            if len(self.instances) in self.learner.model.learner.support_:
+                gradient[i] += (self._Q(self.instances[-1], self.inst) *
+                                partial_z_s_partial_x_k[-1])
+
+            gradient[i] += self.inst.get_label() * partial_b_partial_x_k
+
+        print(gradient)
 
     def _solve_parial_derivatives_matrix(self, k: int):
         """
@@ -279,13 +299,13 @@ class KInsertion(Adversary):
         :return: the appropriate kernel function
         """
 
-        if self.learner.kernel == 'linear':
+        if self.learner.model.learner.kernel == 'linear':
             return self._kernel_linear
-        elif self.learner.kernel == 'poly':
+        elif self.learner.model.learner.kernel == 'poly':
             return self._kernel_poly
-        elif self.learner.kernel == 'rbf':
+        elif self.learner.model.learner.kernel == 'rbf':
             return self._kernel_rbf
-        elif self.learner.kernel == 'sigmoid':
+        elif self.learner.model.learner.kernel == 'sigmoid':
             return self._kernel_sigmoid
         else:
             raise ValueError('No matching kernel function found.')
@@ -295,13 +315,13 @@ class KInsertion(Adversary):
         :return: the appropriate kernel derivative function
         """
 
-        if self.learner.kernel == 'linear':
+        if self.learner.model.learner.kernel == 'linear':
             return self._kernel_derivative_linear
-        elif self.learner.kernel == 'poly':
+        elif self.learner.model.learner.kernel == 'poly':
             return self._kernel_derivative_poly
-        elif self.learner.kernel == 'rbf':
+        elif self.learner.model.learner.kernel == 'rbf':
             return self._kernel_derivative_rbf
-        elif self.learner.kernel == 'sigmoid':
+        elif self.learner.model.learner.kernel == 'sigmoid':
             return self._kernel_derivative_sigmoid
         else:
             raise ValueError('No matching kernel function found.')

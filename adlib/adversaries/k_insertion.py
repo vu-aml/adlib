@@ -59,10 +59,11 @@ class KInsertion(Adversary):
         for i in len(gradient):
             pass  # Do gradient calculations
 
-    def _solve_parial_derivatives_matrix(self):
+    def _solve_parial_derivatives_matrix(self, k: int):
         """
-        :return: partial b / partial x_k, partial z_s / partial x_k (tuple)
+        :return: z_c, partial b / partial x_k, partial z_s / partial x_k (tuple)
         """
+
         learner = self.learner.model.learner
         size = learner.n_support_[0] + learner.n_support_[1] + 1  # binary
         solution = np.full((size, size), 0)
@@ -71,7 +72,7 @@ class KInsertion(Adversary):
             if self.learner.predict(self.inst) != self.inst.get_label():  # in E
                 z_c = learner.C
             else:  # in R, z_c = 0, everything is 0
-                return 0, np.full(learner.n_support_, 0)
+                return 0, 0, np.full(learner.n_support_, 0)
         else:
             z_c = learner.coef_.flatten()[-1]
 
@@ -100,13 +101,13 @@ class KInsertion(Adversary):
         vector = [0]
         for i in learner.support_:
             vector.append(self._Q(self.instances[learner.support_[i]],
-                                  self.instances[-1], True))
+                                  self.instances[-1], True, k))
         vector = np.array(vector)
 
         solution = solution * vector
-        return solution[0], solution[1:]
+        return z_c, solution[0], solution[1:]
 
-    def _Q(self, inst_1: Instance, inst_2: Instance, derivative=False):
+    def _Q(self, inst_1: Instance, inst_2: Instance, derivative=False, k=-1):
         """
         Calculates Q_ij
         :param inst_1: the first instance
@@ -135,8 +136,11 @@ class KInsertion(Adversary):
                 else:
                     fv[i].append(1)
 
-        return (inst_1.get_label() * inst_2.get_label() *
-                kernel(np.array(fv[0]), np.array(fv[1])))
+        if derivative:
+            ret_val = kernel(np.array(fv[0]), np.array(fv[1]), k)
+        else:
+            ret_val = kernel(np.array(fv[0]), np.array(fv[1]))
+        return inst_1.get_label() * inst_2.get_label() * ret_val
 
     def _kernel_linear(self, fv_1: np.ndarray, fv_2: np.ndarray):
         """

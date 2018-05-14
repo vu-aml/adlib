@@ -5,8 +5,10 @@
 
 from adlib.adversaries.adversary import Adversary
 from data_reader.binary_input import Instance
+from data_reader.binary_input import BinaryFeatureVector
 import math
 import numpy as np
+from copy import deepcopy
 from typing import List, Dict
 
 
@@ -19,36 +21,92 @@ class KInsertion(Adversary):
     def __init__(self, learner, poison_instance, beta, alpha=1e-3,
                  number_to_add=1):
         Adversary.__init__(self)
-        self.learner = learner
+        self.learner = deepcopy(learner)
         self.poison_instance = poison_instance
         self.beta = beta
         self.alpha = alpha
         self.number_to_add = number_to_add
+        self.instances = None
+        self.orig_instances = None
+        self.x = None  # The feature vector of the instance to be added
+        self.y = -1 if np.random.binomial(1, 0.5, 1)[0] == 0 else 1  # x's label
+        self.inst = None
 
     def attack(self, instances) -> List[Instance]:
         if len(instances) == 0:
             raise ValueError('Need at least one instance.')
+        self.instances = deepcopy(instances)
+        self.orig_instances = deepcopy(instances)
 
         # Get constants
         kernel = self._get_kernel()
         kernel_derivative = self._get_kernel_derivative()
 
         # x is value to be added
-        x = np.random.binomial(1, 0.5, instances[0].get_feature_count())
+        self.x = np.random.binomial(1, 0.5, instances[0].get_feature_count())
+        indices_list = []
+        for i in range(len(self.x)):
+            if self.x[i] == 1:
+                indices_list.append(i)
+        self.inst = Instance(self.y,
+                             BinaryFeatureVector(len(self.x), indices_list))
+
+        self.instances.append(self.inst)
+        self.learner.training_instances = self.instances
+        self.learner.train()  # Train with newly generated instance
 
         gradient = np.full(instances[0].get_feature_count(), 0)
         for i in len(gradient):
-            pass
+            pass  # Do gradient calculations
 
-    def _solve_parial_derivatives_matrix(self, iter: int):
+    def _solve_parial_derivatives_matrix(self):
+        """
+        :return: partial b / partial x_k, partial z_s / partial x_k (tuple)
+        """
         learner = self.learner.model.learner
         size = learner.n_support_[0] + learner.n_support_[1] + 1  # binary
         solution = np.full((size, size), 0)
 
-        if
+        if len(self.instances) not in learner.support_:  # self.inst not in S
+            if self.learner.predict(self.inst) != self.inst.get_label():  # in E
+                z_c = learner.C
+            else:  # in R, z_c = 0, everything is 0
+                return 0, np.full(learner.n_support_, 0)
+        else:
+            z_c = learner.coef_.flatten()[-1]
 
+        y_s = []
+        for i in learner.support_:
+            y_s.append(self.instances[i].get_label())
+        y_s = np.array(y_s)
 
-    def _Q(self, inst_1: Instance, inst_2: Instance):
+        q_s = np.full((size - 1, size - 1), 0)
+        for i in range(size - 1):
+            for j in range(size - 1):
+                q_s[i][j] = self._Q(self.instances[learner.support_[i]],
+                                    self.instances[learner.support_[j]])
+
+        for i in range(1, size):
+            solution[0][i] = y_s[i - 1]
+            solution[i][0] = y_s[i - 1]
+
+        for i in range(1, size):
+            for j in range(1, size):
+                solution[i][j] = q_s[i - 1][j - 1]
+
+        solution = np.linalg.inv(solution)
+        solution = -1 * z_c * solution
+
+        vector = [0]
+        for i in learner.support_:
+            vector.append(self._Q(self.instances[learner.support_[i]],
+                                  self.instances[-1], True))
+        vector = np.array(vector)
+
+        solution = solution * vector
+        return solution[0], solution[1:]
+
+    def _Q(self, inst_1: Instance, inst_2: Instance, derivative=False):
         """
         Calculates Q_ij
         :param inst_1: the first instance
@@ -59,7 +117,11 @@ class KInsertion(Adversary):
         if len(inst_1) != len(inst_2):
             raise ValueError('Feature vectors need to have same length.')
 
-        kernel = self._get_kernel()
+        if derivative:
+            kernel = self._get_kernel_derivative()
+        else:
+            kernel = self._get_kernel()
+
         fv = [[], []]
         for i in range(2):
             if i == 0:

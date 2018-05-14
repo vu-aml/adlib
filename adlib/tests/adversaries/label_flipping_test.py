@@ -6,11 +6,13 @@ from copy import deepcopy
 from sklearn import svm
 from adlib.learners import SimpleLearner
 import numpy as np
+import pytest
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
 from adlib.adversaries.label_flipping import LabelFlipping
 
 
+@pytest.mark.skip(reason='Takes too much time')
 def test_label_flipping():
     # Data processing unit
     # The path is an index of 400 testing samples(raw email data).

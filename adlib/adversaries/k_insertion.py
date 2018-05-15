@@ -15,6 +15,7 @@ from typing import List, Dict
 # TODO: Implement gradient descent for 1 added vector
 # TODO: Implement loop for k vectors using gradient descent
 # TODO: Review for correctness
+# TODO: Fix singular matrix error that is now wrapped in try-catch
 
 
 class KInsertion(Adversary):
@@ -155,7 +156,7 @@ class KInsertion(Adversary):
         matrix = np.linalg.inv(matrix)
         try:
             matrix = np.linalg.inv(matrix)
-        except np.linalg.LinAlgError:
+        except np.linalg.linalg.LinAlgError:
             # Sometimes the matrix is reported to be singular. In this case,
             # the safest thing to do is have the matrix and thus eventually
             # the gradient equal 0 as to not move the solution incorrectly.

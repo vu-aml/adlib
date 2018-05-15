@@ -5,11 +5,13 @@
 from sklearn import svm
 from adlib.learners import SimpleLearner
 import numpy as np
+import pytest
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
 from adlib.adversaries.k_insertion import KInsertion
 
 
+@pytest.mark.run
 def test_k_insertion():
     # Data processing unit
     # The path is an index of 400 testing samples(raw email data).

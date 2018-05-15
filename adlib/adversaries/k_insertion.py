@@ -33,6 +33,9 @@ class KInsertion(Adversary):
         self.inst = None
         self.kernel = self._get_kernel()
         self.kernel_derivative = self._get_kernel_derivative()
+        self.z_c = None
+        self.matrix = None
+        self.quick_calc = None
 
     def attack(self, instances) -> List[Instance]:
         if len(instances) == 0:
@@ -54,58 +57,61 @@ class KInsertion(Adversary):
         self.learner.training_instances = self.instances
         self.learner.train()
 
-        gradient = self._calculate_gradient()
+        gradient = self._calc_gradient()
         print(gradient)
 
-    def _calculate_gradient(self):
-        z_c, matrix = self._solve_matrix()
+    def _calc_gradient(self):
+        self.z_c, self.matrix = self._solve_matrix()
 
         # If resulting matrix is zero (it will be if z_c == 0 by definition, so
         # short-circuit behavior is being used here), then only do one
         # calculation as per the formula.
-        if z_c == 0 or np.count_nonzero(matrix) == 0:
-            quick_calc = True
+        if self.z_c == 0 or np.count_nonzero(self.matrix) == 0:
+            self.quick_calc = True
         else:
-            quick_calc = False
+            self.quick_calc = False
 
         gradient = []
         for i in range(self.instances[0].get_feature_count()):
+            gradient.append(self._calc_grad_helper(i))
             print(np.array(gradient))
 
-            if quick_calc:
-                val = self._Q(self.instances[-1], self.inst, True, i) * z_c
-                gradient.append(val)
-            else:
-                current = 0  # current partial derivative
-
-                vector = [0]
-                for j in self.learner.model.learner.support_:
-                    vector.append(
-                        self._Q(self.instances[j], self.inst, True, i))
-                vector = np.array(vector)
-
-                solution = matrix.dot(vector)
-                partial_b_partial_x_k = solution[0]
-                partial_z_s_partial_x_k = solution[1:]
-
-                for j in range(len(self.orig_instances)):
-                    if j in self.learner.model.learner.support_:
-                        q_i_t = self._Q(self.orig_instances[j], self.inst)
-                        partial_z_i_partial_x_k = partial_z_s_partial_x_k[
-                            self.learner.model.learner.support_.tolist().index(
-                                j)]
-                        current += q_i_t * partial_z_i_partial_x_k
-
-                current += self._Q(self.instances[-1], self.inst, True, i) * z_c
-
-                if len(self.instances) in self.learner.model.learner.support_:
-                    current += (self._Q(self.instances[-1], self.inst) *
-                                partial_z_s_partial_x_k[-1])
-
-                current += self.inst.get_label() * partial_b_partial_x_k
-                gradient.append(current)
-
         return np.array(gradient)
+
+    def _calc_grad_helper(self, i):
+        if self.quick_calc:
+            val = self._Q(self.instances[-1], self.inst, True, i) * self.z_c
+            return val
+        else:
+            current = 0  # current partial derivative
+
+            vector = [0]
+            for j in self.learner.model.learner.support_:
+                vector.append(
+                    self._Q(self.instances[j], self.inst, True, i))
+            vector = np.array(vector)
+
+            solution = self.matrix.dot(vector)
+            partial_b_partial_x_k = solution[0]
+            partial_z_s_partial_x_k = solution[1:]
+
+            s_v_indices = self.learner.model.learner.support_.tolist()
+            for j in range(len(self.orig_instances)):
+                if j in self.learner.model.learner.support_:
+                    q_i_t = self._Q(self.orig_instances[j], self.inst)
+                    partial_z_i_partial_x_k = partial_z_s_partial_x_k[
+                        s_v_indices.index(j)]
+                    current += q_i_t * partial_z_i_partial_x_k
+
+            current += (self._Q(self.instances[-1], self.inst, True, i) *
+                        self.z_c)
+
+            if len(self.instances) in self.learner.model.learner.support_:
+                current += (self._Q(self.instances[-1], self.inst) *
+                            partial_z_s_partial_x_k[-1])
+
+            current += self.inst.get_label() * partial_b_partial_x_k
+            return current
 
     def _solve_matrix(self):
         """

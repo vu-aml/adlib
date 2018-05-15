@@ -71,11 +71,8 @@ class KInsertion(Adversary):
         else:
             self.quick_calc = False
 
-        gradient = []
-        for i in range(self.instances[0].get_feature_count()):
-            gradient.append(self._calc_grad_helper(i))
-            print(np.array(gradient))
-
+        size = self.instances[0].get_feature_count()
+        gradient = list(map(self._calc_grad_helper, range(size)))
         return np.array(gradient)
 
     def _calc_grad_helper(self, i):

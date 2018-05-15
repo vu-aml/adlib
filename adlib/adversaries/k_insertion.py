@@ -7,16 +7,14 @@ from adlib.adversaries.adversary import Adversary
 from data_reader.binary_input import Instance
 from data_reader.binary_input import BinaryFeatureVector
 import math
-import pathos.multiprocessing as mp
 import numpy as np
 from copy import deepcopy
 from typing import List, Dict
 
 
-# TODO: Implement gradient functions
 # TODO: Implement gradient descent for 1 added vector
 # TODO: Implement loop for k vectors using gradient descent
-# TODO: Save kernel function to self
+# TODO: Review for correctness
 
 
 class KInsertion(Adversary):
@@ -35,7 +33,6 @@ class KInsertion(Adversary):
         self.inst = None
         self.kernel = self._get_kernel()
         self.kernel_derivative = self._get_kernel_derivative()
-        self._temp_args = None
 
     def attack(self, instances) -> List[Instance]:
         if len(instances) == 0:
@@ -57,54 +54,76 @@ class KInsertion(Adversary):
         self.learner.training_instances = self.instances
         self.learner.train()
 
-        print(self.learner.model.learner.support_)
-
-        gradient = []
-        for i in range(instances[0].get_feature_count()):
-            current = 0  # current partial derivative
-
-            (z_c,
-             partial_b_partial_x_k,
-             partial_z_s_partial_x_k) = self._solve_parial_derivatives_matrix(i)
-
-            print('z_c: ', z_c)
-            print('pbpx_k: ', partial_b_partial_x_k)
-            print('z_s partials: ', partial_z_s_partial_x_k)
-
-            for j in range(len(self.orig_instances)):
-                if j in self.learner.model.learner.support_:
-                    q_i_t = self._Q(self.orig_instances[i], self.inst)
-                    partial_z_i_partial_x_k = partial_z_s_partial_x_k[
-                        self.learner.model.learner.support_.tolist().index(i)]
-                    current += q_i_t * partial_z_i_partial_x_k
-
-            current += self._Q(self.instances[-1], self.inst, True, i) * z_c
-
-            if len(self.instances) in self.learner.model.learner.support_:
-                current += (self._Q(self.instances[-1], self.inst) *
-                            partial_z_s_partial_x_k[-1])
-
-            current += self.inst.get_label() * partial_b_partial_x_k
-            gradient.append(current)
-
-        gradient = np.array(gradient)
-
+        gradient = self._calculate_gradient()
         print(gradient)
 
-    def _solve_parial_derivatives_matrix(self, k: int):
+    def _calculate_gradient(self):
+        z_c, matrix = self._solve_matrix()
+
+        # If resulting matrix is zero (it will be if z_c == 0 by definition, so
+        # short-circuit behavior is being used here), then only do one
+        # calculation as per the formula.
+        if z_c == 0 or np.count_nonzero(matrix) == 0:
+            quick_calc = True
+        else:
+            quick_calc = False
+
+        gradient = []
+        for i in range(self.instances[0].get_feature_count()):
+            print(np.array(gradient))
+
+            if quick_calc:
+                val = self._Q(self.instances[-1], self.inst, True, i) * z_c
+                gradient.append(val)
+            else:
+                current = 0  # current partial derivative
+
+                vector = [0]
+                for j in self.learner.model.learner.support_:
+                    vector.append(
+                        self._Q(self.instances[j], self.inst, True, i))
+                vector = np.array(vector)
+
+                solution = matrix.dot(vector)
+                partial_b_partial_x_k = solution[0]
+                partial_z_s_partial_x_k = solution[1:]
+
+                for j in range(len(self.orig_instances)):
+                    if j in self.learner.model.learner.support_:
+                        q_i_t = self._Q(self.orig_instances[j], self.inst)
+                        partial_z_i_partial_x_k = partial_z_s_partial_x_k[
+                            self.learner.model.learner.support_.tolist().index(
+                                j)]
+                        current += q_i_t * partial_z_i_partial_x_k
+
+                current += self._Q(self.instances[-1], self.inst, True, i) * z_c
+
+                if len(self.instances) in self.learner.model.learner.support_:
+                    current += (self._Q(self.instances[-1], self.inst) *
+                                partial_z_s_partial_x_k[-1])
+
+                current += self.inst.get_label() * partial_b_partial_x_k
+                gradient.append(current)
+
+        return np.array(gradient)
+
+    def _solve_matrix(self):
         """
-        :return: z_c, partial b / partial x_k, partial z_s / partial x_k (tuple)
+        :return: z_c, matrix for derivative calculations
+
+        Note: I tried using multiprocessing Pools, but these were slower than
+              using the built-in map function.
         """
 
         learner = self.learner.model.learner
         size = learner.n_support_[0] + learner.n_support_[1] + 1  # binary
-        solution = np.full((size, size), 0)
+        matrix = np.full((size, size), 0)
 
         if len(self.instances) - 1 not in learner.support_:  # not in S
             if self.learner.predict(self.inst) != self.inst.get_label():  # in E
                 z_c = learner.C
             else:  # in R, z_c = 0, everything is 0
-                return 0, 0, np.full(learner.n_support_, 0)
+                return 0, 0, np.full(size - 1, 0)
         else:
             z_c = learner.coef_.flatten()[-1]
 
@@ -114,43 +133,36 @@ class KInsertion(Adversary):
         y_s = np.array(y_s)
 
         q_s = []
-        print('size - 1: ', size - 1)
         for i in range(size - 1):
-            print('i: ', i)
-            calculations = range(size - 1)
-            self._temp_args = (i, learner)
-            pool = mp.Pool(mp.cpu_count() * 2)
-            pool.map(self._matrix_helper, calculations)
-            q_s.append(calculations)
+            values = list(map(
+                lambda idx: self._Q(self.instances[learner.support_[i]],
+                                    self.instances[learner.support_[idx]]),
+                range(size - 1)))
+            q_s.append(values)
         q_s = np.array(q_s)
-        print(q_s)
 
         for i in range(1, size):
-            solution[0][i] = y_s[i - 1]
-            solution[i][0] = y_s[i - 1]
+            matrix[0][i] = y_s[i - 1]
+            matrix[i][0] = y_s[i - 1]
 
         for i in range(1, size):
             for j in range(1, size):
-                solution[i][j] = q_s[i - 1][j - 1]
+                matrix[i][j] = q_s[i - 1][j - 1]
 
-        solution = np.linalg.inv(solution)
-        solution = -1 * z_c * solution
+        matrix = np.linalg.inv(matrix)
+        try:
+            matrix = np.linalg.inv(matrix)
+        except np.linalg.LinAlgError:
+            # Sometimes the matrix is reported to be singular. In this case,
+            # the safest thing to do is have the matrix and thus eventually
+            # the gradient equal 0 as to not move the solution incorrectly.
+            # There is probably an error in the computation, but I have not
+            # looked for it yet.
+            z_c = 0
 
-        vector = [0]
-        for i in learner.support_:
-            vector.append(self._Q(self.instances[learner.support_[i]],
-                                  self.instances[-1], True, k))
-        vector = np.array(vector)
+        matrix = -1 * z_c * matrix
 
-        solution = solution * vector
-        return z_c, solution[0], solution[1:]
-
-    def _matrix_helper(self, j):
-        i = self._temp_args[0]
-        learner = self._temp_args[1]
-        print('j: ', j)
-        return self._Q(self.instances[learner.support_[i]],
-                       self.instances[learner.support_[j]])
+        return z_c, matrix
 
     def _Q(self, inst_1: Instance, inst_2: Instance, derivative=False, k=-1):
         """
@@ -173,8 +185,9 @@ class KInsertion(Adversary):
             else:
                 inst = inst_2
 
+            feature_vector = inst.get_feature_vector()
             for j in range(inst.get_feature_count()):
-                if inst.get_feature_vector().get_feature(j) == 0:
+                if feature_vector.get_feature(j) == 0:
                     fv[i].append(0)
                 else:
                     fv[i].append(1)

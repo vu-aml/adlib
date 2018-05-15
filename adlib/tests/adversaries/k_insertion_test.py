@@ -17,6 +17,15 @@ def test_k_insertion():
                            binary=True, raw=True)
     training_data = load_dataset(dataset)
 
+    # Randomly choose 15% of dataset to decrease debugging time
+    # 10% was too small for a realistic calculation.
+    choices = np.random.binomial(1, 0.15, len(training_data))
+    temp = []
+    for i in range(len(training_data)):
+        if choices[i] == 1:
+            temp.append(training_data[i])
+    training_data = temp
+
     # Setting the default learner
     # Test simple learner svm
     learning_model = svm.SVC(probability=True, kernel='linear')

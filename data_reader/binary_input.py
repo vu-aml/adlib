@@ -36,9 +36,6 @@ class BinaryFeatureVector(object):
     def __iter__(self):
         return iter(self.indices)
 
-    def __iter__(self):
-        return iter(self.indices)
-
     def __getitem__(self, key):
         return self.indices[key]
 

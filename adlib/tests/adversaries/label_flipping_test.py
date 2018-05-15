@@ -12,7 +12,7 @@ from data_reader.operations import load_dataset
 from adlib.adversaries.label_flipping import LabelFlipping
 
 
-@pytest.mark.skip(reason='Takes too much time')
+@pytest.mark.run
 def test_label_flipping():
     # Data processing unit
     # The path is an index of 400 testing samples(raw email data).

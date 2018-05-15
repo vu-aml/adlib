@@ -7,6 +7,7 @@ from adlib.adversaries.adversary import Adversary
 from data_reader.binary_input import Instance
 from data_reader.binary_input import BinaryFeatureVector
 import math
+import multiprocessing as mp
 import numpy as np
 from copy import deepcopy
 from typing import List, Dict
@@ -73,7 +74,8 @@ class KInsertion(Adversary):
             self.quick_calc = False
 
         size = self.instances[0].get_feature_count()
-        gradient = list(map(self._calc_grad_helper, range(size)))
+        pool = mp.Pool(mp.cpu_count())
+        gradient = list(pool.map(self._calc_grad_helper, range(size)))
         return np.array(gradient)
 
     def _calc_grad_helper(self, i):
@@ -153,7 +155,6 @@ class KInsertion(Adversary):
             for j in range(1, size):
                 matrix[i][j] = q_s[i - 1][j - 1]
 
-        matrix = np.linalg.inv(matrix)
         try:
             matrix = np.linalg.inv(matrix)
         except np.linalg.linalg.LinAlgError:
@@ -162,6 +163,7 @@ class KInsertion(Adversary):
             # the gradient equal 0 as to not move the solution incorrectly.
             # There is probably an error in the computation, but I have not
             # looked for it yet.
+            print('SINGULAR MATRIX ERROR - FIX ME')
             z_c = 0
 
         matrix = -1 * z_c * matrix

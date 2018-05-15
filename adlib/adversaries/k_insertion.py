@@ -55,26 +55,37 @@ class KInsertion(Adversary):
         self.learner.training_instances = self.instances
         self.learner.train()
 
-        gradient = np.full(instances[0].get_feature_count(), 0)
-        for i in range(len(gradient)):
+        print(self.learner.model.learner.support_)
+
+        gradient = []
+        for i in range(instances[0].get_feature_count()):
+            current = 0  # current partial derivative
+
             (z_c,
              partial_b_partial_x_k,
              partial_z_s_partial_x_k) = self._solve_parial_derivatives_matrix(i)
 
+            print('z_c: ', z_c)
+            print('pbpx_k: ', partial_b_partial_x_k)
+            print('z_s partials: ', partial_z_s_partial_x_k)
+
             for j in range(len(self.orig_instances)):
-                if i in self.learner.model.learner.support_:
+                if j in self.learner.model.learner.support_:
                     q_i_t = self._Q(self.orig_instances[i], self.inst)
                     partial_z_i_partial_x_k = partial_z_s_partial_x_k[
                         self.learner.model.learner.support_.tolist().index(i)]
-                    gradient[i] += q_i_t * partial_z_i_partial_x_k
+                    current += q_i_t * partial_z_i_partial_x_k
 
-            gradient[i] += self._Q(self.instances[-1], self.inst, True, i) * z_c
+            current += self._Q(self.instances[-1], self.inst, True, i) * z_c
 
             if len(self.instances) in self.learner.model.learner.support_:
-                gradient[i] += (self._Q(self.instances[-1], self.inst) *
-                                partial_z_s_partial_x_k[-1])
+                current += (self._Q(self.instances[-1], self.inst) *
+                            partial_z_s_partial_x_k[-1])
 
-            gradient[i] += self.inst.get_label() * partial_b_partial_x_k
+            current += self.inst.get_label() * partial_b_partial_x_k
+            gradient.append(current)
+
+        gradient = np.array(gradient)
 
         print(gradient)
 
@@ -87,7 +98,7 @@ class KInsertion(Adversary):
         size = learner.n_support_[0] + learner.n_support_[1] + 1  # binary
         solution = np.full((size, size), 0)
 
-        if len(self.instances) not in learner.support_:  # self.inst not in S
+        if len(self.instances) - 1 not in learner.support_:  # not in S
             if self.learner.predict(self.inst) != self.inst.get_label():  # in E
                 z_c = learner.C
             else:  # in R, z_c = 0, everything is 0

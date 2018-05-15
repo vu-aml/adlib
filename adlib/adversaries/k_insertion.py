@@ -124,6 +124,7 @@ class KInsertion(Adversary):
                      calculations)
             q_s.append(calculations)
         q_s = np.array(q_s)
+        print(q_s)
 
         for i in range(1, size):
             solution[0][i] = y_s[i - 1]

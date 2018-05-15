@@ -35,6 +35,7 @@ class KInsertion(Adversary):
         self.inst = None
         self.kernel = self._get_kernel()
         self.kernel_derivative = self._get_kernel_derivative()
+        self._temp_args = None
 
     def attack(self, instances) -> List[Instance]:
         if len(instances) == 0:
@@ -113,15 +114,13 @@ class KInsertion(Adversary):
         y_s = np.array(y_s)
 
         q_s = []
-        pool = mp.Pool(mp.cpu_count())
         print('size - 1: ', size - 1)
         for i in range(size - 1):
             print('i: ', i)
-            calculations = list(range(size - 1))
-            pool.map(lambda index:
-                     self._Q(self.instances[learner.support_[i]],
-                             self.instances[learner.support_[index]]),
-                     calculations)
+            calculations = range(size - 1)
+            self._temp_args = (i, learner)
+            pool = mp.Pool(mp.cpu_count() * 2)
+            pool.map(self._matrix_helper, calculations)
             q_s.append(calculations)
         q_s = np.array(q_s)
         print(q_s)
@@ -145,6 +144,13 @@ class KInsertion(Adversary):
 
         solution = solution * vector
         return z_c, solution[0], solution[1:]
+
+    def _matrix_helper(self, j):
+        i = self._temp_args[0]
+        learner = self._temp_args[1]
+        print('j: ', j)
+        return self._Q(self.instances[learner.support_[i]],
+                       self.instances[learner.support_[j]])
 
     def _Q(self, inst_1: Instance, inst_2: Instance, derivative=False, k=-1):
         """

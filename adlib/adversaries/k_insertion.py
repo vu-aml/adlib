@@ -15,7 +15,7 @@ from typing import List, Dict
 # TODO: Implement gradient functions
 # TODO: Implement gradient descent for 1 added vector
 # TODO: Implement loop for k vectors using gradient descent
-# TODO: Make save kernel function to self
+# TODO: Save kernel function to self
 
 
 class KInsertion(Adversary):
@@ -32,16 +32,14 @@ class KInsertion(Adversary):
         self.x = None  # The feature vector of the instance to be added
         self.y = -1 if np.random.binomial(1, 0.5, 1)[0] == 0 else 1  # x's label
         self.inst = None
+        self.kernel = self._get_kernel()
+        self.kernel_derivative = self._get_kernel_derivative()
 
     def attack(self, instances) -> List[Instance]:
         if len(instances) == 0:
             raise ValueError('Need at least one instance.')
         self.instances = deepcopy(instances)
         self.orig_instances = deepcopy(instances)
-
-        # Get constants
-        kernel = self._get_kernel()
-        kernel_derivative = self._get_kernel_derivative()
 
         # x is value to be added
         self.x = np.random.binomial(1, 0.5, instances[0].get_feature_count())
@@ -129,19 +127,17 @@ class KInsertion(Adversary):
 
     def _Q(self, inst_1: Instance, inst_2: Instance, derivative=False, k=-1):
         """
-        Calculates Q_ij
+        Calculates Q_ij or partial Q_ij / partial x_k
         :param inst_1: the first instance
         :param inst_2: the second instance
-        :return: Q_ij where i corresponds to inst_1 and j corresponds to inst_2
+        :param derivative: True -> calculate derivative, False -> calculate Q
+        :param k: determines which derivative to calculate
+        :return: Q_ij or the derivative where i corresponds to inst_1 and j
+                 corresponds to inst_2
         """
 
         if len(inst_1) != len(inst_2):
             raise ValueError('Feature vectors need to have same length.')
-
-        if derivative:
-            kernel = self._get_kernel_derivative()
-        else:
-            kernel = self._get_kernel()
 
         fv = [[], []]
         for i in range(2):
@@ -157,9 +153,11 @@ class KInsertion(Adversary):
                     fv[i].append(1)
 
         if derivative:
-            ret_val = kernel(np.array(fv[0]), np.array(fv[1]), k)
+            ret_val = self.kernel_derivative(np.array(fv[0]),
+                                             np.array(fv[1]),
+                                             k)
         else:
-            ret_val = kernel(np.array(fv[0]), np.array(fv[1]))
+            ret_val = self.kernel(np.array(fv[0]), np.array(fv[1]))
         return inst_1.get_label() * inst_2.get_label() * ret_val
 
     def _kernel_linear(self, fv_1: np.ndarray, fv_2: np.ndarray):

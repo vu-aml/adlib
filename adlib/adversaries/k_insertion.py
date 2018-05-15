@@ -7,6 +7,7 @@ from adlib.adversaries.adversary import Adversary
 from data_reader.binary_input import Instance
 from data_reader.binary_input import BinaryFeatureVector
 import math
+import pathos.multiprocessing as mp
 import numpy as np
 from copy import deepcopy
 from typing import List, Dict
@@ -111,11 +112,18 @@ class KInsertion(Adversary):
             y_s.append(self.instances[i].get_label())
         y_s = np.array(y_s)
 
-        q_s = np.full((size - 1, size - 1), 0)
+        q_s = []
+        pool = mp.Pool(mp.cpu_count())
+        print('size - 1: ', size - 1)
         for i in range(size - 1):
-            for j in range(size - 1):
-                q_s[i][j] = self._Q(self.instances[learner.support_[i]],
-                                    self.instances[learner.support_[j]])
+            print('i: ', i)
+            calculations = list(range(size - 1))
+            pool.map(lambda index:
+                     self._Q(self.instances[learner.support_[i]],
+                             self.instances[learner.support_[index]]),
+                     calculations)
+            q_s.append(calculations)
+        q_s = np.array(q_s)
 
         for i in range(1, size):
             solution[0][i] = y_s[i - 1]

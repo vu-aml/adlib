@@ -50,9 +50,10 @@ class KInsertion(Adversary):
         self.inst = Instance(self.y,
                              BinaryFeatureVector(len(self.x), indices_list))
 
+        # Train with newly generated instance
         self.instances.append(self.inst)
         self.learner.training_instances = self.instances
-        self.learner.train()  # Train with newly generated instance
+        self.learner.train()
 
         gradient = np.full(instances[0].get_feature_count(), 0)
         for i in range(len(gradient)):
@@ -64,7 +65,7 @@ class KInsertion(Adversary):
                 if i in self.learner.model.learner.support_:
                     q_i_t = self._Q(self.orig_instances[i], self.inst)
                     partial_z_i_partial_x_k = partial_z_s_partial_x_k[
-                        self.learner.model.learner.support_.index(i)]
+                        self.learner.model.learner.support_.tolist().index(i)]
                     gradient[i] += q_i_t * partial_z_i_partial_x_k
 
             gradient[i] += self._Q(self.instances[-1], self.inst, True, i) * z_c
@@ -136,7 +137,7 @@ class KInsertion(Adversary):
                  corresponds to inst_2
         """
 
-        if len(inst_1) != len(inst_2):
+        if inst_1.get_feature_count() != inst_2.get_feature_count():
             raise ValueError('Feature vectors need to have same length.')
 
         fv = [[], []]

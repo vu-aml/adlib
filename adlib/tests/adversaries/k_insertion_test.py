@@ -25,3 +25,7 @@ def test_k_insertion():
 
     attacker = KInsertion(learner, training_data[0])
     attacker.attack(training_data)
+
+
+if __name__ == '__main__':
+    test_k_insertion()

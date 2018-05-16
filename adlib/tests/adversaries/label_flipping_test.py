@@ -14,7 +14,7 @@ from adlib.adversaries.label_flipping import LabelFlipping
 
 @pytest.mark.run
 def test_label_flipping():
-    print('##############################################################')
+    print('\n##############################################################')
     print('START label flipping attack.\n')
     
     # Data processing unit

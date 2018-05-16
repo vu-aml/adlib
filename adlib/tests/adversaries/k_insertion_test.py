@@ -13,7 +13,7 @@ from adlib.adversaries.k_insertion import KInsertion
 
 @pytest.mark.run
 def test_k_insertion():
-    print('##############################################################')
+    print('\n##############################################################')
     print('START k-insertion attack.\n')
     
     # Data processing unit

@@ -53,8 +53,6 @@ class LabelFlipping(Adversary):
         if len(instances) == 0 or len(self.cost) != len(instances):
             raise ValueError('Cost data does not match instances.')
 
-        print('Start label flipping attack.\n')
-
         (half_n,
          n,
          orig_loss,

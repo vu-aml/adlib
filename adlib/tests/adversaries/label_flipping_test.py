@@ -41,7 +41,7 @@ def test_label_flipping():
     # Execute the attack
     cost = list(np.random.binomial(2, 0.5, len(training_data)))
     total_cost = 0.3 * len(training_data)  # flip around ~30% of the labels
-    attacker = LabelFlipping(learner, cost, total_cost, num_iterations=2,
+    attacker = LabelFlipping(learner, cost, total_cost, num_iterations=4,
                              verbose=True)
     attack_data = attacker.attack(training_data)
 
@@ -128,3 +128,7 @@ def calculate_correct_percentages(orig_labels, attack_labels, instances):
     difference = str(round(difference, 4))
 
     return orig_precent_correct, attack_precent_correct, difference
+
+
+if __name__ == '__main__':
+    test_label_flipping()

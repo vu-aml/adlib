@@ -15,16 +15,16 @@ from adlib.adversaries.k_insertion import KInsertion
 def test_k_insertion():
     print('\n##############################################################')
     print('START k-insertion attack.\n')
-    
+
     # Data processing unit
     # The path is an index of 400 testing samples(raw email data).
     dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400',
                            binary=True, raw=True)
     training_data = load_dataset(dataset)
 
-    # Randomly choose 15% of dataset to decrease debugging time
+    # Randomly choose ~12% of dataset to decrease debugging time
     # 10% was too small for a realistic calculation.
-    choices = np.random.binomial(1, 0.15, len(training_data))
+    choices = np.random.binomial(1, 0.12, len(training_data))
     temp = []
     for i in range(len(training_data)):
         if choices[i] == 1:
@@ -39,7 +39,7 @@ def test_k_insertion():
 
     attacker = KInsertion(learner, training_data[0])
     attacker.attack(training_data)
-    
+
     print('END k-insertion attack.')
     print('##############################################################\n')
 

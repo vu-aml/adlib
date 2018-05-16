@@ -20,14 +20,16 @@ from typing import List, Dict
 
 
 class KInsertion(Adversary):
-    def __init__(self, learner, poison_instance, beta=0.07, alpha=1e-3,
-                 number_to_add=1):
+    def __init__(self, learner, poison_instance, beta=1, alpha=1e-3,
+                 number_to_add=2, num_iterations=4):
         Adversary.__init__(self)
         self.learner = deepcopy(learner)
         self.poison_instance = poison_instance
         self.beta = beta
+        self.orig_beta = beta
         self.alpha = alpha
         self.number_to_add = number_to_add
+        self.num_iterations = num_iterations
         self.instances = None
         self.orig_instances = None
         self.x = None  # The feature vector of the instance to be added
@@ -42,28 +44,56 @@ class KInsertion(Adversary):
     def attack(self, instances) -> List[Instance]:
         if len(instances) == 0:
             raise ValueError('Need at least one instance.')
-        self.instances = deepcopy(instances)
+
         self.orig_instances = deepcopy(instances)
-
-        # x is value to be added
-        self.x = np.random.binomial(1, 0.5, instances[0].get_feature_count())
-        indices_list = []
-        for i in range(len(self.x)):
-            if self.x[i] == 1:
-                indices_list.append(i)
-        self.inst = Instance(self.y,
-                             BinaryFeatureVector(len(self.x), indices_list))
-
-        # Train with newly generated instance
-        self.instances.append(self.inst)
+        self.instances = self.orig_instances
         self.learner.training_instances = self.instances
         self.learner.train()
 
-        gradient = self._calc_gradient()
-        print(gradient)
+        for _ in range(self.number_to_add):
+            # x is the full feature vector of the instance to be added
+            self.x = np.random.binomial(1, 0.5,
+                                        instances[0].get_feature_count())
+            self._generate_inst()
+            self.beta = self.orig_beta
+
+            # Main learning loop for one insertion
+            for __ in range(self.num_iterations):
+                # Train with newly generated instance
+                self.instances.append(self.inst)
+                self.learner.training_instances = self.instances
+                self.learner.train()
+
+                # Update feature vector of the instance to be added
+                gradient = self._calc_gradient()
+                self.x = self.x - self.beta * gradient
+                self._generate_inst()
+                self.instances = self.instances[:-1]
+                self.beta = 0.9 * self.beta  # decaying learning rate
+
+                print(self.x, '\n######################################\n')
+
+            # Add the newly generated instance and retrain with that dataset
+            self.instances.append(self.inst)
+            self.learner.training_instances = self.instances
+            self.learner.train()
+
+        return self.instances
+
+    def _generate_inst(self):
+        indices_list = []
+        for i in range(len(self.x)):
+            if self.x[i] > 0.5:
+                indices_list.append(i)
+
+        # Generate new instance
+        self.inst = Instance(self.y,
+                             BinaryFeatureVector(len(self.x), indices_list))
 
     def _calc_gradient(self):
-        self.z_c, self.matrix = self._solve_matrix()
+        result = self._solve_matrix()
+        self.z_c = result[0]
+        self.matrix = result[1]
 
         # If resulting matrix is zero (it will be if z_c == 0 by definition, so
         # short-circuit behavior is being used here), then only do one

@@ -12,7 +12,6 @@ from data_reader.operations import load_dataset
 from adlib.adversaries.label_flipping import LabelFlipping
 
 
-@pytest.mark.run
 def test_label_flipping():
     print('\n##############################################################')
     print('START label flipping attack.\n')

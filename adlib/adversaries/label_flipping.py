@@ -99,8 +99,6 @@ class LabelFlipping(Adversary):
                 label = attacked_instances[i].get_label()
                 attacked_instances[i].set_label(-1 * label)
 
-        print('End label flipping attack.\n')
-
         return attacked_instances
 
     def _calculate_constants(self, instances: List[Instance]):

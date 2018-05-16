@@ -13,6 +13,9 @@ from adlib.adversaries.k_insertion import KInsertion
 
 @pytest.mark.run
 def test_k_insertion():
+    print('##############################################################')
+    print('START k-insertion attack.\n')
+    
     # Data processing unit
     # The path is an index of 400 testing samples(raw email data).
     dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400',
@@ -36,6 +39,9 @@ def test_k_insertion():
 
     attacker = KInsertion(learner, training_data[0])
     attacker.attack(training_data)
+    
+    print('END k-insertion attack.')
+    print('##############################################################\n')
 
 
 if __name__ == '__main__':

@@ -32,7 +32,8 @@ class KInsertion(Adversary):
         :param number_to_add: the number of new instances to add
         :param num_iterations: the number of iterations for each gradient
                                descent calculation
-        :param verbose: if True, print the feature vector for each iteration
+        :param verbose: if True, print the feature vector and gradient for each
+                        iteration
         """
 
         Adversary.__init__(self)
@@ -131,6 +132,10 @@ class KInsertion(Adversary):
         size = self.instances[0].get_feature_count()
         pool = mp.Pool(mp.cpu_count())
         gradient = list(pool.map(self._calc_grad_helper, range(size)))
+
+        if self.verbose:
+            print('\nCurrent gradient:\n', gradient)
+
         return np.array(gradient)
 
     def _calc_grad_helper(self, i):

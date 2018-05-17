@@ -13,12 +13,20 @@ from data_reader.operations import load_dataset
 from sklearn import svm
 import numpy as np
 import pytest
+import sys
 
 
 @pytest.mark.run
 def test_k_insertion():
     print('\n#################################################################')
     print('START k-insertion attack.\n')
+
+    if len(sys.argv) > 2:
+        number_to_add = int(sys.argv[1])
+        num_iterations = int(sys.argv[2])
+    else:
+        number_to_add = 3
+        num_iterations = 4
 
     # Data processing unit
     # The path is an index of 400 testing samples(raw email data).
@@ -52,8 +60,12 @@ def test_k_insertion():
     orig_learner = deepcopy(learner)
 
     # Do the attack
-    attacker = KInsertion(learner, training_data[0], number_to_add=3,
-                          num_iterations=4, verbose=True)
+    attacker = KInsertion(learner,
+                          training_data[0],
+                          number_to_add=number_to_add,
+                          num_iterations=num_iterations,
+                          verbose=True)
+
     attack_data = attacker.attack(training_data)
 
     # Retrain the model with poisoned data

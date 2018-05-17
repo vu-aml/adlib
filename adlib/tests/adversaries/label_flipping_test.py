@@ -13,7 +13,7 @@ from adlib.adversaries.label_flipping import LabelFlipping
 
 
 def test_label_flipping():
-    print('\n##############################################################')
+    print('\n#####################################################################')
     print('START label flipping attack.\n')
     
     # Data processing unit
@@ -75,7 +75,7 @@ def test_label_flipping():
                                                  attack_pred_labels,
                                                  training_data)
 
-    print('###################################################################')
+    print('#####################################################################')
     print('Predictions with training dataset:')
     print('Original correct percentage: ', orig_precent_correct, '%')
     print('Attack correct percentage: ', attack_precent_correct, '%')
@@ -93,14 +93,14 @@ def test_label_flipping():
                                                  attack_pred_labels,
                                                  predict_data)
 
-    print('###################################################################')
+    print('#####################################################################')
     print('Predictions with other half of dataset:')
     print('Original correct percentage: ', orig_precent_correct, '%')
     print('Attack correct percentage: ', attack_precent_correct, '%')
     print('Difference: ', difference, '%')
     
     print('END label flipping attack.')
-    print('##############################################################\n')
+    print('#####################################################################\n')
 
 
 def calculate_correct_percentages(orig_labels, attack_labels, instances):

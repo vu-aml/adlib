@@ -20,8 +20,8 @@ from typing import List, Dict
 
 
 class KInsertion(Adversary):
-    def __init__(self, learner, poison_instance, beta=1, alpha=1e-3,
-                 number_to_add=2, num_iterations=4):
+    def __init__(self, learner, poison_instance, beta=0.5, alpha=1e-3,
+                 number_to_add=10, num_iterations=10, verbose=False):
         Adversary.__init__(self)
         self.learner = deepcopy(learner)
         self.poison_instance = poison_instance
@@ -30,6 +30,7 @@ class KInsertion(Adversary):
         self.alpha = alpha
         self.number_to_add = number_to_add
         self.num_iterations = num_iterations
+        self.verbose = verbose
         self.instances = None
         self.orig_instances = None
         self.x = None  # The feature vector of the instance to be added
@@ -71,7 +72,8 @@ class KInsertion(Adversary):
                 self.instances = self.instances[:-1]
                 self.beta = 0.9 * self.beta  # decaying learning rate
 
-                print(self.x, '\n#####################################################################\n')
+                if self.verbose:
+                    print('Current feature vector:\n', self.x)
 
             # Add the newly generated instance and retrain with that dataset
             self.instances.append(self.inst)

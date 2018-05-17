@@ -30,8 +30,8 @@ def test_k_insertion():
         number_to_add = int(sys.argv[1])
         num_iterations = int(sys.argv[2])
     else:
-        number_to_add = 2
-        num_iterations = 3
+        number_to_add = 1
+        num_iterations = 4
 
     # Data processing unit
     # The path is an index of 400 testing samples(raw email data).

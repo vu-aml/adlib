@@ -13,19 +13,16 @@ from copy import deepcopy
 from typing import List, Dict
 
 
-# TODO: Fix singular matrix error that is now wrapped in try-catch
-# TODO: Implement miscellaneous functions. SEE BELOW.
-
-
 class KInsertion(Adversary):
+    """
+    Performs a k-insertion attack where the attacked data is the original data
+    plus k feature vectors designed to induce the most error in poison_instance.
+    """
+
     def __init__(self, learner, poison_instance, beta=0.5, number_to_add=10,
                  num_iterations=10, verbose=False):
 
         """
-        Performs a k-insertion attack where the attacked data is the original
-        data plus k feature vectors designed to induce the most error in
-        poison_instance.
-
         :param learner: the trained learner
         :param poison_instance: the instance in which to induce the most error
         :param beta: the learning rate
@@ -439,10 +436,37 @@ class KInsertion(Adversary):
             raise ValueError('No matching kernel function found.')
 
     def set_params(self, params: Dict):
-        raise NotImplementedError
+        if params['learner'] is not None:
+            self.learner = params['learner']
+        if params['poison_instance'] is not None:
+            self.poison_instance = params['poison_instance']
+        if params['beta'] is not None:
+            self.beta = params['beta']
+        if params['number_to_add'] is not None:
+            self.number_to_add = params['number_to_add']
+        if params['num_iterations'] is not None:
+            self.num_iterations = params['num_iterations']
+        if params['verbose'] is not None:
+            self.verbose = params['verbose']
+        self.instances = None
+        self.orig_instances = None
+        self.x = None
+        self.y = None
+        self.inst = None
+        self.kernel = self._get_kernel()
+        self.kernel_derivative = self._get_kernel_derivative()
+        self.z_c = None
+        self.matrix = None
+        self.quick_calc = None
 
     def get_available_params(self):
-        raise NotImplementedError
+        params = {'learner': self.learner,
+                  'poison_instance': self.poison_instance,
+                  'beta': self.beta,
+                  'number_to_add': self.number_to_add,
+                  'num_iterations': self.num_iterations,
+                  'verbose': self.verbose}
+        return params
 
     def set_adversarial_params(self, learner, train_instances):
-        raise NotImplementedError
+        self.learner = learner

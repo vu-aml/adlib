@@ -18,6 +18,11 @@ import sys
 
 @pytest.mark.run
 def test_k_insertion():
+    """
+    Use as follows:
+    python3 adlib/tests/adversaries/k_insertion_test.py #-TO-ADD #-ITERATIONS
+    """
+    
     print('\n#################################################################')
     print('START k-insertion attack.\n')
 
@@ -25,8 +30,8 @@ def test_k_insertion():
         number_to_add = int(sys.argv[1])
         num_iterations = int(sys.argv[2])
     else:
-        number_to_add = 3
-        num_iterations = 4
+        number_to_add = 2
+        num_iterations = 3
 
     # Data processing unit
     # The path is an index of 400 testing samples(raw email data).

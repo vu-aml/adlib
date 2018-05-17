@@ -13,10 +13,8 @@ from copy import deepcopy
 from typing import List, Dict
 
 
-# TODO: Implement gradient descent for 1 added vector
-# TODO: Implement loop for k vectors using gradient descent
-# TODO: Review for correctness
 # TODO: Fix singular matrix error that is now wrapped in try-catch
+# TODO: Documentation
 
 
 class KInsertion(Adversary):
@@ -161,9 +159,11 @@ class KInsertion(Adversary):
             if self.learner.predict(self.inst) != self.inst.get_label():  # in E
                 z_c = learner.C
             else:  # in R, z_c = 0, everything is 0
-                return 0, 0, np.full(size - 1, 0)
-        else:
-            z_c = learner.coef_.flatten()[-1]
+                return 0, matrix
+        else:  # in S
+            # Get index of coefficient
+            index = learner.support_.tolist().index(len(self.instances) - 1)
+            z_c = learner.dual_coef_.flatten()[index]
 
         y_s = []
         for i in learner.support_:

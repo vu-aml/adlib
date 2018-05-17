@@ -71,7 +71,7 @@ class KInsertion(Adversary):
                 self.instances = self.instances[:-1]
                 self.beta = 0.9 * self.beta  # decaying learning rate
 
-                print(self.x, '\n######################################\n')
+                print(self.x, '\n#####################################################################\n')
 
             # Add the newly generated instance and retrain with that dataset
             self.instances.append(self.inst)

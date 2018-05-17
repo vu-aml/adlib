@@ -14,25 +14,39 @@ from typing import List, Dict
 
 
 # TODO: Fix singular matrix error that is now wrapped in try-catch
-# TODO: Documentation
+# TODO: Implement miscellaneous functions. SEE BELOW.
 
 
 class KInsertion(Adversary):
-    def __init__(self, learner, poison_instance, beta=0.5, alpha=1e-3,
-                 number_to_add=10, num_iterations=10, verbose=False):
+    def __init__(self, learner, poison_instance, beta=0.5, number_to_add=10,
+                 num_iterations=10, verbose=False):
+
+        """
+        Performs a k-insertion attack where the attacked data is the original
+        data plus k feature vectors designed to induce the most error in
+        poison_instance.
+
+        :param learner: the trained learner
+        :param poison_instance: the instance in which to induce the most error
+        :param beta: the learning rate
+        :param number_to_add: the number of new instances to add
+        :param num_iterations: the number of iterations for each gradient
+                               descent calculation
+        :param verbose: if True, print the feature vector for each iteration
+        """
+
         Adversary.__init__(self)
         self.learner = deepcopy(learner)
         self.poison_instance = poison_instance
         self.beta = beta
         self.orig_beta = beta
-        self.alpha = alpha
         self.number_to_add = number_to_add
         self.num_iterations = num_iterations
         self.verbose = verbose
         self.instances = None
         self.orig_instances = None
         self.x = None  # The feature vector of the instance to be added
-        self.y = -1 if np.random.binomial(1, 0.5, 1)[0] == 0 else 1  # x's label
+        self.y = None  # x's label
         self.inst = None
         self.kernel = self._get_kernel()
         self.kernel_derivative = self._get_kernel_derivative()
@@ -53,6 +67,8 @@ class KInsertion(Adversary):
             # x is the full feature vector of the instance to be added
             self.x = np.random.binomial(1, 0.5,
                                         instances[0].get_feature_count())
+            self.y = -1 if np.random.binomial(1, 0.5, 1)[0] == 0 else 1
+
             self._generate_inst()
             self.beta = self.orig_beta
 
@@ -81,6 +97,11 @@ class KInsertion(Adversary):
         return self.instances
 
     def _generate_inst(self):
+        """
+        :return: a properly generated Instance that has feature vector self.x
+                 and label self.y
+        """
+
         indices_list = []
         for i in range(len(self.x)):
             if self.x[i] > 0.5:
@@ -91,6 +112,10 @@ class KInsertion(Adversary):
                              BinaryFeatureVector(len(self.x), indices_list))
 
     def _calc_gradient(self):
+        """
+        :return: the calculated gradient, an np.ndarray
+        """
+
         result = self._solve_matrix()
         self.z_c = result[0]
         self.matrix = result[1]
@@ -109,6 +134,12 @@ class KInsertion(Adversary):
         return np.array(gradient)
 
     def _calc_grad_helper(self, i):
+        """
+        Helper function for gradient. Calculates one partial derivative.
+        :param i: determines which partial derivative
+        :return: the partial derivative
+        """
+
         if self.quick_calc:
             val = self._Q(self.instances[-1], self.inst, True, i) * self.z_c
             return val

@@ -129,11 +129,15 @@ class KInsertion(Adversary):
         size = self.instances[0].get_feature_count()
         pool = mp.Pool(mp.cpu_count())
         gradient = list(pool.map(self._calc_grad_helper, range(size)))
+        pool.close()
+        pool.join()
+        
+        gradient = np.array(gradient)
 
         if self.verbose:
             print('\nCurrent gradient:\n', gradient)
 
-        return np.array(gradient)
+        return gradient
 
     def _calc_grad_helper(self, i):
         """

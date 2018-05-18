@@ -19,7 +19,7 @@ To install `adlib`, run `python3 setup.py install`. For development, do `python3
 * Progress
 * CVXOPT (optional as a CVXPY solver)
 * Jupyter Notebook (optional for notebook demo)
-* Py.test (optional to test)
+* Py.test (optional for testing)
 
 ### License
 Copyright 2016-2018 Computational Economics Research Lab. Released under the MIT License. See `LICENSE` for details.

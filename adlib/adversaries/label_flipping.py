@@ -54,8 +54,6 @@ class LabelFlipping(Adversary):
         if len(instances) == 0 or len(self.cost) != len(instances):
             raise ValueError('Cost data does not match instances.')
 
-        print('Start label flipping attack.\n')
-
         (half_n,
          n,
          orig_loss,
@@ -75,7 +73,7 @@ class LabelFlipping(Adversary):
         ########################################################################
         # Alternating minimization loop
 
-        q = self._generate_q(half_n)
+        q = np.full(n, 0)
         self._old_q = np.copy(q)
         flip = True
         if not self.verbose:
@@ -101,8 +99,6 @@ class LabelFlipping(Adversary):
             if self._old_q[i] == 0:
                 label = attacked_instances[i].get_label()
                 attacked_instances[i].set_label(-1 * label)
-
-        print('End label flipping attack.\n')
 
         return attacked_instances
 
@@ -147,34 +143,12 @@ class LabelFlipping(Adversary):
         for i in range(half_n):
             orig_loss[i] += 1
 
-        orig_loss = np.log2(orig_loss)
-        orig_loss = np.concatenate([orig_loss, orig_loss])
+        orig_loss = np.log(orig_loss)
+        orig_loss = np.concatenate([orig_loss, orig_loss])  # logistic loss
 
         cost = np.concatenate([np.full(half_n, 0), np.array(self.cost)])
 
         return half_n, n, orig_loss, feature_vectors, labels, cost
-
-    def _generate_q(self, half_n):
-        """
-        Generates a q, where every entry has an equal probability of being 0 or
-        1. Satisfies the q[i] + q[i + half_n] == 1 constraint, but NO cost
-        constraints. If this also satisfied cost constraints, then the solver
-        would most likely return the same initial q generated, which is
-        probabilistically not the optimal one.
-        :param half_n: half of n, the number of Instances
-        :return: the newly-generated q
-        """
-
-        q = np.random.binomial(1, 0.5, half_n)
-        tmp = []
-        for i in q:
-            if i == 1:
-                tmp.append(0)
-            else:
-                tmp.append(1)
-        q = np.concatenate([q, np.array(tmp)])
-
-        return q
 
     def _minimize_w_epsilon(self, instances, n, orig_loss,
                             feature_vectors, labels):
@@ -211,7 +185,8 @@ class LabelFlipping(Adversary):
             constraints.append(0 <= epsilon[i])
 
         prob = cvx.Problem(cvx.Minimize(func), constraints)
-        prob.solve(verbose=self.verbose, parallel=True)
+        prob.solve(verbose=self.verbose, parallel=True,
+                   abstol_inacc=1e-2, reltol_inacc=1e-2, feastol_inacc=1e-2)
 
         self._old_epsilon = np.copy(np.array(epsilon.value).flatten())
         self._old_w = np.copy(np.array(w.value).flatten())
@@ -247,7 +222,7 @@ class LabelFlipping(Adversary):
         constraints += [cost_for_q <= self.total_cost]
 
         prob = cvx.Problem(cvx.Minimize(func), constraints)
-        prob.solve(verbose=self.verbose, parallel=True)
+        prob.solve(verbose=self.verbose, parallel=True, solver=cvx.ECOS_BB)
 
         q_value = np.array(q.value).flatten()
         self._old_q = []

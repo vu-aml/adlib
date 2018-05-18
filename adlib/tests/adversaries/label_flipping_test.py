@@ -12,8 +12,10 @@ from data_reader.operations import load_dataset
 from adlib.adversaries.label_flipping import LabelFlipping
 
 
-@pytest.mark.run
 def test_label_flipping():
+    print('\n#################################################################')
+    print('START label flipping attack.\n')
+
     # Data processing unit
     # The path is an index of 400 testing samples(raw email data).
     dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400',
@@ -97,6 +99,9 @@ def test_label_flipping():
     print('Attack correct percentage: ', attack_precent_correct, '%')
     print('Difference: ', difference, '%')
 
+    print('\nEND label flipping attack.')
+    print('#################################################################\n')
+
 
 def calculate_correct_percentages(orig_labels, attack_labels, instances):
     """
@@ -128,3 +133,7 @@ def calculate_correct_percentages(orig_labels, attack_labels, instances):
     difference = str(round(difference, 4))
 
     return orig_precent_correct, attack_precent_correct, difference
+
+
+if __name__ == '__main__':
+    test_label_flipping()

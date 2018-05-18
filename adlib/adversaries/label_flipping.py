@@ -5,6 +5,7 @@
 from adlib.adversaries.adversary import Adversary
 from data_reader.binary_input import Instance
 import cvxpy as cvx
+import math
 import numpy as np
 from copy import deepcopy
 from progress.bar import Bar
@@ -114,11 +115,6 @@ class LabelFlipping(Adversary):
 
         half_n = len(instances)
         n = half_n * 2  # size of new (doubled) input
-        pred_labels = self.learner.predict(instances)
-        orig_loss = []
-        for i in range(len(pred_labels)):
-            orig_loss.append((pred_labels[i] - instances[i].get_label()) ** 2)
-        orig_loss = np.array(orig_loss + orig_loss)  # eta in formula
 
         feature_vectors = []
         labels = []
@@ -129,6 +125,30 @@ class LabelFlipping(Adversary):
             labels_flipped.append(-inst.get_label())
         feature_vectors = np.array(feature_vectors + feature_vectors)
         labels = np.array(labels + labels_flipped)
+
+        fvs = []
+        for i in range(half_n):
+            feature_vector = feature_vectors[i]
+            tmp = []
+            for j in range(instances[0].get_feature_count()):
+                if feature_vector.get_feature(j) == 1:
+                    tmp.append(1)
+                else:
+                    tmp.append(0)
+            tmp = np.array(tmp)
+            fvs.append(tmp)
+        fvs = np.array(fvs)
+
+        orig_loss = self.learner.model.learner.decision_function(fvs)
+        for i in range(half_n):
+            orig_loss[i] = -1 * orig_loss[i] * instances[i].get_label()
+        orig_loss = np.exp(orig_loss)
+
+        for i in range(half_n):
+            orig_loss[i] += 1
+
+        orig_loss = np.log2(orig_loss)
+        orig_loss = np.concatenate([orig_loss, orig_loss])
 
         cost = np.concatenate([np.full(half_n, 0), np.array(self.cost)])
 

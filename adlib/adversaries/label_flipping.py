@@ -143,8 +143,8 @@ class LabelFlipping(Adversary):
         for i in range(half_n):
             orig_loss[i] += 1
 
-        orig_loss = np.log2(orig_loss)
-        orig_loss = np.concatenate([orig_loss, orig_loss])
+        orig_loss = np.log(orig_loss)
+        orig_loss = np.concatenate([orig_loss, orig_loss])  # logistic loss
 
         cost = np.concatenate([np.full(half_n, 0), np.array(self.cost)])
 

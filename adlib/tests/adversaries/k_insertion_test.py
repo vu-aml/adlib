@@ -78,6 +78,8 @@ def test_k_insertion():
     learner = SimpleLearner(learning_model, attack_data)
     learner.train()
 
+    print('Number of added instances: ', len(attack_data) - len(training_data))
+    
     ############################################################################
     # Calculate statistics with training data
 

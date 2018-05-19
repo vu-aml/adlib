@@ -16,7 +16,7 @@ import pytest
 
 
 @pytest.mark.run
-def test_k_insertion():
+def test_data_modification():
     print('\n#################################################################')
     print('START data modification attack.\n')
 
@@ -98,4 +98,4 @@ def test_k_insertion():
 
 
 if __name__ == '__main__':
-    test_k_insertion()
+    test_data_modification()

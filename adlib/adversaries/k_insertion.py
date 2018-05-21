@@ -51,6 +51,8 @@ class KInsertion(Adversary):
         self.z_c = None
         self.matrix = None
         self.quick_calc = None
+        self.poison_loss_before = None
+        self.poison_loss_after = None
 
     def attack(self, instances) -> List[Instance]:
         if len(instances) == 0:
@@ -60,6 +62,8 @@ class KInsertion(Adversary):
         self.instances = self.orig_instances
         self.learner.training_instances = self.instances
         self.learner.train()
+
+        self.poison_loss_before = self._calc_inst_loss(self.poison_instance)
 
         for _ in range(self.number_to_add):
             # x is the full feature vector of the instance to be added
@@ -92,7 +96,31 @@ class KInsertion(Adversary):
             self.learner.training_instances = self.instances
             self.learner.train()
 
+        self.poison_loss_after = self._calc_inst_loss(self.poison_instance)
+
         return self.instances
+
+    def _calc_inst_loss(self, inst: Instance):
+        """
+        Calculates the logistic loss for one instance
+        :param inst: the instance
+        :return: the logistic loss
+        """
+
+        fv = []
+        for i in range(inst.get_feature_count()):
+            if inst.get_feature_vector().get_feature(i) == 1:
+                fv.append(1)
+            else:
+                fv.append(0)
+        fv = np.array(fv)
+
+        # reshape is for the decision function when inputting only one sample
+        loss = self.learner.model.learner.decision_function(fv.reshape(1, -1))
+        loss *= -1 * inst.get_label()
+        loss = math.log(1 + math.exp(loss))
+
+        return loss
 
     def _generate_inst(self):
         """
@@ -131,7 +159,7 @@ class KInsertion(Adversary):
         gradient = list(pool.map(self._calc_grad_helper, range(size)))
         pool.close()
         pool.join()
-        
+
         gradient = np.array(gradient)
 
         if self.verbose:

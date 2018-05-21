@@ -75,10 +75,11 @@ class DataModification(Adversary):
         self.labels = np.array(self.labels)
 
     def _calc_partial_f_partial_capital_d(self):
-        matrix = list(map(lambda j: list(
-            map(lambda k: self._calc_partial_f_j_partial_x_k(j, k),
-                range(len(self.instances)))),
-                          range(len(self.instances))))
+        pool = mp.Pool(mp.cpu_count())
+        matrix = pool.map(lambda j: list(map(
+            lambda k: self._calc_partial_f_j_partial_x_k(j, k),
+            range(len(self.instances)))), range(len(self.instances)))
+
         return np.array(matrix)
 
     def _calc_partial_f_j_partial_x_k(self, j, k):

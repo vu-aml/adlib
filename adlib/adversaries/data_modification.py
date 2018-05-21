@@ -23,6 +23,7 @@ class DataModification(Adversary):
         self.b = None
         self.g_arr = None  # array of g_i values, shape: (# inst.)
         self.labels = None  # array of labels of the instances
+        self.logistic_vals = None
 
     def attack(self, instances) -> List[Instance]:
         if len(instances) == 0:
@@ -74,6 +75,28 @@ class DataModification(Adversary):
             self.labels.append(inst.get_label())
         self.labels = np.array(self.labels)
 
+        # Calculate logistic function values - sigma(y_i g_i)
+        self.logistic_vals = [
+            DataModification._logistic_function(self.labels[i] * self.g_arr[i])
+            for i in range(len(self.instances))]
+        self.logistic_vals = np.array(self.logistic_vals)
+
+    def _calc_partial_f_partial_theta(self):
+        pool = mp.Pool(mp.cpu_count())
+        matrix = pool.map(lambda j: list(map(
+            lambda k: self._calc_partial_f_j_partial_theta_k(j, k),
+            range(len(self.instances)))), range(len(self.instances)))
+
+        return np.array(matrix)
+
+    def _calc_partial_f_j_partial_theta_k(self, j, k):
+        running_sum = 0
+        for i in range(len(self.instances)):
+            val = self.logistic_vals[i]
+            running_sum += self.fvs[i][k] * self.fvs[i][j] * val * (1 - val)
+
+        return running_sum
+
     def _calc_partial_f_partial_capital_d(self):
         pool = mp.Pool(mp.cpu_count())
         matrix = pool.map(lambda j: list(map(
@@ -86,12 +109,13 @@ class DataModification(Adversary):
         # TODO: Possibly bad formula!!!!!!!!!!!!!!
         running_sum = 0
         for i in range(len(self.instances)):
-            val = self._logistic_function(self.labels[i] * self.g_arr[i])
+            val = self.logistic_vals[i]
             running_sum += (val * (1 - val) * self.labels[i] * self.fvs[i][j] *
                             self.theta[k])
             running_sum -= 1
             if j == k:
                 running_sum += val * self.labels[i]
+
         return running_sum
 
     @staticmethod

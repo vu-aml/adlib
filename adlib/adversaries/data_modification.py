@@ -9,6 +9,7 @@ from copy import deepcopy
 from typing import List, Dict
 import math
 import numpy as np
+import pathos.multiprocessing as mp
 
 
 class DataModification(Adversary):
@@ -16,6 +17,7 @@ class DataModification(Adversary):
         Adversary.__init__(self)
         self.learner = deepcopy(learner)
         self.verbose = verbose
+        self.instances = None
         self.fvs = None  # feature vector matrix, shape: (# inst., # features)
         self.theta = None
         self.b = None
@@ -26,7 +28,10 @@ class DataModification(Adversary):
         if len(instances) == 0:
             raise ValueError('Need at least one instance.')
 
+        self.instances = instances
         self._calculate_constants(instances)
+        matrix = self._calc_partial_f_partial_capital_d()
+        print(matrix)
 
     def _calculate_constants(self, instances: List[Instance]):
         # Calculate feature vectors as np.ndarrays
@@ -69,7 +74,24 @@ class DataModification(Adversary):
             self.labels.append(inst.get_label())
         self.labels = np.array(self.labels)
 
-    # def _calc_partial_f_partial_capital_d(self):
+    def _calc_partial_f_partial_capital_d(self):
+        matrix = list(map(lambda j: list(
+            map(lambda k: self._calc_partial_f_j_partial_x_k(j, k),
+                range(len(self.instances)))),
+                          range(len(self.instances))))
+        return np.array(matrix)
+
+    def _calc_partial_f_j_partial_x_k(self, j, k):
+        # TODO: Possibly bad formula!!!!!!!!!!!!!!
+        running_sum = 0
+        for i in range(len(self.instances)):
+            val = self._logistic_function(self.labels[i] * self.g_arr[i])
+            running_sum += (val * (1 - val) * self.labels[i] * self.fvs[i][j] *
+                            self.theta[k])
+            running_sum -= 1
+            if j == k:
+                running_sum += val * self.labels[i]
+        return running_sum
 
     @staticmethod
     def _logistic_function(x):

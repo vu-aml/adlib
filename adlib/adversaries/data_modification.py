@@ -13,11 +13,17 @@ import pathos.multiprocessing as mp
 
 
 class DataModification(Adversary):
-    def __init__(self, learner, verbose=False):
+    def __init__(self, learner, target_theta, alpha=1e-3, beta=0.1,
+                 verbose=False):
+
         Adversary.__init__(self)
         self.learner = deepcopy(learner)
+        self.target_theta = target_theta
+        self.alpha = alpha
+        self.beta = beta  # learning rate
         self.verbose = verbose
         self.instances = None
+        self.orig_fvs = None  # same as below, just original values
         self.fvs = None  # feature vector matrix, shape: (# inst., # features)
         self.theta = None
         self.b = None
@@ -31,8 +37,6 @@ class DataModification(Adversary):
 
         self.instances = instances
         self._calculate_constants(instances)
-        matrix = self._calc_partial_f_partial_capital_d()
-        print(matrix)
 
     def _calculate_constants(self, instances: List[Instance]):
         # Calculate feature vectors as np.ndarrays
@@ -48,6 +52,7 @@ class DataModification(Adversary):
             tmp = np.array(tmp)
             self.fvs.append(tmp)
         self.fvs = np.array(self.fvs)
+        self.orig_fvs = deepcopy(self.fvs)
 
         # Calculate theta, b, and g_arr
         learner = self.learner.model.learner
@@ -81,11 +86,33 @@ class DataModification(Adversary):
             for i in range(len(self.instances))]
         self.logistic_vals = np.array(self.logistic_vals)
 
+    def _calc_gradient(self):
+        matrix_1 = self._calc_partial_f_partial_capital_d()
+        matrix_2 = np.linalg.inv(self._calc_partial_f_partial_theta())
+        partial_theta_partial_capital_d = -1 * matrix_1.dot(matrix_2)
+
+        # Calculate first part
+        risk_gradient = 2 * (self.theta - self.target_theta)
+        gradient = risk_gradient.dot(partial_theta_partial_capital_d)
+        gradient *= self.beta
+        gradient = [gradient for _ in range(len(self.instances))]
+        gradient = np.array(gradient)
+
+        # Calculate cost part
+        cost = np.linalg.norm(self.fvs - self.orig_fvs)
+        if cost > 0:  # cost can never be < 0
+            cost_gradient = self.fvs - self.orig_fvs
+            cost_gradient /= cost
+        else:
+            cost_gradient = 0
+
+        return np.array(gradient + cost_gradient)
+
     def _calc_partial_f_partial_theta(self):
         pool = mp.Pool(mp.cpu_count())
         matrix = pool.map(lambda j: list(map(
             lambda k: self._calc_partial_f_j_partial_theta_k(j, k),
-            range(len(self.instances)))), range(len(self.instances)))
+            range(len(self.theta)))), range(len(self.theta)))
 
         return np.array(matrix)
 
@@ -101,7 +128,7 @@ class DataModification(Adversary):
         pool = mp.Pool(mp.cpu_count())
         matrix = pool.map(lambda j: list(map(
             lambda k: self._calc_partial_f_j_partial_x_k(j, k),
-            range(len(self.instances)))), range(len(self.instances)))
+            range(len(self.theta)))), range(len(self.theta)))
 
         return np.array(matrix)
 

@@ -22,7 +22,7 @@ def test_k_insertion():
     Use as follows:
     python3 adlib/tests/adversaries/k_insertion_test.py #-TO-ADD #-ITERATIONS
     """
-    
+
     print('\n#################################################################')
     print('START k-insertion attack.\n')
 
@@ -79,7 +79,7 @@ def test_k_insertion():
     learner.train()
 
     print('Number of added instances: ', len(attack_data) - len(training_data))
-    
+
     ############################################################################
     # Calculate statistics with training data
 
@@ -125,6 +125,18 @@ def test_k_insertion():
           before_attack_label)
     print('Selected instance predicted label AFTER attack: ',
           after_attack_label)
+
+    ############################################################################
+    # Output loss calculations
+
+    print('###################################################################')
+    print('poison_instance loss before attack: ',
+          round(attacker.poison_loss_before, 4), '%')
+    print('poison_instance loss after attack: ',
+          round(attacker.poison_loss_after, 4), '%')
+    print('poison_instance loss difference: ',
+          round(attacker.poison_loss_after - attacker.poison_loss_before, 4),
+          '%')
 
     print('\nEND k-insertion attack.')
     print('#################################################################\n')

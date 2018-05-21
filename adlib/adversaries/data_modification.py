@@ -57,11 +57,11 @@ class DataModification(Adversary):
             for _ in range(instances[0].get_feature_count() - i - 1):
                 std_basis_vect.append(0)
             std_basis_vect = np.array(std_basis_vect)
-
-            # reshape is specified by decision function for one sample input
-            val = learner.decision_function(std_basis_vect.reshape(1, -1))
-            self.theta.append(val[0] - self.b)
+            self.theta.append(std_basis_vect)
         self.theta = np.array(self.theta)
+
+        self.theta = learner.decision_function(self.theta)
+        self.theta = self.theta - self.b
 
         # Calculate labels
         self.labels = []

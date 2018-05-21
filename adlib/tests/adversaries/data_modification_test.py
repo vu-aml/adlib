@@ -50,7 +50,7 @@ def test_data_modification():
     original_pred_labels = orig_learner.predict(training_data)
 
     # Do the attack
-    attacker = None
+    attacker = DataModification(orig_learner, True)
     attack_data = attacker.attack(training_data)
 
     # Retrain the model with poisoned data

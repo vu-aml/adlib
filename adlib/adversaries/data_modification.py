@@ -25,7 +25,7 @@ class DataModification(Adversary):
         if len(instances) == 0:
             raise ValueError('Need at least one instance.')
 
-        raise NotImplementedError
+        self._calculate_constants(instances)
 
     def _calculate_constants(self, instances: List[Instance]):
         # Calculate feature vectors as np.ndarrays
@@ -44,21 +44,23 @@ class DataModification(Adversary):
 
         # Calculate theta, b, and g_arr
         learner = self.learner.model.learner
-        self.theta = []
-        for i in range(len(instances)):
-            if i in learner.support_:  # in S
-                index = learner.support_.tolist().index(i)
-                self.theta.append(learner.dual_coef_.flatten()[index])
-            else:  # not in S
-                if (self.learner.predict([instances[i]])[0] !=
-                        instances[i].get_label()):  # in E
-                    self.theta.append(learner.C)
-                else:  # in R
-                    self.theta.append(0)
-        self.theta = np.array(self.theta)
-
-        self.b = learner.intercept_[0]
         self.g_arr = learner.decision_function(self.fvs)
+        self.b = learner.intercept_[0]
+
+        self.theta = []
+        for i in range(instances[0].get_feature_count()):
+            std_basis_vect = []
+            for _ in range(i):
+                std_basis_vect.append(0)
+            std_basis_vect.append(1)
+            for _ in range(instances[0].get_feature_count() - i - 1):
+                std_basis_vect.append(0)
+            std_basis_vect = np.array(std_basis_vect)
+
+            # reshape is specified by decision function for one sample input
+            val = learner.decision_function(std_basis_vect.reshape(1, -1))
+            self.theta.append(val[0] - self.b)
+        self.theta = np.array(self.theta)
 
     @staticmethod
     def _logistic_function(x):

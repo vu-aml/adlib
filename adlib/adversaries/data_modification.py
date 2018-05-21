@@ -12,12 +12,17 @@ import numpy as np
 import pathos.multiprocessing as mp
 
 
+# TODO: self._calc_theta(self) is NOT done
+# TODO: Use numpy.eye in calculate theta
+# TODO: Search for other TODO
+
+
 class DataModification(Adversary):
     def __init__(self, learner, target_theta, alpha=1e-3, beta=0.1,
                  verbose=False):
 
         Adversary.__init__(self)
-        self.learner = deepcopy(learner)
+        self.learner = deepcopy(learner).model.learner
         self.target_theta = target_theta
         self.alpha = alpha
         self.beta = beta  # learning rate
@@ -54,37 +59,40 @@ class DataModification(Adversary):
         self.fvs = np.array(self.fvs)
         self.orig_fvs = deepcopy(self.fvs)
 
-        # Calculate theta, b, and g_arr
-        learner = self.learner.model.learner
-        self.g_arr = learner.decision_function(self.fvs)
-        self.b = learner.intercept_[0]
-
-        self.theta = []
-        for i in range(instances[0].get_feature_count()):
-            std_basis_vect = []
-            for _ in range(i):
-                std_basis_vect.append(0)
-            std_basis_vect.append(1)
-            for _ in range(instances[0].get_feature_count() - i - 1):
-                std_basis_vect.append(0)
-            std_basis_vect = np.array(std_basis_vect)
-            self.theta.append(std_basis_vect)
-        self.theta = np.array(self.theta)
-
-        self.theta = learner.decision_function(self.theta)
-        self.theta = self.theta - self.b
-
         # Calculate labels
         self.labels = []
         for inst in instances:
             self.labels.append(inst.get_label())
         self.labels = np.array(self.labels)
 
+        # Calculate theta, b, and g_arr
+        self.g_arr = self.learner.decision_function(self.fvs)
+        self.b = self.learner.intercept_[0]
+        self._calc_theta()
+
         # Calculate logistic function values - sigma(y_i g_i)
         self.logistic_vals = [
             DataModification._logistic_function(self.labels[i] * self.g_arr[i])
             for i in range(len(self.instances))]
         self.logistic_vals = np.array(self.logistic_vals)
+
+    def _calc_theta(self):
+        self.learner.fit(self.fvs, self.labels)  # Retrain learner
+
+        self.theta = []
+        for i in range(self.instances[0].get_feature_count()):
+            std_basis_vect = []
+            for _ in range(i):
+                std_basis_vect.append(0)
+            std_basis_vect.append(1)
+            for _ in range(self.instances[0].get_feature_count() - i - 1):
+                std_basis_vect.append(0)
+            std_basis_vect = np.array(std_basis_vect)
+            self.theta.append(std_basis_vect)
+        self.theta = np.array(self.theta)
+
+        self.theta = self.learner.decision_function(self.theta)
+        self.theta = self.theta - self.b
 
     def _calc_gradient(self):
         matrix_1 = self._calc_partial_f_partial_capital_d()

@@ -20,6 +20,7 @@ class DataModification(Adversary):
         self.theta = None
         self.b = None
         self.g_arr = None  # array of g_i values, shape: (# inst.)
+        self.labels = None  # array of labels of the instances
 
     def attack(self, instances) -> List[Instance]:
         if len(instances) == 0:
@@ -61,6 +62,14 @@ class DataModification(Adversary):
             val = learner.decision_function(std_basis_vect.reshape(1, -1))
             self.theta.append(val[0] - self.b)
         self.theta = np.array(self.theta)
+
+        # Calculate labels
+        self.labels = []
+        for inst in instances:
+            self.labels.append(inst.get_label())
+        self.labels = np.array(self.labels)
+
+    # def _calc_partial_f_partial_capital_d(self):
 
     @staticmethod
     def _logistic_function(x):

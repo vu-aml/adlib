@@ -7,7 +7,6 @@ from adlib.learners import SimpleLearner
 from adlib.adversaries.data_modification import DataModification
 from adlib.tests.adversaries.label_flipping_test import \
     calculate_correct_percentages
-from copy import deepcopy
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
 from sklearn import svm

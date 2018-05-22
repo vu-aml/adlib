@@ -13,7 +13,7 @@ import pathos.multiprocessing as mp
 
 
 class DataModification(Adversary):
-    def __init__(self, learner, target_theta, alpha=1e-3, beta=0.05,
+    def __init__(self, learner, target_theta, alpha=1e-3, beta=0.03,
                  verbose=False):
 
         Adversary.__init__(self)
@@ -46,7 +46,7 @@ class DataModification(Adversary):
                 print('Distance (iteration: ', iteration, '): ', dist, sep='')
 
             gradient = self._calc_gradient()
-            self.fvs += gradient
+            self.fvs -= gradient
             self._calc_theta()
             dist = np.linalg.norm(self.theta - self.target_theta)
             iteration += 1
@@ -58,7 +58,7 @@ class DataModification(Adversary):
 
         for i in range(len(self.instances)):
             for j in range(self.instances[0].get_feature_count()):
-                self.fvs[i][j] += np.random.normal(0, 0.1)
+                self.fvs[i][j] += np.random.normal(0, 0.01)
 
     def _calculate_constants(self, instances: List[Instance]):
         # Calculate feature vectors as np.ndarrays

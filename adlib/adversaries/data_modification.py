@@ -12,9 +12,7 @@ import numpy as np
 import pathos.multiprocessing as mp
 
 
-# TODO: self._calc_theta(self) is NOT done
-# TODO: Use numpy.eye in calculate theta
-# TODO: Search for other TODO
+# TODO: Possibly bad formula!!!!!!!!!!!!!!
 
 
 class DataModification(Adversary):
@@ -42,6 +40,17 @@ class DataModification(Adversary):
 
         self.instances = instances
         self._calculate_constants(instances)
+
+        dist = self.alpha * 2
+
+        while dist > self.alpha:
+            gradient = self._calc_gradient()
+            self.fvs += gradient
+            self._calc_theta()
+
+            dist = np.linalg.norm(self.theta - self.target_theta)
+            if self.verbose:
+                print('Distance: ', dist, '\n', sep='')
 
     def _calculate_constants(self, instances: List[Instance]):
         # Calculate feature vectors as np.ndarrays
@@ -78,20 +87,8 @@ class DataModification(Adversary):
 
     def _calc_theta(self):
         self.learner.fit(self.fvs, self.labels)  # Retrain learner
-
-        self.theta = []
-        for i in range(self.instances[0].get_feature_count()):
-            std_basis_vect = []
-            for _ in range(i):
-                std_basis_vect.append(0)
-            std_basis_vect.append(1)
-            for _ in range(self.instances[0].get_feature_count() - i - 1):
-                std_basis_vect.append(0)
-            std_basis_vect = np.array(std_basis_vect)
-            self.theta.append(std_basis_vect)
-        self.theta = np.array(self.theta)
-
-        self.theta = self.learner.decision_function(self.theta)
+        self.theta = self.learner.decision_function(
+            np.eye(self.instances[0].get_feature_count(), dtype=int))
         self.theta = self.theta - self.b
 
     def _calc_gradient(self):

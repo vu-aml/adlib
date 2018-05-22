@@ -12,11 +12,8 @@ import numpy as np
 import pathos.multiprocessing as mp
 
 
-# TODO: Possibly bad formula!!!!!!!!!!!!!!
-
-
 class DataModification(Adversary):
-    def __init__(self, learner, target_theta, alpha=1e-3, beta=0.1,
+    def __init__(self, learner, target_theta, alpha=1e-3, beta=0.05,
                  verbose=False):
 
         Adversary.__init__(self)
@@ -40,17 +37,28 @@ class DataModification(Adversary):
 
         self.instances = instances
         self._calculate_constants(instances)
+        self._fuzz_fvs()
 
-        dist = self.alpha * 2
-
+        dist = np.linalg.norm(self.theta - self.target_theta)
+        iteration = 0
         while dist > self.alpha:
+            if self.verbose:
+                print('Distance (iteration: ', iteration, '): ', dist, sep='')
+
             gradient = self._calc_gradient()
             self.fvs += gradient
             self._calc_theta()
-
             dist = np.linalg.norm(self.theta - self.target_theta)
-            if self.verbose:
-                print('Distance: ', dist, '\n', sep='')
+            iteration += 1
+
+    def _fuzz_fvs(self):
+        """
+        Add to every entry of self.fvs some noise to make it non-singular.
+        """
+
+        for i in range(len(self.instances)):
+            for j in range(self.instances[0].get_feature_count()):
+                self.fvs[i][j] += np.random.normal(0, 0.1)
 
     def _calculate_constants(self, instances: List[Instance]):
         # Calculate feature vectors as np.ndarrays
@@ -65,7 +73,7 @@ class DataModification(Adversary):
                     tmp.append(0)
             tmp = np.array(tmp)
             self.fvs.append(tmp)
-        self.fvs = np.array(self.fvs)
+        self.fvs = np.array(self.fvs, dtype='float64')
         self.orig_fvs = deepcopy(self.fvs)
 
         # Calculate labels
@@ -94,7 +102,13 @@ class DataModification(Adversary):
     def _calc_gradient(self):
         matrix_1 = self._calc_partial_f_partial_capital_d()
         matrix_2 = self._calc_partial_f_partial_theta()
-        matrix_2 = np.linalg.inv(matrix_2)
+
+        try:
+            matrix_2 = np.linalg.inv(matrix_2)
+        except np.linalg.linalg.LinAlgError:
+            # Singular matrix -> do not move values with this part of gradient
+            matrix_2 = np.full(matrix_2.shape, 0)
+
         partial_theta_partial_capital_d = -1 * matrix_1.dot(matrix_2)
 
         # Calculate first part
@@ -139,15 +153,13 @@ class DataModification(Adversary):
         return np.array(matrix)
 
     def _calc_partial_f_j_partial_x_k(self, j, k):
-        # TODO: Possibly bad formula!!!!!!!!!!!!!!
         running_sum = 0
         for i in range(len(self.instances)):
             val = self.logistic_vals[i]
-            running_sum += (val * (1 - val) * self.labels[i] * self.fvs[i][j] *
-                            self.theta[k])
-            running_sum -= 1
+            inside = val * self.fvs[i][j] * self.theta[k]
             if j == k:
-                running_sum += val * self.labels[i]
+                inside -= 1
+            running_sum += (1 - val) * self.labels[i] * inside
 
         return running_sum
 

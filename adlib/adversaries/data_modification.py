@@ -93,7 +93,8 @@ class DataModification(Adversary):
 
     def _calc_gradient(self):
         matrix_1 = self._calc_partial_f_partial_capital_d()
-        matrix_2 = np.linalg.inv(self._calc_partial_f_partial_theta())
+        matrix_2 = self._calc_partial_f_partial_theta()
+        matrix_2 = np.linalg.inv(matrix_2)
         partial_theta_partial_capital_d = -1 * matrix_1.dot(matrix_2)
 
         # Calculate first part

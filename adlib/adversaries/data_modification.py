@@ -134,6 +134,8 @@ class DataModification(Adversary):
         matrix = pool.map(lambda j: list(map(
             lambda k: self._calc_partial_f_j_partial_theta_k(j, k),
             range(len(self.theta)))), range(len(self.theta)))
+        pool.close()
+        pool.join()
 
         return np.array(matrix)
 
@@ -150,6 +152,8 @@ class DataModification(Adversary):
         matrix = pool.map(lambda j: list(map(
             lambda k: self._calc_partial_f_j_partial_x_k(j, k),
             range(len(self.theta)))), range(len(self.theta)))
+        pool.close()
+        pool.join()
 
         return np.array(matrix)
 

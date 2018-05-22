@@ -67,17 +67,19 @@ class DataModification(Adversary):
         self._project_fvs()
 
     def _project_fvs(self):
-        flag = False
+        """
+        Transform all values in self.fvs from being in the interval
+        [MIN, MAX] to the interval [0, 1]
+        """
+
+        min_val = np.min(self.fvs)
+        max_val = np.max(self.fvs)
+        distance = max_val - min_val
+        transformation = lambda x: (x - min_val) / distance
+
         for i in range(len(self.instances)):
             for j in range(self.instances[0].get_feature_count()):
-                if self.fvs[i][j] < 0:
-                    flag = True
-                    break
-            if self.fvs[i][j] < 0:
-                break
-
-        if flag:
-            self.fvs += abs(np.min(self.fvs))  # Make it non-negative
+                self.fvs[i][j] = transformation(self.fvs[i][j])
 
     def _calculate_constants(self, instances: List[Instance]):
         # Calculate feature vectors as np.ndarrays

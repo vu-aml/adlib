@@ -13,7 +13,7 @@ import pathos.multiprocessing as mp
 
 
 class DataModification(Adversary):
-    def __init__(self, learner, target_theta, alpha=1e-3, beta=0.1,
+    def __init__(self, learner, target_theta, alpha=1e-3, beta=0.05,
                  verbose=False):
 
         Adversary.__init__(self)
@@ -47,8 +47,8 @@ class DataModification(Adversary):
 
             # Calculate gradient, add gradient (includes learning rate), project
             gradient = self._calc_gradient()
-            self.fvs -= gradient
-            self._fuzz_fvs()  # fuzz and project
+            self.fvs += gradient
+            self._project_fvs()
 
             # Calculate theta
             self._calc_theta()

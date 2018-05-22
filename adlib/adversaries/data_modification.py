@@ -13,7 +13,7 @@ import pathos.multiprocessing as mp
 
 
 class DataModification(Adversary):
-    def __init__(self, learner, target_theta, alpha=1e-3, beta=0.03,
+    def __init__(self, learner, target_theta, alpha=1e-3, beta=0.1,
                  verbose=False):
 
         Adversary.__init__(self)
@@ -107,6 +107,7 @@ class DataModification(Adversary):
             matrix_2 = np.linalg.inv(matrix_2)
         except np.linalg.linalg.LinAlgError:
             # Singular matrix -> do not move values with this part of gradient
+            print('SINGULAR MATRIX ERROR')
             matrix_2 = np.full(matrix_2.shape, 0)
 
         partial_theta_partial_capital_d = -1 * matrix_1.dot(matrix_2)

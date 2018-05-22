@@ -12,6 +12,10 @@ import numpy as np
 import pathos.multiprocessing as mp
 
 
+# TODO: Fix singular matrix error
+# TODO: Verify implementation
+
+
 class DataModification(Adversary):
     def __init__(self, learner, target_theta, alpha=1e-3, beta=0.05,
                  verbose=False):

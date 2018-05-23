@@ -41,7 +41,6 @@ class DataModification(Adversary):
 
         self.instances = instances
         self._calculate_constants(instances)
-        self._fuzz_fvs()
 
         dist = np.linalg.norm(self.theta - self.target_theta)
         iteration = 0
@@ -59,16 +58,15 @@ class DataModification(Adversary):
             dist = np.linalg.norm(self.theta - self.target_theta)
             iteration += 1
 
-    def _fuzz_fvs(self):
+    def _fuzz_matrix(self, matrix: np.ndarray):
         """
-        Add to every entry of self.fvs some noise to make it non-singular.
+        Add to every entry of matrix some noise to make it non-singular.
+        :param matrix: the matrix - 2 dimensional
         """
 
-        for i in range(len(self.instances)):
-            for j in range(self.instances[0].get_feature_count()):
-                self.fvs[i][j] += np.random.normal(0, 0.001)
-
-        self._project_fvs()
+        for i in range(matrix.shape[0]):
+            for j in range(matrix.shape[1]):
+                matrix[i][j] += np.random.normal(0, 0.001)
 
     def _project_fvs(self):
         """
@@ -127,6 +125,7 @@ class DataModification(Adversary):
     def _calc_gradient(self):
         matrix_1 = self._calc_partial_f_partial_capital_d()
         matrix_2 = self._calc_partial_f_partial_theta()
+        self._fuzz_matrix(matrix_2)
 
         try:
             matrix_2 = np.linalg.inv(matrix_2)

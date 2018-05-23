@@ -55,7 +55,7 @@ class DataModification(Adversary):
 
             # Update variables
             self._calc_theta()
-            dist = np.linalg.norm(self.fvs - self.old_fvs)
+            dist = np.linalg.norm(gradient)
             self.old_fvs = deepcopy(self.fvs)
             iteration += 1
 

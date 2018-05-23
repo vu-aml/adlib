@@ -73,19 +73,19 @@ class DataModification(Adversary):
         [MIN, MAX] to the interval [0, 1]
         """
 
-        min_val = np.min(self.fvs)
-        max_val = np.max(self.fvs)
-        distance = max_val - min_val
-        transformation = lambda x: (x - min_val) / distance
-
         # If moving away from 0 or one in the outward direction, flip the value
         # 0 -> 1, 1 -> 0
         for i in range(len(self.instances)):
             for j in range(self.instances[0].get_feature_count()):
                 if self.fvs[i][j] < 0:
                     self.fvs[i][j] += 1
-                elif self.fvs > 1:
+                elif self.fvs[i][j] > 1:
                     self.fvs[i][j] -= 1
+
+        min_val = np.min(self.fvs)
+        max_val = np.max(self.fvs)
+        distance = max_val - min_val
+        transformation = lambda x: (x - min_val) / distance
 
         # Transform [a, b] to [0, 1]
         for i in range(len(self.instances)):

@@ -49,7 +49,7 @@ class DataModification(Adversary):
 
             # Calculate gradient, add gradient (includes learning rate), project
             gradient = self._calc_gradient()
-            self.fvs += gradient
+            self.fvs -= gradient
             self._project_fvs()
 
             # Calculate theta

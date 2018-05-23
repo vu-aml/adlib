@@ -26,8 +26,8 @@ def test_data_modification():
                            binary=True, raw=True)
     training_data = load_dataset(dataset)
 
-    # Randomly choose ~12% of dataset to decrease debugging time
-    choices = np.random.binomial(1, 0.12, len(training_data))
+    # Randomly choose ~5% of dataset to decrease debugging time
+    choices = np.random.binomial(1, 0.05, len(training_data))
     temp = []
     predict_data = []
     count = 0

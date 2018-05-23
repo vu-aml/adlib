@@ -50,7 +50,7 @@ class DataModification(Adversary):
 
             # Gradient descent
             gradient = self._calc_gradient()
-            self.fvs += gradient
+            self.fvs -= gradient
             self._project_fvs()
 
             # Update variables

@@ -79,6 +79,9 @@ def test_data_modification():
     for index in features:
         target_theta[index] = value
 
+    print('Features selected: ', features)
+    print('Number of features: ', len(features))
+
     ############################################################################
 
     # Get original predictions

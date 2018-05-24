@@ -27,7 +27,6 @@ class DataModification(Adversary):
         self.verbose = verbose
         self.instances = None
         self.orig_fvs = None  # same as below, just original values
-        self.old_fvs = None  # previous iteration's fvs values
         self.fvs = None  # feature vector matrix, shape: (# inst., # features)
         self.theta = None
         self.b = None
@@ -42,7 +41,7 @@ class DataModification(Adversary):
         self.instances = instances
         self._calculate_constants(instances)
 
-        dist = 0.0
+        dist = np.linalg.norm(self.theta - self.target_theta)
         iteration = 0
         while dist > self.alpha or iteration == 0:
             if self.verbose:
@@ -55,8 +54,7 @@ class DataModification(Adversary):
 
             # Update variables
             self._calc_theta()
-            dist = np.linalg.norm(self.fvs - self.old_fvs)
-            self.old_fvs = deepcopy(self.fvs)
+            dist = np.linalg.norm(self.theta - self.target_theta)
             iteration += 1
 
     def _fuzz_matrix(self, matrix: np.ndarray):
@@ -100,7 +98,6 @@ class DataModification(Adversary):
             self.fvs.append(tmp)
         self.fvs = np.array(self.fvs, dtype='float64')
         self.orig_fvs = deepcopy(self.fvs)
-        self.old_fvs = deepcopy(self.fvs)
 
         # Calculate labels
         self.labels = []

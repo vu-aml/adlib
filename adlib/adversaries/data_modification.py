@@ -50,7 +50,7 @@ class DataModification(Adversary):
 
             # Gradient descent
             gradient = self._calc_gradient()
-            self.fvs -= gradient
+            self.fvs -= (gradient * self.beta)
             self._project_fvs()
 
             # Update variables
@@ -67,22 +67,13 @@ class DataModification(Adversary):
 
         for i in range(matrix.shape[0]):
             for j in range(matrix.shape[1]):
-                matrix[i][j] += np.random.normal(0, 0.001)
+                matrix[i][j] += abs(np.random.normal(0, 0.00001))
 
     def _project_fvs(self):
         """
         Transform all values in self.fvs from being in the interval
         [MIN, MAX] to the interval [0, 1]
         """
-
-        # If moving away from 0 or one in the outward direction, flip the value
-        # 0 -> 1, 1 -> 0
-        for i in range(len(self.instances)):
-            for j in range(self.instances[0].get_feature_count()):
-                if self.fvs[i][j] < 0:
-                    self.fvs[i][j] += 1
-                elif self.fvs[i][j] > 1:
-                    self.fvs[i][j] -= 1
 
         min_val = np.min(self.fvs)
         max_val = np.max(self.fvs)
@@ -131,6 +122,7 @@ class DataModification(Adversary):
         # Calculate beta
         if self.beta <= 0:
             self.beta = 1 / len(instances)
+            self.beta /= 1000
 
     def _calc_theta(self):
         self.learner.fit(self.fvs, self.labels)  # Retrain learner
@@ -155,7 +147,6 @@ class DataModification(Adversary):
         # Calculate first part
         risk_gradient = 2 * (self.theta - self.target_theta)
         gradient = risk_gradient.dot(partial_theta_partial_capital_d)
-        gradient *= self.beta
         gradient = [gradient for _ in range(len(self.instances))]
         gradient = np.array(gradient)
 
@@ -167,7 +158,10 @@ class DataModification(Adversary):
         else:
             cost_gradient = 0
 
-        return np.array(gradient + cost_gradient)
+        gradient += cost_gradient
+        gradient = np.array(gradient)
+
+        return gradient
 
     def _calc_partial_f_partial_theta(self):
         pool = mp.Pool(mp.cpu_count())

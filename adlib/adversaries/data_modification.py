@@ -160,10 +160,10 @@ class DataModification(Adversary):
 
         return gradient
 
-    def _calc_partial_f_partial_theta(self):
+    def _calc_partial_f_partial_theta(self, i):
         pool = mp.Pool(mp.cpu_count())
         matrix = pool.map(lambda j: list(map(
-            lambda k: self._calc_partial_f_j_partial_theta_k(j, k),
+            lambda k: self._calc_partial_f_j_partial_theta_k(i, j, k),
             range(len(self.theta)))), range(len(self.theta)))
         pool.close()
         pool.join()

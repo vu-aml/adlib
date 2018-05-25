@@ -33,6 +33,7 @@ class DataModification(Adversary):
         self.g_arr = None  # array of g_i values, shape: (# inst.)
         self.labels = None  # array of labels of the instances
         self.logistic_vals = None
+        self.risk_gradient = None
 
     def attack(self, instances) -> List[Instance]:
         if len(instances) == 0:
@@ -128,23 +129,11 @@ class DataModification(Adversary):
         self.theta = self.theta - self.b
 
     def _calc_gradient(self):
-        matrix_1 = self._calc_partial_f_partial_capital_d()
-        matrix_2 = self._calc_partial_f_partial_theta()
-        self._fuzz_matrix(matrix_2)
+        self.risk_gradient = 2 * (self.theta - self.target_theta)
 
-        try:
-            matrix_2 = np.linalg.inv(matrix_2)
-        except np.linalg.linalg.LinAlgError:
-            # Singular matrix -> do not move values with this part of gradient
-            print('SINGULAR MATRIX ERROR')
-            matrix_2 = np.full(matrix_2.shape, 0)
-
-        partial_theta_partial_capital_d = -1 * matrix_1.dot(matrix_2)
-
-        # Calculate first part
-        risk_gradient = 2 * (self.theta - self.target_theta)
-        gradient = risk_gradient.dot(partial_theta_partial_capital_d)
-        gradient = [gradient for _ in range(len(self.instances))]
+        gradient = []
+        for i in range(len(self.instances)):
+            gradient += self._calc_partial_gradient(i)
         gradient = np.array(gradient)
 
         # Calculate cost part
@@ -156,6 +145,24 @@ class DataModification(Adversary):
             cost_gradient = 0
 
         gradient += cost_gradient
+
+        return gradient
+
+    def _calc_partial_gradient(self, i):
+        matrix_1 = self._calc_partial_f_partial_capital_d(i)
+        matrix_2 = self._calc_partial_f_partial_theta(i)
+        # self._fuzz_matrix(matrix_2)
+
+        try:
+            matrix_2 = np.linalg.inv(matrix_2)
+        except np.linalg.linalg.LinAlgError:
+            # Singular matrix -> do not move values with this part of gradient
+            print('SINGULAR MATRIX ERROR')
+            matrix_2 = np.full(matrix_2.shape, 0)
+
+        partial_theta_partial_capital_d = -1 * matrix_1.dot(matrix_2)
+
+        gradient = self.risk_gradient.dot(partial_theta_partial_capital_d)
         gradient = np.array(gradient)
 
         return gradient

@@ -120,20 +120,18 @@ class DataModification(Adversary):
         # Calculate beta
         if self.beta <= 0:
             self.beta = 1 / len(instances)
-            self.beta /= 1000
 
     def _calc_theta(self):
         self.learner.fit(self.fvs, self.labels)  # Retrain learner
         self.theta = self.learner.decision_function(
-            np.eye(self.instances[0].get_feature_count(), dtype=int))
+            np.eye(self.instances[0].get_feature_count()))
         self.theta = self.theta - self.b
 
     def _calc_gradient(self):
         self.risk_gradient = 2 * (self.theta - self.target_theta)
 
-        gradient = []
-        for i in range(len(self.instances)):
-            gradient += self._calc_partial_gradient(i)
+        gradient = list(map(self._calc_partial_gradient,
+                            range(len(self.instances))))
         gradient = np.array(gradient)
 
         # Calculate cost part
@@ -151,7 +149,7 @@ class DataModification(Adversary):
     def _calc_partial_gradient(self, i):
         matrix_1 = self._calc_partial_f_partial_capital_d(i)
         matrix_2 = self._calc_partial_f_partial_theta(i)
-        # self._fuzz_matrix(matrix_2)
+        self._fuzz_matrix(matrix_2)
 
         try:
             matrix_2 = np.linalg.inv(matrix_2)

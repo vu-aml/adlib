@@ -27,6 +27,7 @@ class DataModification(Adversary):
         self.verbose = verbose
         self.instances = None
         self.orig_fvs = None  # same as below, just original values
+        self.old_fvs = None  # last iteration's fvs values
         self.fvs = None  # feature vector matrix, shape: (# inst., # features)
         self.theta = None
         self.b = None
@@ -42,11 +43,13 @@ class DataModification(Adversary):
         self.instances = instances
         self._calculate_constants()
 
-        dist = np.linalg.norm(self.theta - self.target_theta)
+        dist = 0.0
+        theta_dist = np.linalg.norm(self.theta - self.target_theta)
         iteration = 0
         while dist > self.alpha or iteration == 0:
             if self.verbose:
-                print('Distance (iteration: ', iteration, '): ', dist, sep='')
+                print('Iteration: ', iteration, ' - FV distance: ', dist,
+                      ' - theta distance: ', theta_dist, sep='')
 
             # Gradient descent
             gradient = self._calc_gradient()
@@ -59,8 +62,15 @@ class DataModification(Adversary):
 
             # Update variables
             self._calc_theta()
-            dist = np.linalg.norm(self.theta - self.target_theta)
+            dist = np.linalg.norm(self.fvs - self.old_fvs)
+            theta_dist = np.linalg.norm(self.theta - self.target_theta)
+            self.old_fvs = deepcopy(self.fvs)
             iteration += 1
+
+        if self.verbose:
+            print('Iteration: FINAL - FV distance: ', dist,
+                  ' - theta distance: ', theta_dist, ' - alpha: ', self.alpha,
+                  sep='')
 
     def _fuzz_matrix(self, matrix: np.ndarray):
         """
@@ -103,6 +113,7 @@ class DataModification(Adversary):
             self.fvs.append(tmp)
         self.fvs = np.array(self.fvs, dtype='float64')
         self.orig_fvs = deepcopy(self.fvs)
+        self.old_fvs = deepcopy(self.fvs)
 
         # Calculate labels
         self.labels = []

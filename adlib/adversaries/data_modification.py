@@ -134,8 +134,12 @@ class DataModification(Adversary):
     def _calc_gradient(self):
         self.risk_gradient = 2 * (self.theta - self.target_theta)
 
-        gradient = list(map(self._calc_partial_gradient,
-                            range(len(self.instances))))
+        pool = mp.Pool(mp.cpu_count())
+        gradient = pool.map(self._calc_partial_gradient,
+                            range(len(self.instances)))
+        pool.close()
+        pool.join()
+
         gradient = np.array(gradient)
 
         # Calculate cost part
@@ -170,12 +174,9 @@ class DataModification(Adversary):
         return gradient
 
     def _calc_partial_f_partial_theta(self, i):
-        pool = mp.Pool(mp.cpu_count())
-        matrix = pool.map(lambda j: list(map(
+        matrix = list(map(lambda j: list(map(
             lambda k: self._calc_partial_f_j_partial_theta_k(i, j, k),
-            range(len(self.theta)))), range(len(self.theta)))
-        pool.close()
-        pool.join()
+            range(len(self.theta)))), range(len(self.theta))))
 
         return np.array(matrix)
 
@@ -184,12 +185,9 @@ class DataModification(Adversary):
         return self.fvs[i][k] * self.fvs[i][j] * val * (1 - val)
 
     def _calc_partial_f_partial_capital_d(self, i):
-        pool = mp.Pool(mp.cpu_count())
-        matrix = pool.map(lambda j: list(map(
+        matrix = list(map(lambda j: list(map(
             lambda k: self._calc_partial_f_j_partial_x_k(i, j, k),
-            range(len(self.theta)))), range(len(self.theta)))
-        pool.close()
-        pool.join()
+            range(len(self.theta)))), range(len(self.theta))))
 
         return np.array(matrix)
 

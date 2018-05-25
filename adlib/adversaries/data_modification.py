@@ -188,16 +188,12 @@ class DataModification(Adversary):
 
         return np.array(matrix)
 
-    def _calc_partial_f_j_partial_x_k(self, j, k):
-        running_sum = 0
-        for i in range(len(self.instances)):
-            val = self.logistic_vals[i]
-            inside = val * self.fvs[i][j] * self.theta[k]
-            if j == k:
-                inside -= 1
-            running_sum += (1 - val) * self.labels[i] * inside
-
-        return running_sum
+    def _calc_partial_f_j_partial_x_k(self, i, j, k):
+        val = self.logistic_vals[i]
+        inside = val * self.fvs[i][j] * self.theta[k]
+        if j == k:
+            inside -= 1
+        return (1 - val) * self.labels[i] * inside
 
     @staticmethod
     def _logistic_function(x):

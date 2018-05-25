@@ -50,6 +50,10 @@ class DataModification(Adversary):
 
             # Gradient descent
             gradient = self._calc_gradient()
+
+            if self.verbose:
+                print('\nGRADIENT\n', gradient, '\n', sep='')
+
             self.fvs -= (gradient * self.beta)
             self._project_fvs()
 

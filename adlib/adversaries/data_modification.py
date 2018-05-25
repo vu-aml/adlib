@@ -136,11 +136,28 @@ class DataModification(Adversary):
         self.risk_gradient = 2 * (self.theta - self.target_theta)
 
         pool = mp.Pool(mp.cpu_count())
-        gradient = pool.map(self._calc_partial_gradient,
-                            range(len(self.instances)))
+        matrices_1 = pool.map(self._calc_partial_f_partial_capital_d,
+                              range(len(self.instances)))
         pool.close()
         pool.join()
 
+        matrices_1 = np.array(matrices_1)
+
+        matrix_2 = self._calc_partial_f_partial_theta()
+        self._fuzz_matrix(matrix_2)
+
+        try:
+            matrix_2 = np.linalg.inv(matrix_2)
+        except np.linalg.linalg.LinAlgError:
+            # Singular matrix -> do not move values with this part of gradient
+            print('SINGULAR MATRIX ERROR')
+            matrix_2 = np.full(matrix_2.shape, 0)
+
+        gradient = []
+        for i in range(len(matrices_1)):
+            partial_theta_partial_capital_d = -1 * matrices_1[i].dot(matrix_2)
+            value = self.risk_gradient.dot(partial_theta_partial_capital_d)
+            gradient.append(value)
         gradient = np.array(gradient)
 
         # Calculate cost part
@@ -155,35 +172,22 @@ class DataModification(Adversary):
 
         return gradient
 
-    def _calc_partial_gradient(self, i):
-        matrix_1 = self._calc_partial_f_partial_capital_d(i)
-        matrix_2 = self._calc_partial_f_partial_theta(i)
-        self._fuzz_matrix(matrix_2)
-
-        try:
-            matrix_2 = np.linalg.inv(matrix_2)
-        except np.linalg.linalg.LinAlgError:
-            # Singular matrix -> do not move values with this part of gradient
-            print('SINGULAR MATRIX ERROR')
-            matrix_2 = np.full(matrix_2.shape, 0)
-
-        partial_theta_partial_capital_d = -1 * matrix_1.dot(matrix_2)
-
-        gradient = self.risk_gradient.dot(partial_theta_partial_capital_d)
-        gradient = np.array(gradient)
-
-        return gradient
-
-    def _calc_partial_f_partial_theta(self, i):
-        matrix = list(map(lambda j: list(map(
-            lambda k: self._calc_partial_f_j_partial_theta_k(i, j, k),
-            range(len(self.theta)))), range(len(self.theta))))
+    def _calc_partial_f_partial_theta(self):
+        pool = mp.Pool(mp.cpu_count())
+        matrix = pool.map(lambda j: list(map(
+            lambda k: self._calc_partial_f_j_partial_theta_k(j, k),
+            range(len(self.theta)))), range(len(self.theta)))
+        pool.close()
+        pool.join()
 
         return np.array(matrix)
 
-    def _calc_partial_f_j_partial_theta_k(self, i, j, k):
-        val = self.logistic_vals[i]
-        return self.fvs[i][k] * self.fvs[i][j] * val * (1 - val)
+    def _calc_partial_f_j_partial_theta_k(self, j, k):
+        running_sum = 0.0
+        for i in range(len(self.instances)):
+            val = self.logistic_vals[i]
+            running_sum += self.fvs[i][k] * self.fvs[i][j] * val * (1 - val)
+        return running_sum
 
     def _calc_partial_f_partial_capital_d(self, i):
         matrix = list(map(lambda j: list(map(

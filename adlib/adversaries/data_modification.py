@@ -40,7 +40,7 @@ class DataModification(Adversary):
             raise ValueError('Need at least one instance.')
 
         self.instances = instances
-        self._calculate_constants(instances)
+        self._calculate_constants()
 
         dist = np.linalg.norm(self.theta - self.target_theta)
         iteration = 0
@@ -88,13 +88,13 @@ class DataModification(Adversary):
             for j in range(self.instances[0].get_feature_count()):
                 self.fvs[i][j] = transformation(self.fvs[i][j])
 
-    def _calculate_constants(self, instances: List[Instance]):
+    def _calculate_constants(self):
         # Calculate feature vectors as np.ndarrays
         self.fvs = []
-        for i in range(len(instances)):
-            feature_vector = instances[i].get_feature_vector()
+        for i in range(len(self.instances)):
+            feature_vector = self.instances[i].get_feature_vector()
             tmp = []
-            for j in range(instances[0].get_feature_count()):
+            for j in range(self.instances[0].get_feature_count()):
                 if feature_vector.get_feature(j) == 1:
                     tmp.append(1)
                 else:
@@ -106,7 +106,7 @@ class DataModification(Adversary):
 
         # Calculate labels
         self.labels = []
-        for inst in instances:
+        for inst in self.instances:
             self.labels.append(inst.get_label())
         self.labels = np.array(self.labels)
 
@@ -123,7 +123,8 @@ class DataModification(Adversary):
 
         # Calculate beta
         if self.beta <= 0:
-            self.beta = 1 / len(instances)
+            self.beta = 1 / (len(self.instances) *
+                             self.instances[0].get_feature_count())
 
     def _calc_theta(self):
         self.learner.fit(self.fvs, self.labels)  # Retrain learner

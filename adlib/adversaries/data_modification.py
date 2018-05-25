@@ -170,13 +170,9 @@ class DataModification(Adversary):
 
         return np.array(matrix)
 
-    def _calc_partial_f_j_partial_theta_k(self, j, k):
-        running_sum = 0
-        for i in range(len(self.instances)):
-            val = self.logistic_vals[i]
-            running_sum += self.fvs[i][k] * self.fvs[i][j] * val * (1 - val)
-
-        return running_sum
+    def _calc_partial_f_j_partial_theta_k(self, i, j, k):
+        val = self.logistic_vals[i]
+        return self.fvs[i][k] * self.fvs[i][j] * val * (1 - val)
 
     def _calc_partial_f_partial_capital_d(self, i):
         pool = mp.Pool(mp.cpu_count())

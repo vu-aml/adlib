@@ -47,12 +47,12 @@ class DataModification(Adversary):
         old_theta_dist = 0.0
         theta_dist = np.linalg.norm(self.theta - self.target_theta)
         iteration = 0
-        while theta_dist > self.alpha or iteration == 0:
+        while (theta_dist > self.alpha or iteration == 0) and iteration < 500:
             if theta_dist >= old_theta_dist and iteration > 1:
                 if self.verbose:
                     print('Iteration: ', iteration, ' - resetting beta', sep='')
 
-                self.beta *= 0.5
+                self.beta *= 0.9
                 self.old_fvs = self.old_fvs[:-1]
                 self.fvs = deepcopy(self.old_fvs[-1])
                 copy_dist = False
@@ -104,12 +104,13 @@ class DataModification(Adversary):
         min_val = np.min(self.fvs)
         max_val = np.max(self.fvs)
         distance = max_val - min_val
-        transformation = lambda x: (x - min_val) / distance
+        if distance > 0 and (min_val < 0 or max_val > 1):
+            transformation = lambda x: (x - min_val) / distance
 
-        # Transform [a, b] to [0, 1]
-        for i in range(len(self.instances)):
-            for j in range(self.instances[0].get_feature_count()):
-                self.fvs[i][j] = transformation(self.fvs[i][j])
+            # Transform [a, b] to [0, 1]
+            for i in range(len(self.instances)):
+                for j in range(self.instances[0].get_feature_count()):
+                    self.fvs[i][j] = transformation(self.fvs[i][j])
 
     def _calculate_constants(self):
         # Calculate feature vectors as np.ndarrays

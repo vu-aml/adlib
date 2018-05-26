@@ -68,19 +68,23 @@ def test_data_modification():
         if inst.get_label() == 1:
             spam_instances.append(inst)
 
-    features = get_spam_features(spam_instances)
+    spam_features, ham_features = get_spam_features(spam_instances)
     mean = np.mean(orig_theta)
     std = np.std(orig_theta)
 
     # Set features to mean + 3 STD and make it negative to help it be classified
     # as ham and NOT spam
-    value = -1 * (mean + 3 * std)
+    ham_value = mean + 3 * std
+    spam_value = -1 * ham_value
 
-    for index in features:
-        target_theta[index] = value
+    for index in spam_features:
+        target_theta[index] = spam_value
 
-    print('Features selected: ', features)
-    print('Number of features: ', len(features))
+    for index in ham_features:
+        target_theta[index] = ham_value
+
+    print('Features selected: ', np.array(spam_features))
+    print('Number of features: ', len(spam_features))
 
     ############################################################################
 
@@ -141,22 +145,25 @@ def get_spam_features(instances, p=0.75):
     have them is >= p
     :param instances: the spam instances - MUST BE SPAM (i.e. have a label of 1)
     :param p: the proportion of instances that must have this value
-    :return: the list of feature indices
+    :return: a tuple comprised of spam and ham features in separate lists
     """
 
     if len(instances) == 0:
         raise ValueError('Must have at least one instance.')
 
-    features = []
+    spam_features = []
+    ham_features = []
     for i in range(instances[0].get_feature_count()):
         count = 0
         for inst in instances:
             count += 1 if inst.get_feature_vector().get_feature(i) == 1 else 0
 
         if (count / len(instances)) >= p:
-            features.append(i)
+            spam_features.append(i)
+        else:
+            ham_features.append(i)
 
-    return features
+    return spam_features, ham_features
 
 
 if __name__ == '__main__':

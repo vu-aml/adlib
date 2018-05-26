@@ -27,7 +27,7 @@ class DataModification(Adversary):
         self.verbose = verbose
         self.instances = None
         self.orig_fvs = None  # same as below, just original values
-        self.old_fvs = None  # last iteration's fvs values
+        self.old_fvs = []  # last iteration's fvs values
         self.fvs = None  # feature vector matrix, shape: (# inst., # features)
         self.theta = None
         self.b = None
@@ -44,15 +44,25 @@ class DataModification(Adversary):
         self._calculate_constants()
 
         dist = 0.0
+        old_dist = 0.0
         theta_dist = np.linalg.norm(self.theta - self.target_theta)
         iteration = 0
         while dist > self.alpha or iteration == 0:
-            if self.verbose:
-                print('Iteration: ', iteration, ' - FV distance: ', dist,
-                      ' - theta distance: ', theta_dist, sep='')
+            if dist >= old_dist and iteration > 1:
+                if self.verbose:
+                    print('Iteration: ', iteration, ' - resetting gradient',
+                          sep='')
 
-            # Gradient descent
-            gradient = self._calc_gradient()
+                self.beta *= 0.5
+                self.old_fvs = self.old_fvs[:-1]
+                self.fvs = deepcopy(self.old_fvs[-1])
+            else:
+                if self.verbose:
+                    print('Iteration: ', iteration, ' - FV distance: ', dist,
+                          ' - theta distance: ', theta_dist, sep='')
+
+                # gradient descent
+                gradient = self._calc_gradient()
 
             if self.verbose:
                 print('\nGRADIENT\n', gradient, '\n', sep='')
@@ -62,9 +72,10 @@ class DataModification(Adversary):
 
             # Update variables
             self._calc_theta()
-            dist = np.linalg.norm(self.fvs - self.old_fvs)
+            old_dist = dist
+            dist = np.linalg.norm(self.fvs - self.old_fvs[-1])
             theta_dist = np.linalg.norm(self.theta - self.target_theta)
-            self.old_fvs = deepcopy(self.fvs)
+            self.old_fvs.append(deepcopy(self.fvs))
             iteration += 1
 
         if self.verbose:
@@ -113,7 +124,7 @@ class DataModification(Adversary):
             self.fvs.append(tmp)
         self.fvs = np.array(self.fvs, dtype='float64')
         self.orig_fvs = deepcopy(self.fvs)
-        self.old_fvs = deepcopy(self.fvs)
+        self.old_fvs.append(deepcopy(self.fvs))
 
         # Calculate labels
         self.labels = []

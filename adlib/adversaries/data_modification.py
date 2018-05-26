@@ -55,6 +55,7 @@ class DataModification(Adversary):
                 self.beta *= 0.5
                 self.old_fvs = self.old_fvs[:-1]
                 self.fvs = deepcopy(self.old_fvs[-1])
+                copy_dist = False
             else:
                 if self.verbose:
                     print('Iteration: ', iteration, ' - FV distance: ', fv_dist,
@@ -62,6 +63,7 @@ class DataModification(Adversary):
 
                 # gradient descent
                 gradient = self._calc_gradient()
+                copy_dist = True
 
             if self.verbose:
                 print('\nGRADIENT\n', gradient, '\n', sep='')
@@ -71,7 +73,8 @@ class DataModification(Adversary):
 
             # Update variables
             self._calc_theta()
-            old_theta_dist = theta_dist
+            if copy_dist:
+                old_theta_dist = theta_dist
             fv_dist = np.linalg.norm(self.fvs - self.old_fvs[-1])
             theta_dist = np.linalg.norm(self.theta - self.target_theta)
             self.old_fvs.append(deepcopy(self.fvs))

@@ -43,22 +43,21 @@ class DataModification(Adversary):
         self.instances = instances
         self._calculate_constants()
 
-        dist = 0.0
-        old_dist = 0.0
+        fv_dist = 0.0
+        old_theta_dist = 0.0
         theta_dist = np.linalg.norm(self.theta - self.target_theta)
         iteration = 0
-        while dist > self.alpha or iteration == 0:
-            if dist >= old_dist and iteration > 1:
+        while theta_dist > self.alpha or iteration == 0:
+            if theta_dist >= old_theta_dist and iteration > 1:
                 if self.verbose:
-                    print('Iteration: ', iteration, ' - resetting gradient',
-                          sep='')
+                    print('Iteration: ', iteration, ' - resetting beta', sep='')
 
                 self.beta *= 0.5
                 self.old_fvs = self.old_fvs[:-1]
                 self.fvs = deepcopy(self.old_fvs[-1])
             else:
                 if self.verbose:
-                    print('Iteration: ', iteration, ' - FV distance: ', dist,
+                    print('Iteration: ', iteration, ' - FV distance: ', fv_dist,
                           ' - theta distance: ', theta_dist, sep='')
 
                 # gradient descent
@@ -72,16 +71,16 @@ class DataModification(Adversary):
 
             # Update variables
             self._calc_theta()
-            old_dist = dist
-            dist = np.linalg.norm(self.fvs - self.old_fvs[-1])
+            old_theta_dist = theta_dist
+            fv_dist = np.linalg.norm(self.fvs - self.old_fvs[-1])
             theta_dist = np.linalg.norm(self.theta - self.target_theta)
             self.old_fvs.append(deepcopy(self.fvs))
             iteration += 1
 
         if self.verbose:
-            print('Iteration: FINAL - FV distance: ', dist,
+            print('Iteration: FINAL - FV distance: ', fv_dist,
                   ' - theta distance: ', theta_dist, ' - alpha: ', self.alpha,
-                  sep='')
+                  ' - beta: ', self.beta, sep='')
 
     def _fuzz_matrix(self, matrix: np.ndarray):
         """

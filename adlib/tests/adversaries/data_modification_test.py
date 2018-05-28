@@ -135,6 +135,15 @@ def test_data_modification():
     print('Attack correct percentage: ', attack_precent_correct, '%')
     print('Difference: ', difference, '%')
 
+    ############################################################################
+    # Calculate statistics with predict data (other half of dataset)
+
+    spam_pred_labels = learner.predict(spam_instances)
+    spam_ham_count = sum(map(lambda x: 1 if x == -1 else 0, spam_pred_labels))
+    print('###################################################################')
+    print('Number of spam instances in original training set that were \n',
+          'classified as ham after the attack: ', spam_ham_count, sep='')
+
     print('\nEND data modification attack.')
     print('#################################################################\n')
 

@@ -4,7 +4,7 @@
 # Matthew Sedam
 
 from adlib.adversaries.adversary import Adversary
-from data_reader.binary_input import Instance
+from data_reader.binary_input import BinaryFeatureVector, Instance
 from copy import deepcopy
 from typing import List, Dict
 import math
@@ -26,6 +26,7 @@ class DataModification(Adversary):
         self.beta = beta  # learning rate
         self.verbose = verbose
         self.instances = None
+        self.return_instances = None
         self.orig_fvs = None  # same as below, just original values
         self.old_fvs = []  # last iteration's fvs values
         self.fvs = None  # feature vector matrix, shape: (# inst., # features)
@@ -41,14 +42,15 @@ class DataModification(Adversary):
             raise ValueError('Need at least one instance.')
 
         self.instances = instances
+        self.return_instances = deepcopy(self.instances)
         self._calculate_constants()
 
         fv_dist = 0.0
-        old_theta_dist = 0.0
+        old_fv_dist = 0.0
         theta_dist = np.linalg.norm(self.theta - self.target_theta)
         iteration = 0
-        while (theta_dist > self.alpha or iteration == 0) and iteration < 500:
-            if theta_dist >= old_theta_dist and iteration > 1:
+        while (fv_dist > self.alpha or iteration == 0) and iteration < 500:
+            if fv_dist >= old_fv_dist and iteration > 1:
                 if self.verbose:
                     print('Iteration: ', iteration, ' - resetting beta', sep='')
 
@@ -74,7 +76,7 @@ class DataModification(Adversary):
             # Update variables
             self._calc_theta()
             if copy_dist:
-                old_theta_dist = theta_dist
+                old_fv_dist = fv_dist
             fv_dist = np.linalg.norm(self.fvs - self.old_fvs[-1])
             theta_dist = np.linalg.norm(self.theta - self.target_theta)
             self.old_fvs.append(deepcopy(self.fvs))
@@ -84,6 +86,18 @@ class DataModification(Adversary):
             print('Iteration: FINAL - FV distance: ', fv_dist,
                   ' - theta distance: ', theta_dist, ' - alpha: ', self.alpha,
                   ' - beta: ', self.beta, sep='')
+            print('Target Theta:\n', self.target_theta, '\nTheta:\n',
+                  self.theta, '\n')
+
+        for i in range(len(self.fvs)):
+            indices = []
+            for j in range(len(self.fvs[i])):
+                if self.fvs[i][j] >= 0.5:
+                    indices += j
+            self.return_instances[i].feature_vector = BinaryFeatureVector(
+                self.return_instances[i].get_feature_count(), indices)
+
+        return self.return_instances
 
     def _fuzz_matrix(self, matrix: np.ndarray):
         """

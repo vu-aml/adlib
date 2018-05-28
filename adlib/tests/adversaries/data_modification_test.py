@@ -142,7 +142,8 @@ def test_data_modification():
     spam_ham_count = sum(map(lambda x: 1 if x == -1 else 0, spam_pred_labels))
     print('###################################################################')
     print('Number of spam instances in original training set that were \n',
-          'classified as ham after the attack: ', spam_ham_count, sep='')
+          'classified as ham after the attack: ', spam_ham_count, '/',
+          len(spam_instances), sep='')
 
     print('\nEND data modification attack.')
     print('#################################################################\n')

@@ -97,20 +97,26 @@ class DataModification(Adversary):
 
     def _project_fvs(self):
         """
-        Transform all values in self.fvs from being in the interval
-        [MIN, MAX] to the interval [0, 1]
+        Transform all feature vectors in self.fvs from having elements in the
+        interval [MIN, MAX] to the interval [0, 1]
         """
 
-        min_val = np.min(self.fvs)
-        max_val = np.max(self.fvs)
+        pool = mp.Pool(mp.cpu_count())
+        self.fvs = pool.map(self._project_feature_vector, self.fvs)
+        pool.close()
+        pool.join()
+
+        self.fvs = np.array(self.fvs)
+
+    def _project_feature_vector(self, fv):
+        min_val = np.min(fv)
+        max_val = mp.max(fv)
         distance = max_val - min_val
+
         if distance > 0 and (min_val < 0 or max_val > 1):
             transformation = lambda x: (x - min_val) / distance
-
-            # Transform [a, b] to [0, 1]
-            for i in range(len(self.instances)):
-                for j in range(self.instances[0].get_feature_count()):
-                    self.fvs[i][j] = transformation(self.fvs[i][j])
+            for i in range(len(fv)):
+                fv[i] = transformation(fv[i])
 
     def _calculate_constants(self):
         # Calculate feature vectors as np.ndarrays

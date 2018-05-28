@@ -1,5 +1,5 @@
 # Adversarial Machine Learning Library (AML)
-## Computational Economics Research Lab at Vanderbilt University
+### Computational Economics Research Lab at Vanderbilt University
 
 [![Build Status](https://travis-ci.org/vu-aml/adlib.svg?branch=master)](https://travis-ci.org/vu-aml/adlib)
 

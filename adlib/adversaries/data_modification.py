@@ -102,13 +102,14 @@ class DataModification(Adversary):
         """
 
         pool = mp.Pool(mp.cpu_count())
-        self.fvs = pool.map(self._project_feature_vector, self.fvs)
+        self.fvs = pool.map(self._project_feature_vector, self.fvs.tolist())
         pool.close()
         pool.join()
 
         self.fvs = np.array(self.fvs)
 
     def _project_feature_vector(self, fv):
+        fv = np.array(fv)
         min_val = np.min(fv)
         max_val = np.max(fv)
         distance = max_val - min_val
@@ -117,6 +118,8 @@ class DataModification(Adversary):
             transformation = lambda x: (x - min_val) / distance
             for i in range(len(fv)):
                 fv[i] = transformation(fv[i])
+
+        return fv
 
     def _calculate_constants(self):
         # Calculate feature vectors as np.ndarrays

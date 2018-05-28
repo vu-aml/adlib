@@ -93,7 +93,7 @@ class DataModification(Adversary):
             indices = []
             for j in range(len(self.fvs[i])):
                 if self.fvs[i][j] >= 0.5:
-                    indices += j
+                    indices.append(j)
             self.return_instances[i].feature_vector = BinaryFeatureVector(
                 self.return_instances[i].get_feature_count(), indices)
 

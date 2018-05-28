@@ -72,16 +72,13 @@ def test_data_modification():
     mean = np.mean(orig_theta)
     std = np.std(orig_theta)
 
-    # Set features to mean + 3 STD and make it negative to help it be classified
-    # as ham and NOT spam
-    ham_value = mean + 3 * std
-    spam_value = -1 * ham_value
+    # Set features to recognize spam as ham
 
     for index in spam_features:
-        target_theta[index] = spam_value
+        target_theta[index] = -1
 
     for index in ham_features:
-        target_theta[index] = ham_value
+        target_theta[index] = orig_theta[index]
 
     print('Features selected: ', np.array(spam_features))
     print('Number of features: ', len(spam_features))

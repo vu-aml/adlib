@@ -110,7 +110,7 @@ class DataModification(Adversary):
 
     def _project_feature_vector(self, fv):
         min_val = np.min(fv)
-        max_val = mp.max(fv)
+        max_val = np.max(fv)
         distance = max_val - min_val
 
         if distance > 0 and (min_val < 0 or max_val > 1):

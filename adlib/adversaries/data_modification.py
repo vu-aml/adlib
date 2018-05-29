@@ -16,19 +16,13 @@ import pathos.multiprocessing as mp
 
 
 class DataModification(Adversary):
-    def __init__(self, learner, target_theta, alpha=1e-8, beta=-1,
+    def __init__(self, learner, target_theta, alpha=1e-8, beta=0.1,
                  beta_update_cnst=0.92, max_iter=1000, verbose=False):
 
         Adversary.__init__(self)
         self.learner = deepcopy(learner).model.learner
         self.target_theta = target_theta
         self.alpha = alpha
-
-        if beta <= 0:  # learning rate
-            self.beta = 0.1
-        else:
-            self.beta = beta
-
         self.beta_update_cnst = beta_update_cnst
         self.max_iter = max_iter
         self.verbose = verbose
@@ -53,13 +47,13 @@ class DataModification(Adversary):
         self._calculate_constants()
 
         fv_dist = 0.0
-        old_fv_dist = 0.0
         theta_dist = np.linalg.norm(self.theta - self.target_theta)
+        old_theta_dist = theta_dist
         iteration = 0
-        while ((fv_dist > self.alpha or iteration == 0) and
+        while ((theta_dist > self.alpha or iteration == 0) and
                iteration < self.max_iter):
 
-            if fv_dist >= old_fv_dist and iteration > 1:
+            if theta_dist >= old_theta_dist and iteration > 1:
                 if self.verbose:
                     print('Iteration: ', iteration, ' - resetting beta', sep='')
 
@@ -85,7 +79,7 @@ class DataModification(Adversary):
             # Update variables
             self._calc_theta()
             if copy_dist:
-                old_fv_dist = fv_dist
+                old_theta_dist = theta_dist
             fv_dist = np.linalg.norm(self.fvs - self.old_fvs[-1])
             theta_dist = np.linalg.norm(self.theta - self.target_theta)
             self.old_fvs.append(deepcopy(self.fvs))

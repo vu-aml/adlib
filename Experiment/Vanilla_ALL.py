@@ -34,7 +34,7 @@ def single_run_list(y_pred, y_true):
     return result
 
 def run(custom_var=10):
-    dataset = EmailDataset(path='./data_reader/data/enron/index_dir_small', binary=False, raw=True)
+    dataset = EmailDataset(path='../data_reader/data/enron/index_dir_small', binary=False, raw=True)
     training_, testing_ = dataset.split(0.01)
     training_data = load_dataset(training_)
     testing_data = load_dataset(testing_)

@@ -10,7 +10,7 @@ class FeatureDeletion(learner):
     def __init__(self, training_instances=None, params=None):
 
         learner.__init__(self)
-        self.weight_vector = None  # type: np.array(shape=(1))
+        self.weight_vector = None  # type: np.array(shape=1)
         self.num_features = 0  # type: int
         self.hinge_loss_multiplier = 0.5  # type: float
         self.max_feature_deletion = 30  # type: int
@@ -51,8 +51,8 @@ class FeatureDeletion(learner):
             y, X = y.reshape((num_instances, 1)), X
 
         C = self.hinge_loss_multiplier
-        print("current C value: {}".format(C))
-        print("current K: {}".format(self.max_feature_deletion))
+        print("current C value(hinge loss multipler): {}".format(C))
+        print("current K(maximum feature deletion): {}".format(self.max_feature_deletion))
         print(X.shape)
         K = self.max_feature_deletion
 
@@ -61,23 +61,28 @@ class FeatureDeletion(learner):
         t = Variable(num_instances)
         z = Variable(num_instances)
         v = Variable(num_instances, self.num_features)
+        loss_f = Variable(num_instances)
 
-        loss = sum_entries(pos(1 - mul_elemwise(y, X * w + b) + t))
+        #loss = sum_entries(pos(1 - mul_elemwise(y, X * w + b) + t))
 
         constraints = [t >= K * z + sum_entries(v, axis=1),
                        v >= 0]
         constraints.extend([z[i] + v[i, :] >=
                             y[i] * mul_elemwise(X[i], w).T for i in range(num_instances)])
-        obj = Minimize(0.5 * (sum_squares(w)) + C * loss)
+        constraints.extend([loss_f[i] >= 0 for i in range(num_instances)])
+        constraints.extend([loss_f[i] >= (1 - mul_elemwise(y[i], X[i] * w + b) + t[i]) for i in range(num_instances)])
+        obj = Minimize(0.5 * (sum_squares(w)) + C * sum_entries(loss_f))
 
         prob = Problem(obj, constraints)
-        prob.solve(solver=ECOS)
+        #switch another server to solve the scalability issue
+        prob.solve(solver=SCS)
         # print("training completed, here is the learned weight vector:")
 
         # weight_vector is of shape (1, self.num_features)
         self.weight_vector = [np.array(w.value).T][0][0]
         self.bias = b.value
         print("final weight vector shape: {}".format(self.weight_vector.shape))
+       # print("bias term:{}".format(self.bias))
         top_idx = [i for i in np.argsort(np.absolute(self.weight_vector))[-10:]]
         print("indices with top 10 absolute value:")
         for i in top_idx:

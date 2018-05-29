@@ -14,12 +14,11 @@ Based on the Adversarial Support Vector Machine Learning by Yan Zhou, Murat Kant
  
 Concept: A generalized attacker algorithm that attempts to move the instances' features in a 
          certain direction by a certain distance that is measured by how harsh the attack is.
-                                                          
 """
 
 
 class FreeRange(Adversary):
-    def __init__(self, f_attack=0.2, manual_bound=True, xj_min=0.0, xj_max=1.0, atk_type='random', binary=False, learn_model=None):
+    def __init__(self, f_attack=0.2, manual_bound=True, xj_min=0.0, xj_max=1.0, binary=False, learn_model=None):
         """
 
         :param f_attack:  float (between 0 and 1),determining the agressiveness
@@ -40,14 +39,11 @@ class FreeRange(Adversary):
         self.innocuous_target = None
         self.num_features = None
         self.binary = binary
-        self.type = atk_type
         self.learn_model = learn_model  # type: Classifier
 
     def set_adversarial_params(self, learn_model, train_instances: List[Instance]):
         self.learn_model = learn_model
         self.num_features = train_instances[0].get_feature_count()
-        if self.binary:
-            self.set_innocuous_target(train_instances, learner, self.type)
         if self.manual:
             self.set_boundaries(train_instances)
 
@@ -97,33 +93,6 @@ class FreeRange(Adversary):
         self.x_max = find_max(train_instances)
 
 
-
-
-    def set_innocuous_target(self, train_instances, learner, type):
-        """
-        If type is random, we simply pick the first instance from training data as the
-        innocuous target. Otherwise, we compute the centroid of training data.
-        :param train_instances:
-        :param learner:
-        :param type: specifies how to find innocuous_target
-        :return: None
-        """
-        if type == 'random':
-            self.innocuous_target = next(
-                (x for x in train_instances if x.get_label() == -1),
-                None)
-        elif type == 'centroid':
-            target = find_centroid(train_instances)
-            if learner.predict(target) == 1:
-                print("Fail to find centroid of from estimated training data")
-                self.innocuous_target = next(
-                    (x for x in train_instances if x.get_label() == -1),
-                    None)
-            else:
-                self.innocuous_target = target
-
-
-
     def transform(self, instance: Instance):
         '''
         for the binary case, the f_attack value represents the percentage of features we change.
@@ -138,11 +107,7 @@ class FreeRange(Adversary):
             attack_times = int(self.f_attack * self.num_features)
             count = 0
             for i in range(0, self.num_features):
-                delta_ij = self.innocuous_target.get_feature_vector().get_feature(i) \
-                           - instance.get_feature_vector().get_feature(i)
-                if delta_ij != 0:
-                    if self.binary:  # when features are binary
-                        instance.get_feature_vector().flip_bit(i)
+                instance.get_feature_vector().flip_bit(i)
                 count += 1
                 if count == attack_times:
                     return instance

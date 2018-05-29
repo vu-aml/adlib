@@ -29,7 +29,7 @@ def summary(y_pred, y_true):
     return s
 
 
-dataset = EmailDataset(path='../data_reader/data/enron/enron1/index_dir',binary= False,raw=True)
+dataset = EmailDataset(path='../data_reader/data/enron/1', binary=False, raw=True, max_features_=500)
 training_, testing_ = dataset.split(0.6)
 training_data = load_dataset(training_)
 testing_data = load_dataset(testing_)

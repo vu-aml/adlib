@@ -26,9 +26,8 @@ def summary(y_pred, y_true):
     s += "TP {0}, FP {1}, TN {2}, FN {3}".format(tp,fp,tn,fn)
     return s
 
-
-dataset = EmailDataset(path='../data_reader/data/enron/enron1/index_dir',binary= False,raw=True)
-training_, testing_ = dataset.split(0.8)
+dataset = EmailDataset(path='../data_reader/data/enron/1',binary= False,raw=True,max_features_=20)
+training_, testing_ = dataset.split(0.1)
 training_data = load_dataset(training_)
 testing_data = load_dataset(testing_)
 test_true_label = [x.label for x in testing_data]

@@ -16,7 +16,7 @@ def fv_equals(fv1, fv2):
     return True
 
 
-def find_centroid(instances: List[Instance]) -> Instance:
+def find_centroid(instances: List[Instance]):
     num_features = instances[0].get_feature_vector().feature_count
     indices = []
     data = []
@@ -39,34 +39,42 @@ def find_max(instances: List[Instance]):
     :return:
     """
     num_features = instances[0].get_feature_vector().feature_count
-    indices = []
-    data = []
+    max_val_list = []
     for i in range(num_features):
         max = 0
         for instance in instances:
             value = instance.get_feature_vector().get_feature(i)
             if value >= max:
                 max = value
-        if max != 0:
-            indices.append(i)
-            data.append(max)
-    return RealFeatureVector(num_features, indices, data)
+        max_val_list.append(max)
+    return max_val_list
+
+    #num_features = instances[0].get_feature_vector().feature_count
+    #indices = []
+    #data = []
+    #for i in range(num_features):
+    #    max = 0
+    #    for instance in instances:
+    #        value = instance.get_feature_vector().get_feature(i)
+    #        if value >= max:
+    #            max = value
+    #    if max != 0:
+    #        indices.append(i)
+    #        data.append(max)
+    #return RealFeatureVector(num_features, indices, data)
 
 
 def find_min(instances: List[Instance]):
     num_features = instances[0].get_feature_vector().feature_count
-    indices = []
-    data = []
+    min_val_list = []
     for i in range(num_features):
-        min = 1000
+        min = 10000
         for instance in instances:
             value = instance.get_feature_vector().get_feature(i)
             if value <= min:
                 min = value
-        if min != 0:
-            indices.append(i)
-            data.append(min)
-    return RealFeatureVector(num_features, indices, data)
+        min_val_list.append(min)
+    return min_val_list
 
 
 def sparsify(instances: List[Instance]):

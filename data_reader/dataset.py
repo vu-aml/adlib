@@ -1,5 +1,6 @@
 import os
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn import preprocessing
 import sklearn.utils
 import scipy
 from scipy.sparse import csr_matrix, dok_matrix, find
@@ -48,8 +49,8 @@ class EmailDataset(Dataset):
     """
 
     def __init__(self, path=None, raw=True, features=None, labels=None,
-                 binary=True, strip_accents_=None, ngram_range_=(1, 1),
-                 max_df_=1.0, min_df_=1, max_features_=1000, num_instances = 0):
+                 binary=False, strip_accents_=None, ngram_range_=(1, 1),
+                 max_df_=1.0, min_df_=1, max_features_=1000, num_instances = 0, standardization= False):
         super(EmailDataset, self).__init__()
         self.num_instances = num_instances
         self.binary = binary
@@ -60,14 +61,20 @@ class EmailDataset(Dataset):
                 self.labels, self.corpus = self._create_corpus(path)
             # Sklearn module to fit/transform data and resulting feature matrix
             # Maybe optionally pass this in as a parameter instead.
+            #stop words?
                 self.vectorizer = \
                     TfidfVectorizer(analyzer='word', strip_accents=strip_accents_,
                                     ngram_range=ngram_range_, max_df=max_df_,
                                     min_df=min_df_, max_features=max_features_,
-                                    binary=False, stop_words='english',
+                                    binary=self.binary, stop_words='english',
                                     use_idf=True, norm=None)
                 self.vectorizer = self.vectorizer.fit(self.corpus)
                 self.features = self.vectorizer.transform(self.corpus)
+                if standardization:
+                    dense_feature = self.features.todense()
+                    scaler = preprocessing.StandardScaler(with_mean=False)
+                    scaler.fit(dense_feature)
+                    self.features = csr_matrix(scaler.transform(dense_feature))
             else:
                 self.labels, self.features = \
                     self._load(path, os.path.splitext(path)[1][1:])

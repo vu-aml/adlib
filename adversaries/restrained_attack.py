@@ -100,17 +100,29 @@ class Restrained(Adversary):
         :param instance:
         :return: instance
         '''
-        for i in range(0, self.num_features):
-            xij = instance.get_feature_vector().get_feature(i)
-            target = self.innocuous_target.get_feature_vector().get_feature(i)
-            if abs(xij) + abs(target) == 0:
-                bound = 0
-            else:
-                bound = self.discount_factor * (1 - self.f_attack *
-                                                (abs(target - xij) /
-                                                 (abs(xij) + abs(target)))) \
-                        * abs((target - xij))
-            # is that ok to just assign a random number between the range???
-            delta_ij = random.uniform(0, bound)
-            instance.flip(i, xij + delta_ij)
-        return instance
+        if self.binary:
+            attack_times = int(self.f_attack * self.num_features)
+            count = 0
+            for i in range(0, self.num_features):
+                delta_ij = self.innocuous_target.get_feature_vector().get_feature(i) \
+                           - instance.get_feature_vector().get_feature(i)
+                if delta_ij != 0:
+                    if self.binary:  # when features are binary
+                        instance.get_feature_vector().flip_bit(i)
+                count += 1
+                if count == attack_times:
+                    return instance
+        else:
+            for i in range(0, self.num_features):
+                xij = instance.get_feature_vector().get_feature(i)
+                target = self.innocuous_target.get_feature_vector().get_feature(i)
+                if abs(xij) + abs(target) == 0:
+                    bound = 0
+                else:
+                    bound = self.discount_factor * (1 - self.f_attack *
+                                                    (abs(target - xij) /
+                                                     (abs(xij) + abs(target)))) \
+                            * abs((target - xij))
+                delta_ij = random.uniform(0, bound)
+                instance.flip(i, xij + delta_ij)
+            return instance

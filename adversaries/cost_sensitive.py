@@ -13,7 +13,7 @@ Concept:
     Given complete information about initial classifier C and an instance X, adversary
     finds a feature change strategy A(x) that maximizes its own utility Ua.
     By modeling the problem as a COP, which can be formulated as an integer
-    linear program, the adversary finds the minimum cost camoflauge (MCC),
+    linear program, the adversary finds the minimum cost camouflage (MCC),
     or smallest cost of feature changes that covers the log odds gap between
     classifier classifying the instance as positive and classifying it as a
     false negative.  Only changes instances the classifier classified as
@@ -27,8 +27,8 @@ Concept:
 # the parameters can be set according to the experiments described in the paper
 # position: (-,-)= (0,0) (-,+) = (0,1) (+,-)= (1,0) (+,+)= (1,1)
 class CostSensitive(Adversary):
-    def __init__(self, Ua=None, Vi=None, Uc=None, Wi=None, learn_model=None, binary=True, scenario="Add_Word",
-                 Xdomain = None,training_instances = None):
+    def __init__(self, Ua=None, Vi=None, Uc=None, Wi=None, learn_model=None, binary=False, scenario="synonym",
+                 Xdomain = None,training_instances = None,cost= None):
         """
         :param Ua: Utility accreued by Adversary when the classifier classifies as yc an instance
                    of class y. U(-,+) > 0, U(+,+)<0 ,and U(-,-)= U(+,-) = 0
@@ -37,7 +37,7 @@ class CostSensitive(Adversary):
                    Uc(+,-) <- and Uc(-,+) <0, Uc(+,+) >0, Uc(-,-) >0
         :param Wi: Cost of changing the ith feature from xi to xi_prime
         :param learner:
-        :param scenario: can select three spam filtering scenarios: add words, add length, synonym
+        :param scenario: can select three spam filtering scenarios: add_word, add_length, synonym
         """
         self.Ua = Ua
         self.Vi = Vi
@@ -48,6 +48,7 @@ class CostSensitive(Adversary):
         self.delta_Ua = None
         self.training_instances = training_instances
         self.Xdomain = Xdomain
+        self.cost = cost
         if self.training_instances is not None:
             self.find_max_min()
             self.positive_instances = [x for x in training_instances if
@@ -57,20 +58,26 @@ class CostSensitive(Adversary):
             self.delta_Ua = self.Ua[0][1] - self.Ua[1][1]
         self.learn_model = learn_model  # type: Classifier
         self.scenario = scenario
+        if self.scenario == "add_word":
+            if not self.binary:
+                print("Warning: add_word scenario requires Boolean features")
+
 
     def attack(self, instances) -> List[Instance]:
+        #print(self.domain)
         transformed_instances = []
-        asd = 0
+        #asd = 0
         for instance in instances:
-            print(asd)
-            asd += 1
-            transformed_instance = deepcopy(instance)
+            #print(asd)
+            #asd += 1
+            transform_instance = deepcopy(instance)
             if instance.get_label() == learner.positive_classification:
-                print("transform")
-                transformed_instances.append(self.a(transformed_instance))
+                #print("transform")
+                transformed = self.a(transform_instance)
+                transformed_instances.append(transformed)
             else:
-                print("intact")
-                transformed_instances.append(transformed_instance)
+                #print("intact")
+                transformed_instances.append(transform_instance)
         return transformed_instances
 
     def set_params(self, params: Dict):
@@ -84,6 +91,8 @@ class CostSensitive(Adversary):
             self.Uc = params['Uc']
         if 'Xdomain' in params.keys():
             self.Xdomain = params['Xdomain']
+        if 'cost' in params.keys():
+            self.cost = params['cost']
 
     def get_available_params(self) -> Dict:
         params = {'measuring_cost': self.Vi,
@@ -95,7 +104,7 @@ class CostSensitive(Adversary):
         return params
 
     def set_adversarial_params(self, learner, training_instances):
-        print("still in set_adv_params")
+        print("set adversarial params")
         self.learn_model = learner
         self.training_instances = training_instances
         self.num_features = training_instances[0].get_feature_count()
@@ -123,7 +132,7 @@ class CostSensitive(Adversary):
         if self.Xdomain is not None:
             return self.Xdomain
         else:
-            return np.linspace(self.domain[0].get_feature(i),self.domain[1].get_feature(i),10)
+            return np.linspace(self.domain[0][i],self.domain[1][i],2)
 
     def gap(self, x):
         '''
@@ -164,13 +173,29 @@ class CostSensitive(Adversary):
         Args: x (Instance)
         return: possible
         '''
-        W = self.gap(x)  # discretized
-        print("A is being repeated")
-        minCost, minList = self.find_mcc(30, W, x)
+        #W = self.gap(x)
+        W = int(self.gap(x))  # discretized
+        #this only changes the first half of the feature vectors
+        #it is possible that optimize the ordering finds better solution
+        minCost, minList = self.find_mcc(x.get_feature_count()/2, W, x)
         if minCost < self.delta_Ua:
             for i, xi_prime in minList:
                 x.flip(i, xi_prime)
         return x
+
+    def w_cost_function(self,x,x_prime):
+        '''
+        Get the cost function when x is changed to x_prime
+        for add_word and synonym scenario, it can be a constant cost
+        for add_length scenario, it can be proportional to the feature changes
+        :param x:
+        :param x_prime:
+        :return:
+        '''
+        if self.scenario == "add_word" or self.scenario == "synonym":
+            if self.cost!= None:
+                return self.cost
+        return 0.1 * self.w_feature_difference(x,x_prime)
 
     def w_feature_difference(self, x, x_prime):
         '''
@@ -198,23 +223,25 @@ class CostSensitive(Adversary):
                  corresponding transformations
          '''
         print("w={0}".format(w))
-        print("Xdomain {0}".format(self.find_x_domain(i)))
+        #print("Xdomain {0}".format(self.find_x_domain(i)))
         print("i is {0}".format(i))
+
         if w <= 0:
             return 0, []
         if i <= 0:
+            print("i is less or equal to 0... return mincost:infinity")
             return float("inf"), []
         minCost = float('inf')
         minList = []
         xdomain = self.find_x_domain(i)
         for xi_prime in xdomain:
-            instance_prime = deepcopy(x)
+            instance_prime = x
             instance_prime.flip(i, xi_prime)
             delta_log_odds = self.log_odds(instance_prime) - self.log_odds(x)
             if delta_log_odds >= 0:
                 curCost, curList = self.find_mcc(i - 1, w - delta_log_odds, x)
-                curCost += self.w_feature_difference(x, instance_prime)
-                curList += [(i, xi_prime)]
+                curCost += self.w_cost_function(x, instance_prime)
+                curList.append((i, xi_prime))
                 if curCost < minCost:
                     minCost = curCost
                     minList = curList

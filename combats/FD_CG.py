@@ -8,6 +8,7 @@ from adversaries.coordinate_greedy import CoordinateGreedy
 from sklearn import metrics
 from utils import save_result
 import multiprocessing
+import pandas as pd
 import numpy as np
 import json
 
@@ -53,7 +54,8 @@ def run(par_map):
 
     #test Restrained_attack
     a_start = timer()
-    attacker = CoordinateGreedy(max_change=100, lambda_val=0.1)
+    attacker = CoordinateGreedy()
+    attacker.set_params(par_map)
     attacker.set_adversarial_params(fd_learner, testing_data)
     attacked_data = attacker.attack(testing_data)
 
@@ -66,8 +68,7 @@ def run(par_map):
     ret = []
     ret.extend(result1)
     ret.extend(result2)
-    name = "FD:C=3,K=20;CG:M=100,L=0.1"
-    return name,ret
+    return ret
 
 
 def generate_param_map(param_path = "para", process_time=10):
@@ -85,8 +86,11 @@ def generate_interval(start, end, process_count, dtype=None, log=False):
 
 
 if __name__ == '__main__':
-    data_path = sys.argv(0)
-    param_path = sys.argv(1)
+    param_path = sys.argv[1]
     lst = generate_param_map(param_path)
     pool = multiprocessing.Pool(processes=10)
-    result = pool.map(run, pool)
+    result = pool.map(run, lst)
+    arr = np.array(result)
+    data = pd.DataFrame(arr, columns = ["param", "old_acc", "old_prec", "old_rec", "old_f1","learn_t",
+                "new_acc", "new_prec","new_rec", "new_f1","atk_t"])
+    data.to_csv("result.csv", sep='\t', encoding='utf-8')

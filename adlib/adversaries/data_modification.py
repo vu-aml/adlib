@@ -23,6 +23,7 @@ class DataModification(Adversary):
         self.learner = deepcopy(learner).model.learner
         self.target_theta = target_theta
         self.alpha = alpha
+        self.beta = beta
         self.beta_update_cnst = beta_update_cnst
         self.max_iter = max_iter
         self.verbose = verbose

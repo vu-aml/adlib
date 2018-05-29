@@ -16,14 +16,21 @@ import pathos.multiprocessing as mp
 
 
 class DataModification(Adversary):
-    def __init__(self, learner, target_theta, alpha=1e-3, beta=-1,
-                 verbose=False):
+    def __init__(self, learner, target_theta, alpha=1e-8, beta=-1,
+                 beta_update_cnst=0.92, max_iter=1000, verbose=False):
 
         Adversary.__init__(self)
         self.learner = deepcopy(learner).model.learner
         self.target_theta = target_theta
         self.alpha = alpha
-        self.beta = beta  # learning rate
+
+        if beta <= 0:  # learning rate
+            self.beta = 0.1
+        else:
+            self.beta = beta
+
+        self.beta_update_cnst = beta_update_cnst
+        self.max_iter = max_iter
         self.verbose = verbose
         self.instances = None
         self.return_instances = None
@@ -49,12 +56,14 @@ class DataModification(Adversary):
         old_fv_dist = 0.0
         theta_dist = np.linalg.norm(self.theta - self.target_theta)
         iteration = 0
-        while (fv_dist > self.alpha or iteration == 0) and iteration < 500:
+        while ((fv_dist > self.alpha or iteration == 0) and
+               iteration < self.max_iter):
+
             if fv_dist >= old_fv_dist and iteration > 1:
                 if self.verbose:
                     print('Iteration: ', iteration, ' - resetting beta', sep='')
 
-                self.beta *= 0.9
+                self.beta *= self.beta_update_cnst
                 self.old_fvs = self.old_fvs[:-1]
                 self.fvs = deepcopy(self.old_fvs[-1])
                 copy_dist = False
@@ -169,10 +178,8 @@ class DataModification(Adversary):
             for i in range(len(self.instances))]
         self.logistic_vals = np.array(self.logistic_vals)
 
-        # Calculate beta
-        if self.beta <= 0:
-            self.beta = 1 / (len(self.instances) *
-                             self.instances[0].get_feature_count())
+        # Calculate beta relative to size of input
+        self.beta /= len(self.instances) * self.instances[0].get_feature_count()
 
     def _calc_theta(self):
         self.learner.fit(self.fvs, self.labels)  # Retrain learner

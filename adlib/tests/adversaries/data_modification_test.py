@@ -15,7 +15,6 @@ import numpy as np
 import pytest
 
 
-@pytest.mark.run
 def test_data_modification():
     print('\n#################################################################')
     print('START data modification attack.\n')

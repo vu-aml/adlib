@@ -68,8 +68,6 @@ def test_data_modification():
             spam_instances.append(inst)
 
     spam_features, ham_features = get_spam_features(spam_instances)
-    mean = np.mean(orig_theta)
-    std = np.std(orig_theta)
 
     # Set features to recognize spam as ham
 

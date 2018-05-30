@@ -12,11 +12,8 @@ import numpy as np
 import pathos.multiprocessing as mp
 
 
-# TODO: Verify implementation
-
-
 class DataModification(Adversary):
-    def __init__(self, learner, target_theta, lda=1, alpha=1e-8, beta=1,
+    def __init__(self, learner, target_theta, lda=1, alpha=1e-8, beta=0.1,
                  max_iter=1000, verbose=False):
 
         Adversary.__init__(self)
@@ -51,7 +48,6 @@ class DataModification(Adversary):
         theta_dist = np.linalg.norm(self.theta - self.target_theta)
         iteration = 0
         while (iteration == 0 or (theta_dist > self.alpha and
-                                  fv_dist > self.alpha and
                                   iteration < self.max_iter)):
 
             if self.verbose:
@@ -161,9 +157,6 @@ class DataModification(Adversary):
             DataModification._logistic_function(self.labels[i] * self.g_arr[i])
             for i in range(len(self.instances))]
         self.logistic_vals = np.array(self.logistic_vals)
-
-        # Calculate beta relative to size of input
-        self.beta /= len(self.instances) * self.instances[0].get_feature_count()
 
     def _calc_theta(self):
         self.learner.fit(self.fvs, self.labels)  # Retrain learner

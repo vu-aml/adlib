@@ -13,15 +13,15 @@ import pathos.multiprocessing as mp
 
 
 class DataModification(Adversary):
-    def __init__(self, learner, target_theta, lda=1, alpha=1e-8, beta=0.1,
+    def __init__(self, learner, target_theta, lda=1, alpha=1e-8, beta=1,
                  max_iter=1000, verbose=False):
 
         Adversary.__init__(self)
         self.learner = deepcopy(learner).model.learner
         self.target_theta = target_theta
-        self.lda = lda
+        self.lda = lda  # lambda
         self.alpha = alpha
-        self.beta = beta
+        self.beta = beta  # learning rate - will be divided by size of input
         self.max_iter = max_iter
         self.verbose = verbose
         self.instances = None
@@ -157,6 +157,9 @@ class DataModification(Adversary):
             DataModification._logistic_function(self.labels[i] * self.g_arr[i])
             for i in range(len(self.instances))]
         self.logistic_vals = np.array(self.logistic_vals)
+
+        # Calculate beta relative to size of input
+        self.beta /= len(self.instances)
 
     def _calc_theta(self):
         self.learner.fit(self.fvs, self.labels)  # Retrain learner

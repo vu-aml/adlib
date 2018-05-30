@@ -16,21 +16,20 @@ import pathos.multiprocessing as mp
 
 
 class DataModification(Adversary):
-    def __init__(self, learner, target_theta, alpha=1e-8, beta=0.05,
-                 beta_update_cnst=0.75, max_iter=1000, verbose=False):
+    def __init__(self, learner, target_theta, alpha=1e-8, beta=0.01,
+                 max_iter=1000, verbose=False):
 
         Adversary.__init__(self)
         self.learner = deepcopy(learner).model.learner
         self.target_theta = target_theta
         self.alpha = alpha
         self.beta = beta
-        self.beta_update_cnst = beta_update_cnst
         self.max_iter = max_iter
         self.verbose = verbose
         self.instances = None
         self.return_instances = None
         self.orig_fvs = None  # same as below, just original values
-        self.old_fvs = []  # last iteration's fvs values
+        self.old_fvs = None  # last iteration's fvs values
         self.fvs = None  # feature vector matrix, shape: (# inst., # features)
         self.theta = None
         self.b = None
@@ -49,32 +48,17 @@ class DataModification(Adversary):
 
         fv_dist = 0.0
         theta_dist = np.linalg.norm(self.theta - self.target_theta)
-        old_fv_dist = 0.0
-        old_theta_dist = theta_dist
         iteration = 0
         while (iteration == 0 or (theta_dist > self.alpha and
                                   fv_dist > self.alpha and
                                   iteration < self.max_iter)):
 
-            if ((theta_dist >= old_theta_dist or fv_dist >= old_fv_dist) and
-                    iteration > 1):
+            if self.verbose:
+                print('Iteration: ', iteration, ' - FV distance: ', fv_dist,
+                      ' - theta distance: ', theta_dist, sep='')
 
-                if self.verbose:
-                    print('Iteration: ', iteration, ' - resetting beta = ',
-                          self.beta, sep='')
-
-                self.beta *= self.beta_update_cnst
-                self.old_fvs = self.old_fvs[:-1]
-                self.fvs = deepcopy(self.old_fvs[-1])
-                copy_dist = False
-            else:
-                if self.verbose:
-                    print('Iteration: ', iteration, ' - FV distance: ', fv_dist,
-                          ' - theta distance: ', theta_dist, sep='')
-
-                # gradient descent
-                gradient = self._calc_gradient()
-                copy_dist = True
+            # Gradient descent
+            gradient = self._calc_gradient()
 
             if self.verbose:
                 print('\nGRADIENT\n', gradient, '\n', sep='')
@@ -84,14 +68,9 @@ class DataModification(Adversary):
 
             # Update variables
             self._calc_theta()
-
-            if copy_dist:
-                old_fv_dist = fv_dist
-                old_theta_dist = theta_dist
-
-            fv_dist = np.linalg.norm(self.fvs - self.old_fvs[-1])
+            fv_dist = np.linalg.norm(self.fvs - self.old_fvs)
             theta_dist = np.linalg.norm(self.theta - self.target_theta)
-            self.old_fvs.append(deepcopy(self.fvs))
+            self.old_fvs = deepcopy(self.fvs)
 
             iteration += 1
 
@@ -163,7 +142,7 @@ class DataModification(Adversary):
             self.fvs.append(tmp)
         self.fvs = np.array(self.fvs, dtype='float64')
         self.orig_fvs = deepcopy(self.fvs)
-        self.old_fvs.append(deepcopy(self.fvs))
+        self.old_fvs = deepcopy(self.fvs)
 
         # Calculate labels
         self.labels = []

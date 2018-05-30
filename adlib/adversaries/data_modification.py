@@ -16,8 +16,8 @@ import pathos.multiprocessing as mp
 
 
 class DataModification(Adversary):
-    def __init__(self, learner, target_theta, alpha=1e-8, beta=0.1,
-                 beta_update_cnst=0.92, max_iter=1000, verbose=False):
+    def __init__(self, learner, target_theta, alpha=1e-8, beta=0.05,
+                 beta_update_cnst=0.75, max_iter=1000, verbose=False):
 
         Adversary.__init__(self)
         self.learner = deepcopy(learner).model.learner
@@ -49,14 +49,19 @@ class DataModification(Adversary):
 
         fv_dist = 0.0
         theta_dist = np.linalg.norm(self.theta - self.target_theta)
+        old_fv_dist = 0.0
         old_theta_dist = theta_dist
         iteration = 0
-        while ((theta_dist > self.alpha or iteration == 0) and
-               iteration < self.max_iter):
+        while (iteration == 0 or (theta_dist > self.alpha and
+                                  fv_dist > self.alpha and
+                                  iteration < self.max_iter)):
 
-            if theta_dist >= old_theta_dist and iteration > 1:
+            if ((theta_dist >= old_theta_dist or fv_dist >= old_fv_dist) and
+                    iteration > 1):
+
                 if self.verbose:
-                    print('Iteration: ', iteration, ' - resetting beta', sep='')
+                    print('Iteration: ', iteration, ' - resetting beta = ',
+                          self.beta, sep='')
 
                 self.beta *= self.beta_update_cnst
                 self.old_fvs = self.old_fvs[:-1]
@@ -79,18 +84,22 @@ class DataModification(Adversary):
 
             # Update variables
             self._calc_theta()
+
             if copy_dist:
+                old_fv_dist = fv_dist
                 old_theta_dist = theta_dist
+
             fv_dist = np.linalg.norm(self.fvs - self.old_fvs[-1])
             theta_dist = np.linalg.norm(self.theta - self.target_theta)
             self.old_fvs.append(deepcopy(self.fvs))
+
             iteration += 1
 
         if self.verbose:
             print('Iteration: FINAL - FV distance: ', fv_dist,
                   ' - theta distance: ', theta_dist, ' - alpha: ', self.alpha,
                   ' - beta: ', self.beta, sep='')
-            print('Target Theta:\n', self.target_theta, '\nTheta:\n',
+            print('\nTarget Theta:\n', self.target_theta, '\n\nTheta:\n',
                   self.theta, '\n')
 
         for i in range(len(self.fvs)):

@@ -16,12 +16,13 @@ import pathos.multiprocessing as mp
 
 
 class DataModification(Adversary):
-    def __init__(self, learner, target_theta, alpha=1e-8, beta=0.01,
+    def __init__(self, learner, target_theta, lda=1, alpha=1e-8, beta=1,
                  max_iter=1000, verbose=False):
 
         Adversary.__init__(self)
         self.learner = deepcopy(learner).model.learner
         self.target_theta = target_theta
+        self.lda = lda
         self.alpha = alpha
         self.beta = beta
         self.max_iter = max_iter
@@ -171,14 +172,13 @@ class DataModification(Adversary):
         self.theta = self.theta - self.b
 
     def _calc_gradient(self):
-        self.risk_gradient = 2 * (self.theta - self.target_theta)
+        self.risk_gradient = self.theta - self.target_theta
 
         pool = mp.Pool(mp.cpu_count())
         matrices_1 = pool.map(self._calc_partial_f_partial_capital_d,
                               range(len(self.instances)))
         pool.close()
         pool.join()
-
         matrices_1 = np.array(matrices_1)
 
         matrix_2 = self._calc_partial_f_partial_theta()
@@ -193,19 +193,13 @@ class DataModification(Adversary):
 
         gradient = []
         for i in range(len(matrices_1)):
-            partial_theta_partial_capital_d = -1 * matrices_1[i].dot(matrix_2)
+            partial_theta_partial_capital_d = -1 * matrix_2.dot(matrices_1[i])
             value = self.risk_gradient.dot(partial_theta_partial_capital_d)
             gradient.append(value)
         gradient = np.array(gradient)
 
         # Calculate cost part
-        cost = np.linalg.norm(self.fvs - self.orig_fvs)
-        if cost > 0:  # cost can never be < 0
-            cost_gradient = self.fvs - self.orig_fvs
-            cost_gradient /= cost
-        else:
-            cost_gradient = 0
-
+        cost_gradient = self.lda * (self.fvs - self.orig_fvs)
         gradient += cost_gradient
 
         return gradient
@@ -225,6 +219,7 @@ class DataModification(Adversary):
         for i in range(len(self.instances)):
             val = self.logistic_vals[i]
             running_sum += self.fvs[i][k] * self.fvs[i][j] * val * (1 - val)
+        running_sum += self.lda if j == k else 0
         return running_sum
 
     def _calc_partial_f_partial_capital_d(self, i):
@@ -236,10 +231,8 @@ class DataModification(Adversary):
 
     def _calc_partial_f_j_partial_x_k(self, i, j, k):
         val = self.logistic_vals[i]
-        inside = val * self.fvs[i][j] * self.theta[k]
-        if j == k:
-            inside -= 1
-        return (1 - val) * self.labels[i] * inside
+        return ((1 - val) * (val * self.theta[k] * self.fvs[i][j] -
+                             self.labels[i] if j == k else 0))
 
     @staticmethod
     def _logistic_function(x):

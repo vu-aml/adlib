@@ -25,8 +25,8 @@ def test_data_modification():
                            binary=True, raw=True)
     training_data = load_dataset(dataset)
 
-    # Randomly choose ~50% of dataset to decrease debugging time
-    choices = np.random.binomial(1, 0.5, len(training_data))
+    # Randomly choose ~10% of dataset to decrease debugging time
+    choices = np.random.binomial(1, 0.1, len(training_data))
     temp = []
     predict_data = []
     count = 0
@@ -74,7 +74,7 @@ def test_data_modification():
 
     # Set features to recognize spam as ham
     for index in spam_features:
-        target_theta[index] = -1 * (mean + 3 * std)
+        target_theta[index] = -1 * (mean + 1.2 * std)
 
     for index in ham_features:
         target_theta[index] = orig_theta[index]

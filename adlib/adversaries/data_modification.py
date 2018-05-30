@@ -13,8 +13,8 @@ import pathos.multiprocessing as mp
 
 
 class DataModification(Adversary):
-    def __init__(self, learner, target_theta, lda=1, alpha=1e-8, beta=0.1,
-                 max_iter=1000, verbose=False):
+    def __init__(self, learner, target_theta, lda=0.5, alpha=1e-5, beta=1,
+                 max_iter=10000, verbose=False):
 
         Adversary.__init__(self)
         self.learner = deepcopy(learner).model.learner
@@ -159,7 +159,7 @@ class DataModification(Adversary):
         self.logistic_vals = np.array(self.logistic_vals)
 
         # Calculate beta relative to size of input
-        self.beta /= (self.fvs.shape[0] * self.fvs.shape[1])
+        self.beta /= self.fvs.shape[1]
 
     def _calc_theta(self):
         self.learner.fit(self.fvs, self.labels)  # Retrain learner
@@ -178,7 +178,7 @@ class DataModification(Adversary):
         matrices_1 = np.array(matrices_1)
 
         matrix_2 = self._calc_partial_f_partial_theta()
-        self._fuzz_matrix(matrix_2)
+        #  self._fuzz_matrix(matrix_2)
 
         try:
             matrix_2 = np.linalg.inv(matrix_2)

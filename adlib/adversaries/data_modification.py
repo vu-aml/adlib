@@ -13,7 +13,7 @@ import pathos.multiprocessing as mp
 
 
 class DataModification(Adversary):
-    def __init__(self, learner, target_theta, lda=1, alpha=1e-8, beta=0.5,
+    def __init__(self, learner, target_theta, lda=1, alpha=1e-8, beta=0.1,
                  max_iter=1000, verbose=False):
 
         Adversary.__init__(self)
@@ -159,7 +159,7 @@ class DataModification(Adversary):
         self.logistic_vals = np.array(self.logistic_vals)
 
         # Calculate beta relative to size of input
-        # self.beta /= (self.fvs.shape[0] * self.fvs.shape[1])
+        self.beta /= (self.fvs.shape[0] * self.fvs.shape[1])
 
     def _calc_theta(self):
         self.learner.fit(self.fvs, self.labels)  # Retrain learner

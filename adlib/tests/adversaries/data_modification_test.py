@@ -24,20 +24,7 @@ def test_data_modification():
     dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400',
                            binary=True, raw=True)
     training_data = load_dataset(dataset)
-
-    # Randomly choose ~10% of dataset to decrease debugging time
-    choices = np.random.binomial(1, 0.1, len(training_data))
-    temp = []
-    predict_data = []
-    count = 0
-    for i in range(len(training_data)):
-        if choices[i] == 1:
-            temp.append(training_data[i])
-            count += 1
-        else:
-            predict_data.append(training_data[i])
-    training_data = temp
-    print('Training sample size: ', count, '/400\n', sep='')
+    predict_data = training_data
 
     # Setting the default learner
     # Test simple learner svm

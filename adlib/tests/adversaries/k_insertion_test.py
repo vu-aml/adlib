@@ -16,7 +16,6 @@ import pytest
 import sys
 
 
-@pytest.mark.run
 def test_k_insertion():
     """
     Use as follows:

@@ -13,16 +13,21 @@ import pathos.multiprocessing as mp
 
 
 class DataModification(Adversary):
+    """
+    Performs a data modification attack where the attacker can only change
+    feature vectors.
+    """
+
     def __init__(self, learner, target_theta, lda=0.001, alpha=1e-3, beta=0.05,
                  max_iter=2000, verbose=False):
 
         Adversary.__init__(self)
         self.learner = deepcopy(learner).model.learner
-        self.target_theta = target_theta
-        self.lda = lda  # lambda
-        self.alpha = alpha
+        self.target_theta = target_theta  # the theta value of which to target
+        self.lda = lda  # lambda - implies importance of cost
+        self.alpha = alpha  # convergence condition (diff < alpha)
         self.beta = beta  # learning rate - will be divided by size of input
-        self.max_iter = max_iter
+        self.max_iter = max_iter  # maximum iterations
         self.verbose = verbose
         self.instances = None
         self.return_instances = None
@@ -78,6 +83,7 @@ class DataModification(Adversary):
             print('\nTarget Theta:\n', self.target_theta, '\n\nTheta:\n',
                   self.theta, '\n')
 
+        # Go from floating-point values in [0, 1] to integers in {0, 1}
         for i in range(len(self.fvs)):
             indices = []
             for j in range(len(self.fvs[i])):
@@ -88,7 +94,8 @@ class DataModification(Adversary):
 
         return self.return_instances
 
-    def _fuzz_matrix(self, matrix: np.ndarray):
+    @staticmethod
+    def _fuzz_matrix(matrix: np.ndarray):
         """
         Add to every entry of matrix some noise to make it non-singular.
         :param matrix: the matrix - 2 dimensional
@@ -112,20 +119,32 @@ class DataModification(Adversary):
         self.fvs = np.array(self.fvs)
 
     def _project_feature_vector(self, fv):
+        """
+        Projects a single feature vector from having elements in the interval
+        [MIN, MAX] to the interval [0, 1] if necessary
+        :param fv: the feature vector
+        :return: the projected feature vector
+        """
+
         fv = np.array(fv)
         min_val = np.min(fv)
         max_val = np.max(fv)
         distance = max_val - min_val
 
         if distance > 0 and (min_val < 0 or max_val > 1):
-            transformation = lambda x: (x - min_val) / distance
+            def transformation(x):
+                return (x - min_val) / distance
+
             for i in range(len(fv)):
                 fv[i] = transformation(fv[i])
 
         return fv
 
     def _calculate_constants(self):
-        # Calculate feature vectors as np.ndarrays
+        """
+        Calculates constants for the gradient descent loop
+        """
+
         self.fvs = []
         for i in range(len(self.instances)):
             feature_vector = self.instances[i].get_feature_vector()
@@ -162,12 +181,21 @@ class DataModification(Adversary):
         self.beta /= self.fvs.shape[1]
 
     def _calc_theta(self):
+        """
+        Calculates theta from learning the feature vectors
+        """
+
         self.learner.fit(self.fvs, self.labels)  # Retrain learner
         self.theta = self.learner.decision_function(
             np.eye(self.instances[0].get_feature_count()))
         self.theta = self.theta - self.b
 
     def _calc_gradient(self):
+        """
+        Calculates the gradient of the feature vectors
+        :return: the gradient
+        """
+
         self.risk_gradient = self.theta - self.target_theta
 
         pool = mp.Pool(mp.cpu_count())
@@ -201,6 +229,10 @@ class DataModification(Adversary):
         return gradient
 
     def _calc_partial_f_partial_theta(self):
+        """
+        Calculates ∂f/∂Θ
+        """
+
         pool = mp.Pool(mp.cpu_count())
         matrix = pool.map(lambda j: list(map(
             lambda k: self._calc_partial_f_j_partial_theta_k(j, k),
@@ -211,6 +243,12 @@ class DataModification(Adversary):
         return np.array(matrix)
 
     def _calc_partial_f_j_partial_theta_k(self, j, k):
+        """
+        Calculates ∂f_j / 
+        :param j:
+        :param k:
+        :return:
+        """
         running_sum = 0.0
         for i in range(len(self.instances)):
             val = self.logistic_vals[i]

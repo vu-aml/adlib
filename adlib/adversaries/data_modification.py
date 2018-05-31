@@ -13,7 +13,7 @@ import pathos.multiprocessing as mp
 
 
 class DataModification(Adversary):
-    def __init__(self, learner, target_theta, lda=0.5, alpha=1e-3, beta=0.01,
+    def __init__(self, learner, target_theta, lda=0.01, alpha=1e-3, beta=0.1,
                  max_iter=10000, verbose=False):
 
         Adversary.__init__(self)

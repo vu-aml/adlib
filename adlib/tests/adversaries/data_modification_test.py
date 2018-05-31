@@ -141,7 +141,7 @@ def test_data_modification():
     print('#################################################################\n')
 
 
-def get_spam_features(instances, p=0.75):
+def get_spam_features(instances, p=0.9):
     """
     Returns a list of feature indices where the proportion of instances that
     have them is >= p

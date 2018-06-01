@@ -76,7 +76,7 @@ class KInsertion(Adversary):
 
         self.poison_loss_before = self._calc_inst_loss(self.poison_instance)
 
-        for _ in range(self.number_to_add):
+        for k in range(self.number_to_add):
             # x is the full feature vector of the instance to be added
             self.x = np.random.binomial(1, 0.5,
                                         instances[0].get_feature_count())
@@ -123,6 +123,9 @@ class KInsertion(Adversary):
                     print('Current feature vector:\n', self.x)
 
                 iteration += 1
+
+            print('Iteration: FINAL - gradient norm: ', grad_norm, sep='')
+            print('Number added so far: ', k + 1, sep='')
 
             # Add the newly generated instance and retrain with that dataset
             self.instances.append(self.inst)

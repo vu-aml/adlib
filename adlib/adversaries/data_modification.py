@@ -20,14 +20,23 @@ class DataModification(Adversary):
 
     def __init__(self, learner, target_theta, lda=0.001, alpha=1e-3, beta=0.05,
                  max_iter=2000, verbose=False):
+        """
+        :param learner: the trained learner
+        :param target_theta: the theta value of which to target
+        :param lda: lambda - implies importance of cost
+        :param alpha: convergence condition (diff <= alpha)
+        :param beta: learning rate - will be divided by size of input
+        :param max_iter: maximum iterations
+        :param verbose: if True, will print gradient for each iteration
+        """
 
         Adversary.__init__(self)
         self.learner = deepcopy(learner).model.learner
-        self.target_theta = target_theta  # the theta value of which to target
-        self.lda = lda  # lambda - implies importance of cost
-        self.alpha = alpha  # convergence condition (diff < alpha)
-        self.beta = beta  # learning rate - will be divided by size of input
-        self.max_iter = max_iter  # maximum iterations
+        self.target_theta = target_theta
+        self.lda = lda
+        self.alpha = alpha
+        self.beta = beta
+        self.max_iter = max_iter
         self.verbose = verbose
         self.instances = None
         self.return_instances = None
@@ -42,6 +51,12 @@ class DataModification(Adversary):
         self.risk_gradient = None
 
     def attack(self, instances) -> List[Instance]:
+        """
+        Performs a data modification attack
+        :param instances: the input instances
+        :return: the attacked instances
+        """
+
         if len(instances) == 0:
             raise ValueError('Need at least one instance.')
 
@@ -55,9 +70,8 @@ class DataModification(Adversary):
         while (iteration == 0 or (theta_dist > self.alpha and
                                   iteration < self.max_iter)):
 
-            if self.verbose:
-                print('Iteration: ', iteration, ' - FV distance: ', fv_dist,
-                      ' - theta distance: ', theta_dist, sep='')
+            print('Iteration: ', iteration, ' - FV distance: ', fv_dist,
+                  ' - theta distance: ', theta_dist, sep='')
 
             # Gradient descent
             gradient = self._calc_gradient()
@@ -76,10 +90,11 @@ class DataModification(Adversary):
 
             iteration += 1
 
+        print('Iteration: FINAL - FV distance: ', fv_dist,
+              ' - theta distance: ', theta_dist, ' - alpha: ', self.alpha,
+              ' - beta: ', self.beta, sep='')
+
         if self.verbose:
-            print('Iteration: FINAL - FV distance: ', fv_dist,
-                  ' - theta distance: ', theta_dist, ' - alpha: ', self.alpha,
-                  ' - beta: ', self.beta, sep='')
             print('\nTarget Theta:\n', self.target_theta, '\n\nTheta:\n',
                   self.theta, '\n')
 
@@ -94,17 +109,6 @@ class DataModification(Adversary):
 
         return self.return_instances
 
-    @staticmethod
-    def _fuzz_matrix(matrix: np.ndarray):
-        """
-        Add to every entry of matrix some noise to make it non-singular.
-        :param matrix: the matrix - 2 dimensional
-        """
-
-        for i in range(matrix.shape[0]):
-            for j in range(matrix.shape[1]):
-                matrix[i][j] += abs(np.random.normal(0, 0.00001))
-
     def _project_fvs(self):
         """
         Transform all feature vectors in self.fvs from having elements in the
@@ -112,39 +116,18 @@ class DataModification(Adversary):
         """
 
         pool = mp.Pool(mp.cpu_count())
-        self.fvs = pool.map(self._project_feature_vector, self.fvs.tolist())
+        self.fvs = pool.map(self.project_feature_vector, self.fvs.tolist())
         pool.close()
         pool.join()
 
         self.fvs = np.array(self.fvs)
-
-    def _project_feature_vector(self, fv):
-        """
-        Projects a single feature vector from having elements in the interval
-        [MIN, MAX] to the interval [0, 1] if necessary
-        :param fv: the feature vector
-        :return: the projected feature vector
-        """
-
-        fv = np.array(fv)
-        min_val = np.min(fv)
-        max_val = np.max(fv)
-        distance = max_val - min_val
-
-        if distance > 0 and (min_val < 0 or max_val > 1):
-            def transformation(x):
-                return (x - min_val) / distance
-
-            for i in range(len(fv)):
-                fv[i] = transformation(fv[i])
-
-        return fv
 
     def _calculate_constants(self):
         """
         Calculates constants for the gradient descent loop
         """
 
+        # Calculate feature vectors
         self.fvs = []
         for i in range(len(self.instances)):
             feature_vector = self.instances[i].get_feature_vector()
@@ -173,7 +156,7 @@ class DataModification(Adversary):
 
         # Calculate logistic function values - sigma(y_i g_i)
         self.logistic_vals = [
-            DataModification._logistic_function(self.labels[i] * self.g_arr[i])
+            DataModification.logistic_function(self.labels[i] * self.g_arr[i])
             for i in range(len(self.instances))]
         self.logistic_vals = np.array(self.logistic_vals)
 
@@ -206,7 +189,7 @@ class DataModification(Adversary):
         matrices_1 = np.array(matrices_1)
 
         matrix_2 = self._calc_partial_f_partial_theta()
-        #  self._fuzz_matrix(matrix_2)
+        #  self.fuzz_matrix(matrix_2)
 
         try:
             matrix_2 = np.linalg.inv(matrix_2)
@@ -231,6 +214,7 @@ class DataModification(Adversary):
     def _calc_partial_f_partial_theta(self):
         """
         Calculates ∂f/∂Θ
+        :return: the partial derivative
         """
 
         pool = mp.Pool(mp.cpu_count())
@@ -244,11 +228,12 @@ class DataModification(Adversary):
 
     def _calc_partial_f_j_partial_theta_k(self, j, k):
         """
-        Calculates ∂f_j / 
-        :param j:
-        :param k:
-        :return:
+        Calculates ∂f_j / ∂Θ_k
+        :param j: see above
+        :param k: see above
+        :return: the partial derivative
         """
+
         running_sum = 0.0
         for i in range(len(self.instances)):
             val = self.logistic_vals[i]
@@ -257,6 +242,12 @@ class DataModification(Adversary):
         return running_sum
 
     def _calc_partial_f_partial_capital_d(self, i):
+        """
+        Calculates ∂f/∂D
+        :param i: indicates which feature vector to use
+        :return: the partial derivative
+        """
+
         matrix = list(map(lambda j: list(map(
             lambda k: self._calc_partial_f_j_partial_x_k(i, j, k),
             range(len(self.theta)))), range(len(self.theta))))
@@ -264,19 +255,98 @@ class DataModification(Adversary):
         return np.array(matrix)
 
     def _calc_partial_f_j_partial_x_k(self, i, j, k):
+        """
+        Calculates ∂f_j / ∂x_k
+        :param i: indicates which feature vector to use
+        :param j: see above
+        :param k: see above
+        :return: the partial derivative
+        """
+
         val = self.logistic_vals[i]
         return ((1 - val) * (val * self.theta[k] * self.fvs[i][j] -
                              self.labels[i] if j == k else 0))
 
     @staticmethod
-    def _logistic_function(x):
+    def project_feature_vector(fv):
+        """
+        Projects a single feature vector from having elements in the interval
+        [MIN, MAX] to the interval [0, 1] if necessary
+        :param fv: the feature vector
+        :return: the projected feature vector
+        """
+
+        fv = np.array(fv)
+        min_val = np.min(fv)
+        max_val = np.max(fv)
+        distance = max_val - min_val
+
+        if distance > 0 and (min_val < 0 or max_val > 1):
+            def transformation(x):
+                return (x - min_val) / distance
+
+            for i in range(len(fv)):
+                fv[i] = transformation(fv[i])
+
+        return fv
+
+    @staticmethod
+    def fuzz_matrix(matrix: np.ndarray):
+        """
+        Add to every entry of matrix some noise to make it non-singular.
+        :param matrix: the matrix - 2 dimensional
+        """
+
+        for i in range(matrix.shape[0]):
+            for j in range(matrix.shape[1]):
+                matrix[i][j] += abs(np.random.normal(0, 0.00001))
+
+    @staticmethod
+    def logistic_function(x):
+        """
+        :param x: x
+        :return: the logistic function of x
+        """
+
         return 1 / (1 + math.exp(-1 * x))
 
     def set_params(self, params: Dict):
-        raise NotImplementedError
+        if params['learner'] is not None:
+            self.learner = params['learner']
+        if params['target_theta'] is not None:
+            self.target_theta = params['target_theta']
+        if params['lda'] is not None:
+            self.lda = params['lda']
+        if params['alpha'] is not None:
+            self.alpha = params['alpha']
+        if params['beta'] is not None:
+            self.beta = params['beta']
+        if params['max_iter'] is not None:
+            self.max_iter = params['max_iter']
+        if params['verbose'] is not None:
+            self.verbose = params['verbose']
+
+        self.instances = None
+        self.return_instances = None
+        self.orig_fvs = None
+        self.old_fvs = None
+        self.fvs = None
+        self.theta = None
+        self.b = None
+        self.g_arr = None
+        self.labels = None
+        self.logistic_vals = None
+        self.risk_gradient = None
 
     def get_available_params(self):
-        raise NotImplementedError
+        params = {'learner': self.learner,
+                  'target_theta': self.target_theta,
+                  'lda': self.lda,
+                  'alpha': self.alpha,
+                  'beta': self.beta,
+                  'max_iter': self.max_iter,
+                  'verbose': self.verbose}
+        return params
 
     def set_adversarial_params(self, learner, train_instances):
-        raise NotImplementedError
+        self.learner = learner

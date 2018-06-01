@@ -480,6 +480,7 @@ class KInsertion(Adversary):
             self.num_iterations = params['num_iterations']
         if params['verbose'] is not None:
             self.verbose = params['verbose']
+
         self.instances = None
         self.orig_instances = None
         self.x = None

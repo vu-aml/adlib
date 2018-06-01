@@ -116,33 +116,11 @@ class DataModification(Adversary):
         """
 
         pool = mp.Pool(mp.cpu_count())
-        self.fvs = pool.map(self._project_feature_vector, self.fvs.tolist())
+        self.fvs = pool.map(self.project_feature_vector, self.fvs.tolist())
         pool.close()
         pool.join()
 
         self.fvs = np.array(self.fvs)
-
-    def _project_feature_vector(self, fv):
-        """
-        Projects a single feature vector from having elements in the interval
-        [MIN, MAX] to the interval [0, 1] if necessary
-        :param fv: the feature vector
-        :return: the projected feature vector
-        """
-
-        fv = np.array(fv)
-        min_val = np.min(fv)
-        max_val = np.max(fv)
-        distance = max_val - min_val
-
-        if distance > 0 and (min_val < 0 or max_val > 1):
-            def transformation(x):
-                return (x - min_val) / distance
-
-            for i in range(len(fv)):
-                fv[i] = transformation(fv[i])
-
-        return fv
 
     def _calculate_constants(self):
         """
@@ -178,7 +156,7 @@ class DataModification(Adversary):
 
         # Calculate logistic function values - sigma(y_i g_i)
         self.logistic_vals = [
-            DataModification._logistic_function(self.labels[i] * self.g_arr[i])
+            DataModification.logistic_function(self.labels[i] * self.g_arr[i])
             for i in range(len(self.instances))]
         self.logistic_vals = np.array(self.logistic_vals)
 
@@ -211,7 +189,7 @@ class DataModification(Adversary):
         matrices_1 = np.array(matrices_1)
 
         matrix_2 = self._calc_partial_f_partial_theta()
-        #  self._fuzz_matrix(matrix_2)
+        #  self.fuzz_matrix(matrix_2)
 
         try:
             matrix_2 = np.linalg.inv(matrix_2)
@@ -290,7 +268,30 @@ class DataModification(Adversary):
                              self.labels[i] if j == k else 0))
 
     @staticmethod
-    def _fuzz_matrix(matrix: np.ndarray):
+    def project_feature_vector(fv):
+        """
+        Projects a single feature vector from having elements in the interval
+        [MIN, MAX] to the interval [0, 1] if necessary
+        :param fv: the feature vector
+        :return: the projected feature vector
+        """
+
+        fv = np.array(fv)
+        min_val = np.min(fv)
+        max_val = np.max(fv)
+        distance = max_val - min_val
+
+        if distance > 0 and (min_val < 0 or max_val > 1):
+            def transformation(x):
+                return (x - min_val) / distance
+
+            for i in range(len(fv)):
+                fv[i] = transformation(fv[i])
+
+        return fv
+
+    @staticmethod
+    def fuzz_matrix(matrix: np.ndarray):
         """
         Add to every entry of matrix some noise to make it non-singular.
         :param matrix: the matrix - 2 dimensional
@@ -301,7 +302,7 @@ class DataModification(Adversary):
                 matrix[i][j] += abs(np.random.normal(0, 0.00001))
 
     @staticmethod
-    def _logistic_function(x):
+    def logistic_function(x):
         """
         :param x: x
         :return: the logistic function of x

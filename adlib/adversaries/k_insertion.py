@@ -4,6 +4,7 @@
 # Matthew Sedam
 
 from adlib.adversaries.adversary import Adversary
+from adlib.adversaries.data_modification import DataModification
 from data_reader.binary_input import Instance
 from data_reader.binary_input import BinaryFeatureVector
 import math
@@ -20,7 +21,7 @@ class KInsertion(Adversary):
     """
 
     def __init__(self, learner, poison_instance, alpha=1e-3, beta=0.05,
-                 number_to_add=10, verbose=False):
+                 max_iter=2000, number_to_add=10, verbose=False):
 
         """
         :param learner: the trained learner
@@ -37,6 +38,7 @@ class KInsertion(Adversary):
         self.poison_instance = poison_instance
         self.alpha = alpha
         self.beta = beta
+        self.max_iter = max_iter
         self.orig_beta = beta
         self.number_to_add = number_to_add
         self.verbose = verbose
@@ -84,7 +86,14 @@ class KInsertion(Adversary):
             self.beta = self.orig_beta
 
             # Main learning loop for one insertion
-            for __ in range(self.num_iterations):
+            grad_norm = 0.0
+            iteration = 0
+            while (iteration == 0 or (grad_norm > self.alpha and
+                                      iteration < self.max_iter)):
+
+                print('Iteration: ', iteration, ' - gradient norm: ', grad_norm,
+                      sep='')
+
                 # Train with newly generated instance
                 self.instances.append(self.inst)
                 self.learner.training_instances = self.instances
@@ -101,7 +110,10 @@ class KInsertion(Adversary):
 
                 # Update feature vector of the instance to be added
                 gradient = self._calc_gradient()
+                grad_norm = np.linalg.norm(gradient)
+
                 self.x = self.x - self.beta * gradient
+                self.x = DataModification.project_feature_vector(self.x)
                 self._generate_inst()
                 self.instances = self.instances[:-1]
                 self.fvs = self.fvs[:-1]
@@ -109,6 +121,8 @@ class KInsertion(Adversary):
 
                 if self.verbose:
                     print('Current feature vector:\n', self.x)
+
+                iteration += 1
 
             # Add the newly generated instance and retrain with that dataset
             self.instances.append(self.inst)

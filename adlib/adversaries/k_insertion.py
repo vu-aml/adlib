@@ -28,6 +28,7 @@ class KInsertion(Adversary):
         :param poison_instance: the instance in which to induce the most error
         :param alpha: convergence condition (diff <= alpha)
         :param beta: the learning rate
+        :param max_iter: the maximum number of iterations
         :param number_to_add: the number of new instances to add
         :param verbose: if True, print the feature vector and gradient for each
                         iteration
@@ -533,17 +534,21 @@ class KInsertion(Adversary):
             self.learner = params['learner']
         if params['poison_instance'] is not None:
             self.poison_instance = params['poison_instance']
+        if params['alpha'] is not None:
+            self.alpha = params['alpha']
         if params['beta'] is not None:
             self.beta = params['beta']
+        if params['max_iter'] is not None:
+            self.max_iter = params['max_iter']
         if params['number_to_add'] is not None:
             self.number_to_add = params['number_to_add']
-        if params['num_iterations'] is not None:
-            self.num_iterations = params['num_iterations']
         if params['verbose'] is not None:
             self.verbose = params['verbose']
 
         self.instances = None
         self.orig_instances = None
+        self.fvs = None
+        self.labels = None
         self.x = None
         self.y = None
         self.inst = None
@@ -552,13 +557,16 @@ class KInsertion(Adversary):
         self.z_c = None
         self.matrix = None
         self.quick_calc = None
+        self.poison_loss_before = None
+        self.poison_loss_after = None
 
     def get_available_params(self):
         params = {'learner': self.learner,
                   'poison_instance': self.poison_instance,
+                  'alpha': self.alpha,
                   'beta': self.beta,
+                  'max_iter': self.max_iter,
                   'number_to_add': self.number_to_add,
-                  'num_iterations': self.num_iterations,
                   'verbose': self.verbose}
         return params
 

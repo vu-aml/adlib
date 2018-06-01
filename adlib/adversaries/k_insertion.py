@@ -19,16 +19,15 @@ class KInsertion(Adversary):
     plus k feature vectors designed to induce the most error in poison_instance.
     """
 
-    def __init__(self, learner, poison_instance, beta=0.5, number_to_add=10,
-                 num_iterations=10, verbose=False):
+    def __init__(self, learner, poison_instance, alpha=1e-3, beta=0.05,
+                 number_to_add=10, verbose=False):
 
         """
         :param learner: the trained learner
         :param poison_instance: the instance in which to induce the most error
+        :param alpha: convergence condition (diff <= alpha)
         :param beta: the learning rate
         :param number_to_add: the number of new instances to add
-        :param num_iterations: the number of iterations for each gradient
-                               descent calculation
         :param verbose: if True, print the feature vector and gradient for each
                         iteration
         """
@@ -36,13 +35,15 @@ class KInsertion(Adversary):
         Adversary.__init__(self)
         self.learner = deepcopy(learner)
         self.poison_instance = poison_instance
+        self.alpha = alpha
         self.beta = beta
         self.orig_beta = beta
         self.number_to_add = number_to_add
-        self.num_iterations = num_iterations
         self.verbose = verbose
         self.instances = None
         self.orig_instances = None
+        self.fvs = None  # feature vectors
+        self.labels = None  # labels
         self.x = None  # The feature vector of the instance to be added
         self.y = None  # x's label
         self.inst = None
@@ -55,13 +56,21 @@ class KInsertion(Adversary):
         self.poison_loss_after = None
 
     def attack(self, instances) -> List[Instance]:
+        """
+        Performs a k-insertion attack
+        :param instances: the input instances
+        :return: the attacked instances
+        """
+
         if len(instances) == 0:
             raise ValueError('Need at least one instance.')
 
         self.orig_instances = deepcopy(instances)
         self.instances = self.orig_instances
+        self.beta /= instances[0].get_feature_count()  # scale beta
         self.learner.training_instances = self.instances
-        self.learner.train()
+        learner = self.learner.model.learner
+        learner.fit(self.fvs, self.labels)
 
         self.poison_loss_before = self._calc_inst_loss(self.poison_instance)
 
@@ -79,14 +88,24 @@ class KInsertion(Adversary):
                 # Train with newly generated instance
                 self.instances.append(self.inst)
                 self.learner.training_instances = self.instances
-                self.learner.train()
+
+                self.fvs = self.fvs.tolist()
+                self.fvs.append(self.x)
+                self.fvs = np.array(self.fvs)
+
+                self.labels = self.labels.tolist()
+                self.labels.append(self.y)
+                self.labels = np.array(self.labels)
+
+                learner.fit(self.fvs, self.labels)
 
                 # Update feature vector of the instance to be added
                 gradient = self._calc_gradient()
                 self.x = self.x - self.beta * gradient
                 self._generate_inst()
                 self.instances = self.instances[:-1]
-                self.beta = 0.9 * self.beta  # decaying learning rate
+                self.fvs = self.fvs[:-1]
+                self.labels = self.labels[:-1]
 
                 if self.verbose:
                     print('Current feature vector:\n', self.x)
@@ -99,6 +118,31 @@ class KInsertion(Adversary):
         self.poison_loss_after = self._calc_inst_loss(self.poison_instance)
 
         return self.instances
+
+    def _calculate_constants(self):
+        """
+        Calculates constants for the gradient descent loop
+        """
+
+        # Calculate feature vectors
+        self.fvs = []
+        for i in range(len(self.instances)):
+            feature_vector = self.instances[i].get_feature_vector()
+            tmp = []
+            for j in range(self.instances[0].get_feature_count()):
+                if feature_vector.get_feature(j) == 1:
+                    tmp.append(1)
+                else:
+                    tmp.append(0)
+            tmp = np.array(tmp)
+            self.fvs.append(tmp)
+        self.fvs = np.array(self.fvs, dtype='float64')
+
+        # Calculate labels
+        self.labels = []
+        for inst in self.instances:
+            self.labels.append(inst.get_label())
+        self.labels = np.array(self.labels)
 
     def _calc_inst_loss(self, inst: Instance):
         """
@@ -130,7 +174,7 @@ class KInsertion(Adversary):
 
         indices_list = []
         for i in range(len(self.x)):
-            if self.x[i] > 0.5:
+            if self.x[i] >= 0.5:
                 indices_list.append(i)
 
         # Generate new instance

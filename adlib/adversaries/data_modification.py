@@ -24,7 +24,7 @@ class DataModification(Adversary):
         :param learner: the trained learner
         :param target_theta: the theta value of which to target
         :param lda: lambda - implies importance of cost
-        :param alpha: convergence condition (diff < alpha)
+        :param alpha: convergence condition (diff <= alpha)
         :param beta: learning rate - will be divided by size of input
         :param max_iter: maximum iterations
         :param verbose: if True, will print gradient for each iteration
@@ -149,6 +149,7 @@ class DataModification(Adversary):
         Calculates constants for the gradient descent loop
         """
 
+        # Calculate feature vectors
         self.fvs = []
         for i in range(len(self.instances)):
             feature_vector = self.instances[i].get_feature_vector()

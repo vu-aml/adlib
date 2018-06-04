@@ -572,3 +572,4 @@ class KInsertion(Adversary):
 
     def set_adversarial_params(self, learner, train_instances):
         self.learner = learner
+        self.instances = train_instances

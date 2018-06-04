@@ -5,6 +5,7 @@
 # Matthew Sedam
 
 from adlib.learners.learner import learner
+from typing import Dict
 
 
 class TRIM_Learner(learner):
@@ -17,4 +18,32 @@ class TRIM_Learner(learner):
         learner.__init__(self)
         raise NotImplementedError
 
-    
+    def train(self):
+        """
+        Train on the set of training instances.
+        """
+
+        raise NotImplementedError
+
+    def predict(self, instances):
+        """
+        Predict classification labels for the set of instances.
+        :param instances: list of Instance objects
+        :return: label classifications (List(int))
+        """
+
+        raise NotImplementedError
+
+    def set_params(self, params: Dict):
+        """
+        Sets parameters for the learner.
+        :param params: parameters
+        """
+
+        raise NotImplementedError
+
+    def predict_proba(self, X):
+        raise NotImplementedError
+
+    def decision_function(self, X):
+        raise NotImplementedError

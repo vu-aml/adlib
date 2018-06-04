@@ -42,6 +42,27 @@ class TRIM_Learner(learner):
                 if len(inst_set) == self.n:
                     break
 
+        old_loss = -1
+        loss = 0
+        while loss != old_loss:
+            fvs, labels = TRIM_Learner.get_fv_matrix_and_labels(inst_set)
+            loss_vector = self.base_learner.model.learner.decision_function(fvs)
+            loss_vector -= labels
+            loss_vector = list(map(lambda x: x ** 2, loss_vector))
+
+            loss_tuples = []
+            for i in range(len(loss_vector)):
+                loss_tuples.append((loss_vector[i], inst_set[i]))
+            loss_tuples.sort()
+
+            inst_set = list(map(lambda tup: tup[1], loss_tuples[:self.n]))
+
+            self.base_learner.training_instances = inst_set
+            self.base_learner.train()
+
+            old_loss = loss
+            loss = self._calc_loss(inst_set)
+
     def _calc_loss(self, inst_set: List[Instance]):
         """
         Calculates the loss function as specified in the paper
@@ -52,16 +73,9 @@ class TRIM_Learner(learner):
         w = self.base_learner.model.learner.decision_function(
             np.eye(self.training_instances[0].get_feature_count()))
         w -= self.base_learner.model.learner.intercept_[0]
-        loss = 0.5 * self.lda * (np.linalg.norm(w) ** 2)
 
-        # Calculate feature vector matrix and label array
-        fvs = []
-        labels = []
-        for inst in inst_set:
-            fvs.append(TRIM_Learner.get_feature_vector_array(inst))
-            labels.append(inst.get_label())
-        fvs = np.array(fvs)
-        labels = np.array(labels)
+        loss = 0.5 * self.lda * (np.linalg.norm(w) ** 2)
+        fvs, labels = TRIM_Learner.get_fv_matrix_and_labels(inst_set)
 
         # Calculate loss
         f_values = self.base_learner.model.learner.decision_function(fvs)
@@ -109,3 +123,20 @@ class TRIM_Learner(learner):
             else:
                 tmp.append(0)
         return np.array(tmp)
+
+    @staticmethod
+    def get_fv_matrix_and_labels(instances: List[Instance]):
+        """
+        Calculate feature vector matrix and label array
+        :param instances: the list of Instances
+        :return: a tuple of the feature vector matrix and labels
+                 (np.ndarray, np.ndarray)
+        """
+
+        fvs = []
+        labels = []
+        for inst in instances:
+            fvs.append(TRIM_Learner.get_feature_vector_array(inst))
+            labels.append(inst.get_label())
+
+        return np.array(fvs), np.array(labels)

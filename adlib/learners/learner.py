@@ -1,5 +1,4 @@
 from typing import Dict, List
-from data_reader.dataset import EmailDataset
 from data_reader.binary_input import Instance
 
 

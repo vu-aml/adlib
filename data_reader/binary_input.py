@@ -1,6 +1,5 @@
-from typing import List, Dict
-from scipy.sparse import csr_matrix, dok_matrix
-from data_reader.dataset import EmailDataset
+from typing import List
+from scipy.sparse import csr_matrix
 from data_reader.real_input import RealFeatureVector
 
 """
@@ -60,7 +59,7 @@ class BinaryFeatureVector(object):
         else:
             return 0
 
-    def change_bit(self,index, feature):
+    def change_bit(self, index, feature):
         """
         Change the bit only if the feature is different from the current feature
         :param index:
@@ -150,20 +149,17 @@ class Instance(object):
                 """
         return self.feature_vector
 
-
     def get_feature_count(self):
         """
         :return: Number of features in the underlying feature vector
         """
         return self.feature_vector.get_feature_count()
 
-
     def get_csr_matrix(self):
         """
         :return: csr_matrix of the underlying feature vector
         """
         return self.feature_vector.get_csr_matrix()
-
 
     def get_feature_vector_cost(self, goal_instance):
         """
@@ -172,14 +168,14 @@ class Instance(object):
         :param goal_vector:
         :return:  a val indicating the differences
         """
-        feature_difference = self.get_feature_vector().feature_difference(goal_instance.get_feature_vector())
+        feature_difference = self.get_feature_vector().feature_difference(
+            goal_instance.get_feature_vector())
         sum = 0
         for index in range(len(feature_difference)):
             sum += abs(feature_difference[index])
         return sum
 
-
-    def flip(self,index,value):
+    def flip(self, index, value):
         """
           Chnange the bit at given index
         :param index:
@@ -187,7 +183,6 @@ class Instance(object):
         :return:
         """
         if type(self.get_feature_vector()) == RealFeatureVector:
-            self.get_feature_vector().flip_val(index,value)
+            self.get_feature_vector().flip_val(index, value)
         else:
-            self.get_feature_vector().change_bit(index,value)
-
+            self.get_feature_vector().change_bit(index, value)

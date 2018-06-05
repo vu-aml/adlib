@@ -1,5 +1,5 @@
-from typing import List, Dict
-from scipy.sparse import csr_matrix, dok_matrix
+from typing import List
+from scipy.sparse import csr_matrix
 
 """
 Created Binary FeatureVector and Instance data structures.

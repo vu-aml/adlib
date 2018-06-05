@@ -50,7 +50,8 @@ class Adversary(object):
         raise NotImplementedError
 
     def set_adversarial_params(self, learner, train_instances):
-        """Give the adversary knowledge of the initial learner and train instances.
+        """
+        Give the adversary knowledge of the initial learner and train instances.
 
         This standardizes the input to each adversarial function. It is the job
         of any adversaries derived from this class to determine exactly what
@@ -58,15 +59,14 @@ class Adversary(object):
 
             Args:
                 learner (InitialPredictor): Initial predictive model.
-                train_instances (List[Instance]): Instances used by the initial learner
-                to create model.
-
+                train_instances (List[Instance]): Instances used by the initial
+                learner to create model.
         """
+
         raise NotImplementedError
 
     def clone(self):
         """Return a new copy of the adversary with same initial params."""
-        our_type = type(self)
         new_params = copy.deepcopy(self.get_available_params())
         obj = self.__class__
         new_obj = obj(**new_params)

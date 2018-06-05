@@ -1,11 +1,7 @@
 import sys
-from sklearn import svm
-from data_reader.binary_input import Instance
 from data_reader.operations import load_dataset
 from sklearn import metrics
 import adlib.learners as learner
-import random
-from random import seed, shuffle
 from data_reader.dataset import EmailDataset
 import matplotlib.pyplot as plt
 
@@ -22,17 +18,17 @@ def main(argv):
     testing_data = load_dataset(testing_)
 
     # initialize and train RobustLearner
-    clf2 = learner.FeatureDeletion(training_data,{'hinge_loss_multiplier': 1,
-                                    'max_feature_deletion': 30})
+    clf2 = learner.FeatureDeletion(training_data, {'hinge_loss_multiplier': 1,
+                                                   'max_feature_deletion': 30})
     clf2.train()
 
     # produce simple metrics
     y_predict = clf2.predict(testing_data[0])
     y_true = testing_data[0].label
-    print(y_predict,y_true)
+    print(y_predict, y_true)
 
     score = metrics.accuracy_score([y_true], [y_predict])
-    print("score = "+str(score))
+    print("score = " + str(score))
 
     wgt = clf2.decision_function()[0].tolist()[0]
     print(wgt)
@@ -41,6 +37,5 @@ def main(argv):
     plt.show()
 
 
-
 if __name__ == "__main__":
-  main(sys.argv[1:])
+    main(sys.argv[1:])

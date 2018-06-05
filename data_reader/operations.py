@@ -1,5 +1,4 @@
-import json, os, pickle
-from typing import List, Dict
+from typing import List
 from scipy.sparse import csr_matrix
 from data_reader.binary_input import Instance, BinaryFeatureVector
 from data_reader.real_input import RealFeatureVector
@@ -101,7 +100,8 @@ def load_dataset(emailData: EmailDataset) -> List[Instance]:
     data = emailData.features.data
     for i in range(0, emailData.num_instances):
         if emailData.binary:
-            tmp_vector = BinaryFeatureVector(num_features, indices[indptr[i]:indptr[i + 1]].tolist())
+            tmp_vector = BinaryFeatureVector(num_features,
+                                             indices[indptr[i]:indptr[i + 1]].tolist())
         else:
             instance_data = data[indptr[i]:indptr[i + 1]].tolist()
             tmp_vector = RealFeatureVector(num_features, indices[indptr[i]:indptr[i + 1]].tolist(),
@@ -126,6 +126,5 @@ def summarize(instances):
         data = []
         for instance in instances:
             data.append(instance.get_feature_vector().get_feature(i))
-        summaries.append((mean(data),stdev(data)))
+        summaries.append((mean(data), stdev(data)))
     return summaries
-

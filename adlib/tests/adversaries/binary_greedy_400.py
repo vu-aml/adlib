@@ -19,19 +19,18 @@ def summary(y_pred, y_true):
 def get_evasion_set(x_test, y_pred):
     # for x, y in zip(x_test, y_pred):
     #     print("true label: {0}, predicted label: {1}".format(x.label, y))
-    ls = [x for x, y in zip(x_test, y_pred) if x.label==1 and y==1]
+    ls = [x for x, y in zip(x_test, y_pred) if x.label == 1 and y == 1]
     print("{0} malicious instances are being detected initially")
     return ls, [x.label for x in ls]
 
 
-dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400',binary=True,raw=True)
+dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400', binary=True, raw=True)
 training_, testing_ = dataset.split({'train': 60, 'test': 40})
 training_data = load_dataset(training_)
 testing_data = load_dataset(testing_)
 test_true_label = [x.label for x in testing_data]
 
-
-#test simple learner svm
+# test simple learner svm
 learning_model = svm.SVC(probability=True, kernel='linear')
 learner1 = SimpleLearner(learning_model, training_data)
 learner1.train()
@@ -44,11 +43,10 @@ print("finding the set of detected malicious instances for attacking")
 mal_set, mal_label = get_evasion_set(testing_data, predictions)
 print("size of new dataset: {0}".format(len(mal_set)))
 
-#test Restrained_attack
+# test Restrained_attack
 attacker = BinaryGreedy()
 attacker.set_adversarial_params(learner1, mal_set)
 new_testing_data = attacker.attack(mal_set)
-
 
 predictions2 = learner1.predict(new_testing_data)
 print("========= post-attack prediction =========")

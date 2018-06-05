@@ -14,9 +14,6 @@ from sklearn import svm
 import numpy as np
 
 
-# TODO: SEE BELOW
-
-
 def test_trim_learner():
     print()
     print('###################################################################')
@@ -94,9 +91,11 @@ def test_trim_learner():
                                 verbose=True)
     trim_learner.train()
 
-    original_pred_labels = trim_learner.predict(training_data)
-
-    # TODO: Finish this
+    pred_labels = trim_learner.predict(training_data + testing_data)
+    (percent_correct,
+     _, _) = calculate_correct_percentages(pred_labels,
+                                           pred_labels,
+                                           training_data + testing_data)
 
     print('\nEND TRIM learner test.')
     print('###################################################################')

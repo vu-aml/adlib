@@ -1,8 +1,6 @@
 from typing import List, Dict
 from data_reader.binary_input import Instance
-from data_reader.dataset import EmailDataset
 from adlib.learners.models.model import BaseModel
-import numpy as np
 from data_reader.operations import sparsify
 
 
@@ -35,10 +33,10 @@ class Model(BaseModel):
 
         """
         if isinstance(instances, List):
-             (y, X) = sparsify(instances)
-             self.learner.fit(X.toarray() ,y)
+            (y, X) = sparsify(instances)
+            self.learner.fit(X.toarray(), y)
         else:
-             self.learner.fit(instances.data[0], instances.data[1])
+            self.learner.fit(instances.data[0], instances.data[1])
 
     def predict(self, instances):
         """Predict classification labels for the set of instances using
@@ -56,11 +54,11 @@ class Model(BaseModel):
             (y, X) = sparsify(instances)
             predictions = self.learner.predict(X.toarray())
         elif type(instances) == Instance:
-            predictions = self.learner.predict(instances.get_feature_vector().get_csr_matrix().toarray())[0]
+            predictions = self.learner.predict(
+                instances.get_feature_vector().get_csr_matrix().toarray())[0]
         else:
             predictions = self.learner.predict(instances.features)
         return predictions
-
 
     def predict_proba(self, instances):
         """Use the model to determine probability of adversarial classification.
@@ -78,7 +76,8 @@ class Model(BaseModel):
             full_probs = self.learner.predict_proba(X.toarray())
             probs = [x[0] for x in full_probs]
         elif type(instances) == Instance:
-            probs = self.learner.predict_proba(instances.get_feature_vector().get_csr_matrix())
+            probs = self.learner.predict_proba(
+                instances.get_feature_vector().get_csr_matrix())
         else:
             probs = self.learner.predict_proba(instances.features)
         return probs
@@ -119,7 +118,8 @@ class Model(BaseModel):
             (y, X) = sparsify(instances)
             f = self.learner.decision_function(X)
         elif type(instances) == Instance:
-            f = self.learner.decision_function(instances.get_feature_vector().get_csr_matrix())[0]
+            f = self.learner.decision_function(
+                instances.get_feature_vector().get_csr_matrix())[0]
         else:
             self.learner.dicision_function(instances.features)
         return f

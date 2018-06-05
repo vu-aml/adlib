@@ -1,8 +1,5 @@
 import pytest
-from adlib.learners import SVMRestrained
-from data_reader import binary_input
-from data_reader.binary_input import Instance
-from random import seed, shuffle
+from random import seed
 from data_reader.dataset import EmailDataset
 from adlib.learners.simple_learner import SimpleLearner
 from sklearn import svm
@@ -15,6 +12,7 @@ def data():
     seed(1)
     training_data, testing_data = dataset.split({'train': 60, 'test': 40})
     return {'training_data': training_data, 'testing_data': testing_data}
+
 
 @pytest.fixture
 def training_data(data):
@@ -31,6 +29,7 @@ def simple_learner(data):
     learning_model = svm.SVC(probability=True, kernel='linear')
     learner = SimpleLearner(learning_model, data['training_data'])
     return learner
+
 
 @pytest.fixture
 def empty_learner():
@@ -51,6 +50,7 @@ def bad_dataset_params3():
     with pytest.raises(AttributeError) as error:
         dataset = EmailDataset(path='notarealpath.pkl', features=[1, 2, 3],
                                labels=[1])
+
 
 # TODO: Also test serializing then loading
 def load_serialized():

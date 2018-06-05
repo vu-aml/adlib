@@ -4,7 +4,6 @@ import numpy as np
 import cvxpy as cvx
 from cvxpy import Variable as Variable
 from cvxpy import mul_elemwise as mul
-from data_reader.dataset import EmailDataset
 from data_reader.binary_input import Instance
 from data_reader.operations import sparsify
 
@@ -107,18 +106,18 @@ class SVMRestrained(learner):
 
             """
         predictions = []
-        #list of instances
+        # list of instances
         if isinstance(instances, List):
             for instance in instances:
                 features = instance.get_feature_vector().get_csr_matrix().toarray()
                 predictions.append((int)(np.sign(self.predict_instance(features))))
-        #single instance
+        # single instance
         elif type(instances) == Instance:
             predictions = (int)(np.sign(self.predict_instance(
-            instances.get_feature_vector().get_csr_matrix().toarray())))
+                instances.get_feature_vector().get_csr_matrix().toarray())))
         else:
-        #email data set
-        #return a num if there is a single instance
+            # email data set
+            # return a num if there is a single instance
             for i in range(0, instances.features.shape[0]):
                 instance = instances.features[i, :].toarray()
                 predictions.append((int)(np.sign(self.predict_instance(instance))))

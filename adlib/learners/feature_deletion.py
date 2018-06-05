@@ -86,15 +86,15 @@ class FeatureDeletion(learner):
          :return: list of int labels
          """
         predictions = []
-        #list of instances
+        # list of instances
         if isinstance(instances, List):
             for instance in instances:
                 features = instance.get_feature_vector().get_csr_matrix().toarray()
                 predictions.append(np.sign(self.predict_instance(features)))
-        #single instance
+        # single instance
         elif type(instances) == Instance:
             predictions = np.sign(self.predict_instance(
-            instances.get_feature_vector().get_csr_matrix().toarray()))
+                instances.get_feature_vector().get_csr_matrix().toarray()))
         else:
             predictions = []
             for i in range(0, instances.features.shape[0]):

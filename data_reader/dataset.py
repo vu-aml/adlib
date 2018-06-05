@@ -1,13 +1,13 @@
 import os
 from sklearn.feature_extraction.text import TfidfVectorizer
 import scipy
-from scipy.sparse import csr_matrix, dok_matrix, find
+from scipy.sparse import csr_matrix
 import sklearn
 import numpy as np
 import csv
 import pickle
 from collections import namedtuple
-from copy import copy, deepcopy
+from copy import deepcopy
 
 
 class Dataset(object):
@@ -26,6 +26,7 @@ class Dataset(object):
 
     def save(self):
         raise NotImplementedError
+
 
 class EmailDataset(Dataset):
     """Dataset which loads data from either raw email txt files, a serialized
@@ -48,17 +49,17 @@ class EmailDataset(Dataset):
 
     def __init__(self, path=None, raw=True, features=None, labels=None,
                  binary=True, strip_accents_=None, ngram_range_=(1, 1),
-                 max_df_=1.0, min_df_=1, max_features_=1000, num_instances = 0):
+                 max_df_=1.0, min_df_=1, max_features_=1000, num_instances=0):
         super(EmailDataset, self).__init__()
         self.num_instances = num_instances
         self.binary = binary
         if path is not None:
             self.base_path = os.path.dirname(path)
-        #: Number of instances within the current corpus
+            #: Number of instances within the current corpus
             if raw:
                 self.labels, self.corpus = self._create_corpus(path)
-            # Sklearn module to fit/transform data and resulting feature matrix
-            # Maybe optionally pass this in as a parameter instead.
+                # Sklearn module to fit/transform data and resulting feature matrix
+                # Maybe optionally pass this in as a parameter instead.
                 self.vectorizer = \
                     TfidfVectorizer(analyzer='word', strip_accents=strip_accents_,
                                     ngram_range=ngram_range_, max_df=max_df_,
@@ -186,7 +187,8 @@ class EmailDataset(Dataset):
 
     def __eq__(self, other):
         if isinstance(other, EmailDataset):
-            if self.features.shape == other.features.shape and self.features.dtype == other.features.dtype:
+            if (self.features.shape == other.features.shape and
+                    self.features.dtype == other.features.dtype):
                 if (self.features != other.features).nnz() == 0:
                     return self.labels == other.labels
         else:
@@ -229,11 +231,11 @@ class EmailDataset(Dataset):
             feats = data[:, 1:]
             mask = ~np.isnan(feats)
             col = feats[mask]
-            row = np.concatenate([np.ones_like(x)*i
-                                 for i, x in enumerate(feats)])[mask.flatten()]
+            row = np.concatenate([np.ones_like(x) * i
+                                  for i, x in enumerate(feats)])[mask.flatten()]
             features = csr_matrix((np.ones_like(col), (row, col)),
                                   shape=(feats.shape[0],
-                                  int(np.max(feats[mask]))+1))
+                                         int(np.max(feats[mask])) + 1))
             return np.squeeze(labels), features
 
     def _pickle(self, outfile, save=True):
@@ -247,9 +249,9 @@ class EmailDataset(Dataset):
         if save:
             with open(outfile, 'wb') as fileobj:
                 pickle.dump({
-                            'labels': self.labels,
-                            'features': self.features
-                            }, fileobj, pickle.HIGHEST_PROTOCOL)
+                    'labels': self.labels,
+                    'features': self.features
+                }, fileobj, pickle.HIGHEST_PROTOCOL)
         else:
             # TODO: throw exception if FileNotFoundError
             with open(outfile, 'rb') as fileobj:
@@ -318,14 +320,15 @@ class EmailDataset(Dataset):
         if splits[0] < 1.0:
             frac = splits[0]
         else:
-            frac = splits[0]/100
-        pivot = int(self.__len__()*frac)
+            frac = splits[0] / 100
+        pivot = int(self.__len__() * frac)
         s_feats, s_labels = sklearn.utils.shuffle(self.features, self.labels)
         print(type(s_feats))
         print(type(s_labels))
         return (self.__class__(raw=False, features=s_feats[:pivot, :],
-                               labels=s_labels[:pivot],num_instances = pivot,binary= self.binary),
+                               labels=s_labels[:pivot], num_instances=pivot, binary=self.binary),
                 self.__class__(raw=False, features=s_feats[pivot:, :],
-                               labels=s_labels[pivot:],num_instances = self.num_instances - pivot,binary= self.binary))
+                               labels=s_labels[pivot:], num_instances=self.num_instances - pivot,
+                               binary=self.binary))
         # return (self.Data(s_feats[:pivot, :], s_labels[:pivot]),
         #         self.Data(s_feats[pivot:, :], s_labels[pivot:]))

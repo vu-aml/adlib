@@ -1,18 +1,17 @@
 from adlib.adversaries.adversary import Adversary
-from data_reader.binary_input import Instance, BinaryFeatureVector
 from typing import List, Dict
-from data_reader.dataset import EmailDataset
 from data_reader.binary_input import Instance
 from adlib.learners.learner import learner
 from copy import deepcopy
 from math import exp
 
-'''Simple optimization of adversarial instance with binary valued feature vector.
+"""Simple optimization of adversarial instance with binary valued feature 
+vector.
 
 Concept:
     Iterates through features in the adversarial instance, flipping features
     that lower the probability of being classified adversarial.
-'''
+"""
 
 
 class SimpleOptimize(Adversary):
@@ -28,7 +27,8 @@ class SimpleOptimize(Adversary):
         for instance in instances:
             transformed_instance = deepcopy(instance)
             if instance.get_label() == learner.positive_classification:
-                transformed_instances.append(self.optimize(transformed_instance))
+                transformed_instances.append(
+                    self.optimize(transformed_instance))
             else:
                 transformed_instances.append(transformed_instance)
         return transformed_instances
@@ -46,8 +46,8 @@ class SimpleOptimize(Adversary):
 
     def set_adversarial_params(self, learner, training_data):
         self.learn_model = learner
-        self.num_features = training_data[0].get_feature_vector().get_feature_count()
-
+        self.num_features = training_data[
+            0].get_feature_vector().get_feature_count()
 
     def optimize(self, instance: Instance):
         """Flip features that lower the prob. of being classified adversarial.

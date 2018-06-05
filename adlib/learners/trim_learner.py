@@ -1,6 +1,6 @@
 # trim_learner.py
 # A learner that implements the TRIM algorithm described in "Manipulating
-# Machine Learning- Poisoning Attacks and Countermeasures for Regression
+# Machine Learning - Poisoning Attacks and Countermeasures for Regression
 # Learning" found at https://arxiv.org/pdf/1804.00308.pdf.
 # Matthew Sedam
 
@@ -17,7 +17,7 @@ class TRIM_Learner(learner):
     mentioned above.
     """
 
-    def __init__(self, training_instances, n: int, lda=0.1, verbose=True):
+    def __init__(self, training_instances, n: int, lda=0.1, verbose=False):
         learner.__init__(self)
         self.training_instances = training_instances
         self.n = n

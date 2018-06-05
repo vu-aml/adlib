@@ -5,7 +5,6 @@
 from adlib.adversaries.adversary import Adversary
 from data_reader.binary_input import Instance
 import cvxpy as cvx
-import math
 import numpy as np
 from copy import deepcopy
 from progress.bar import Bar

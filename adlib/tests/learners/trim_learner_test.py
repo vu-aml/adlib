@@ -86,16 +86,24 @@ def test_trim_learner():
     ############################################################################
     # Calculate statistics with trim learner
 
-    # We poisoned roughly 30% of the data, so 70% should be correct
+    # We poisoned roughly 30% of the data, so 70% should be unpoisoned
     trim_learner = TRIM_Learner(training_data, int(0.7 * len(training_data)),
                                 verbose=True)
     trim_learner.train()
 
-    pred_labels = trim_learner.predict(training_data + testing_data)
-    (percent_correct,
-     _, _) = calculate_correct_percentages(pred_labels,
-                                           pred_labels,
-                                           training_data + testing_data)
+    trim_pred_labels = trim_learner.predict(training_data + testing_data)
+    normal_pred_labels = learner.predict(training_data + testing_data)
+    (trim_percent_correct,
+     normal_percent_correct,
+     difference) = calculate_correct_percentages(trim_pred_labels,
+                                                 normal_pred_labels,
+                                                 training_data + testing_data)
+
+    print('###################################################################')
+    print('Predictions after using TRIM learner:')
+    print('Simple leraner correct percentage: ', normal_percent_correct, '%')
+    print('TRIM learner percentage: ', trim_percent_correct, '%')
+    print('Difference: ', difference, '%')
 
     print('\nEND TRIM learner test.')
     print('###################################################################')

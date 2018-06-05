@@ -17,13 +17,24 @@ class TRIM_Learner(learner):
     mentioned above.
     """
 
-    def __init__(self, training_instances, n: int, lda=0.1, verbose=False):
+    def __init__(self, training_instances: List[Instance], n: int, lda=0.1,
+                 verbose=False):
+        """
+        :param training_instances: the instances on which to train
+        :param n: the number of unpoisoned instances in training_instances - the
+                  size of the original dataset
+        :param lda: lambda - for regularization term
+        :param verbose: if True, the solver will be in verbose mode
+        """
+
         learner.__init__(self)
         self.training_instances = training_instances
         self.n = n
         self.lda = lda  # lambda
         self.verbose = verbose
         self.num_features = self.training_instances[0].get_feature_count()
+        self.w = None
+        self.b = None
 
     def train(self):
         """
@@ -67,7 +78,17 @@ class TRIM_Learner(learner):
             old_loss = loss
             loss = self._calc_loss(inst_set)
 
+        self.w = w
+        self.b = b
+
     def _minimize_loss(self, fvs, labels):
+        """
+        Use CVXPY to minimize the loss function.
+        :param fvs: the feature vectors (np.ndarray)
+        :param labels: the list of labels (np.ndarray or List[int])
+        :return: w (np.ndarray) and b (float)
+        """
+
         # Setup variables and constants
         w = cvx.Variable(fvs.shape[1])
         b = cvx.Variable()
@@ -107,7 +128,15 @@ class TRIM_Learner(learner):
         :return: label classifications (List(int))
         """
 
-        raise NotImplementedError
+        if not self.w or not self.b:
+            raise ValueError('Must train learner before prediction.')
+
+        fvs, _ = TRIM_Learner.get_fv_matrix_and_labels(instances)
+
+        labels = fvs.dot(self.w) + self.b
+        labels = list(map(lambda x: 1 if x >= 0 else -1, labels))
+
+        return labels
 
     def set_params(self, params: Dict):
         """
@@ -115,13 +144,24 @@ class TRIM_Learner(learner):
         :param params: parameters
         """
 
-        raise NotImplementedError
+        if params['training_instances'] is not None:
+            self.training_instances = params['training_instances']
+        if params['n'] is not None:
+            self.n = params['n']
+        if params['lda'] is not None:
+            self.lda = params['lda']
+        if params['verbose'] is not None:
+            self.verbose = params['verbose']
+
+        self.num_features = self.training_instances[0].get_feature_count()
+        self.w = None
+        self.b = None
 
     def predict_proba(self, X):
         raise NotImplementedError
 
     def decision_function(self, X):
-        raise NotImplementedError
+        return X.dot(self.w) + self.b
 
     @staticmethod
     def get_feature_vector_array(inst: Instance):

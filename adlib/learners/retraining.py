@@ -23,29 +23,30 @@ Concept:
 
 
 class Retraining(learner):
-    def __init__(self, base_model=None, training_instances=None, attacker = None,params: Dict = None):
+    def __init__(self, base_model=None, training_instances=None, attacker=None,
+                 params: Dict = None):
         learner.__init__(self)
         self.model = Model(base_model)
-        #self.attack_alg = None  # Type: class
-        #self.adv_params = None
+        # self.attack_alg = None  # Type: class
+        # self.adv_params = None
         self.attacker = attacker  # Type: Adversary
         self.set_training_instances(training_instances)
         self.iteration_times = 5  # int: control the number of rounds directly
-        #self.set_params(params)
+        # self.set_params(params)
 
     def set_params(self, params: Dict):
-        #if 'attack_alg' in params.keys():
+        # if 'attack_alg' in params.keys():
         #    self.attack_alg = params['attack_alg']
         if 'attacker' in params.keys():
             self.attacker = params['attacker']
-        #if params['adv_params'] is not None:
-         #   self.adv_params = params['adv_params']
+        # if params['adv_params'] is not None:
+        #   self.adv_params = params['adv_params']
         if 'iteration_times' in params.keys() and 'iteration_times' is not None:
             self.iteration_times = params['iteration_times']
 
     def get_available_params(self) -> Dict:
-        params = {'attacker':self.attacker,
-                  'attack_params':self.adv_params,
+        params = {'attacker': self.attacker,
+                  'attack_params': self.adv_params,
                   'iteration_times': self.iteration_times}
         return params
 
@@ -59,9 +60,9 @@ class Retraining(learner):
         '''
         self.model.train(self.training_instances)
         iteration = self.iteration_times
-        #self.attacker = self.attack_alg()
-        #self.attacker.set_params(self.adv_params)
-        #self.attacker.set_adversarial_params(self.model, self.training_instances)
+        # self.attacker = self.attack_alg()
+        # self.attacker.set_params(self.adv_params)
+        # self.attacker.set_adversarial_params(self.model, self.training_instances)
 
         print("==> Training...")
         malicious_instances = [x for x in self.training_instances if
@@ -74,11 +75,12 @@ class Retraining(learner):
             for instance in transformed_instances:
                 in_list = False
                 for idx, old_instance in enumerate(augmented_instances):
-                    if fv_equals(old_instance.get_feature_vector(),instance.get_feature_vector()):
+                    if fv_equals(old_instance.get_feature_vector(), instance.get_feature_vector()):
                         in_list = True
                 if not in_list:
                     new.append(instance)
-                augmented_instances.append(Instance(label=1, feature_vector=instance.get_feature_vector()))
+                augmented_instances.append(
+                    Instance(label=1, feature_vector=instance.get_feature_vector()))
             self.model.train(augmented_instances)
             malicious_instances = [x for x in augmented_instances if
                                    self.model.predict(x) == 1]

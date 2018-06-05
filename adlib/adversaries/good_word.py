@@ -3,30 +3,29 @@ from adlib.adversaries.adversary import Adversary
 from data_reader.binary_input import Instance, BinaryFeatureVector
 from adlib.learners.learner import learner
 from copy import deepcopy
-from itertools import filterfalse
 
-'''Good Word Attack based on Good Word Attacks on Statistical Spam Filters by 
+"""Good Word Attack based on Good Word Attacks on Statistical Spam Filters by 
    Daniel Lowd and Christopher Meek.
 
 Concept:
-   This algorithm tries to measure the weight of each words in the email lists and 
-   attempts to create a list of n good words. The first-n-words and best-n-words are 
-   two methods of discovering the list.
-'''
+   This algorithm tries to measure the weight of each words in the email lists 
+   and attempts to create a list of n good words. The first-n-words and 
+   best-n-words are two methods of discovering the list.
+"""
+
 
 class GoodWord(Adversary):
-
     BEST_N = 'best_n'
     FIRST_N = 'first_n'
 
-    def __init__(self, n = 100, attack_model_type = BEST_N):
+    def __init__(self, n=100, attack_model_type=BEST_N):
         """
         :param n: number of words needed
         :param attack_model_type: choose the best-n or first-n algorithm
         """
         self.learn_model = None
-        self.positive_instance = None    # type: Instance
-        self.negative_instance = None    # type: Instance
+        self.positive_instance = None  # type: Instance
+        self.negative_instance = None  # type: Instance
         self.n = n
         self.num_queries = 0
         self.attack_model_type = attack_model_type
@@ -39,7 +38,8 @@ class GoodWord(Adversary):
             transformed_instance = deepcopy(instance)
             if instance.get_label() == learner.positive_classification:
                 transformed_instances.append(
-                    self.add_words_to_instance(transformed_instance, word_indices))
+                    self.add_words_to_instance(transformed_instance,
+                                               word_indices))
             else:
                 transformed_instances.append(transformed_instance)
         print('Number of queries issued:', self.num_queries)
@@ -66,21 +66,25 @@ class GoodWord(Adversary):
 
     def set_adversarial_params(self, learner, train_instances):
         self.learn_model = learner
-        instances = train_instances # type: List[Instance]
+        instances = train_instances  # type: List[Instance]
         self.positive_instance = next(
-            (x for x in instances if x.get_label() == learner.positive_classification),
+            (x for x in instances if
+             x.get_label() == learner.positive_classification),
             None
         )
         self.negative_instance = next(
-            (x for x in instances if x.get_label() == learner.negative_classification),
+            (x for x in instances if
+             x.get_label() == learner.negative_classification),
             None
         )
         self.feature_space = set()
         for instance in train_instances:
-          self.feature_space.update(instance.get_feature_vector())
+            self.feature_space.update(instance.get_feature_vector())
 
-    # This is a uniform adversarial cost function, should we add a weight parameter?
-    def feature_difference(self, y: BinaryFeatureVector, xa: BinaryFeatureVector) -> List:
+    # This is a uniform adversarial cost function, should we add a weight
+    # parameter?
+    def feature_difference(self, y: BinaryFeatureVector,
+                           xa: BinaryFeatureVector) -> List:
         y_array = y.get_csr_matrix()
         xa_array = xa.get_csr_matrix()
 
@@ -104,7 +108,7 @@ class GoodWord(Adversary):
         prev_message = None
         # loop until current message is classified as spam
         while (self.predict_and_record(curr_message) !=
-            learner.positive_classification):
+               learner.positive_classification):
 
             prev_message = deepcopy(curr_message)
             word_removed = False
@@ -122,7 +126,8 @@ class GoodWord(Adversary):
                     curr_message_words.add(index)
                     word_added = True
                     break
-            # curr_message and prev_message will not change for any more iterations
+            # curr_message and prev_message will not change for any more
+            # iterations
             if not word_added:
                 raise Exception('Could not find witness')
         return (curr_message, prev_message)
@@ -131,10 +136,12 @@ class GoodWord(Adversary):
         if not self.n: raise ValueError('Must specify n')
         negative_weight_word_indices = set()
         spam_message, _ = self.find_witness()
-        # use the feature vector of the negative instance just to iterate over all the indices in a
+        # use the feature vector of the negative instance just to iterate over
+        # all the indices in a
         # feature vector, the actual values do not matter
 
-        # this doesn't iterate over all possible features because of the current feature vector
+        # this doesn't iterate over all possible features because of the
+        # current feature vector
         # implementation
         for feature in self.feature_space:
             if spam_message.get_feature(feature) == 0:
@@ -144,20 +151,25 @@ class GoodWord(Adversary):
                     negative_weight_word_indices.add(feature)
                 if len(negative_weight_word_indices) == self.n:
                     return negative_weight_word_indices
-                # remove word from message so spam_message stays the same for each iteration
+                # remove word from message so spam_message stays the same for
+                # each iteration
                 spam_message.flip_bit(feature)
         return negative_weight_word_indices
 
     def best_n_words(self, spam_message, legit_message):
         barely_spam_message, barely_legit_message = self.find_witness()
-        positive_weight_word_indices = self.build_word_set(barely_legit_message, learner.positive_classification)
-        negative_weight_word_indices = self.build_word_set(barely_spam_message, learner.negative_classification)
+        positive_weight_word_indices = self.build_word_set(barely_legit_message,
+                                                           learner.positive_classification)
+        negative_weight_word_indices = self.build_word_set(barely_spam_message,
+                                                           learner.negative_classification)
         best_n_word_indices = set()
         iterations_without_change = 0
         max_iterations_without_change = 10
         for spammy_word_index in positive_weight_word_indices:
-            is_index_in_spam_msg = barely_spam_message.get_feature(spammy_word_index) == 1
-            if not is_index_in_spam_msg: barely_spam_message.flip_bit(spammy_word_index)
+            is_index_in_spam_msg = barely_spam_message.get_feature(
+                spammy_word_index) == 1
+            if not is_index_in_spam_msg: barely_spam_message.flip_bit(
+                spammy_word_index)
             small_weight_word_indices = self.build_word_set(
                 barely_spam_message,
                 learner.positive_classification,
@@ -168,11 +180,14 @@ class GoodWord(Adversary):
                 learner.negative_classification,
                 negative_weight_word_indices
             )
-            if not is_index_in_spam_msg: barely_spam_message.flip_bit(spammy_word_index)
+            if not is_index_in_spam_msg: barely_spam_message.flip_bit(
+                spammy_word_index)
 
-            if len(best_n_word_indices) + len(large_weight_word_indices) < self.n:
+            if len(best_n_word_indices) + len(
+                    large_weight_word_indices) < self.n:
                 negative_weight_word_indices = negative_weight_word_indices - large_weight_word_indices
-                best_n_word_indices = best_n_word_indices.union(large_weight_word_indices)
+                best_n_word_indices = best_n_word_indices.union(
+                    large_weight_word_indices)
                 if len(large_weight_word_indices) == 0:
                     iterations_without_change += 1
                 else:
@@ -185,14 +200,17 @@ class GoodWord(Adversary):
                     iterations_without_change = 0
 
             if iterations_without_change == max_iterations_without_change:
-                for i in range(min(self.n - len(best_n_word_indices), len(negative_weight_word_indices))):
+                for i in range(min(self.n - len(best_n_word_indices),
+                                   len(negative_weight_word_indices))):
                     best_n_word_indices.add(negative_weight_word_indices.pop())
                 return best_n_word_indices
         return best_n_word_indices
 
-    def build_word_set(self, message, intended_classification, indices_to_check = None):
+    def build_word_set(self, message, intended_classification,
+                       indices_to_check=None):
         # if no specific indices are passed in, defaults to checking every index
-        # build list of words by adding dictionary word to the message and sending it through
+        # build list of words by adding dictionary word to the message and
+        # sending it through
         # the filter
         indices_to_check = indices_to_check if indices_to_check != None else self.feature_space
         result = set()

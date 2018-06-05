@@ -1,7 +1,7 @@
 from adlib.learners.learner import learner
 from adlib.learners.models import sklearner
 from typing import Dict
-from data_reader.dataset import EmailDataset
+
 
 class SimpleLearner(learner):
     """Simple Learner for initial learning methods.
@@ -9,7 +9,7 @@ class SimpleLearner(learner):
     strategies.
     """
 
-    def __init__(self, model=None, training_instances = None):
+    def __init__(self, model=None, training_instances=None):
         learner.__init__(self)
         if model:
             self.set_model(model)
@@ -38,7 +38,7 @@ class SimpleLearner(learner):
     def predict_proba(self, testing_instances):
         return self.model.predict_proba(testing_instances)
 
-    def predict_log_proba(self,testing_instances):
+    def predict_log_proba(self, testing_instances):
         return self.model.predict_log_proba(testing_instances)
 
     def set_params(self, params: Dict):
@@ -46,7 +46,7 @@ class SimpleLearner(learner):
             self.model = self.set_model(params['model'])
 
     def get_weight(self):
-        weight= self.model.learner.coef_[0]
+        weight = self.model.learner.coef_[0]
         return weight
 
     def get_constant(self):

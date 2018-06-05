@@ -120,18 +120,18 @@ class SVMFreeRange(learner):
 
             """
         predictions = []
-        #list of instances
+        # list of instances
         if isinstance(instances, List):
             for instance in instances:
                 features = instance.get_feature_vector().get_csr_matrix().toarray()
                 predictions.append((int)(np.sign(self.predict_instance(features))))
-        #single instance
+        # single instance
         elif type(instances) == Instance:
             predictions = (int)(np.sign(self.predict_instance(
-            instances.get_feature_vector().get_csr_matrix().toarray())))
+                instances.get_feature_vector().get_csr_matrix().toarray())))
         else:
-        #email data set
-        #return a num if there is a single instance
+            # email data set
+            # return a num if there is a single instance
             for i in range(0, instances.features.shape[0]):
                 instance = instances.features[i, :].toarray()
                 predictions.append((int)(np.sign(self.predict_instance(instance))))
@@ -139,18 +139,17 @@ class SVMFreeRange(learner):
                 return predictions[0]
         return predictions
 
-
     def predict_instance(self, features: np.array):
         return self.weight_vector.dot(features.T)[0][0] + self.bias
 
     def predict_proba(self, instances):
         return self.predict(instances)
 
-    #correct???
-    #decision_function should be the distance to the hyperplane
+    # correct???
+    # decision_function should be the distance to the hyperplane
     def decision_function(self):
-        #determinant = np.linalg.det(self.weight_vector)
-        #return (self.weight_vector / determinant) * instance.T + self.bias / determinant
+        # determinant = np.linalg.det(self.weight_vector)
+        # return (self.weight_vector / determinant) * instance.T + self.bias / determinant
         return self.weight_vector, self.bias
 
     def get_weight(self):

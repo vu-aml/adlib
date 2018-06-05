@@ -3,7 +3,6 @@ from adlib.adversaries.feature_deletion import AdversaryFeatureDeletion
 from sklearn import svm
 from adlib.learners import SimpleLearner
 from data_reader.dataset import EmailDataset
-from data_reader.binary_input import Instance
 from data_reader.operations import load_dataset
 
 
@@ -47,7 +46,8 @@ def test_attack(feature_deletion, data):
     sample = data['testing_data'][0]
     num = sample.get_feature_vector().get_feature_count()
     for i in range(num):
-        assert result.get_feature_vector().get_feature(i) == sample.get_feature_vector().get_feature(i)
+        assert result.get_feature_vector().get_feature(
+            i) == sample.get_feature_vector().get_feature(i)
 
 
 def test_attack_different(feature_deletion, data):

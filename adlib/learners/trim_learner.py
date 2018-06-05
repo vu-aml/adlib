@@ -6,8 +6,8 @@
 
 from data_reader.binary_input import Instance
 from adlib.learners.learner import learner
-from adlib.learners.simple_learner import SimpleLearner
 from typing import Dict, List
+import cvxpy as cvx
 import numpy as np
 
 
@@ -17,20 +17,18 @@ class TRIM_Learner(learner):
     mentioned above.
     """
 
-    def __init__(self, base_learner: SimpleLearner, n: int, lda=0.1):
+    def __init__(self, training_instances, n: int, lda=0.1, verbose=True):
         learner.__init__(self)
-        self.base_learner = base_learner
+        self.training_instances = training_instances
         self.n = n
         self.lda = lda  # lambda
-        self.training_instances = base_learner.training_instances
-        self.num_features = base_learner.num_features
+        self.verbose = verbose
+        self.num_features = self.training_instances[0].get_feature_count()
 
     def train(self):
         """
         Train on the set of training instances.
         """
-
-        self.base_learner.train()
 
         # Create random sample of size self.n
         inst_set = []
@@ -42,11 +40,16 @@ class TRIM_Learner(learner):
                 if len(inst_set) == self.n:
                     break
 
+        fvs, labels = TRIM_Learner.get_fv_matrix_and_labels(inst_set)
+
+        # Calculate initial theta
+        w, b = self._minimize_loss(fvs, labels)
+
         old_loss = -1
         loss = 0
         while loss != old_loss:
-            fvs, labels = TRIM_Learner.get_fv_matrix_and_labels(inst_set)
-            loss_vector = self.base_learner.model.learner.decision_function(fvs)
+            # Calculate minimal set
+            loss_vector = fvs.dot(w) + b
             loss_vector -= labels
             loss_vector = list(map(lambda x: x ** 2, loss_vector))
 
@@ -57,30 +60,43 @@ class TRIM_Learner(learner):
 
             inst_set = list(map(lambda tup: tup[1], loss_tuples[:self.n]))
 
-            self.base_learner.training_instances = inst_set
-            self.base_learner.train()
+            # Minimize loss
+            fvs, labels = TRIM_Learner.get_fv_matrix_and_labels(inst_set)
+            w, b = self._minimize_loss(fvs, labels)
 
             old_loss = loss
             loss = self._calc_loss(inst_set)
 
-    def _calc_loss(self, inst_set: List[Instance]):
+    def _minimize_loss(self, fvs, labels):
+        # Setup variables and constants
+        w = cvx.Variable(fvs.shape[1])
+        b = cvx.Variable()
+
+        # Setup CVX problem
+        f_vector = []
+        for arr in fvs:
+            f_vector.append(sum(map(lambda x, y: x * y, w, arr)) + b)
+
+        loss = sum(map(lambda x, y: (x - y) ** 2, f_vector, labels))
+        loss /= fvs.shape[0]
+        loss += 0.5 * self.lda * (cvx.pnorm(w, 2) ** 2)
+
+        # Solve problem
+        prob = cvx.Problem(cvx.Minimize(loss), [])
+        prob.solve(verbose=self.verbose, parallel=True)
+
+        return np.array(w.value), b.value
+
+    def _calc_loss(self, fvs, labels, w, b):
         """
         Calculates the loss function as specified in the paper
         :param inst_set: the set of Instances
         :return: the loss
         """
 
-        w = self.base_learner.model.learner.decision_function(
-            np.eye(self.training_instances[0].get_feature_count()))
-        w -= self.base_learner.model.learner.intercept_[0]
-
         loss = 0.5 * self.lda * (np.linalg.norm(w) ** 2)
-        fvs, labels = TRIM_Learner.get_fv_matrix_and_labels(inst_set)
-
-        # Calculate loss
-        f_values = self.base_learner.model.learner.decision_function(fvs)
-        tmp = np.array(list(map(lambda x: x ** 2, f_values - labels)))
-        loss += (1 / self.n) * sum(tmp)
+        tmp = sum(map(lambda x, y: (x - y) ** 2, fvs.dot(w) + b, labels))
+        loss += tmp / fvs.shape[0]
 
         return loss
 

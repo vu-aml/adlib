@@ -5,7 +5,6 @@ from data_reader.operations import fv_equals
 from adlib.learners.simple_learner import SimpleLearner
 from sklearn.utils.validation import check_array, check_is_fitted
 import numpy as np
-from copy import deepcopy
 
 """
    Based on the Adversarial Classification By Nilesh Dalvi, 

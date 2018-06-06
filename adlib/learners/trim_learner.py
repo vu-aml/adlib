@@ -59,6 +59,9 @@ class TRIM_Learner(learner):
         old_loss = -1
         loss = 0
         while loss != old_loss:
+            if self.verbose:
+                print('Current loss:', loss)
+
             # Calculate minimal set
             loss_vector = fvs.dot(w) + b
             loss_vector -= labels
@@ -76,7 +79,7 @@ class TRIM_Learner(learner):
             w, b = self._minimize_loss(fvs, labels)
 
             old_loss = loss
-            loss = self._calc_loss(inst_set)
+            loss = self._calc_loss(fvs, labels, w, b)
 
         self.w = w
         self.b = b
@@ -106,7 +109,7 @@ class TRIM_Learner(learner):
         prob = cvx.Problem(cvx.Minimize(loss), [])
         prob.solve(verbose=self.verbose, parallel=True)
 
-        return np.array(w.value), b.value
+        return np.array(w.value).flatten(), b.value
 
     def _calc_loss(self, fvs, labels, w, b):
         """
@@ -128,7 +131,7 @@ class TRIM_Learner(learner):
         :return: label classifications (List(int))
         """
 
-        if not self.w or not self.b:
+        if self.w is None or self.b is None:
             raise ValueError('Must train learner before prediction.')
 
         fvs, _ = TRIM_Learner.get_fv_matrix_and_labels(instances)

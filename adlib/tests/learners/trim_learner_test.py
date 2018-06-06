@@ -45,12 +45,33 @@ def test_trim_learner():
     total_cost = 0.3 * len(training_data)  # flip around ~30% of the labels
     attacker = LabelFlipping(learner, cost, total_cost, num_iterations=2,
                              verbose=True)
+
+    print('###################################################################')
+    print('START label-flipping attack.\n')
+
     attack_data = attacker.attack(training_data)
+
+    print('\nEND label-flipping attack.')
+    print('###################################################################')
+    print()
 
     # Retrain the model with poisoned data
     learning_model = svm.SVC(probability=True, kernel='linear')
     learner = SimpleLearner(learning_model, attack_data)
     learner.train()
+
+    print('###################################################################')
+    print('START TRIM learner.\n')
+
+    # Train with TRIM learner
+    # We poisoned roughly 30% of the data, so 70% should be unpoisoned
+    trim_learner = TRIM_Learner(attack_data, int(0.7 * len(attack_data)),
+                                verbose=True)
+    trim_learner.train()
+
+    print('\nEND TRIM learner.')
+    print('###################################################################')
+    print()
 
     ############################################################################
     # Calculate statistics with training data
@@ -90,23 +111,20 @@ def test_trim_learner():
     ############################################################################
     # Calculate statistics with trim learner
 
-    # We poisoned roughly 30% of the data, so 70% should be unpoisoned
-    trim_learner = TRIM_Learner(training_data, int(0.7 * len(training_data)),
-                                verbose=True)
-    trim_learner.train()
+    data = training_data + testing_data
+    trim_pred_labels = trim_learner.predict(data)
+    normal_pred_labels = learner.predict(data)
 
-    trim_pred_labels = trim_learner.predict(training_data + testing_data)
-    normal_pred_labels = learner.predict(training_data + testing_data)
     (trim_percent_correct,
      normal_percent_correct,
      difference) = calculate_correct_percentages(trim_pred_labels,
                                                  normal_pred_labels,
-                                                 training_data + testing_data)
+                                                 data)
 
     print('###################################################################')
-    print('Predictions after using TRIM learner:')
-    print('Simple leraner correct percentage: ', normal_percent_correct, '%')
+    print('Predictions using TRIM learner:')
     print('TRIM learner percentage: ', trim_percent_correct, '%')
+    print('Simple learner correct percentage: ', normal_percent_correct, '%')
     print('Difference: ', difference, '%')
 
     print('\nEND TRIM learner test.')

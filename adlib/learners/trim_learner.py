@@ -70,7 +70,7 @@ class TRIM_Learner(learner):
             loss_tuples = []
             for i in range(len(loss_vector)):
                 loss_tuples.append((loss_vector[i], inst_set[i]))
-            loss_tuples.sort()
+            loss_tuples.sort(key=lambda x: x[0])  # sort using only first elem
 
             inst_set = list(map(lambda tup: tup[1], loss_tuples[:self.n]))
 
@@ -107,7 +107,7 @@ class TRIM_Learner(learner):
 
         # Solve problem
         prob = cvx.Problem(cvx.Minimize(loss), [])
-        prob.solve(verbose=self.verbose, parallel=True)
+        prob.solve(solver=cvx.SCS, verbose=self.verbose, parallel=True)
 
         return np.array(w.value).flatten(), b.value
 

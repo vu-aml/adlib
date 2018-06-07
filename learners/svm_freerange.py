@@ -142,19 +142,18 @@ class SVMFreeRange(learner):
                 return predictions[0]
         return predictions
 
-
-    def predict_instance(self, features: np.array):
-        return self.weight_vector.dot(features.T)[0] + self.bias
-
     def predict_proba(self, instances):
         return self.predict(instances)
 
-    #correct???
+    def predict_instance(self, instances: np.array):
+        return self.weight_vector.dot(instances.T)[0] + self.bias
+
     #decision_function should be the distance to the hyperplane
-    def decision_function(self):
-        #determinant = np.linalg.det(self.weight_vector)
-        #return (self.weight_vector / determinant) * instance.T + self.bias / determinant
-        return self.weight_vector, self.bias
+    def decision_function(self, instances):
+        predict_instances = self.weight_vector.dot(instances.T) + self.bias
+        norm = np.linalg.norm(self.weight_vector)
+        return predict_instances / norm
+
 
     def get_weight(self):
         return self.weight_vector

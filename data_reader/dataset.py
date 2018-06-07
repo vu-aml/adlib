@@ -231,18 +231,26 @@ class EmailDataset(Dataset):
                     serialize.writerow(instance)
         else:
             # TODO: throw exception if FileNotFoundError
-            data = np.genfromtxt(outfile, delimiter=',')
-            self.num_instances = data.shape[0]
-            labels = data[:, :1]
-            feats = data[:, 1:]
-            mask = ~np.isnan(feats)
-            col = feats[mask]
-            row = np.concatenate([np.ones_like(x)*i
-                                 for i, x in enumerate(feats)])[mask.flatten()]
-            features = csr_matrix((np.ones_like(col), (row, col)),
-                                  shape=(feats.shape[0],
-                                  int(np.max(feats[mask]))+1))
-            return np.squeeze(labels), features
+            if self.binary:
+                data = np.genfromtxt(outfile, delimiter=',')
+                self.num_instances = data.shape[0]
+                labels = data[:, :1]
+                feats = data[:, 1:]
+                mask = ~np.isnan(feats)
+                col = feats[mask]
+                row = np.concatenate([np.ones_like(x) * i
+                                      for i, x in enumerate(feats)])[mask.flatten()]
+                features = csr_matrix((np.ones_like(col), (row, col)),
+                                      shape=(feats.shape[0],
+                                             int(np.max(feats[mask])) + 1))
+                return np.squeeze(labels), features
+            else:
+                data = np.genfromtxt(outfile, delimiter=',')
+                self.num_instances = data.shape[0]
+                labels = data[:, :1]
+                feats = data[:, 1:]
+                features = csr_matrix(feats)
+                return np.squeeze(labels), features
 
     def _pickle(self, outfile, save=True):
         """A fast method for saving and loading datasets as python objects.

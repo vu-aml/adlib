@@ -96,5 +96,11 @@ class L_infSVM(learner):
         '''
         return int(np.sign(np.asscalar(features.dot(self.weight_vector)) + self.bias))
 
+    #decision_function should be the distance to the hyperplane
+    def decision_function(self, instances):
+        predict_instances = self.weight_vector.dot(instances.T) + self.bias
+        norm = np.linalg.norm(self.weight_vector)
+        return predict_instances / norm
+
     def get_weight(self):
         return np.asarray(self.weight_vector.T)[0]

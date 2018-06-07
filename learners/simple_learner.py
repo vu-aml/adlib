@@ -54,3 +54,6 @@ class SimpleLearner(learner):
 
     def get_constant(self):
         return self.model.learner.intercept_
+    
+    def decision_function(self, X):
+        return self.model.learner.decision_function(X)

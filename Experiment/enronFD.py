@@ -5,6 +5,7 @@ from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
 from adversaries.feature_deletion import AdversaryFeatureDeletion
 from sklearn import metrics
+from learners import FeatureDeletion
 
 #Passing
 
@@ -29,29 +30,40 @@ def summary(y_pred, y_true):
     return s
 
 
-dataset = EmailDataset(path='../data_reader/data/enron/index_dir',binary= False,raw=True)
-training_, testing_ = dataset.split(0.01)
-training_data = load_dataset(training_)
-testing_data = load_dataset(testing_)
+_dataset = EmailDataset(path='../data_reader/data/uci/uci_modified.csv', binary=False, raw=False)
+train_, test_ = _dataset.split(0.2)
+training_data = load_dataset(train_)
+testing_data = load_dataset(test_)
 test_true_label = [x.label for x in testing_data]
 
+# running feature deletion learner
+# the parameter should be altered by process arguments
+fd_learner = FeatureDeletion(training_data, params={'hinge_loss_multiplier': 3,
+                                    'max_feature_deletion': 25})
+fd_learner.train()
 
-#test simple learner svm
-learning_model = svm.SVC(probability=True, kernel='linear')
-learner1 = SVMFreeRange(training_instances=training_data)
-learner1.train()
-
-predictions = learner1.predict(testing_data)
+predictions = fd_learner.predict(testing_data)
+print("The classification before attack finishes.")
 print("======== initial prediction =========")
 print(summary(predictions, test_true_label))
 
 
-#test Restrained_attack
-attacker = AdversaryFeatureDeletion()
-attacker.set_adversarial_params(learner1, testing_data)
-new_testing_data = attacker.attack(testing_data)
+##test simple learner svm
+#learning_model = svm.SVC(probability=True, kernel='linear')
+#learner1 = SVMFreeRange(training_instances=training_data)
+#learner1.train()
 
-predictions2 = learner1.predict(new_testing_data)
-print("========= post-attack prediction =========")
-print(summary(predictions2, test_true_label))
+#predictions = learner1.predict(testing_data)
+#print("======== initial prediction =========")
+#print(summary(predictions, test_true_label))
+
+
+#test Restrained_attack
+#attacker = AdversaryFeatureDeletion()
+#attacker.set_adversarial_params(learner1, testing_data)
+#new_testing_data = attacker.attack(testing_data)
+
+#predictions2 = learner1.predict(new_testing_data)
+#print("========= post-attack prediction =========")
+#print(summary(predictions2, test_true_label))
 

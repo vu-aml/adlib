@@ -1,10 +1,11 @@
 import sys
+sys.path.append("/home/dingx/adlib/adlib")
 from sklearn import svm
 from learners import FeatureDeletion
 from timeit import default_timer as timer
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
-from adversaries.coordinate_greedy import CoordinateGreedy
+from adversaries.feature_deletion import AdversaryFeatureDeletion
 from sklearn import metrics
 from utils import save_result
 import multiprocessing
@@ -34,8 +35,8 @@ def single_run_list(y_pred, y_true):
     return result
 
 def run(par_map):
-    _dataset = EmailDataset(path='../data_reader/data/uci/uci_modified.csv', binary=False, raw=False)
-    train_,test_ = _dataset.split(0.2)
+    _dataset = EmailDataset(path='../data_reader/data/enron/10', binary=False, raw=True, max_features_=500)
+    train_,test_ = _dataset.split(0.7)
     training_data = load_dataset(train_)
     testing_data = load_dataset(test_)
     test_true_label = [x.label for x in testing_data]
@@ -54,7 +55,7 @@ def run(par_map):
 
     #test Restrained_attack
     a_start = timer()
-    attacker = CoordinateGreedy()
+    attacker = AdversaryFeatureDeletion()
     attacker.set_params(par_map)
     attacker.set_adversarial_params(fd_learner, testing_data)
     attacked_data = attacker.attack(testing_data)
@@ -87,10 +88,11 @@ def generate_interval(start, end, process_count, dtype=None, log=False):
 
 if __name__ == '__main__':
     param_path = sys.argv[1]
-    lst = generate_param_map(param_path,process_time=1)
-    pool = multiprocessing.Pool(processes=1)
+    return_path = sys.argv[2]
+    lst = generate_param_map(param_path,process_time=5)
+    pool = multiprocessing.Pool(processes=5)
     result = pool.map(run, lst)
     arr = np.array(result)
     data = pd.DataFrame(arr, columns = ["old_acc", "old_prec", "old_rec", "old_f1","learn_t",
                 "new_acc", "new_prec","new_rec", "new_f1","atk_t"])
-    data.to_csv("result2.csv", sep='\t', encoding='utf-8')
+    data.to_csv(return_path, sep='\t', encoding='utf-8')

@@ -23,7 +23,7 @@ def test_data_modification():
     dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400',
                            binary=False, raw=True)
 
-    training_data, predict_data = dataset.split({'train': 50, 'test': 50})
+    training_data, predict_data = dataset.split({'train': 35, 'test': 65})
     training_data = load_dataset(training_data)
     predict_data = load_dataset(predict_data)
 
@@ -51,7 +51,7 @@ def test_data_modification():
     target_theta = deepcopy(orig_theta)
 
     spam_instances = []
-    for inst in training_data:
+    for inst in training_data + predict_data:
         if inst.get_label() == 1:
             spam_instances.append(inst)
 

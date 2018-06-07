@@ -1,4 +1,5 @@
 import sys
+sys.path.append("/home/dingx/adlib/adlib")
 from sklearn import svm
 from learners import FeatureDeletion
 from timeit import default_timer as timer
@@ -25,17 +26,17 @@ def single_run_list(y_pred, y_true):
             tn += 1
         if y_true[idx] == -1 and y_true[idx] != y_pred[idx]:
             fp += 1
-    print (tp,fp,tn,fn)
+    print(tp,fp,tn,fn)
     acc = np.around(metrics.accuracy_score(y_true, y_pred), 3)
     prec = np.around(metrics.precision_score(y_true, y_pred), 3)
     rec = np.around(metrics.recall_score(y_true, y_pred), 3)
     f1 = np.around(metrics.f1_score(y_true, y_pred), 3)
-    result = [acc, prec, rec, f1]
+    result = [acc, prec, rec, f1,tp,fp,tn,fn]
     return result
 
 def run(par_map):
     _dataset = EmailDataset(path='../data_reader/data/uci/uci_modified.csv', binary=False, raw=False)
-    train_,test_ = _dataset.split(0.2)
+    train_,test_ = _dataset.split(0.8)
     training_data = load_dataset(train_)
     testing_data = load_dataset(test_)
     test_true_label = [x.label for x in testing_data]
@@ -71,12 +72,11 @@ def run(par_map):
     return ret
 
 
-def generate_param_map(param_path = "para", process_time=10):
-    with open(param_path, 'r') as para_file:
-        par_map= json.load(para_file)
+def generate_param_map(par_map, process_time=10):
     lst = []
-    for i in range(process_time):
-        lst.append(par_map)
+    for item in (par_map["param"]):
+       for i in range(process_time):
+               lst.append(item)
     return lst
 
 def generate_interval(start, end, process_count, dtype=None, log=False):
@@ -85,12 +85,35 @@ def generate_interval(start, end, process_count, dtype=None, log=False):
     return (np.linspace(start, end, process_count, dtype=dtype)).tolist()
 
 
+def generate_index(param_lst):
+    map = {}
+    num = 0
+    for item in param_lst:
+        title = "FD "+"H"+str(item["hinge_loss_multiplier"])+" F"+ str(
+            item["max_feature_deletion"])+ " CG"+" C"+str\
+            (item["max_change"])+ " L"+str(item["lambda_val"])
+        map[num] = title
+        num+=1
+    return map
+
+
 if __name__ == '__main__':
     param_path = sys.argv[1]
-    lst = generate_param_map(param_path,process_time=1)
-    pool = multiprocessing.Pool(processes=1)
+    data_path = sys.argv[2]
+    process_time = sys.argv[3]
+    with open(param_path, 'r') as para_file:
+        par_map= json.load(para_file)
+    total_time = len(par_map["param"]) * process_time
+
+    lst = generate_param_map(par_map,process_time)
+    pool = multiprocessing.Pool(processes=total_time)
+
     result = pool.map(run, lst)
     arr = np.array(result)
-    data = pd.DataFrame(arr, columns = ["old_acc", "old_prec", "old_rec", "old_f1","learn_t",
-                "new_acc", "new_prec","new_rec", "new_f1","atk_t"])
-    data.to_csv("result2.csv", sep='\t', encoding='utf-8')
+    data = pd.DataFrame(arr, columns = ["old_acc", "old_prec", "old_rec", "old_f1",
+                                        "old_tp","old_fp","old_tn","old_fn","learn_t",
+                                        "new_acc", "new_prec","new_rec", "new_f1",
+                                         "tp","fp","tn","fn","atk_t"])
+    data.rename(index=generate_index(lst))
+    data.to_csv(data_path, sep='\t', encoding='utf-8')
+    #data.to_excel(data_path)

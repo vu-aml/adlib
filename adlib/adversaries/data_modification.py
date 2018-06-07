@@ -120,7 +120,7 @@ class DataModification(Adversary):
 
         for i, row in enumerate(self.fvs):
             for j, val in enumerate(row):
-                if val[0] < 0:
+                if val < 0:
                     self.fvs[i][j] = 0
 
     def _calculate_constants(self):

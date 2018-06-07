@@ -4,7 +4,8 @@
 # Matthew Sedam
 
 from adlib.adversaries.adversary import Adversary
-from data_reader.binary_input import BinaryFeatureVector, Instance
+from data_reader.binary_input import Instance
+from data_reader.real_input import RealFeatureVector
 from copy import deepcopy
 from typing import List, Dict
 import math
@@ -19,7 +20,7 @@ class DataModification(Adversary):
     """
 
     def __init__(self, learner, target_theta, lda=0.001, alpha=1e-3, beta=0.05,
-                 max_iter=2000, verbose=False):
+                 max_iter=1000, verbose=False):
         """
         :param learner: the trained learner
         :param target_theta: the theta value of which to target
@@ -67,7 +68,7 @@ class DataModification(Adversary):
         fv_dist = 0.0
         theta_dist = np.linalg.norm(self.theta - self.target_theta)
         iteration = 0
-        while (iteration == 0 or (theta_dist > self.alpha and
+        while (iteration == 0 or (fv_dist > self.alpha and
                                   iteration < self.max_iter)):
 
             print('Iteration: ', iteration, ' - FV distance: ', fv_dist,
@@ -99,28 +100,28 @@ class DataModification(Adversary):
                   self.theta, '\n')
 
         # Go from floating-point values in [0, 1] to integers in {0, 1}
-        for i in range(len(self.fvs)):
+        for fv in self.fvs:
             indices = []
-            for j in range(len(self.fvs[i])):
-                if self.fvs[i][j] >= 0.5:
-                    indices.append(j)
-            self.return_instances[i].feature_vector = BinaryFeatureVector(
-                self.return_instances[i].get_feature_count(), indices)
+            data = []
+            for i, val in enumerate(fv):
+                if val != 0:
+                    indices.append(i)
+                    data.append(val)
+
+            self.return_instances[i].feature_vector = RealFeatureVector(
+                self.return_instances[i].get_feature_count(), indices, data)
 
         return self.return_instances
 
     def _project_fvs(self):
         """
-        Transform all feature vectors in self.fvs from having elements in the
-        interval [MIN, MAX] to the interval [0, 1]
+        Transforms all values in self.fvs to have non-negative values
         """
 
-        pool = mp.Pool(mp.cpu_count())
-        self.fvs = pool.map(self.project_feature_vector, self.fvs.tolist())
-        pool.close()
-        pool.join()
-
-        self.fvs = np.array(self.fvs)
+        for i, row in enumerate(self.fvs):
+            for j, val in enumerate(row):
+                if val[0] < 0:
+                    self.fvs[i][j] = 0
 
     def _calculate_constants(self):
         """
@@ -130,15 +131,12 @@ class DataModification(Adversary):
         # Calculate feature vectors
         self.fvs = []
         for i in range(len(self.instances)):
-            feature_vector = self.instances[i].get_feature_vector()
-            tmp = []
-            for j in range(self.instances[0].get_feature_count()):
-                if feature_vector.get_feature(j) == 1:
-                    tmp.append(1)
-                else:
-                    tmp.append(0)
-            tmp = np.array(tmp)
-            self.fvs.append(tmp)
+            fv = self.instances[i].get_feature_vector().get_csr_matrix()
+            fv = np.array(fv.todense().tolist()).flatten()
+            self.fvs.append(fv)
+            print(
+                fv.shape)  ############################################################
+
         self.fvs = np.array(self.fvs, dtype='float64')
         self.orig_fvs = deepcopy(self.fvs)
         self.old_fvs = deepcopy(self.fvs)
@@ -268,29 +266,6 @@ class DataModification(Adversary):
                              self.labels[i] if j == k else 0))
 
     @staticmethod
-    def project_feature_vector(fv):
-        """
-        Projects a single feature vector from having elements in the interval
-        [MIN, MAX] to the interval [0, 1] if necessary
-        :param fv: the feature vector
-        :return: the projected feature vector
-        """
-
-        fv = np.array(fv)
-        min_val = np.min(fv)
-        max_val = np.max(fv)
-        distance = max_val - min_val
-
-        if distance > 0 and (min_val < 0 or max_val > 1):
-            def transformation(x):
-                return (x - min_val) / distance
-
-            for i in range(len(fv)):
-                fv[i] = transformation(fv[i])
-
-        return fv
-
-    @staticmethod
     def fuzz_matrix(matrix: np.ndarray):
         """
         Add to every entry of matrix some noise to make it non-singular.
@@ -350,3 +325,4 @@ class DataModification(Adversary):
 
     def set_adversarial_params(self, learner, train_instances):
         self.learner = learner
+        self.instances = train_instances

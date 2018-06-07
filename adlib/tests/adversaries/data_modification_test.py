@@ -12,7 +12,6 @@ from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
 from sklearn import svm
 import numpy as np
-import pytest
 
 
 def test_data_modification():
@@ -22,9 +21,11 @@ def test_data_modification():
     # Data processing unit
     # The path is an index of 400 testing samples(raw email data).
     dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400',
-                           binary=True, raw=True)
-    training_data = load_dataset(dataset)
-    predict_data = training_data
+                           binary=False, raw=True)
+
+    training_data, predict_data = dataset.split({'train': 50, 'test': 50})
+    training_data = load_dataset(training_data)
+    predict_data = load_dataset(predict_data)
 
     # Setting the default learner
     # Test simple learner svm
@@ -57,10 +58,11 @@ def test_data_modification():
     spam_features, _ = get_spam_features(spam_instances)
 
     # Set features to recognize spam as ham
+    mean = np.mean(orig_theta)
+    mean = mean if mean > 0 else 0
+    std = np.std(orig_theta)
     for index in spam_features:
-        target_theta[index] = (-1 * target_theta[index]
-                               if target_theta[index] > 0
-                               else target_theta[index])
+        target_theta[index] = -1 * (mean + 3 * std)
 
     print('Features selected: ', np.array(spam_features))
     print('Number of features: ', len(spam_features))
@@ -145,7 +147,7 @@ def get_spam_features(instances, p=0.9):
     for i in range(instances[0].get_feature_count()):
         count = 0
         for inst in instances:
-            count += 1 if inst.get_feature_vector().get_feature(i) == 1 else 0
+            count += 1 if inst.get_feature_vector().get_feature(i) > 0 else 0
 
         if (count / len(instances)) >= p:
             spam_features.append(i)

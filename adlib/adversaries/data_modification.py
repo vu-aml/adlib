@@ -19,14 +19,16 @@ class DataModification(Adversary):
     feature vectors.
     """
 
-    def __init__(self, learner, target_theta, lda=0.001, alpha=1e-3, beta=0.1,
-                 decay=-1, max_iter=300, verbose=False):
+    def __init__(self, learner, target_theta, lda=0.001, alpha=1e-3, beta=0.05,
+                 decay=-1, eta=0.9, max_iter=150, verbose=False):
         """
         :param learner: the trained learner
         :param target_theta: the theta value of which to target
         :param lda: lambda - implies importance of cost
         :param alpha: convergence condition (diff <= alpha)
         :param beta: learning rate - will be divided by size of input
+        :param decay: the decay rate of the learning rate
+        :param eta: the momentum rate
         :param max_iter: maximum iterations
         :param verbose: if True, will print gradient for each iteration
         """
@@ -38,6 +40,7 @@ class DataModification(Adversary):
         self.alpha = alpha
         self.beta = beta
         self.decay = self.beta / max_iter if decay < 0 else decay
+        self.eta = eta
         self.max_iter = max_iter
         self.verbose = verbose
         self.instances = None
@@ -69,6 +72,7 @@ class DataModification(Adversary):
         fv_dist = 0.0
         theta_dist = np.linalg.norm(self.theta - self.target_theta)
         iteration = 0
+        old_update_vector = 0
         while (iteration == 0 or (fv_dist > self.alpha and
                                   iteration < self.max_iter)):
 
@@ -76,13 +80,15 @@ class DataModification(Adversary):
                   ' - theta distance: ', theta_dist, ' - beta: ', self.beta,
                   sep='')
 
-            # Gradient descent
+            # Gradient descent with momentum
             gradient = self._calc_gradient()
 
             if self.verbose:
                 print('\nGradient:\n', gradient, sep='')
 
-            self.fvs -= (gradient * self.beta)
+            update_vector = (self.eta * old_update_vector +
+                             (1 - self.eta) * gradient)
+            self.fvs -= self.beta * update_vector
             self._project_fvs()
 
             if self.verbose:
@@ -94,6 +100,7 @@ class DataModification(Adversary):
             theta_dist = np.linalg.norm(self.theta - self.target_theta)
             self.old_fvs = deepcopy(self.fvs)
             self.beta *= 1 / (1 + self.decay * iteration)
+            old_update_vector = deepcopy(update_vector)
 
             iteration += 1
 
@@ -297,6 +304,10 @@ class DataModification(Adversary):
             self.alpha = params['alpha']
         if params['beta'] is not None:
             self.beta = params['beta']
+        if params['decay'] is not None:
+            self.decay = params['decay']
+        if params['eta'] is not None:
+            self.eta = params['eta']
         if params['max_iter'] is not None:
             self.max_iter = params['max_iter']
         if params['verbose'] is not None:
@@ -320,6 +331,8 @@ class DataModification(Adversary):
                   'lda': self.lda,
                   'alpha': self.alpha,
                   'beta': self.beta,
+                  'decay': self.decay,
+                  'eta': self.eta,
                   'max_iter': self.max_iter,
                   'verbose': self.verbose}
         return params

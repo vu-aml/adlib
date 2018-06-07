@@ -19,8 +19,8 @@ class DataModification(Adversary):
     feature vectors.
     """
 
-    def __init__(self, learner, target_theta, lda=0.001, alpha=1e-3, beta=0.05,
-                 max_iter=1000, verbose=False):
+    def __init__(self, learner, target_theta, lda=0.001, alpha=1e-3, beta=0.1,
+                 decay=-1, max_iter=300, verbose=False):
         """
         :param learner: the trained learner
         :param target_theta: the theta value of which to target
@@ -37,6 +37,7 @@ class DataModification(Adversary):
         self.lda = lda
         self.alpha = alpha
         self.beta = beta
+        self.decay = self.beta / max_iter if decay < 0 else decay
         self.max_iter = max_iter
         self.verbose = verbose
         self.instances = None
@@ -72,7 +73,8 @@ class DataModification(Adversary):
                                   iteration < self.max_iter)):
 
             print('Iteration: ', iteration, ' - FV distance: ', fv_dist,
-                  ' - theta distance: ', theta_dist, sep='')
+                  ' - theta distance: ', theta_dist, ' - beta: ', self.beta,
+                  sep='')
 
             # Gradient descent
             gradient = self._calc_gradient()
@@ -88,6 +90,7 @@ class DataModification(Adversary):
             fv_dist = np.linalg.norm(self.fvs - self.old_fvs)
             theta_dist = np.linalg.norm(self.theta - self.target_theta)
             self.old_fvs = deepcopy(self.fvs)
+            self.beta *= 1 / (1 + self.decay * iteration)
 
             iteration += 1
 
@@ -155,9 +158,6 @@ class DataModification(Adversary):
             DataModification.logistic_function(self.labels[i] * self.g_arr[i])
             for i in range(len(self.instances))]
         self.logistic_vals = np.array(self.logistic_vals)
-
-        # Calculate beta relative to size of input
-        self.beta /= self.fvs.shape[1]
 
     def _calc_theta(self):
         """

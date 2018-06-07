@@ -100,7 +100,7 @@ def generate_index(param_lst):
 if __name__ == '__main__':
     param_path = sys.argv[1]
     data_path = sys.argv[2]
-    process_time = sys.argv[3]
+    process_time = int(sys.argv[3])
     with open(param_path, 'r') as para_file:
         par_map= json.load(para_file)
     total_time = len(par_map["param"]) * process_time

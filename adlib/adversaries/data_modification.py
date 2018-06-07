@@ -134,8 +134,6 @@ class DataModification(Adversary):
             fv = self.instances[i].get_feature_vector().get_csr_matrix()
             fv = np.array(fv.todense().tolist()).flatten()
             self.fvs.append(fv)
-            print(
-                fv.shape)  ############################################################
 
         self.fvs = np.array(self.fvs, dtype='float64')
         self.orig_fvs = deepcopy(self.fvs)

@@ -80,10 +80,13 @@ class DataModification(Adversary):
             gradient = self._calc_gradient()
 
             if self.verbose:
-                print('\nGRADIENT\n', gradient, '\n', sep='')
+                print('\nGradient:\n', gradient, '\n', sep='')
 
             self.fvs -= (gradient * self.beta)
             self._project_fvs()
+
+            if self.verbose:
+                print('\nFeature Vectors:\n', self.fvs, '\n', sep='')
 
             # Update variables
             self._calc_theta()
@@ -96,10 +99,10 @@ class DataModification(Adversary):
 
         print('Iteration: FINAL - FV distance: ', fv_dist,
               ' - theta distance: ', theta_dist, ' - alpha: ', self.alpha,
-              ' - beta: ', self.beta, sep='')
+              ' - beta: ', self.beta, '\n', sep='')
 
         if self.verbose:
-            print('\nTarget Theta:\n', self.target_theta, '\n\nTheta:\n',
+            print('\n\nTarget Theta:\n\n', self.target_theta, '\n\nTheta:\n\n',
                   self.theta, '\n')
 
         # Go from floating-point values in [0, 1] to integers in {0, 1}

@@ -4,7 +4,8 @@
 # Matthew Sedam
 
 from adlib.adversaries.adversary import Adversary
-from adlib.adversaries.data_modification import DataModification
+from adlib.adversaries.datamodification.data_modification import \
+    DataModification
 from data_reader.binary_input import Instance
 from data_reader.binary_input import BinaryFeatureVector
 import math

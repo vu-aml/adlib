@@ -10,6 +10,7 @@ from copy import deepcopy
 from typing import List, Dict
 import math
 import numpy as np
+import os
 import pathos.multiprocessing as mp
 
 
@@ -80,6 +81,8 @@ class DataModification(Adversary):
                   ' - theta distance: ', theta_dist, ' - beta: ', self.beta,
                   sep='')
 
+            self._write_to_file()
+
             # Gradient descent with momentum
             gradient = self._calc_gradient()
 
@@ -101,6 +104,8 @@ class DataModification(Adversary):
             self.old_fvs = deepcopy(self.fvs)
             self.beta *= 1 / (1 + self.decay * iteration)
             old_update_vector = deepcopy(update_vector)
+
+            self._cleanup_files()
 
             iteration += 1
 
@@ -126,6 +131,26 @@ class DataModification(Adversary):
                 feature_count, indices, data)
 
         return self.return_instances
+
+    def _write_to_file(self):
+        """
+        Writes matrices and vectors to a file for the fast binary processor
+        """
+
+        np.savetxt('./fvs.txt', self.fvs)
+        np.savetxt('./logistic_vals.txt', self.logistic_vals)
+        np.savetxt('./theta.txt', self.theta)
+        np.savetxt('./labels.txt', self.labels)
+
+    def _cleanup_files(self):
+        """
+        Removes unused temporary files
+        """
+
+        os.remove('./fvs.txt')
+        os.remove('./logistic_vals.txt')
+        os.remove('./theta.txt')
+        os.remove('./labels.txt')
 
     def _project_fvs(self):
         """

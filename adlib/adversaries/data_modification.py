@@ -113,16 +113,17 @@ class DataModification(Adversary):
                   self.theta, '\n')
 
         # Go from floating-point values in [0, 1] to integers in {0, 1}
-        for fv in self.fvs:
+        feature_count = self.fvs.shape[1]
+        for i, fv in enumerate(self.fvs):
             indices = []
             data = []
-            for i, val in enumerate(fv):
+            for j, val in enumerate(fv):
                 if val != 0:
-                    indices.append(i)
+                    indices.append(j)
                     data.append(val)
 
             self.return_instances[i].feature_vector = RealFeatureVector(
-                self.return_instances[i].get_feature_count(), indices, data)
+                feature_count, indices, data)
 
         return self.return_instances
 

@@ -54,7 +54,6 @@ class DataModification(Adversary):
         self.labels = None  # array of labels of the instances
         self.logistic_vals = None
         self.risk_gradient = None
-        self.statistics_vector = None  # tuples of (mean, std. dev.) of self.fvs
 
     def attack(self, instances) -> List[Instance]:
         """
@@ -82,17 +81,14 @@ class DataModification(Adversary):
                   sep='')
 
             # Gradient descent with momentum
-            self._standardize_fvs()  # Standardize before gradient calculation
-
             gradient = self._calc_gradient()
+
             if self.verbose:
                 print('\nGradient:\n', gradient, sep='')
 
             update_vector = (self.eta * old_update_vector +
                              (1 - self.eta) * gradient)
             self.fvs -= self.beta * update_vector
-
-            self._unstandardize_fvs()  # Un-standardize after gradient is added
             self._project_fvs()
 
             if self.verbose:
@@ -140,29 +136,6 @@ class DataModification(Adversary):
             for j, val in enumerate(row):
                 if val < 0:
                     self.fvs[i][j] = 0
-
-    def _standardize_fvs(self):
-        """
-        Standardizes self.fvs
-        """
-
-        self.statistics_vector = []
-        for i, fv in enumerate(self.fvs):
-            mean = np.mean(fv)
-            std = np.std(fv)
-            self.fvs[i] -= mean
-            self.fvs[i] /= std if std > 0 else 1
-
-            self.statistics_vector.append((mean, std))
-
-    def _unstandardize_fvs(self):
-        """
-        Un-standardizes self.fvs
-        """
-
-        for i, fv in enumerate(self.fvs):
-            self.fvs[i] *= self.statistics_vector[i][1]  # mul by std
-            self.fvs[i] += self.statistics_vector[i][0]  # add mean
 
     def _calculate_constants(self):
         """
@@ -352,7 +325,6 @@ class DataModification(Adversary):
         self.labels = None
         self.logistic_vals = None
         self.risk_gradient = None
-        self.statistics_vector = None
 
     def get_available_params(self):
         params = {'learner': self.learner,

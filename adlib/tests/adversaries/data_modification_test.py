@@ -55,14 +55,14 @@ def test_data_modification():
         if inst.get_label() == 1:
             spam_instances.append(inst)
 
-    spam_features, _ = get_spam_features(spam_instances)
+    spam_features, ham_features = get_spam_features(spam_instances)
 
     # Set features to recognize spam as ham
-    mean = np.mean(orig_theta)
-    mean = mean if mean > 0 else 0
-    std = np.std(orig_theta)
     for index in spam_features:
-        target_theta[index] = -1 * (mean + 3 * std)
+        target_theta[index] = -1
+
+    for index in ham_features:
+        target_theta[index] = 1
 
     print('Features selected: ', np.array(spam_features))
     print('Number of features: ', len(spam_features))

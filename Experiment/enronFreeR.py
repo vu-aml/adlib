@@ -47,7 +47,7 @@ print(summary(predictions, test_true_label))
 
 
 #test Restrained_attack
-attacker = FreeRange(0.1)
+attacker = FreeRange(0.1,manual_bound=False)
 attacker.set_adversarial_params(learner1, testing_data)
 new_testing_data = attacker.attack(testing_data)
 

@@ -44,7 +44,7 @@ class FreeRange(Adversary):
     def set_adversarial_params(self, learn_model, train_instances: List[Instance]):
         self.learn_model = learn_model
         self.num_features = train_instances[0].get_feature_count()
-        if self.manual:
+        if not self.manual:
             self.set_boundaries(train_instances)
 
     def set_params(self, params: Dict):
@@ -115,8 +115,8 @@ class FreeRange(Adversary):
             for i in range(0, self.num_features):
                 xij = instance.get_feature_vector().get_feature(i)
                 if not self.manual:
-                    lower_bound = self.f_attack * (self.x_min.get_feature(i) - xij)
-                    upper_bound = self.f_attack * (self.x_max.get_feature(i) - xij)
+                    lower_bound = self.f_attack * (self.x_min[i] - xij)
+                    upper_bound = self.f_attack * (self.x_max[i] - xij)
                 else:
                     lower_bound = self.f_attack * (self.xj_min - xij)
                     upper_bound = self.f_attack * (self.xj_max - xij)

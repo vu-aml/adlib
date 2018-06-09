@@ -12,6 +12,7 @@ import math
 import numpy as np
 import os
 import pathos.multiprocessing as mp
+import platform
 
 
 class DataModification(Adversary):
@@ -55,6 +56,7 @@ class DataModification(Adversary):
         self.labels = None  # array of labels of the instances
         self.logistic_vals = None
         self.risk_gradient = None
+        self.system = platform.system()
 
     def attack(self, instances) -> List[Instance]:
         """
@@ -213,14 +215,46 @@ class DataModification(Adversary):
 
         self.risk_gradient = self.theta - self.target_theta
 
-        pool = mp.Pool(mp.cpu_count())
-        matrices_1 = pool.map(self._calc_partial_f_partial_capital_d,
-                              range(len(self.instances)))
-        pool.close()
-        pool.join()
-        matrices_1 = np.array(matrices_1)
+        command_fail = True
+        if self.system == 'Darwin' or self.system == 'Linux':
+            command = './adlib/adversaries/datamodification/dm-gradient-'
+            command += 'macos' if self.system == 'Darwin' else 'linux'
+            command += (' ' + str(self.lda) + ' ' + str(self.fvs.shape[0]) +
+                        ' ' + str(self.fvs.shape[1]))
 
-        matrix_2 = self._calc_partial_f_partial_theta()
+            if os.system(command) == 0:  # Command exited correctly
+                with open('./partial_f_partial_capital_d.txt') as file:
+                    tmp = []
+                    for line in file:
+                        matrix = list(map(lambda x: float(x), list(
+                            filter(lambda x: x != '', line[:-1].split(' ')))))
+                        matrix = np.array(matrix)
+                        matrix.shape = (self.fvs.shape[1], self.fvs.shape[1])
+                        tmp.append(matrix)
+                matrices_1 = np.array(tmp)
+
+                with open('./partial_f_partial_theta.txt') as file:
+                    tmp = []
+                    for line in file:
+                        tmp.append(list(map(lambda x: float(x), list(
+                            filter(lambda x: x != '', line[:-1].split(' '))))))
+                matrix_2 = np.array(tmp)
+
+                os.remove('./partial_f_partial_capital_d.txt')
+                os.remove('./partial_f_partial_theta.txt')
+
+                command_fail = False
+
+        if command_fail:
+            pool = mp.Pool(mp.cpu_count())
+            matrices_1 = pool.map(self._calc_partial_f_partial_capital_d,
+                                  range(len(self.instances)))
+            pool.close()
+            pool.join()
+
+            matrices_1 = np.array(matrices_1)
+            matrix_2 = self._calc_partial_f_partial_theta()
+
         #  self.fuzz_matrix(matrix_2)
 
         try:
@@ -350,6 +384,7 @@ class DataModification(Adversary):
         self.labels = None
         self.logistic_vals = None
         self.risk_gradient = None
+        self.system = platform.system()
 
     def get_available_params(self):
         params = {'learner': self.learner,

@@ -22,7 +22,7 @@ class DataModification(Adversary):
     """
 
     def __init__(self, learner, target_theta, lda=0.001, alpha=1e-3, beta=0.05,
-                 decay=-1, eta=0.9, max_iter=100, verbose=False):
+                 decay=-1, eta=0.9, max_iter=250, verbose=False):
         """
         :param learner: the trained learner
         :param target_theta: the theta value of which to target

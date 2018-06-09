@@ -24,7 +24,7 @@ def test_data_modification():
     dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400',
                            binary=False, raw=True)
 
-    training_data, predict_data = dataset.split({'train': 35, 'test': 65})
+    training_data, predict_data = dataset.split({'train': 50, 'test': 50})
     training_data = load_dataset(training_data)
     predict_data = load_dataset(predict_data)
 
@@ -63,7 +63,7 @@ def test_data_modification():
         target_theta[index] = -1
 
     for index in ham_features:
-        target_theta[index] = 1
+        target_theta[index] = 0.1
 
     print('Features selected: ', np.array(spam_features))
     print('Number of features: ', len(spam_features))

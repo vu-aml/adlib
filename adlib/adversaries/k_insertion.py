@@ -26,7 +26,7 @@ class KInsertion(Adversary):
     """
 
     def __init__(self, learner, poison_instance, alpha=1e-4, beta=0.05,
-                 decay=-1, max_iter=2000, number_to_add=10, verbose=False):
+                 decay=-1, max_iter=250, number_to_add=10, verbose=False):
 
         """
         :param learner: the trained learner
@@ -85,13 +85,8 @@ class KInsertion(Adversary):
         self.poison_loss_before = self._calc_inst_loss(self.poison_instance)
 
         for k in range(self.number_to_add):
-            # x is the full feature vector of the instance to be added
-            # self.x = np.random.normal(np.mean(self.fvs), np.std(self.fvs),
-            #                           instances[0].get_feature_count())
-            self.x = np.full(instances[0].get_feature_count(), 1,
-                             dtype='float64')
-            # self.x = np.array(list(map(lambda x: 0 if x < 0 else x,
-            #                            self.x)))
+            self.x = np.full(instances[0].get_feature_count(),
+                             np.mean(self.fvs), dtype='float64')
             self.y = -1 if np.random.binomial(1, 0.5, 1)[0] == 0 else 1
             self._generate_inst()
 
@@ -101,8 +96,8 @@ class KInsertion(Adversary):
             old_x = deepcopy(self.x)
             fv_dist = 0.0
             iteration = 0
-            while (iteration == 0 or (fv_dist > self.alpha and
-                                      iteration < self.max_iter)):
+            while (iteration < 5 or (fv_dist > self.alpha and
+                                     iteration < self.max_iter)):
 
                 print('Iteration: ', iteration, ' - FV distance: ', fv_dist,
                       ' - beta: ', self.beta, sep='')

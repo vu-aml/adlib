@@ -4,15 +4,16 @@
 # Matthew Sedam
 
 from adlib.adversaries.adversary import Adversary
-from adlib.adversaries.datamodification.data_modification import \
-    DataModification
 from data_reader.binary_input import Instance
-from data_reader.binary_input import BinaryFeatureVector
+from data_reader.real_input import RealFeatureVector
 import math
 import multiprocessing as mp
 import numpy as np
 from copy import deepcopy
 from typing import List, Dict
+
+
+# TODO: Update vars in __init__ and misc. functions
 
 
 class KInsertion(Adversary):
@@ -115,7 +116,8 @@ class KInsertion(Adversary):
                 grad_norm = np.linalg.norm(gradient)
 
                 self.x = self.x - self.beta * gradient
-                self.x = DataModification.project_feature_vector(self.x)
+                self.x = np.array(list(map(lambda x: 0 if x < 0 else x,
+                                           self.x)))
                 self._generate_inst()
                 self.instances = self.instances[:-1]
                 self.fvs = self.fvs[:-1]
@@ -146,15 +148,9 @@ class KInsertion(Adversary):
         # Calculate feature vectors
         self.fvs = []
         for i in range(len(self.instances)):
-            feature_vector = self.instances[i].get_feature_vector()
-            tmp = []
-            for j in range(self.instances[0].get_feature_count()):
-                if feature_vector.get_feature(j) == 1:
-                    tmp.append(1)
-                else:
-                    tmp.append(0)
-            tmp = np.array(tmp)
-            self.fvs.append(tmp)
+            fv = self.instances[i].get_feature_vector().get_csr_matrix()
+            fv = np.array(fv.todense().tolist()).flatten()
+            self.fvs.append(fv)
         self.fvs = np.array(self.fvs, dtype='float64')
 
         # Calculate labels
@@ -170,13 +166,8 @@ class KInsertion(Adversary):
         :return: the logistic loss
         """
 
-        fv = []
-        for i in range(inst.get_feature_count()):
-            if inst.get_feature_vector().get_feature(i) == 1:
-                fv.append(1)
-            else:
-                fv.append(0)
-        fv = np.array(fv)
+        fv = inst.get_feature_vector().get_csr_matrix()
+        fv = np.array(fv.todense().tolist()).flatten()
 
         # reshape is for the decision function when inputting only one sample
         loss = self.learner.model.learner.decision_function(fv.reshape(1, -1))
@@ -191,14 +182,16 @@ class KInsertion(Adversary):
                  and label self.y
         """
 
-        indices_list = []
-        for i in range(len(self.x)):
-            if self.x[i] >= 0.5:
-                indices_list.append(i)
+        indices = []
+        data = []
+        for i, val in enumerate(self.x):
+            if val != 0:
+                indices.append(i)
+                data.append(val)
 
         # Generate new instance
-        self.inst = Instance(self.y,
-                             BinaryFeatureVector(len(self.x), indices_list))
+        fv = RealFeatureVector(len(self.x), indices, data)
+        self.inst = Instance(self.y, fv)
 
     def _calc_gradient(self):
         """

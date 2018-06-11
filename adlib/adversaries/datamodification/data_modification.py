@@ -125,7 +125,7 @@ class DataModification(Adversary):
             print('\n\nTarget Theta:\n\n', self.target_theta, '\n\nTheta:\n\n',
                   self.theta, '\n')
 
-        # Go from floating-point values in [0, 1] to integers in {0, 1}
+        # Build appropriate RealFeatureVectors
         feature_count = self.fvs.shape[1]
         for i, fv in enumerate(self.fvs):
             indices = []

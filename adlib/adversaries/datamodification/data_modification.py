@@ -13,6 +13,7 @@ import numpy as np
 import os
 import pathos.multiprocessing as mp
 import platform
+import time
 
 
 class DataModification(Adversary):
@@ -83,6 +84,8 @@ class DataModification(Adversary):
                   ' - theta distance: ', theta_dist, ' - beta: ', self.beta,
                   sep='')
 
+            begin = time.time()
+
             self._write_to_file()
 
             # Gradient descent with momentum
@@ -108,6 +111,9 @@ class DataModification(Adversary):
             old_update_vector = deepcopy(update_vector)
 
             self._cleanup_files()
+
+            end = time.time()
+            print('TIME: ', end - begin, 's', sep='')
 
             iteration += 1
 

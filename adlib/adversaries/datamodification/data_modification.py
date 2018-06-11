@@ -22,7 +22,7 @@ class DataModification(Adversary):
     feature vectors.
     """
 
-    def __init__(self, learner, target_theta, lda=0.001, alpha=1e-3, beta=0.05,
+    def __init__(self, learner, target_theta, lda=0.001, alpha=1e-6, beta=0.05,
                  decay=-1, eta=0.9, max_iter=250, verbose=False):
         """
         :param learner: the trained learner

@@ -74,6 +74,8 @@ class KInsertion(Adversary):
         self.instances = self.orig_instances
         self.beta /= instances[0].get_feature_count()  # scale beta
         self.learner.training_instances = self.instances
+        self._calculate_constants()
+
         learner = self.learner.model.learner
         learner.fit(self.fvs, self.labels)
 
@@ -337,19 +339,15 @@ class KInsertion(Adversary):
         if inst_1.get_feature_count() != inst_2.get_feature_count():
             raise ValueError('Feature vectors need to have same length.')
 
-        fv = [[], []]
+        fv = []
         for i in range(2):
             if i == 0:
                 inst = inst_1
             else:
                 inst = inst_2
 
-            feature_vector = inst.get_feature_vector()
-            for j in range(inst.get_feature_count()):
-                if feature_vector.get_feature(j) == 0:
-                    fv[i].append(0)
-                else:
-                    fv[i].append(1)
+            fv.append(inst.get_feature_vector().get_csr_matrix())
+            fv[i] = np.array(fv[i].todense().tolist()).flatten()
 
         if derivative:
             ret_val = self.kernel_derivative(np.array(fv[0]),
@@ -357,6 +355,7 @@ class KInsertion(Adversary):
                                              k)
         else:
             ret_val = self.kernel(np.array(fv[0]), np.array(fv[1]))
+
         return inst_1.get_label() * inst_2.get_label() * ret_val
 
     def _kernel_linear(self, fv_1: np.ndarray, fv_2: np.ndarray):

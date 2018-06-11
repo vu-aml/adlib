@@ -29,7 +29,7 @@ def find_centroid(instances: List[Instance]):
         if sum != 0:
             indices.append(i)
             data.append(sum)
-    return RealFeatureVector(num_features, indices, data)
+    return Instance(-1,RealFeatureVector(num_features, indices, data))
 
 
 def find_max(instances: List[Instance]):

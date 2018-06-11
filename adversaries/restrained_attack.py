@@ -17,7 +17,7 @@ Concept: A generalized attacker algorithm that attempts to move the instances' f
 
 
 class Restrained(Adversary):
-    def __init__(self, f_attack=0.5, binary=True, discount_factor=1, type='random', learn_model=None):
+    def __init__(self, f_attack=0.5, binary=True, discount_factor=1, type='centroid', learn_model=None):
         """
 
         :param f_attack:  float (between 0 and 1),determining the agressiveness

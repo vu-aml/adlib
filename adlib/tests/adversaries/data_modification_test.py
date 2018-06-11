@@ -4,7 +4,8 @@
 
 
 from adlib.learners import SimpleLearner
-from adlib.adversaries.data_modification import DataModification
+from adlib.adversaries.datamodification.data_modification import \
+    DataModification
 from adlib.tests.adversaries.label_flipping_test import \
     calculate_correct_percentages
 from copy import deepcopy
@@ -12,7 +13,6 @@ from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
 from sklearn import svm
 import numpy as np
-import pytest
 
 
 def test_data_modification():
@@ -22,9 +22,11 @@ def test_data_modification():
     # Data processing unit
     # The path is an index of 400 testing samples(raw email data).
     dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400',
-                           binary=True, raw=True)
-    training_data = load_dataset(dataset)
-    predict_data = training_data
+                           binary=False, raw=True)
+
+    training_data, predict_data = dataset.split({'train': 50, 'test': 50})
+    training_data = load_dataset(training_data)
+    predict_data = load_dataset(predict_data)
 
     # Setting the default learner
     # Test simple learner svm
@@ -50,17 +52,18 @@ def test_data_modification():
     target_theta = deepcopy(orig_theta)
 
     spam_instances = []
-    for inst in training_data:
+    for inst in training_data + predict_data:
         if inst.get_label() == 1:
             spam_instances.append(inst)
 
-    spam_features, _ = get_spam_features(spam_instances)
+    spam_features, ham_features = get_spam_features(spam_instances)
 
     # Set features to recognize spam as ham
     for index in spam_features:
-        target_theta[index] = (-1 * target_theta[index]
-                               if target_theta[index] > 0
-                               else target_theta[index])
+        target_theta[index] = -1
+
+    for index in ham_features:
+        target_theta[index] = 0.1
 
     print('Features selected: ', np.array(spam_features))
     print('Number of features: ', len(spam_features))
@@ -145,7 +148,7 @@ def get_spam_features(instances, p=0.9):
     for i in range(instances[0].get_feature_count()):
         count = 0
         for inst in instances:
-            count += 1 if inst.get_feature_vector().get_feature(i) == 1 else 0
+            count += 1 if inst.get_feature_vector().get_feature(i) > 0 else 0
 
         if (count / len(instances)) >= p:
             spam_features.append(i)

@@ -9,6 +9,7 @@ from data_reader.real_input import RealFeatureVector
 import math
 import multiprocessing as mp
 import numpy as np
+import time
 from copy import deepcopy
 from typing import List, Dict
 
@@ -23,7 +24,7 @@ class KInsertion(Adversary):
     """
 
     def __init__(self, learner, poison_instance, alpha=1e-3, beta=0.05,
-                 max_iter=2000, number_to_add=10, verbose=False):
+                 decay=-1, max_iter=2000, number_to_add=10, verbose=False):
 
         """
         :param learner: the trained learner
@@ -41,6 +42,7 @@ class KInsertion(Adversary):
         self.poison_instance = poison_instance
         self.alpha = alpha
         self.beta = beta
+        self.decay = self.beta / max_iter if decay < 0 else decay
         self.max_iter = max_iter
         self.orig_beta = beta
         self.number_to_add = number_to_add
@@ -72,7 +74,6 @@ class KInsertion(Adversary):
 
         self.orig_instances = deepcopy(instances)
         self.instances = self.orig_instances
-        self.beta /= instances[0].get_feature_count()  # scale beta
         self.learner.training_instances = self.instances
         self._calculate_constants()
 
@@ -83,11 +84,13 @@ class KInsertion(Adversary):
 
         for k in range(self.number_to_add):
             # x is the full feature vector of the instance to be added
-            self.x = np.random.binomial(1, 0.5,
-                                        instances[0].get_feature_count())
+            self.x = np.random.normal(np.mean(self.fvs), np.std(self.fvs),
+                                      instances[0].get_feature_count())
+            self.x = np.array(list(map(lambda x: 0 if x < 0 else x,
+                                       self.x)))
             self.y = -1 if np.random.binomial(1, 0.5, 1)[0] == 0 else 1
-
             self._generate_inst()
+
             self.beta = self.orig_beta
 
             # Main learning loop for one insertion
@@ -97,7 +100,9 @@ class KInsertion(Adversary):
                                       iteration < self.max_iter)):
 
                 print('Iteration: ', iteration, ' - gradient norm: ', grad_norm,
-                      sep='')
+                      ' - beta: ', self.beta, sep='')
+
+                begin = time.time()
 
                 # Train with newly generated instance
                 self.instances.append(self.inst)
@@ -117,9 +122,10 @@ class KInsertion(Adversary):
                 gradient = self._calc_gradient()
                 grad_norm = np.linalg.norm(gradient)
 
-                self.x = self.x - self.beta * gradient
+                self.x -= self.beta * gradient
                 self.x = np.array(list(map(lambda x: 0 if x < 0 else x,
                                            self.x)))
+                self.beta *= 1 / (1 + self.decay * iteration)
                 self._generate_inst()
                 self.instances = self.instances[:-1]
                 self.fvs = self.fvs[:-1]
@@ -127,6 +133,9 @@ class KInsertion(Adversary):
 
                 if self.verbose:
                     print('Current feature vector:\n', self.x)
+
+                end = time.time()
+                print('TIME: ', end - begin, 's', sep='')
 
                 iteration += 1
 

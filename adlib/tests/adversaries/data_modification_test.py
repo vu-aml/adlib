@@ -16,7 +16,8 @@ import numpy as np
 
 
 def test_data_modification():
-    print('\n#################################################################')
+    print()
+    print('###################################################################')
     print('START data modification attack.\n')
 
     # Data processing unit
@@ -128,7 +129,8 @@ def test_data_modification():
           len(spam_instances), sep='')
 
     print('\nEND data modification attack.')
-    print('#################################################################\n')
+    print('###################################################################')
+    print()
 
 
 def get_spam_features(instances, p=0.9):

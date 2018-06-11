@@ -25,7 +25,7 @@ class KInsertion(Adversary):
     plus k feature vectors designed to induce the most error in poison_instance.
     """
 
-    def __init__(self, learner, poison_instance, alpha=1e-6, beta=0.05,
+    def __init__(self, learner, poison_instance, alpha=1e-4, beta=0.05,
                  decay=-1, max_iter=2000, number_to_add=10, verbose=False):
 
         """
@@ -86,22 +86,25 @@ class KInsertion(Adversary):
 
         for k in range(self.number_to_add):
             # x is the full feature vector of the instance to be added
-            self.x = np.random.normal(np.mean(self.fvs), np.std(self.fvs),
-                                      instances[0].get_feature_count())
-            self.x = np.array(list(map(lambda x: 0 if x < 0 else x,
-                                       self.x)))
+            # self.x = np.random.normal(np.mean(self.fvs), np.std(self.fvs),
+            #                           instances[0].get_feature_count())
+            self.x = np.full(instances[0].get_feature_count(), 1,
+                             dtype='float64')
+            # self.x = np.array(list(map(lambda x: 0 if x < 0 else x,
+            #                            self.x)))
             self.y = -1 if np.random.binomial(1, 0.5, 1)[0] == 0 else 1
             self._generate_inst()
 
             self.beta = self.orig_beta
 
             # Main learning loop for one insertion
-            grad_norm = 0.0
+            old_x = deepcopy(self.x)
+            fv_dist = 0.0
             iteration = 0
-            while (iteration == 0 or (grad_norm > self.alpha and
+            while (iteration == 0 or (fv_dist > self.alpha and
                                       iteration < self.max_iter)):
 
-                print('Iteration: ', iteration, ' - gradient norm: ', grad_norm,
+                print('Iteration: ', iteration, ' - FV distance: ', fv_dist,
                       ' - beta: ', self.beta, sep='')
 
                 begin = time.time()
@@ -122,32 +125,41 @@ class KInsertion(Adversary):
 
                 # Update feature vector of the instance to be added
                 gradient = self._calc_gradient()
-                grad_norm = np.linalg.norm(gradient)
+
+                if self.verbose:
+                    print('\nGradient:\n', gradient, sep='')
 
                 self.x -= self.beta * gradient
                 self.x = np.array(list(map(lambda x: 0 if x < 0 else x,
                                            self.x)))
                 self.beta *= 1 / (1 + self.decay * iteration)
+
                 self._generate_inst()
                 self.instances = self.instances[:-1]
                 self.fvs = self.fvs[:-1]
                 self.labels = self.labels[:-1]
 
+                fv_dist = np.linalg.norm(self.x - old_x)
+                old_x = deepcopy(self.x)
+
                 if self.verbose:
-                    print('\nCurrent feature vector:\n', self.x, '\n')
+                    print('\nFeature vector:\n', self.x, '\n')
 
                 end = time.time()
                 print('TIME: ', end - begin, 's', sep='')
 
                 iteration += 1
 
-            print('Iteration: FINAL - gradient norm: ', grad_norm, sep='')
-            print('Number added so far: ', k + 1, sep='')
+            print('Iteration: FINAL - FV distance: ', fv_dist, ' - alpha: ',
+                  self.alpha, ' - beta: ', self.beta, sep='')
+            print('Number added so far: ', k + 1, '\n', sep='')
 
             # Add the newly generated instance and retrain with that dataset
             self.instances.append(self.inst)
             self.learner.training_instances = self.instances
             self.learner.train()
+
+            self._calculate_constants()
 
         self.poison_loss_after = self._calc_inst_loss(self.poison_instance)
 
@@ -230,10 +242,6 @@ class KInsertion(Adversary):
         pool.join()
 
         gradient = np.array(gradient)
-
-        if self.verbose:
-            print('\nCurrent gradient:\n', gradient)
-
         return gradient
 
     def _calc_grad_helper(self, i):

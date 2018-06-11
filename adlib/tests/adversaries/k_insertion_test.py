@@ -20,7 +20,8 @@ def test_k_insertion():
     python3 adlib/tests/adversaries/k_insertion_test.py NUMBER-TO-ADD
     """
 
-    print('\n#################################################################')
+    print()
+    print('###################################################################')
     print('START k-insertion attack.\n')
 
     if len(sys.argv) > 2:
@@ -119,7 +120,8 @@ def test_k_insertion():
           round(attacker.poison_loss_after - attacker.poison_loss_before, 4))
 
     print('\nEND k-insertion attack.')
-    print('#################################################################\n')
+    print('###################################################################')
+    print()
 
 
 if __name__ == '__main__':

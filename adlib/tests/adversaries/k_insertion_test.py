@@ -112,12 +112,11 @@ def test_k_insertion():
 
     print('###################################################################')
     print('poison_instance loss before attack: ',
-          round(attacker.poison_loss_before, 4), '%')
+          round(attacker.poison_loss_before, 4))
     print('poison_instance loss after attack: ',
-          round(attacker.poison_loss_after, 4), '%')
+          round(attacker.poison_loss_after, 4))
     print('poison_instance loss difference: ',
-          round(attacker.poison_loss_after - attacker.poison_loss_before, 4),
-          '%')
+          round(attacker.poison_loss_after - attacker.poison_loss_before, 4))
 
     print('\nEND k-insertion attack.')
     print('#################################################################\n')

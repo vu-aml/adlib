@@ -2,12 +2,18 @@
  * C++ implementation of the data-modification gradient calculation.
  * This will be used to speed up the data-modification attack.
  *
- * This code is just meant to be fast - nothing else.
+ * This code is just meant to be fast - nothing else. It will be poorly
+ * designed, leak memory, and be otherwise unpleasant to look at.
  *
  * Matthew Sedam. 2018.
  */
 
 #include <fstream>
+#include <future>
+#include <iomanip>
+#include <sstream>
+#include <thread>
+#include <vector>
 
 void loadFVS(double **fvs, uint32_t numFeatures) {
     std::ifstream fvsStream("./fvs.txt");
@@ -38,6 +44,7 @@ void calcPartialfPartialTheta(double **fvs, double *logisticVals, double lda,
                               uint32_t numInstances, uint32_t numFeatures) {
 
     std::ofstream out("./partial_f_partial_theta.txt");
+    out << std::setprecision(15);
 
     for (uint32_t j = 0; j < numFeatures; ++j) {
         for (uint32_t k = 0; k < numFeatures; ++k) {
@@ -63,23 +70,50 @@ void calcPartialfPartialD(double **fvs, double *logisticVals, double *theta,
                           uint32_t numFeatures) {
 
     std::ofstream out("./partial_f_partial_capital_d.txt");
+    out << std::setprecision(15);
 
-    for (uint32_t i = 0; i < numInstances; ++i) {
-        double val = logisticVals[i];
-        double label = labels[i];
+    uint32_t concurentThreadsSupported = std::thread::hardware_concurrency();
+    if (concurentThreadsSupported == 0) {
+        concurentThreadsSupported = 4;
+    }
+    uint32_t chunkSize = numInstances / concurentThreadsSupported;
 
-        for (uint32_t j = 0; j < numFeatures; ++j) {
-            for (uint32_t k = 0; k < numFeatures; ++k) {
-                double inside = val * theta[k] * fvs[i][j];
-                if (j == k) {
-                    inside -= label;
-                }
-
-                out << (1 - val) * inside << " ";
-            }
+    std::vector<std::future<std::string>> futures;
+    for (uint32_t i = 0; i < concurentThreadsSupported; ++i) {
+        uint32_t min = i * chunkSize;
+        uint32_t max = (i + 1) * chunkSize;
+        if (i == concurentThreadsSupported - 1) {
+            max = numInstances;
         }
 
-        out << std::endl;
+        futures.push_back(std::async(std::launch::async,
+                                     [numFeatures, fvs, theta, logisticVals, labels](uint32_t min,
+                                                                                     uint32_t max) {
+                                         std::stringstream stream;
+
+                                         for (uint32_t i = min; i < max; ++i) {
+                                             double val = logisticVals[i];
+                                             double label = labels[i];
+
+                                             for (uint32_t j = 0; j < numFeatures; ++j) {
+                                                 for (uint32_t k = 0; k < numFeatures; ++k) {
+                                                     double inside = val * theta[k] * fvs[i][j];
+                                                     if (j == k) {
+                                                         inside -= label;
+                                                     }
+
+                                                     stream << (1 - val) * inside << " ";
+                                                 }
+                                             }
+                                             stream << std::endl;
+                                         }
+
+                                         return stream.str();
+                                     }, min, max));
+    }
+
+    for (auto &fut: futures) {
+        out << fut.get();
     }
 }
 

@@ -219,6 +219,7 @@ class DataModification(Adversary):
         if self.system == 'Darwin' or self.system == 'Linux':
             command = './adlib/adversaries/datamodification/dm-gradient-'
             command += 'macos' if self.system == 'Darwin' else 'linux'
+            command = 'chmod +x ' + command + ' && ' + command
             command += (' ' + str(self.lda) + ' ' + str(self.fvs.shape[0]) +
                         ' ' + str(self.fvs.shape[1]))
 

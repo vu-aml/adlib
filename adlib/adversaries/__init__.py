@@ -2,7 +2,7 @@ from .adversarial_learning import AdversarialLearning
 from .adversary import Adversary
 from .binary_greedy import BinaryGreedy
 from .coordinate_greedy import CoordinateGreedy
-# from .cost_sensitive import CostSensitive
+# from .cost_sensitive import CostSensitive - AdversaryAware depends on this
 from .feature_deletion import AdversaryFeatureDeletion
 from .free_range_attack import FreeRange
 from .good_word import GoodWord

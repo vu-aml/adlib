@@ -61,7 +61,8 @@ class EmailDataset(Dataset):
                 # Sklearn module to fit/transform data and resulting feature matrix
                 # Maybe optionally pass this in as a parameter instead.
                 self.vectorizer = \
-                    TfidfVectorizer(analyzer='word', strip_accents=strip_accents_,
+                    TfidfVectorizer(analyzer='word',
+                                    strip_accents=strip_accents_,
                                     ngram_range=ngram_range_, max_df=max_df_,
                                     min_df=min_df_, max_features=max_features_,
                                     binary=False, stop_words='english',
@@ -74,7 +75,8 @@ class EmailDataset(Dataset):
         elif path is None and features is not None and labels is not None:
             lbl = type(labels)
             if lbl != np.ndarray and lbl != np.float64 and lbl != int and lbl != float:
-                raise ValueError("Labels must be in the form of a numpy array, a float, or an int")
+                raise ValueError(
+                    "Labels must be in the form of a numpy array, a float, or an int")
             assert type(features) == scipy.sparse.csr.csr_matrix
 
             self.features = features
@@ -145,7 +147,8 @@ class EmailDataset(Dataset):
             else:
                 # maybe return emaildataset instance with corresponding label?
                 return self.features[index]
-        return self.Data(features=self.features[index], labels=self.labels[index])
+        return self.Data(features=self.features[index],
+                         labels=self.labels[index])
 
     def __setitem__(self, index, value):
         self.features[index] = value.features
@@ -211,7 +214,8 @@ class EmailDataset(Dataset):
     def clone(self):
         """Return a new copy of the dataset with same initial params."""
 
-        return self.Data(features=self.features.copy(), labels=self.labels.copy())
+        return self.Data(features=self.features.copy(),
+                         labels=self.labels.copy())
 
     def _csv(self, outfile, save=True):
         # load a .csv file where all the data in the file mark the relative postions,
@@ -323,12 +327,12 @@ class EmailDataset(Dataset):
             frac = splits[0] / 100
         pivot = int(self.__len__() * frac)
         s_feats, s_labels = sklearn.utils.shuffle(self.features, self.labels)
-        print(type(s_feats))
-        print(type(s_labels))
         return (self.__class__(raw=False, features=s_feats[:pivot, :],
-                               labels=s_labels[:pivot], num_instances=pivot, binary=self.binary),
+                               labels=s_labels[:pivot], num_instances=pivot,
+                               binary=self.binary),
                 self.__class__(raw=False, features=s_feats[pivot:, :],
-                               labels=s_labels[pivot:], num_instances=self.num_instances - pivot,
+                               labels=s_labels[pivot:],
+                               num_instances=self.num_instances - pivot,
                                binary=self.binary))
         # return (self.Data(s_feats[:pivot, :], s_labels[:pivot]),
         #         self.Data(s_feats[pivot:, :], s_labels[pivot:]))

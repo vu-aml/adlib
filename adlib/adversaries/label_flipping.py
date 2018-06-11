@@ -5,7 +5,6 @@
 from adlib.adversaries.adversary import Adversary
 from data_reader.binary_input import Instance
 import cvxpy as cvx
-import math
 import numpy as np
 from copy import deepcopy
 from progress.bar import Bar
@@ -185,8 +184,7 @@ class LabelFlipping(Adversary):
             constraints.append(0 <= epsilon[i])
 
         prob = cvx.Problem(cvx.Minimize(func), constraints)
-        prob.solve(verbose=self.verbose, parallel=True,
-                   abstol_inacc=1e-2, reltol_inacc=1e-2, feastol_inacc=1e-2)
+        prob.solve(solver=cvx.SCS, verbose=self.verbose, parallel=True)
 
         self._old_epsilon = np.copy(np.array(epsilon.value).flatten())
         self._old_w = np.copy(np.array(w.value).flatten())
@@ -222,7 +220,7 @@ class LabelFlipping(Adversary):
         constraints += [cost_for_q <= self.total_cost]
 
         prob = cvx.Problem(cvx.Minimize(func), constraints)
-        prob.solve(verbose=self.verbose, parallel=True, solver=cvx.ECOS_BB)
+        prob.solve(solver=cvx.ECOS_BB, verbose=self.verbose, parallel=True)
 
         q_value = np.array(q.value).flatten()
         self._old_q = []

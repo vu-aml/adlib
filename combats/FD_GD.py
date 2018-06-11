@@ -7,6 +7,7 @@ from timeit import default_timer as timer
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
 from adversaries.free_range_attack import FreeRange
+from adversaries.gradient_descent import GradientDescent
 from sklearn import metrics
 from utils import save_result
 import multiprocessing
@@ -60,7 +61,7 @@ def run(par_map):
 
     # test Restrained_attack
     a_start = timer()
-    attacker = FreeRange(manual_bound=False)
+    attacker = GradientDescent()
     attacker.set_params(par_map)
     attacker.set_adversarial_params(fd_learner, testing_data)
     attacked_data = attacker.attack(testing_data)
@@ -95,17 +96,18 @@ def generate_index(param_lst):
     map = []
     for item in param_lst:
         title = "FD " + "H" + str(item["hinge_loss_multiplier"]) + " F" + str(
-            item["max_feature_deletion"]) + " FA" + " F" + str \
-                    (item["f_attack"])
+            item["max_feature_deletion"]) + " GD" + " S" + str \
+                    (item["step_size"]) + " MI" + str(item["max_iter"])
         map.append(title)
     return map
 
 
 if __name__ == '__main__':
-    logging.basicConfig(filename='FAresult.log', level=logging.INFO)
+    logging.basicConfig(filename='GD_result.log', level=logging.INFO)
     param_path = sys.argv[1]
     data_path = sys.argv[2]
     process_time = int(sys.argv[3])
+    exl_path = sys.argv[4]
     with open(param_path, 'r') as para_file:
         par_map = json.load(para_file)
     total_time = len(par_map["param"]) * process_time
@@ -119,4 +121,4 @@ if __name__ == '__main__':
     data = pd.DataFrame(arr, columns=["old_acc", "old_prec", "old_rec", "old_f1", "learn_t",
                                       "new_acc", "new_prec", "new_rec", "new_f1", "atk_t"],index = list(title_map))
     data.to_csv(data_path, sep='\t', encoding='utf-8')
-    data.to_excel("test2.xlsx")
+    data.to_excel(exl_path)

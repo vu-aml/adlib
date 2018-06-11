@@ -150,7 +150,7 @@ class GradientDescent(Adversary):
             # check a small epsilon(difference is a small value after
             # several iterations)
             if self.check_convergence_info(obj_func_value, obj_function_value_list):
-                print("Goes to Convergence here.... Iteration: %d, Obj value %.4f" % (iter,obj_func_value))
+                #print("Goes to Convergence here.... Iteration: %d, Obj value %.4f" % (iter,obj_func_value))
                 mat_indices = [x for x in range(0, self.num_features) if new_instance[0][x] != 0]
                 mat_data = [new_instance[0][x] for x in range(0, self.num_features) if new_instance[0][x] != 0]
                 return Instance(-1, RealFeatureVector(self.num_features, mat_indices, mat_data))
@@ -167,7 +167,7 @@ class GradientDescent(Adversary):
             grad_update = new_grad_update
 
 
-        print("Convergence has not been found..")
+        #print("Convergence has not been found..")
         mat_indices = [x for x in range(0, self.num_features) if candidate_attack_instances[-1][0][x] != 0]
         mat_data = [candidate_attack_instances[-1][0][x] for x in range(0, self.num_features)
                     if candidate_attack_instances[-1][0][x] != 0]

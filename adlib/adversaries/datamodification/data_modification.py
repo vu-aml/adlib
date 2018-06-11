@@ -4,12 +4,16 @@
 # Matthew Sedam
 
 from adlib.adversaries.adversary import Adversary
-from data_reader.binary_input import BinaryFeatureVector, Instance
+from data_reader.binary_input import Instance
+from data_reader.real_input import RealFeatureVector
 from copy import deepcopy
 from typing import List, Dict
 import math
 import numpy as np
+import os
 import pathos.multiprocessing as mp
+import platform
+import time
 
 
 class DataModification(Adversary):
@@ -19,13 +23,15 @@ class DataModification(Adversary):
     """
 
     def __init__(self, learner, target_theta, lda=0.001, alpha=1e-3, beta=0.05,
-                 max_iter=2000, verbose=False):
+                 decay=-1, eta=0.9, max_iter=250, verbose=False):
         """
         :param learner: the trained learner
         :param target_theta: the theta value of which to target
         :param lda: lambda - implies importance of cost
         :param alpha: convergence condition (diff <= alpha)
         :param beta: learning rate - will be divided by size of input
+        :param decay: the decay rate of the learning rate
+        :param eta: the momentum rate
         :param max_iter: maximum iterations
         :param verbose: if True, will print gradient for each iteration
         """
@@ -36,6 +42,8 @@ class DataModification(Adversary):
         self.lda = lda
         self.alpha = alpha
         self.beta = beta
+        self.decay = self.beta / max_iter if decay < 0 else decay
+        self.eta = eta
         self.max_iter = max_iter
         self.verbose = verbose
         self.instances = None
@@ -49,6 +57,7 @@ class DataModification(Adversary):
         self.labels = None  # array of labels of the instances
         self.logistic_vals = None
         self.risk_gradient = None
+        self.system = platform.system()
 
     def attack(self, instances) -> List[Instance]:
         """
@@ -67,60 +76,99 @@ class DataModification(Adversary):
         fv_dist = 0.0
         theta_dist = np.linalg.norm(self.theta - self.target_theta)
         iteration = 0
-        while (iteration == 0 or (theta_dist > self.alpha and
+        old_update_vector = 0
+        while (iteration == 0 or (fv_dist > self.alpha and
                                   iteration < self.max_iter)):
 
             print('Iteration: ', iteration, ' - FV distance: ', fv_dist,
-                  ' - theta distance: ', theta_dist, sep='')
+                  ' - theta distance: ', theta_dist, ' - beta: ', self.beta,
+                  sep='')
 
-            # Gradient descent
+            begin = time.time()
+
+            self._write_to_file()
+
+            # Gradient descent with momentum
             gradient = self._calc_gradient()
 
             if self.verbose:
-                print('\nGRADIENT\n', gradient, '\n', sep='')
+                print('\nGradient:\n', gradient, sep='')
 
-            self.fvs -= (gradient * self.beta)
+            update_vector = (self.eta * old_update_vector +
+                             (1 - self.eta) * gradient)
+            self.fvs -= self.beta * update_vector
             self._project_fvs()
+
+            if self.verbose:
+                print('\nFeature Vectors:\n', self.fvs, '\n', sep='')
 
             # Update variables
             self._calc_theta()
             fv_dist = np.linalg.norm(self.fvs - self.old_fvs)
             theta_dist = np.linalg.norm(self.theta - self.target_theta)
             self.old_fvs = deepcopy(self.fvs)
+            self.beta *= 1 / (1 + self.decay * iteration)
+            old_update_vector = deepcopy(update_vector)
+
+            self._cleanup_files()
+
+            end = time.time()
+            print('TIME: ', end - begin, 's', sep='')
 
             iteration += 1
 
         print('Iteration: FINAL - FV distance: ', fv_dist,
               ' - theta distance: ', theta_dist, ' - alpha: ', self.alpha,
-              ' - beta: ', self.beta, sep='')
+              ' - beta: ', self.beta, '\n', sep='')
 
         if self.verbose:
-            print('\nTarget Theta:\n', self.target_theta, '\n\nTheta:\n',
+            print('\n\nTarget Theta:\n\n', self.target_theta, '\n\nTheta:\n\n',
                   self.theta, '\n')
 
         # Go from floating-point values in [0, 1] to integers in {0, 1}
-        for i in range(len(self.fvs)):
+        feature_count = self.fvs.shape[1]
+        for i, fv in enumerate(self.fvs):
             indices = []
-            for j in range(len(self.fvs[i])):
-                if self.fvs[i][j] >= 0.5:
+            data = []
+            for j, val in enumerate(fv):
+                if val != 0:
                     indices.append(j)
-            self.return_instances[i].feature_vector = BinaryFeatureVector(
-                self.return_instances[i].get_feature_count(), indices)
+                    data.append(val)
+
+            self.return_instances[i].feature_vector = RealFeatureVector(
+                feature_count, indices, data)
 
         return self.return_instances
 
+    def _write_to_file(self):
+        """
+        Writes matrices and vectors to a file for the fast binary processor
+        """
+
+        np.savetxt('./fvs.txt', self.fvs)
+        np.savetxt('./logistic_vals.txt', self.logistic_vals)
+        np.savetxt('./theta.txt', self.theta)
+        np.savetxt('./labels.txt', self.labels)
+
+    def _cleanup_files(self):
+        """
+        Removes unused temporary files
+        """
+
+        os.remove('./fvs.txt')
+        os.remove('./logistic_vals.txt')
+        os.remove('./theta.txt')
+        os.remove('./labels.txt')
+
     def _project_fvs(self):
         """
-        Transform all feature vectors in self.fvs from having elements in the
-        interval [MIN, MAX] to the interval [0, 1]
+        Transforms all values in self.fvs to have non-negative values
         """
 
-        pool = mp.Pool(mp.cpu_count())
-        self.fvs = pool.map(self.project_feature_vector, self.fvs.tolist())
-        pool.close()
-        pool.join()
-
-        self.fvs = np.array(self.fvs)
+        for i, row in enumerate(self.fvs):
+            for j, val in enumerate(row):
+                if val < 0:
+                    self.fvs[i][j] = 0
 
     def _calculate_constants(self):
         """
@@ -130,15 +178,10 @@ class DataModification(Adversary):
         # Calculate feature vectors
         self.fvs = []
         for i in range(len(self.instances)):
-            feature_vector = self.instances[i].get_feature_vector()
-            tmp = []
-            for j in range(self.instances[0].get_feature_count()):
-                if feature_vector.get_feature(j) == 1:
-                    tmp.append(1)
-                else:
-                    tmp.append(0)
-            tmp = np.array(tmp)
-            self.fvs.append(tmp)
+            fv = self.instances[i].get_feature_vector().get_csr_matrix()
+            fv = np.array(fv.todense().tolist()).flatten()
+            self.fvs.append(fv)
+
         self.fvs = np.array(self.fvs, dtype='float64')
         self.orig_fvs = deepcopy(self.fvs)
         self.old_fvs = deepcopy(self.fvs)
@@ -160,9 +203,6 @@ class DataModification(Adversary):
             for i in range(len(self.instances))]
         self.logistic_vals = np.array(self.logistic_vals)
 
-        # Calculate beta relative to size of input
-        self.beta /= self.fvs.shape[1]
-
     def _calc_theta(self):
         """
         Calculates theta from learning the feature vectors
@@ -181,14 +221,47 @@ class DataModification(Adversary):
 
         self.risk_gradient = self.theta - self.target_theta
 
-        pool = mp.Pool(mp.cpu_count())
-        matrices_1 = pool.map(self._calc_partial_f_partial_capital_d,
-                              range(len(self.instances)))
-        pool.close()
-        pool.join()
-        matrices_1 = np.array(matrices_1)
+        command_fail = True
+        if self.system == 'Darwin' or self.system == 'Linux':
+            command = './adlib/adversaries/datamodification/dm-gradient-'
+            command += 'macos' if self.system == 'Darwin' else 'linux'
+            command = 'chmod +x ' + command + ' && ' + command
+            command += (' ' + str(self.lda) + ' ' + str(self.fvs.shape[0]) +
+                        ' ' + str(self.fvs.shape[1]))
 
-        matrix_2 = self._calc_partial_f_partial_theta()
+            if os.system(command) == 0:  # Command exited correctly
+                with open('./partial_f_partial_capital_d.txt') as file:
+                    tmp = []
+                    for line in file:
+                        matrix = list(map(lambda x: float(x), list(
+                            filter(lambda x: x != '', line[:-1].split(' ')))))
+                        matrix = np.array(matrix)
+                        matrix.shape = (self.fvs.shape[1], self.fvs.shape[1])
+                        tmp.append(matrix)
+                matrices_1 = np.array(tmp)
+
+                with open('./partial_f_partial_theta.txt') as file:
+                    tmp = []
+                    for line in file:
+                        tmp.append(list(map(lambda x: float(x), list(
+                            filter(lambda x: x != '', line[:-1].split(' '))))))
+                matrix_2 = np.array(tmp)
+
+                os.remove('./partial_f_partial_capital_d.txt')
+                os.remove('./partial_f_partial_theta.txt')
+
+                command_fail = False
+
+        if command_fail:
+            pool = mp.Pool(mp.cpu_count())
+            matrices_1 = pool.map(self._calc_partial_f_partial_capital_d,
+                                  range(len(self.instances)))
+            pool.close()
+            pool.join()
+
+            matrices_1 = np.array(matrices_1)
+            matrix_2 = self._calc_partial_f_partial_theta()
+
         #  self.fuzz_matrix(matrix_2)
 
         try:
@@ -268,29 +341,6 @@ class DataModification(Adversary):
                              self.labels[i] if j == k else 0))
 
     @staticmethod
-    def project_feature_vector(fv):
-        """
-        Projects a single feature vector from having elements in the interval
-        [MIN, MAX] to the interval [0, 1] if necessary
-        :param fv: the feature vector
-        :return: the projected feature vector
-        """
-
-        fv = np.array(fv)
-        min_val = np.min(fv)
-        max_val = np.max(fv)
-        distance = max_val - min_val
-
-        if distance > 0 and (min_val < 0 or max_val > 1):
-            def transformation(x):
-                return (x - min_val) / distance
-
-            for i in range(len(fv)):
-                fv[i] = transformation(fv[i])
-
-        return fv
-
-    @staticmethod
     def fuzz_matrix(matrix: np.ndarray):
         """
         Add to every entry of matrix some noise to make it non-singular.
@@ -321,6 +371,10 @@ class DataModification(Adversary):
             self.alpha = params['alpha']
         if params['beta'] is not None:
             self.beta = params['beta']
+        if params['decay'] is not None:
+            self.decay = params['decay']
+        if params['eta'] is not None:
+            self.eta = params['eta']
         if params['max_iter'] is not None:
             self.max_iter = params['max_iter']
         if params['verbose'] is not None:
@@ -337,6 +391,7 @@ class DataModification(Adversary):
         self.labels = None
         self.logistic_vals = None
         self.risk_gradient = None
+        self.system = platform.system()
 
     def get_available_params(self):
         params = {'learner': self.learner,
@@ -344,9 +399,12 @@ class DataModification(Adversary):
                   'lda': self.lda,
                   'alpha': self.alpha,
                   'beta': self.beta,
+                  'decay': self.decay,
+                  'eta': self.eta,
                   'max_iter': self.max_iter,
                   'verbose': self.verbose}
         return params
 
     def set_adversarial_params(self, learner, train_instances):
         self.learner = learner
+        self.instances = train_instances

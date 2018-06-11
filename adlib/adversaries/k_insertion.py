@@ -4,6 +4,8 @@
 # Matthew Sedam
 
 from adlib.adversaries.adversary import Adversary
+from adlib.adversaries.datamodification.data_modification import \
+    DataModification
 from data_reader.binary_input import Instance
 from data_reader.real_input import RealFeatureVector
 import math
@@ -132,7 +134,7 @@ class KInsertion(Adversary):
                 self.labels = self.labels[:-1]
 
                 if self.verbose:
-                    print('Current feature vector:\n', self.x)
+                    print('\nCurrent feature vector:\n', self.x, '\n')
 
                 end = time.time()
                 print('TIME: ', end - begin, 's', sep='')
@@ -318,6 +320,8 @@ class KInsertion(Adversary):
         for i in range(1, size):
             for j in range(1, size):
                 matrix[i][j] = q_s[i - 1][j - 1]
+
+        DataModification.fuzz_matrix(matrix)
 
         try:
             matrix = np.linalg.inv(matrix)

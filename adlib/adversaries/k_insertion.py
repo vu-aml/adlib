@@ -25,7 +25,7 @@ class KInsertion(Adversary):
     plus k feature vectors designed to induce the most error in poison_instance.
     """
 
-    def __init__(self, learner, poison_instance, alpha=1e-4, beta=10,
+    def __init__(self, learner, poison_instance, alpha=1e-4, beta=0.5,
                  decay=-1, max_iter=250, number_to_add=10, verbose=False):
 
         """
@@ -238,7 +238,7 @@ class KInsertion(Adversary):
         pool.close()
         pool.join()
 
-        gradient = np.array(gradient)
+        gradient = np.array(gradient, dtype='float64')
         return gradient
 
     def _calc_grad_helper(self, i):
@@ -257,7 +257,7 @@ class KInsertion(Adversary):
             vector = [0]
             for j in self.learner.model.learner.support_:
                 vector.append(
-                    self._Q(self.instances[j], self.inst, True, i))
+                    self._Q(self.instances[j], self.inst, derivative=True, k=i))
             vector = np.array(vector)
 
             solution = self.matrix.dot(vector)
@@ -298,7 +298,7 @@ class KInsertion(Adversary):
             if self.learner.predict(self.inst) != self.inst.get_label():  # in E
                 z_c = learner.C
             else:  # in R, z_c = 0, everything is 0
-                return 0, matrix
+                return 0.0, matrix
         else:  # in S
             # Get index of coefficient
             index = learner.support_.tolist().index(len(self.instances) - 1)
@@ -337,7 +337,7 @@ class KInsertion(Adversary):
             # There is probably an error in the computation, but I have not
             # looked for it yet.
             print('SINGULAR MATRIX ERROR - FIX ME')
-            z_c = 0
+            z_c = 0.0
 
         matrix = -1 * z_c * matrix
 
@@ -357,22 +357,20 @@ class KInsertion(Adversary):
         if inst_1.get_feature_count() != inst_2.get_feature_count():
             raise ValueError('Feature vectors need to have same length.')
 
-        fv = []
+        fvs = []
         for i in range(2):
             if i == 0:
                 inst = inst_1
             else:
                 inst = inst_2
 
-            fv.append(inst.get_feature_vector().get_csr_matrix())
-            fv[i] = np.array(fv[i].todense().tolist()).flatten()
+            fvs.append(inst.get_feature_vector().get_csr_matrix())
+            fvs[i] = np.array(fvs[i].todense().tolist()).flatten()
 
         if derivative:
-            ret_val = self.kernel_derivative(np.array(fv[0]),
-                                             np.array(fv[1]),
-                                             k)
+            ret_val = self.kernel_derivative(fvs[0], fvs[1], k)
         else:
-            ret_val = self.kernel(np.array(fv[0]), np.array(fv[1]))
+            ret_val = self.kernel(fvs[0], fvs[1])
 
         return inst_1.get_label() * inst_2.get_label() * ret_val
 

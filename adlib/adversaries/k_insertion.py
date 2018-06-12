@@ -90,6 +90,10 @@ class KInsertion(Adversary):
         for k in range(self.number_to_add):
             self.x = np.full(instances[0].get_feature_count(),
                              np.mean(self.fvs), dtype='float64')
+            self.x = np.array(list(map(
+                lambda x: -1 * x if np.random.binomial(1, 0.5, 1)[0] == 0
+                else x, self.x)))
+
             self.y = -1 if np.random.binomial(1, 0.5, 1)[0] == 0 else 1
             self._generate_inst()
 
@@ -100,8 +104,8 @@ class KInsertion(Adversary):
             fv_dist = 0.0
             iteration = 0
             old_update_vector = 0
-            while (iteration < 5 or (fv_dist > self.alpha and
-                                     iteration < self.max_iter)):
+            while (iteration == 0 or (fv_dist > self.alpha and
+                                      iteration < self.max_iter)):
 
                 print('Iteration: ', iteration, ' - FV distance: ', fv_dist,
                       ' - beta: ', self.beta, sep='')

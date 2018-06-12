@@ -134,6 +134,9 @@ class KInsertion(Adversary):
                 # Gradient descent with momentum
                 gradient = self._calc_gradient()
 
+                if list(filter(lambda x: not x, gradient == 0)) == []:
+                    iteration = self.max_iter
+
                 if self.verbose:
                     print('\nGradient:\n', gradient, sep='')
 

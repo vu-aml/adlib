@@ -88,11 +88,16 @@ class KInsertion(Adversary):
         self.poison_loss_before = self._calc_inst_loss(self.poison_instance)
 
         for k in range(self.number_to_add):
-            self.x = np.full(instances[0].get_feature_count(),
-                             np.mean(self.fvs), dtype='float64')
-            self.x = np.array(list(map(
-                lambda x: -1 * x if np.random.binomial(1, 0.5, 1)[0] == 0
-                else x, self.x)))
+            mean = np.mean(self.fvs)
+            std = np.std(self.fvs)
+
+            self.x = np.full(instances[0].get_feature_count(), mean,
+                             dtype='float64')
+            self.x = list(map(
+                lambda x, y: x * y,
+                self.x,
+                np.random.normal(1, std, len(self.x))))
+            self.x = np.array(list(map(lambda x: 0 if x < 0 else x, self.x)))
 
             self.y = -1 if np.random.binomial(1, 0.5, 1)[0] == 0 else 1
             self._generate_inst()

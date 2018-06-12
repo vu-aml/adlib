@@ -16,9 +16,6 @@ from copy import deepcopy
 from typing import List, Dict
 
 
-# TODO: Update vars in __init__ and misc. functions
-
-
 class KInsertion(Adversary):
     """
     Performs a k-insertion attack where the attacked data is the original data
@@ -34,6 +31,8 @@ class KInsertion(Adversary):
         :param poison_instance: the instance in which to induce the most error
         :param alpha: convergence condition (diff <= alpha)
         :param beta: the learning rate
+        :param decay: the decay rate
+        :param eta: the momentum percentage
         :param max_iter: the maximum number of iterations
         :param number_to_add: the number of new instances to add
         :param verbose: if True, print the feature vector and gradient for each
@@ -554,6 +553,10 @@ class KInsertion(Adversary):
             self.alpha = params['alpha']
         if params['beta'] is not None:
             self.beta = params['beta']
+        if params['decay'] is not None:
+            self.decay = params['decay']
+        if params['eta'] is not None:
+            self.eta = params['eta']
         if params['max_iter'] is not None:
             self.max_iter = params['max_iter']
         if params['number_to_add'] is not None:
@@ -576,11 +579,15 @@ class KInsertion(Adversary):
         self.poison_loss_before = None
         self.poison_loss_after = None
 
+        np.set_printoptions(threshold=0)
+
     def get_available_params(self):
         params = {'learner': self.learner,
                   'poison_instance': self.poison_instance,
                   'alpha': self.alpha,
                   'beta': self.beta,
+                  'decay': self.decay,
+                  'eta': self.eta,
                   'max_iter': self.max_iter,
                   'number_to_add': self.number_to_add,
                   'verbose': self.verbose}

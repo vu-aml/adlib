@@ -26,7 +26,8 @@ class KInsertion(Adversary):
     """
 
     def __init__(self, learner, poison_instance, alpha=1e-4, beta=0.5,
-                 decay=-1, max_iter=250, number_to_add=10, verbose=False):
+                 decay=-1, eta=0.9, max_iter=250, number_to_add=10,
+                 verbose=False):
 
         """
         :param learner: the trained learner
@@ -45,6 +46,7 @@ class KInsertion(Adversary):
         self.alpha = alpha
         self.beta = beta
         self.decay = self.beta / max_iter if decay < 0 else decay
+        self.eta = eta
         self.max_iter = max_iter
         self.orig_beta = beta
         self.number_to_add = number_to_add
@@ -98,6 +100,7 @@ class KInsertion(Adversary):
             old_x = deepcopy(self.x)
             fv_dist = 0.0
             iteration = 0
+            old_update_vector = 0
             while (iteration < 5 or (fv_dist > self.alpha and
                                      iteration < self.max_iter)):
 
@@ -120,16 +123,21 @@ class KInsertion(Adversary):
 
                 learner.fit(self.fvs, self.labels)
 
-                # Update feature vector of the instance to be added
+                # Gradient descent with momentum
                 gradient = self._calc_gradient()
 
                 if self.verbose:
                     print('\nGradient:\n', gradient, sep='')
 
-                self.x -= self.beta * gradient
+                update_vector = (self.eta * old_update_vector +
+                                 (1 - self.eta) * gradient)
+
+                self.x -= self.beta * update_vector
                 self.x = np.array(list(map(lambda x: 0 if x < 0 else x,
                                            self.x)))
-                self.beta *= 1 / (1 + self.decay * iteration)
+
+                if self.verbose:
+                    print('\nFeature vector:\n', self.x, '\n')
 
                 self._generate_inst()
                 self.instances = self.instances[:-1]
@@ -138,9 +146,8 @@ class KInsertion(Adversary):
 
                 fv_dist = np.linalg.norm(self.x - old_x)
                 old_x = deepcopy(self.x)
-
-                if self.verbose:
-                    print('\nFeature vector:\n', self.x, '\n')
+                self.beta *= 1 / (1 + self.decay * iteration)
+                old_update_vector = deepcopy(update_vector)
 
                 end = time.time()
                 print('TIME: ', end - begin, 's', sep='')

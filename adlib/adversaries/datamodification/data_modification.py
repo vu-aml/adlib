@@ -222,10 +222,17 @@ class DataModification(Adversary):
         self.risk_gradient = self.theta - self.target_theta
 
         command_fail = True
-        if self.system == 'Darwin' or self.system == 'Linux':
-            command = './adlib/adversaries/datamodification/dm-gradient-'
-            command += 'macos' if self.system == 'Darwin' else 'linux'
-            command = 'chmod +x ' + command + ' && ' + command
+        if (self.system == 'Darwin' or
+                self.system == 'Linux' or
+                self.system == 'Windows'):
+
+            if self.system == 'Windows':
+                command = './adlib/adversaries/datamodification/dm-gradient-'
+                command += 'Windows'
+            else:
+                command = './adlib/adversaries/datamodification/dm-gradient-'
+                command += 'macos' if self.system == 'Darwin' else 'linux'
+                command = 'chmod +x ' + command + ' && ' + command
             command += (' ' + str(self.lda) + ' ' + str(self.fvs.shape[0]) +
                         ' ' + str(self.fvs.shape[1]))
 

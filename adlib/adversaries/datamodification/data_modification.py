@@ -4,11 +4,11 @@
 # Matthew Sedam
 
 from adlib.adversaries.adversary import Adversary
+from adlib.utils.common import logistic_function
 from data_reader.binary_input import Instance
 from data_reader.real_input import RealFeatureVector
 from copy import deepcopy
 from typing import List, Dict
-import math
 import numpy as np
 import os
 import pathos.multiprocessing as mp
@@ -198,9 +198,8 @@ class DataModification(Adversary):
         self._calc_theta()
 
         # Calculate logistic function values - sigma(y_i g_i)
-        self.logistic_vals = [
-            DataModification.logistic_function(self.labels[i] * self.g_arr[i])
-            for i in range(len(self.instances))]
+        self.logistic_vals = [logistic_function(self.labels[i] * self.g_arr[i])
+                              for i in range(len(self.instances))]
         self.logistic_vals = np.array(self.logistic_vals)
 
     def _calc_theta(self):
@@ -345,29 +344,6 @@ class DataModification(Adversary):
         val = self.logistic_vals[i]
         return ((1 - val) * (val * self.theta[k] * self.fvs[i][j] -
                              self.labels[i] if j == k else 0))
-
-    @staticmethod
-    def fuzz_matrix(matrix: np.ndarray):
-        """
-        Add to every entry of matrix some noise to make it non-singular.
-        :param matrix: the matrix - 2 dimensional
-        """
-
-        m = matrix.tolist()
-        for i in range(matrix.shape[0]):
-            for j in range(matrix.shape[1]):
-                m[i][j] += abs(np.random.normal(0, 0.00001))
-
-        return np.array(m)
-
-    @staticmethod
-    def logistic_function(x):
-        """
-        :param x: x
-        :return: the logistic function of x
-        """
-
-        return 1 / (1 + math.exp(-1 * x))
 
     def set_params(self, params: Dict):
         if params['learner'] is not None:

@@ -4,8 +4,7 @@
 # Matthew Sedam
 
 from adlib.adversaries.adversary import Adversary
-from adlib.adversaries.datamodification.data_modification import \
-    DataModification
+from adlib.utils.common import fuzz_matrix
 from data_reader.binary_input import Instance
 from data_reader.real_input import RealFeatureVector
 import math
@@ -351,14 +350,12 @@ class KInsertion(Adversary):
             for j in range(1, size):
                 matrix[i][j] = q_s[i - 1][j - 1]
 
-        # matrix = DataModification.fuzz_matrix(matrix)
-
         try:
             matrix = np.linalg.inv(matrix)
         except np.linalg.linalg.LinAlgError:
             print('SINGULAR MATRIX ERROR')
 
-            matrix = DataModification.fuzz_matrix(matrix)
+            matrix = fuzz_matrix(matrix)
             matrix = np.linalg.inv(matrix)
 
         matrix = -1 * z_c * matrix

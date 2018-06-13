@@ -262,7 +262,7 @@ class DataModification(Adversary):
             matrices_1 = np.array(matrices_1)
             matrix_2 = self._calc_partial_f_partial_theta()
 
-        #  self.fuzz_matrix(matrix_2)
+        #  matrix_2 = self.fuzz_matrix(matrix_2)
 
         try:
             matrix_2 = np.linalg.inv(matrix_2)
@@ -347,9 +347,12 @@ class DataModification(Adversary):
         :param matrix: the matrix - 2 dimensional
         """
 
+        m = matrix.tolist()
         for i in range(matrix.shape[0]):
             for j in range(matrix.shape[1]):
-                matrix[i][j] += abs(np.random.normal(0, 0.00001))
+                m[i][j] += abs(np.random.normal(0, 0.00001))
+
+        return np.array(m)
 
     @staticmethod
     def logistic_function(x):

@@ -24,11 +24,6 @@ def test_k_insertion():
     print('###################################################################')
     print('START k-insertion attack.\n')
 
-    if len(sys.argv) > 2:
-        number_to_add = int(sys.argv[1])
-    else:
-        number_to_add = 40
-
     # Data processing unit
     # The path is an index of 400 testing samples(raw email data).
     dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400',
@@ -36,6 +31,11 @@ def test_k_insertion():
     training_data, predict_data = dataset.split({'train': 50, 'test': 50})
     training_data = load_dataset(training_data)
     predict_data = load_dataset(predict_data)
+
+    if len(sys.argv) > 2:
+        number_to_add = int(sys.argv[1])
+    else:
+        number_to_add = int(0.3 * len(training_data))
 
     # Setting the default learner
     # Test simple learner svm

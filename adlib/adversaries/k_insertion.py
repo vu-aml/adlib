@@ -22,8 +22,8 @@ class KInsertion(Adversary):
     plus k feature vectors designed to induce the most error in poison_instance.
     """
 
-    def __init__(self, learner, poison_instance, alpha=1e-8, beta=0.5,
-                 decay=-1, eta=0.9, max_iter=100, number_to_add=5,
+    def __init__(self, learner, poison_instance, alpha=1e-8, beta=1,
+                 decay=-1, eta=0.9, max_iter=250, number_to_add=10,
                  verbose=False):
 
         """
@@ -88,8 +88,14 @@ class KInsertion(Adversary):
         self.poison_loss_before = self._calc_inst_loss(self.poison_instance)
 
         for k in range(self.number_to_add):
-            self.x = np.full(instances[0].get_feature_count(), 1.0,
-                             dtype='float64')
+            mean = np.mean(self.fvs)
+            mean = 1 if mean <= 0 else mean
+            std = np.std(self.fvs)
+
+            self.x = np.random.normal(mean, std, self.fvs.shape[1])
+            self.x = np.array(list(map(lambda x: abs(x), self.x)),
+                              dtype='float64')
+
             self.y = -1 if np.random.binomial(1, 0.5) == 0 else 1
             self._generate_inst()
 
@@ -97,14 +103,16 @@ class KInsertion(Adversary):
 
             # Main learning loop for one insertion
             old_x = deepcopy(self.x)
+            grad_norm = 0.0
             fv_dist = 0.0
             iteration = 0
-            old_update_vector = 0
+            old_update_vector = 0.0
             while (iteration == 0 or (fv_dist > self.alpha and
                                       iteration < self.max_iter)):
 
                 print('Iteration: ', iteration, ' - FV distance: ', fv_dist,
-                      ' - beta: ', self.beta, sep='')
+                      ' - gradient norm: ', grad_norm, ' - beta: ', self.beta,
+                      sep='')
 
                 begin = time.time()
 
@@ -124,6 +132,7 @@ class KInsertion(Adversary):
 
                 # Gradient descent with momentum
                 gradient = self._calc_gradient()
+                grad_norm = np.linalg.norm(gradient)
 
                 if not list(filter(lambda x: not x, gradient == 0)):
                     self.instances = self.instances[:-1]
@@ -142,7 +151,10 @@ class KInsertion(Adversary):
                                            self.x)))
 
                 if self.verbose:
-                    print('\nFeature vector:\n', self.x, '\n')
+                    print('\nFeature vector:\n', self.x, '\n', sep='')
+                    print('Max FV value:', np.max(self.x), '- Min FV value:',
+                          np.min(self.x))
+                    print('Label:', self.y, '\n')
 
                 self._generate_inst()
                 self.instances = self.instances[:-1]
@@ -338,18 +350,15 @@ class KInsertion(Adversary):
             for j in range(1, size):
                 matrix[i][j] = q_s[i - 1][j - 1]
 
-        DataModification.fuzz_matrix(matrix)
+        # matrix = DataModification.fuzz_matrix(matrix)
 
         try:
             matrix = np.linalg.inv(matrix)
         except np.linalg.linalg.LinAlgError:
-            # Sometimes the matrix is reported to be singular. In this case,
-            # the safest thing to do is have the matrix and thus eventually
-            # the gradient equal 0 as to not move the solution incorrectly.
-            # There is probably an error in the computation, but I have not
-            # looked for it yet.
-            print('SINGULAR MATRIX ERROR - FIX ME')
-            z_c = 0.0
+            print('SINGULAR MATRIX ERROR')
+
+            matrix = DataModification.fuzz_matrix(matrix)
+            matrix = np.linalg.inv(matrix)
 
         matrix = -1 * z_c * matrix
 

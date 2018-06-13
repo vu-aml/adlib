@@ -144,15 +144,12 @@ class KInsertion(Adversary):
                 if self.verbose:
                     print('\nGradient:\n', gradient, sep='')
 
-                max = np.max(self.fvs)
                 update_vector = (self.eta * old_update_vector +
                                  (1 - self.eta) * gradient)
 
                 self.x -= self.beta * update_vector
-                self.x = list(map(lambda x: abs(x), self.x))
-                self.x = list(map(lambda x: max * 10.0 if x > max * 10.0 else x,
-                                  self.x))
-                self.x = np.array(self.x)
+                self.x = np.array(list(map(lambda x: abs(x), self.x)),
+                                  dtype='float64')
 
                 if self.verbose:
                     print('\nFeature vector:\n', self.x, '\n', sep='')
@@ -320,7 +317,7 @@ class KInsertion(Adversary):
 
         learner = self.learner.model.learner
         size = learner.n_support_[0] + learner.n_support_[1] + 1  # binary
-        matrix = np.full((size, size), 0)
+        matrix = np.full((size, size), 0.0)
 
         if len(self.instances) - 1 not in learner.support_:  # not in S
             if self.learner.predict(self.inst) != self.inst.get_label():  # in E

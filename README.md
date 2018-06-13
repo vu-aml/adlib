@@ -2,6 +2,7 @@
 ### Computational Economics Research Lab at Vanderbilt University
 
 [![Build Status](https://travis-ci.org/vu-aml/adlib.svg?branch=master)](https://travis-ci.org/vu-aml/adlib)
+[![Build Status](https://circleci.com/gh/vu-aml/adlib.svg?style=shield&circle-token=:circle-token)
 
 Game-theoretic adversarial machine learning library providing a set of learner and adversary modules.
 

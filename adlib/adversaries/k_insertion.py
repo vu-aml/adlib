@@ -22,7 +22,7 @@ class KInsertion(Adversary):
     plus k feature vectors designed to induce the most error in poison_instance.
     """
 
-    def __init__(self, learner, poison_instance, alpha=1e-8, beta=1,
+    def __init__(self, learner, poison_instance, alpha=1e-8, beta=0.05,
                  decay=-1, eta=0.9, max_iter=250, number_to_add=10,
                  verbose=False):
 
@@ -92,7 +92,7 @@ class KInsertion(Adversary):
             mean = 1 if mean <= 0 else mean
             std = np.std(self.fvs)
 
-            self.x = np.random.normal(mean, std, self.fvs.shape[1])
+            self.x = np.random.normal(mean, std / 10.0, self.fvs.shape[1])
             self.x = np.array(list(map(lambda x: abs(x), self.x)),
                               dtype='float64')
 
@@ -134,7 +134,8 @@ class KInsertion(Adversary):
                 gradient = self._calc_gradient()
                 grad_norm = np.linalg.norm(gradient)
 
-                if not list(filter(lambda x: not x, gradient == 0)):
+                # if gradient is all 0.0
+                if np.min(gradient) == 0.0 and np.max(gradient) == 0.0:
                     self.instances = self.instances[:-1]
                     self.fvs = self.fvs[:-1]
                     self.labels = self.labels[:-1]
@@ -143,12 +144,15 @@ class KInsertion(Adversary):
                 if self.verbose:
                     print('\nGradient:\n', gradient, sep='')
 
+                max = np.max(self.fvs)
                 update_vector = (self.eta * old_update_vector +
                                  (1 - self.eta) * gradient)
 
                 self.x -= self.beta * update_vector
-                self.x = np.array(list(map(lambda x: 0 if x < 0 else x,
-                                           self.x)))
+                self.x = list(map(lambda x: abs(x), self.x))
+                self.x = list(map(lambda x: max * 10.0 if x > max * 10.0 else x,
+                                  self.x))
+                self.x = np.array(self.x)
 
                 if self.verbose:
                     print('\nFeature vector:\n', self.x, '\n', sep='')

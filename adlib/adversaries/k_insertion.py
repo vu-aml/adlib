@@ -88,18 +88,9 @@ class KInsertion(Adversary):
         self.poison_loss_before = self._calc_inst_loss(self.poison_instance)
 
         for k in range(self.number_to_add):
-            mean = np.mean(self.fvs)
-            std = np.std(self.fvs)
-
-            self.x = np.full(instances[0].get_feature_count(), mean,
+            self.x = np.full(instances[0].get_feature_count(), 1.0,
                              dtype='float64')
-            self.x = list(map(
-                lambda x, y: x * y,
-                self.x,
-                np.random.normal(1, std, len(self.x))))
-            self.x = np.array(list(map(lambda x: 0 if x < 0 else x, self.x)))
-
-            self.y = -1 if np.random.binomial(1, 0.5, 1)[0] == 0 else 1
+            self.y = -1 if np.random.binomial(1, 0.5) == 0 else 1
             self._generate_inst()
 
             self.beta = self.orig_beta
@@ -134,8 +125,11 @@ class KInsertion(Adversary):
                 # Gradient descent with momentum
                 gradient = self._calc_gradient()
 
-                if list(filter(lambda x: not x, gradient == 0)) == []:
-                    iteration = self.max_iter
+                if not list(filter(lambda x: not x, gradient == 0)):
+                    self.instances = self.instances[:-1]
+                    self.fvs = self.fvs[:-1]
+                    self.labels = self.labels[:-1]
+                    break
 
                 if self.verbose:
                     print('\nGradient:\n', gradient, sep='')

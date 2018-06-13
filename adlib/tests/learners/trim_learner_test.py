@@ -43,8 +43,7 @@ def test_trim_learner():
     # Execute the attack
     cost = list(np.random.binomial(2, 0.5, len(training_data)))
     total_cost = 0.3 * len(training_data)  # flip around ~30% of the labels
-    attacker = LabelFlipping(learner, cost, total_cost, num_iterations=2,
-                             verbose=True)
+    attacker = LabelFlipping(learner, cost, total_cost, verbose=True)
 
     print('###################################################################')
     print('START label-flipping attack.\n')

@@ -16,7 +16,8 @@ import numpy as np
 
 
 def test_data_modification():
-    print('\n#################################################################')
+    print()
+    print('###################################################################')
     print('START data modification attack.\n')
 
     # Data processing unit
@@ -60,10 +61,10 @@ def test_data_modification():
 
     # Set features to recognize spam as ham
     for index in spam_features:
-        target_theta[index] = -1
+        target_theta[index] = -10
 
     for index in ham_features:
-        target_theta[index] = 0.1
+        target_theta[index] = 0.01
 
     print('Features selected: ', np.array(spam_features))
     print('Number of features: ', len(spam_features))
@@ -128,7 +129,8 @@ def test_data_modification():
           len(spam_instances), sep='')
 
     print('\nEND data modification attack.')
-    print('#################################################################\n')
+    print('###################################################################')
+    print()
 
 
 def get_spam_features(instances, p=0.9):

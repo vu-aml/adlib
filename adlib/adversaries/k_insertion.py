@@ -21,8 +21,8 @@ class KInsertion(Adversary):
     plus k feature vectors designed to induce the most error in poison_instance.
     """
 
-    def __init__(self, learner, poison_instance, alpha=1e-8, beta=0.05,
-                 decay=-1, eta=0.9, max_iter=250, number_to_add=10,
+    def __init__(self, learner, poison_instance, alpha=1e-8, beta=0.1,
+                 decay=-1, eta=0.9, max_iter=125, number_to_add=10,
                  verbose=False):
 
         """

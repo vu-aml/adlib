@@ -4,8 +4,8 @@ import numpy as np, scipy.optimize
 import numpy.linalg as la
 
 # import my modules
-from my_args import setup_argparse
-from gd_poisoners import *
+from adlib.adversaries.datatransform.poisoning.my_args import setup_argparse
+from adlib.adversaries.datatransform.poisoning.gd_poisoners import *
 
 
 # -------------------------------------------------------------------------------

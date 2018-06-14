@@ -8,6 +8,26 @@ from adlib.adversaries import Adversary
 from data_reader.binary_input import Instance
 from typing import Dict, List
 
+""" Examples
+GD with random flipping
+python MYTEST -m ridge -init randflip -obj 0 -a 0.5 -b 0.1 -i 1 -s 4 -seed 123
+
+BGD with AlfaTilt
+python MYTEST -m ridge -init alfatilt -obj 0 -a 0.5 -b 0.1 -i 1 -s 4 -seed 123
+
+BGD with InfFlip
+python MYTEST -m ridge -init inflip -obj 0 -a 0.5 -b 0.1 -i 1 -s 4 -seed 123
+
+BGD with Adaptive
+python MYTEST -m ridge -init adaptive -obj 0 -a 0.5 -b 0.1 -i 1 -s 4 -seed 123
+
+Validation with random flipping
+python MYTEST -m ridge -init randflip -obj 1 -a 0.5 -b 0.1 -i 1 -s 4 -seed 123
+
+New objective with random flipping
+python MYTEST -m ridge -init randflip -obj 2 -a 0.5 -b 0.1 -i 1 -s 4 -seed 123
+"""
+
 
 class DataTransform(Adversary):
     def __init__(self):

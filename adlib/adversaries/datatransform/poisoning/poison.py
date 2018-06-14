@@ -1,11 +1,8 @@
 # Matthew Jagielski
 
-import numpy as np, scipy.optimize
-import numpy.linalg as la
-
+from adlib.adversaries.datatransform.poisoning.gd_poisoners import *
 # import my modules
 from adlib.adversaries.datatransform.poisoning.my_args import setup_argparse
-from adlib.adversaries.datatransform.poisoning.gd_poisoners import *
 
 
 # ------------------------------------------------------------------------------

@@ -30,14 +30,37 @@ python MYTEST -m ridge -init randflip -obj 2 -a 0.5 -b 0.1 -i 1 -s 4 -seed 123
 
 
 class DataTransform(Adversary):
-    def __init__(selfbeta=0.1, dataset='../datasets/house-processed.csv',
+    def __init__(self, beta=0.1,
+                 dataset=('./data_reader/data/raw/data-transform/'
+                          'house-processed.csv'),
                  epsilon=0.001, eta=0.5, initialization='randflip', lambd=1,
-                 logdir='../results', logind=0, model='ridge', multiproc=False,
+                 logdir='./results', logind=0, model='ridge', multiproc=True,
                  numinit=1, objective=1, optimizey=False, partct=4, poisct=75,
                  rounding=False, seed=123, sigma=1.0, testct=500, trainct=300,
                  validct=250, visualize=False):
         Adversary.__init__(self)
-        raise NotImplementedError
+        self.beta = beta
+        self.dataset = dataset
+        self.epsilon = epsilon
+        self.eta = eta
+        self.initialization = initialization
+        self.lambd = lambd
+        self.logdir = logdir
+        self.logind = logind
+        self.model = model
+        self.multiproc = multiproc
+        self.numinit = numinit
+        self.objective = objective
+        self.optimizey = optimizey
+        self.partct = partct
+        self.poisct = poisct
+        self.rounding = rounding
+        self.seed = seed
+        self.sigma = sigma
+        self.testct = testct
+        self.trainct = trainct
+        self.validct = validct
+        self.visualize = visualize
 
     def attack(self, instances) -> List[Instance]:
         raise NotImplementedError

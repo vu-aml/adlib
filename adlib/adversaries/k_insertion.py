@@ -131,7 +131,6 @@ class KInsertion(Adversary):
 
                 # Gradient descent with momentum
                 gradient = self._calc_gradient()
-                grad_norm = np.linalg.norm(gradient)
 
                 # if gradient is all 0.0
                 if np.min(gradient) == 0.0 and np.max(gradient) == 0.0:
@@ -143,8 +142,18 @@ class KInsertion(Adversary):
                 if self.verbose:
                     print('\nGradient:\n', gradient, sep='')
 
+                # If gradient is too large, only move a very small amount in its
+                # direction.
+                old_eta = None
+                if np.linalg.norm(gradient) >= 100 * grad_norm:
+                    old_eta = self.eta
+                    self.eta = 1.0 - (10.0 / np.max(abs(gradient)))
+
                 update_vector = (self.eta * old_update_vector +
                                  (1 - self.eta) * gradient)
+
+                if old_eta:
+                    self.eta = old_eta
 
                 self.x -= self.beta * update_vector
                 self.x = np.array(list(map(lambda x: abs(x), self.x)),
@@ -162,6 +171,7 @@ class KInsertion(Adversary):
                 self.labels = self.labels[:-1]
 
                 fv_dist = np.linalg.norm(self.x - old_x)
+                grad_norm = np.linalg.norm(gradient)
                 old_x = deepcopy(self.x)
                 self.beta *= 1 / (1 + self.decay * iteration)
                 old_update_vector = deepcopy(update_vector)

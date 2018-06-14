@@ -11,3 +11,4 @@ from .label_flipping import LabelFlipping
 from .restrained_attack import Restrained
 from .simple_optimize import SimpleOptimize
 from . import datamodification
+from . import datatransform

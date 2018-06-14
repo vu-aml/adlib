@@ -1,7 +1,6 @@
 # Matthew Jagielski
 
 from adlib.adversaries.datatransform.poisoning.gd_poisoners import *
-# import my modules
 from adlib.adversaries.datatransform.poisoning.my_args import setup_argparse
 
 

@@ -102,8 +102,8 @@ class KInsertion(Adversary):
 
             # Main learning loop for one insertion
             old_x = deepcopy(self.x)
-            grad_norm = 0.0
             fv_dist = 0.0
+            grad_norm = 0.0
             iteration = 0
             old_update_vector = 0.0
             while (iteration == 0 or (fv_dist > self.alpha and
@@ -145,7 +145,9 @@ class KInsertion(Adversary):
                 # If gradient is too large, only move a very small amount in its
                 # direction.
                 old_eta = None
-                if np.linalg.norm(gradient) >= 100 * grad_norm:
+                old_grad_norm = grad_norm
+                grad_norm = np.linalg.norm(gradient)
+                if grad_norm >= 100 * old_grad_norm and iteration > 0:
                     old_eta = self.eta
                     self.eta = 1.0 - (10.0 / np.max(abs(gradient)))
 
@@ -155,12 +157,19 @@ class KInsertion(Adversary):
                 if old_eta:
                     self.eta = old_eta
 
+                if self.verbose:
+                    print('\nUpdate Vector:\n', update_vector, sep='')
+
                 self.x -= self.beta * update_vector
                 self.x = np.array(list(map(lambda x: abs(x), self.x)),
                                   dtype='float64')
 
                 if self.verbose:
                     print('\nFeature vector:\n', self.x, '\n', sep='')
+                    print('Max gradient value:', np.max(gradient), '- Min',
+                          'gradient value:', np.min(gradient))
+                    print('Max UV value:', np.max(update_vector), '- Min',
+                          'UV value:', np.min(update_vector))
                     print('Max FV value:', np.max(self.x), '- Min FV value:',
                           np.min(self.x))
                     print('Label:', self.y, '\n')
@@ -171,7 +180,6 @@ class KInsertion(Adversary):
                 self.labels = self.labels[:-1]
 
                 fv_dist = np.linalg.norm(self.x - old_x)
-                grad_norm = np.linalg.norm(gradient)
                 old_x = deepcopy(self.x)
                 self.beta *= 1 / (1 + self.decay * iteration)
                 old_update_vector = deepcopy(update_vector)

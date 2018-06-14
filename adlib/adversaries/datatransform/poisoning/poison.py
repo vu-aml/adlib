@@ -8,9 +8,9 @@ from adlib.adversaries.datatransform.poisoning.my_args import setup_argparse
 from adlib.adversaries.datatransform.poisoning.gd_poisoners import *
 
 
-# -------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # TRIM algorithm
-# ------------------------------------------------------------------------------- 
+# ------------------------------------------------------------------------------
 def robustopt(x, y, count, lam, poiser):
     length = x.shape[0]
     width = x.shape[1]
@@ -90,7 +90,7 @@ def read_dataset_file(f):
         return np.matrix(x), y
 
 
-# -------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 def open_logging_files(logdir, modeltype, logind, args):
     myname = str(modeltype) + str(logind)
     logdir = logdir + os.path.sep + myname
@@ -110,7 +110,7 @@ def open_logging_files(logdir, modeltype, logind, args):
     return trainfile, testfile, validfile, resfile, logdir
 
 
-# ------------------------------------------------------------------------------- 
+# ------------------------------------------------------------------------------
 def sample_dataset(x, y, trnct, poisct, tstct, vldct, seed):
     size = x.shape[0]
     print(size)
@@ -142,7 +142,7 @@ def sample_dataset(x, y, trnct, poisct, tstct, vldct, seed):
     return trnx, trny, tstx, tsty, poisx, poisy, vldx, vldy
 
 
-# -------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 def infflip(x, y, count, poiser):
     mean = np.ravel(x.mean(axis=0))  # .reshape(1,-1)
     corr = np.dot(x.T, x) + 0.01 * np.eye(x.shape[1])
@@ -172,7 +172,7 @@ def infflip(x, y, count, poiser):
     return x[poisinds], gainsy
 
 
-# -------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 def levflip(x, y, count, poiser):
     allpoisy = []
     clf, _ = poiser.learn_model(x, y, None)
@@ -200,7 +200,7 @@ def levflip(x, y, count, poiser):
     return x[poisinds], allpoisy
 
 
-# -------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 def cookflip(x, y, count, poiser):
     allpoisy = []
     clf, _ = poiser.learn_model(x, y, None)
@@ -233,7 +233,7 @@ def cookflip(x, y, count, poiser):
     return x[poisinds], allpoisy
 
 
-# -------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 def farthestfirst(x, y, count, poiser):
     allpoisy = []
     clf, _ = poiser.learn_model(x, y, None)
@@ -257,7 +257,7 @@ def farthestfirst(x, y, count, poiser):
     return x[poisinds], allpoisy
 
 
-# -------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 def alfatilt(x, y, count, poiser):
     trueclf, _ = poiser.learn_model(x, y, None)
     truepreds = trueclf.predict(x)
@@ -292,7 +292,7 @@ def alfatilt(x, y, count, poiser):
     return x[poisinds], allpoisy
 
 
-# -------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 def inf_flip(X_tr, Y_tr, count):
     Y_tr = np.array(Y_tr)
     inv_cov = (0.01 * np.eye(X_tr.shape[1]) + np.dot(X_tr.T, X_tr)) ** -1
@@ -315,7 +315,7 @@ def inf_flip(X_tr, Y_tr, count):
     return X_tr[poisinds], [yvals[a] for a in poisinds]
 
 
-# -------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 def alfa_tilt(X_tr, Y_tr, count):
     inv_cov = (0.01 * np.eye(X_tr.shape[1]) + np.dot(X_tr.T, X_tr)) ** -1
     H = np.dot(np.dot(X_tr, inv_cov), X_tr.T)
@@ -342,7 +342,7 @@ def alfa_tilt(X_tr, Y_tr, count):
     return X_tr[poisinds], [yvals[a] for a in poisinds]
 
 
-# -------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 def adaptive(X_tr, Y_tr, count):
     Y_tr_copy = np.array(Y_tr)
     X_tr_copy = np.copy(X_tr)
@@ -377,7 +377,8 @@ def adaptive(X_tr, Y_tr, count):
 def randflip(X_tr, Y_tr, count):
     poisinds = np.random.choice(X_tr.shape[0], count, replace=False)
     print("Points selected: ", poisinds)
-    # Y_pois = [1-Y_tr[i] for i in poisinds]  # this is for validating yopt, not for initialization
+    # Y_pois = [1-Y_tr[i] for i in poisinds]  # this is for validating yopt,
+    # not for initialization
     Y_pois = [1 if 1 - Y_tr[i] > 0.5 else 0 for i in
               poisinds]  # this is the flip all the way implementation
     return np.matrix(X_tr[poisinds]), Y_pois
@@ -388,7 +389,8 @@ def randflipnobd(X_tr, Y_tr, count):
     print("Points selected: ", poisinds)
     Y_pois = [1 - Y_tr[i] for i in
               poisinds]  # this is for validating yopt, not for initialization
-    # Y_pois = [1 if 1-Y_tr[i]>0.5 else 0 for i in poisinds]  # this is the flip all the way implementation
+    # Y_pois = [1 if 1-Y_tr[i]>0.5 else 0 for i in poisinds]  # this is the
+    # flip all the way implementation
     return np.matrix(X_tr[poisinds]), Y_pois
 
 
@@ -423,14 +425,15 @@ def rmml(X_tr, Y_tr, count):
     return np.matrix(allpoisx), poisy.tolist()
 
 
-# -------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 def roundpois(poisx, poisy):
     return np.around(poisx), [0 if val < 0.5 else 1 for val in poisy]
 
 
-# ------------------------------------------------------------------------------- 
-# #datasets = ["icmldataset.txt",'contagio-preprocessed-missing.csv','pharm-preproc.csv','loan-processed.csv','house-processed.csv']
-# ------------------------------------------------------------------------------- 
+# ------------------------------------------------------------------------------
+# #datasets = ["icmldataset.txt",'contagio-preprocessed-missing.csv',
+# 'pharm-preproc.csv','loan-processed.csv','house-processed.csv']
+# ------------------------------------------------------------------------------
 def main(args):
     trainfile, testfile, validfile, resfile, newlogdir = \
         open_logging_files(args.logdir, args.model, args.logind, args)

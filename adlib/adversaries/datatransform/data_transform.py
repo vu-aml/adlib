@@ -30,7 +30,12 @@ python MYTEST -m ridge -init randflip -obj 2 -a 0.5 -b 0.1 -i 1 -s 4 -seed 123
 
 
 class DataTransform(Adversary):
-    def __init__(self):
+    def __init__(selfbeta=0.1, dataset='../datasets/house-processed.csv',
+                 epsilon=0.001, eta=0.5, initialization='randflip', lambd=1,
+                 logdir='../results', logind=0, model='ridge', multiproc=False,
+                 numinit=1, objective=1, optimizey=False, partct=4, poisct=75,
+                 rounding=False, seed=123, sigma=1.0, testct=500, trainct=300,
+                 validct=250, visualize=False):
         Adversary.__init__(self)
         raise NotImplementedError
 

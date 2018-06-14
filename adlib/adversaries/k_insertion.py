@@ -4,13 +4,13 @@
 # Matthew Sedam
 
 from adlib.adversaries.adversary import Adversary
-from adlib.adversaries.datamodification.data_modification import \
-    DataModification
+from adlib.utils.common import fuzz_matrix
 from data_reader.binary_input import Instance
-from data_reader.binary_input import BinaryFeatureVector
+from data_reader.real_input import RealFeatureVector
 import math
 import multiprocessing as mp
 import numpy as np
+import time
 from copy import deepcopy
 from typing import List, Dict
 
@@ -21,14 +21,17 @@ class KInsertion(Adversary):
     plus k feature vectors designed to induce the most error in poison_instance.
     """
 
-    def __init__(self, learner, poison_instance, alpha=1e-3, beta=0.05,
-                 max_iter=2000, number_to_add=10, verbose=False):
+    def __init__(self, learner, poison_instance, alpha=1e-8, beta=0.05,
+                 decay=-1, eta=0.9, max_iter=250, number_to_add=10,
+                 verbose=False):
 
         """
         :param learner: the trained learner
         :param poison_instance: the instance in which to induce the most error
         :param alpha: convergence condition (diff <= alpha)
         :param beta: the learning rate
+        :param decay: the decay rate
+        :param eta: the momentum percentage
         :param max_iter: the maximum number of iterations
         :param number_to_add: the number of new instances to add
         :param verbose: if True, print the feature vector and gradient for each
@@ -40,6 +43,8 @@ class KInsertion(Adversary):
         self.poison_instance = poison_instance
         self.alpha = alpha
         self.beta = beta
+        self.decay = self.beta / max_iter if decay < 0 else decay
+        self.eta = eta
         self.max_iter = max_iter
         self.orig_beta = beta
         self.number_to_add = number_to_add
@@ -59,6 +64,8 @@ class KInsertion(Adversary):
         self.poison_loss_before = None
         self.poison_loss_after = None
 
+        np.set_printoptions(threshold=0)
+
     def attack(self, instances) -> List[Instance]:
         """
         Performs a k-insertion attack
@@ -71,30 +78,42 @@ class KInsertion(Adversary):
 
         self.orig_instances = deepcopy(instances)
         self.instances = self.orig_instances
-        self.beta /= instances[0].get_feature_count()  # scale beta
         self.learner.training_instances = self.instances
+        self._calculate_constants()
+
         learner = self.learner.model.learner
         learner.fit(self.fvs, self.labels)
 
         self.poison_loss_before = self._calc_inst_loss(self.poison_instance)
 
         for k in range(self.number_to_add):
-            # x is the full feature vector of the instance to be added
-            self.x = np.random.binomial(1, 0.5,
-                                        instances[0].get_feature_count())
-            self.y = -1 if np.random.binomial(1, 0.5, 1)[0] == 0 else 1
+            mean = np.mean(self.fvs)
+            mean = 1 if mean <= 0 else mean
+            std = np.std(self.fvs)
 
+            self.x = np.random.normal(mean, std / 10.0, self.fvs.shape[1])
+            self.x = np.array(list(map(lambda x: abs(x), self.x)),
+                              dtype='float64')
+
+            self.y = -1 if np.random.binomial(1, 0.5) == 0 else 1
             self._generate_inst()
+
             self.beta = self.orig_beta
 
             # Main learning loop for one insertion
+            old_x = deepcopy(self.x)
             grad_norm = 0.0
+            fv_dist = 0.0
             iteration = 0
-            while (iteration == 0 or (grad_norm > self.alpha and
+            old_update_vector = 0.0
+            while (iteration == 0 or (fv_dist > self.alpha and
                                       iteration < self.max_iter)):
 
-                print('Iteration: ', iteration, ' - gradient norm: ', grad_norm,
+                print('Iteration: ', iteration, ' - FV distance: ', fv_dist,
+                      ' - gradient norm: ', grad_norm, ' - beta: ', self.beta,
                       sep='')
+
+                begin = time.time()
 
                 # Train with newly generated instance
                 self.instances.append(self.inst)
@@ -110,29 +129,58 @@ class KInsertion(Adversary):
 
                 learner.fit(self.fvs, self.labels)
 
-                # Update feature vector of the instance to be added
+                # Gradient descent with momentum
                 gradient = self._calc_gradient()
                 grad_norm = np.linalg.norm(gradient)
 
-                self.x = self.x - self.beta * gradient
-                self.x = DataModification.project_feature_vector(self.x)
+                # if gradient is all 0.0
+                if np.min(gradient) == 0.0 and np.max(gradient) == 0.0:
+                    self.instances = self.instances[:-1]
+                    self.fvs = self.fvs[:-1]
+                    self.labels = self.labels[:-1]
+                    break
+
+                if self.verbose:
+                    print('\nGradient:\n', gradient, sep='')
+
+                update_vector = (self.eta * old_update_vector +
+                                 (1 - self.eta) * gradient)
+
+                self.x -= self.beta * update_vector
+                self.x = np.array(list(map(lambda x: abs(x), self.x)),
+                                  dtype='float64')
+
+                if self.verbose:
+                    print('\nFeature vector:\n', self.x, '\n', sep='')
+                    print('Max FV value:', np.max(self.x), '- Min FV value:',
+                          np.min(self.x))
+                    print('Label:', self.y, '\n')
+
                 self._generate_inst()
                 self.instances = self.instances[:-1]
                 self.fvs = self.fvs[:-1]
                 self.labels = self.labels[:-1]
 
-                if self.verbose:
-                    print('Current feature vector:\n', self.x)
+                fv_dist = np.linalg.norm(self.x - old_x)
+                old_x = deepcopy(self.x)
+                self.beta *= 1 / (1 + self.decay * iteration)
+                old_update_vector = deepcopy(update_vector)
+
+                end = time.time()
+                print('TIME: ', end - begin, 's', sep='')
 
                 iteration += 1
 
-            print('Iteration: FINAL - gradient norm: ', grad_norm, sep='')
-            print('Number added so far: ', k + 1, sep='')
+            print('Iteration: FINAL - FV distance: ', fv_dist, ' - alpha: ',
+                  self.alpha, ' - beta: ', self.beta, sep='')
+            print('Number added so far: ', k + 1, '\n', sep='')
 
             # Add the newly generated instance and retrain with that dataset
             self.instances.append(self.inst)
             self.learner.training_instances = self.instances
             self.learner.train()
+
+            self._calculate_constants()
 
         self.poison_loss_after = self._calc_inst_loss(self.poison_instance)
 
@@ -146,15 +194,9 @@ class KInsertion(Adversary):
         # Calculate feature vectors
         self.fvs = []
         for i in range(len(self.instances)):
-            feature_vector = self.instances[i].get_feature_vector()
-            tmp = []
-            for j in range(self.instances[0].get_feature_count()):
-                if feature_vector.get_feature(j) == 1:
-                    tmp.append(1)
-                else:
-                    tmp.append(0)
-            tmp = np.array(tmp)
-            self.fvs.append(tmp)
+            fv = self.instances[i].get_feature_vector().get_csr_matrix()
+            fv = np.array(fv.todense().tolist()).flatten()
+            self.fvs.append(fv)
         self.fvs = np.array(self.fvs, dtype='float64')
 
         # Calculate labels
@@ -170,13 +212,8 @@ class KInsertion(Adversary):
         :return: the logistic loss
         """
 
-        fv = []
-        for i in range(inst.get_feature_count()):
-            if inst.get_feature_vector().get_feature(i) == 1:
-                fv.append(1)
-            else:
-                fv.append(0)
-        fv = np.array(fv)
+        fv = inst.get_feature_vector().get_csr_matrix()
+        fv = np.array(fv.todense().tolist()).flatten()
 
         # reshape is for the decision function when inputting only one sample
         loss = self.learner.model.learner.decision_function(fv.reshape(1, -1))
@@ -191,14 +228,16 @@ class KInsertion(Adversary):
                  and label self.y
         """
 
-        indices_list = []
-        for i in range(len(self.x)):
-            if self.x[i] >= 0.5:
-                indices_list.append(i)
+        indices = []
+        data = []
+        for i, val in enumerate(self.x):
+            if val != 0:
+                indices.append(i)
+                data.append(val)
 
         # Generate new instance
-        self.inst = Instance(self.y,
-                             BinaryFeatureVector(len(self.x), indices_list))
+        fv = RealFeatureVector(len(self.x), indices, data)
+        self.inst = Instance(self.y, fv)
 
     def _calc_gradient(self):
         """
@@ -223,11 +262,7 @@ class KInsertion(Adversary):
         pool.close()
         pool.join()
 
-        gradient = np.array(gradient)
-
-        if self.verbose:
-            print('\nCurrent gradient:\n', gradient)
-
+        gradient = np.array(gradient, dtype='float64')
         return gradient
 
     def _calc_grad_helper(self, i):
@@ -246,7 +281,7 @@ class KInsertion(Adversary):
             vector = [0]
             for j in self.learner.model.learner.support_:
                 vector.append(
-                    self._Q(self.instances[j], self.inst, True, i))
+                    self._Q(self.instances[j], self.inst, derivative=True, k=i))
             vector = np.array(vector)
 
             solution = self.matrix.dot(vector)
@@ -281,13 +316,13 @@ class KInsertion(Adversary):
 
         learner = self.learner.model.learner
         size = learner.n_support_[0] + learner.n_support_[1] + 1  # binary
-        matrix = np.full((size, size), 0)
+        matrix = np.full((size, size), 0.0)
 
         if len(self.instances) - 1 not in learner.support_:  # not in S
             if self.learner.predict(self.inst) != self.inst.get_label():  # in E
                 z_c = learner.C
             else:  # in R, z_c = 0, everything is 0
-                return 0, matrix
+                return 0.0, matrix
         else:  # in S
             # Get index of coefficient
             index = learner.support_.tolist().index(len(self.instances) - 1)
@@ -318,13 +353,10 @@ class KInsertion(Adversary):
         try:
             matrix = np.linalg.inv(matrix)
         except np.linalg.linalg.LinAlgError:
-            # Sometimes the matrix is reported to be singular. In this case,
-            # the safest thing to do is have the matrix and thus eventually
-            # the gradient equal 0 as to not move the solution incorrectly.
-            # There is probably an error in the computation, but I have not
-            # looked for it yet.
-            print('SINGULAR MATRIX ERROR - FIX ME')
-            z_c = 0
+            print('SINGULAR MATRIX ERROR')
+
+            matrix = fuzz_matrix(matrix)
+            matrix = np.linalg.inv(matrix)
 
         matrix = -1 * z_c * matrix
 
@@ -344,26 +376,21 @@ class KInsertion(Adversary):
         if inst_1.get_feature_count() != inst_2.get_feature_count():
             raise ValueError('Feature vectors need to have same length.')
 
-        fv = [[], []]
+        fvs = []
         for i in range(2):
             if i == 0:
                 inst = inst_1
             else:
                 inst = inst_2
 
-            feature_vector = inst.get_feature_vector()
-            for j in range(inst.get_feature_count()):
-                if feature_vector.get_feature(j) == 0:
-                    fv[i].append(0)
-                else:
-                    fv[i].append(1)
+            fvs.append(inst.get_feature_vector().get_csr_matrix())
+            fvs[i] = np.array(fvs[i].todense().tolist()).flatten()
 
         if derivative:
-            ret_val = self.kernel_derivative(np.array(fv[0]),
-                                             np.array(fv[1]),
-                                             k)
+            ret_val = self.kernel_derivative(fvs[0], fvs[1], k)
         else:
-            ret_val = self.kernel(np.array(fv[0]), np.array(fv[1]))
+            ret_val = self.kernel(fvs[0], fvs[1])
+
         return inst_1.get_label() * inst_2.get_label() * ret_val
 
     def _kernel_linear(self, fv_1: np.ndarray, fv_2: np.ndarray):
@@ -539,6 +566,10 @@ class KInsertion(Adversary):
             self.alpha = params['alpha']
         if params['beta'] is not None:
             self.beta = params['beta']
+        if params['decay'] is not None:
+            self.decay = params['decay']
+        if params['eta'] is not None:
+            self.eta = params['eta']
         if params['max_iter'] is not None:
             self.max_iter = params['max_iter']
         if params['number_to_add'] is not None:
@@ -561,11 +592,15 @@ class KInsertion(Adversary):
         self.poison_loss_before = None
         self.poison_loss_after = None
 
+        np.set_printoptions(threshold=0)
+
     def get_available_params(self):
         params = {'learner': self.learner,
                   'poison_instance': self.poison_instance,
                   'alpha': self.alpha,
                   'beta': self.beta,
+                  'decay': self.decay,
+                  'eta': self.eta,
                   'max_iter': self.max_iter,
                   'number_to_add': self.number_to_add,
                   'verbose': self.verbose}

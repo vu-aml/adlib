@@ -11,47 +11,31 @@ from copy import deepcopy
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
 from sklearn import svm
-import numpy as np
-import pytest
 import sys
 
 
 def test_k_insertion():
     """
     Use as follows:
-    python3 adlib/tests/adversaries/k_insertion_test.py #-TO-ADD #-ITERATIONS
+    python3 adlib/tests/adversaries/k_insertion_test.py NUMBER-TO-ADD
     """
 
-    print('\n#################################################################')
+    print()
+    print('###################################################################')
     print('START k-insertion attack.\n')
-
-    if len(sys.argv) > 2:
-        number_to_add = int(sys.argv[1])
-        num_iterations = int(sys.argv[2])
-    else:
-        number_to_add = 1
-        num_iterations = 4
 
     # Data processing unit
     # The path is an index of 400 testing samples(raw email data).
     dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400',
-                           binary=True, raw=True)
-    training_data = load_dataset(dataset)
+                           binary=False, raw=True)
+    training_data, predict_data = dataset.split({'train': 50, 'test': 50})
+    training_data = load_dataset(training_data)
+    predict_data = load_dataset(predict_data)
 
-    # Randomly choose ~12% of dataset to decrease debugging time
-    # 10% was too small for a realistic calculation.
-    choices = np.random.binomial(1, 0.12, len(training_data))
-    temp = []
-    predict_data = []
-    count = 0
-    for i in range(len(training_data)):
-        if choices[i] == 1:
-            temp.append(training_data[i])
-            count += 1
-        else:
-            predict_data.append(training_data[i])
-    training_data = temp
-    print('Training sample size: ', count, '/400\n', sep='')
+    if len(sys.argv) > 2:
+        number_to_add = int(sys.argv[1])
+    else:
+        number_to_add = int(0.3 * len(training_data))
 
     # Setting the default learner
     # Test simple learner svm
@@ -67,7 +51,6 @@ def test_k_insertion():
     attacker = KInsertion(learner,
                           training_data[0],
                           number_to_add=number_to_add,
-                          num_iterations=num_iterations,
                           verbose=True)
 
     attack_data = attacker.attack(training_data)
@@ -130,15 +113,15 @@ def test_k_insertion():
 
     print('###################################################################')
     print('poison_instance loss before attack: ',
-          round(attacker.poison_loss_before, 4), '%')
+          round(attacker.poison_loss_before, 4))
     print('poison_instance loss after attack: ',
-          round(attacker.poison_loss_after, 4), '%')
+          round(attacker.poison_loss_after, 4))
     print('poison_instance loss difference: ',
-          round(attacker.poison_loss_after - attacker.poison_loss_before, 4),
-          '%')
+          round(attacker.poison_loss_after - attacker.poison_loss_before, 4))
 
     print('\nEND k-insertion attack.')
-    print('#################################################################\n')
+    print('###################################################################')
+    print()
 
 
 if __name__ == '__main__':

@@ -4,11 +4,11 @@
 # Matthew Sedam
 
 from adlib.adversaries.adversary import Adversary
+from adlib.utils.common import logistic_function
 from data_reader.binary_input import Instance
 from data_reader.real_input import RealFeatureVector
 from copy import deepcopy
 from typing import List, Dict
-import math
 import numpy as np
 import os
 import pathos.multiprocessing as mp
@@ -22,7 +22,7 @@ class DataModification(Adversary):
     feature vectors.
     """
 
-    def __init__(self, learner, target_theta, lda=0.001, alpha=1e-3, beta=0.05,
+    def __init__(self, learner, target_theta, lda=0.001, alpha=1e-4, beta=0.05,
                  decay=-1, eta=0.9, max_iter=250, verbose=False):
         """
         :param learner: the trained learner
@@ -125,7 +125,7 @@ class DataModification(Adversary):
             print('\n\nTarget Theta:\n\n', self.target_theta, '\n\nTheta:\n\n',
                   self.theta, '\n')
 
-        # Go from floating-point values in [0, 1] to integers in {0, 1}
+        # Build appropriate RealFeatureVectors
         feature_count = self.fvs.shape[1]
         for i, fv in enumerate(self.fvs):
             indices = []
@@ -198,9 +198,8 @@ class DataModification(Adversary):
         self._calc_theta()
 
         # Calculate logistic function values - sigma(y_i g_i)
-        self.logistic_vals = [
-            DataModification.logistic_function(self.labels[i] * self.g_arr[i])
-            for i in range(len(self.instances))]
+        self.logistic_vals = [logistic_function(self.labels[i] * self.g_arr[i])
+                              for i in range(len(self.instances))]
         self.logistic_vals = np.array(self.logistic_vals)
 
     def _calc_theta(self):
@@ -222,10 +221,16 @@ class DataModification(Adversary):
         self.risk_gradient = self.theta - self.target_theta
 
         command_fail = True
-        if self.system == 'Darwin' or self.system == 'Linux':
+        if (self.system == 'Darwin' or
+                self.system == 'Linux' or
+                self.system == 'Windows'):
+
             command = './adlib/adversaries/datamodification/dm-gradient-'
-            command += 'macos' if self.system == 'Darwin' else 'linux'
-            command = 'chmod +x ' + command + ' && ' + command
+            if self.system == 'Windows':
+                command += 'Windows'
+            else:
+                command += 'macos' if self.system == 'Darwin' else 'linux'
+                command = 'chmod +x ' + command + ' && ' + command
             command += (' ' + str(self.lda) + ' ' + str(self.fvs.shape[0]) +
                         ' ' + str(self.fvs.shape[1]))
 
@@ -262,7 +267,7 @@ class DataModification(Adversary):
             matrices_1 = np.array(matrices_1)
             matrix_2 = self._calc_partial_f_partial_theta()
 
-        #  self.fuzz_matrix(matrix_2)
+        #  matrix_2 = self.fuzz_matrix(matrix_2)
 
         try:
             matrix_2 = np.linalg.inv(matrix_2)
@@ -339,26 +344,6 @@ class DataModification(Adversary):
         val = self.logistic_vals[i]
         return ((1 - val) * (val * self.theta[k] * self.fvs[i][j] -
                              self.labels[i] if j == k else 0))
-
-    @staticmethod
-    def fuzz_matrix(matrix: np.ndarray):
-        """
-        Add to every entry of matrix some noise to make it non-singular.
-        :param matrix: the matrix - 2 dimensional
-        """
-
-        for i in range(matrix.shape[0]):
-            for j in range(matrix.shape[1]):
-                matrix[i][j] += abs(np.random.normal(0, 0.00001))
-
-    @staticmethod
-    def logistic_function(x):
-        """
-        :param x: x
-        :return: the logistic function of x
-        """
-
-        return 1 / (1 + math.exp(-1 * x))
 
     def set_params(self, params: Dict):
         if params['learner'] is not None:

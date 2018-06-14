@@ -5,8 +5,10 @@
 # Matthew Sedam. 2018. Original code from Matthew Jagielski.
 
 from adlib.adversaries import Adversary
+from adlib.adversaries.datatransform.poisoning.poison import main
 from data_reader.binary_input import Instance
 from typing import Dict, List
+import argparse
 
 """ Examples
 GD with random flipping
@@ -34,7 +36,7 @@ class DataTransform(Adversary):
                  dataset=('./data_reader/data/raw/data-transform/'
                           'house-processed.csv'),
                  epsilon=0.001, eta=0.5, initialization='randflip', lambd=1,
-                 logdir='./results', logind=0, model='ridge', multiproc=True,
+                 logdir='./results', logind=0, model='ridge', multiproc=False,
                  numinit=1, objective=1, optimizey=False, partct=4, poisct=75,
                  rounding=False, seed=123, sigma=1.0, testct=500, trainct=300,
                  validct=250, visualize=False):
@@ -61,15 +63,39 @@ class DataTransform(Adversary):
         self.trainct = trainct
         self.validct = validct
         self.visualize = visualize
+        self.args = self.get_available_params()
 
     def attack(self, instances) -> List[Instance]:
-        raise NotImplementedError
+        main(argparse.Namespace(**self.args))
 
     def set_params(self, params: Dict):
         raise NotImplementedError
 
     def get_available_params(self):
-        raise NotImplementedError
+        params = {'beta': self.beta,
+                  'dataset': self.dataset,
+                  'epsilon': self.epsilon,
+                  'eta': self.eta,
+                  'initialization': self.initialization,
+                  'lambd': self.lambd,
+                  'logdir': self.logdir,
+                  'logind': self.logind,
+                  'model': self.model,
+                  'multiproc': self.multiproc,
+                  'numinit': self.numinit,
+                  'objective': self.objective,
+                  'optimizey': self.optimizey,
+                  'partct': self.partct,
+                  'poisct': self.poisct,
+                  'rounding': self.rounding,
+                  'seed': self.seed,
+                  'sigma': self.sigma,
+                  'testct': self.testct,
+                  'trainct': self.trainct,
+                  'validct': self.validct,
+                  'visualize': self.visualize}
+
+        return params
 
     def set_adversarial_params(self, learner, train_instances):
         raise NotImplementedError

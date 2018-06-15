@@ -88,7 +88,8 @@ class KInsertion(Adversary):
 
         for k in range(self.number_to_add):
             print()
-            print('###########################################################')
+            print('###################################################', end='')
+            print('################')
 
             self._generate_x_y_and_inst()
             self.beta = self.orig_beta
@@ -193,7 +194,8 @@ class KInsertion(Adversary):
 
             self._calculate_constants()
 
-            print('###########################################################')
+            print('###################################################', end='')
+            print('################')
             print()
 
         self.poison_loss_after = self._calc_inst_loss(self.poison_instance)

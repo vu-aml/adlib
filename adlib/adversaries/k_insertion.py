@@ -135,7 +135,9 @@ class KInsertion(Adversary):
                 grad_norm = np.linalg.norm(gradient)
                 if grad_norm >= 100 * old_grad_norm and iteration > 0:
                     old_eta = self.eta
-                    self.eta = 1.0 - (10.0 / np.max(abs(gradient)))
+                    max_val = np.max(abs(gradient))
+                    max_val = 1.0 if max_val == 0 else max_val
+                    self.eta = 1.0 - (10.0 / max_val)
 
                 update_vector = (self.eta * old_update_vector +
                                  (1 - self.eta) * gradient)

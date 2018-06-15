@@ -5,56 +5,6 @@ import math
 import numpy as np
 
 
-def fuzz_matrix(matrix: np.ndarray):
-    """
-    Add to every entry of matrix some noise to make it non-singular.
-    :param matrix: the matrix - 2 dimensional
-    """
-
-    m = matrix.tolist()
-    for i in range(matrix.shape[0]):
-        for j in range(matrix.shape[1]):
-            m[i][j] += abs(np.random.normal(0, 0.00001))
-
-    return np.array(m)
-
-
-def logistic_function(x):
-    """
-    :param x: x
-    :return: the logistic function of x
-    """
-
-    return 1 / (1 + math.exp(-1 * x))
-
-
-def get_spam_features(instances, p=0.9):
-    """
-    Returns a list of feature indices where the proportion of instances that
-    have them is >= p
-    :param instances: the spam instances - MUST BE SPAM (i.e. have a label of 1)
-    :param p: the proportion of instances that must have this value
-    :return: a tuple comprised of spam and ham features in separate lists
-    """
-
-    if len(instances) == 0:
-        raise ValueError('Must have at least one instance.')
-
-    spam_features = []
-    ham_features = []
-    for i in range(instances[0].get_feature_count()):
-        count = 0
-        for inst in instances:
-            count += 1 if inst.get_feature_vector().get_feature(i) > 0 else 0
-
-        if (count / len(instances)) >= p:
-            spam_features.append(i)
-        else:
-            ham_features.append(i)
-
-    return spam_features, ham_features
-
-
 def calculate_correct_percentages(orig_labels, attack_labels, instances):
     """
     Calculates the percent of labels that were predicted correctly before and
@@ -85,3 +35,53 @@ def calculate_correct_percentages(orig_labels, attack_labels, instances):
     difference = str(round(difference, 4))
 
     return orig_precent_correct, attack_precent_correct, difference
+
+
+def fuzz_matrix(matrix: np.ndarray):
+    """
+    Add to every entry of matrix some noise to make it non-singular.
+    :param matrix: the matrix - 2 dimensional
+    """
+
+    m = matrix.tolist()
+    for i in range(matrix.shape[0]):
+        for j in range(matrix.shape[1]):
+            m[i][j] += abs(np.random.normal(0, 0.00001))
+
+    return np.array(m)
+
+
+def get_spam_features(instances, p=0.9):
+    """
+    Returns a list of feature indices where the proportion of instances that
+    have them is >= p
+    :param instances: the spam instances - MUST BE SPAM (i.e. have a label of 1)
+    :param p: the proportion of instances that must have this value
+    :return: a tuple comprised of spam and ham features in separate lists
+    """
+
+    if len(instances) == 0:
+        raise ValueError('Must have at least one instance.')
+
+    spam_features = []
+    ham_features = []
+    for i in range(instances[0].get_feature_count()):
+        count = 0
+        for inst in instances:
+            count += 1 if inst.get_feature_vector().get_feature(i) > 0 else 0
+
+        if (count / len(instances)) >= p:
+            spam_features.append(i)
+        else:
+            ham_features.append(i)
+
+    return spam_features, ham_features
+
+
+def logistic_function(x):
+    """
+    :param x: x
+    :return: the logistic function of x
+    """
+
+    return 1 / (1 + math.exp(-1 * x))

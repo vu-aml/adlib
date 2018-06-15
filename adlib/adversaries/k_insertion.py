@@ -4,7 +4,7 @@
 # Matthew Sedam
 
 from adlib.adversaries.adversary import Adversary
-from adlib.utils.common import fuzz_matrix
+from adlib.utils.common import fuzz_matrix, get_spam_features
 from data_reader.binary_input import Instance
 from data_reader.real_input import RealFeatureVector
 import math

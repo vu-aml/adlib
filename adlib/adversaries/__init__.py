@@ -1,3 +1,6 @@
+from . import datamodification
+from . import datatransform
+
 from .adversarial_learning import AdversarialLearning
 from .adversary import Adversary
 from .binary_greedy import BinaryGreedy
@@ -10,4 +13,3 @@ from .k_insertion import KInsertion
 from .label_flipping import LabelFlipping
 from .restrained_attack import Restrained
 from .simple_optimize import SimpleOptimize
-from . import datamodification

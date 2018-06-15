@@ -87,17 +87,7 @@ class KInsertion(Adversary):
         self.poison_loss_before = self._calc_inst_loss(self.poison_instance)
 
         for k in range(self.number_to_add):
-            mean = np.mean(self.fvs)
-            mean = 1 if mean <= 0 else mean
-            std = np.std(self.fvs)
-
-            self.x = np.random.normal(mean, std / 10.0, self.fvs.shape[1])
-            self.x = np.array(list(map(lambda x: abs(x), self.x)),
-                              dtype='float64')
-
-            self.y = -1 if np.random.binomial(1, 0.5) == 0 else 1
-            self._generate_inst()
-
+            self._generate_x_y_and_inst()
             self.beta = self.orig_beta
 
             # Main learning loop for one insertion
@@ -203,6 +193,30 @@ class KInsertion(Adversary):
         self.poison_loss_after = self._calc_inst_loss(self.poison_instance)
 
         return self.instances
+
+    def _generate_x_y_and_inst(self):
+        spam_instances = list(filter(lambda inst: inst.get_label() == 1,
+                                     self.instances))
+        spam_features, ham_features = get_spam_features(spam_instances)
+
+        mean = np.mean(self.fvs)
+        mean = 1 if mean <= 0 else mean
+        std = np.std(self.fvs)
+
+        self.x = np.random.normal(mean, std / 10.0, self.fvs.shape[1])
+        self.x = np.array(list(map(lambda x: abs(x), self.x)),
+                          dtype='float64')
+
+        # Increase spam-like characteristics - an outlier in the whole data set
+        for index in spam_features:
+            self.x[index] = np.max(self.fvs) * 2.5
+
+        # Decrease ham-like characteristics
+        for index in ham_features:
+            self.x[index] /= 10.0
+
+        self.y = -1  # spam-like instance is classified as ham
+        self._generate_inst()
 
     def _calculate_constants(self):
         """

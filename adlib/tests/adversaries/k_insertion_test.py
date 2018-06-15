@@ -3,10 +3,9 @@
 # Matthew Sedam
 
 
-from adlib.learners import SimpleLearner
 from adlib.adversaries.k_insertion import KInsertion
-from adlib.tests.adversaries.label_flipping_test import \
-    calculate_correct_percentages
+from adlib.learners import SimpleLearner
+from adlib.utils.common import calculate_correct_percentages
 from copy import deepcopy
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
@@ -28,14 +27,14 @@ def test_k_insertion():
     # The path is an index of 400 testing samples(raw email data).
     dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400',
                            binary=False, raw=True)
-    training_data, predict_data = dataset.split({'train': 50, 'test': 50})
+    training_data, predict_data = dataset.split({'train': 20, 'test': 80})
     training_data = load_dataset(training_data)
     predict_data = load_dataset(predict_data)
 
     if len(sys.argv) > 2:
         number_to_add = int(sys.argv[1])
     else:
-        number_to_add = int(0.3 * len(training_data))
+        number_to_add = int(0.25 * len(training_data))
 
     # Setting the default learner
     # Test simple learner svm

@@ -21,8 +21,8 @@ class KInsertion(Adversary):
     plus k feature vectors designed to induce the most error in poison_instance.
     """
 
-    def __init__(self, learner, poison_instance, alpha=1e-8, beta=0.05,
-                 decay=-1, eta=0.9, max_iter=250, number_to_add=10,
+    def __init__(self, learner, poison_instance, alpha=1e-8, beta=0.1,
+                 decay=-1, eta=0.9, max_iter=125, number_to_add=10,
                  verbose=False):
 
         """
@@ -87,23 +87,17 @@ class KInsertion(Adversary):
         self.poison_loss_before = self._calc_inst_loss(self.poison_instance)
 
         for k in range(self.number_to_add):
-            mean = np.mean(self.fvs)
-            mean = 1 if mean <= 0 else mean
-            std = np.std(self.fvs)
+            print()
+            print('###################################################', end='')
+            print('################')
 
-            self.x = np.random.normal(mean, std / 10.0, self.fvs.shape[1])
-            self.x = np.array(list(map(lambda x: abs(x), self.x)),
-                              dtype='float64')
-
-            self.y = -1 if np.random.binomial(1, 0.5) == 0 else 1
-            self._generate_inst()
-
+            self._generate_x_y_and_inst()
             self.beta = self.orig_beta
 
             # Main learning loop for one insertion
             old_x = deepcopy(self.x)
-            grad_norm = 0.0
             fv_dist = 0.0
+            grad_norm = 0.0
             iteration = 0
             old_update_vector = 0.0
             while (iteration == 0 or (fv_dist > self.alpha and
@@ -131,7 +125,6 @@ class KInsertion(Adversary):
 
                 # Gradient descent with momentum
                 gradient = self._calc_gradient()
-                grad_norm = np.linalg.norm(gradient)
 
                 # if gradient is all 0.0
                 if np.min(gradient) == 0.0 and np.max(gradient) == 0.0:
@@ -143,8 +136,23 @@ class KInsertion(Adversary):
                 if self.verbose:
                     print('\nGradient:\n', gradient, sep='')
 
+                # If gradient is too large, only move a very small amount in its
+                # direction.
+                old_eta = None
+                old_grad_norm = grad_norm
+                grad_norm = np.linalg.norm(gradient)
+                if grad_norm >= 100 * old_grad_norm and iteration > 0:
+                    old_eta = self.eta
+                    self.eta = 1.0 - (10.0 / np.max(abs(gradient)))
+
                 update_vector = (self.eta * old_update_vector +
                                  (1 - self.eta) * gradient)
+
+                if old_eta:
+                    self.eta = old_eta
+
+                if self.verbose:
+                    print('\nUpdate Vector:\n', update_vector, sep='')
 
                 self.x -= self.beta * update_vector
                 self.x = np.array(list(map(lambda x: abs(x), self.x)),
@@ -152,6 +160,10 @@ class KInsertion(Adversary):
 
                 if self.verbose:
                     print('\nFeature vector:\n', self.x, '\n', sep='')
+                    print('Max gradient value:', np.max(gradient), '- Min',
+                          'gradient value:', np.min(gradient))
+                    print('Max UV value:', np.max(update_vector), '- Min',
+                          'UV value:', np.min(update_vector))
                     print('Max FV value:', np.max(self.x), '- Min FV value:',
                           np.min(self.x))
                     print('Label:', self.y, '\n')
@@ -181,6 +193,10 @@ class KInsertion(Adversary):
             self.learner.train()
 
             self._calculate_constants()
+
+            print('###################################################', end='')
+            print('################')
+            print()
 
         self.poison_loss_after = self._calc_inst_loss(self.poison_instance)
 
@@ -221,6 +237,18 @@ class KInsertion(Adversary):
         loss = math.log(1 + math.exp(loss))
 
         return loss
+
+    def _generate_x_y_and_inst(self):
+        """
+        Generates self.x, self.y, and self.inst
+        """
+
+        self.x = self.poison_instance.get_feature_vector().get_csr_matrix()
+        self.x = np.array(self.x.todense().tolist(), dtype='float64').flatten()
+        self.x += abs(np.random.normal(0, 0.00001, len(self.x)))
+        self.y = -1 * self.poison_instance.get_label()
+
+        self._generate_inst()
 
     def _generate_inst(self):
         """

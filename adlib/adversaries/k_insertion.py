@@ -194,17 +194,6 @@ class KInsertion(Adversary):
 
         return self.instances
 
-    def _generate_x_y_and_inst(self):
-        """
-        Generates self.x, self.y, and self.inst
-        """
-
-        self.x = self.poison_instance.get_feature_vector().get_csr_matrix()
-        self.x = np.array(self.x.todense().tolist(), dtype='float64').flatten()
-        self.y = -1 * self.poison_instance.get_label()
-
-        self._generate_inst()
-
     def _calculate_constants(self):
         """
         Calculates constants for the gradient descent loop
@@ -240,6 +229,18 @@ class KInsertion(Adversary):
         loss = math.log(1 + math.exp(loss))
 
         return loss
+
+    def _generate_x_y_and_inst(self):
+        """
+        Generates self.x, self.y, and self.inst
+        """
+
+        self.x = self.poison_instance.get_feature_vector().get_csr_matrix()
+        self.x = np.array(self.x.todense().tolist(), dtype='float64').flatten()
+        self.x += abs(np.random.normal(0, 0.00001, len(self.x)))
+        self.y = -1 * self.poison_instance.get_label()
+
+        self._generate_inst()
 
     def _generate_inst(self):
         """

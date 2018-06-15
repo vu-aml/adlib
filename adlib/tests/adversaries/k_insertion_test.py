@@ -3,10 +3,9 @@
 # Matthew Sedam
 
 
-from adlib.learners import SimpleLearner
 from adlib.adversaries.k_insertion import KInsertion
-from adlib.tests.adversaries.label_flipping_test import \
-    calculate_correct_percentages
+from adlib.learners import SimpleLearner
+from adlib.utils.common import calculate_correct_percentages
 from copy import deepcopy
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset

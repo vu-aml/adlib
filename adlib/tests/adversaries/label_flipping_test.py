@@ -2,14 +2,14 @@
 # Tests the label flipping implementation
 # Matthew Sedam
 
-from copy import deepcopy
-from sklearn import svm
+from adlib.adversaries.label_flipping import LabelFlipping
 from adlib.learners import SimpleLearner
-import numpy as np
-import pytest
+from adlib.utils.common import calculate_correct_percentages
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
-from adlib.adversaries.label_flipping import LabelFlipping
+import numpy as np
+from copy import deepcopy
+from sklearn import svm
 
 
 def test_label_flipping():
@@ -100,38 +100,6 @@ def test_label_flipping():
 
     print('\nEND label flipping attack.')
     print('#################################################################\n')
-
-
-def calculate_correct_percentages(orig_labels, attack_labels, instances):
-    """
-    Calculates the percent of labels that were predicted correctly before and
-    after the attack.
-    :param orig_labels: the labels predicted by the pre-attack learner
-    :param attack_labels: the labels predicted by the post-attack learner
-    :param instances: the list of instances
-    :return: strings of original percent correct, attack percent correct, and
-             the difference (original - attack)
-    """
-
-    orig_count = 0
-    count = 0
-    for i in range(len(instances)):
-        if orig_labels[i] != instances[i].get_label():
-            orig_count += 1
-        elif attack_labels[i] != instances[i].get_label():
-            count += 1
-
-    orig_precent_correct = ((len(instances) - orig_count) * 100
-                            / len(instances))
-    attack_precent_correct = ((len(instances) - count) * 100
-                              / len(instances))
-    difference = orig_precent_correct - attack_precent_correct
-
-    orig_precent_correct = str(round(orig_precent_correct, 4))
-    attack_precent_correct = str(round(attack_precent_correct, 4))
-    difference = str(round(difference, 4))
-
-    return orig_precent_correct, attack_precent_correct, difference
 
 
 if __name__ == '__main__':

@@ -4,7 +4,7 @@
 # Matthew Sedam
 
 from adlib.adversaries.adversary import Adversary
-from adlib.utils.common import fuzz_matrix, get_spam_features
+from adlib.utils.common import fuzz_matrix
 from data_reader.binary_input import Instance
 from data_reader.real_input import RealFeatureVector
 import math
@@ -195,27 +195,14 @@ class KInsertion(Adversary):
         return self.instances
 
     def _generate_x_y_and_inst(self):
-        spam_instances = list(filter(lambda inst: inst.get_label() == 1,
-                                     self.instances))
-        spam_features, ham_features = get_spam_features(spam_instances)
+        """
+        Generates self.x, self.y, and self.inst
+        """
 
-        mean = np.mean(self.fvs)
-        mean = 1 if mean <= 0 else mean
-        std = np.std(self.fvs)
+        self.x = self.poison_instance.get_feature_vector().get_csr_matrix()
+        self.x = np.array(self.x.todense().tolist(), dtype='float64').flatten()
+        self.y = -1 * self.poison_instance.get_label()
 
-        self.x = np.random.normal(mean, std / 10.0, self.fvs.shape[1])
-        self.x = np.array(list(map(lambda x: abs(x), self.x)),
-                          dtype='float64')
-
-        # Increase spam-like characteristics - an outlier in the whole data set
-        for index in spam_features:
-            self.x[index] = np.max(self.fvs) * 2.5
-
-        # Decrease ham-like characteristics
-        for index in ham_features:
-            self.x[index] /= 10.0
-
-        self.y = -1  # spam-like instance is classified as ham
         self._generate_inst()
 
     def _calculate_constants(self):

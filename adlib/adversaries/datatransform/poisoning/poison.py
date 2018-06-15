@@ -98,10 +98,10 @@ def open_logging_files(logdir, modeltype, logind, args):
         for arg in args.__dict__:
             cmdfile.write('{}: {}\n'.format(arg, args.__dict__[arg]))
 
-    trainfile = open(logdir + os.path.sep + "train.txt", 'w')
-    testfile = open(logdir + os.path.sep + "test.txt", 'w')
-    validfile = open(logdir + os.path.sep + "valid.txt", 'w')
-    resfile = open(logdir + os.path.sep + "err.txt", 'w')
+    trainfile = open(logdir + os.path.sep + 'train.txt', 'w')
+    testfile = open(logdir + os.path.sep + 'test.txt', 'w')
+    validfile = open(logdir + os.path.sep + 'valid.txt', 'w')
+    resfile = open(logdir + os.path.sep + 'err.txt', 'w')
     resfile.write('poisct,itnum,obj_diff,obj_val,val_mse,test_mse,time\n')
     return trainfile, testfile, validfile, resfile, logdir
 
@@ -372,7 +372,7 @@ def adaptive(X_tr, Y_tr, count):
 
 def randflip(X_tr, Y_tr, count):
     poisinds = np.random.choice(X_tr.shape[0], count, replace=False)
-    print("Points selected: ", poisinds)
+    print('Points selected: ', poisinds)
     # Y_pois = [1-Y_tr[i] for i in poisinds]  # this is for validating yopt,
     # not for initialization
     Y_pois = [1 if 1 - Y_tr[i] > 0.5 else 0 for i in
@@ -382,7 +382,7 @@ def randflip(X_tr, Y_tr, count):
 
 def randflipnobd(X_tr, Y_tr, count):
     poisinds = np.random.choice(X_tr.shape[0], count, replace=False)
-    print("Points selected: ", poisinds)
+    print('Points selected: ', poisinds)
     Y_pois = [1 - Y_tr[i] for i in
               poisinds]  # this is for validating yopt, not for initialization
     # Y_pois = [1 if 1-Y_tr[i]>0.5 else 0 for i in poisinds]  # this is the
@@ -427,7 +427,7 @@ def roundpois(poisx, poisy):
 
 
 # ------------------------------------------------------------------------------
-# #datasets = ["icmldataset.txt",'contagio-preprocessed-missing.csv',
+# #datasets = ['icmldataset.txt','contagio-preprocessed-missing.csv',
 # 'pharm-preproc.csv','loan-processed.csv','house-processed.csv']
 # ------------------------------------------------------------------------------
 def main(args):
@@ -436,8 +436,7 @@ def main(args):
     x, y = open_dataset(args.dataset, args.visualize)
     trainx, trainy, testx, testy, poisx, poisy, validx, validy = \
         sample_dataset(x, y, args.trainct, args.poisct, args.testct,
-                       args.validct, \
-                       args.seed)
+                       args.validct, args.seed)
 
     for i in range(len(testy)):
         testfile.write(','.join(
@@ -460,19 +459,19 @@ def main(args):
     print(totprop)
 
     timestart, timeend = None, None
-    types = {'linreg': LinRegGDPoisoner, \
-             'lasso': LassoGDPoisoner, \
-             'enet': ENetGDPoisoner, \
+    types = {'linreg': LinRegGDPoisoner,
+             'lasso': LassoGDPoisoner,
+             'enet': ENetGDPoisoner,
              'ridge': RidgeGDPoisoner}
 
-    inits = {'levflip': levflip, \
-             'cookflip': cookflip, \
-             'alfatilt': alfa_tilt, \
-             'inflip': inf_flip, \
-             'ffirst': farthestfirst, \
-             'adaptive': adaptive, \
-             'randflip': randflip, \
-             'randflipnobd': randflipnobd, \
+    inits = {'levflip': levflip,
+             'cookflip': cookflip,
+             'alfatilt': alfa_tilt,
+             'inflip': inf_flip,
+             'ffirst': farthestfirst,
+             'adaptive': adaptive,
+             'randflip': randflip,
+             'randflipnobd': randflipnobd,
              'rmml': rmml}
 
     bestpoisx, bestpoisy, besterr = None, None, -1
@@ -491,13 +490,13 @@ def main(args):
         clf, _ = genpoiser.learn_model(np.concatenate((trainx, poisx), axis=0),
                                        trainy + poisy, None)
         err = genpoiser.computeError(clf)[0]
-        print("Validation Error:", err)
+        print('Validation Error:', err)
         if err > besterr:
             bestpoisx, bestpoisy, besterr = np.copy(poisx), poisy[:], err
     poisx, poisy = np.matrix(bestpoisx), bestpoisy
-    poiser = types[args.model](trainx, trainy, testx, testy, validx, validy, \
-                               args.eta, args.beta, args.sigma, args.epsilon, \
-                               args.multiproc, trainfile, resfile, \
+    poiser = types[args.model](trainx, trainy, testx, testy, validx, validy,
+                               args.eta, args.beta, args.sigma, args.epsilon,
+                               args.multiproc, trainfile, resfile,
                                args.objective, args.optimizey, colmap)
 
     for i in range(args.partct + 1):
@@ -505,7 +504,7 @@ def main(args):
         numsamples = int(0.5 + args.trainct * (curprop / (1 - curprop)))
         curpoisx = poisx[:numsamples, :]
         curpoisy = poisy[:numsamples]
-        trainfile.write("\n")
+        trainfile.write('\n')
 
         timestart = datetime.datetime.now()
         poisres, poisresy = poiser.poison_data(curpoisx, curpoisy, timestart,
@@ -530,8 +529,8 @@ def main(args):
 
         towrite = [numsamples, -1, None, None, err[0], err[1],
                    (timeend - timestart).total_seconds()]
-        resfile.write(','.join([str(val) for val in towrite]) + "\n")
-        trainfile.write("\n")
+        resfile.write(','.join([str(val) for val in towrite]) + '\n')
+        trainfile.write('\n')
         for j in range(numsamples):
             trainfile.write(','.join([str(val) for val in
                                       [poisresy[j]] + poisres[j].tolist()[
@@ -540,8 +539,8 @@ def main(args):
         if args.rounding:
             towrite = [numsamples, 'r', None, None, rounderr[0], rounderr[1],
                        (timeend - timestart).total_seconds()]
-            resfile.write(','.join([str(val) for val in towrite]) + "\n")
-            trainfile.write("\nround\n")
+            resfile.write(','.join([str(val) for val in towrite]) + '\n')
+            trainfile.write('\nround\n')
             for j in range(numsamples):
                 trainfile.write(','.join([str(val) for val in
                                           [roundy[j]] + roundx[j].tolist()[
@@ -556,24 +555,24 @@ def main(args):
     testfile.close()
 
     print()
-    print("Unpoisoned")
-    print("Validation MSE:", errgrd[0])
-    print("Test MSE:", errgrd[1])
+    print('Unpoisoned')
+    print('Validation MSE:', errgrd[0])
+    print('Test MSE:', errgrd[1])
     print('Poisoned:')
-    print("Validation MSE:", err[0])
-    print("Test MSE:", err[1])
+    print('Validation MSE:', err[0])
+    print('Test MSE:', err[1])
     if args.rounding:
-        print("Rounded")
-        print("Validation MSE", rounderr[0])
-        print("Test MSE:", rounderr[1])
+        print('Rounded')
+        print('Validation MSE', rounderr[0])
+        print('Test MSE:', rounderr[1])
 
 
 if __name__ == '__main__':
-    print("starting poison ...\n")
+    print('starting poison ...\n')
     parser = setup_argparse()
     args = parser.parse_args()
 
-    print("-----------------------------------------------------------")
+    print('-----------------------------------------------------------')
     print(args)
-    print("-----------------------------------------------------------")
+    print('-----------------------------------------------------------')
     main(args)

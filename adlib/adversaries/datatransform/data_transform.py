@@ -43,6 +43,7 @@ class DataTransform(Adversary):
         self.trainct = trainct
         self.validct = validct
         self.visualize = visualize
+
         self.args = self.get_available_params()
 
     def attack(self, instances):
@@ -241,6 +242,8 @@ class DataTransform(Adversary):
             self.validct = params['validct']
         if params['visualize'] is not None:
             self.visualize = params['visualize']
+
+        self.args = self.get_available_params()
 
     def get_available_params(self):
         params = {'beta': self.beta,

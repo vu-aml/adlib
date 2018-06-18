@@ -3,7 +3,7 @@ from data_reader.binary_input import Instance
 from typing import List, Dict
 import numpy as np
 from copy import deepcopy
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 
 """
   Based on Nightmare at Test Time: Robust Learning by Feature Deletion by Amir Globerson

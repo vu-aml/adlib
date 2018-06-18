@@ -18,7 +18,7 @@ Concept: A generalized attacker algorithm that attempts to move the instances' f
 
 
 class FreeRange(Adversary):
-    def __init__(self, f_attack=0.2, manual_bound=True, xj_min=0.0, xj_max=1.0, binary=False, learn_model=None):
+    def __init__(self, f_attack=0.2, manual_bound=False, xj_min=0.0, xj_max=1.0, binary=False, learn_model=None):
         """
 
         :param f_attack:  float (between 0 and 1),determining the agressiveness
@@ -56,15 +56,15 @@ class FreeRange(Adversary):
             self.f_attack = params['f_attack']
         if 'binary' in params.keys():
             self.binary = params['binary']
-        if 'type' in params.keys():
-            self.type = params['type']
+        if 'manual_bound' in params.keys():
+            self.manual = params['manual_bound']
 
     def get_available_params(self) -> Dict:
         params = {'xj_min': self.xj_min,
                   'xj_max': self.xj_max,
                   'f_attack': self.f_attack,
                   'binary': self.binary,
-                  'type': self.type
+                  'manual_bound': self.manual
                   }
         return params
 

@@ -72,7 +72,7 @@ def run(par_map):
     return ret
 
 
-def generate_param_map(param_path = "para", process_time=10):
+def generate_param_map(param_path = "FD_CG_para", process_time=10):
     with open(param_path, 'r') as para_file:
         par_map= json.load(para_file)
     lst = []

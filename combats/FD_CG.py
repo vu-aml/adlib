@@ -95,17 +95,19 @@ def generate_index(param_lst):
     map = []
     for item in param_lst:
         title = "FD " + "H" + str(item["hinge_loss_multiplier"]) + " F" + str(
-            item["max_feature_deletion"]) + " CG" + " C" + str \
-                    (item["max_change"]) + " L" + str(item["lambda_val"])
+            item["max_feature_deletion"]) + " CG" + " Iter" + str \
+                    (item["max_change"]) + " L" + str(item["lambda_val"] + " Step" +
+                                                      str(item['step_size']))
         map.append(title)
     return map
 
 
 if __name__ == '__main__':
-    logging.basicConfig(filename='result.log', level=logging.INFO)
+    logging.basicConfig(filename='FDCGresult.log', level=logging.INFO)
     param_path = sys.argv[1]
     data_path = sys.argv[2]
     process_time = int(sys.argv[3])
+    exl_path = sys.argv[4]
     with open(param_path, 'r') as para_file:
         par_map = json.load(para_file)
     total_time = len(par_map["param"]) * process_time
@@ -119,4 +121,4 @@ if __name__ == '__main__':
     data = pd.DataFrame(arr, columns=["old_acc", "old_prec", "old_rec", "old_f1", "learn_t",
                                       "new_acc", "new_prec", "new_rec", "new_f1", "atk_t"],index = list(title_map))
     data.to_csv(data_path, sep='\t', encoding='utf-8')
-    data.to_excel("test.xlsx")
+    data.to_excel(exl_path)

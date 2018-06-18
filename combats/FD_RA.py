@@ -61,7 +61,7 @@ def run(par_map):
 
     # test Restrained_attack
     a_start = timer()
-    attacker = Restrained()
+    attacker = Restrained(binary=False,type = "centroid")
     attacker.set_params(par_map)
     attacker.set_adversarial_params(fd_learner, testing_data)
     attacked_data = attacker.attack(testing_data)

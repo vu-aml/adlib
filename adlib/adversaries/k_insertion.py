@@ -132,6 +132,7 @@ class KInsertion(Adversary):
                 grad_norm = np.linalg.norm(gradient)
                 if grad_norm >= 2 * old_grad_norm and iteration > 0:
                     reduce_val = np.max(abs(gradient)) / 2
+                    reduce_val = 1.0 if reduce_val <= 0 else reduce_val
                     gradient /= reduce_val
 
                 if self.verbose:
@@ -144,6 +145,7 @@ class KInsertion(Adversary):
                 uv_norm = np.linalg.norm(update_vector)
                 if uv_norm >= 2 * old_uv_norm and iteration > 0:
                     reduce_val = np.max(abs(update_vector)) / 2
+                    reduce_val = 1.0 if reduce_val <= 0 else reduce_val
                     update_vector /= reduce_val
 
                 if self.verbose:

@@ -7,20 +7,25 @@ from adlib.learners import SimpleLearner
 from adlib.utils.common import calculate_correct_percentages
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
-import numpy as np
 from copy import deepcopy
 from sklearn import svm
+import numpy as np
+import time
 
 
 def test_label_flipping():
     print('\n#################################################################')
     print('START label flipping attack.\n')
 
+    begin = time.time()
+
     # Data processing unit
     # The path is an index of 400 testing samples(raw email data).
     dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400',
                            binary=True, raw=True)
     training_data = load_dataset(dataset)
+
+    print('Training sample size: ', len(training_data), '/400\n', sep='')
 
     # Randomly cut dataset in approximately half
     rand_choices = np.random.binomial(1, 0.5, len(training_data))
@@ -97,6 +102,9 @@ def test_label_flipping():
     print('Original correct percentage: ', orig_precent_correct, '%')
     print('Attack correct percentage: ', attack_precent_correct, '%')
     print('Difference: ', difference, '%')
+
+    end = time.time()
+    print('\nTotal time: ', round(begin - end, 2), 's', '\n', sep='')
 
     print('\nEND label flipping attack.')
     print('#################################################################\n')

@@ -11,6 +11,7 @@ from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
 from sklearn import svm
 import sys
+import time
 
 
 def test_k_insertion():
@@ -23,6 +24,8 @@ def test_k_insertion():
     print('###################################################################')
     print('START k-insertion attack.\n')
 
+    begin = time.time()
+
     # Data processing unit
     # The path is an index of 400 testing samples(raw email data).
     dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400',
@@ -30,6 +33,8 @@ def test_k_insertion():
     training_data, predict_data = dataset.split({'train': 20, 'test': 80})
     training_data = load_dataset(training_data)
     predict_data = load_dataset(predict_data)
+
+    print('Training sample size: ', len(training_data), '/400\n', sep='')
 
     if len(sys.argv) > 2:
         number_to_add = int(sys.argv[1])
@@ -117,6 +122,9 @@ def test_k_insertion():
           round(attacker.poison_loss_after, 4))
     print('poison_instance loss difference: ',
           round(attacker.poison_loss_after - attacker.poison_loss_before, 4))
+
+    end = time.time()
+    print('\nTotal time: ', round(begin - end, 2), 's', '\n', sep='')
 
     print('\nEND k-insertion attack.')
     print('###################################################################')

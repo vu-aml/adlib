@@ -6,13 +6,18 @@
 from adlib.learners import SimpleLearner
 from adlib.learners import TRIM_Learner
 from adlib.adversaries.label_flipping import LabelFlipping
-from adlib.tests.adversaries.label_flipping_test import \
-    calculate_correct_percentages
+from adlib.adversaries.k_insertion import KInsertion
+from adlib.adversaries.datamodification.data_modification import \
+    DataModification
+from adlib.utils.common import calculate_correct_percentages
+from adlib.utils.common import get_spam_features
 from copy import deepcopy
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
 from sklearn import svm
 import numpy as np
+import sys
+import time
 
 
 def test_trim_learner():
@@ -20,13 +25,21 @@ def test_trim_learner():
     print('###################################################################')
     print('START TRIM learner test.\n')
 
+    begin = time.time()
+
+    if len(sys.argv) == 2 and sys.argv[1] in ['label-flipping',
+                                              'k-insertion',
+                                              'data-modification']:
+        attacker_name = sys.argv[1]
+    else:
+        attacker_name = 'label-flipping'
+
     # Data processing unit
     # The path is an index of 400 testing samples(raw email data).
     dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400',
                            binary=True, raw=True)
 
-    training_data, testing_data = dataset.split({'train': 60,
-                                                 'test': 40})
+    training_data, testing_data = dataset.split({'train': 20, 'test': 80})
     training_data = load_dataset(training_data)
     testing_data = load_dataset(testing_data)
 
@@ -41,16 +54,47 @@ def test_trim_learner():
     orig_learner = deepcopy(learner)
 
     # Execute the attack
-    cost = list(np.random.binomial(2, 0.5, len(training_data)))
-    total_cost = 0.3 * len(training_data)  # flip around ~30% of the labels
-    attacker = LabelFlipping(learner, cost, total_cost, verbose=True)
+    if attacker_name == 'label-flipping':
+        cost = list(np.random.binomial(2, 0.5, len(training_data)))
+        total_cost = 0.3 * len(training_data)  # flip around ~30% of the labels
+        attacker = LabelFlipping(learner, cost, total_cost, verbose=True)
+    elif attacker_name == 'k-insertion':
+        number_to_add = int(0.25 * len(training_data))
+        attacker = KInsertion(learner,
+                              training_data[0],
+                              number_to_add=number_to_add,
+                              verbose=True)
+    else:  # attacker_name == 'data-modification'
+        lnr = orig_learner.model.learner
+        eye = np.eye(training_data[0].get_feature_count(), dtype=int)
+        orig_theta = lnr.decision_function(eye) - lnr.intercept_[0]
+        target_theta = deepcopy(orig_theta)
+
+        spam_instances = []
+        for inst in training_data + testing_data:
+            if inst.get_label() == 1:
+                spam_instances.append(inst)
+
+        spam_features, ham_features = get_spam_features(spam_instances)
+
+        # Set features to recognize spam as ham
+        for index in spam_features:
+            target_theta[index] = -10
+
+        for index in ham_features:
+            target_theta[index] = 0.01
+
+        print('Features selected: ', np.array(spam_features))
+        print('Number of features: ', len(spam_features))
+
+        attacker = DataModification(orig_learner, target_theta, verbose=True)
 
     print('###################################################################')
-    print('START label-flipping attack.\n')
+    print('START', attacker_name, 'attack.\n')
 
     attack_data = attacker.attack(training_data)
 
-    print('\nEND label-flipping attack.')
+    print('\nEND', attacker_name, 'attack.')
     print('###################################################################')
     print()
 
@@ -125,6 +169,9 @@ def test_trim_learner():
     print('TRIM learner percentage: ', trim_percent_correct, '%')
     print('Simple learner correct percentage: ', normal_percent_correct, '%')
     print('Difference: ', difference, '%')
+
+    end = time.time()
+    print('\nTotal time: ', round(begin - end, 2), 's', '\n', sep='')
 
     print('\nEND TRIM learner test.')
     print('###################################################################')

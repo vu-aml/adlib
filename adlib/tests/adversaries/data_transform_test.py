@@ -4,12 +4,15 @@
 
 from adlib.adversaries.datatransform.data_transform import DataTransform
 from adlib.adversaries.datatransform.poisoning.poison import open_dataset
+import time
 
 
 def test_data_transform():
     print()
     print('###################################################################')
     print('START data transform attack.\n')
+
+    begin = time.time()
 
     args = {'beta': 0.1,
             'dataset': ('./data_reader/data/raw/data-transform/'
@@ -39,6 +42,9 @@ def test_data_transform():
 
     attacker = DataTransform(**args)
     poisoned_x, poisoned_y = attacker.attack((x, y))
+
+    end = time.time()
+    print('\nTotal time: ', round(begin - end, 2), 's', '\n', sep='')
 
     print('\nEND data transform attack.')
     print('###################################################################')

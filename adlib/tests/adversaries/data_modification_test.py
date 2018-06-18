@@ -13,12 +13,15 @@ from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
 from sklearn import svm
 import numpy as np
+import time
 
 
 def test_data_modification():
     print()
     print('###################################################################')
     print('START data modification attack.\n')
+
+    begin = time.time()
 
     # Data processing unit
     # The path is an index of 400 testing samples(raw email data).
@@ -127,6 +130,9 @@ def test_data_modification():
     print('Number of spam instances in original training set that were \n',
           'classified as ham after the attack: ', spam_ham_count, '/',
           len(spam_instances), sep='')
+
+    end = time.time()
+    print('\nTotal time: ', round(begin - end, 2), 's', '\n', sep='')
 
     print('\nEND data modification attack.')
     print('###################################################################')

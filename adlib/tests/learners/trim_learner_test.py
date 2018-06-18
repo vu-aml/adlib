@@ -13,12 +13,15 @@ from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
 from sklearn import svm
 import numpy as np
+import time
 
 
 def test_trim_learner():
     print()
     print('###################################################################')
     print('START TRIM learner test.\n')
+
+    begin = time.time()
 
     # Data processing unit
     # The path is an index of 400 testing samples(raw email data).
@@ -125,6 +128,9 @@ def test_trim_learner():
     print('TRIM learner percentage: ', trim_percent_correct, '%')
     print('Simple learner correct percentage: ', normal_percent_correct, '%')
     print('Difference: ', difference, '%')
+
+    end = time.time()
+    print('\nTotal time: ', round(begin - end, 2), 's', '\n', sep='')
 
     print('\nEND TRIM learner test.')
     print('###################################################################')

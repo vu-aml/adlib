@@ -11,7 +11,7 @@ import cvxpy as cvx
 import numpy as np
 
 
-class TRIM_Learner(learner):
+class TRIMLearner(learner):
     """
     A learner that implements the TRIM algorithm described in the paper
     mentioned above.
@@ -51,7 +51,7 @@ class TRIM_Learner(learner):
                 if len(inst_set) == self.n:
                     break
 
-        fvs, labels = TRIM_Learner.get_fv_matrix_and_labels(inst_set)
+        fvs, labels = TRIMLearner.get_fv_matrix_and_labels(inst_set)
 
         # Calculate initial theta
         w, b = self._minimize_loss(fvs, labels)
@@ -75,7 +75,7 @@ class TRIM_Learner(learner):
             inst_set = list(map(lambda tup: tup[1], loss_tuples[:self.n]))
 
             # Minimize loss
-            fvs, labels = TRIM_Learner.get_fv_matrix_and_labels(inst_set)
+            fvs, labels = TRIMLearner.get_fv_matrix_and_labels(inst_set)
             w, b = self._minimize_loss(fvs, labels)
 
             old_loss = loss
@@ -134,7 +134,7 @@ class TRIM_Learner(learner):
         if self.w is None or self.b is None:
             raise ValueError('Must train learner before prediction.')
 
-        fvs, _ = TRIM_Learner.get_fv_matrix_and_labels(instances)
+        fvs, _ = TRIMLearner.get_fv_matrix_and_labels(instances)
 
         labels = fvs.dot(self.w) + self.b
         labels = list(map(lambda x: 1 if x >= 0 else -1, labels))
@@ -195,7 +195,7 @@ class TRIM_Learner(learner):
         fvs = []
         labels = []
         for inst in instances:
-            fvs.append(TRIM_Learner.get_feature_vector_array(inst))
+            fvs.append(TRIMLearner.get_feature_vector_array(inst))
             labels.append(inst.get_label())
 
         return np.array(fvs), np.array(labels)

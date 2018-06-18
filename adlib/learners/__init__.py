@@ -5,4 +5,5 @@ from .retraining import Retraining
 from .simple_learner import SimpleLearner
 from .svm_freerange import SVMFreeRange
 from .svm_restrained import SVMRestrained
-from .trim_learner import TRIM_Learner
+from .trim_learner import TRIMLearner
+from .iterative_retraining_learner import IterativeRetrainingLearner

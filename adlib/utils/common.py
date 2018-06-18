@@ -1,8 +1,26 @@
 # A set of common functions
 # Matthew Sedam. 2018.
 
+from data_reader.binary_input import Instance
+from typing import List
 import math
 import numpy as np
+
+
+def get_fvs_and_labels(instances: List[Instance]):
+    """
+    :param instances: the instances
+    :return: the feature vector matrix and labels
+    """
+
+    fvs = []
+    labels = []
+    for inst in instances:
+        fvs.append(np.array(inst.get_csr_matrix().todense().tolist()).flatten())
+        labels.append(inst.get_label())
+    fvs, labels = np.array(fvs), np.array(labels)
+
+    return fvs, labels
 
 
 def calculate_correct_percentages(orig_labels, attack_labels, instances):

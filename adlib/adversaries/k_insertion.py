@@ -97,14 +97,15 @@ class KInsertion(Adversary):
             old_x = deepcopy(self.x)
             fv_dist = 0.0
             grad_norm = 0.0
+            uv_norm = 0.0
             iteration = 0
             old_update_vector = 0.0
             while (iteration == 0 or (fv_dist > self.alpha and
                                       iteration < self.max_iter)):
 
                 print('Iteration: ', iteration, ' - FV distance: ', fv_dist,
-                      ' - gradient norm: ', grad_norm, ' - beta: ', self.beta,
-                      sep='')
+                      ' - gradient norm: ', grad_norm, ' - UV norm: ', uv_norm,
+                      ' - beta: ', self.beta, sep='')
 
                 begin = time.time()
 
@@ -125,25 +126,25 @@ class KInsertion(Adversary):
                 # Gradient descent with momentum
                 gradient = self._calc_gradient()
 
-                if self.verbose:
-                    print('\nGradient:\n', gradient, sep='')
-
                 # If gradient is too large, only move a very small amount in its
                 # direction.
-                old_eta = None
                 old_grad_norm = grad_norm
                 grad_norm = np.linalg.norm(gradient)
-                if grad_norm >= 100 * old_grad_norm and iteration > 0:
-                    old_eta = self.eta
-                    max_val = np.max(abs(gradient))
-                    max_val = 1.0 if max_val == 0 else max_val
-                    self.eta = 1.0 - (10.0 / max_val)
+                if grad_norm >= 2 * old_grad_norm and iteration > 0:
+                    reduce_val = np.max(abs(gradient)) / 2
+                    gradient /= reduce_val
+
+                if self.verbose:
+                    print('\nGradient:\n', gradient, sep='')
 
                 update_vector = (self.eta * old_update_vector +
                                  (1 - self.eta) * gradient)
 
-                if old_eta:
-                    self.eta = old_eta
+                old_uv_norm = uv_norm
+                uv_norm = np.linalg.norm(update_vector)
+                if uv_norm >= 2 * old_uv_norm and iteration > 0:
+                    reduce_val = np.max(abs(update_vector)) / 2
+                    update_vector /= reduce_val
 
                 if self.verbose:
                     print('\nUpdate Vector:\n', update_vector, sep='')

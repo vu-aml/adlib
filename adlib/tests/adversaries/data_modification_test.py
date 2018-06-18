@@ -32,6 +32,8 @@ def test_data_modification():
     training_data = load_dataset(training_data)
     predict_data = load_dataset(predict_data)
 
+    print('Training sample size: ', len(training_data), '/400\n', sep='')
+
     # Setting the default learner
     # Test simple learner svm
     orig_learning_model = svm.SVC(probability=True, kernel='linear')

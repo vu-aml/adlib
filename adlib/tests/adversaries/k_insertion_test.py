@@ -34,6 +34,8 @@ def test_k_insertion():
     training_data = load_dataset(training_data)
     predict_data = load_dataset(predict_data)
 
+    print('Training sample size: ', len(training_data), '/400\n', sep='')
+
     if len(sys.argv) > 2:
         number_to_add = int(sys.argv[1])
     else:

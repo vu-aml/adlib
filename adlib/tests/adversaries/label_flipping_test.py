@@ -25,6 +25,8 @@ def test_label_flipping():
                            binary=True, raw=True)
     training_data = load_dataset(dataset)
 
+    print('Training sample size: ', len(training_data), '/400\n', sep='')
+
     # Randomly cut dataset in approximately half
     rand_choices = np.random.binomial(1, 0.5, len(training_data))
     new_training_data = []

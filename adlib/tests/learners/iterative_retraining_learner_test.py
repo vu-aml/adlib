@@ -1,10 +1,9 @@
-# trim_learner_test.py
-# Tests the TRIM learner implementation
+# iterative_retraining_learner_test.py
+# Tests the Iterative Retraining learner.
 # Matthew Sedam
 
 
 from adlib.learners import SimpleLearner
-from adlib.learners import TRIMLearner
 from adlib.adversaries.label_flipping import LabelFlipping
 from adlib.adversaries.k_insertion import KInsertion
 from adlib.adversaries.datamodification.data_modification import \
@@ -20,7 +19,7 @@ import sys
 import time
 
 
-def test_trim_learner():
+def test_iterative_retraining_learner():
     print()
     print('###################################################################')
     print('START TRIM learner test.\n')
@@ -104,15 +103,11 @@ def test_trim_learner():
     learner.train()
 
     print('###################################################################')
-    print('START TRIM learner.\n')
+    print('START Iterative Retraining learner.\n')
 
-    # Train with TRIM learner
-    # We poisoned roughly 30% of the data, so 70% should be unpoisoned
-    trim_learner = TRIMLearner(attack_data, int(0.7 * len(attack_data)),
-                               verbose=True)
-    trim_learner.train()
+    ###
 
-    print('\nEND TRIM learner.')
+    print('\nEND Iterative Retraining learner.')
     print('###################################################################')
     print()
 
@@ -179,4 +174,4 @@ def test_trim_learner():
 
 
 if __name__ == '__main__':
-    test_trim_learner()
+    test_iterative_retraining_learner()

@@ -6,11 +6,11 @@ from random import shuffle
 import numpy as np
 import learners as learners
 from copy import deepcopy
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 #for debuggin purposes, the Q values are printed
 from random import *
 
-DEBUG = True
+DEBUG = False
 
 """
    Based on A General Retraining Framework for Scalable Adversarial Classification
@@ -103,8 +103,8 @@ class CoordinateGreedy(Adversary):
             else:
               transformed_instances.append(instance)
 
-        if DEBUG:
-            plt.show()
+        #if DEBUG:
+        #    plt.show()
 
         return transformed_instances
 
@@ -144,9 +144,9 @@ class CoordinateGreedy(Adversary):
 
             # check whether Q_value actually descends and converges to a minimum
             # plot the iteration and Q_values using matplotlib
-            if DEBUG:
-                iteration_list.append(iteration_time)
-                Q_value_list.append(new_q)
+            #if DEBUG:
+            #    iteration_list.append(iteration_time)
+            #    Q_value_list.append(new_q)
 
            # if new_q < 0:
            #     print("Attack finishes because Q is less than 0")
@@ -167,8 +167,8 @@ class CoordinateGreedy(Adversary):
                         #print("Attack finishes because of convergence!")
                         break
 
-        if DEBUG:
-            plt.plot(iteration_list,Q_value_list)
+        #if DEBUG:
+        #    plt.plot(iteration_list,Q_value_list)
 
         mat_indices = [x for x in range(0, self.num_features) if xk[x] != 0]
         mat_data = [xk[x] for x in range(0, self.num_features) if xk[x] != 0]

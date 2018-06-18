@@ -12,7 +12,7 @@ from sklearn.metrics import pairwise
 from collections import deque
 from data_reader.operations import sparsify
 import operator
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 
 """
    Gradient Desecent Evasion Attack from Evasion Attacks Against Machine Learning at Test Time,

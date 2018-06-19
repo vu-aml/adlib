@@ -95,9 +95,8 @@ def generate_index(param_lst):
     map = []
     for item in param_lst:
         title = "FD " + "H" + str(item["hinge_loss_multiplier"]) + " F" + str(
-            item["max_feature_deletion"]) + " CG" + " Iter" + str \
-                    (item["max_change"]) + " L" + str(item["lambda_val"] + " Step" +
-                                                      str(item['step_size']))
+            item["max_feature_deletion"]) + " CG" + " Iter" + str(item["max_change"]) +\
+                " L" + str(item["lambda_val"]) + " Step" + str(item['step_size'])
         map.append(title)
     return map
 

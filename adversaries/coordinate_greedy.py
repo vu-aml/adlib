@@ -71,7 +71,7 @@ class CoordinateGreedy(Adversary):
         if 'random_start' in params.keys():
             self.random_start = params['random_start']
         if 'cost_function' in params.keys():
-            self.cost_function = params.keys()
+            self.cost_function = params['cost_function']
         if 'convergence_time' in params.keys():
             self.convergence_time = params['convergence_time']
 

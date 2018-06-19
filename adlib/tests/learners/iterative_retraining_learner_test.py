@@ -4,6 +4,7 @@
 
 
 from adlib.learners import SimpleLearner
+from adlib.learners import IterativeRetrainingLearner
 from adlib.adversaries.label_flipping import LabelFlipping
 from adlib.adversaries.k_insertion import KInsertion
 from adlib.adversaries.datamodification.data_modification import \
@@ -22,7 +23,7 @@ import time
 def test_iterative_retraining_learner():
     print()
     print('###################################################################')
-    print('START TRIM learner test.\n')
+    print('START Iterative Retraining Learner test.\n')
 
     begin = time.time()
 
@@ -107,7 +108,9 @@ def test_iterative_retraining_learner():
     print('###################################################################')
     print('START Iterative Retraining learner.\n')
 
-    ###
+    iterative_retraining_learner = IterativeRetrainingLearner(orig_learner,
+                                                              attack_data)
+    iterative_retraining_learner.train()
 
     print('\nEND Iterative Retraining learner.')
     print('###################################################################')
@@ -149,28 +152,29 @@ def test_iterative_retraining_learner():
     print('Difference: ', difference, '%')
 
     ############################################################################
-    # Calculate statistics with trim learner
+    # Calculate statistics with iterative retraining learner
 
     data = training_data + testing_data
-    trim_pred_labels = trim_learner.predict(data)
+    iter_retrain_pred_labels = iterative_retraining_learner.predict(data)
     normal_pred_labels = learner.predict(data)
 
-    (trim_percent_correct,
+    (iter_retrain_percent_correct,
      normal_percent_correct,
-     difference) = calculate_correct_percentages(trim_pred_labels,
+     difference) = calculate_correct_percentages(iter_retrain_pred_labels,
                                                  normal_pred_labels,
                                                  data)
 
     print('###################################################################')
-    print('Predictions using TRIM learner:')
-    print('TRIM learner percentage: ', trim_percent_correct, '%')
+    print('Predictions using Iterative Retraining learner:')
+    print('Iterative Retraining learner percentage: ',
+          iter_retrain_percent_correct, '%')
     print('Simple learner correct percentage: ', normal_percent_correct, '%')
     print('Difference: ', difference, '%')
 
     end = time.time()
     print('\nTotal time: ', round(end - begin, 2), 's', '\n', sep='')
 
-    print('\nEND TRIM learner test.')
+    print('\nEND Iterative Retraining Learner test.')
     print('###################################################################')
     print()
 

@@ -23,7 +23,7 @@ import time
 def test_trim_learner():
     print()
     print('###################################################################')
-    print('START TRIM learner test.\n')
+    print('START TRIM Learner test.\n')
 
     begin = time.time()
 
@@ -173,7 +173,7 @@ def test_trim_learner():
     end = time.time()
     print('\nTotal time: ', round(end - begin, 2), 's', '\n', sep='')
 
-    print('\nEND TRIM learner test.')
+    print('\nEND TRIM Learner test.')
     print('###################################################################')
     print()
 

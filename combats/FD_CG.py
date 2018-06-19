@@ -1,6 +1,6 @@
 import sys
 
-sys.path.append("/home/dingx/adlib/adlib")
+sys.path.append("/home/dingx/adlib")
 from sklearn import svm
 from learners import FeatureDeletion
 from timeit import default_timer as timer

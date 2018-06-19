@@ -1,6 +1,7 @@
 # A set of common functions
 # Matthew Sedam. 2018.
 
+from adlib.learners.simple_learner import SimpleLearner
 from data_reader.binary_input import Instance
 from typing import List
 import math
@@ -103,3 +104,20 @@ def logistic_function(x):
     """
 
     return 1 / (1 + math.exp(-1 * x))
+
+
+def logistic_loss(instances: List[Instance], lnr: SimpleLearner):
+    """
+    Calculates the logistic loss for instances
+    :param instances: the instances
+    :param lnr: the SimpleLearner
+    :return: the loss
+    """
+
+    fvs, labels = get_fvs_and_labels(instances)
+
+    loss = lnr.decision_function(fvs)
+    loss = list(map(lambda x, y: -1 * x * y, loss, labels))
+    loss = np.array(list(map(lambda x: math.log(1 + math.exp(x)), loss)))
+
+    return loss

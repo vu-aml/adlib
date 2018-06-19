@@ -93,6 +93,8 @@ def test_trim_learner():
     print('START', attacker_name, 'attack.\n')
 
     attack_data = attacker.attack(training_data)
+    attack_data += testing_data
+    np.random.shuffle(attack_data)
 
     print('\nEND', attacker_name, 'attack.')
     print('###################################################################')
@@ -107,9 +109,7 @@ def test_trim_learner():
     print('START TRIM learner.\n')
 
     # Train with TRIM learner
-    # We poisoned roughly 30% of the data, so 70% should be unpoisoned
-    trim_learner = TRIMLearner(attack_data, int(0.7 * len(attack_data)),
-                               verbose=True)
+    trim_learner = TRIMLearner(attack_data, len(testing_data), verbose=True)
     trim_learner.train()
 
     print('\nEND TRIM learner.')

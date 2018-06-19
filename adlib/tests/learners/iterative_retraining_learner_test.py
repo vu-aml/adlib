@@ -166,7 +166,7 @@ def test_iterative_retraining_learner():
     print('Difference: ', difference, '%')
 
     end = time.time()
-    print('\nTotal time: ', round(begin - end, 2), 's', '\n', sep='')
+    print('\nTotal time: ', round(end - begin, 2), 's', '\n', sep='')
 
     print('\nEND TRIM learner test.')
     print('###################################################################')

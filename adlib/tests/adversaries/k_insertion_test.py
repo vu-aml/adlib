@@ -124,7 +124,7 @@ def test_k_insertion():
           round(attacker.poison_loss_after - attacker.poison_loss_before, 4))
 
     end = time.time()
-    print('\nTotal time: ', round(begin - end, 2), 's', '\n', sep='')
+    print('\nTotal time: ', round(end - begin, 2), 's', '\n', sep='')
 
     print('\nEND k-insertion attack.')
     print('###################################################################')

@@ -104,7 +104,7 @@ def test_label_flipping():
     print('Difference: ', difference, '%')
 
     end = time.time()
-    print('\nTotal time: ', round(begin - end, 2), 's', '\n', sep='')
+    print('\nTotal time: ', round(end - begin, 2), 's', '\n', sep='')
 
     print('\nEND label flipping attack.')
     print('#################################################################\n')

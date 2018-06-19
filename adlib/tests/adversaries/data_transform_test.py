@@ -44,7 +44,7 @@ def test_data_transform():
     poisoned_x, poisoned_y = attacker.attack((x, y))
 
     end = time.time()
-    print('\nTotal time: ', round(begin - end, 2), 's', '\n', sep='')
+    print('\nTotal time: ', round(end - begin, 2), 's', '\n', sep='')
 
     print('\nEND data transform attack.')
     print('###################################################################')

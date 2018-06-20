@@ -30,8 +30,9 @@ class IterativeRetrainingLearner(learner):
     def train(self):
         loss = logistic_loss(self.training_instances, self.learner)
         mean = np.mean(loss)
+        median = np.median(loss)
         std = np.std(loss)
-        self.loss_threshold = mean + 2.0 * std
+        self.loss_threshold = ((mean + median) / 2.0) + 2.0 * std
 
         old_training_instances = []
         while set(old_training_instances) != set(self.training_instances):

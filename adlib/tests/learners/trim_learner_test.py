@@ -9,8 +9,9 @@ from adlib.adversaries.label_flipping import LabelFlipping
 from adlib.adversaries.k_insertion import KInsertion
 from adlib.adversaries.datamodification.data_modification import \
     DataModification
+from adlib.tests.adversaries.data_modification_test import \
+    calculate_target_theta
 from adlib.utils.common import calculate_correct_percentages
-from adlib.utils.common import get_spam_features
 from copy import deepcopy
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
@@ -65,27 +66,9 @@ def test_trim_learner():
                               number_to_add=number_to_add,
                               verbose=True)
     else:  # attacker_name == 'data-modification'
-        lnr = orig_learner.model.learner
-        eye = np.eye(training_data[0].get_feature_count(), dtype=int)
-        orig_theta = lnr.decision_function(eye) - lnr.intercept_[0]
-        target_theta = deepcopy(orig_theta)
-
-        spam_instances = []
-        for inst in training_data + testing_data:
-            if inst.get_label() == 1:
-                spam_instances.append(inst)
-
-        spam_features, ham_features = get_spam_features(spam_instances)
-
-        # Set features to recognize spam as ham
-        for index in spam_features:
-            target_theta[index] = -10
-
-        for index in ham_features:
-            target_theta[index] = 0.01
-
-        print('Features selected: ', np.array(spam_features))
-        print('Number of features: ', len(spam_features))
+        target_theta = calculate_target_theta(orig_learner,
+                                              training_data,
+                                              testing_data)
 
         attacker = DataModification(orig_learner, target_theta, verbose=True)
 

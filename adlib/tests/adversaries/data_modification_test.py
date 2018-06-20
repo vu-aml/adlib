@@ -52,24 +52,9 @@ def test_data_modification():
     # to decrease the value of the decision function and hopefully make it
     # negative so as to classify my spam as ham.
 
-    lnr = orig_learner.model.learner
-    eye = np.eye(training_data[0].get_feature_count(), dtype=int)
-    orig_theta = lnr.decision_function(eye) - lnr.intercept_[0]
-    target_theta = deepcopy(orig_theta)
-
-    spam_instances = []
-    for inst in training_data + predict_data:
-        if inst.get_label() == 1:
-            spam_instances.append(inst)
-
-    spam_features, ham_features = get_spam_features(spam_instances)
-
-    # Set features to recognize spam as ham
-    for index in spam_features:
-        target_theta[index] = -1
-
-    print('Features selected: ', np.array(spam_features))
-    print('Number of features: ', len(spam_features))
+    target_theta = calculate_target_theta(orig_learner,
+                                          training_data,
+                                          predict_data)
 
     ############################################################################
 
@@ -136,6 +121,29 @@ def test_data_modification():
     print('\nEND data modification attack.')
     print('###################################################################')
     print()
+
+
+def calculate_target_theta(orig_learner, training_data, predict_data):
+    lnr = orig_learner.model.learner
+    eye = np.eye(training_data[0].get_feature_count(), dtype=int)
+    orig_theta = lnr.decision_function(eye) - lnr.intercept_[0]
+    target_theta = deepcopy(orig_theta)
+
+    spam_instances = []
+    for inst in training_data + predict_data:
+        if inst.get_label() == 1:
+            spam_instances.append(inst)
+
+    spam_features, ham_features = get_spam_features(spam_instances)
+
+    # Set features to recognize spam as ham
+    for index in spam_features:
+        target_theta[index] = -1
+
+    print('Features selected: ', np.array(spam_features))
+    print('Number of features: ', len(spam_features))
+
+    return target_theta
 
 
 if __name__ == '__main__':

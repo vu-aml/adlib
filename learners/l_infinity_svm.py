@@ -104,3 +104,6 @@ class L_infSVM(learner):
 
     def get_weight(self):
         return np.asarray(self.weight_vector.T)[0]
+
+    def get_constant(self):
+        return self.bias

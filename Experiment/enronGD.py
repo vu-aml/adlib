@@ -26,10 +26,10 @@ def summary(y_pred, y_true):
     s += "TP {0}, FP {1}, TN {2}, FN {3}".format(tp,fp,tn,fn)
     return s
 
-dataset = EmailDataset(path='../data_reader/data/enron/enron1/index_dir',binary= False,raw=True)
-training, testing = dataset.split(0.6)
-training_data = load_dataset(training)
-testing_data = load_dataset(testing)
+_dataset = EmailDataset(path='../data_reader/data/uci/uci_modified.csv', binary=False, raw=False)
+train_, test_ = _dataset.split(0.8)
+training_data = load_dataset(train_)
+testing_data = load_dataset(test_)
 test_true_label = [x.label for x in testing_data]
 
 
@@ -43,7 +43,7 @@ print("======== initial prediction =========")
 print(summary(predictions, test_true_label))
 
 
-adversary = GradientDescent(step_size=0.2,max_iter=1500)
+adversary = GradientDescent(step_size=2,trade_off=10,max_iter=1000,mimicry="kde_euclidean")
 adversary.set_adversarial_params(learner1,training_data)
 new_testing_data = adversary.attack(testing_data)
 

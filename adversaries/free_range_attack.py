@@ -18,7 +18,8 @@ Concept: A generalized attacker algorithm that attempts to move the instances' f
 
 
 class FreeRange(Adversary):
-    def __init__(self, f_attack=0.2, manual_bound=False, xj_min=0.0, xj_max=1.0, binary=False, learn_model=None):
+    def __init__(self, f_attack=0.2, manual_bound=False, xj_min=0.0, xj_max=1.0, binary=False, learn_model=None,
+                 distribution = "uniform"):
         """
 
         :param f_attack:  float (between 0 and 1),determining the agressiveness
@@ -31,6 +32,8 @@ class FreeRange(Adversary):
         :param binary:    bool True means binary features
         :param learner:   from Learners
         :param type:      specify how to find innocuous target
+        :param distribution: determine distribution of the attack instance generation
+
         """
         self.xj_min = xj_min
         self.xj_max = xj_max
@@ -40,6 +43,7 @@ class FreeRange(Adversary):
         self.num_features = None
         self.binary = binary
         self.learn_model = learn_model  # type: Classifier
+        self.distribution = distribution
 
     def set_adversarial_params(self, learn_model, train_instances: List[Instance]):
         self.learn_model = learn_model
@@ -58,13 +62,16 @@ class FreeRange(Adversary):
             self.binary = params['binary']
         if 'manual_bound' in params.keys():
             self.manual = params['manual_bound']
+        if 'distribution'in params.keys():
+            self.distribution = params['distribution']
 
     def get_available_params(self) -> Dict:
         params = {'xj_min': self.xj_min,
                   'xj_max': self.xj_max,
                   'f_attack': self.f_attack,
                   'binary': self.binary,
-                  'manual_bound': self.manual
+                  'manual_bound': self.manual,
+                  'distribution': self.distribution
                   }
         return params
 

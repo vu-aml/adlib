@@ -47,10 +47,10 @@ def summary(y_pred, y_true):
     return s
 
 
-dataset = EmailDataset(path='../data_reader/data/enron/1',binary= False,raw=True)
-training_, testing_ = dataset.split(0.6)
-training_data = load_dataset(training_)
-testing_data = load_dataset(testing_)
+dataset = EmailDataset(path='../data_reader/data/uci/uci_modified.csv', binary=False, raw=False)
+training, testing = dataset.split(0.95)
+training_data = load_dataset(training)
+testing_data = load_dataset(testing)
 test_true_label = [x.label for x in testing_data]
 
 
@@ -65,7 +65,7 @@ print(summary(predictions, test_true_label))
 
 
 #test Restrained_attack
-attacker = CoordinateGreedy(lambda_val=0.1, max_change=10, step_size=1000)
+attacker = CoordinateGreedy( cost_function = "exponential",lambda_val=0.8, max_iteration=1000, step_size=1)
 attacker.set_adversarial_params(learner1, testing_data)
 new_testing_data = attacker.attack(testing_data)
 

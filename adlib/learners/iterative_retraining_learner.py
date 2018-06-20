@@ -31,26 +31,21 @@ class IterativeRetrainingLearner(learner):
         loss = logistic_loss(self.training_instances, self.learner)
         mean = np.mean(loss)
         std = np.std(loss)
-        self.loss_threshold = (0.9 * mean) + (0.5 * std)
+        self.loss_threshold = mean + 2.0 * std
 
-        old_training_instances = self.training_instances[:]
-        first = True
-        while (first or
-               set(old_training_instances) != set(self.training_instances)):
+        old_training_instances = []
+        while set(old_training_instances) != set(self.training_instances):
 
-            first = False
-
+            old_training_instances = self.training_instances[:]
             instances = []
             for i, inst in enumerate(self.training_instances):
                 if loss[i] < self.loss_threshold:
                     instances.append(inst)
 
             self.training_instances = instances
-
             self.learner.set_training_instances(self.training_instances)
             self.learner.train()
             loss = logistic_loss(self.training_instances, self.learner)
-            old_training_instances = self.training_instances[:]
 
         self.learner.set_training_instances(self.training_instances)
         self.learner.train()

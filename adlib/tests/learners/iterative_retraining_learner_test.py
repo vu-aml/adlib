@@ -38,7 +38,7 @@ def test_iterative_retraining_learner():
     # Data processing unit
     # The path is an index of 400 testing samples(raw email data).
     dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400',
-                           binary=True, raw=True)
+                           binary=False, raw=True)
 
     training_data, testing_data = dataset.split({'train': 20, 'test': 80})
     training_data = load_dataset(training_data)

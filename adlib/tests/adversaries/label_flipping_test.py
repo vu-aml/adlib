@@ -22,7 +22,7 @@ def test_label_flipping():
     # Data processing unit
     # The path is an index of 400 testing samples(raw email data).
     dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400',
-                           binary=True, raw=True)
+                           binary=False, raw=True)
     training_data = load_dataset(dataset)
 
     print('Training sample size: ', len(training_data), '/400\n', sep='')

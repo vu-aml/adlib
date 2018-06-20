@@ -18,24 +18,22 @@ Concept: A generalized attacker algorithm that attempts to move the instances'
 
 
 class Restrained(Adversary):
-    def __init__(self, f_attack=0.5, binary=True, discount_factor=1,
-                 type='random', learner=None):
+    def __init__(self, f_attack=0.5, binary=True, discount_factor=1, type='centroid', learn_model=None):
         """
 
-        :param f_attack:  float (between 0 and 1),determining the aggressiveness
+        :param f_attack:  float (between 0 and 1),determining the agressiveness
                           of the attack
         :param binary:    bool True means binary features
         :param learner:   from Learners
         :param type:      specify how to find innocuous target
-        :param discount_factor: float(between 0 and 1), determining the data
-                                movement of the attack
+        :param discount_factor: float(between 0 and 1),determing the data movement of the attack
         """
         self.f_attack = f_attack
         self.discount_factor = discount_factor
         self.innocuous_target = None
         self.num_features = None
         self.binary = binary
-        self.learn_model = learner  # type: Classifier
+        self.learn_model = learn_model  # type: Classifier
         self.type = type
 
     def set_params(self, params: Dict):
@@ -67,17 +65,15 @@ class Restrained(Adversary):
         for instance in instances:
             transformed_instance = deepcopy(instance)
             if instance.get_label() == 1:
-                transformed_instances.append(
-                    self.transform(transformed_instance))
+                transformed_instances.append(self.transform(transformed_instance))
             else:
                 transformed_instances.append(transformed_instance)
         return transformed_instances
 
     def set_innocuous_target(self, train_instances, learner, type):
         """
-        If type is random, we simply pick the first instance from training data
-        as the innocuous target. Otherwise, we compute the centroid of training
-        data.
+        If type is random, we simply pick the first instance from training data as the
+        innocuous target. Otherwise, we compute the centroid of training data.
         :param train_instances:
         :param learner:
         :param type: specifies how to find innocuous_target
@@ -85,16 +81,14 @@ class Restrained(Adversary):
         """
         if type == 'random':
             self.innocuous_target = next(
-                (x for x in train_instances if
-                 x.get_label() == learner.negative_classification),
+                (x for x in train_instances if x.get_label() == -1),
                 None)
         elif type == 'centroid':
             target = find_centroid(train_instances)
             if learner.predict(target) == 1:
                 print("Fail to find centroid of from estimated training data")
                 self.innocuous_target = next(
-                    (x for x in train_instances if
-                     x.get_label() == learner.negative_classification),
+                    (x for x in train_instances if x.get_label() == -1),
                     None)
             else:
                 self.innocuous_target = target
@@ -102,23 +96,34 @@ class Restrained(Adversary):
     def transform(self, instance: Instance):
         '''
         for the real_value case, we generate a value between 0 and the bound.
-        The bound is calculated by 1- c_delta * (abs(xt - x)/abs(x) + abs(xt))
-                                   * (xt -x)
+        The bound is calculated by 1- c_delta * (abs(xt - x)/abs(x) + abs(xt)) * (xt -x)
         This value will be added to the xij for the new instance
         :param instance:
         :return: instance
         '''
-        for i in range(0, self.num_features):
-            xij = instance.get_feature_vector().get_feature(i)
-            target = self.innocuous_target.get_feature_vector().get_feature(i)
-            if abs(xij) + abs(target) == 0:
-                bound = 0
-            else:
-                bound = (self.discount_factor * (1 - self.f_attack *
-                                                 (abs(target - xij) /
-                                                  (abs(xij) + abs(target)))) *
-                         abs((target - xij)))
-            # is that ok to just assign a random number between the range???
-            delta_ij = random.uniform(0, bound)
-            instance.flip(i, xij + delta_ij)
-        return instance
+        if self.binary:
+            attack_times = int(self.f_attack * self.num_features)
+            count = 0
+            for i in range(0, self.num_features):
+                delta_ij = self.innocuous_target.get_feature_vector().get_feature(i) \
+                           - instance.get_feature_vector().get_feature(i)
+                if delta_ij != 0:
+                    if self.binary:  # when features are binary
+                        instance.get_feature_vector().flip_bit(i)
+                count += 1
+                if count == attack_times:
+                    return instance
+        else:
+            for i in range(0, self.num_features):
+                xij = instance.get_feature_vector().get_feature(i)
+                target = self.innocuous_target.get_feature_vector().get_feature(i)
+                if abs(xij) + abs(target) == 0:
+                    bound = 0
+                else:
+                    bound = self.discount_factor * (1 - self.f_attack *
+                                                    (abs(target - xij) /
+                                                     (abs(xij) + abs(target)))) \
+                            * abs((target - xij))
+                delta_ij = random.uniform(0, bound)
+                instance.flip(i, xij + delta_ij)
+            return instance

@@ -40,7 +40,7 @@ def test_iterative_retraining_learner():
     dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400',
                            binary=False, raw=True)
 
-    training_data, testing_data = dataset.split({'train': 70, 'test': 30})
+    training_data, testing_data = dataset.split({'train': 50, 'test': 50})
     training_data = load_dataset(training_data)
     testing_data = load_dataset(testing_data)
 
@@ -76,8 +76,6 @@ def test_iterative_retraining_learner():
     print('START', attacker_name, 'attack.\n')
 
     attack_data = attacker.attack(training_data)
-    attack_data += testing_data
-    np.random.shuffle(attack_data)
 
     print('\nEND', attacker_name, 'attack.')
     print('###################################################################')

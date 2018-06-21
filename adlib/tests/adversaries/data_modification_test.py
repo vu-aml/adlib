@@ -140,6 +140,9 @@ def calculate_target_theta(orig_learner, training_data, predict_data):
     for index in spam_features:
         target_theta[index] = -1
 
+    for index in ham_features:
+        target_theta[index] = 1
+
     print('Features selected: ', np.array(spam_features))
     print('Number of features: ', len(spam_features))
 

@@ -16,26 +16,27 @@ class IterativeRetrainingLearner(learner):
     A learner that iteratively retrains and removes outliers based on loss.
     """
 
-    def __init__(self, lnr: SimpleLearner, training_instances: List[Instance]):
-        learner.__init__(self)
+    def __init__(self, lnr: SimpleLearner, training_instances: List[Instance],
+                 verbose=False):
 
+        learner.__init__(self)
         self.learner = deepcopy(lnr)
         self.learner.set_training_instances(training_instances)
         self.learner.train()
-
         self.set_training_instances(training_instances)
         self.orig_training_instances = deepcopy(training_instances)
+        self.verbose = verbose
         self.loss_threshold = None
 
     def train(self):
         loss = logistic_loss(self.training_instances, self.learner)
-        mean = np.mean(loss)
-        median = np.median(loss)
-        std = np.std(loss)
-        self.loss_threshold = ((mean + median) / 2.0) + 2.0 * std
+        self.learner.set_training_instances(self.training_instances)
+        self.learner.train()
 
         old_training_instances = []
         while set(old_training_instances) != set(self.training_instances):
+            q75, q25 = np.percentile(loss, [75, 25])
+            self.loss_threshold = q75 + 1.5 * (q75 - q25)
 
             old_training_instances = self.training_instances[:]
             instances = []
@@ -44,6 +45,11 @@ class IterativeRetrainingLearner(learner):
                     instances.append(inst)
 
             self.training_instances = instances
+
+            if self.verbose:
+                print('Number of instances:', len(self.training_instances))
+                print('Loss threshold:', self.loss_threshold)
+
             self.learner.set_training_instances(self.training_instances)
             self.learner.train()
             loss = logistic_loss(self.training_instances, self.learner)

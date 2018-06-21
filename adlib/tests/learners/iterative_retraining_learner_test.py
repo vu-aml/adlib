@@ -96,7 +96,8 @@ def test_iterative_retraining_learner():
     print('START Iterative Retraining learner.\n')
 
     iterative_retraining_learner = IterativeRetrainingLearner(orig_learner,
-                                                              attack_data)
+                                                              attack_data,
+                                                              verbose=True)
     iterative_retraining_learner.train()
 
     print('\nEND Iterative Retraining learner.')

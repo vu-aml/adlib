@@ -1,8 +1,27 @@
 # A set of common functions
 # Matthew Sedam. 2018.
 
+from adlib.learners.simple_learner import SimpleLearner
+from data_reader.binary_input import Instance
+from typing import List
 import math
 import numpy as np
+
+
+def get_fvs_and_labels(instances: List[Instance]):
+    """
+    :param instances: the instances
+    :return: the feature vector matrix and labels
+    """
+
+    fvs = []
+    labels = []
+    for inst in instances:
+        fvs.append(np.array(inst.get_csr_matrix().todense().tolist()).flatten())
+        labels.append(inst.get_label())
+    fvs, labels = np.array(fvs), np.array(labels)
+
+    return fvs, labels
 
 
 def calculate_correct_percentages(orig_labels, attack_labels, instances):
@@ -21,7 +40,7 @@ def calculate_correct_percentages(orig_labels, attack_labels, instances):
     for i in range(len(instances)):
         if orig_labels[i] != instances[i].get_label():
             orig_count += 1
-        elif attack_labels[i] != instances[i].get_label():
+        if attack_labels[i] != instances[i].get_label():
             count += 1
 
     orig_precent_correct = ((len(instances) - orig_count) * 100
@@ -85,3 +104,20 @@ def logistic_function(x):
     """
 
     return 1 / (1 + math.exp(-1 * x))
+
+
+def logistic_loss(instances: List[Instance], lnr: SimpleLearner):
+    """
+    Calculates the logistic loss for instances
+    :param instances: the instances
+    :param lnr: the SimpleLearner
+    :return: the loss
+    """
+
+    fvs, labels = get_fvs_and_labels(instances)
+
+    loss = lnr.model.learner.decision_function(fvs)
+    loss = list(map(lambda x, y: -1 * x * y, loss, labels))
+    loss = np.array(list(map(lambda x: math.log(1 + math.exp(x)), loss)))
+
+    return loss

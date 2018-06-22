@@ -37,7 +37,7 @@ class DataModification(Adversary):
         """
 
         Adversary.__init__(self)
-        self.learner = deepcopy(learner).model.learner
+        self.learner = deepcopy(learner.model.learner)
         self.target_theta = target_theta
         self.lda = lda
         self.alpha = alpha

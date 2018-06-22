@@ -3,6 +3,7 @@
 # Matthew Sedam
 
 from adlib.adversaries.adversary import Adversary
+from adlib.utils.common import get_fvs_and_labels
 from data_reader.binary_input import Instance
 import cvxpy as cvx
 import numpy as np
@@ -117,22 +118,11 @@ class LabelFlipping(Adversary):
         for inst in instances:
             feature_vectors.append(inst.get_feature_vector())
             labels.append(inst.get_label())
-            labels_flipped.append(-inst.get_label())
+            labels_flipped.append(-1 * inst.get_label())
         feature_vectors = np.array(feature_vectors + feature_vectors)
         labels = np.array(labels + labels_flipped)
 
-        fvs = []
-        for i in range(half_n):
-            feature_vector = feature_vectors[i]
-            tmp = []
-            for j in range(instances[0].get_feature_count()):
-                if feature_vector.get_feature(j) == 1:
-                    tmp.append(1)
-                else:
-                    tmp.append(0)
-            tmp = np.array(tmp)
-            fvs.append(tmp)
-        fvs = np.array(fvs)
+        fvs, _ = get_fvs_and_labels(instances)
 
         orig_loss = self.learner.model.learner.decision_function(fvs)
         for i in range(half_n):
@@ -178,8 +168,8 @@ class LabelFlipping(Adversary):
         for i in range(n):
             tmp = 0.0
             for j in range(instances[0].get_feature_count()):
-                if feature_vectors[i].get_feature(j) == 1:
-                    tmp += w[j]
+                if feature_vectors[i].get_feature(j) > 0:
+                    tmp += w[j] * feature_vectors[i].get_feature(j)
             constraints.append(1 - labels[i] * tmp <= epsilon)
             constraints.append(0 <= epsilon[i])
 

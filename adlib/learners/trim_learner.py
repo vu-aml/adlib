@@ -4,8 +4,9 @@
 # Learning" found at https://arxiv.org/pdf/1804.00308.pdf.
 # Matthew Sedam
 
-from data_reader.binary_input import Instance
 from adlib.learners.learner import learner
+from adlib.utils.common import get_fvs_and_labels
+from data_reader.binary_input import Instance
 from typing import Dict, List
 import cvxpy as cvx
 import numpy as np
@@ -51,7 +52,7 @@ class TRIMLearner(learner):
                 if len(inst_set) == self.n:
                     break
 
-        fvs, labels = TRIMLearner.get_fv_matrix_and_labels(inst_set)
+        fvs, labels = get_fvs_and_labels(inst_set)
 
         # Calculate initial theta
         w, b = self._minimize_loss(fvs, labels)
@@ -75,7 +76,7 @@ class TRIMLearner(learner):
             inst_set = list(map(lambda tup: tup[1], loss_tuples[:self.n]))
 
             # Minimize loss
-            fvs, labels = TRIMLearner.get_fv_matrix_and_labels(inst_set)
+            fvs, labels = get_fvs_and_labels(inst_set)
             w, b = self._minimize_loss(fvs, labels)
 
             old_loss = loss
@@ -134,7 +135,7 @@ class TRIMLearner(learner):
         if self.w is None or self.b is None:
             raise ValueError('Must train learner before prediction.')
 
-        fvs, _ = TRIMLearner.get_fv_matrix_and_labels(instances)
+        fvs, _ = get_fvs_and_labels(instances)
 
         labels = fvs.dot(self.w) + self.b
         labels = list(map(lambda x: 1 if x >= 0 else -1, labels))
@@ -165,37 +166,3 @@ class TRIMLearner(learner):
 
     def decision_function(self, X):
         return X.dot(self.w) + self.b
-
-    @staticmethod
-    def get_feature_vector_array(inst: Instance):
-        """
-        Turns the feature vector into an np.ndarray
-        :param inst: the Instance
-        :return: the feature vector (np.ndarray)
-        """
-
-        fv = inst.get_feature_vector()
-        tmp = []
-        for j in range(inst.get_feature_count()):
-            if fv.get_feature(j) == 1:
-                tmp.append(1)
-            else:
-                tmp.append(0)
-        return np.array(tmp)
-
-    @staticmethod
-    def get_fv_matrix_and_labels(instances: List[Instance]):
-        """
-        Calculate feature vector matrix and label array
-        :param instances: the list of Instances
-        :return: a tuple of the feature vector matrix and labels
-                 (np.ndarray, np.ndarray)
-        """
-
-        fvs = []
-        labels = []
-        for inst in instances:
-            fvs.append(TRIMLearner.get_feature_vector_array(inst))
-            labels.append(inst.get_label())
-
-        return np.array(fvs), np.array(labels)

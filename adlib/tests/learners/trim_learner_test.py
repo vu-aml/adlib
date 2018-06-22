@@ -9,8 +9,9 @@ from adlib.adversaries.label_flipping import LabelFlipping
 from adlib.adversaries.k_insertion import KInsertion
 from adlib.adversaries.datamodification.data_modification import \
     DataModification
+from adlib.tests.adversaries.data_modification_test import \
+    calculate_target_theta
 from adlib.utils.common import calculate_correct_percentages
-from adlib.utils.common import get_spam_features
 from copy import deepcopy
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
@@ -23,7 +24,7 @@ import time
 def test_trim_learner():
     print()
     print('###################################################################')
-    print('START TRIM learner test.\n')
+    print('START TRIM Learner test.\n')
 
     begin = time.time()
 
@@ -37,9 +38,9 @@ def test_trim_learner():
     # Data processing unit
     # The path is an index of 400 testing samples(raw email data).
     dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400',
-                           binary=True, raw=True)
+                           binary=False, raw=True)
 
-    training_data, testing_data = dataset.split({'train': 20, 'test': 80})
+    training_data, testing_data = dataset.split({'train': 50, 'test': 50})
     training_data = load_dataset(training_data)
     testing_data = load_dataset(testing_data)
 
@@ -65,27 +66,9 @@ def test_trim_learner():
                               number_to_add=number_to_add,
                               verbose=True)
     else:  # attacker_name == 'data-modification'
-        lnr = orig_learner.model.learner
-        eye = np.eye(training_data[0].get_feature_count(), dtype=int)
-        orig_theta = lnr.decision_function(eye) - lnr.intercept_[0]
-        target_theta = deepcopy(orig_theta)
-
-        spam_instances = []
-        for inst in training_data + testing_data:
-            if inst.get_label() == 1:
-                spam_instances.append(inst)
-
-        spam_features, ham_features = get_spam_features(spam_instances)
-
-        # Set features to recognize spam as ham
-        for index in spam_features:
-            target_theta[index] = -10
-
-        for index in ham_features:
-            target_theta[index] = 0.01
-
-        print('Features selected: ', np.array(spam_features))
-        print('Number of features: ', len(spam_features))
+        target_theta = calculate_target_theta(orig_learner,
+                                              training_data,
+                                              testing_data)
 
         attacker = DataModification(orig_learner, target_theta, verbose=True)
 
@@ -107,8 +90,8 @@ def test_trim_learner():
     print('START TRIM learner.\n')
 
     # Train with TRIM learner
-    # We poisoned roughly 30% of the data, so 70% should be unpoisoned
-    trim_learner = TRIMLearner(attack_data, int(0.7 * len(attack_data)),
+    trim_learner = TRIMLearner(attack_data,
+                               int(0.7 * len(attack_data)),
                                verbose=True)
     trim_learner.train()
 
@@ -171,9 +154,9 @@ def test_trim_learner():
     print('Difference: ', difference, '%')
 
     end = time.time()
-    print('\nTotal time: ', round(begin - end, 2), 's', '\n', sep='')
+    print('\nTotal time: ', round(end - begin, 2), 's', '\n', sep='')
 
-    print('\nEND TRIM learner test.')
+    print('\nEND TRIM Learner test.')
     print('###################################################################')
     print()
 

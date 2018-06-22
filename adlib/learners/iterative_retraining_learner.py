@@ -3,7 +3,12 @@
 # Matthew Sedam
 
 from adlib.learners.learner import learner
-from typing import Dict
+from adlib.learners.simple_learner import SimpleLearner
+from adlib.utils.common import logistic_loss
+from copy import deepcopy
+from data_reader.binary_input import Instance
+from typing import Dict, List
+import numpy as np
 
 
 class IterativeRetrainingLearner(learner):
@@ -11,15 +16,49 @@ class IterativeRetrainingLearner(learner):
     A learner that iteratively retrains and removes outliers based on loss.
     """
 
-    def __init__(self):
+    def __init__(self, lnr: SimpleLearner, training_instances: List[Instance],
+                 verbose=False):
+
         learner.__init__(self)
-        raise NotImplementedError
+        self.learner = deepcopy(lnr)
+        self.learner.set_training_instances(training_instances)
+        self.learner.train()
+        self.set_training_instances(training_instances)
+        self.orig_training_instances = deepcopy(training_instances)
+        self.verbose = verbose
+        self.loss_threshold = None
 
     def train(self):
-        raise NotImplementedError
+        loss = logistic_loss(self.training_instances, self.learner)
+        self.learner.set_training_instances(self.training_instances)
+        self.learner.train()
+
+        old_training_instances = []
+        while set(old_training_instances) != set(self.training_instances):
+            q75, q25 = np.percentile(loss, [75, 25])
+            self.loss_threshold = q75 + 1.5 * (q75 - q25)
+
+            old_training_instances = self.training_instances[:]
+            instances = []
+            for i, inst in enumerate(self.training_instances):
+                if loss[i] < self.loss_threshold:
+                    instances.append(inst)
+
+            self.training_instances = instances
+
+            if self.verbose:
+                print('Number of instances:', len(self.training_instances))
+                print('Loss threshold:', self.loss_threshold)
+
+            self.learner.set_training_instances(self.training_instances)
+            self.learner.train()
+            loss = logistic_loss(self.training_instances, self.learner)
+
+        self.learner.set_training_instances(self.training_instances)
+        self.learner.train()
 
     def predict(self, instances):
-        raise NotImplementedError
+        return self.learner.predict(instances)
 
     def set_params(self, params: Dict):
         raise NotImplementedError

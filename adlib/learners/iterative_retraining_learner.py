@@ -18,13 +18,17 @@ class IterativeRetrainingLearner(learner):
 
     def __init__(self, lnr: SimpleLearner, training_instances: List[Instance],
                  verbose=False):
+        """
+        :param lnr: the base learner
+        :param training_instances: the list of training instances
+        :param verbose: if True, the learner will print progress
+        """
 
         learner.__init__(self)
         self.learner = deepcopy(lnr)
         self.learner.set_training_instances(training_instances)
         self.learner.train()
         self.set_training_instances(training_instances)
-        self.orig_training_instances = deepcopy(training_instances)
         self.verbose = verbose
         self.loss_threshold = None
 
@@ -61,10 +65,19 @@ class IterativeRetrainingLearner(learner):
         return self.learner.predict(instances)
 
     def set_params(self, params: Dict):
-        raise NotImplementedError
+        if params['lnr'] is not None:
+            self.learner = deepcopy(params['lnr'])
+        if params['training_instances'] is not None:
+            self.set_training_instances(params['training_instances'])
+            self.learner.set_training_instances(params['training_instances'])
+            self.learner.train()
+        if params['verbose'] is not None:
+            self.verbose = params['verbose']
+
+        self.loss_threshold = None
 
     def predict_proba(self, X):
         raise NotImplementedError
 
     def decision_function(self, X):
-        raise NotImplementedError
+        return self.learner.model.learner.decision_function(X)

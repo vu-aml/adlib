@@ -4,7 +4,7 @@
 # Learning" found at https://arxiv.org/pdf/1804.00308.pdf.
 # Matthew Sedam
 
-from adlib.learners.learner import learner
+from adlib.learners.learner import Learner
 from adlib.utils.common import get_fvs_and_labels
 from data_reader.binary_input import Instance
 from typing import Dict, List
@@ -12,7 +12,7 @@ import cvxpy as cvx
 import numpy as np
 
 
-class TRIMLearner(learner):
+class TRIMLearner(Learner):
     """
     A learner that implements the TRIM algorithm described in the paper
     mentioned above.
@@ -28,7 +28,7 @@ class TRIMLearner(learner):
         :param verbose: if True, the solver will be in verbose mode
         """
 
-        learner.__init__(self)
+        Learner.__init__(self)
         self.training_instances = training_instances
         self.n = n
         self.lda = lda  # lambda

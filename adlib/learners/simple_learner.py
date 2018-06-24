@@ -1,16 +1,16 @@
-from adlib.learners.learner import learner
+from adlib.learners.learner import Learner
 from adlib.learners.models import sklearner
 from typing import Dict
 
 
-class SimpleLearner(learner):
+class SimpleLearner(Learner):
     """Simple Learner for initial learning methods.
     Defines the bare-minimum functionality for initial learning
     strategies.
     """
 
     def __init__(self, model=None, training_instances=None):
-        learner.__init__(self)
+        Learner.__init__(self)
         if model:
             self.set_model(model)
         else:

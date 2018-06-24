@@ -1,6 +1,6 @@
 import pytest
 from adlib.adversaries import FreeRange
-from adlib.learners import learner, SVMFreeRange
+from adlib.learners import Learner, SVMFreeRange
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
 
@@ -47,7 +47,7 @@ def test_transform_instance(free_range, freerange_learner, training_data, testin
     param = {}
     param['f_attack'] = 1
     free_range.set_params(param)
-    sample_ = next((x for x in testing_data if x.get_label() == learner.positive_classification),
+    sample_ = next((x for x in testing_data if x.get_label() == Learner.positive_classification),
                    None)
     free_range.transform(sample_)
     for i in range(0, free_range.num_features):
@@ -61,7 +61,7 @@ def test_transform_instance_low(free_range, freerange_learner, training_data, te
     # if f_attack is low, the result is different from the innocuous target
     param = {}
     param['f_attack'] = 0.01
-    sample = next((x for x in testing_data if x.get_label() == learner.positive_classification),
+    sample = next((x for x in testing_data if x.get_label() == Learner.positive_classification),
                   None)
     free_range.transform(sample)
     equal = True

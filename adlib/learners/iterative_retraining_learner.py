@@ -2,7 +2,7 @@
 # A learner that iteratively retrains and removes outliers based on loss.
 # Matthew Sedam
 
-from adlib.learners.learner import learner
+from adlib.learners.learner import Learner
 from adlib.learners.simple_learner import SimpleLearner
 from adlib.utils.common import logistic_loss
 from copy import deepcopy
@@ -11,7 +11,7 @@ from typing import Dict, List
 import numpy as np
 
 
-class IterativeRetrainingLearner(learner):
+class IterativeRetrainingLearner(Learner):
     """
     A learner that iteratively retrains and removes outliers based on loss.
     """
@@ -24,7 +24,7 @@ class IterativeRetrainingLearner(learner):
         :param verbose: if True, the learner will print progress
         """
 
-        learner.__init__(self)
+        Learner.__init__(self)
         self.learner = deepcopy(lnr)
         self.learner.set_training_instances(training_instances)
         self.learner.train()

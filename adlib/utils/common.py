@@ -1,7 +1,7 @@
 # A set of common functions
 # Matthew Sedam. 2018.
 
-from adlib.learners import learner
+from adlib.learners import Learner
 from data_reader.binary_input import Instance
 from typing import List
 import math
@@ -106,7 +106,7 @@ def logistic_function(x):
     return 1 / (1 + math.exp(-1 * x))
 
 
-def logistic_loss(instances: List[Instance], lnr: learner):
+def logistic_loss(instances: List[Instance], lnr: Learner):
     """
     Calculates the logistic loss for instances
     :param instances: the instances

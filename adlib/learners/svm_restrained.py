@@ -1,4 +1,4 @@
-from adlib.learners.learner import learner
+from adlib.learners.learner import Learner
 from typing import List, Dict
 import numpy as np
 import cvxpy as cvx
@@ -14,7 +14,7 @@ except ImportError:
     OPT_INSTALLED = False
 
 
-class SVMRestrained(learner):
+class SVMRestrained(Learner):
     """Solves asymmetric dual problem: :math:`argmin (1/2)*⎜⎜w⎟⎟^2 + C*∑(xi0)`
 
     By solving the convex optimization, optimal weight and bias matrices are
@@ -26,7 +26,7 @@ class SVMRestrained(learner):
     """
 
     def __init__(self, params=None, training_instances=None):
-        learner.__init__(self)
+        Learner.__init__(self)
         self.weight_vector = None
         self.bias = 0
         self.c_delta = 0.5

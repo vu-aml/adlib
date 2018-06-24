@@ -1,6 +1,6 @@
 from sklearn.naive_bayes import GaussianNB
 import pytest
-from adlib.learners import learner, SimpleLearner
+from adlib.learners import Learner, SimpleLearner
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
 from adlib.adversaries import CostSensitive
@@ -54,7 +54,7 @@ def test_log_threshold(cost_sensitive):
 def test_gap_negative_instances(cost_sensitive, NB_learner, data):
     cost_sensitive.set_adversarial_params(NB_learner, data['training_data'])
     sample = next((x for x in data['testing_data'] if x.get_label() ==
-                   learner.negative_classification), None)
+                   Learner.negative_classification), None)
     # gap(x) <= 0 for all negative_classified instances
     result = cost_sensitive.gap(sample)
     assert result <= 0
@@ -63,7 +63,7 @@ def test_gap_negative_instances(cost_sensitive, NB_learner, data):
 def test_find_MCC(cost_sensitive, NB_learner, data):
     cost_sensitive.set_adversarial_params(NB_learner, data['training_data'])
     sample = next((x for x in data['testing_data'] if x.get_label() ==
-                   learner.negative_classification), None)
+                   Learner.negative_classification), None)
     x_cost, x_list = cost_sensitive.find_mcc(cost_sensitive.num_features,
                                              cost_sensitive.gap(sample), sample)
     y_cost, y_list = cost_sensitive.find_mcc(0, cost_sensitive.gap(sample), sample)
@@ -76,7 +76,7 @@ def test_find_MCC(cost_sensitive, NB_learner, data):
 def test_A_x_(cost_sensitive, NB_learner, data):
     cost_sensitive.set_adversarial_params(NB_learner, data['training_data'])
     sample = next((x for x in data['testing_data'] if x.get_label() ==
-                   learner.positive_classification), None)
+                   Learner.positive_classification), None)
     result = deepcopy(sample)
     cost_sensitive.a(result)
     assert result.label == sample.label

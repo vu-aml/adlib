@@ -3,7 +3,7 @@ from data_reader.binary_input import Instance
 from data_reader.real_input import RealFeatureVector
 from typing import List, Dict
 import numpy as np
-from adlib.learners import learner
+from adlib.learners import Learner
 
 #import matplotlib.pyplot as plt
 #for debugging purposes, the Q values are printed

@@ -2,7 +2,7 @@
 # A learner that implements the Alternating TRIM algorithm.
 # Matthew Sedam
 
-from adlib.learners.learner import learner
+from adlib.learners.learner import Learner
 from adlib.utils.common import get_fvs_and_labels, logistic_loss
 from copy import deepcopy
 from typing import Dict
@@ -10,13 +10,13 @@ import cvxpy as cvx
 import numpy as np
 
 
-class AlternatingTRIMLearner(learner):
+class AlternatingTRIMLearner(Learner):
     """
     A learner that implements the Alternating TRIM algorithm.
     """
 
     def __init__(self, training_instances, poison_percentage, verbose=False):
-        learner.__init__(self)
+        Learner.__init__(self)
         self.training_instances = deepcopy(training_instances)
         self.poison_percentage = poison_percentage
         self.n = (1 - poison_percentage) * len(self.training_instances)

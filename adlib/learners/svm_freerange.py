@@ -1,4 +1,4 @@
-from adlib.learners.learner import learner
+from adlib.learners.learner import Learner
 from data_reader.binary_input import Instance
 from data_reader.operations import sparsify
 from adlib.adversaries.adversary import Adversary
@@ -16,7 +16,7 @@ except ImportError:
     OPT_INSTALLED = False
 
 
-class SVMFreeRange(learner):
+class SVMFreeRange(Learner):
     """Solves asymmetric dual problem: :math:`argmin (1/2)*⎜⎜w⎟⎟^2 + C*∑(xi0)`
 
     By solving the convex optimization, optimal weight and bias matrices are
@@ -33,7 +33,7 @@ class SVMFreeRange(learner):
     """
 
     def __init__(self, params=None, training_instances=None):
-        learner.__init__(self)
+        Learner.__init__(self)
         self.weight_vector = None
         self.bias = 0
         self.c_f = 0.5

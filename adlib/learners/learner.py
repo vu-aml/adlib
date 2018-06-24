@@ -2,7 +2,7 @@ from typing import Dict, List
 from data_reader.binary_input import Instance
 
 
-class learner(object):
+class Learner(object):
     """Base class for initial learning methods.
 
     Defines the bare-minimum functionality for initial learning

@@ -1,7 +1,7 @@
 from adlib.adversaries.adversary import Adversary
 from typing import List, Dict
 from data_reader.binary_input import Instance
-from adlib.learners.learner import learner
+from adlib.learners.learner import Learner
 from copy import deepcopy
 from math import exp
 
@@ -26,7 +26,7 @@ class SimpleOptimize(Adversary):
         transformed_instances = []
         for instance in instances:
             transformed_instance = deepcopy(instance)
-            if instance.get_label() == learner.positive_classification:
+            if instance.get_label() == Learner.positive_classification:
                 transformed_instances.append(
                     self.optimize(transformed_instance))
             else:

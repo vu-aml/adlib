@@ -6,6 +6,7 @@ from adlib.learners.learner import learner
 from adlib.utils.common import get_fvs_and_labels, logistic_loss
 from copy import deepcopy
 from typing import Dict
+import cvxpy as cvx
 import numpy as np
 
 
@@ -14,7 +15,7 @@ class AlternatingTRIMLearner(learner):
     A learner that implements the Alternating TRIM algorithm.
     """
 
-    def __init__(self, training_instances, poison_percentage, verbose):
+    def __init__(self, training_instances, poison_percentage, verbose=False):
         learner.__init__(self)
         self.training_instances = deepcopy(training_instances)
         self.poison_percentage = poison_percentage
@@ -22,8 +23,31 @@ class AlternatingTRIMLearner(learner):
         self.verbose = verbose
 
     def train(self):
-        fvs, labels = get_fvs_and_labels()
+        fvs, labels = get_fvs_and_labels(self.training_instances)
         tau = self._generate_tau()
+
+        # Setup variables
+        theta = cvx.Variable(fvs.shape[1])
+        b = cvx.Variable()
+
+        # Setup CVXPY problem
+        f_vector = []
+        for vector in fvs:
+            f_vector.append(sum(map(lambda x, y: x * y, vector, theta)) + b)
+
+        tmp = []
+        for i, val in enumerate(tau):
+            if val == 1:
+                tmp.append(cvx.logistic(-1 * labels[i] * f_vector[i]))
+
+        # Solve minimization problem
+
+        func = sum(tmp)
+        problem = cvx.Problem(cvx.Minimize(func), [])
+        problem.solve(solver=cvx.SCS, verbose=self.verbose, parallel=True)
+
+        print(theta.value)
+        print(b.value)
 
     def _generate_tau(self):
         """
@@ -37,16 +61,16 @@ class AlternatingTRIMLearner(learner):
 
         total = sum(tau)
         while total != self.n:
-            if total > self.n:
-                for i, val in enumerate(tau):
+            for i, val in enumerate(tau):
+                if total > self.n:
                     if val == 1 and np.random.binomial(1, 0.5) == 1:
                         tau[i] = 0
                         break
-            else:
-                for i, val in enumerate(tau):
+                else:
                     if val == 0 and np.random.binomial(1, 0.5) == 1:
                         tau[i] = 1
                         break
+            total = sum(tau)
 
         return tau
 

@@ -21,6 +21,9 @@ import sys
 import time
 
 
+# TODO: Remove testing below
+
+
 def test_alternating_trim_learner():
     print()
     print('###################################################################')
@@ -75,7 +78,8 @@ def test_alternating_trim_learner():
     print('###################################################################')
     print('START', attacker_name, 'attack.\n')
 
-    attack_data = attacker.attack(training_data)
+    # attack_data = attacker.attack(training_data)  # Testing
+    attack_data = testing_data
 
     print('\nEND', attacker_name, 'attack.')
     print('###################################################################')
@@ -90,7 +94,7 @@ def test_alternating_trim_learner():
     print('START Alternating TRIM learner.\n')
 
     # Train with TRIM learner
-    alt_trim_learner = AlternatingTRIMLearner()
+    alt_trim_learner = AlternatingTRIMLearner(training_data, 0.3, verbose=True)
     alt_trim_learner.train()
 
     print('\nEND Alternating TRIM learner.')

@@ -21,32 +21,41 @@ class AlternatingTRIMLearner(learner):
         self.poison_percentage = poison_percentage
         self.n = (1 - poison_percentage) * len(self.training_instances)
         self.verbose = verbose
+        self.theta = None
+        self.b = None
 
     def train(self):
         fvs, labels = get_fvs_and_labels(self.training_instances)
         tau = self._generate_tau()
+        old_tau = np.full(len(tau), 0)
 
-        # Setup variables
-        theta = cvx.Variable(fvs.shape[1])
-        b = cvx.Variable()
+        while np.linalg.norm(tau - old_tau) != 0:
+            # Setup variables
+            theta = cvx.Variable(fvs.shape[1])
+            b = cvx.Variable()
 
-        # Setup CVXPY problem
-        f_vector = []
-        for vector in fvs:
-            f_vector.append(sum(map(lambda x, y: x * y, vector, theta)) + b)
+            # Setup CVXPY problem
+            f_vector = []
+            for vector in fvs:
+                f_vector.append(sum(map(lambda x, y: x * y, vector, theta)) + b)
 
-        tmp = []
-        for i, val in enumerate(tau):
-            if val == 1:
-                tmp.append(cvx.logistic(-1 * labels[i] * f_vector[i]))
+            tmp = []
+            for i, val in enumerate(tau):
+                if val == 1:
+                    tmp.append(cvx.logistic(-1 * labels[i] * f_vector[i]))
 
-        # Solve the minimization problem
-        func = sum(tmp)
-        problem = cvx.Problem(cvx.Minimize(func), [])
-        problem.solve(solver=cvx.SCS, verbose=self.verbose, parallel=True)
+            # Solve the minimization problem
+            func = sum(tmp)
+            problem = cvx.Problem(cvx.Minimize(func), [])
+            problem.solve(solver=cvx.SCS, verbose=self.verbose, parallel=True)
 
-        print(theta.value)
-        print(b.value)
+            self.theta = np.array(theta.value).flatten()
+            self.b = b.value
+
+            ####################################################################
+
+            loss = logistic_loss(self.training_instances, self)
+            print(loss)
 
     def _generate_tau(self):
         """
@@ -83,4 +92,4 @@ class AlternatingTRIMLearner(learner):
         raise NotImplementedError
 
     def decision_function(self, X):
-        raise NotImplementedError
+        return X.dot(self.theta) + self.b

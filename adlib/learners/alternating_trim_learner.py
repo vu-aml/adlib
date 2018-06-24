@@ -40,8 +40,7 @@ class AlternatingTRIMLearner(learner):
             if val == 1:
                 tmp.append(cvx.logistic(-1 * labels[i] * f_vector[i]))
 
-        # Solve minimization problem
-
+        # Solve the minimization problem
         func = sum(tmp)
         problem = cvx.Problem(cvx.Minimize(func), [])
         problem.solve(solver=cvx.SCS, verbose=self.verbose, parallel=True)

@@ -151,7 +151,7 @@ class GDPoisoner(object):
         """
 
         poisct = poisx.shape[0]
-        print("Poison Count: {}".format(poisct))
+        print('Poison Count: {}'.format(poisct))
 
         new_poisx = np.zeros(poisx.shape)
         new_poisy = [None for a in poisy]
@@ -191,23 +191,23 @@ class GDPoisoner(object):
         # figure out starting error
         it_res = self.iter_progress(poisx, poisy, poisx, poisy)
 
-        print("Iteration {}:".format(count))
-        print("Objective Value: {} Change: {}".format(it_res[0], it_res[0]))
-        print("Validation MSE: {}".format(it_res[2][0]))
-        print("Test MSE: {}".format(it_res[2][1]))
+        print('Iteration {}:'.format(count))
+        print('Objective Value: {} Change: {}'.format(it_res[0], it_res[0]))
+        print('Validation MSE: {}'.format(it_res[2][0]))
+        print('Test MSE: {}'.format(it_res[2][1]))
 
         last_obj = it_res[0]
         if it_res[0] > best_obj:
             best_poisx, best_poisy, best_obj = poisx, poisy, it_res[0]
 
         # stuff to put into self.resfile
-        towrite = [poisct, count, it_res[0], it_res[1], \
-                   it_res[2][0], it_res[2][1], \
+        towrite = [poisct, count, it_res[0], it_res[1],
+                   it_res[2][0], it_res[2][1],
                    (datetime.datetime.now() - tstart).total_seconds()]
 
-        self.resfile.write(','.join([str(val) for val in towrite]) + "\n")
-        self.trainfile.write("\n")
-        self.trainfile.write(str(poisct) + "," + str(count) + '\n')
+        self.resfile.write(','.join([str(val) for val in towrite]) + '\n')
+        self.trainfile.write('\n')
+        self.trainfile.write(str(poisct) + ',' + str(count) + '\n')
 
         if visualize:
             self.trainfile.write('{},{}\n'.format(poisy[0], new_poisx[0]))
@@ -252,18 +252,18 @@ class GDPoisoner(object):
 
             it_res = self.iter_progress(poisx, poisy, new_poisx, new_poisy)
 
-            print("Iteration {}:".format(count))
-            print("Objective Value: {} Change: {}".format(
+            print('Iteration {}:'.format(count))
+            print('Objective Value: {} Change: {}'.format(
                 it_res[0], it_res[0] - it_res[1]))
 
-            print("Validation MSE: {}".format(it_res[2][0]))
-            print("Test MSE: {}".format(it_res[2][1]))
-            print("Y pushed out of bounds: {}/{}".format(
+            print('Validation MSE: {}'.format(it_res[2][0]))
+            print('Test MSE: {}'.format(it_res[2][1]))
+            print('Y pushed out of bounds: {}/{}'.format(
                 outofboundsct, poisct))
 
             # if we don't make progress, decrease learning rate
             if (it_res[0] < it_res[1]):
-                print("no progress")
+                print('no progress')
                 self.eta *= 0.75
                 new_poisx, new_poisy = poisx, poisy
             else:
@@ -279,8 +279,8 @@ class GDPoisoner(object):
                        it_res[2][0], it_res[2][1],
                        (datetime.datetime.now() - tstart).total_seconds()]
 
-            self.resfile.write(','.join([str(val) for val in towrite]) + "\n")
-            self.trainfile.write("\n{},{}\n".format(poisct, count))
+            self.resfile.write(','.join([str(val) for val in towrite]) + '\n')
+            self.trainfile.write('\n{},{}\n'.format(poisct, count))
 
             for j in range(poisct):
                 self.trainfile.write(','.join([str(val) for val in

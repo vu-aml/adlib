@@ -10,9 +10,6 @@ import cvxpy as cvx
 import numpy as np
 
 
-# TODO: loss is reported as 0 -> incorrect
-
-
 class AlternatingTRIMLearner(Learner):
     """
     A learner that implements the Alternating TRIM algorithm.

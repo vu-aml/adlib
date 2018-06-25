@@ -21,9 +21,6 @@ import sys
 import time
 
 
-# TODO: Remove testing below
-
-
 def test_alternating_trim_learner():
     print()
     print('###################################################################')
@@ -78,8 +75,7 @@ def test_alternating_trim_learner():
     print('###################################################################')
     print('START', attacker_name, 'attack.\n')
 
-    # attack_data = attacker.attack(training_data)  # Testing
-    attack_data = testing_data
+    attack_data = attacker.attack(training_data)
 
     print('\nEND', attacker_name, 'attack.')
     print('###################################################################')

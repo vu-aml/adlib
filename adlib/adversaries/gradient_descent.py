@@ -17,7 +17,7 @@ import operator
     (g(x)) result, subject to a bound on its distance. An extra mimicry component is added to avoid descending to meaningless
     regions.
 
-    This algorithm is based on adversariaLib - Advanced library for the evaluation of machine 
+    This algorithm is based on adversariaLib - Advanced library for the evaluation of machine
     learning algorithms and classifiers against adversarial attacks. Copyright (C) 2013, Igino Corona,
     Battista Biggio, Davide Maiorca, Dept. of Electrical and Electronic Engineering, University of Cagliari, Italy.
 """

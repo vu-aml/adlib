@@ -6,13 +6,13 @@ from copy import deepcopy
 import random
 
 """
-Based on the Adversarial Support Vector Machine Learning by Yan Zhou, 
+Based on the Adversarial Support Vector Machine Learning by Yan Zhou,
 Murat Kantarcioglu, Bhavani Thuraisingham and Bowei Xi.
- 
-Concept: A generalized attacker algorithm that attempts to move the instances' 
-         features in a certain direction by a certain distance that is measured 
+
+Concept: A generalized attacker algorithm that attempts to move the instances'
+         features in a certain direction by a certain distance that is measured
          by how harsh the attack is.
-                                                          
+
 """
 
 

@@ -7,10 +7,10 @@ from sklearn.utils.validation import check_array, check_is_fitted
 import numpy as np
 
 """
-   Based on the Adversarial Classification By Nilesh Dalvi, 
-   Pedro Domingos, Mausam, Sumit Sanghai, Deepak Verma. 
+   Based on the Adversarial Classification By Nilesh Dalvi,
+   Pedro Domingos, Mausam, Sumit Sanghai, Deepak Verma.
    This learner is set based on the assumption that the attacker
-   is a naive bayes based attacker and uses it s optimal strategy to modify test 
+   is a naive bayes based attacker and uses it s optimal strategy to modify test
    instances.
 """
 

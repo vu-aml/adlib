@@ -4,12 +4,12 @@ from data_reader.binary_input import Instance, BinaryFeatureVector
 from adlib.learners.learner import Learner
 from copy import deepcopy
 
-"""Good Word Attack based on Good Word Attacks on Statistical Spam Filters by 
+"""Good Word Attack based on Good Word Attacks on Statistical Spam Filters by
    Daniel Lowd and Christopher Meek.
 
 Concept:
-   This algorithm tries to measure the weight of each words in the email lists 
-   and attempts to create a list of n good words. The first-n-words and 
+   This algorithm tries to measure the weight of each words in the email lists
+   and attempts to create a list of n good words. The first-n-words and
    best-n-words are two methods of discovering the list.
 """
 

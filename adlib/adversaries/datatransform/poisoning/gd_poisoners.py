@@ -144,7 +144,7 @@ class GDPoisoner(object):
         poison_data takes an initial set of poisoning points and optimizes it
         using gradient descent with parameters set in __init__
 
-        poisxinit, poisyinit: initial poisoning points 
+        poisxinit, poisyinit: initial poisoning points
         tstart: start time - used for writing out performance
         visualize: whether we want to visualize the gradient descent steps
         newlogdir: directory to log into, to save the visualization
@@ -314,7 +314,7 @@ class GDPoisoner(object):
         lam: regularization coef
         eq7lhs, mu: needed for gradient
         poisx_hist, poisy_hist: path of poisoning
-        newlogdir: directory to save pretty picture to        
+        newlogdir: directory to save pretty picture to
         """
 
         plt.plot(self.x, self.y, 'k.')
@@ -330,7 +330,7 @@ class GDPoisoner(object):
 
         # plot path of poisoning pt
         for i in range(poisx_hist.shape[1]):
-            # plot start, path, and end      
+            # plot start, path, and end
             plt.plot(poisx_hist[0, i, :], poisy_hist[0, i], 'g.', markersize=10)
             plt.plot(poisx_hist[:, i, :], poisy_hist[:, i], 'g-', linewidth=3)
             plt.plot(poisx_hist[-1, i, :], poisy_hist[-1, i], 'g*',
@@ -347,7 +347,7 @@ class GDPoisoner(object):
                   resolution=0.1):
         """
         plot_func plots a heatmap of the objective function
-        
+
         f: objective function
         min_x: smallest value of x desired in the heatmap
         max_x: largest value of x desired in the heatmap

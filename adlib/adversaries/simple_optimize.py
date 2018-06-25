@@ -5,7 +5,7 @@ from adlib.learners.learner import Learner
 from copy import deepcopy
 from math import exp
 
-"""Simple optimization of adversarial instance with binary valued feature 
+"""Simple optimization of adversarial instance with binary valued feature
 vector.
 
 Concept:

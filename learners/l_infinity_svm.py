@@ -24,7 +24,7 @@ class L_infSVM(learner):
         learner.__init__(self)
         self.weight_vector = None  # type: np.array(shape=(1))
         self.num_features = 0  # type: int
-        self.reg_coef = coef  # type: float
+        self.coef = coef  # type: float
         self.bias = 0  # type: int
 
         if training_instances is not None:
@@ -35,11 +35,11 @@ class L_infSVM(learner):
 
     def set_params(self, params: Dict):
         if 'coef' in params:
-            self.reg_coef = params['coef']
+            self.coef = params['coef']
 
 
     def get_available_params(self) -> Dict:
-        params = {'coef': self.reg_coef}
+        params = {'coef': self.coef}
         return params
 
 
@@ -65,12 +65,12 @@ class L_infSVM(learner):
 
         weights = Variable(n)
         bias = Variable()
-        loss_func = sum_entries(pos(1 - mul_elemwise(y, X*weights - bias)))
+        loss_func = sum_entries(pos(1 - mul_elemwise(y, X*weights + bias)))
         reg_term = norm(weights, 'inf')
-        reg_factor = self.reg_coef
+        slack_factor = self.coef
 
         # define optimization problem
-        prob = Problem(Minimize(loss_func / m + reg_factor * reg_term))
+        prob = Problem(Minimize(slack_factor * loss_func + reg_term))
         prob.solve()
         self.weight_vector = weights.value
         self.bias = bias.value

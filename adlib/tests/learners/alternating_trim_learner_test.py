@@ -146,15 +146,15 @@ def test_alternating_trim_learner():
                                                  data)
 
     print('###################################################################')
-    print('Predictions using TRIM learner:')
-    print('TRIM learner percentage: ', trim_percent_correct, '%')
+    print('Predictions using Alternating TRIM learner:')
+    print('Alternating TRIM learner percentage: ', trim_percent_correct, '%')
     print('Simple learner correct percentage: ', normal_percent_correct, '%')
     print('Difference: ', difference, '%')
 
     end = time.time()
     print('\nTotal time: ', round(end - begin, 2), 's', '\n', sep='')
 
-    print('\nEND TRIM Learner test.')
+    print('\nEND Alternating TRIM learner test.')
     print('###################################################################')
     print()
 

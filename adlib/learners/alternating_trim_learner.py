@@ -54,7 +54,7 @@ class AlternatingTRIMLearner(Learner):
             # Solve the minimization problem
             func = sum(tmp)
             problem = cvx.Problem(cvx.Minimize(func), [])
-            problem.solve(solver=cvx.SCS, verbose=self.verbose, parallel=True)
+            problem.solve(solver=cvx.ECOS, verbose=self.verbose, parallel=True)
 
             self.theta = np.array(theta.value).flatten()
             self.b = b.value

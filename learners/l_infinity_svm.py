@@ -19,7 +19,7 @@ class L_infSVM(learner):
     """
 
 
-    def __init__(self, training_instances=None, coef=0.25):
+    def __init__(self, training_instances=None, coef=0.25, params= None):
 
         learner.__init__(self)
         self.weight_vector = None  # type: np.array(shape=(1))
@@ -29,6 +29,19 @@ class L_infSVM(learner):
 
         if training_instances is not None:
             self.set_training_instances(training_instances)
+        if params is not None:
+            self.set_params(params)
+
+
+    def set_params(self, params: Dict):
+        if 'coef' in params:
+            self.reg_coef = params['coef']
+
+
+    def get_available_params(self) -> Dict:
+        params = {'coef': self.reg_coef}
+        return params
+
 
     def train(self):
         """

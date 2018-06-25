@@ -28,7 +28,7 @@ def testing_data(data):
 
 @pytest.fixture
 def freerange_learner(data):
-    return SVMFreeRange({'c_f': 0.7, 'xmin': 0.25, 'xmax': 0.75}, \
+    return SVMFreeRange({'c_f': 0.7, 'xmin': 0.25, 'xmax': 0.75},
                         data['training_data'])
 
 

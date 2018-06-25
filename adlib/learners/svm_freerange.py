@@ -94,8 +94,7 @@ class SVMFreeRange(Learner):
 
         constraints = [xi0 >= 0,
                        xi0 >= 1 - mul(pnl, (pn * w + b)) + t,
-                       t >= mul(self.c_f, (mul(xj_max - pn, v)
-                                           - mul(xj_min - pn, u)) * ones_col),
+                       t >= mul(self.c_f, (mul(xj_max - pn, v) - mul(xj_min - pn, u)) * ones_col),
                        u - v == 0.5 * (1 + pnl) * w.T,
                        u >= 0,
                        v >= 0]

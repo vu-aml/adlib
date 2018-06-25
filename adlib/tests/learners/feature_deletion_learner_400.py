@@ -45,9 +45,10 @@ learning_model = svm.SVC(probability=True, kernel='linear')
 learner1 = SimpleLearner(learning_model, training_data)
 learner1.train()
 
-# #Print learned weight from initial svm
+# Print learned weight from initial svm
 # print(learner1.get_weight())
-# plt.plot(list(range(len(learner1.get_weight()))), testing_data[2].get_csr_matrix().toarray().reshape((1000,)).tolist())
+# plt.plot(list(range(len(learner1.get_weight()))),
+# testing_data[2].get_csr_matrix().toarray().reshape((1000,)).tolist())
 # plt.show()
 predictions = learner1.predict(testing_data)
 print("======== initial prediction =========")

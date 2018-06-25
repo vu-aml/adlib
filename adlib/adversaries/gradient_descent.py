@@ -263,9 +263,8 @@ class GradientDescent(Adversary):
                             attack_instance))
                 else:
                     grad = grad + (
-                            dual_coef[0][element] * kernel[element][0] * 2 * gamma * (
-                            support[element] -
-                            attack_instance))
+                            dual_coef[0][element] * kernel[element][0] * 2 * gamma *
+                            (support[element] - attack_instance))
             return -grad
         if self.learn_model == SimpleLearner and self.learn_model.model == SVC \
                 and self.learn_model.model.kernel == 'linear':
@@ -309,9 +308,9 @@ class GradientDescent(Adversary):
     def gradient_euclidean(self, attack_instance, negative_instances, max_neg_instance=10,
                            weights=1):
         # compute the euclidean distance of the attack_instance to the negative instances.
-        dist = [(negative_instance, self.euclidean_dist(attack_instance, negative_instance
-                                                        , weights)) for negative_instance in
-                negative_instances]
+        dist = [
+            (negative_instance, self.euclidean_dist(attack_instance, negative_instance, weights))
+            for negative_instance in negative_instances]
 
         # acquire the first max_neg_instance # of best fitted instances
         # sort the resulting dist list according to cmp(a,b).

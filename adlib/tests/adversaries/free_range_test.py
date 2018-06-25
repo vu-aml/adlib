@@ -31,7 +31,7 @@ def free_range():
 
 @pytest.fixture
 def freerange_learner(data):
-    return SVMFreeRange({'c_f': 0.7, 'xmin': 0.25, 'xmax': 0.75}, \
+    return SVMFreeRange({'c_f': 0.7, 'xmin': 0.25, 'xmax': 0.75},
                         data['training_data'])
 
 
@@ -51,8 +51,8 @@ def test_transform_instance(free_range, freerange_learner, training_data, testin
                    None)
     free_range.transform(sample_)
     for i in range(0, free_range.num_features):
-        delta = (free_range.innocuous_target.get_feature_vector().get_feature(i)
-                 - sample_.get_feature_vector().get_feature(i))
+        delta = (free_range.innocuous_target.get_feature_vector().get_feature(i) -
+                 sample_.get_feature_vector().get_feature(i))
         assert delta == 0
 
 
@@ -66,8 +66,8 @@ def test_transform_instance_low(free_range, freerange_learner, training_data, te
     free_range.transform(sample)
     equal = True
     for i in range(0, free_range.num_features):
-        delta = (free_range.innocuous_target.get_feature_vector().get_feature(i)
-                 - sample.get_feature_vector().get_feature(i))
+        delta = (free_range.innocuous_target.get_feature_vector().get_feature(i) -
+                 sample.get_feature_vector().get_feature(i))
         if delta != 0:
             equal = False
     assert not equal

@@ -45,10 +45,8 @@ def calculate_correct_percentages(orig_labels, attack_labels, instances):
         if attack_labels[i] != instances[i].get_label():
             count += 1
 
-    orig_precent_correct = ((len(instances) - orig_count) * 100
-                            / len(instances))
-    attack_precent_correct = ((len(instances) - count) * 100
-                              / len(instances))
+    orig_precent_correct = ((len(instances) - orig_count) * 100 / len(instances))
+    attack_precent_correct = ((len(instances) - count) * 100 / len(instances))
     difference = orig_precent_correct - attack_precent_correct
 
     orig_precent_correct = str(round(orig_precent_correct, 4))

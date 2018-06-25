@@ -33,7 +33,6 @@ try:
 except:
     from math import log
 
-
     def log2(val):
         return log(val, 2)
 
@@ -45,7 +44,6 @@ try:
         cls = method.im_class
         return _unpickle_method, (func_name, obj, cls)
 
-
     def _unpickle_method(func_name, obj, cls):
         for cls in cls.mro():
             try:
@@ -55,7 +53,6 @@ try:
             else:
                 break
         return func.__get__(obj, cls)
-
 
     import copy_reg
     import types
@@ -799,8 +796,8 @@ class LassoGDPoisoner(LinRegGDPoisoner):
                 clf = linear_model.LassoCV(max_iter=10000)
                 clf.fit(x, y)
                 lam = clf.alpha_
-            clf = linear_model.Lasso(alpha=lam, \
-                                     max_iter=10000, \
+            clf = linear_model.Lasso(alpha=lam,
+                                     max_iter=10000,
                                      warm_start=True)
         clf.fit(x, y)
         return clf, lam

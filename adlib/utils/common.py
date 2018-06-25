@@ -118,6 +118,6 @@ def logistic_loss(instances: List[Instance], lnr: Learner):
 
     loss = lnr.decision_function(fvs)
     loss = list(map(lambda x, y: -1 * x * y, loss, labels))
-    loss = np.array(list(map(lambda x: math.log(1 + math.exp(x)), loss)))
+    loss = np.array(list(map(lambda x: math.log1p(math.exp(x)), loss)))
 
     return loss

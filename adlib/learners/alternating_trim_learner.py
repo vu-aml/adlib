@@ -22,7 +22,7 @@ class AlternatingTRIMLearner(Learner):
         Learner.__init__(self)
         self.training_instances = deepcopy(training_instances)
         self.poison_percentage = poison_percentage
-        self.n = (1 - poison_percentage) * len(self.training_instances)
+        self.n = int((1 - poison_percentage) * len(self.training_instances))
         self.verbose = verbose
         self.theta = None
         self.b = None
@@ -31,8 +31,12 @@ class AlternatingTRIMLearner(Learner):
         fvs, labels = get_fvs_and_labels(self.training_instances)
         tau = self._generate_tau()
         old_tau = np.full(len(tau), 0)
+        tau_dist = np.linalg.norm(tau - old_tau)
+        iteration = 0
 
-        while np.linalg.norm(tau - old_tau) != 0:
+        while tau_dist != 0:
+            print('Iteration: ', iteration, ' - tau_dist: ', tau_dist, sep='')
+
             # Setup variables
             theta = cvx.Variable(fvs.shape[1])
             b = cvx.Variable()
@@ -58,7 +62,17 @@ class AlternatingTRIMLearner(Learner):
             ####################################################################
 
             loss = logistic_loss(self.training_instances, self)
-            print(loss)
+            loss_sort_list = list(enumerate(loss))
+            loss_sort_list.sort(key=lambda x: x[1])
+            old_tau = deepcopy(tau)
+
+            for i, val in enumerate(loss_sort_list):
+                tau[val[0]] = 1 if i < self.n else 0
+
+            tau_dist = np.linalg.norm(tau - old_tau)
+            iteration += 1
+
+        print('Iteration: FINAL - tau_dist: ', tau_dist, sep='')
 
     def _generate_tau(self):
         """
@@ -86,7 +100,9 @@ class AlternatingTRIMLearner(Learner):
         return tau
 
     def predict(self, instances):
-        raise NotImplementedError
+        fvs, _ = get_fvs_and_labels(instances)
+        decision_vals = self.decision_function(fvs)
+        return list(map(lambda x: 1 if x >= 0 else -1, decision_vals))
 
     def set_params(self, params: Dict):
         raise NotImplementedError

@@ -40,7 +40,7 @@ def test_trim_learner():
     dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400',
                            binary=False, raw=True)
 
-    training_data, testing_data = dataset.split({'train': 50, 'test': 50})
+    training_data, testing_data = dataset.split({'train': 25, 'test': 75})
     training_data = load_dataset(training_data)
     testing_data = load_dataset(testing_data)
 

@@ -7,6 +7,8 @@ from typing import List
 import math
 import numpy as np
 
+EXP_MAX = 710  # math.exp(x) has no OverflowError if x < EXP_MAX
+
 
 def get_fvs_and_labels(instances: List[Instance]):
     """
@@ -118,6 +120,7 @@ def logistic_loss(instances: List[Instance], lnr: Learner):
 
     loss = lnr.decision_function(fvs)
     loss = list(map(lambda x, y: -1 * x * y, loss, labels))
-    loss = np.array(list(map(lambda x: math.log1p(math.exp(x)), loss)))
+    loss = np.array(list(
+        map(lambda x: math.log1p(math.exp(x)) if x < EXP_MAX else x, loss)))
 
     return loss

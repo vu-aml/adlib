@@ -100,7 +100,7 @@ class KInsertion(Adversary):
             uv_norm = 0.0
             iteration = 0
             old_update_vector = 0.0
-            max_val = np.max(self.fvs) * 100.0
+            max_val = np.max(self.fvs) * 0.5 * (k + 2) if k < 10 else np.max(self.fvs)
             while (iteration == 0 or (fv_dist > self.alpha and
                                       iteration < self.max_iter)):
 

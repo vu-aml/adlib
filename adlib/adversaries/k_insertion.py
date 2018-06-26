@@ -100,6 +100,7 @@ class KInsertion(Adversary):
             uv_norm = 0.0
             iteration = 0
             old_update_vector = 0.0
+            max_val = np.max(self.fvs) * 100.0
             while (iteration == 0 or (fv_dist > self.alpha and
                                       iteration < self.max_iter)):
 
@@ -125,35 +126,25 @@ class KInsertion(Adversary):
 
                 # Gradient descent with momentum
                 gradient = self._calc_gradient()
-
-                # If gradient is too large, only move a very small amount in its
-                # direction.
-                old_grad_norm = grad_norm
                 grad_norm = np.linalg.norm(gradient)
-                if grad_norm >= 2 * old_grad_norm and iteration > 0:
-                    reduce_val = np.max(abs(gradient)) / 2
-                    reduce_val = 1.0 if reduce_val <= 0 else reduce_val
-                    gradient /= reduce_val
 
                 if self.verbose:
                     print('\nGradient:\n', gradient, sep='')
 
                 update_vector = (self.eta * old_update_vector +
                                  (1 - self.eta) * gradient)
-
-                old_uv_norm = uv_norm
                 uv_norm = np.linalg.norm(update_vector)
-                if uv_norm >= 2 * old_uv_norm and iteration > 0:
-                    reduce_val = np.max(abs(update_vector)) / 2
-                    reduce_val = 1.0 if reduce_val <= 0 else reduce_val
-                    update_vector /= reduce_val
 
                 if self.verbose:
                     print('\nUpdate Vector:\n', update_vector, sep='')
 
+                def update(x):
+                    ret_val = 0.0 if x < 0.0 else x
+                    ret_val = max_val if ret_val > max_val else ret_val
+                    return ret_val
+
                 self.x -= self.beta * update_vector
-                self.x = np.array(list(map(lambda x: 0.0 if x < 0.0 else x,
-                                           self.x)), dtype='float64')
+                self.x = np.array(list(map(update, self.x)), dtype='float64')
 
                 if self.verbose:
                     print('\nFeature vector:\n', self.x, '\n', sep='')

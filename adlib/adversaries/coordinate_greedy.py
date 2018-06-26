@@ -86,8 +86,7 @@ class CoordinateGreedy(Adversary):
             self.num_features = Instances[0].get_feature_count()
 
         if self.weight_vector is None:
-            raise ValueError(
-                'Must set learner_model and weight_vector before attack.')
+            raise ValueError('Must set learner_model and weight_vector before attack.')
         print("weight vec before attack: {}".format(self.weight_vector.shape))
 
         transformed_instances = []
@@ -223,11 +222,9 @@ class CoordinateGreedy(Adversary):
 
     def transform_cost(self, x: np.array, xi: np.array):
         if self.cost_function == "quadratic":
-            return self.weight_vector.dot(x) + self.bias + self.quadratic_cost(
-                x, xi)
+            return self.weight_vector.dot(x) + self.bias + self.quadratic_cost(x, xi)
         elif self.cost_function == "exponential":
-            return self.weight_vector.dot(
-                x) + self.bias + self.exponential_cost(x, xi)
+            return self.weight_vector.dot(x) + self.bias + self.exponential_cost(x, xi)
 
     def quadratic_cost(self, x: np.array, xi: np.array):
         return self.lambda_val / 2 * sum((x - xi) ** 2)

@@ -19,7 +19,7 @@ class TRIMLearner(Learner):
     """
 
     def __init__(self, training_instances: List[Instance], n: int, lda=0.1,
-                 verbose=False):
+                 alpha=1e-10, verbose=False):
         """
         :param training_instances: the instances on which to train
         :param n: the number of unpoisoned instances in training_instances - the
@@ -32,6 +32,7 @@ class TRIMLearner(Learner):
         self.training_instances = training_instances
         self.n = n
         self.lda = lda  # lambda
+        self.alpha = alpha
         self.verbose = verbose
         self.num_features = self.training_instances[0].get_feature_count()
         self.w = None
@@ -59,9 +60,9 @@ class TRIMLearner(Learner):
 
         old_loss = -1
         loss = 0
-        while loss != old_loss:
+        while abs(loss - old_loss) < self.alpha:
             if self.verbose:
-                print('Current loss:', loss)
+                print('\nCurrent loss:', loss, '\n')
 
             # Calculate minimal set
             loss_vector = fvs.dot(w) + b

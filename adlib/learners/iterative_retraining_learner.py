@@ -50,8 +50,8 @@ class IterativeRetrainingLearner(Learner):
             self.training_instances = instances
 
             if self.verbose:
-                print('Number of instances:', len(self.training_instances))
-                print('Loss threshold:', self.loss_threshold)
+                print('\nNumber of instances:', len(self.training_instances))
+                print('Loss threshold:', self.loss_threshold, '\n')
 
             self.learner.set_training_instances(self.training_instances)
             self.learner.train()

@@ -39,7 +39,7 @@ class IterativeRetrainingLearner(Learner):
         old_training_instances = []
         while set(old_training_instances) != set(self.training_instances):
             q75, q25 = np.percentile(loss, [75, 25])
-            self.loss_threshold = q75 + 1.5 * (q75 - q25)
+            self.loss_threshold = q75 + 2.25 * (q75 - q25)
 
             old_training_instances = self.training_instances[:]
             instances = []
@@ -51,11 +51,14 @@ class IterativeRetrainingLearner(Learner):
 
             if self.verbose:
                 print('\nNumber of instances:', len(self.training_instances))
-                print('Loss threshold:', self.loss_threshold, '\n')
+                print('Loss threshold:', self.loss_threshold)
 
             self.learner.set_training_instances(self.training_instances)
             self.learner.train()
             loss = logistic_loss(self.training_instances, self.learner)
+
+            if self.verbose:
+                print('Loss:\n', loss, '\n')
 
         self.learner.set_training_instances(self.training_instances)
         self.learner.train()

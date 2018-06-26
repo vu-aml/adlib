@@ -22,8 +22,8 @@ class TRIMLearner(Learner):
                  alpha=1e-10, verbose=False):
         """
         :param training_instances: the instances on which to train
-        :param n: the number of unpoisoned instances in training_instances - the
-                  size of the original dataset
+        :param n: the number of un-poisoned instances in training_instances
+                  - the size of the original data set
         :param lda: lambda - for regularization term
         :param verbose: if True, the solver will be in verbose mode
         """

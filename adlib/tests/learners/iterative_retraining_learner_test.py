@@ -41,7 +41,7 @@ def test_iterative_retraining_learner():
     dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400',
                            binary=False, raw=True)
 
-    training_data, testing_data = dataset.split({'train': 50, 'test': 50})
+    training_data, testing_data = dataset.split({'train': 25, 'test': 75})
     training_data = load_dataset(training_data)
     testing_data = load_dataset(testing_data)
 
@@ -58,7 +58,7 @@ def test_iterative_retraining_learner():
     # Execute the attack
     if attacker_name == 'label-flipping':
         cost = list(np.random.binomial(2, 0.5, len(training_data)))
-        total_cost = 0.3 * len(training_data)  # flip around ~30% of the labels
+        total_cost = 0.5 * len(training_data)  # flip around ~50% of the labels
         attacker = LabelFlipping(learner, cost, total_cost, verbose=True)
     elif attacker_name == 'k-insertion':
         number_to_add = int(0.25 * len(training_data))
@@ -91,7 +91,7 @@ def test_iterative_retraining_learner():
     print('START Iterative Retraining learner.\n')
 
     iterative_retraining_learner = IterativeRetrainingLearner(
-        TRIMLearner(training_data, int(0.7 * len(training_data)), verbose=True),
+        TRIMLearner(training_data, int(0.5 * len(training_data)), verbose=True),
         attack_data,
         verbose=True)
 

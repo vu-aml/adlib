@@ -1,6 +1,6 @@
 from sklearn import svm
 import pytest
-from adlib.learners import learner, SimpleLearner
+from adlib.learners import Learner, SimpleLearner
 from data_reader.dataset import EmailDataset
 from data_reader.binary_input import Instance, BinaryFeatureVector
 from data_reader.operations import load_dataset

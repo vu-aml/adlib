@@ -1,15 +1,15 @@
 from typing import List, Dict
 from adlib.adversaries.adversary import Adversary
 from data_reader.binary_input import Instance, BinaryFeatureVector
-from adlib.learners.learner import learner
+from adlib.learners.learner import Learner
 from copy import deepcopy
 
-"""Good Word Attack based on Good Word Attacks on Statistical Spam Filters by 
+"""Good Word Attack based on Good Word Attacks on Statistical Spam Filters by
    Daniel Lowd and Christopher Meek.
 
 Concept:
-   This algorithm tries to measure the weight of each words in the email lists 
-   and attempts to create a list of n good words. The first-n-words and 
+   This algorithm tries to measure the weight of each words in the email lists
+   and attempts to create a list of n good words. The first-n-words and
    best-n-words are two methods of discovering the list.
 """
 
@@ -36,7 +36,7 @@ class GoodWord(Adversary):
 
         for instance in instances:
             transformed_instance = deepcopy(instance)
-            if instance.get_label() == learner.positive_classification:
+            if instance.get_label() == Learner.positive_classification:
                 transformed_instances.append(
                     self.add_words_to_instance(transformed_instance,
                                                word_indices))
@@ -108,7 +108,7 @@ class GoodWord(Adversary):
         prev_message = None
         # loop until current message is classified as spam
         while (self.predict_and_record(curr_message) !=
-               learner.positive_classification):
+               Learner.positive_classification):
 
             prev_message = deepcopy(curr_message)
             word_removed = False
@@ -147,7 +147,7 @@ class GoodWord(Adversary):
             if spam_message.get_feature(feature) == 0:
                 spam_message.flip_bit(feature)
                 prediction_result = self.predict_and_record(spam_message)
-                if prediction_result == learner.negative_classification:
+                if prediction_result == Learner.negative_classification:
                     negative_weight_word_indices.add(feature)
                 if len(negative_weight_word_indices) == self.n:
                     return negative_weight_word_indices
@@ -159,9 +159,9 @@ class GoodWord(Adversary):
     def best_n_words(self, spam_message, legit_message):
         barely_spam_message, barely_legit_message = self.find_witness()
         positive_weight_word_indices = self.build_word_set(barely_legit_message,
-                                                           learner.positive_classification)
+                                                           Learner.positive_classification)
         negative_weight_word_indices = self.build_word_set(barely_spam_message,
-                                                           learner.negative_classification)
+                                                           Learner.negative_classification)
         best_n_word_indices = set()
         iterations_without_change = 0
         max_iterations_without_change = 10
@@ -172,12 +172,12 @@ class GoodWord(Adversary):
                 spammy_word_index)
             small_weight_word_indices = self.build_word_set(
                 barely_spam_message,
-                learner.positive_classification,
+                Learner.positive_classification,
                 negative_weight_word_indices
             )
             large_weight_word_indices = self.build_word_set(
                 barely_spam_message,
-                learner.negative_classification,
+                Learner.negative_classification,
                 negative_weight_word_indices
             )
             if not is_index_in_spam_msg: barely_spam_message.flip_bit(

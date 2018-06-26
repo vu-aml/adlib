@@ -1,16 +1,16 @@
-from adlib.learners.learner import learner
+from adlib.learners.learner import Learner
 from adlib.learners.models import sklearner
 from typing import Dict
 
 
-class SimpleLearner(learner):
+class SimpleLearner(Learner):
     """Simple Learner for initial learning methods.
     Defines the bare-minimum functionality for initial learning
     strategies.
     """
 
     def __init__(self, model=None, training_instances=None):
-        learner.__init__(self)
+        Learner.__init__(self)
         if model:
             self.set_model(model)
         else:
@@ -40,6 +40,9 @@ class SimpleLearner(learner):
 
     def predict_log_proba(self, testing_instances):
         return self.model.predict_log_proba(testing_instances)
+
+    def decision_function(self, X):
+        return self.model.learner.decision_function(X)
 
     def set_params(self, params: Dict):
         if params['model'] is not None:

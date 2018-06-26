@@ -1,7 +1,7 @@
 from adlib.adversaries.adversary import Adversary
 from typing import List, Dict
 from data_reader.binary_input import Instance
-from adlib.learners.learner import learner
+from adlib.learners.learner import Learner
 from copy import deepcopy
 from data_reader.operations import find_min, find_max
 import numpy as np
@@ -10,15 +10,15 @@ import numpy as np
     Dalvi, Domingos, Mausam, Sanghai, and Verma
     University of Washington
 Concept:
-    Given complete information about initial classifier C and an instance X, 
-    adversary finds a feature change strategy A(x) that maximizes its own 
-    utility Ua. By modeling the problem as a COP, which can be formulated as an 
-    integer linear program, the adversary finds the minimum cost camoflauge 
-    (MCC), or smallest cost of feature changes that covers the log odds gap 
-    between classifier classifying the instance as positive and classifying it 
+    Given complete information about initial classifier C and an instance X,
+    adversary finds a feature change strategy A(x) that maximizes its own
+    utility Ua. By modeling the problem as a COP, which can be formulated as an
+    integer linear program, the adversary finds the minimum cost camoflauge
+    (MCC), or smallest cost of feature changes that covers the log odds gap
+    between classifier classifying the instance as positive and classifying it
     as a false negative.  Only changes instances the classifier classified as
     positive and that can be changed without costing so much that it
-    outweighs the utility that would be gained by C falsely classifying the 
+    outweighs the utility that would be gained by C falsely classifying the
     instance as negative.  Runs in pseudo linear time.
     TODO: Extend compatibility beyond probability classifier models
 """
@@ -42,6 +42,7 @@ class CostSensitive(Adversary):
         :param scenario: can select three spam filtering scenarios: add words,
                          add length, synonym
         """
+
         self.Ua = Ua
         self.Vi = Vi
         self.Uc = Uc
@@ -67,7 +68,7 @@ class CostSensitive(Adversary):
         transformed_instances = []
         for instance in instances:
             transformed_instance = deepcopy(instance)
-            if instance.get_label() == learner.positive_classification:
+            if instance.get_label() == Learner.positive_classification:
                 transformed_instances.append(self.a(transformed_instance))
             else:
                 transformed_instances.append(transformed_instance)

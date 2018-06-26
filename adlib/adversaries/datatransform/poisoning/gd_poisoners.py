@@ -33,7 +33,6 @@ try:
 except:
     from math import log
 
-
     def log2(val):
         return log(val, 2)
 
@@ -45,7 +44,6 @@ try:
         cls = method.im_class
         return _unpickle_method, (func_name, obj, cls)
 
-
     def _unpickle_method(func_name, obj, cls):
         for cls in cls.mro():
             try:
@@ -55,7 +53,6 @@ try:
             else:
                 break
         return func.__get__(obj, cls)
-
 
     import copy_reg
     import types
@@ -70,10 +67,10 @@ except:
 ##############################################################################
 
 class GDPoisoner(object):
-    def __init__(self, x, y, testx, testy, validx, validy, \
-                 eta, beta, sigma, eps, \
-                 mproc, \
-                 trainfile, resfile, \
+    def __init__(self, x, y, testx, testy, validx, validy,
+                 eta, beta, sigma, eps,
+                 mproc,
+                 trainfile, resfile,
                  objective, opty, colmap):
         """
         GDPoisoner handles gradient descent and poisoning routines
@@ -144,14 +141,14 @@ class GDPoisoner(object):
         poison_data takes an initial set of poisoning points and optimizes it
         using gradient descent with parameters set in __init__
 
-        poisxinit, poisyinit: initial poisoning points 
+        poisxinit, poisyinit: initial poisoning points
         tstart: start time - used for writing out performance
         visualize: whether we want to visualize the gradient descent steps
         newlogdir: directory to log into, to save the visualization
         """
 
         poisct = poisx.shape[0]
-        print("Poison Count: {}".format(poisct))
+        print('Poison Count: {}'.format(poisct))
 
         new_poisx = np.zeros(poisx.shape)
         new_poisy = [None for a in poisy]
@@ -191,23 +188,23 @@ class GDPoisoner(object):
         # figure out starting error
         it_res = self.iter_progress(poisx, poisy, poisx, poisy)
 
-        print("Iteration {}:".format(count))
-        print("Objective Value: {} Change: {}".format(it_res[0], it_res[0]))
-        print("Validation MSE: {}".format(it_res[2][0]))
-        print("Test MSE: {}".format(it_res[2][1]))
+        print('Iteration {}:'.format(count))
+        print('Objective Value: {} Change: {}'.format(it_res[0], it_res[0]))
+        print('Validation MSE: {}'.format(it_res[2][0]))
+        print('Test MSE: {}'.format(it_res[2][1]))
 
         last_obj = it_res[0]
         if it_res[0] > best_obj:
             best_poisx, best_poisy, best_obj = poisx, poisy, it_res[0]
 
         # stuff to put into self.resfile
-        towrite = [poisct, count, it_res[0], it_res[1], \
-                   it_res[2][0], it_res[2][1], \
+        towrite = [poisct, count, it_res[0], it_res[1],
+                   it_res[2][0], it_res[2][1],
                    (datetime.datetime.now() - tstart).total_seconds()]
 
-        self.resfile.write(','.join([str(val) for val in towrite]) + "\n")
-        self.trainfile.write("\n")
-        self.trainfile.write(str(poisct) + "," + str(count) + '\n')
+        self.resfile.write(','.join([str(val) for val in towrite]) + '\n')
+        self.trainfile.write('\n')
+        self.trainfile.write(str(poisct) + ',' + str(count) + '\n')
 
         if visualize:
             self.trainfile.write('{},{}\n'.format(poisy[0], new_poisx[0]))
@@ -215,8 +212,7 @@ class GDPoisoner(object):
             for j in range(poisct):
                 self.trainfile.write(','.join(
                     [str(val) for val
-                     in [poisy[j]] + poisx[j].tolist()[0] \
-                     ]) + '\n')
+                     in [poisy[j]] + poisx[j].tolist()[0]]) + '\n')
 
         # main work loop
         while True:
@@ -227,7 +223,7 @@ class GDPoisoner(object):
             y_cur = self.trny + poisy
 
             clf, lam = self.learn_model(x_cur, y_cur, None)
-            pois_params = [(poisx[i], poisy[i], eq7lhs, mu, clf, lam) \
+            pois_params = [(poisx[i], poisy[i], eq7lhs, mu, clf, lam)
                            for i in range(poisct)]
             outofboundsct = 0
 
@@ -253,18 +249,18 @@ class GDPoisoner(object):
 
             it_res = self.iter_progress(poisx, poisy, new_poisx, new_poisy)
 
-            print("Iteration {}:".format(count))
-            print("Objective Value: {} Change: {}".format(
+            print('Iteration {}:'.format(count))
+            print('Objective Value: {} Change: {}'.format(
                 it_res[0], it_res[0] - it_res[1]))
 
-            print("Validation MSE: {}".format(it_res[2][0]))
-            print("Test MSE: {}".format(it_res[2][1]))
-            print("Y pushed out of bounds: {}/{}".format(
+            print('Validation MSE: {}'.format(it_res[2][0]))
+            print('Test MSE: {}'.format(it_res[2][1]))
+            print('Y pushed out of bounds: {}/{}'.format(
                 outofboundsct, poisct))
 
             # if we don't make progress, decrease learning rate
             if (it_res[0] < it_res[1]):
-                print("no progress")
+                print('no progress')
                 self.eta *= 0.75
                 new_poisx, new_poisy = poisx, poisy
             else:
@@ -276,12 +272,12 @@ class GDPoisoner(object):
 
             last_obj = it_res[1]
 
-            towrite = [poisct, count, it_res[0], it_res[1] - it_res[0], \
-                       it_res[2][0], it_res[2][1], \
+            towrite = [poisct, count, it_res[0], it_res[1] - it_res[0],
+                       it_res[2][0], it_res[2][1],
                        (datetime.datetime.now() - tstart).total_seconds()]
 
-            self.resfile.write(','.join([str(val) for val in towrite]) + "\n")
-            self.trainfile.write("\n{},{}\n".format(poisct, count))
+            self.resfile.write(','.join([str(val) for val in towrite]) + '\n')
+            self.trainfile.write('\n{},{}\n'.format(poisct, count))
 
             for j in range(poisct):
                 self.trainfile.write(','.join([str(val) for val in
@@ -296,7 +292,7 @@ class GDPoisoner(object):
 
             # visualization done - plotting time
             if (visualize and count >= 9):
-                self.plot_path(clf_init, lam_init, eq7lhs, mu, \
+                self.plot_path(clf_init, lam_init, eq7lhs, mu,
                                poisx_hist, poisy_hist, newlogdir)
                 break
 
@@ -305,7 +301,7 @@ class GDPoisoner(object):
 
         return best_poisx, best_poisy
 
-    def plot_path(self, clf, lam, eq7lhs, mu, \
+    def plot_path(self, clf, lam, eq7lhs, mu,
                   poisx_hist, poisy_hist, newlogdir):
         """
         plot_path makes a pretty picture of the gradient descent path
@@ -314,7 +310,7 @@ class GDPoisoner(object):
         lam: regularization coef
         eq7lhs, mu: needed for gradient
         poisx_hist, poisy_hist: path of poisoning
-        newlogdir: directory to save pretty picture to        
+        newlogdir: directory to save pretty picture to
         """
 
         plt.plot(self.x, self.y, 'k.')
@@ -330,7 +326,7 @@ class GDPoisoner(object):
 
         # plot path of poisoning pt
         for i in range(poisx_hist.shape[1]):
-            # plot start, path, and end      
+            # plot start, path, and end
             plt.plot(poisx_hist[0, i, :], poisy_hist[0, i], 'g.', markersize=10)
             plt.plot(poisx_hist[:, i, :], poisy_hist[:, i], 'g-', linewidth=3)
             plt.plot(poisx_hist[-1, i, :], poisy_hist[-1, i], 'g*',
@@ -343,11 +339,10 @@ class GDPoisoner(object):
         # plt.tight_layout() # whatever looks better
         plt.savefig(os.path.join(newlogdir, 'vis2d.png'))
 
-    def plot_func(self, f, min_x=0, max_x=1, \
-                  resolution=0.1):
+    def plot_func(self, f, min_x=0, max_x=1, resolution=0.1):
         """
         plot_func plots a heatmap of the objective function
-        
+
         f: objective function
         min_x: smallest value of x desired in the heatmap
         max_x: largest value of x desired in the heatmap
@@ -397,7 +392,7 @@ class GDPoisoner(object):
                                 grid_x[i, 0].reshape((1, 1))),
                                axis=0),
                 self.trny + [x[i, 1]], None)
-            z[i, 0], z[i, 1] = self.comp_grad_dummy(eq7lhs, mu, clf, lam, \
+            z[i, 0], z[i, 1] = self.comp_grad_dummy(eq7lhs, mu, clf, lam,
                                                     x[i, 0].reshape((1, 1)),
                                                     x[i, 1])
 
@@ -411,7 +406,7 @@ class GDPoisoner(object):
         """
         m = self.compute_m(clf, poisx, poisy)
 
-        wxc, bxc, wyc, byc = self.compute_wb_zc(eq7lhs, mu, clf.coef_, m, \
+        wxc, bxc, wyc, byc = self.compute_wb_zc(eq7lhs, mu, clf.coef_, m,
                                                 self.samplenum, poisx)
 
         if (self.objective == 0):
@@ -445,7 +440,7 @@ class GDPoisoner(object):
         m = self.compute_m(clf, poisxelem, poisyelem)
 
         # compute partials
-        wxc, bxc, wyc, byc = self.compute_wb_zc(eq7lhs, mu, clf.coef_, m, \
+        wxc, bxc, wyc, byc = self.compute_wb_zc(eq7lhs, mu, clf.coef_, m,
                                                 self.samplenum, poisxelem)
 
         if (self.objective == 0):
@@ -477,7 +472,7 @@ class GDPoisoner(object):
         else:
             attack = allattack
 
-        poisxelem, poisyelem, _ = self.lineSearch(poisxelem, poisyelem, \
+        poisxelem, poisyelem, _ = self.lineSearch(poisxelem, poisyelem,
                                                   attack, attacky)
         poisxelem = poisxelem.reshape((1, self.feanum))
 
@@ -655,10 +650,10 @@ class GDPoisoner(object):
 ############################################################################################
 
 class LinRegGDPoisoner(GDPoisoner):
-    def __init__(self, x, y, testx, testy, validx, validy, \
-                 eta, beta, sigma, eps, \
-                 mproc, \
-                 trainfile, resfile, \
+    def __init__(self, x, y, testx, testy, validx, validy,
+                 eta, beta, sigma, eps,
+                 mproc,
+                 trainfile, resfile,
                  objective, opty, colmap):
         """
         LinRegGDPoisoner implements computations for ordinary least
@@ -668,9 +663,9 @@ class LinRegGDPoisoner(GDPoisoner):
         for input description, see GDPoisoner.__init__
         """
 
-        GDPoisoner.__init__(self, x, y, testx, testy, validx, validy, \
-                            eta, beta, sigma, eps, mproc, \
-                            trainfile, resfile, \
+        GDPoisoner.__init__(self, x, y, testx, testy, validx, validy,
+                            eta, beta, sigma, eps, mproc,
+                            trainfile, resfile,
                             objective, opty, colmap)
         self.initclf, self.initlam = self.learn_model(self.x, self.y, None)
 
@@ -755,15 +750,15 @@ class LinRegGDPoisoner(GDPoisoner):
 ############################################################################################
 
 class LassoGDPoisoner(LinRegGDPoisoner):
-    def __init__(self, x, y, testx, testy, validx, validy, \
-                 eta, beta, sigma, eps, \
-                 mproc, \
-                 trainfile, resfile, \
+    def __init__(self, x, y, testx, testy, validx, validy,
+                 eta, beta, sigma, eps,
+                 mproc,
+                 trainfile, resfile,
                  objective, opty, colmap):
 
-        GDPoisoner.__init__(self, x, y, testx, testy, validx, validy, \
-                            eta, beta, sigma, eps, mproc, \
-                            trainfile, resfile, \
+        GDPoisoner.__init__(self, x, y, testx, testy, validx, validy,
+                            eta, beta, sigma, eps, mproc,
+                            trainfile, resfile,
                             objective, opty, colmap)
 
         self.initlam = -1
@@ -779,7 +774,7 @@ class LassoGDPoisoner(LinRegGDPoisoner):
 
     def comp_attack_trn(self, clf, wxc, bxc, wyc, byc, otherargs):
         r, = otherargs
-        attackx, attacky = LinRegGDPoisoner.comp_attack_trn(self, clf, \
+        attackx, attacky = LinRegGDPoisoner.comp_attack_trn(self, clf,
                                                             wxc, bxc, wyc, byc,
                                                             otherargs)
         attackx += self.initlam * np.dot(r, wxc)
@@ -801,8 +796,8 @@ class LassoGDPoisoner(LinRegGDPoisoner):
                 clf = linear_model.LassoCV(max_iter=10000)
                 clf.fit(x, y)
                 lam = clf.alpha_
-            clf = linear_model.Lasso(alpha=lam, \
-                                     max_iter=10000, \
+            clf = linear_model.Lasso(alpha=lam,
+                                     max_iter=10000,
                                      warm_start=True)
         clf.fit(x, y)
         return clf, lam
@@ -813,17 +808,17 @@ class LassoGDPoisoner(LinRegGDPoisoner):
 ############################################################################################
 
 class RidgeGDPoisoner(LinRegGDPoisoner):
-    def __init__(self, x, y, testx, testy, validx, validy, \
-                 eta, beta, sigma, eps, \
-                 mproc, \
-                 trainfile, resfile, \
+    def __init__(self, x, y, testx, testy, validx, validy,
+                 eta, beta, sigma, eps,
+                 mproc,
+                 trainfile, resfile,
                  objective, opty, colmap):
-        GDPoisoner.__init__(self, x, y, testx, testy, validx, validy, \
-                            eta, beta, sigma, eps, mproc, \
-                            trainfile, resfile, \
+        GDPoisoner.__init__(self, x, y, testx, testy, validx, validy,
+                            eta, beta, sigma, eps, mproc,
+                            trainfile, resfile,
                             objective, opty, colmap)
         self.initlam = -1
-        self.initclf, self.initlam = self.learn_model(self.trnx, self.trny, \
+        self.initclf, self.initlam = self.learn_model(self.trnx, self.trny,
                                                       None, lam=None)
 
     def comp_obj_trn(self, clf, lam, otherargs):
@@ -833,7 +828,7 @@ class RidgeGDPoisoner(LinRegGDPoisoner):
 
     def comp_attack_trn(self, clf, wxc, bxc, wyc, byc, otherargs):
         r, = otherargs
-        attackx, attacky = LinRegGDPoisoner.comp_attack_trn(self, clf, \
+        attackx, attacky = LinRegGDPoisoner.comp_attack_trn(self, clf,
                                                             wxc, bxc, wyc, byc,
                                                             otherargs)
 
@@ -863,15 +858,15 @@ class RidgeGDPoisoner(LinRegGDPoisoner):
 ############################################################################################
 
 class ENetGDPoisoner(LinRegGDPoisoner):
-    def __init__(self, x, y, testx, testy, validx, validy, \
-                 eta, beta, sigma, eps, \
-                 mproc, \
-                 trainfile, resfile, \
+    def __init__(self, x, y, testx, testy, validx, validy,
+                 eta, beta, sigma, eps,
+                 mproc,
+                 trainfile, resfile,
                  objective, opty):
 
-        GDPoisoner.__init__(self, x, y, testx, testy, validx, validy, \
-                            eta, beta, sigma, eps, mproc, \
-                            trainfile, resfile, \
+        GDPoisoner.__init__(self, x, y, testx, testy, validx, validy,
+                            eta, beta, sigma, eps, mproc,
+                            trainfile, resfile,
                             objective, opty)
         self.initlam = -1
         self.initclf, self.initlam = self.learn_model(self.x, self.y, None,
@@ -888,7 +883,7 @@ class ENetGDPoisoner(LinRegGDPoisoner):
 
     def comp_attack_trn(self, clf, wxc, bxc, wyc, byc, otherargs):
         r, = otherargs
-        attackx, attacky = LinRegGDPoisoner.comp_attack_trn(self, clf, \
+        attackx, attacky = LinRegGDPoisoner.comp_attack_trn(self, clf,
                                                             wxc, bxc, wyc, byc,
                                                             otherargs)
         attackx += np.dot(r, wxc)
@@ -920,8 +915,8 @@ class ENetGDPoisoner(LinRegGDPoisoner):
                 clf = linear_model.ElasticNetCV(max_iter=10000)
                 clf.fit(x, y)
                 lam = clf.alpha_
-            clf = linear_model.ElasticNet(alpha=lam, \
-                                          max_iter=10000, \
+            clf = linear_model.ElasticNet(alpha=lam,
+                                          max_iter=10000,
                                           warm_start=True)
         clf.fit(x, y)
         return clf, lam

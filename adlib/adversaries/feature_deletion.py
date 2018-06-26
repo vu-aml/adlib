@@ -5,11 +5,11 @@ import numpy as np
 from copy import deepcopy
 
 """
-  Based on Nightmare at Test Time: Robust Learning by Feature Deletion by 
+  Based on Nightmare at Test Time: Robust Learning by Feature Deletion by
   Amir Globerson and Sam Roweis.
-  
-  Concept: Implementing a typical attacker that tries to delete the features 
-           with the least weights by setting the features' value to zero to 
+
+  Concept: Implementing a typical attacker that tries to delete the features
+           with the least weights by setting the features' value to zero to
            fool the learning algorithm.
 """
 

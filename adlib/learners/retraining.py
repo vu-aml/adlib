@@ -1,4 +1,4 @@
-from adlib.learners.learner import learner
+from adlib.learners.learner import Learner
 from typing import Dict, List
 from data_reader.dataset import EmailDataset
 from data_reader.binary_input import Instance
@@ -22,10 +22,10 @@ Concept:
 """
 
 
-class Retraining(learner):
+class Retraining(Learner):
     def __init__(self, base_model=None, training_instances=None, attacker=None,
                  params: Dict = None):
-        learner.__init__(self)
+        Learner.__init__(self)
         self.model = Model(base_model)
         # self.attack_alg = None  # Type: class
         # self.adv_params = None

@@ -7,10 +7,10 @@ from sklearn.utils.validation import check_array, check_is_fitted
 import numpy as np
 
 """
-   Based on the Adversarial Classification By Nilesh Dalvi, 
-   Pedro Domingos, Mausam, Sumit Sanghai, Deepak Verma. 
+   Based on the Adversarial Classification By Nilesh Dalvi,
+   Pedro Domingos, Mausam, Sumit Sanghai, Deepak Verma.
    This learner is set based on the assumption that the attacker
-   is a naive bayes based attacker and uses it s optimal strategy to modify test 
+   is a naive bayes based attacker and uses it s optimal strategy to modify test
    instances.
 """
 
@@ -95,8 +95,8 @@ class AdversaryAware(object):
         p_x_ = 0
         for attack_instance in new_list:
             p_x_ += np.exp(self.posterior_proba(attack_instance))[0, 1]
-        return p_x_ + self.i_x(instance) * \
-               np.exp(self.posterior_proba(instance))[0, 1]
+        return (p_x_ + self.i_x(instance) *
+                np.exp(self.posterior_proba(instance))[0, 1])
 
     def i_x(self, instance):
         if self.learner.predict(instance) == -1:

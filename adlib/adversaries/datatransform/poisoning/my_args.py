@@ -48,7 +48,7 @@ def setup_argparse():
     parser.add_argument('-s', '--partct', default=4, type=int,
                         help='number of increments to poison with')
 
-    # logging results                        
+    # logging results
     parser.add_argument('-ld', '--logdir', default='./results',
                         help='directory to store output')
     parser.add_argument('-li', '--logind', default=0,
@@ -56,7 +56,7 @@ def setup_argparse():
                               'train{model}{outputind}.txt, '
                               'test{model}{outputind}.txt'))
 
-    # model                        
+    # model
     parser.add_argument('-m', '--model', default='linreg',
                         choices=['linreg', 'lasso', 'enet', 'ridge'],
                         help=('choose linreg for linear regression, lasso for '
@@ -92,7 +92,7 @@ def setup_argparse():
     parser.add_argument('-numinit', type=int, default=1,
                         help='number of times to attempt initialization')
 
-    # round 
+    # round
     parser.add_argument('-rnd', '--rounding', action='store_true',
                         help='to round or not to round')
 

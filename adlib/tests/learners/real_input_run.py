@@ -13,7 +13,7 @@ testing_data = load_dataset(testing_)
 # learning_model = svm.SVC(probability=True, kernel='linear')
 # learner = SimpleLearner(learning_model, training_data)
 
-learner = SVMRestrained({'c_f': 0.7, 'xmin': 0.25, 'xmax': 0.75}, \
+learner = SVMRestrained({'c_f': 0.7, 'xmin': 0.25, 'xmax': 0.75},
                         training_data)
 # learner = SimpleLearner(learning_model, training_data)
 

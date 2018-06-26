@@ -64,4 +64,4 @@ def test_predict_returns_binary_label(simple_learner, testing_data):
     simple_learner.train()
     result = simple_learner.predict(testing_data[0])
     assert result in [SimpleLearner.positive_classification, SimpleLearner.negative_classification]
-    ##assert result == sample_.labels
+    # assert result == sample_.labels

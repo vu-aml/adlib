@@ -1,10 +1,10 @@
-# trim_learner_test.py
-# Tests the TRIM learner implementation
+# alternating_trim_learner_test.py
+# Tests the Alternating TRIM learner implementation
 # Matthew Sedam
 
 
 from adlib.learners import SimpleLearner
-from adlib.learners import TRIMLearner
+from adlib.learners import AlternatingTRIMLearner
 from adlib.adversaries.label_flipping import LabelFlipping
 from adlib.adversaries.k_insertion import KInsertion
 from adlib.adversaries.datamodification.data_modification import \
@@ -21,10 +21,10 @@ import sys
 import time
 
 
-def test_trim_learner():
+def test_alternating_trim_learner():
     print()
     print('###################################################################')
-    print('START TRIM Learner test.\n')
+    print('START Alternating TRIM Learner test.\n')
 
     begin = time.time()
 
@@ -87,15 +87,13 @@ def test_trim_learner():
     learner.train()
 
     print('###################################################################')
-    print('START TRIM learner.\n')
+    print('START Alternating TRIM learner.\n')
 
     # Train with TRIM learner
-    trim_learner = TRIMLearner(attack_data,
-                               int(0.7 * len(attack_data)),
-                               verbose=True)
-    trim_learner.train()
+    alt_trim_learner = AlternatingTRIMLearner(training_data, 0.3, verbose=True)
+    alt_trim_learner.train()
 
-    print('\nEND TRIM learner.')
+    print('\nEND Alternating TRIM learner.')
     print('###################################################################')
     print()
 
@@ -138,7 +136,7 @@ def test_trim_learner():
     # Calculate statistics with trim learner
 
     data = training_data + testing_data
-    trim_pred_labels = trim_learner.predict(data)
+    trim_pred_labels = alt_trim_learner.predict(data)
     normal_pred_labels = learner.predict(data)
 
     (trim_percent_correct,
@@ -148,18 +146,18 @@ def test_trim_learner():
                                                  data)
 
     print('###################################################################')
-    print('Predictions using TRIM learner:')
-    print('TRIM learner percentage: ', trim_percent_correct, '%')
+    print('Predictions using Alternating TRIM learner:')
+    print('Alternating TRIM learner percentage: ', trim_percent_correct, '%')
     print('Simple learner correct percentage: ', normal_percent_correct, '%')
     print('Difference: ', difference, '%')
 
     end = time.time()
     print('\nTotal time: ', round(end - begin, 2), 's', '\n', sep='')
 
-    print('\nEND TRIM Learner test.')
+    print('\nEND Alternating TRIM learner test.')
     print('###################################################################')
     print()
 
 
 if __name__ == '__main__':
-    test_trim_learner()
+    test_alternating_trim_learner()

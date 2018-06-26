@@ -1,11 +1,13 @@
 # A set of common functions
 # Matthew Sedam. 2018.
 
-from adlib.learners.simple_learner import SimpleLearner
+from adlib.learners import Learner
 from data_reader.binary_input import Instance
 from typing import List
 import math
 import numpy as np
+
+EXP_MAX = 710  # math.exp(x) has no OverflowError if x < EXP_MAX
 
 
 def get_fvs_and_labels(instances: List[Instance]):
@@ -43,10 +45,8 @@ def calculate_correct_percentages(orig_labels, attack_labels, instances):
         if attack_labels[i] != instances[i].get_label():
             count += 1
 
-    orig_precent_correct = ((len(instances) - orig_count) * 100
-                            / len(instances))
-    attack_precent_correct = ((len(instances) - count) * 100
-                              / len(instances))
+    orig_precent_correct = ((len(instances) - orig_count) * 100 / len(instances))
+    attack_precent_correct = ((len(instances) - count) * 100 / len(instances))
     difference = orig_precent_correct - attack_precent_correct
 
     orig_precent_correct = str(round(orig_precent_correct, 4))
@@ -106,18 +106,18 @@ def logistic_function(x):
     return 1 / (1 + math.exp(-1 * x))
 
 
-def logistic_loss(instances: List[Instance], lnr: SimpleLearner):
+def logistic_loss(instances: List[Instance], lnr: Learner):
     """
     Calculates the logistic loss for instances
     :param instances: the instances
-    :param lnr: the SimpleLearner
+    :param lnr: the learner
     :return: the loss
     """
 
     fvs, labels = get_fvs_and_labels(instances)
 
-    loss = lnr.model.learner.decision_function(fvs)
-    loss = list(map(lambda x, y: -1 * x * y, loss, labels))
-    loss = np.array(list(map(lambda x: math.log(1 + math.exp(x)), loss)))
+    loss = lnr.decision_function(fvs)
+    loss = -1 * np.multiply(loss, labels)
+    loss = np.log1p(np.nan_to_num(np.exp(loss)))
 
     return loss

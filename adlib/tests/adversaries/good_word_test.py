@@ -1,7 +1,7 @@
 import pytest
 from adlib.adversaries import GoodWord
 from sklearn import svm
-from adlib.learners import learner, SimpleLearner
+from adlib.learners import Learner, SimpleLearner
 from data_reader.dataset import EmailDataset
 from data_reader.binary_input import Instance
 from data_reader.operations import load_dataset
@@ -69,8 +69,8 @@ def test_set_params_raises_exception_with_invalid_attack_type(good_word):
 def test_set_adversarial_params(good_word, simple_learner, data):
     good_word.set_adversarial_params(simple_learner, data['training_data'])
     assert good_word.learn_model == simple_learner
-    assert good_word.positive_instance.get_label() == learner.positive_classification
-    assert good_word.negative_instance.get_label() == learner.negative_classification
+    assert good_word.positive_instance.get_label() == Learner.positive_classification
+    assert good_word.negative_instance.get_label() == Learner.negative_classification
     # add feature space test
 
 
@@ -97,8 +97,8 @@ def test_add_words_to_instance_no_change_for_existing_word(good_word, training_d
 def test_find_witness_returns_messages_differing_by_one_word(good_word_with_params):
     adv = good_word_with_params
     spam_msg, legit_msg = adv.find_witness()
-    assert adv.predict(Instance(0, legit_msg)) == learner.negative_classification
-    assert adv.predict(Instance(0, spam_msg)) == learner.positive_classification
+    assert adv.predict(Instance(0, legit_msg)) == Learner.negative_classification
+    assert adv.predict(Instance(0, spam_msg)) == Learner.positive_classification
     assert len(legit_msg.feature_difference(spam_msg)) == 1
 
 

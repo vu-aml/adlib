@@ -38,8 +38,7 @@ class IterativeRetrainingLearner(Learner):
 
         old_training_instances = []
         while set(old_training_instances) != set(self.training_instances):
-            q75, q25 = np.percentile(loss, [75, 25])
-            self.loss_threshold = q75 + 2.25 * (q75 - q25)
+            self.loss_threshold = np.mean(loss) + 3 * np.std(loss)
 
             old_training_instances = self.training_instances[:]
             instances = []

@@ -109,7 +109,7 @@ class TRIMLearner(Learner):
 
         # Solve problem
         prob = cvx.Problem(cvx.Minimize(loss), [])
-        prob.solve(solver=cvx.SCS, verbose=self.verbose, parallel=True)
+        prob.solve(solver=cvx.ECOS, verbose=self.verbose, parallel=True)
 
         return np.array(w.value).flatten(), b.value
 

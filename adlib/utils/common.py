@@ -115,7 +115,7 @@ def logistic_loss(instances, lnr: Learner, labels=None):
     :return: the loss
     """
 
-    if isinstance(instances, List[Instance]):
+    if isinstance(instances, List):
         fvs, labels = get_fvs_and_labels(instances)
     elif isinstance(instances, np.ndarray):
         fvs = instances

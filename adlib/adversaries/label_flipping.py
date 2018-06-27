@@ -131,7 +131,8 @@ class LabelFlipping(Adversary):
         labels = np.array(labels + labels_flipped)
 
         fvs, _ = get_fvs_and_labels(instances)
-        orig_loss = logistic_loss(fvs, self.learner, labels)
+        orig_loss = logistic_loss(fvs, self.learner,
+                                  np.array(labels[:(len(labels) // 2)]))
         orig_loss = np.concatenate([orig_loss, orig_loss])
 
         cost = np.concatenate([np.full(half_n, 0), np.array(self.cost)])

@@ -3,7 +3,7 @@
 # Matthew Sedam
 
 from adlib.adversaries.adversary import Adversary
-from adlib.utils.common import get_fvs_and_labels
+from adlib.utils.common import get_fvs_and_labels, logistic_loss
 from data_reader.binary_input import Instance
 import cvxpy as cvx
 import numpy as np
@@ -39,9 +39,9 @@ class LabelFlipping(Adversary):
         self.gamma = gamma
         self.num_iterations = 2 * num_iterations
         self.verbose = verbose
-        self._old_q = None
-        self._old_epsilon = None
-        self._old_w = None
+        self.q = None
+        self.epsilon = None
+        self.w = None
 
     def attack(self, instances) -> List[Instance]:
         """
@@ -74,29 +74,37 @@ class LabelFlipping(Adversary):
         # Alternating minimization loop
 
         q = np.full(n, 0)
-        self._old_q = np.copy(q)
+        self.q = deepcopy(q)
         flip = True
+
         if not self.verbose:
             bar = Bar('Processing', max=self.num_iterations + 1,
                       suffix='%(percent)d%%')
             bar.next()
+
         for _ in range(self.num_iterations):
+            old_q = deepcopy(self.q)
+
             if flip:  # q is fixed, minimize over w and epsilon
                 self._minimize_w_epsilon(instances, n, orig_loss,
                                          feature_vectors, labels)
             else:  # w and epsilon are fixed, minimize over q
                 self._minimize_q(n, half_n, orig_loss, cost)
+
+            q_dist = np.linalg.norm(self.q - old_q)
+
+            print('q_dist:', q_dist)
+
             flip = not flip
             if not self.verbose:
                 bar.next()
+
         if not self.verbose:
             bar.finish()
 
-        ########################################################################
-
         attacked_instances = deepcopy(instances)
         for i in range(half_n):
-            if self._old_q[i] == 0:
+            if self.q[i] == 0:
                 label = attacked_instances[i].get_label()
                 attacked_instances[i].set_label(-1 * label)
 
@@ -123,17 +131,8 @@ class LabelFlipping(Adversary):
         labels = np.array(labels + labels_flipped)
 
         fvs, _ = get_fvs_and_labels(instances)
-
-        orig_loss = self.learner.model.learner.decision_function(fvs)
-        for i in range(half_n):
-            orig_loss[i] = -1 * orig_loss[i] * instances[i].get_label()
-        orig_loss = np.exp(orig_loss)
-
-        for i in range(half_n):
-            orig_loss[i] += 1
-
-        orig_loss = np.log(orig_loss)
-        orig_loss = np.concatenate([orig_loss, orig_loss])  # logistic loss
+        orig_loss = logistic_loss(fvs, self.learner, labels)
+        orig_loss = np.concatenate([orig_loss, orig_loss])
 
         cost = np.concatenate([np.full(half_n, 0), np.array(self.cost)])
 
@@ -154,7 +153,7 @@ class LabelFlipping(Adversary):
         # Setup variables and constants
         epsilon = cvx.Variable(n)
         w = cvx.Variable(instances[0].get_feature_count())
-        q = self._old_q
+        q = self.q
 
         # Calculate constants
         cnst = q.dot(orig_loss)
@@ -174,10 +173,10 @@ class LabelFlipping(Adversary):
             constraints.append(0 <= epsilon[i])
 
         prob = cvx.Problem(cvx.Minimize(func), constraints)
-        prob.solve(solver=cvx.SCS, verbose=self.verbose, parallel=True)
+        prob.solve(solver=cvx.ECOS, verbose=self.verbose, parallel=True)
 
-        self._old_epsilon = np.copy(np.array(epsilon.value).flatten())
-        self._old_w = np.copy(np.array(w.value).flatten())
+        self.epsilon = np.copy(np.array(epsilon.value).flatten())
+        self.w = np.copy(np.array(w.value).flatten())
 
     def _minimize_q(self, n, half_n, orig_loss, cost):
         """
@@ -189,8 +188,8 @@ class LabelFlipping(Adversary):
         """
 
         # Setup variables and constants
-        epsilon = self._old_epsilon
-        w = self._old_w
+        epsilon = self.epsilon
+        w = self.w
         q = cvx.Int(n)
 
         # Calculate constants - see comment above
@@ -213,10 +212,10 @@ class LabelFlipping(Adversary):
         prob.solve(solver=cvx.ECOS_BB, verbose=self.verbose, parallel=True)
 
         q_value = np.array(q.value).flatten()
-        self._old_q = []
+        self.q = []
         for i in range(n):
-            self._old_q.append(round(q_value[i]))
-        self._old_q = np.copy(np.array(self._old_q, dtype=int))
+            self.q.append(round(q_value[i]))
+        self.q = np.array(self.q, dtype=int)
 
     def set_params(self, params: Dict):
         if params['learner'] is not None:
@@ -231,9 +230,10 @@ class LabelFlipping(Adversary):
             self.num_iterations = params['num_iterations']
         if params['verbose'] is not None:
             self.verbose = params['verbose']
-        self._old_q = None
-        self._old_epsilon = None
-        self._old_w = None
+
+        self.q = None
+        self.epsilon = None
+        self.w = None
 
     def get_available_params(self):
         params = {'learner': self.learner,

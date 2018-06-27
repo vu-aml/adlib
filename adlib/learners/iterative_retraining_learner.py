@@ -36,7 +36,7 @@ class IterativeRetrainingLearner(Learner):
         self.learner.train()
         loss = logistic_loss(self.training_instances, self.learner)
 
-        self.loss_threshold = np.mean(loss) + 2.5 * np.std(loss)
+        self.loss_threshold = np.mean(loss) + 2 * np.std(loss)
 
         old_training_instances = []
         while set(old_training_instances) != set(self.training_instances):

@@ -67,7 +67,7 @@ class TRIMLearner(Learner):
             # Calculate minimal set
             loss_vector = fvs.dot(w) + b
             loss_vector -= labels
-            loss_vector = list(map(lambda x: x ** 2, loss_vector))
+            loss_vector = loss_vector ** 2
 
             loss_tuples = []
             for i in range(len(loss_vector)):

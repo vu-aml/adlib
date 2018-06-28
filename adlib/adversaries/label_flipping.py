@@ -8,7 +8,6 @@ from data_reader.binary_input import Instance
 import cvxpy as cvx
 import numpy as np
 from copy import deepcopy
-from progress.bar import Bar
 from typing import List, Dict
 
 
@@ -20,14 +19,13 @@ class LabelFlipping(Adversary):
     """
 
     def __init__(self, learner, cost: List[float], total_cost: float,
-                 gamma=0.1, num_iterations=10, verbose=False):
+                 gamma=0.1, alpha=1e-8, verbose=False):
         """
         :param learner: the previously-trained SVM learner
         :param cost: the cost vector, has length of size of instances
         :param total_cost: the total cost for the attack
         :param gamma: the gamma rate, default 0.1
-        :param num_iterations: the number of iterations of the alternating
-                               minimization loop, default 10
+        :param alpha: the convergence level
         :param verbose: if True, then the solver will be set to verbose mode,
                         default False
         """
@@ -37,7 +35,7 @@ class LabelFlipping(Adversary):
         self.cost = cost
         self.total_cost = total_cost
         self.gamma = gamma
-        self.num_iterations = 2 * num_iterations
+        self.alpha = alpha
         self.verbose = verbose
         self.q = None
         self.epsilon = None
@@ -73,38 +71,27 @@ class LabelFlipping(Adversary):
         ########################################################################
         # Alternating minimization loop
 
-        q = np.full(n, 0)
+        q = np.random.rand(n)
         self.q = deepcopy(q)
-        flip = True
+        q_dist = 0
+        iteration = 0
 
-        if not self.verbose:
-            bar = Bar('Processing', max=self.num_iterations + 1,
-                      suffix='%(percent)d%%')
-            bar.next()
+        while iteration == 0 or q_dist > self.alpha:
+            print('\nIteration:', iteration, '- q_dist:', q_dist, '- q:')
+            print(self.q, '\n')
 
-        for _ in range(self.num_iterations):
             old_q = deepcopy(self.q)
-
-            if flip:  # q is fixed, minimize over w and epsilon
-                self._minimize_w_epsilon(instances, n, orig_loss,
-                                         feature_vectors, labels)
-            else:  # w and epsilon are fixed, minimize over q
-                self._minimize_q(n, half_n, orig_loss, cost)
-
+            self._minimize_w_epsilon(instances, n, orig_loss,
+                                     feature_vectors, labels)
+            self._minimize_q(n, half_n, orig_loss, cost)
             q_dist = np.linalg.norm(self.q - old_q)
+            iteration += 1
 
-            print('q_dist:', q_dist)
-
-            flip = not flip
-            if not self.verbose:
-                bar.next()
-
-        if not self.verbose:
-            bar.finish()
+        print('\nIteration: FINAL - q_dist:', q_dist)
 
         attacked_instances = deepcopy(instances)
         for i in range(half_n):
-            if self.q[i] == 0:
+            if self.q[i] <= 0.5:
                 label = attacked_instances[i].get_label()
                 attacked_instances[i].set_label(-1 * label)
 
@@ -185,13 +172,13 @@ class LabelFlipping(Adversary):
         :param n: the number of instances
         :param half_n: half of n
         :param orig_loss: the original loss calculations
-        :param cost: cost: the cost vector, has length of size of instances
+        :param cost: the cost vector, has length of size of instances
         """
 
         # Setup variables and constants
         epsilon = self.epsilon
         w = self.w
-        q = cvx.Int(n)
+        q = cvx.Variable(n)
 
         # Calculate constants - see comment above
         cnst = self.gamma * w.dot(w)
@@ -210,13 +197,10 @@ class LabelFlipping(Adversary):
         constraints += [cost_for_q <= self.total_cost]
 
         prob = cvx.Problem(cvx.Minimize(func), constraints)
-        prob.solve(solver=cvx.ECOS_BB, verbose=self.verbose, parallel=True)
+        prob.solve(solver=cvx.ECOS, verbose=self.verbose, parallel=True)
 
         q_value = np.array(q.value).flatten()
-        self.q = []
-        for i in range(n):
-            self.q.append(round(q_value[i]))
-        self.q = np.array(self.q, dtype=int)
+        self.q = q_value
 
     def set_params(self, params: Dict):
         if params['learner'] is not None:
@@ -227,8 +211,8 @@ class LabelFlipping(Adversary):
             self.total_cost = params['total_cost']
         if params['gamma'] is not None:
             self.gamma = params['gamma']
-        if params['num_iterations'] is not None:
-            self.num_iterations = params['num_iterations']
+        if params['alpha'] is not None:
+            self.alpha = params['alpha']
         if params['verbose'] is not None:
             self.verbose = params['verbose']
 
@@ -241,7 +225,7 @@ class LabelFlipping(Adversary):
                   'cost': self.cost,
                   'total_cost': self.total_cost,
                   'gamma': self.gamma,
-                  'num_iterations': self.num_iterations,
+                  'alpha': self.alpha,
                   'verbose': self.verbose}
         return params
 

@@ -15,8 +15,7 @@ To install `adlib`, run `python3 setup.py install`. For development, do `python3
 * NumPy
 * Matplotlib
 * Scikit-learn
-* CVXPY (0.4 version)
-* Progress
+* CVXPY (0.4-0.4.11 version)
 * Pathos
 * CVXOPT (optional as a CVXPY solver)
 * Jupyter Notebook (optional for notebook demo)

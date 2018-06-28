@@ -14,7 +14,8 @@ import time
 
 
 def test_label_flipping():
-    print('\n#################################################################')
+    print()
+    print('###################################################################')
     print('START label flipping attack.\n')
 
     begin = time.time()
@@ -23,20 +24,12 @@ def test_label_flipping():
     # The path is an index of 400 testing samples(raw email data).
     dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400',
                            binary=False, raw=True)
-    training_data = load_dataset(dataset)
+
+    training_data, predict_data = dataset.split({'train': 25, 'test': 75})
+    training_data = load_dataset(training_data)
+    predict_data = load_dataset(predict_data)
 
     print('Training sample size: ', len(training_data), '/400\n', sep='')
-
-    # Randomly cut dataset in approximately half
-    rand_choices = np.random.binomial(1, 0.5, len(training_data))
-    new_training_data = []
-    predict_data = []
-    for i in range(len(training_data)):
-        if rand_choices[i] == 1:
-            new_training_data.append(training_data[i])
-        else:
-            predict_data.append(training_data[i])
-    training_data = new_training_data
 
     # Setting the default learner
     # Test simple learner svm
@@ -107,7 +100,8 @@ def test_label_flipping():
     print('\nTotal time: ', round(end - begin, 2), 's', '\n', sep='')
 
     print('\nEND label flipping attack.')
-    print('#################################################################\n')
+    print('###################################################################')
+    print()
 
 
 if __name__ == '__main__':

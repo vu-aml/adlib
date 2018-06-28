@@ -3,12 +3,13 @@
 # Matthew Sedam
 
 
-from adlib.learners import SimpleLearner
-from adlib.learners import IterativeRetrainingLearner
 from adlib.adversaries.label_flipping import LabelFlipping
 from adlib.adversaries.k_insertion import KInsertion
 from adlib.adversaries.datamodification.data_modification import \
     DataModification
+from adlib.learners import IterativeRetrainingLearner
+from adlib.learners import SimpleLearner
+from adlib.learners import TRIMLearner
 from adlib.tests.adversaries.data_modification_test import \
     calculate_target_theta
 from adlib.utils.common import calculate_correct_percentages
@@ -40,7 +41,7 @@ def test_iterative_retraining_learner():
     dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400',
                            binary=False, raw=True)
 
-    training_data, testing_data = dataset.split({'train': 50, 'test': 50})
+    training_data, testing_data = dataset.split({'train': 25, 'test': 75})
     training_data = load_dataset(training_data)
     testing_data = load_dataset(testing_data)
 
@@ -57,7 +58,7 @@ def test_iterative_retraining_learner():
     # Execute the attack
     if attacker_name == 'label-flipping':
         cost = list(np.random.binomial(2, 0.5, len(training_data)))
-        total_cost = 0.3 * len(training_data)  # flip around ~30% of the labels
+        total_cost = 0.4 * len(training_data)  # flip around ~40% of the labels
         attacker = LabelFlipping(learner, cost, total_cost, verbose=True)
     elif attacker_name == 'k-insertion':
         number_to_add = int(0.25 * len(training_data))
@@ -89,9 +90,11 @@ def test_iterative_retraining_learner():
     print('###################################################################')
     print('START Iterative Retraining learner.\n')
 
-    iterative_retraining_learner = IterativeRetrainingLearner(orig_learner,
-                                                              attack_data,
-                                                              verbose=True)
+    iterative_retraining_learner = IterativeRetrainingLearner(
+        TRIMLearner(training_data, int(0.4 * len(training_data)), verbose=True),
+        attack_data,
+        verbose=True)
+
     iterative_retraining_learner.train()
 
     print('\nEND Iterative Retraining learner.')

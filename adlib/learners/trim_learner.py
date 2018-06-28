@@ -19,11 +19,11 @@ class TRIMLearner(Learner):
     """
 
     def __init__(self, training_instances: List[Instance], n: int, lda=0.1,
-                 verbose=False):
+                 alpha=1e-10, verbose=False):
         """
         :param training_instances: the instances on which to train
-        :param n: the number of unpoisoned instances in training_instances - the
-                  size of the original dataset
+        :param n: the number of un-poisoned instances in training_instances
+                  - the size of the original data set
         :param lda: lambda - for regularization term
         :param verbose: if True, the solver will be in verbose mode
         """
@@ -32,6 +32,7 @@ class TRIMLearner(Learner):
         self.training_instances = training_instances
         self.n = n
         self.lda = lda  # lambda
+        self.alpha = alpha
         self.verbose = verbose
         self.num_features = self.training_instances[0].get_feature_count()
         self.w = None
@@ -59,14 +60,14 @@ class TRIMLearner(Learner):
 
         old_loss = -1
         loss = 0
-        while loss != old_loss:
+        while abs(loss - old_loss) < self.alpha:
             if self.verbose:
-                print('Current loss:', loss)
+                print('\nCurrent loss:', loss, '\n')
 
             # Calculate minimal set
             loss_vector = fvs.dot(w) + b
             loss_vector -= labels
-            loss_vector = list(map(lambda x: x ** 2, loss_vector))
+            loss_vector = loss_vector ** 2
 
             loss_tuples = []
             for i in range(len(loss_vector)):
@@ -108,7 +109,7 @@ class TRIMLearner(Learner):
 
         # Solve problem
         prob = cvx.Problem(cvx.Minimize(loss), [])
-        prob.solve(solver=cvx.SCS, verbose=self.verbose, parallel=True)
+        prob.solve(solver=cvx.ECOS, verbose=self.verbose, parallel=True)
 
         return np.array(w.value).flatten(), b.value
 

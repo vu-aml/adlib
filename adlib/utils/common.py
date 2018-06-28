@@ -45,8 +45,8 @@ def calculate_correct_percentages(orig_labels, attack_labels, instances):
         if attack_labels[i] != instances[i].get_label():
             count += 1
 
-    orig_precent_correct = ((len(instances) - orig_count) * 100 / len(instances))
-    attack_precent_correct = ((len(instances) - count) * 100 / len(instances))
+    orig_precent_correct = (len(instances) - orig_count) * 100 / len(instances)
+    attack_precent_correct = (len(instances) - count) * 100 / len(instances)
     difference = orig_precent_correct - attack_precent_correct
 
     orig_precent_correct = str(round(orig_precent_correct, 4))
@@ -106,15 +106,21 @@ def logistic_function(x):
     return 1 / (1 + math.exp(-1 * x))
 
 
-def logistic_loss(instances: List[Instance], lnr: Learner):
+def logistic_loss(instances, lnr: Learner, labels=None):
     """
     Calculates the logistic loss for instances
-    :param instances: the instances
+    :param instances: the instances, either List[Instance] or np.ndarray
     :param lnr: the learner
+    :param labels: the labels if instances is of type np.ndarray
     :return: the loss
     """
 
-    fvs, labels = get_fvs_and_labels(instances)
+    if isinstance(instances, List):
+        fvs, labels = get_fvs_and_labels(instances)
+    elif isinstance(instances, np.ndarray):
+        fvs = instances
+    else:
+        raise ValueError('instances is not a List[Instance] or an np.ndarray.')
 
     loss = lnr.decision_function(fvs)
     loss = -1 * np.multiply(loss, labels)

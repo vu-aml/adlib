@@ -2,8 +2,8 @@
 # A learner that iteratively retrains and removes outliers based on loss.
 # Matthew Sedam
 
-from adlib.learners.learner import Learner
-from adlib.learners.simple_learner import SimpleLearner
+from adlib.learners import Learner
+from adlib.learners import TRIMLearner
 from adlib.utils.common import logistic_loss
 from copy import deepcopy
 from data_reader.binary_input import Instance
@@ -16,7 +16,7 @@ class IterativeRetrainingLearner(Learner):
     A learner that iteratively retrains and removes outliers based on loss.
     """
 
-    def __init__(self, lnr: SimpleLearner, training_instances: List[Instance],
+    def __init__(self, lnr: TRIMLearner, training_instances: List[Instance],
                  verbose=False):
         """
         :param lnr: the base learner
@@ -27,21 +27,19 @@ class IterativeRetrainingLearner(Learner):
         Learner.__init__(self)
         self.learner = deepcopy(lnr)
         self.learner.set_training_instances(training_instances)
-        self.learner.train()
         self.set_training_instances(training_instances)
         self.verbose = verbose
         self.loss_threshold = None
 
     def train(self):
-        loss = logistic_loss(self.training_instances, self.learner)
         self.learner.set_training_instances(self.training_instances)
         self.learner.train()
+        loss = logistic_loss(self.training_instances, self.learner)
+
+        self.loss_threshold = np.mean(loss) + 2 * np.std(loss)
 
         old_training_instances = []
         while set(old_training_instances) != set(self.training_instances):
-            q75, q25 = np.percentile(loss, [75, 25])
-            self.loss_threshold = q75 + 1.5 * (q75 - q25)
-
             old_training_instances = self.training_instances[:]
             instances = []
             for i, inst in enumerate(self.training_instances):
@@ -51,12 +49,15 @@ class IterativeRetrainingLearner(Learner):
             self.training_instances = instances
 
             if self.verbose:
-                print('Number of instances:', len(self.training_instances))
+                print('\nNumber of instances:', len(self.training_instances))
                 print('Loss threshold:', self.loss_threshold)
 
             self.learner.set_training_instances(self.training_instances)
             self.learner.train()
             loss = logistic_loss(self.training_instances, self.learner)
+
+            if self.verbose:
+                print('Loss:\n', loss, '\n')
 
         self.learner.set_training_instances(self.training_instances)
         self.learner.train()
@@ -80,4 +81,4 @@ class IterativeRetrainingLearner(Learner):
         raise NotImplementedError
 
     def decision_function(self, X):
-        return self.learner.model.learner.decision_function(X)
+        return self.decision_function(X)

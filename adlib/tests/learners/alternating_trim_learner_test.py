@@ -21,6 +21,9 @@ import sys
 import time
 
 
+# TODO: Switch attack back
+
+
 def test_alternating_trim_learner():
     print()
     print('###################################################################')
@@ -57,7 +60,7 @@ def test_alternating_trim_learner():
     # Execute the attack
     if attacker_name == 'label-flipping':
         cost = list(np.random.binomial(2, 0.5, len(training_data)))
-        total_cost = 0.5 * len(training_data)  # flip around ~50% of the labels
+        total_cost = 0.25 * len(training_data)  # flip around ~25% of the labels
         attacker = LabelFlipping(learner, cost, total_cost, verbose=True)
     elif attacker_name == 'k-insertion':
         number_to_add = int(0.25 * len(training_data))
@@ -76,6 +79,11 @@ def test_alternating_trim_learner():
     print('START', attacker_name, 'attack.\n')
 
     attack_data = attacker.attack(training_data)
+    # attack_data = deepcopy(training_data)
+    # tmp = np.random.binomial(1, 0.25, len(training_data))
+    # for i, val in enumerate(tmp):
+    #     if val == 1:
+    #         attack_data[i].set_label(-1 * attack_data[i].get_label())
 
     print('\nEND', attacker_name, 'attack.')
     print('###################################################################')
@@ -90,7 +98,7 @@ def test_alternating_trim_learner():
     print('START Alternating TRIM learner.\n')
 
     # Train with TRIM learner
-    alt_trim_learner = AlternatingTRIMLearner(training_data, 0.5, verbose=True)
+    alt_trim_learner = AlternatingTRIMLearner(training_data, 0.25, verbose=True)
     alt_trim_learner.train()
 
     print('\nEND Alternating TRIM learner.')

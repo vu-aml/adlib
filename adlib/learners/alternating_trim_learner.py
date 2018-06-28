@@ -19,7 +19,7 @@ class AlternatingTRIMLearner(Learner):
                  verbose=False):
 
         Learner.__init__(self)
-        self.training_instances = deepcopy(training_instances)
+        self.set_training_instances(deepcopy(training_instances))
         self.poison_percentage = poison_percentage
         self.n = int((1 - poison_percentage) * len(self.training_instances))
         self.max_iter = max_iter
@@ -105,7 +105,14 @@ class AlternatingTRIMLearner(Learner):
         return list(map(lambda x: 1 if x >= 0 else -1, decision_vals))
 
     def set_params(self, params: Dict):
-        raise NotImplementedError
+        if params['training_instances'] is not None:
+            self.set_training_instances(params['training_instances'])
+        if params['poison_percentage'] is not None:
+            self.poison_percentage = params['poison_percentage']
+        if params['max_iter'] is not None:
+            self.max_iter = params['max_iter']
+        if params['verbose'] is not None:
+            self.verbose = params['verbose']
 
     def predict_proba(self, X):
         raise NotImplementedError

@@ -66,7 +66,7 @@ class AlternatingTRIMLearner(Learner):
             for i, val in enumerate(loss_sort_list):
                 tau[val[0]] = 1 if i < self.n else 0
 
-            tau_dist = np.linalg.norm(tau - old_tau)
+            tau_dist = np.linalg.norm(tau - old_tau) ** 2
             iteration += 1
 
         print('Iteration: FINAL - tau_dist: ', tau_dist, sep='')

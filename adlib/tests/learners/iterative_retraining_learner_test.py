@@ -58,7 +58,7 @@ def test_iterative_retraining_learner():
     # Execute the attack
     if attacker_name == 'label-flipping':
         cost = list(np.random.binomial(2, 0.5, len(training_data)))
-        total_cost = 0.4 * len(training_data)  # flip around ~40% of the labels
+        total_cost = 0.25 * len(training_data)  # flip around ~25% of the labels
         attacker = LabelFlipping(learner, cost, total_cost, verbose=True)
     elif attacker_name == 'k-insertion':
         number_to_add = int(0.25 * len(training_data))

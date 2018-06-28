@@ -21,9 +21,6 @@ import sys
 import time
 
 
-# TODO: Switch attack back
-
-
 def test_alternating_trim_learner():
     print()
     print('###################################################################')
@@ -78,12 +75,7 @@ def test_alternating_trim_learner():
     print('###################################################################')
     print('START', attacker_name, 'attack.\n')
 
-    # attack_data = attacker.attack(training_data)
-    attack_data = deepcopy(training_data)
-    tmp = np.random.binomial(1, 0.25, len(training_data))
-    for i, val in enumerate(tmp):
-        if val == 1:
-            attack_data[i].set_label(-1 * attack_data[i].get_label())
+    attack_data = attacker.attack(training_data)
 
     print('\nEND', attacker_name, 'attack.')
     print('###################################################################')

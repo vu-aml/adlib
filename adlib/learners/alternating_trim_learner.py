@@ -99,8 +99,7 @@ class AlternatingTRIMLearner(Learner):
             self.theta = np.array(theta.value).flatten()
             self.b = b.value
 
-            ####################################################################
-
+            # Minimize based on loss
             loss = logistic_loss(self.training_instances, self)
             loss_sort_list = list(enumerate(loss))
             loss_sort_list.sort(key=lambda x: x[1])

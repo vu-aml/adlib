@@ -71,7 +71,10 @@ class LabelFlipping(Adversary):
         ########################################################################
         # Alternating minimization loop
 
-        q = np.random.rand(n)
+        q = np.random.rand(half_n)
+        q_add_inv = 1 - q
+        q = np.concatenate([q, q_add_inv])
+
         self.q = deepcopy(q)
         q_dist = 0
         iteration = 0

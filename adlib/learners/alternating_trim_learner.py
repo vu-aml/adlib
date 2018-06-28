@@ -15,19 +15,57 @@ class AlternatingTRIMLearner(Learner):
     A learner that implements the Alternating TRIM algorithm.
     """
 
-    def __init__(self, training_instances, poison_percentage, max_iter=50,
-                 verbose=False):
+    def __init__(self, training_instances, max_iter=10, verbose=False):
 
         Learner.__init__(self)
         self.set_training_instances(deepcopy(training_instances))
-        self.poison_percentage = poison_percentage
-        self.n = int((1 - poison_percentage) * len(self.training_instances))
         self.max_iter = max_iter
         self.verbose = verbose
+
+        self.poison_percentage = None
+        self.n = None
         self.theta = None
         self.b = None
 
     def train(self):
+        step_size = 1 / len(self.training_instances)
+        best_poison_percentage = 0.05
+        best_theta = None
+        best_b = None
+        best_loss = None
+
+        self.poison_percentage = 0.05
+        self.n = int((1 - self.poison_percentage) *
+                     len(self.training_instances))
+
+        while self.poison_percentage < 0.5:
+            loss = self._train_helper()
+            if self.verbose:
+                print('\nPoison Percentage:', self.poison_percentage, '- loss:',
+                      loss, '\n')
+
+            if not best_loss or loss < best_loss:
+                best_poison_percentage = self.poison_percentage
+                best_loss = loss
+                best_theta = self.theta
+                best_b = self.b
+
+            self.poison_percentage += step_size
+            self.n = int((1 - self.poison_percentage) *
+                         len(self.training_instances))
+
+        self.poison_percentage = best_poison_percentage
+        self.n = int((1 - self.poison_percentage) *
+                     len(self.training_instances))
+        self.theta = best_theta
+        self.b = best_b
+
+    def _train_helper(self):
+        """
+        Helper function for train. Does the actual training.
+        :return: the total loss
+        """
+
         fvs, labels = get_fvs_and_labels(self.training_instances)
         tau = self._generate_tau()
         old_tau = np.full(len(tau), 0)
@@ -35,7 +73,9 @@ class AlternatingTRIMLearner(Learner):
         iteration = 0
 
         while tau_dist != 0 and iteration < self.max_iter:
-            print('Iteration: ', iteration, ' - tau_dist: ', tau_dist, sep='')
+            if self.verbose:
+                print('Iteration: ', iteration, ' - tau_dist: ', tau_dist,
+                      sep='')
 
             # Setup variables
             theta = cvx.Variable(fvs.shape[1])
@@ -72,7 +112,10 @@ class AlternatingTRIMLearner(Learner):
             tau_dist = int(np.linalg.norm(tau - old_tau) ** 2)
             iteration += 1
 
-        print('Iteration: FINAL - tau_dist: ', tau_dist, sep='')
+        if self.verbose:
+            print('Iteration: FINAL - tau_dist: ', tau_dist, sep='')
+
+        return sum(loss)
 
     def _generate_tau(self):
         """
@@ -106,13 +149,16 @@ class AlternatingTRIMLearner(Learner):
 
     def set_params(self, params: Dict):
         if params['training_instances'] is not None:
-            self.set_training_instances(params['training_instances'])
-        if params['poison_percentage'] is not None:
-            self.poison_percentage = params['poison_percentage']
+            self.set_training_instances(deepcopy(params['training_instances']))
         if params['max_iter'] is not None:
             self.max_iter = params['max_iter']
         if params['verbose'] is not None:
             self.verbose = params['verbose']
+
+        self.poison_percentage = None
+        self.n = None
+        self.theta = None
+        self.b = None
 
     def predict_proba(self, X):
         raise NotImplementedError

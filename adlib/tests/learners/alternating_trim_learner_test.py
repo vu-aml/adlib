@@ -98,7 +98,7 @@ def test_alternating_trim_learner():
     print('START Alternating TRIM learner.\n')
 
     # Train with TRIM learner
-    alt_trim_learner = AlternatingTRIMLearner(training_data, 0.25, verbose=True)
+    alt_trim_learner = AlternatingTRIMLearner(training_data, verbose=True)
     alt_trim_learner.train()
 
     print('\nEND Alternating TRIM learner.')

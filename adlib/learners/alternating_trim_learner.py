@@ -15,11 +15,14 @@ class AlternatingTRIMLearner(Learner):
     A learner that implements the Alternating TRIM algorithm.
     """
 
-    def __init__(self, training_instances, poison_percentage, verbose=False):
+    def __init__(self, training_instances, poison_percentage, max_iter=50,
+                 verbose=False):
+
         Learner.__init__(self)
         self.training_instances = deepcopy(training_instances)
         self.poison_percentage = poison_percentage
         self.n = int((1 - poison_percentage) * len(self.training_instances))
+        self.max_iter = max_iter
         self.verbose = verbose
         self.theta = None
         self.b = None
@@ -28,10 +31,10 @@ class AlternatingTRIMLearner(Learner):
         fvs, labels = get_fvs_and_labels(self.training_instances)
         tau = self._generate_tau()
         old_tau = np.full(len(tau), 0)
-        tau_dist = np.linalg.norm(tau - old_tau)
+        tau_dist = np.linalg.norm(tau - old_tau) ** 2
         iteration = 0
 
-        while tau_dist != 0:
+        while tau_dist != 0 and iteration < self.max_iter:
             print('Iteration: ', iteration, ' - tau_dist: ', tau_dist, sep='')
 
             # Setup variables

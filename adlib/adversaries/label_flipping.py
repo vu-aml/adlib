@@ -19,7 +19,7 @@ class LabelFlipping(Adversary):
     """
 
     def __init__(self, learner, cost: List[float], total_cost: float,
-                 gamma=0.1, alpha=1e-8, verbose=False):
+                 gamma=0.1, alpha=5e-7, verbose=False):
         """
         :param learner: the previously-trained SVM learner
         :param cost: the cost vector, has length of size of instances

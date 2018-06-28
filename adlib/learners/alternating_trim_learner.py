@@ -31,7 +31,7 @@ class AlternatingTRIMLearner(Learner):
         fvs, labels = get_fvs_and_labels(self.training_instances)
         tau = self._generate_tau()
         old_tau = np.full(len(tau), 0)
-        tau_dist = np.linalg.norm(tau - old_tau) ** 2
+        tau_dist = int(np.linalg.norm(tau - old_tau) ** 2)
         iteration = 0
 
         while tau_dist != 0 and iteration < self.max_iter:
@@ -69,7 +69,7 @@ class AlternatingTRIMLearner(Learner):
             for i, val in enumerate(loss_sort_list):
                 tau[val[0]] = 1 if i < self.n else 0
 
-            tau_dist = np.linalg.norm(tau - old_tau) ** 2
+            tau_dist = int(np.linalg.norm(tau - old_tau) ** 2)
             iteration += 1
 
         print('Iteration: FINAL - tau_dist: ', tau_dist, sep='')

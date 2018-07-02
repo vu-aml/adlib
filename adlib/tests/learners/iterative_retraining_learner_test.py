@@ -22,6 +22,9 @@ import sys
 import time
 
 
+# TODO: Remove dummy attack
+
+
 def test_iterative_retraining_learner():
     print()
     print('###################################################################')
@@ -76,7 +79,12 @@ def test_iterative_retraining_learner():
     print('###################################################################')
     print('START', attacker_name, 'attack.\n')
 
-    attack_data = attacker.attack(training_data)
+    # attack_data = attacker.attack(training_data)
+    attack_data = deepcopy(training_data)
+    tmp = np.random.binomial(1, 0.3, len(attack_data))
+    for i, val in enumerate(tmp):
+        if val == 1:
+            attack_data[i].set_label(attack_data[i].get_label() * -1)
 
     print('\nEND', attacker_name, 'attack.')
     print('###################################################################')

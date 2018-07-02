@@ -1,0 +1,236 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 29 09:08:50 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4TD8mhB031106
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 09:08:49 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 24660162B71
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 13:08:44 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.5 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 501)
+	id 9E68D163871; Tue, 29 May 2007 13:06:14 +0000 (GMT)
+To: samba-cvs@samba.org
+From: abartlet@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070529130614.9E68D163871@lists.samba.org>
+Date: Tue, 29 May 2007 13:06:14 +0000 (GMT)
+Subject: svn commit: samba r23191 - in branches/SAMBA_4_0/source/selftest: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: abartlet
+Date: 2007-05-29 13:06:08 +0000 (Tue, 29 May 2007)
+New Revision: 23191
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23191
+
+Log:
+Use the new provision-backend script to setup Fedora DS for make test.
+
+OpenLDAP to follow once I get things working...
+
+Andrew Bartlett
+
+Modified:
+   branches/SAMBA_4_0/source/selftest/Samba4.pm
+   branches/SAMBA_4_0/source/selftest/selftest.pl
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/selftest/Samba4.pm
+===================================================================
+--- branches/SAMBA_4_0/source/selftest/Samba4.pm	2007-05-29 12:53:42 UTC (rev 23190)
++++ branches/SAMBA_4_0/source/selftest/Samba4.pm	2007-05-29 13:06:08 UTC (rev 23191)
+@@ -39,7 +39,7 @@
+ 
+ 	# running slapd in the background means it stays in the same process group, so it can be
+ 	# killed by timelimit
+-	if ($self->{ldap} eq "fedora") {
++	if ($self->{ldap} eq "fedora-ds") {
+ 	        system("$ENV{FEDORA_DS_PREFIX}/sbin/ns-slapd -D $env_vars->{FEDORA_DS_DIR} -d0 -i $env_vars->{FEDORA_DS_PIDFILE}> $env_vars->{LDAPDIR}/logs 2>&1 &");
+ 	} elsif ($self->{ldap} eq "openldap") {
+ 	        openldap_start($env_vars->{SLAPD_CONF}, $uri, "$env_vars->{LDAPDIR}/logs");
+@@ -58,7 +58,7 @@
+ sub slapd_stop($$)
+ {
+ 	my ($self, $envvars) = @_;
+-	if ($self->{ldap} eq "fedora") {
++	if ($self->{ldap} eq "fedora-ds") {
+ 		system("$envvars->{LDAPDIR}/slapd-samba4/stop-slapd");
+ 	} elsif ($self->{ldap} eq "openldap") {
+ 		open(IN, "<$envvars->{OPENLDAP_PIDFILE}") or 
+@@ -177,54 +177,18 @@
+ ");
+ }
+ 
+-sub mk_fedora($$$$$$)
++sub mk_fedora_ds($$$)
+ {
+-	my ($self, $ldapdir, $basedn, $root, $password, $privatedir, $configuration) = @_;
++	my ($self, $ldapdir, $configuration) = @_;
+ 
+-	mkdir($ldapdir, 0777);
+-
+ 	my $fedora_ds_inf = "$ldapdir/fedorads.inf";
+-	my $fedora_ds_initial_ldif = "$ldapdir/fedorads-initial.ldif";
++	my $fedora_ds_extra_ldif = "$ldapdir/fedorads-partitions.ldif";
+ 
+ 	#Make the subdirectory be as fedora DS would expect
+ 	my $fedora_ds_dir = "$ldapdir/slapd-samba4";
+ 
+ 	my $pidfile = "$fedora_ds_dir/logs/slapd-samba4.pid";
+ 
+-	open(CONF, ">$fedora_ds_inf");
+-	print CONF "
+-[General]
+-SuiteSpotUserID = $root
+-FullMachineName=   localhost
+-ServerRoot=   $ldapdir
+-
+-[slapd]
+-ldapifilepath=$ldapdir/ldapi
+-Suffix= $basedn
+-RootDN= cn=Manager,$basedn
+-RootDNPwd= $password
+-ServerIdentifier= samba4
+-#InstallLdifFile=$fedora_ds_initial_ldif
+-
+-inst_dir= $fedora_ds_dir
+-config_dir= $fedora_ds_dir
+-schema_dir= $fedora_ds_dir/schema
+-lock_dir= $fedora_ds_dir/lock
+-log_dir= $fedora_ds_dir/logs
+-run_dir= $fedora_ds_dir/logs
+-db_dir= $fedora_ds_dir/db
+-bak_dir= $fedora_ds_dir/bak
+-tmp_dir= $fedora_ds_dir/tmp
+-ldif_dir= $fedora_ds_dir/ldif
+-cert_dir= $fedora_ds_dir
+-
+-start_server= 0
+-install_full_schema= 0
+-";
+-	close(CONF);
+-
+-	open(LDIF, ">$fedora_ds_initial_ldif");
+-
+ my $dir = getcwd();
+ chdir "$ENV{FEDORA_DS_PREFIX}/bin" || die;
+ 	if (system("perl $ENV{FEDORA_DS_PREFIX}/bin/ds_newinst.pl $fedora_ds_inf >&2") != 0) {
+@@ -233,40 +197,10 @@
+         }
+         chdir $dir || die;
+ 
+-	open(LDIF, ">>$fedora_ds_dir/dse.ldif");
+-	print LDIF "dn: cn=\"cn=Configuration,$basedn\",cn=mapping tree,cn=config
+-objectclass: top
+-objectclass: extensibleObject
+-objectclass: nsMappingTree
+-nsslapd-state: backend
+-nsslapd-backend: configData
+-cn: cn=Configuration,$basedn
++	system("cat $fedora_ds_extra_ldif >> $fedora_ds_dir/dse.ldif");
+ 
+-dn: cn=configData,cn=ldbm database,cn=plugins,cn=config
+-objectclass: extensibleObject
+-objectclass: nsBackendInstance
+-nsslapd-suffix: cn=Configuration,$basedn
+-cn: configData
++	system("$self->{bindir}/ad2oLschema $configuration -H $ldapdir/schema-tmp.ldb --option=convert:target=fedora-ds -I $self->{setupdir}/schema-map-fedora-ds-1.0 -O $fedora_ds_dir/schema/99_ad.ldif >&2") == 0 or die("schema conversion for Fedora DS failed");
+ 
+-dn: cn=\"cn=Schema,cn=Configuration,$basedn\",cn=mapping tree,cn=config
+-objectclass: top
+-objectclass: extensibleObject
+-objectclass: nsMappingTree
+-nsslapd-state: backend
+-nsslapd-backend: schemaData
+-cn: cn=Schema,cn=Configuration,$basedn
+-
+-dn: cn=schemaData,cn=ldbm database,cn=plugins,cn=config
+-objectclass: extensibleObject
+-objectclass: nsBackendInstance
+-nsslapd-suffix: cn=Schema,cn=Configuration,$basedn
+-cn: schemaData
+-
+-";
+-	close(LDIF);
+-
+-	system("$self->{bindir}/ad2oLschema $configuration -H $privatedir/sam.ldb --option=convert:target=fedora-ds -I $self->{setupdir}/schema-map-fedora-ds-1.0 -O $fedora_ds_dir/schema/99_ad.ldif >&2") == 0 or die("schema conversion for Fedora DS failed");
+-
+ 	return ($fedora_ds_dir, $pidfile);
+ }
+ 
+@@ -425,8 +359,6 @@
+ 	system("slapadd -b cn=Configuration,$basedn -f $slapd_conf -l $ldapdir/$dnsname-config.ldif >/dev/null") == 0 or die("slapadd failed");
+ 	system("slapadd -b cn=Schema,cn=Configuration,$basedn -f $slapd_conf -l $ldapdir/$dnsname-schema.ldif >/dev/null") == 0 or die("slapadd failed");
+ 
+-    system("slaptest -u -f $slapd_conf >/dev/null") == 0 or 
+-		die ("slaptest after database load failed");
+     
+ 	$ENV{PATH} = $oldpath;
+ 
+@@ -626,10 +558,11 @@
+ 
+ 	if (defined($self->{ldap})) {
+ 
++                system("$self->{bindir}/smbscript $self->{setupdir}/provision-backend $configuration --ldap-manager-pass=$password --root=$root --realm=$dnsname --host-name=$netbiosname --ldap-backend-type=$self->{ldap}>&2") == 0 or die("backend provision failed");
+ 	        if ($self->{ldap} eq "openldap") {
+ 		       ($ret->{SLAPD_CONF}, $ret->{OPENLDAP_PIDFILE}) = $self->mk_openldap($ldapdir, $basedn, $password, $privatedir, $dnsname, $configuration, join(' ', @provision_options)) or die("Unable to create openldap directories");
+-	        } elsif ($self->{ldap} eq "fedora") {
+-		       ($ret->{FEDORA_DS_DIR}, $ret->{FEDORA_DS_PIDFILE}) = $self->mk_fedora($ldapdir, $basedn, $root, $password, $privatedir, $configuration) or die("Unable to create fedora ds directories");
++	        } elsif ($self->{ldap} eq "fedora-ds") {
++		       ($ret->{FEDORA_DS_DIR}, $ret->{FEDORA_DS_PIDFILE}) = $self->mk_fedora_ds($ldapdir, $configuration) or die("Unable to create fedora ds directories");
+ 		       push (@provision_options, "--ldap-module=nsuniqueid");
+ 	        }
+ 
+@@ -711,7 +644,7 @@
+ 	my ($self, $envvars) = @_;
+ 	my $provision_aci = "";
+ 	
+-	if ($self->{ldap} eq "fedora") {
++	if ($self->{ldap} eq "fedora-ds") {
+ 		#it is easier to base64 encode this than correctly escape it:
+ 		# (targetattr = "*") (version 3.0;acl "full access to all by all";allow (all)(userdn = "ldap:///anyone");)
+ 		$provision_aci = "--aci=aci:: KHRhcmdldGF0dHIgPSAiKiIpICh2ZXJzaW9uIDMuMDthY2wgImZ1bGwgYWNjZXNzIHRvIGFsbCBieSBhbGwiO2FsbG93IChhbGwpKHVzZXJkbiA9ICJsZGFwOi8vL2FueW9uZSIpOykK";
+
+Modified: branches/SAMBA_4_0/source/selftest/selftest.pl
+===================================================================
+--- branches/SAMBA_4_0/source/selftest/selftest.pl	2007-05-29 12:53:42 UTC (rev 23190)
++++ branches/SAMBA_4_0/source/selftest/selftest.pl	2007-05-29 13:06:08 UTC (rev 23191)
+@@ -422,7 +422,7 @@
+  --expected-failures=FILE   specify list of tests that is guaranteed to fail
+ 
+ Samba4 Specific:
+- --ldap=openldap|fedora     back smbd onto specified ldap server
++ --ldap=openldap|fedora-ds     back smbd onto specified ldap server
+ 
+ Samba3 Specific:
+  --bindir=PATH              path to binaries
+@@ -477,7 +477,7 @@
+ # Backwards compatibility:
+ if (defined($ENV{TEST_LDAP}) and $ENV{TEST_LDAP} eq "yes") {
+ 	if (defined($ENV{FEDORA_DS_PREFIX})) {
+-		$ldap = "fedora";
++		$ldap = "fedora-ds";
+ 	} else {
+ 		$ldap = "openldap";
+ 	}
+

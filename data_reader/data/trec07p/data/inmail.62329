@@ -1,0 +1,199 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Jun 21 10:33:04 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5LEX4L9025148
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 21 Jun 2007 10:33:04 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 2EDB51639F0
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 21 Jun 2007 14:33:02 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.3 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1004)
+	id E73A816392C; Thu, 21 Jun 2007 14:32:10 +0000 (GMT)
+To: samba-cvs@samba.org
+From: gd@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070621143210.E73A816392C@lists.samba.org>
+Date: Thu, 21 Jun 2007 14:32:10 +0000 (GMT)
+Subject: svn commit: samba r23568 - in branches: SAMBA_3_0/source/nsswitch
+	SAMBA_3_0_25/source/nsswitch SAMBA_3_0_26/source/nsswitch
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: gd
+Date: 2007-06-21 14:32:09 +0000 (Thu, 21 Jun 2007)
+New Revision: 23568
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23568
+
+Log:
+Remove last traces of Heimdal KCM support (and don't misuse wbinfo where a
+torture test would be much more appropriate). Fix #4408.
+
+Guenther
+
+Modified:
+   branches/SAMBA_3_0/source/nsswitch/wbinfo.c
+   branches/SAMBA_3_0_25/source/nsswitch/wbinfo.c
+   branches/SAMBA_3_0_26/source/nsswitch/wbinfo.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/nsswitch/wbinfo.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/wbinfo.c	2007-06-21 14:30:40 UTC (rev 23567)
++++ branches/SAMBA_3_0/source/nsswitch/wbinfo.c	2007-06-21 14:32:09 UTC (rev 23568)
+@@ -1459,37 +1459,16 @@
+ 				break;
+ 			}
+ 		case 'K': {
+-				BOOL got_error = False;
+ 				uint32 flags =  WBFLAG_PAM_KRB5 |
+ 						WBFLAG_PAM_CACHED_LOGIN |
+ 						WBFLAG_PAM_FALLBACK_AFTER_KRB5 |
+ 						WBFLAG_PAM_INFO3_TEXT;
+-				fstring tok;
+-				int i;
+-				const char *arg[] = { NULL, NULL };
+-				const char *cctypes[] = { "FILE", 
+-							  "KCM", 
+-							  "KCM:0", 
+-							  "Garbage", 
+-							  NULL, 
+-							  "0"};
+ 
+-				arg[0] = string_arg;
+-
+-				while (next_token(arg, tok, LIST_SEP, sizeof(tok))) {
+-
+-					for (i=0; i < ARRAY_SIZE(cctypes); i++) {
+-						if (!wbinfo_auth_krb5(tok, cctypes[i], flags)) {
+-							d_fprintf(stderr, "Could not authenticate user [%s] with "
+-								"Kerberos (ccache: %s)\n", tok, cctypes[i]);
+-							got_error = True;
+-						}
+-					}
+-				}
+-
+-				if (got_error)
++				if (!wbinfo_auth_krb5(string_arg, "FILE", flags)) {
++					d_fprintf(stderr, "Could not authenticate user [%s] with "
++						"Kerberos (ccache: %s)\n", string_arg, "FILE");
+ 					goto done;
+-
++				}
+ 				break;
+ 			}
+ 		case 'k':
+
+Modified: branches/SAMBA_3_0_25/source/nsswitch/wbinfo.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/nsswitch/wbinfo.c	2007-06-21 14:30:40 UTC (rev 23567)
++++ branches/SAMBA_3_0_25/source/nsswitch/wbinfo.c	2007-06-21 14:32:09 UTC (rev 23568)
+@@ -1459,37 +1459,16 @@
+ 				break;
+ 			}
+ 		case 'K': {
+-				BOOL got_error = False;
+ 				uint32 flags =  WBFLAG_PAM_KRB5 |
+ 						WBFLAG_PAM_CACHED_LOGIN |
+ 						WBFLAG_PAM_FALLBACK_AFTER_KRB5 |
+ 						WBFLAG_PAM_INFO3_TEXT;
+-				fstring tok;
+-				int i;
+-				const char *arg[] = { NULL, NULL };
+-				const char *cctypes[] = { "FILE", 
+-							  "KCM", 
+-							  "KCM:0", 
+-							  "Garbage", 
+-							  NULL, 
+-							  "0"};
+ 
+-				arg[0] = string_arg;
+-
+-				while (next_token(arg, tok, LIST_SEP, sizeof(tok))) {
+-
+-					for (i=0; i < ARRAY_SIZE(cctypes); i++) {
+-						if (!wbinfo_auth_krb5(tok, cctypes[i], flags)) {
+-							d_fprintf(stderr, "Could not authenticate user [%s] with "
+-								"Kerberos (ccache: %s)\n", tok, cctypes[i]);
+-							got_error = True;
+-						}
+-					}
+-				}
+-
+-				if (got_error)
++				if (!wbinfo_auth_krb5(string_arg, "FILE", flags)) {
++					d_fprintf(stderr, "Could not authenticate user [%s] with "
++						"Kerberos (ccache: %s)\n", string_arg, "FILE");
+ 					goto done;
+-
++				}
+ 				break;
+ 			}
+ 		case 'k':
+
+Modified: branches/SAMBA_3_0_26/source/nsswitch/wbinfo.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/nsswitch/wbinfo.c	2007-06-21 14:30:40 UTC (rev 23567)
++++ branches/SAMBA_3_0_26/source/nsswitch/wbinfo.c	2007-06-21 14:32:09 UTC (rev 23568)
+@@ -1459,37 +1459,16 @@
+ 				break;
+ 			}
+ 		case 'K': {
+-				BOOL got_error = False;
+ 				uint32 flags =  WBFLAG_PAM_KRB5 |
+ 						WBFLAG_PAM_CACHED_LOGIN |
+ 						WBFLAG_PAM_FALLBACK_AFTER_KRB5 |
+ 						WBFLAG_PAM_INFO3_TEXT;
+-				fstring tok;
+-				int i;
+-				const char *arg[] = { NULL, NULL };
+-				const char *cctypes[] = { "FILE", 
+-							  "KCM", 
+-							  "KCM:0", 
+-							  "Garbage", 
+-							  NULL, 
+-							  "0"};
+ 
+-				arg[0] = string_arg;
+-
+-				while (next_token(arg, tok, LIST_SEP, sizeof(tok))) {
+-
+-					for (i=0; i < ARRAY_SIZE(cctypes); i++) {
+-						if (!wbinfo_auth_krb5(tok, cctypes[i], flags)) {
+-							d_fprintf(stderr, "Could not authenticate user [%s] with "
+-								"Kerberos (ccache: %s)\n", tok, cctypes[i]);
+-							got_error = True;
+-						}
+-					}
+-				}
+-
+-				if (got_error)
++				if (!wbinfo_auth_krb5(string_arg, "FILE", flags)) {
++					d_fprintf(stderr, "Could not authenticate user [%s] with "
++						"Kerberos (ccache: %s)\n", string_arg, "FILE");
+ 					goto done;
+-
++				}
+ 				break;
+ 			}
+ 		case 'k':
+

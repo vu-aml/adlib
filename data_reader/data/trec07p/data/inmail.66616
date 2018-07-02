@@ -1,0 +1,319 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Jun 26 15:16:07 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5QJG6L9016600
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 26 Jun 2007 15:16:07 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 1BAC51638D0
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 26 Jun 2007 19:15:59 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id 2A1BE162BBC; Tue, 26 Jun 2007 19:15:33 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070626191533.2A1BE162BBC@lists.samba.org>
+Date: Tue, 26 Jun 2007 19:15:33 +0000 (GMT)
+Subject: svn commit: samba r23612 - in branches: SAMBA_3_0/source/utils
+	SAMBA_3_0_25/source/utils SAMBA_3_0_26/source/utils
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-06-26 19:15:26 +0000 (Tue, 26 Jun 2007)
+New Revision: 23612
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23612
+
+Log:
+Revert 'net idmap dump' to the 3.0.24 behaviour.
+
+Modified:
+   branches/SAMBA_3_0/source/utils/net_idmap.c
+   branches/SAMBA_3_0_25/source/utils/net_idmap.c
+   branches/SAMBA_3_0_26/source/utils/net_idmap.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/utils/net_idmap.c
+===================================================================
+--- branches/SAMBA_3_0/source/utils/net_idmap.c	2007-06-26 18:18:44 UTC (rev 23611)
++++ branches/SAMBA_3_0/source/utils/net_idmap.c	2007-06-26 19:15:26 UTC (rev 23612)
+@@ -28,50 +28,51 @@
+ 	} } while(0)
+ 
+ /***********************************************************
+- Dump the current idmap
++ Helper function for net_idmap_dump. Dump one entry.
+  **********************************************************/
+-static int net_idmap_dump(int argc, const char **argv)
++static int net_idmap_dump_one_entry(TDB_CONTEXT *tdb,
++				    TDB_DATA key,
++				    TDB_DATA data,
++				    void *unused)
+ {
+-	TALLOC_CTX *ctx;
+-	char *filename;
+-
+-	if (argc != 1) {
+-		return net_help_idmap(argc, argv);
++	if (strcmp((char *)key.dptr, "USER HWM") == 0) {
++		printf("USER HWM %d\n", IVAL(data.dptr,0));
++		return 0;
+ 	}
+ 
+-	if (! winbind_ping()) {
+-		d_fprintf(stderr, "To use net idmap Winbindd must be running.\n");
+-		return -1;
++	if (strcmp((char *)key.dptr, "GROUP HWM") == 0) {
++		printf("GROUP HWM %d\n", IVAL(data.dptr,0));
++		return 0;
+ 	}
+ 
+-	ctx = talloc_new(NULL);
+-	ALLOC_CHECK(ctx);
++	if (strncmp((char *)key.dptr, "S-", 2) != 0)
++		return 0;
+ 
+-	filename = talloc_strdup(ctx, argv[0]);
+-	ALLOC_CHECK(filename);
++	printf("%s %s\n", data.dptr, key.dptr);
++	return 0;
++}
+ 
+-	/* filename must be absolute */
+-	if (*filename != '/') {
+-		char path[4096];
+-		
+-		filename = getcwd(path, 4095);
+-		if ( ! filename) {
+-			d_fprintf(stderr, "Failed to obtain full output file path");
+-			talloc_free(ctx);
+-			return -1;
+-		}
++/***********************************************************
++ Dump the current idmap
++ **********************************************************/
++static int net_idmap_dump(int argc, const char **argv)
++{
++	TDB_CONTEXT *idmap_tdb;
+ 
+-		filename = talloc_asprintf(ctx, "%s/%s", path, argv[0]);
+-		ALLOC_CHECK(filename);
+-	}
++	if ( argc != 1 )
++		return net_help_idmap( argc, argv );
+ 
+-	if ( ! winbind_idmap_dump_maps(ctx, filename)) {
+-		d_fprintf(stderr, "Failed to obtain idmap data from winbindd\n");
+-		talloc_free(ctx);
++	idmap_tdb = tdb_open_log(argv[0], 0, TDB_DEFAULT, O_RDONLY, 0);
++
++	if (idmap_tdb == NULL) {
++		d_fprintf(stderr, "Could not open idmap: %s\n", argv[0]);
+ 		return -1;
+ 	}
+ 
+-	talloc_free(ctx);
++	tdb_traverse(idmap_tdb, net_idmap_dump_one_entry, NULL);
++
++	tdb_close(idmap_tdb);
++
+ 	return 0;
+ }
+ 
+
+Modified: branches/SAMBA_3_0_25/source/utils/net_idmap.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/utils/net_idmap.c	2007-06-26 18:18:44 UTC (rev 23611)
++++ branches/SAMBA_3_0_25/source/utils/net_idmap.c	2007-06-26 19:15:26 UTC (rev 23612)
+@@ -28,50 +28,51 @@
+ 	} } while(0)
+ 
+ /***********************************************************
+- Dump the current idmap
++ Helper function for net_idmap_dump. Dump one entry.
+  **********************************************************/
+-static int net_idmap_dump(int argc, const char **argv)
++static int net_idmap_dump_one_entry(TDB_CONTEXT *tdb,
++				    TDB_DATA key,
++				    TDB_DATA data,
++				    void *unused)
+ {
+-	TALLOC_CTX *ctx;
+-	char *filename;
+-
+-	if (argc != 1) {
+-		return net_help_idmap(argc, argv);
++	if (strcmp(key.dptr, "USER HWM") == 0) {
++		printf("USER HWM %d\n", IVAL(data.dptr,0));
++		return 0;
+ 	}
+ 
+-	if (! winbind_ping()) {
+-		d_fprintf(stderr, "To use net idmap Winbindd must be running.\n");
+-		return -1;
++	if (strcmp(key.dptr, "GROUP HWM") == 0) {
++		printf("GROUP HWM %d\n", IVAL(data.dptr,0));
++		return 0;
+ 	}
+ 
+-	ctx = talloc_new(NULL);
+-	ALLOC_CHECK(ctx);
++	if (strncmp(key.dptr, "S-", 2) != 0)
++		return 0;
+ 
+-	filename = talloc_strdup(ctx, argv[0]);
+-	ALLOC_CHECK(filename);
++	printf("%s %s\n", data.dptr, key.dptr);
++	return 0;
++}
+ 
+-	/* filename must be absolute */
+-	if (*filename != '/') {
+-		char path[4096];
+-		
+-		filename = getcwd(path, 4095);
+-		if ( ! filename) {
+-			d_fprintf(stderr, "Failed to obtain full output file path");
+-			talloc_free(ctx);
+-			return -1;
+-		}
++/***********************************************************
++ Dump the current idmap
++ **********************************************************/
++static int net_idmap_dump(int argc, const char **argv)
++{
++	TDB_CONTEXT *idmap_tdb;
+ 
+-		filename = talloc_asprintf(ctx, "%s/%s", path, argv[0]);
+-		ALLOC_CHECK(filename);
+-	}
++	if ( argc != 1 )
++		return net_help_idmap( argc, argv );
+ 
+-	if ( ! winbind_idmap_dump_maps(ctx, filename)) {
+-		d_fprintf(stderr, "Failed to obtain idmap data from winbindd\n");
+-		talloc_free(ctx);
++	idmap_tdb = tdb_open_log(argv[0], 0, TDB_DEFAULT, O_RDONLY, 0);
++
++	if (idmap_tdb == NULL) {
++		d_fprintf(stderr, "Could not open idmap: %s\n", argv[0]);
+ 		return -1;
+ 	}
+ 
+-	talloc_free(ctx);
++	tdb_traverse(idmap_tdb, net_idmap_dump_one_entry, NULL);
++
++	tdb_close(idmap_tdb);
++
+ 	return 0;
+ }
+ 
+
+Modified: branches/SAMBA_3_0_26/source/utils/net_idmap.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/utils/net_idmap.c	2007-06-26 18:18:44 UTC (rev 23611)
++++ branches/SAMBA_3_0_26/source/utils/net_idmap.c	2007-06-26 19:15:26 UTC (rev 23612)
+@@ -28,50 +28,51 @@
+ 	} } while(0)
+ 
+ /***********************************************************
+- Dump the current idmap
++ Helper function for net_idmap_dump. Dump one entry.
+  **********************************************************/
+-static int net_idmap_dump(int argc, const char **argv)
++static int net_idmap_dump_one_entry(TDB_CONTEXT *tdb,
++				    TDB_DATA key,
++				    TDB_DATA data,
++				    void *unused)
+ {
+-	TALLOC_CTX *ctx;
+-	char *filename;
+-
+-	if (argc != 1) {
+-		return net_help_idmap(argc, argv);
++	if (strcmp((char *)key.dptr, "USER HWM") == 0) {
++		printf("USER HWM %d\n", IVAL(data.dptr,0));
++		return 0;
+ 	}
+ 
+-	if (! winbind_ping()) {
+-		d_fprintf(stderr, "To use net idmap Winbindd must be running.\n");
+-		return -1;
++	if (strcmp((char *)key.dptr, "GROUP HWM") == 0) {
++		printf("GROUP HWM %d\n", IVAL(data.dptr,0));
++		return 0;
+ 	}
+ 
+-	ctx = talloc_new(NULL);
+-	ALLOC_CHECK(ctx);
++	if (strncmp((char *)key.dptr, "S-", 2) != 0)
++		return 0;
+ 
+-	filename = talloc_strdup(ctx, argv[0]);
+-	ALLOC_CHECK(filename);
++	printf("%s %s\n", data.dptr, key.dptr);
++	return 0;
++}
+ 
+-	/* filename must be absolute */
+-	if (*filename != '/') {
+-		char path[4096];
+-		
+-		filename = getcwd(path, 4095);
+-		if ( ! filename) {
+-			d_fprintf(stderr, "Failed to obtain full output file path");
+-			talloc_free(ctx);
+-			return -1;
+-		}
++/***********************************************************
++ Dump the current idmap
++ **********************************************************/
++static int net_idmap_dump(int argc, const char **argv)
++{
++	TDB_CONTEXT *idmap_tdb;
+ 
+-		filename = talloc_asprintf(ctx, "%s/%s", path, argv[0]);
+-		ALLOC_CHECK(filename);
+-	}
++	if ( argc != 1 )
++		return net_help_idmap( argc, argv );
+ 
+-	if ( ! winbind_idmap_dump_maps(ctx, filename)) {
+-		d_fprintf(stderr, "Failed to obtain idmap data from winbindd\n");
+-		talloc_free(ctx);
++	idmap_tdb = tdb_open_log(argv[0], 0, TDB_DEFAULT, O_RDONLY, 0);
++
++	if (idmap_tdb == NULL) {
++		d_fprintf(stderr, "Could not open idmap: %s\n", argv[0]);
+ 		return -1;
+ 	}
+ 
+-	talloc_free(ctx);
++	tdb_traverse(idmap_tdb, net_idmap_dump_one_entry, NULL);
++
++	tdb_close(idmap_tdb);
++
+ 	return 0;
+ }
+ 
+

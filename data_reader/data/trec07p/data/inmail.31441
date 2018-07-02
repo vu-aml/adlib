@@ -1,0 +1,164 @@
+From perl6-all-return-81167-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue May  8 10:32:14 2007
+Return-Path: <perl6-all-return-81167-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l48EWDqD016195
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 8 May 2007 10:32:14 -0400
+Received: (qmail 15589 invoked by uid 514); 8 May 2007 14:32:11 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 15584 invoked from network); 8 May 2007 14:32:11 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+Message-ID: <20070508142014.47991.qmail@spout.spiders.net>
+References: <RT-Ticket-42905@perl.org>
+            <189adbd0705071821l427409d9v94895cc11b9a374@mail.gmail.com>
+            <rt-3.6.HEAD-12281-1178587398-1986.42905-72-0@perl.org>
+In-Reply-To: <rt-3.6.HEAD-12281-1178587398-1986.42905-72-0@perl.org>
+From: "Will Coleda" <will@coleda.com>
+To: perl6-internals@perl.org
+Subject: Re: [perl #42905] [PATCH] implement vtable overriding for PDD15,
+  bugfix
+Date: Tue, 08 May 2007 10:20:14 -0400
+Mime-Version: 1.0
+Content-Type: text/plain; charset="utf-8"; format=flowed
+Content-Transfer-Encoding: 7bit
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+
+Alek Storm (via RT) writes: 
+
+> # New Ticket Created by  "Alek Storm" 
+> # Please include the string:  [perl #42905]
+> # in the subject line of all future correspondence about this issue. 
+> # <URL: http://rt.perl.org/rt3/Ticket/Display.html?id=42905 > 
+> 
+> 
+> I've attached a patch to implement vtable overriding for PDD15.  The basic
+> idea is to wrap all Object vtable methods in code that searches up the
+> parent stack for the corresponding vtable method, call it if found, and if
+> it's not found, call the original implementation of the method, or throw an
+> exception.  Any variables used in the wrapper code are prefixed with '__' to
+> avoid name collisions. 
+> 
+> The PCCMETHOD 'add_vtable_method' is added to Class.  Using two separate
+> methods for adding normal methods and vtable methods is much cleaner and
+> more logical, since they are two completely separate functionalities.  In
+> fact, using this interface, the :vtable pragma is completely unnecessary, so
+> we could remove it if we wanted to.
+
+How would one implement a vtable method, (referring to self), and then add 
+it to the object? You'd have to add an ":init :load :anon" block after the 
+vtable was defined in order to invoke add_vtable_method, and you'd need a 
+reference to the invokable you're adding, which means you'd have to leave it 
+lying about in a namespace somewhere so you could extract it. 
+
+So, I think keeping a compile time directive like :vtable around is still a 
+good idea. 
+
+>  Because I was unsure exactly how the
+> interface is going to end up, 'add_method' also adds vtable methods also, if
+> :vtable is set on the method. If we decide to go with this interface, I'd
+> like to take it out, along with the :vtable pragma. 
+> 
+> Trying to override 'mark', 'destroy', or 'morph' throws an exception,
+> because overriding them might be dangerous.  An exception is also thrown for
+> 'init_pmc', see below.
+
+(morph) FYI, there are dynamic PMCs that already override morph, for good or 
+evil. 
+
+> The 'init' vtable method in Object is not wrapped by pmc2c, since its
+> override is called from Class.new().  Class.new() is changed from accepting
+> a named slurpy of attributes to an unnamed slurpy of initializer
+> parameters.  This slurpy is :flattened and passed to 'init'.  This is really
+> cool, because now 'init' acts like a normal method, and can accept a
+> variable-sized parameter list.  This makes 'init_pmc' obsolete, so trying to
+> override it throws an exception.  Named parameters don't work, but c'mon,
+> you can't have it all, right? 
+> 
+> In the implementation of Class.new(), the slurpy had to be manually
+> flattened, due to limitations in the argument passing implementation:
+> Parrot_run_meth_fromc* takes a va_list, and va_lists are passed around
+> internally in src/inter_call.c.  This is bad, because va_list is an opaque
+> type, and we need to generate one without a variable argument list.  I don't
+> know why it's like that, but it definitely can't stay that way - it's much
+> better to use an array of UnionVal's.  Maybe I'll fix it later. 
+> 
+> Currently, passing arguments to Class.new() when 'init' is not overridden
+> doesn't throw an exception.  Should it? 
+> 
+> This patch also fixes a bug with 'invoke' in both ParrotObject and Object:
+> 'self' had to be explicitly passed to the override.  This is fixed by adding
+> the signature flag PARROT_ARG_OBJECT, and unshifting that OR-ed with
+> PARROT_ARG_PMC onto the args signature.  This has a counterpart already used
+> in fetch_arg_sig() in src/inter_call.c. 
+> 
+> For compatibility with the old object system, this patch doesn't change the
+> semantics of the :vtable pragma according to the discussion in #42430.  Once
+> the old system is gone, we can change it. 
+> 
+> The old double-underscore method of vtable overriding can die along with the
+> old object system, but I would prefer to submit a patch to get rid of it
+> sooner, since I don't know how long the old object system will stick around.
+
+Matt Diephouse had done some work to remove usage of this idiom.
+
+> I've updated PDD15 to match the new interface and semantics.  Obviously the
+> documentation is only correct if all of the patch gets applied, so if it
+> doesn't, this must be changed. 
+> 
+> Tests are included for 'init', 'invoke', and vtable method lookup through
+> the parent stack.  Also, I fixed some tests in t/pmc/parrotobject.t that
+> overrode 'invoke' without using the :method pragma, and removed the test for
+> #41372, which is now obsolete. 
+> 
+> Also, a question: what exactly is the '_namespace' member of Parrot_Class
+> used for?  I don't see it used anywhere; it can be gotten and set, but is
+> otherwise useless, since methods are added using a separate mechanism. 
+> 
+> Well, that's about it.  I realize some people (especially Allison ;)) will
+> probably disagree with parts of this patch, but I'd like to get the parts we
+> do agree on committed.  Thanks. 
+> 
+> diffstat output:
+>  docs/pdds/pdd15_objects.pod   |   32 ++++++--
+>  include/parrot/enums.h        |    5 -
+>  include/parrot/objects.h      |    1
+>  lib/Parrot/Pmc2c.pm           |    6 -
+>  lib/Parrot/Pmc2c/Object.pm    |  158
+> ++++++++++++++++++++++++++++++++++++++++++
+>  lib/Parrot/Pmc2c/PCCMETHOD.pm |    2
+>  src/inter_call.c              |    7 +
+>  src/objects.c                 |    7 +
+>  src/ops/object.ops            |    4 -
+>  src/pmc/class.pmc             |  150
+> ++++++++++++++++++++++++++++++++++++---
+>  src/pmc/classobject.h         |    4 +
+>  src/pmc/delegate.pmc          |   16 +++-
+>  src/pmc/object.pmc            |   51 +++++++++++++
+>  t/pmc/class.t                 |  114 ++++++++++++++++++++++--------
+>  t/pmc/object-meths.t          |   24 ++++++
+>  t/pmc/parrotobject.t          |   23 ------
+>  16 files changed, 521 insertions(+), 83 deletions(-) 
+> 
+> -- 
+> Alek Storm
+

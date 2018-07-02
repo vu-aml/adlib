@@ -1,0 +1,556 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Jun 12 05:13:03 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5C9D3L9024811
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 12 Jun 2007 05:13:03 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 69FDE162BC1
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 12 Jun 2007 09:13:02 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1017)
+	id F30E8162AE0; Tue, 12 Jun 2007 09:12:29 +0000 (GMT)
+To: samba-cvs@samba.org
+From: obnox@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070612091229.F30E8162AE0@lists.samba.org>
+Date: Tue, 12 Jun 2007 09:12:29 +0000 (GMT)
+Subject: svn commit: samba r23427 - in branches/SAMBA_3_0_26/source:
+	registry rpc_server services
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: obnox
+Date: 2007-06-12 09:12:29 +0000 (Tue, 12 Jun 2007)
+New Revision: 23427
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23427
+
+Log:
+Merge r19947 from 3_0:
+
+Change regkey_open_internal to take the parent key and a talloc_ctx as
+arguments. This also replaces regkey_close_internal by TALLOC_FREE.
+
+(The modification to srv_winreg_nt.c differs from the original patch
+and is kept as minimal as possible due to preliminary commits not
+having been merged.)
+
+Michael
+
+
+Modified:
+   branches/SAMBA_3_0_26/source/registry/reg_frontend.c
+   branches/SAMBA_3_0_26/source/rpc_server/srv_eventlog_nt.c
+   branches/SAMBA_3_0_26/source/rpc_server/srv_winreg_nt.c
+   branches/SAMBA_3_0_26/source/services/services_db.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0_26/source/registry/reg_frontend.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/registry/reg_frontend.c	2007-06-12 08:02:32 UTC (rev 23426)
++++ branches/SAMBA_3_0_26/source/registry/reg_frontend.c	2007-06-12 09:12:29 UTC (rev 23427)
+@@ -345,44 +345,67 @@
+ /***********************************************************************
+ ***********************************************************************/
+ 
+-WERROR regkey_open_internal( REGISTRY_KEY **regkey, const char *path, 
++static int regkey_destructor(REGISTRY_KEY *key)
++{
++	return regdb_close();
++}
++
++WERROR regkey_open_internal( TALLOC_CTX *mem_ctx, REGISTRY_KEY *parent,
++			     REGISTRY_KEY **regkey, const char *name,
+                              NT_USER_TOKEN *token, uint32 access_desired )
+ {
+ 	WERROR     	result = WERR_OK;
+-	REGISTRY_KEY    *keyinfo;
++	REGISTRY_KEY    *key;
+ 	REGSUBKEY_CTR	*subkeys = NULL;
+-	uint32 access_granted;
+-	
+-	if ( !(W_ERROR_IS_OK(result = regdb_open()) ) )
+-		return result;
++	size_t path_len;
+ 
+-	DEBUG(7,("regkey_open_internal: name = [%s]\n", path));
++	DEBUG(7,("regkey_open_internal: name = [%s]\n", name));
+ 
+-	if ( !(*regkey = TALLOC_ZERO_P(NULL, REGISTRY_KEY)) ) {
+-		regdb_close();
++	if ( !(key = TALLOC_ZERO_P(mem_ctx, REGISTRY_KEY)) ) {
+ 		return WERR_NOMEM;
+ 	}
++
++	if ( !(W_ERROR_IS_OK(result = regdb_open()) ) )
++		return result;
++
++	talloc_set_destructor(key, regkey_destructor);
+ 		
+-	keyinfo = *regkey;
+-		
+ 	/* initialization */
+ 	
+-	keyinfo->type = REG_KEY_GENERIC;
+-	if (!(keyinfo->name = talloc_strdup(keyinfo, path))) {
++	key->type = REG_KEY_GENERIC;
++	if (!(key->name = talloc_strdup(key, name))) {
+ 		result = WERR_NOMEM;
+ 		goto done;
+ 	}
+ 
++	if (parent != NULL) {
++		char *tmp;
++		if (!(tmp = talloc_asprintf(key, "%s%s%s", 
++					    parent ? parent->name : "",
++					    parent ? "\\" : "", 
++					    key->name))) {
++			result = WERR_NOMEM;
++			goto done;
++		}
++		TALLOC_FREE(key->name);
++		key->name = tmp;
++	}
++
++	path_len = strlen( key->name );
++	if ( (path_len != 0) && (key->name[path_len-1] == '\\') ) {
++		key->name[path_len-1] = '\0';
++	}
++
+ 	/* Tag this as a Performance Counter Key */
+ 
+-	if( StrnCaseCmp(path, KEY_HKPD, strlen(KEY_HKPD)) == 0 )
+-		keyinfo->type = REG_KEY_HKPD;
++	if( StrnCaseCmp(key->name, KEY_HKPD, strlen(KEY_HKPD)) == 0 )
++		key->type = REG_KEY_HKPD;
+ 	
+ 	/* Look up the table of registry I/O operations */
+ 
+-	if ( !(keyinfo->hook = reghook_cache_find( keyinfo->name )) ) {
+-		DEBUG(0,("open_registry_key: Failed to assigned a REGISTRY_HOOK to [%s]\n",
+-			keyinfo->name ));
++	if ( !(key->hook = reghook_cache_find( key->name )) ) {
++		DEBUG(0,("open_registry_key: Failed to assigned a "
++			 "REGISTRY_HOOK to [%s]\n", key->name ));
+ 		result = WERR_BADFILE;
+ 		goto done;
+ 	}
+@@ -390,40 +413,31 @@
+ 	/* check if the path really exists; failed is indicated by -1 */
+ 	/* if the subkey count failed, bail out */
+ 
+-	if ( !(subkeys = TALLOC_ZERO_P( keyinfo, REGSUBKEY_CTR )) ) {
++	if ( !(subkeys = TALLOC_ZERO_P( key, REGSUBKEY_CTR )) ) {
+ 		result = WERR_NOMEM;
+ 		goto done;
+ 	}
+ 
+-	if ( fetch_reg_keys( keyinfo, subkeys ) == -1 )  {
++	if ( fetch_reg_keys( key, subkeys ) == -1 )  {
+ 		result = WERR_BADFILE;
+ 		goto done;
+ 	}
+ 	
+ 	TALLOC_FREE( subkeys );
+ 
+-	if ( !regkey_access_check( keyinfo, access_desired, &access_granted, token ) ) {
++	if ( !regkey_access_check( key, access_desired, &key->access_granted,
++				   token ) ) {
+ 		result = WERR_ACCESS_DENIED;
+ 		goto done;
+ 	}
++
++	*regkey = key;
++	result = WERR_OK;
+ 	
+-	keyinfo->access_granted = access_granted;
+-
+ done:
+ 	if ( !W_ERROR_IS_OK(result) ) {
+-		regkey_close_internal( *regkey );
++		TALLOC_FREE(key);
+ 	}
+ 
+ 	return result;
+ }
+-
+-/*******************************************************************
+-*******************************************************************/
+-
+-WERROR regkey_close_internal( REGISTRY_KEY *key )
+-{
+-	TALLOC_FREE( key );
+-	regdb_close();
+-
+-	return WERR_OK;
+-}
+
+Modified: branches/SAMBA_3_0_26/source/rpc_server/srv_eventlog_nt.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/rpc_server/srv_eventlog_nt.c	2007-06-12 08:02:32 UTC (rev 23426)
++++ branches/SAMBA_3_0_26/source/rpc_server/srv_eventlog_nt.c	2007-06-12 09:12:29 UTC (rev 23427)
+@@ -411,9 +411,8 @@
+ 
+ 	pstr_sprintf( path, "%s/%s", KEY_EVENTLOG, elogname );
+ 
+-	wresult =
+-		regkey_open_internal( &keyinfo, path, get_root_nt_token(  ),
+-				      REG_KEY_READ );
++	wresult = regkey_open_internal( NULL, NULL, &keyinfo, path,
++					get_root_nt_token(  ), REG_KEY_READ );
+ 
+ 	if ( !W_ERROR_IS_OK( wresult ) ) {
+ 		DEBUG( 4,
+@@ -436,7 +435,7 @@
+ 	if ( ( val = regval_ctr_getvalue( values, "MaxSize" ) ) != NULL )
+ 		uiMaxSize = IVAL( regval_data_p( val ), 0 );
+ 
+-	regkey_close_internal( keyinfo );
++	TALLOC_FREE( keyinfo );
+ 
+ 	tdb_store_int32( ELOG_TDB_CTX(info->etdb), EVT_MAXSIZE, uiMaxSize );
+ 	tdb_store_int32( ELOG_TDB_CTX(info->etdb), EVT_RETENTION, uiRetention );
+
+Modified: branches/SAMBA_3_0_26/source/rpc_server/srv_winreg_nt.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/rpc_server/srv_winreg_nt.c	2007-06-12 08:02:32 UTC (rev 23426)
++++ branches/SAMBA_3_0_26/source/rpc_server/srv_winreg_nt.c	2007-06-12 09:12:29 UTC (rev 23427)
+@@ -40,7 +40,7 @@
+  
+ static void free_regkey_info(void *ptr)
+ {
+-	regkey_close_internal( (REGISTRY_KEY*)ptr );
++	TALLOC_FREE(ptr);
+ };
+ 
+ /******************************************************************
+@@ -72,31 +72,19 @@
+                                  REGISTRY_KEY **keyinfo, REGISTRY_KEY *parent,
+ 				 const char *subkeyname, uint32 access_desired  )
+ {
+-	pstring         keypath;
+-	int		path_len;
+ 	WERROR     	result = WERR_OK;
+ 
+-	/* create a full registry path and strip any trailing '\' 
+-	   characters */
+-	   
+-	pstr_sprintf( keypath, "%s%s%s", 
+-		parent ? parent->name : "",
+-		parent ? "\\" : "", 
+-		subkeyname );
+-	
+-	path_len = strlen( keypath );
+-	if ( path_len && keypath[path_len-1] == '\\' )
+-		keypath[path_len-1] = '\0';
+-	
+-	/* now do the internal open */
+-		
+-	result = regkey_open_internal( keyinfo, keypath, p->pipe_user.nt_user_token, access_desired );
+-	if ( !W_ERROR_IS_OK(result) )
++	result = regkey_open_internal( NULL, parent, keyinfo, subkeyname, 
++				       p->pipe_user.nt_user_token, 
++				       access_desired );
++	if ( !W_ERROR_IS_OK(result) ) {
++		TALLOC_FREE( *keyinfo );
+ 		return result;
++	}
+ 	
+ 	if ( !create_policy_hnd( p, hnd, free_regkey_info, *keyinfo ) ) {
+ 		result = WERR_BADFILE; 
+-		regkey_close_internal( *keyinfo );
++		TALLOC_FREE( *keyinfo );
+ 	}
+ 	
+ 	return result;
+
+Modified: branches/SAMBA_3_0_26/source/services/services_db.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/services/services_db.c	2007-06-12 08:02:32 UTC (rev 23426)
++++ branches/SAMBA_3_0_26/source/services/services_db.c	2007-06-12 09:12:29 UTC (rev 23427)
+@@ -322,8 +322,8 @@
+ 	/* open the new service key */
+ 
+ 	pstr_sprintf( path, "%s\\%s", KEY_SERVICES, name );
+-	wresult = regkey_open_internal( &key_service, path, get_root_nt_token(), 
+-		REG_KEY_ALL );
++	wresult = regkey_open_internal( NULL, NULL, &key_service, path,
++					get_root_nt_token(), REG_KEY_ALL );
+ 	if ( !W_ERROR_IS_OK(wresult) ) {
+ 		DEBUG(0,("add_new_svc_name: key lookup failed! [%s] (%s)\n", 
+ 			path, dos_errstr(wresult)));
+@@ -334,7 +334,7 @@
+ 
+ 	if ( !(svc_subkeys = TALLOC_ZERO_P( key_service, REGSUBKEY_CTR )) ) {
+ 		DEBUG(0,("add_new_svc_name: talloc() failed!\n"));
+-		regkey_close_internal( key_service );
++		TALLOC_FREE( key_service );
+ 		return;
+ 	}
+ 	
+@@ -346,7 +346,7 @@
+ 	
+ 	if ( !(values = TALLOC_ZERO_P( key_service, REGVAL_CTR )) ) {
+ 		DEBUG(0,("add_new_svc_name: talloc() failed!\n"));
+-		regkey_close_internal( key_service );
++		TALLOC_FREE( key_service );
+ 		return;
+ 	}
+ 
+@@ -355,29 +355,29 @@
+ 
+ 	/* cleanup the service key*/
+ 
+-	regkey_close_internal( key_service );
++	TALLOC_FREE( key_service );
+ 
+ 	/* now add the security descriptor */
+ 
+ 	pstr_sprintf( path, "%s\\%s\\%s", KEY_SERVICES, name, "Security" );
+-	wresult = regkey_open_internal( &key_secdesc, path, get_root_nt_token(), 
+-		REG_KEY_ALL );
++	wresult = regkey_open_internal( NULL, NULL, &key_secdesc, path,
++					get_root_nt_token(), REG_KEY_ALL );
+ 	if ( !W_ERROR_IS_OK(wresult) ) {
+ 		DEBUG(0,("add_new_svc_name: key lookup failed! [%s] (%s)\n", 
+ 			path, dos_errstr(wresult)));
+-		regkey_close_internal( key_secdesc );
++		TALLOC_FREE( key_secdesc );
+ 		return;
+ 	}
+ 
+ 	if ( !(values = TALLOC_ZERO_P( key_secdesc, REGVAL_CTR )) ) {
+ 		DEBUG(0,("add_new_svc_name: talloc() failed!\n"));
+-		regkey_close_internal( key_secdesc );
++		TALLOC_FREE( key_secdesc );
+ 		return;
+ 	}
+ 
+ 	if ( !(sd = construct_service_sd(key_secdesc)) ) {
+ 		DEBUG(0,("add_new_svc_name: Failed to create default sec_desc!\n"));
+-		regkey_close_internal( key_secdesc );
++		TALLOC_FREE( key_secdesc );
+ 		return;
+ 	}
+ 	
+@@ -394,7 +394,7 @@
+ 	/* finally cleanup the Security key */
+ 	
+ 	prs_mem_free( &ps );
+-	regkey_close_internal( key_secdesc );
++	TALLOC_FREE( key_secdesc );
+ 
+ 	return;
+ }
+@@ -412,8 +412,8 @@
+ 	
+ 	/* bad mojo here if the lookup failed.  Should not happen */
+ 	
+-	wresult = regkey_open_internal( &key, KEY_SERVICES, get_root_nt_token(), 
+-		REG_KEY_ALL );
++	wresult = regkey_open_internal( NULL, NULL, &key, KEY_SERVICES,
++					get_root_nt_token(), REG_KEY_ALL );
+ 
+ 	if ( !W_ERROR_IS_OK(wresult) ) {
+ 		DEBUG(0,("init_services_keys: key lookup failed! (%s)\n", 
+@@ -425,7 +425,7 @@
+ 	
+ 	if ( !(subkeys = TALLOC_ZERO_P( key, REGSUBKEY_CTR )) ) {
+ 		DEBUG(0,("init_services_keys: talloc() failed!\n"));
+-		regkey_close_internal( key );
++		TALLOC_FREE( key );
+ 		return;
+ 	}
+ 	
+@@ -447,7 +447,7 @@
+ 		add_new_svc_name( key, subkeys, service_list[i] );
+ 	}
+ 
+-	regkey_close_internal( key );
++	TALLOC_FREE( key );
+ 
+ 	/* initialize the control hooks */
+ 
+@@ -476,7 +476,8 @@
+ 	/* now add the security descriptor */
+ 
+ 	pstr_sprintf( path, "%s\\%s\\%s", KEY_SERVICES, name, "Security" );
+-	wresult = regkey_open_internal( &key, path, token, REG_KEY_ALL );
++	wresult = regkey_open_internal( NULL, NULL, &key, path, token,
++					REG_KEY_ALL );
+ 	if ( !W_ERROR_IS_OK(wresult) ) {
+ 		DEBUG(0,("svcctl_get_secdesc: key lookup failed! [%s] (%s)\n", 
+ 			path, dos_errstr(wresult)));
+@@ -485,7 +486,7 @@
+ 
+ 	if ( !(values = TALLOC_ZERO_P( key, REGVAL_CTR )) ) {
+ 		DEBUG(0,("add_new_svc_name: talloc() failed!\n"));
+-		regkey_close_internal( key );
++		TALLOC_FREE( key );
+ 		return NULL;
+ 	}
+ 
+@@ -494,7 +495,7 @@
+ 	if ( !(val = regval_ctr_getvalue( values, "Security" )) ) {
+ 		DEBUG(6,("svcctl_get_secdesc: constructing default secdesc for service [%s]\n", 
+ 			name));
+-		regkey_close_internal( key );
++		TALLOC_FREE( key );
+ 		return construct_service_sd( ctx );
+ 	}
+ 	
+@@ -505,7 +506,7 @@
+ 	prs_give_memory( &ps, (char *)regval_data_p(val), regval_size(val), False );
+ 	
+ 	if ( !sec_io_desc("sec_desc", &sd, &ps, 0 ) ) {
+-		regkey_close_internal( key );
++		TALLOC_FREE( key );
+ 		return construct_service_sd( ctx );
+ 	}
+ 	
+@@ -514,7 +515,7 @@
+ 	/* finally cleanup the Security key */
+ 	
+ 	prs_mem_free( &ps );
+-	regkey_close_internal( key );
++	TALLOC_FREE( key );
+ 
+ 	return ret_sd;
+ }
+@@ -535,7 +536,8 @@
+ 	/* now add the security descriptor */
+ 
+ 	pstr_sprintf( path, "%s\\%s\\%s", KEY_SERVICES, name, "Security" );
+-	wresult = regkey_open_internal( &key, path, token, REG_KEY_ALL );
++	wresult = regkey_open_internal( NULL, NULL, &key, path, token,
++					REG_KEY_ALL );
+ 	if ( !W_ERROR_IS_OK(wresult) ) {
+ 		DEBUG(0,("svcctl_get_secdesc: key lookup failed! [%s] (%s)\n", 
+ 			path, dos_errstr(wresult)));
+@@ -544,7 +546,7 @@
+ 
+ 	if ( !(values = TALLOC_ZERO_P( key, REGVAL_CTR )) ) {
+ 		DEBUG(0,("add_new_svc_name: talloc() failed!\n"));
+-		regkey_close_internal( key );
++		TALLOC_FREE( key );
+ 		return False;
+ 	}
+ 	
+@@ -561,7 +563,7 @@
+ 	/* cleanup */
+ 	
+ 	prs_mem_free( &ps );
+-	regkey_close_internal( key);
++	TALLOC_FREE( key);
+ 
+ 	return ret;
+ }
+@@ -581,7 +583,8 @@
+ 	/* now add the security descriptor */
+ 
+ 	pstr_sprintf( path, "%s\\%s", KEY_SERVICES, name );
+-	wresult = regkey_open_internal( &key, path, token, REG_KEY_READ );
++	wresult = regkey_open_internal( NULL, NULL, &key, path, token,
++					REG_KEY_READ );
+ 	if ( !W_ERROR_IS_OK(wresult) ) {
+ 		DEBUG(0,("svcctl_lookup_dispname: key lookup failed! [%s] (%s)\n", 
+ 			path, dos_errstr(wresult)));
+@@ -590,7 +593,7 @@
+ 
+ 	if ( !(values = TALLOC_ZERO_P( key, REGVAL_CTR )) ) {
+ 		DEBUG(0,("svcctl_lookup_dispname: talloc() failed!\n"));
+-		regkey_close_internal( key );
++		TALLOC_FREE( key );
+ 		goto fail;
+ 	}
+ 
+@@ -601,13 +604,13 @@
+ 
+ 	rpcstr_pull( display_name, regval_data_p(val), sizeof(display_name), regval_size(val), 0 );
+ 
+-	regkey_close_internal( key );
++	TALLOC_FREE( key );
+ 	
+ 	return display_name;
+ 
+ fail:
+ 	/* default to returning the service name */
+-	regkey_close_internal( key );
++	TALLOC_FREE( key );
+ 	fstrcpy( display_name, name );
+ 	return display_name;
+ }
+@@ -627,7 +630,8 @@
+ 	/* now add the security descriptor */
+ 
+ 	pstr_sprintf( path, "%s\\%s", KEY_SERVICES, name );
+-	wresult = regkey_open_internal( &key, path, token, REG_KEY_READ );
++	wresult = regkey_open_internal( NULL, NULL, &key, path, token,
++					REG_KEY_READ );
+ 	if ( !W_ERROR_IS_OK(wresult) ) {
+ 		DEBUG(0,("svcctl_lookup_dispname: key lookup failed! [%s] (%s)\n", 
+ 			path, dos_errstr(wresult)));
+@@ -636,7 +640,7 @@
+ 
+ 	if ( !(values = TALLOC_ZERO_P( key, REGVAL_CTR )) ) {
+ 		DEBUG(0,("svcctl_lookup_dispname: talloc() failed!\n"));
+-		regkey_close_internal( key );
++		TALLOC_FREE( key );
+ 		return NULL;
+ 	}
+ 
+@@ -647,7 +651,7 @@
+ 	else
+ 		rpcstr_pull( description, regval_data_p(val), sizeof(description), regval_size(val), 0 );
+ 
+-	regkey_close_internal( key );
++	TALLOC_FREE( key );
+ 	
+ 	return description;
+ }
+@@ -666,7 +670,8 @@
+ 	/* now add the security descriptor */
+ 
+ 	pstr_sprintf( path, "%s\\%s", KEY_SERVICES, name );
+-	wresult = regkey_open_internal( &key, path, token, REG_KEY_READ );
++	wresult = regkey_open_internal( NULL, NULL, &key, path, token,
++					REG_KEY_READ );
+ 	if ( !W_ERROR_IS_OK(wresult) ) {
+ 		DEBUG(0,("svcctl_fetch_regvalues: key lookup failed! [%s] (%s)\n", 
+ 			path, dos_errstr(wresult)));
+@@ -675,13 +680,13 @@
+ 
+ 	if ( !(values = TALLOC_ZERO_P( NULL, REGVAL_CTR )) ) {
+ 		DEBUG(0,("svcctl_fetch_regvalues: talloc() failed!\n"));
+-		regkey_close_internal( key );
++		TALLOC_FREE( key );
+ 		return NULL;
+ 	}
+ 	
+ 	fetch_reg_values( key, values );
+ 
+-	regkey_close_internal( key );
++	TALLOC_FREE( key );
+ 	
+ 	return values;
+ }
+

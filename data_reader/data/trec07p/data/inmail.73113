@@ -1,0 +1,253 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Jul  3 15:55:48 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l63JtlL9000649
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 3 Jul 2007 15:55:47 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 6F007162C24
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue,  3 Jul 2007 19:55:43 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.4 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL,UPPERCASE_25_50 autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 540)
+	id D0A88162AC0; Tue,  3 Jul 2007 19:55:04 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jerry@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070703195504.D0A88162AC0@lists.samba.org>
+Date: Tue,  3 Jul 2007 19:55:04 +0000 (GMT)
+Subject: svn commit: samba r23689 - in branches/SAMBA_3_0/source: . exports
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: jerry
+Date: 2007-07-03 19:55:02 +0000 (Tue, 03 Jul 2007)
+New Revision: 23689
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23689
+
+Log:
+Squashed commit of the following:
+
+commit 0d4bbd197198a94bf4e29e0ccd175a40a60097f3
+Author: Gerald (Jerry) Carter <jerry@samba.org>
+Date:   Mon Jul 2 20:08:19 2007 -0500
+
+    Introduce GNU ld linker export-script for hiding non-public symbols
+    in shared libraries.
+
+    Based on initial patch from Julien Cristau <jcristau@debian.org>
+    and suggestions from James Peach <jpeach@samba.org>.  Currently
+    the libsmbsharemodes libraries still exports *.  Signed off on
+    my Derrell as well.
+
+Added:
+   branches/SAMBA_3_0/source/exports/
+   branches/SAMBA_3_0/source/exports/libsmbclient.syms
+   branches/SAMBA_3_0/source/exports/libsmbsharemodes.syms
+   branches/SAMBA_3_0/source/library-versions.in
+Modified:
+   branches/SAMBA_3_0/source/Makefile.in
+   branches/SAMBA_3_0/source/configure.in
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/Makefile.in
+===================================================================
+--- branches/SAMBA_3_0/source/Makefile.in	2007-07-03 18:00:54 UTC (rev 23688)
++++ branches/SAMBA_3_0/source/Makefile.in	2007-07-03 19:55:02 UTC (rev 23689)
+@@ -21,6 +21,12 @@
+ CC=@CC@
+ SHLD=@SHLD@
+ 
++## Dynamic shared libraries build settings
++DSO_EXPORTS_CMD=-Wl,--version-script,exports/`basename $@ | sed 's/@SHLIBEXT@$$/syms/'`
++DSO_EXPORTS=@DSO_EXPORTS@
++SONAME_VER=`grep ^$@ $(srcdir)/library-versions | cut -d: -f2`
++SHLD_DSO = $(SHLD) $(LDSHFLAGS) $(DSO_EXPORTS) 
++
+ # Add $(DEVELOPER_CFLAGS) to $(CFLAGS) to enable extra compiler
+ # (GCC) warnings. This is done automtically for --enable-developer
+ # and --enable-krb5developer.
+@@ -125,20 +131,9 @@
+ PIDDIR = @piddir@
+ 
+ LIBSMBCLIENT=bin/libsmbclient.a @LIBSMBCLIENT_SHARED@
+-LIBSMBCLIENT_MAJOR=0
+-LIBSMBCLIENT_MINOR=1
+-
+ LIBMSRPC=bin/libmsrpc.a @LIBMSRPC_SHARED@
+-LIBMSRPC_MAJOR=0
+-LIBMSRPC_MINOR=1
+-
+ LIBSMBSHAREMODES=bin/libsmbsharemodes.a @LIBSMBSHAREMODES_SHARED@
+-LIBSMBSHAREMODES_MAJOR=0
+-LIBSMBSHAREMODES_MINOR=2
+-
+ LIBADDNS=bin/libaddns.a @LIBADDNS_SHARED@
+-LIBADDNS_MAJOR=0
+-LIBADDNS_MINOR=1
+ 
+ FLAGS1 = $(CFLAGS) @FLAGS1@ @SAMBA_CPPFLAGS@ $(CPPFLAGS)
+ FLAGS2 =
+@@ -1357,9 +1352,9 @@
+ 
+ bin/libaddns.@SHLIBEXT@: $(BINARY_PREREQS) $(LIBADDNS_OBJ)
+ 	@echo Linking libaddns shared library $@
+-	@$(SHLD) $(LDSHFLAGS) -o $@ $(LIBADDNS_OBJ) $(LDFLAGS) $(LIBS) \
++	@$(SHLD_DSO) -o $@ $(LIBADDNS_OBJ) $(LDFLAGS) $(LIBS) \
+ 		$(KRB5LIBS) $(UUID_LIBS)\
+-		@SONAMEFLAG@`basename $@`.$(LIBADDNS_MAJOR)
++		@SONAMEFLAG@`basename $@`.$(SONAME_VER)
+ 
+ bin/libaddns.a: $(BINARY_PREREQS) $(LIBADDNS_OBJ)
+ 	@echo Linking libaddns non-shared library $@
+@@ -1367,9 +1362,9 @@
+ 
+ bin/libsmbclient.@SHLIBEXT@: $(BINARY_PREREQS) $(LIBSMBCLIENT_OBJ)
+ 	@echo Linking libsmbclient shared library $@
+-	@$(SHLD) $(LDSHFLAGS) -o $@ $(LIBSMBCLIENT_OBJ) $(LDFLAGS) $(LIBS) \
++	@$(SHLD_DSO) -o $@ $(LIBSMBCLIENT_OBJ) $(LDFLAGS) $(LIBS) \
+ 		$(KRB5LIBS) $(LDAP_LIBS) $(NSCD_LIBS) \
+-		@SONAMEFLAG@`basename $@`.$(LIBSMBCLIENT_MAJOR)
++		@SONAMEFLAG@`basename $@`.$(SONAME_VER)
+ 
+ bin/libsmbclient.a: $(BINARY_PREREQS) $(LIBSMBCLIENT_OBJ)
+ 	@echo Linking libsmbclient non-shared library $@
+@@ -1377,9 +1372,9 @@
+ 
+ bin/libsmbsharemodes.@SHLIBEXT@: $(BINARY_PREREQS) $(LIBSMBSHAREMODES_OBJ)
+ 	@echo Linking libsmbsharemodes shared library $@
+-	@$(SHLD) $(LDSHFLAGS) -o $@ $(LIBSMBSHAREMODES_OBJ) $(LDFLAGS) $(LIBS) \
++	@$(SHLD_DSO) -o $@ $(LIBSMBSHAREMODES_OBJ) $(LDFLAGS) $(LIBS) \
+ 		$(KRB5LIBS) $(LDAP_LIBS) \
+-		@SONAMEFLAG@`basename $@`.$(LIBSMBSHAREMODES_MAJOR)
++		@SONAMEFLAG@`basename $@`.$(SONAME_VER)
+ 
+ bin/libsmbsharemodes.a: $(BINARY_PREREQS) $(LIBSMBSHAREMODES_OBJ)
+ 	@echo Linking libsmbsharemodes non-shared library $@
+@@ -1387,8 +1382,8 @@
+ 
+ bin/libmsrpc.@SHLIBEXT@: $(BINARY_PREREQS) $(CAC_OBJ)
+ 	@echo Linking libmsrpc shared library $@
+-	@$(SHLD) $(LDSHFLAGS) -o $@ $(CAC_OBJ) $(LDFLAGS) $(LIBS) \
+-	@SONAMEFLAG@`basename $@`.$(LIBMSRPC_MAJOR)
++	@$(SHLD_DSO) -o $@ $(CAC_OBJ) $(LDFLAGS) $(LIBS) \
++		@SONAMEFLAG@`basename $@`.$(SONAME_VER)
+ 
+ bin/libmsrpc.a: $(BINARY_PREREQS) $(CAC_OBJ)
+ 	@echo Linking libmsrpc non-shared library $@
+
+Modified: branches/SAMBA_3_0/source/configure.in
+===================================================================
+--- branches/SAMBA_3_0/source/configure.in	2007-07-03 18:00:54 UTC (rev 23688)
++++ branches/SAMBA_3_0/source/configure.in	2007-07-03 19:55:02 UTC (rev 23689)
+@@ -283,6 +283,7 @@
+ AC_SUBST(MODULE_EXPORTS)
+ AC_SUBST(SONAMEFLAG)
+ AC_SUBST(SHLD)
++AC_SUBST(DSO_EXPORTS)
+ AC_SUBST(HOST_OS)
+ AC_SUBST(PICFLAG)
+ AC_SUBST(PIE_CFLAGS)
+@@ -545,6 +546,9 @@
+  	if test "$ac_cv_gnu_ld_date" -lt 20030217; then
+  		ac_cv_gnu_ld_no_default_allow_shlib_undefined=yes
+  	fi
++	if test "$ac_cv_gnu_ld_date" -gt 20030101; then
++		ac_cv_gnu_ld_version_script=yes
++	fi
+         else
+            AC_MSG_CHECKING(GNU ld release version)
+            changequote(,)dnl
+@@ -560,6 +564,9 @@
+            if test "$ac_cv_gnu_ld_vernr_major" -lt 2 || test "$ac_cv_gnu_ld_vernr_minor" -lt 14; then
+              ac_cv_gnu_ld_no_default_allow_shlib_undefined=yes
+            fi
++           if test "$ac_cv_gnu_ld_vernr_major" -gt 2 || test "$ac_cv_gnu_l= d_vernr_major"=2 && test "$ac_cv_gnu_ld_vernr_minor" -ge 12; then
++             ac_cv_gnu_ld_version_script=yes
++           fi
+         fi
+ fi
+ 
+@@ -1839,8 +1846,8 @@
+ SHLD="\${CC} \${CFLAGS}"
+ PICFLAG="${PIE_CFLAGS}"
+ SHLIBEXT="so"
++DSO_EXPORTS=""
+ 
+-
+ # this bit needs to be modified for each OS that supports share libs
+ # You need to specify how to create a shared library and
+ # how to compile C code to produce PIC object files
+@@ -2037,6 +2044,10 @@
+ 	BLDSHARED=false
+ fi
+ 
++if test "$enable_shared" = yes -a "${ac_cv_gnu_ld_version_script}" = yes; then
++	DSO_EXPORTS=\$\(DSO_EXPORTS_CMD\)
++fi
++
+ AC_MSG_RESULT($BLDSHARED)
+ 
+ AC_MSG_CHECKING([LDFLAGS])
+@@ -6469,7 +6480,7 @@
+ SMBD_LIBS="$samba_dmapi_libs"
+ AC_SUBST(SMBD_LIBS)
+ 
+-AC_OUTPUT(Makefile script/findsmb smbadduser script/gen-8bit-gap.sh script/installbin.sh script/uninstallbin.sh)
++AC_OUTPUT(Makefile library-versions script/findsmb smbadduser script/gen-8bit-gap.sh script/installbin.sh script/uninstallbin.sh)
+ 
+ #################################################
+ # Print very concise instructions on building/use
+
+Added: branches/SAMBA_3_0/source/exports/libsmbclient.syms
+===================================================================
+--- branches/SAMBA_3_0/source/exports/libsmbclient.syms	2007-07-03 18:00:54 UTC (rev 23688)
++++ branches/SAMBA_3_0/source/exports/libsmbclient.syms	2007-07-03 19:55:02 UTC (rev 23689)
+@@ -0,0 +1,4 @@
++{
++	global: smbc_*;
++	local: *;
++};
+
+Added: branches/SAMBA_3_0/source/exports/libsmbsharemodes.syms
+===================================================================
+--- branches/SAMBA_3_0/source/exports/libsmbsharemodes.syms	2007-07-03 18:00:54 UTC (rev 23688)
++++ branches/SAMBA_3_0/source/exports/libsmbsharemodes.syms	2007-07-03 19:55:02 UTC (rev 23689)
+@@ -0,0 +1,3 @@
++{
++	global: *;
++};
+
+Added: branches/SAMBA_3_0/source/library-versions.in
+===================================================================
+--- branches/SAMBA_3_0/source/library-versions.in	2007-07-03 18:00:54 UTC (rev 23688)
++++ branches/SAMBA_3_0/source/library-versions.in	2007-07-03 19:55:02 UTC (rev 23689)
+@@ -0,0 +1,9 @@
++##
++## Basic script for defining the major and minor librrary revision numbers
++## Makefile_target:major:minor
++##
++bin/libsmbclient.@SHLIBEXT@:0:1
++bin/libsmbsharemodes.@SHLIBEXT@:0:2
++bin/libaddns.@SHLIBEXT@:0:1
++bin/libmsrpc.@SHLIBEXT@:0:1
++
+

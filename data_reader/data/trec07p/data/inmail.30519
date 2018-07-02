@@ -1,0 +1,176 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon May  7 08:15:33 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l47CFXqD031077
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 7 May 2007 08:15:33 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id E1A461638D8
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon,  7 May 2007 12:15:31 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.4 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id 69AA9162AE0; Mon,  7 May 2007 12:15:12 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070507121512.69AA9162AE0@lists.samba.org>
+Date: Mon,  7 May 2007 12:15:12 +0000 (GMT)
+Subject: svn commit: samba r22740 - in branches/SAMBA_3_0/source/auth: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-05-07 12:15:11 +0000 (Mon, 07 May 2007)
+New Revision: 22740
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22740
+
+Log:
+Move debug_*_user_token to token_utils.c
+
+Modified:
+   branches/SAMBA_3_0/source/auth/auth_util.c
+   branches/SAMBA_3_0/source/auth/token_util.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/auth/auth_util.c
+===================================================================
+--- branches/SAMBA_3_0/source/auth/auth_util.c	2007-05-07 11:25:00 UTC (rev 22739)
++++ branches/SAMBA_3_0/source/auth/auth_util.c	2007-05-07 12:15:11 UTC (rev 22740)
+@@ -430,51 +430,6 @@
+ 	return NT_STATUS_IS_OK(nt_status) ? True : False;
+ }
+ 
+-/****************************************************************************
+- prints a NT_USER_TOKEN to debug output.
+-****************************************************************************/
+-
+-void debug_nt_user_token(int dbg_class, int dbg_lev, NT_USER_TOKEN *token)
+-{
+-	size_t     i;
+-	
+-	if (!token) {
+-		DEBUGC(dbg_class, dbg_lev, ("NT user token: (NULL)\n"));
+-		return;
+-	}
+-	
+-	DEBUGC(dbg_class, dbg_lev,
+-	       ("NT user token of user %s\n",
+-		sid_string_static(&token->user_sids[0]) ));
+-	DEBUGADDC(dbg_class, dbg_lev,
+-		  ("contains %lu SIDs\n", (unsigned long)token->num_sids));
+-	for (i = 0; i < token->num_sids; i++)
+-		DEBUGADDC(dbg_class, dbg_lev,
+-			  ("SID[%3lu]: %s\n", (unsigned long)i, 
+-			   sid_string_static(&token->user_sids[i])));
+-
+-	dump_se_priv( dbg_class, dbg_lev, &token->privileges );
+-}
+-
+-/****************************************************************************
+- prints a UNIX 'token' to debug output.
+-****************************************************************************/
+-
+-void debug_unix_user_token(int dbg_class, int dbg_lev, uid_t uid, gid_t gid,
+-			   int n_groups, gid_t *groups)
+-{
+-	int     i;
+-	DEBUGC(dbg_class, dbg_lev,
+-	       ("UNIX token of user %ld\n", (long int)uid));
+-
+-	DEBUGADDC(dbg_class, dbg_lev,
+-		  ("Primary group is %ld and contains %i supplementary "
+-		   "groups\n", (long int)gid, n_groups));
+-	for (i = 0; i < n_groups; i++)
+-		DEBUGADDC(dbg_class, dbg_lev, ("Group[%3i]: %ld\n", i, 
+-			(long int)groups[i]));
+-}
+-
+ static int server_info_dtor(auth_serversupplied_info *server_info)
+ {
+ 	TALLOC_FREE(server_info->sam_account);
+
+Modified: branches/SAMBA_3_0/source/auth/token_util.c
+===================================================================
+--- branches/SAMBA_3_0/source/auth/token_util.c	2007-05-07 11:25:00 UTC (rev 22739)
++++ branches/SAMBA_3_0/source/auth/token_util.c	2007-05-07 12:15:11 UTC (rev 22740)
+@@ -147,8 +147,8 @@
+  * Add alias SIDs from memberships within the partially created token SID list
+  */
+ 
+-static NTSTATUS add_aliases(const DOM_SID *domain_sid,
+-			    struct nt_user_token *token)
++NTSTATUS add_aliases(const DOM_SID *domain_sid,
++		     struct nt_user_token *token)
+ {
+ 	uint32 *aliases;
+ 	size_t i, num_aliases;
+@@ -455,4 +455,49 @@
+ 	return result;
+ }
+ 
++/****************************************************************************
++ prints a NT_USER_TOKEN to debug output.
++****************************************************************************/
++
++void debug_nt_user_token(int dbg_class, int dbg_lev, NT_USER_TOKEN *token)
++{
++	size_t     i;
++	
++	if (!token) {
++		DEBUGC(dbg_class, dbg_lev, ("NT user token: (NULL)\n"));
++		return;
++	}
++	
++	DEBUGC(dbg_class, dbg_lev,
++	       ("NT user token of user %s\n",
++		sid_string_static(&token->user_sids[0]) ));
++	DEBUGADDC(dbg_class, dbg_lev,
++		  ("contains %lu SIDs\n", (unsigned long)token->num_sids));
++	for (i = 0; i < token->num_sids; i++)
++		DEBUGADDC(dbg_class, dbg_lev,
++			  ("SID[%3lu]: %s\n", (unsigned long)i, 
++			   sid_string_static(&token->user_sids[i])));
++
++	dump_se_priv( dbg_class, dbg_lev, &token->privileges );
++}
++
++/****************************************************************************
++ prints a UNIX 'token' to debug output.
++****************************************************************************/
++
++void debug_unix_user_token(int dbg_class, int dbg_lev, uid_t uid, gid_t gid,
++			   int n_groups, gid_t *groups)
++{
++	int     i;
++	DEBUGC(dbg_class, dbg_lev,
++	       ("UNIX token of user %ld\n", (long int)uid));
++
++	DEBUGADDC(dbg_class, dbg_lev,
++		  ("Primary group is %ld and contains %i supplementary "
++		   "groups\n", (long int)gid, n_groups));
++	for (i = 0; i < n_groups; i++)
++		DEBUGADDC(dbg_class, dbg_lev, ("Group[%3i]: %ld\n", i, 
++			(long int)groups[i]));
++}
++
+ /* END */
+

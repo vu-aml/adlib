@@ -1,0 +1,119 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Jun 27 08:32:11 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5RCWBL9026482
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 27 Jun 2007 08:32:11 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 05767163AE1
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 27 Jun 2007 12:32:07 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1004)
+	id 015E4163A6F; Wed, 27 Jun 2007 12:30:22 +0000 (GMT)
+To: samba-cvs@samba.org
+From: gd@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070627123023.015E4163A6F@lists.samba.org>
+Date: Wed, 27 Jun 2007 12:30:22 +0000 (GMT)
+Subject: svn commit: samba r23629 - in branches/SAMBA_4_0/source/librpc/idl:
+	.
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: gd
+Date: 2007-06-27 12:30:21 +0000 (Wed, 27 Jun 2007)
+New Revision: 23629
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23629
+
+Log:
+Document lsa lookupname lookuplevels Volker discovered a while ago.
+
+Guenther
+
+Modified:
+   branches/SAMBA_4_0/source/librpc/idl/lsa.idl
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/librpc/idl/lsa.idl
+===================================================================
+--- branches/SAMBA_4_0/source/librpc/idl/lsa.idl	2007-06-27 12:27:00 UTC (rev 23628)
++++ branches/SAMBA_4_0/source/librpc/idl/lsa.idl	2007-06-27 12:30:21 UTC (rev 23629)
+@@ -339,13 +339,30 @@
+ 		uint32 max_size;
+ 	} lsa_RefDomainList;
+ 
++	/* Level 1: Ask everywhere
++	 * Level 2: Ask domain and trusted domains, no builtin and wkn
++	 * Level 3: Only ask domain
++	 * Level 4: W2k3ad: Only ask AD trusts
++	 * Level 5: Don't lookup anything
++	 * Level 6: Like 4
++	 */
++
++	typedef enum {
++		LSA_LOOKUP_NAMES_ALL = 1,
++		LSA_LOOKUP_NAMES_DOMAINS_ONLY = 2,
++		LSA_LOOKUP_NAMES_PRIMARY_DOMAIN_ONLY = 3,
++		LSA_LOOKUP_NAMES_UPLEVEL_TRUSTS_ONLY = 4,
++		LSA_LOOKUP_NAMES_NONE = 5,
++		LSA_LOOKUP_NAMES_UPLEVEL_TRUSTS_ONLY2 = 6
++	} lsa_LookupNamesLevel;
++
+ 	[public] NTSTATUS lsa_LookupNames (
+ 		[in]         policy_handle *handle,
+ 		[in,range(0,1000)] uint32 num_names,
+ 		[in,size_is(num_names)]  lsa_String names[],
+ 		[out,unique] lsa_RefDomainList *domains,
+ 		[in,out]     lsa_TransSidArray *sids,
+-		[in]         uint16 level,
++		[in]         lsa_LookupNamesLevel level,
+ 		[in,out]     uint32 *count
+ 		);
+ 
+@@ -856,7 +873,7 @@
+ 		[in,size_is(num_names)]  lsa_String names[],
+ 		[out,unique]        lsa_RefDomainList *domains,
+ 		[in,out] lsa_TransSidArray2 *sids,
+-		[in]         uint16 level,
++		[in]         lsa_LookupNamesLevel level,
+ 		[in,out] uint32 *count,
+ 		[in]         uint32 unknown1,
+ 		[in]         uint32 unknown2
+@@ -909,7 +926,7 @@
+ 		[in,size_is(num_names)]  lsa_String names[],
+ 		[out,unique]        lsa_RefDomainList *domains,
+ 		[in,out] lsa_TransSidArray3 *sids,
+-		[in]         uint16 level,
++		[in]         lsa_LookupNamesLevel level,
+ 		[in,out] uint32 *count,
+ 		[in]         uint32 unknown1,
+ 		[in]         uint32 unknown2
+@@ -997,7 +1014,7 @@
+ 		[in,size_is(num_names)]  lsa_String names[],
+ 		[out,unique]        lsa_RefDomainList *domains,
+ 		[in,out] lsa_TransSidArray3 *sids,
+-		[in]         uint16 level,
++		[in]         lsa_LookupNamesLevel level,
+ 		[in,out] uint32 *count,
+ 		[in]         uint32 unknown1,
+ 		[in]         uint32 unknown2
+

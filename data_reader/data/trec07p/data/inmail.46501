@@ -1,0 +1,122 @@
+From perl6-all-return-81657-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue May 29 20:15:56 2007
+Return-Path: <perl6-all-return-81657-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4U0FthB005580
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 29 May 2007 20:15:56 -0400
+Received: (qmail 5045 invoked by uid 514); 30 May 2007 00:15:50 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 5040 invoked from network); 30 May 2007 00:15:50 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+In-Reply-To: <rt-3.6.HEAD-1668-1180472685-236.43070-72-0@perl.org>
+References: <RT-Ticket-43070@perl.org> <20070529210132.59357.qmail@spout.spiders.net> <rt-3.6.HEAD-1668-1180472685-236.43070-72-0@perl.org>
+Mime-Version: 1.0 (Apple Message framework v752.3)
+Content-Type: text/plain; charset=US-ASCII; delsp=yes; format=flowed
+Message-Id: <594F5B10-F807-47C6-982A-DB4FBEE7C1CC@coleda.com>
+Cc: bugs-bitbucket@netlabs.develooper.com
+Content-Transfer-Encoding: 7bit
+From: Will Coleda <will@coleda.com>
+Subject: Re: [perl #43070] [BUG] Can't build shared on darwin 
+Date: Tue, 29 May 2007 19:26:56 -0400
+To: perl6-internals@perl.org
+X-Mailer: Apple Mail (2.752.3)
+X-Virus-Scanned: Symantec AntiVirus Scan Engine
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-1.9 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_NEUTRAL
+
+This is due to config/init/hints/darwin.pm, which hardcodes "/usr/ 
+local/..." to the path.
+
+A fix which works only in a non-install variety of parrot would be:
+
+=== config/init/hints/darwin.pm
+==================================================================
+--- config/init/hints/darwin.pm (revision 5655)
++++ config/init/hints/darwin.pm (local)
+@@ -21,7 +21,9 @@
+          }
+      }
+-    $ldflags .= " -L" . $conf->data->get('build_dir') . "/blib/lib";
++    my $lib_dir = $conf->data->get('build_dir') . "/blib/lib";
++
++    $ldflags .= " -L$lib_dir";
+      $ccflags .= " -pipe -fno-common -Wno-long-double ";
+      $ccflags =~ s/-flat_namespace\s*//;
+      $ldflags =~ s/-flat_namespace\s*//;
+@@ -52,10 +54,10 @@
+          # XXX ugly hack for rpath_lib in config/inter/libparrot.pm
+          rpath            => "-L",
+          libparrot_soname => "-install_name "
+-            . $conf->data->get('lib_dir')
++            . $lib_dir
+              . $conf->data->get('slash')
+              . "libparrot"
+              . $conf->data->get('share_ext')
+
+
+Given that install is generally considered borked, I'd tend to apply  
+this.
+
+
+On May 29, 2007, at 5:04 PM, Will Coleda (via RT) wrote:
+
+> # New Ticket Created by  Will Coleda
+> # Please include the string:  [perl #43070]
+> # in the subject line of all future correspondence about this issue.
+> # <URL: http://rt.perl.org/rt3/Ticket/Display.html?id=43070 >
+>
+>
+> Using a config of:
+>
+> CC="ccache gcc-4.0"
+> CX="ccache g++-4.0"
+> perl Configure.pl --cc="$CC" --cxx="$CX" --link="$CX" --ld="$CX"
+>  --parrot_is_shared $@
+>
+> parrot seems to build ok on darwin/intel, but dies later during the  
+> build
+> with:
+>
+> perl -MExtUtils::Command -e rm_rf PAST.pbc
+> ../../runtime/parrot/library/PAST.pbc
+> ../../parrot -o PAST.pbc --output-pbc PAST.pir
+> dyld: Library not loaded: /usr/local/lib/libparrot.dylib
+>   Referenced from: /Users/coke/research/parrot2/compilers/ 
+> past/../../parrot
+>   Reason: image not found
+> make[1]: *** [PAST.pbc] Trace/BPT trap
+> make: *** [compilers.dummy] Error 2
+>
+> $ otool -l parrot | grep libparrot.dylib
+>          name /usr/local/lib/libparrot.dylib (offset 24)
+>
+> I'm guessing that shouldn't be pointing to /usr/local, as I didn't  
+> install.
+>
+> If I do a symbolic link from there back to the build version in my  
+> dev area,
+> the build completes.
+>
+
+--
+Will "Coke" Coleda
+will@coleda.com
+
+

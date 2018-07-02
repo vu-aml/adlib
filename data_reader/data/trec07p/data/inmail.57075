@@ -1,0 +1,153 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Jun 13 23:39:19 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5E3dIL9015778
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 13 Jun 2007 23:39:18 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id BA4E6163819
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 14 Jun 2007 03:39:15 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1013)
+	id E81F6162AD4; Thu, 14 Jun 2007 03:38:45 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jpeach@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070614033845.E81F6162AD4@lists.samba.org>
+Date: Thu, 14 Jun 2007 03:38:45 +0000 (GMT)
+Subject: svn commit: samba r23478 - in branches/SAMBA_3_0/source: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: jpeach
+Date: 2007-06-14 03:38:43 +0000 (Thu, 14 Jun 2007)
+New Revision: 23478
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23478
+
+Log:
+Change the handling of the developer CFLAGS so that they are always
+
+emited to the Makefile in the DEVELOPER_CFLAGS variable. This makes
+it easy to turn developer mode on and off without waiting for
+configure to run. The developer flags are only added to CFLAGS for
+the --enable-developer and --enable-krb5developer cases.
+
+Modified:
+   branches/SAMBA_3_0/source/Makefile.in
+   branches/SAMBA_3_0/source/configure.in
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/Makefile.in
+===================================================================
+--- branches/SAMBA_3_0/source/Makefile.in	2007-06-13 21:59:39 UTC (rev 23477)
++++ branches/SAMBA_3_0/source/Makefile.in	2007-06-14 03:38:43 UTC (rev 23478)
+@@ -20,8 +20,14 @@
+ LIBS=@LIBS@
+ CC=@CC@
+ SHLD=@SHLD@
++
++# Add $(DEVELOPER_CFLAGS) to $(CFLAGS) to enable extra compiler
++# (GCC) warnings. This is done automtically for --enable-developer
++# and --enable-krb5developer.
++DEVELOPER_CFLAGS=@DEVELOPER_CFLAGS@
+ CFLAGS=@CFLAGS@
+ CPPFLAGS=-DHAVE_CONFIG_H @CPPFLAGS@
++
+ EXEEXT=@EXEEXT@
+ LDFLAGS=@PIE_LDFLAGS@ @LDFLAGS@
+ AR=@AR@
+
+Modified: branches/SAMBA_3_0/source/configure.in
+===================================================================
+--- branches/SAMBA_3_0/source/configure.in	2007-06-13 21:59:39 UTC (rev 23477)
++++ branches/SAMBA_3_0/source/configure.in	2007-06-14 03:38:43 UTC (rev 23478)
+@@ -435,7 +435,19 @@
+ AC_ARG_ENABLE(developer, [  --enable-developer      Turn on developer warnings and debugging (default=no)],
+     [if eval "test x$enable_developer = xyes"; then
+         developer=yes
+-    	DEVELOPER_CFLAGS="-gstabs -Wall -Wshadow -Wstrict-prototypes -Wpointer-arith -Wcast-align -Wwrite-strings -DDEBUG_PASSWORD -DDEVELOPER"
++    fi])
++
++AC_ARG_ENABLE(krb5developer, [  --enable-krb5developer  Turn on developer warnings and debugging, except -Wstrict-prototypes (default=no)],
++    [if eval "test x$enable_krb5developer = xyes"; then
++        developer=yes
++	krb5_developer=yes
++    fi])
++
++# Probe the gcc version for extra CFLAGS. We always stash these in
++# DEVELOPER_CFLAGS, so that you can turn them on and off with a simple
++# Makefile edit, avoiding the need to re-run configure.
++if test x"$ac_cv_prog_gcc" = x"yes" ; then
++    	DEVELOPER_CFLAGS="-gstabs -Wall -Wshadow -Wpointer-arith -Wcast-align -Wwrite-strings -DDEBUG_PASSWORD -DDEVELOPER"
+ 	# Add -Wdeclaration-after-statement if compiler supports it
+ 	AC_CACHE_CHECK(
+           [that the C compiler understands -Wdeclaration-after-statement],
+@@ -448,12 +460,12 @@
+ 	    samba_cv_HAVE_Wdeclaration_after_statement=yes,
+ 	    samba_cv_HAVE_Wdeclaration_after_statement=no,
+ 	    samba_cv_HAVE_Wdeclaration_after_statement=cross)
++       ])
+ 
+-       ])
+-       if test x"$samba_cv_HAVE_Wdeclaration_after_statement" = x"yes"; then
++	if test x"$samba_cv_HAVE_Wdeclaration_after_statement" = x"yes"; then
+ 	    DEVELOPER_CFLAGS="${DEVELOPER_CFLAGS} -Wdeclaration-after-statement"
+-       fi
+-	# here
++	fi
++
+ 	#-Werror-implicit-function-declaration
+ 	AC_CACHE_CHECK(
+           [that the C compiler understands -Werror-implicit-function-declaration],
+@@ -470,13 +482,13 @@
+        if test x"$samba_cv_HAVE_Werror_implicit_function_declaration" = x"yes"; then
+ 	    DEVELOPER_CFLAGS="${DEVELOPER_CFLAGS} -Werror-implicit-function-declaration"
+        fi
+-    fi])
+ 
+-AC_ARG_ENABLE(krb5developer, [  --enable-krb5developer  Turn on developer warnings and debugging, except -Wstrict-prototypes (default=no)],
+-    [if eval "test x$enable_krb5developer = xyes"; then
+-        developer=yes
+-	CFLAGS="${CFLAGS} -gstabs -Wall -Wshadow -Wpointer-arith -Wcast-qual -Wcast-align -Wwrite-strings -DDEBUG_PASSWORD -DDEVELOPER"
+-    fi])
++	# krb5developer is like developer, except we don't get
++	# -Wstrict-prototypes.
++       if test x"$krb5_developer" ~= x"$yes" ; then
++	    DEVELOPER_CFLAGS="$DEVELOPER_CFLAGS -Wstrict-prototypes"
++       fi
++fi
+ 
+ AC_ARG_ENABLE(dmalloc, [  --enable-dmalloc        Enable heap debugging [default=no]])
+ 
+@@ -6474,8 +6486,9 @@
+ 	   AC_MSG_WARN([cannot run when cross-compiling]))
+ 
+ dnl Merge in developer cflags from now on
+-if test x"$developer" = x"yes"; then
+-    CFLAGS="${CFLAGS} ${DEVELOPER_CFLAGS}"
++AC_SUBST(DEVELOPER_CFLAGS)
++if test x"$krb5_developer" = x"yes" -o x"$developer" = x"yes"; then
++    CFLAGS="${CFLAGS} $(DEVELOPER_CFLAGS)"
+ fi
+ 
+ builddir=`pwd`
+

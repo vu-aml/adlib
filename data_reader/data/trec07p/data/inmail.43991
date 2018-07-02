@@ -1,0 +1,240 @@
+From perl6-all-return-81595-ktwarwic=speedy.uwaterloo.ca@perl.org  Fri May 25 23:13:57 2007
+Return-Path: <perl6-all-return-81595-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4Q3DtqD003125
+	for <ktwarwic@flax9.uwaterloo.ca>; Fri, 25 May 2007 23:13:56 -0400
+Received: (qmail 6024 invoked by uid 514); 26 May 2007 03:13:50 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 6019 invoked from network); 26 May 2007 03:13:50 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-0.7 required=8.0
+	tests=BAYES_20,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: moderator for perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+Date: Fri, 25 May 2007 13:42:19 -0700
+From: David Fetter <david@fetter.org>
+To: Parrot Developers <perl6-internals@perl.org>
+Subject: Re: RPMs
+Message-ID: <20070525204219.GE9883@fetter.org>
+References: <20070523232701.GG31574@fetter.org> <20070524111257.9015.qmail@lists.develooper.com>
+Mime-Version: 1.0
+Content-Type: multipart/mixed; boundary="0F1p//8PRICkK4MW"
+Content-Disposition: inline
+In-Reply-To: <20070524111257.9015.qmail@lists.develooper.com>
+User-Agent: Mutt/1.4.2.2i
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-0.7 required=8.0
+	tests=BAYES_20,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+
+--0F1p//8PRICkK4MW
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+
+On Thu, May 24, 2007 at 11:12:57AM -0000, Rafael Garcia-Suarez wrote:
+> David Fetter wrote in perl.perl6.internals :
+> > Folks,
+> >
+> > I've been wrestling with the .spec file to generate RPMs for parrot
+> > 0.4.12, and so far, the .spec file is winning, so I figured I'd do
+> > what I always do when I'm losing: fight dirty and call in help :)
+> 
+> I think that Steven Pritchard has worked on RPMs for Fedora. See the
+> fedora-perl-devel-list, at redhat.com. Notably, he posted this specfile
+> there :
+>     http://ftp.kspei.com/pub/steve/rpms/parrot/parrot.spec
+
+Thanks to Steven for the update, and to Nuno Carvalho for the hacks
+atop same.  I've got the following one running for Fedora Core 6,
+although rpmlint complains that the -devel package has no docs.  Any
+chance of throwing this one into trunk?
+
+Cheers,
+D
+-- 
+David Fetter <david@fetter.org> http://fetter.org/
+phone: +1 415 235 3778        AIM: dfetter666
+                              Skype: davidfetter
+
+Remember to vote!
+Consider donating to PostgreSQL: http://www.postgresql.org/about/donate
+
+--0F1p//8PRICkK4MW
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: attachment; filename="parrot.spec"
+
+Name:           parrot
+Version:        0.4.12
+Release:        1%{?dist}
+Summary:        Parrot Virtual Machine
+License:        GPL or Artistic
+Group:          Development/Libraries
+URL:            http://www.parrotcode.org/
+Source0:        http://www.cpan.org/authors/id/M/MD/MDIEP/parrot-%{version}.tar.gz
+BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
+BuildRequires:  readline-devel
+BuildRequires:  ncurses-devel
+BuildRequires:  gmp-devel
+BuildRequires:  gdbm-devel
+BuildRequires:  /usr/bin/perldoc
+BuildRequires:  bc
+BuildRequires:  m4
+BuildRequires:  libicu-devel
+BuildRequires:  perl-SVK
+
+%package devel
+Summary:        Parrot Virtual Machine development headers and libraries
+License:        GPL or Artistic
+Group:          Development/Libraries
+Requires:       %{name} = %{version}-%{release}
+Requires:       %{_libdir}/pkgconfig
+
+%description
+Parrot is a virtual machine designed to efficiently compile and
+execute bytecode for interpreted languages. Parrot will be the target
+for the final Perl 6 compiler, and is already usable as a backend for
+Pugs, as well as variety of other languages.
+
+%description devel
+Parrot Virtual Machine development headers and libraries.
+
+%prep
+%setup -q
+
+%{__perl} -pi -e 's,"lib/,"%{_lib}/, if (/CONST_STRING\(interp,/)' \
+    src/library.c
+%{__perl} -pi -e "s,'/usr/lib','%{_libdir}',;s,runtime/lib/,runtime/%{_lib}/," \
+    tools/dev/install_files.pl \
+    tools/dev/mk_manifests.pl
+
+%build
+%{__perl} Configure.pl \
+    --prefix=%{_usr} \
+    --libdir=%{_libdir} \
+    --sysconfdir=%{_sysconfdir} \
+    --infodir=%{_datadir}/info \
+    --mandir=%{_mandir} \
+    --cc=%{__cc} \
+    --cxx=%{__cxx} \
+    --optimize="$RPM_OPT_FLAGS -maccumulate-outgoing-args" \
+    --parrot_is_shared \
+    --lex=/usr/bin/flex \
+    --yacc=/usr/bin/yacc \
+    --libs='-lcurses -lm'
+
+export LD_LIBRARY_PATH=$( pwd )/blib/lib
+make
+
+%install
+rm -rf $RPM_BUILD_ROOT
+
+export LD_LIBRARY_PATH=$( pwd )/blib/lib
+make reallyinstall DESTDIR=$RPM_BUILD_ROOT
+
+# Drop the docs so rpm can pick them up itself.
+rm -rf $RPM_BUILD_ROOT/%{_docdir}/parrot
+
+# Force permissions on doc directories.
+find LICENSES docs examples -type d -exec chmod 755 {} \;
+find LICENSES docs examples -type f -exec chmod 644 {} \;
+
+# Force permissions on shared libs so they get stripped.
+find $RPM_BUILD_ROOT%{_libdir} -type f \( -name '*.so' -o -name '*.so.*' \) \
+    -exec chmod 755 {} \;
+
+# These files *probably* aren't needed.
+rm -rf $RPM_BUILD_ROOT%{_usr}/compilers \
+    $RPM_BUILD_ROOT%{_usr}/config \
+    $RPM_BUILD_ROOT%{_includedir}/src \
+    $RPM_BUILD_ROOT%{_usr}/src
+
+%check
+export LD_LIBRARY_PATH=$( pwd )/blib/lib
+# make test < /dev/null
+# %{?_with_fulltest:make fulltest < /dev/null}
+# make test || :
+# %{?_with_fulltest:make fulltest || :}
+
+%clean
+rm -rf $RPM_BUILD_ROOT
+
+%post -p /sbin/ldconfig
+
+%postun -p /sbin/ldconfig
+
+%files
+%defattr(-,root,root,-)
+%doc ABI_CHANGES ChangeLog CREDITS NEWS PBC_COMPAT PLATFORMS README
+%doc RESPONSIBLE_PARTIES TODO
+%doc LICENSES docs examples
+%exclude %{_bindir}/parrot-config
+%{_bindir}/*
+%{_libdir}/parrot
+%{_libdir}/libparrot.so.*
+
+%files devel
+%defattr(-,root,root,-)
+%{_bindir}/parrot-config
+%{_includedir}/parrot
+%{_libdir}/libparrot.so
+%{_libdir}/libparrot.a
+%{_libdir}/pkgconfig/*
+
+%changelog
+* Fri May 25 2007 David Fetter <david@fetter.org> 0.4.12-1
+- Update to 0.4.12.
+
+* Wed Apr 18 2007 Steven Pritchard <steve@kspei.com> 0.4.11-1
+- Update to 0.4.11.
+
+* Wed Mar 21 2007 Steven Pritchard <steve@kspei.com> 0.4.10-1
+- Update to 0.4.10.
+
+* Sat Mar 10 2007 Steven Pritchard <steve@kspei.com> 0.4.9-1
+- Update to 0.4.9.
+- BR ncurses-devel.
+- For some reason now I need to force -lm too.
+- Remove some files/directories that shouldn't be included.
+
+* Wed Jan 17 2007 Steven Pritchard <steve@kspei.com> 0.4.8-1
+- Attempt update to 0.4.8.
+
+* Fri Jun 30 2006 Steven Pritchard <steve@kspei.com> 0.4.5-5
+- Override lib_dir and make various substitutions to try to fix multilib.
+- Remove rpath use from Makefile.
+- Fix a pod error in src/ops/experimental.ops.
+- Enable "make test" since t/doc/pod.t won't fail now.
+
+* Wed Jun 28 2006 Steven Pritchard <steve@kspei.com> 0.4.5-4
+- Force permissions on shared libraries so rpmbuild strips them.
+
+* Wed Jun 28 2006 Steven Pritchard <steve@kspei.com> 0.4.5-3
+- Fix URL, description, summary, etc.
+- Add post/postun.
+- Move parrot-config to the devel sub-package.
+- Force permissions on the doc directories.
+
+* Tue Jun 27 2006 Steven Pritchard <steve@kspei.com> 0.4.5-2
+- Add -lcurses to get readline detection to work.
+- BR libicu-devel.
+
+* Tue Jun 27 2006 Steven Pritchard <steve@kspei.com> 0.4.5-1
+- Initial packaging attempt.
+
+--0F1p//8PRICkK4MW--
+

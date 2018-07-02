@@ -1,0 +1,107 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri May 11 18:24:36 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4BMOaqD002726
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 11 May 2007 18:24:36 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 5DF80162C45
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 11 May 2007 22:24:34 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.5 required=3.8 tests=AWL,BAYES_00,NO_RELAYS,
+	RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: by lists.samba.org (Postfix, from userid 549)
+	id DF6B3162ACC; Fri, 11 May 2007 22:23:59 +0000 (GMT)
+Date: Fri, 11 May 2007 15:23:22 -0700
+From: Jeremy Allison <jra@samba.org>
+To: "Neal A. Lucier" <nlucier@math.purdue.edu>
+Message-ID: <20070511222322.GB24317@samba1>
+References: <46448E58.1090004@samba.org> <20070511165945.GN10586@samba1>
+	<4644B70C.6040506@math.purdue.edu>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+In-Reply-To: <4644B70C.6040506@math.purdue.edu>
+User-Agent: Mutt/1.5.11
+Cc: "Gerald \(Jerry\) Carter" <jerry@samba.org>,
+   Jeremy Allison <jra@samba.org>, samba-technical@samba.org
+Subject: Re: symlink failure when listing a dircetory in samba 3.0.25
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: Jeremy Allison <jra@samba.org>
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+On Fri, May 11, 2007 at 02:33:48PM -0400, Neal A. Lucier wrote:
+> 
+> I think that filtering is the wrong conclusion to the fact that
+> you are unable to guess the possible type and or status of the
+> target of a symlink.  My argument and subsequent example have to do
+> with just standard ugo UNIX permissions and might not apply in
+> Posix.1e, NTFS, NFSv4, or other ACL regimes.  I'm not a programmer
+> or an SMB/NTFS guru by any means.
+> 
+> User 'nlucier' makes symlinks to files and directories in /root,
+> neither or which can be stated by the creator of the symlink or
+> anyone who stats the symlink; however, the symlink itself is
+> created with permiscous permissions and anyone can tell what
+> that it is a symlink and what its target is, and if they also
+> have abilites to stat the target then they can further determine
+> if the target is a directory or a file.
+> 
+> In terms of icon choice in explorer.exe, it seems you need to
+> express three states; 1) symlink can stat target, target is dir
+> 2) symlink can stat target, target is file 3) symlink can't
+> stat target.  You could overload either the stat AND dir or
+> stat AND file icon to also symbolize no stat of target.
+> 
+> Can't stat target example; "dir" is a directory symlink and "file"
+> is a file symlink (but since we can't stat who really knows?).
+> 
+> % ln -s /root/file file
+> % ln -s /root/dir/ dir/
+> % ls -l file
+> lrwxrwxrwx   1 nlucier  cstaff        10 May 11 14:20 file -> /root/file
+> % ls -l dir
+> lrwxrwxrwx   1 nlucier  cstaff         9 May 11 14:20 dir -> /root/dir
+> 
+> Can stat target example; ls intelligently recognizes and informs the
+> user if the target is a file or a directory.
+> 
+> % ln -s /etc/passwd file
+> % ln -s /etc/init.d/ dir/
+> % ls -l file
+> lrwxrwxrwx   1 nlucier  cstaff        11 May 11 14:26 file -> /etc/passwd
+> % ls -l dir
+> lrwxrwxrwx   1 nlucier  cstaff        11 May 11 14:26 dir -> /etc/init.d/
+> 
+> How this actually maps into how new Windows symlinks work I have no clue.
+> 
+> But as a user (and an admin) I would like to be able to create and
+> see symlinks that point to nowhere on both *nix and samba/windows
+> shares and partitions.
+
+Then use the Linux CIFSFS client that understands symlinks and
+will report them (and create them) in exactly the same way as
+a local filesystem.
+
+It's only a Windows client that can't see these things, as we
+can't know what they map to. The codepath in question is only
+taken when doing a Windows qfileinfo - on a UNIX qfileinfo
+we correctly return a symlink.
+
+Jeremy.
+

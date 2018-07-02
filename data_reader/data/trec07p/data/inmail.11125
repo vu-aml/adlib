@@ -1,0 +1,148 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Apr 17 05:37:04 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3H9b30I025890
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 05:37:03 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id B4A31163A14
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 09:36:39 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.4 required=3.8 tests=AWL,BAYES_00,RCVD_IN_DSBL,
+	SPF_NEUTRAL autolearn=no version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: from mail.mx-netz.de (ip-217-172-181-76.mx-netz.de [217.172.181.76])
+	by lists.samba.org (Postfix) with ESMTP id 8BE31163863
+	for <samba-technical@samba.org>; Tue, 17 Apr 2007 09:36:00 +0000 (GMT)
+Received: from [172.30.76.9] (unknown [172.30.76.9])
+	(using TLSv1 with cipher RC4-MD5 (128/128 bits))
+	(No client certificate requested)
+	(SASL METHOD:[PLAIN] USERNAME:[metze])
+	by mail.mx-netz.de (SMTP-MAIL-SERVER) with ESMTP id 9FD6D20C549
+	for <samba-technical@samba.org>; Tue, 17 Apr 2007 11:35:58 +0200 (CEST)
+Message-ID: <46249515.5030803@samba.org>
+Date: Tue, 17 Apr 2007 11:36:21 +0200
+From: "Stefan (metze) Metzmacher" <metze@samba.org>
+User-Agent: Thunderbird 1.5.0.10 (X11/20060911)
+MIME-Version: 1.0
+To: Multiple recipients of list SAMBA-TECHNICAL <samba-technical@samba.org>
+X-Enigmail-Version: 0.94.2.0
+OpenPGP: id=0E53083F
+Content-Type: multipart/mixed; boundary="------------020206060404010506000505"
+Subject: [SAMBA3] only use recv/send on sockets
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2635
+Lines: 95
+
+This is a multi-part message in MIME format.
+--------------020206060404010506000505
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 7bit
+
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA1
+
+Hi,
+
+here's a little patch that changes the usage of read/write to recv/send
+in lib/util_sock.c
+
+this isn't really needed, but helps with the PCAP support of
+socket_wrapper, as only recv/send is catched by sowcket_wrapper
+
+Comments please:-)
+
+met
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.5 (GNU/Linux)
+Comment: Using GnuPG with SUSE - http://enigmail.mozdev.org
+
+iD8DBQFGJJUUm70gjA5TCD8RAotcAKCnyb7qoNf9LsA4zfQLcbgSZBDMrQCeIbh+
+Jbn+C6v6es7BgNdP2OdsbHY=
+=v0OL
+-----END PGP SIGNATURE-----
+
+--------------020206060404010506000505
+Content-Type: text/x-patch;
+ name="sys_recv-01.diff"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline;
+ filename="sys_recv-01.diff"
+
+=== lib/util_sock.c
+==================================================================
+--- lib/util_sock.c	(revision 29987)
++++ lib/util_sock.c	(local)
+@@ -366,7 +366,7 @@
+ 			}
+ 		}
+ 
+-		ret = sys_read(fd,buffer + total,N - total);
++		ret = sys_recv(fd,buffer + total,N - total, 0);
+ 
+ 		if (ret == 0) {
+ 			DEBUG(10,("read_data_until: read of %d returned 0. Error = %s\n", (int)(N - total), strerror(errno) ));
+@@ -417,7 +417,7 @@
+ 		}
+ 		
+ 		while (nread < mincnt) {
+-			readret = sys_read(fd, buf + nread, maxcnt - nread);
++			readret = sys_recv(fd, buf + nread, maxcnt - nread, 0);
+ 			
+ 			if (readret == 0) {
+ 				DEBUG(5,("read_socket_with_timeout: blocking read. EOF from client.\n"));
+@@ -478,7 +478,7 @@
+ 			return -1;
+ 		}
+ 		
+-		readret = sys_read(fd, buf+nread, maxcnt-nread);
++		readret = sys_recv(fd, buf+nread, maxcnt-nread, 0);
+ 		
+ 		if (readret == 0) {
+ 			/* we got EOF on the file descriptor */
+@@ -519,7 +519,7 @@
+ 	smb_read_error = 0;
+ 
+ 	while (total < N) {
+-		ret = sys_read(fd,buffer + total,N - total);
++		ret = sys_recv(fd,buffer + total,N - total, 0);
+ 
+ 		if (ret == 0) {
+ 			DEBUG(10,("read_data: read of %d returned 0. Error = %s\n", (int)(N - total), strerror(errno) ));
+@@ -553,7 +553,7 @@
+ 	ssize_t ret;
+ 
+ 	while (total < N) {
+-		ret = sys_write(fd,buffer + total,N - total);
++		ret = sys_send(fd,buffer + total,N - total, 0);
+ 
+ 		if (ret == -1) {
+ 			if (fd == client_fd) {
+
+--------------020206060404010506000505
+Content-Type: application/pgp-signature;
+ name="sys_recv-01.diff.sig"
+Content-Transfer-Encoding: base64
+Content-Disposition: inline;
+ filename="sys_recv-01.diff.sig"
+
+iD8DBQBGJJUVm70gjA5TCD8RAmsGAKCRqHxopB7tL1k1Pj1HY+f6wykicgCfXXqF2qpBa4Zq
+fCTllkyL4erBZA8=
+--------------020206060404010506000505--
+

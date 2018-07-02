@@ -1,0 +1,100 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon May 21 12:25:49 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4LGPmqD001142
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 21 May 2007 12:25:48 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 528C3163941
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 21 May 2007 16:25:45 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.1 required=3.8 tests=AWL,BAYES_05,RCVD_IN_DSBL,
+	UNPARSEABLE_RELAY autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from mail.SerNet.de (mail1.SerNet.DE [193.175.80.2])
+	by lists.samba.org (Postfix) with ESMTP id 70234162ACB
+	for <samba-technical@lists.samba.org>;
+	Mon, 21 May 2007 16:25:05 +0000 (GMT)
+Received: from intern.SerNet.DE by mail.SerNet.DE with esmtp (Exim 4.51 #1)
+	for samba-technical@lists.samba.org
+	id 1HqAgy-0005Rd-AX; Mon, 21 May 2007 18:25:04 +0200
+Received: by intern.SerNet.DE
+	id 1HqAgy-0006kM-5q; Mon, 21 May 2007 18:25:04 +0200
+Received: by intern.SerNet.DE
+	id 1HqAgx-0006kJ-W1; Mon, 21 May 2007 18:25:04 +0200
+Received: from bjacke by pell.sernet.de with local (Exim 4.63)
+	(envelope-from <bjacke@sernet.de>) id 1HqAfv-0003dt-R1
+	for samba-technical@lists.samba.org; Mon, 21 May 2007 18:23:59 +0200
+Date: Mon, 21 May 2007 18:23:47 +0200
+From: =?iso-8859-1?Q?Bj=F6rn?= JACKE <bjoern@j3e.de>
+To: samba-technical@lists.samba.org
+Mail-Followup-To: samba-technical@lists.samba.org
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="BOKacYhQ+x31HxR3"
+Content-Disposition: inline
+Message-Id: <E1HqAgy-0006kM-5q@intern.SerNet.DE>
+Organization: SerNet GmbH, Goettingen, Germany
+Subject: setgroups problems on FreeBSD - proposed fix
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+
+--BOKacYhQ+x31HxR3
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+
+Hi,
+
+on FreeBSD setgroups() behaves a bit non-standard:
+
+FreeBSD stores the effective gid at index 0 in the gid_t *list. This way the
+first group in the list that Samba supplies to setgroups gets overwritten.
+
+Attached there is a patch which fixes the setgroups() call also for FreeBSD
+systems. Thanks to Volker for that!
+
+This might also be the solution for bugzilla #3990.
+
+Bjoern
+
+--BOKacYhQ+x31HxR3
+Content-Type: text/x-patch; charset=us-ascii
+Content-Disposition: attachment; filename="samba3-freebsd-setgroups-fix.patch"
+
+Index: source/smbd/sec_ctx.c
+===================================================================
+--- source/smbd/sec_ctx.c	(Revision 23033)
++++ source/smbd/sec_ctx.c	(Arbeitskopie)
+@@ -246,7 +246,14 @@
+ 	gain_root();
+ 
+ #ifdef HAVE_SETGROUPS
+-	sys_setgroups(ngroups, groups);
++	gid_t *new_groups;
++	if (!(new_groups = SMB_MALLOC_ARRAY(gid_t, ngroups+1))) {
++		smb_panic("malloc failed\n");
++	}
++	new_groups[0] = gid;
++	memcpy(&new_groups[1], groups, sizeof(gid_t) * ngroups);
++	sys_setgroups(ngroups+1, new_groups);
++	SAFE_FREE(new_groups);
+ #endif
+ 
+ 	ctx_p->ut.ngroups = ngroups;
+
+--BOKacYhQ+x31HxR3--
+

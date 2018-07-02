@@ -1,0 +1,315 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Jun 21 13:35:23 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5LHZLL9027012
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 21 Jun 2007 13:35:22 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 9582A16385E
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 21 Jun 2007 17:35:19 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=3.8 tests=AWL,BAYES_00,RCVD_IN_DSBL,
+	UNPARSEABLE_RELAY autolearn=no version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: from mail.SerNet.de (mail1.SerNet.DE [193.175.80.2])
+	by lists.samba.org (Postfix) with ESMTP id 3ECAF162AFD
+	for <samba-technical@samba.org>; Thu, 21 Jun 2007 17:34:45 +0000 (GMT)
+Received: from intern.SerNet.DE by mail.SerNet.DE with esmtp (Exim 4.51 #1)
+	for samba-technical@samba.org
+	id 1I1QYO-000206-F1; Thu, 21 Jun 2007 19:34:44 +0200
+Received: by intern.SerNet.DE
+	id 1I1QYO-0001ca-86; Thu, 21 Jun 2007 19:34:44 +0200
+Received: by intern.SerNet.DE
+	id 1I1QYO-0001cW-1S; Thu, 21 Jun 2007 19:34:44 +0200
+Date: Thu, 21 Jun 2007 19:34:37 +0200
+From: Volker Lendecke <Volker.Lendecke@SerNet.DE>
+To: samba-technical@samba.org
+MIME-Version: 1.0
+Content-Type: multipart/signed; micalg=pgp-sha1;
+	protocol="application/pgp-signature"; boundary="9zSXsLTf0vkW971A"
+Content-Disposition: inline
+User-Agent: Mutt/1.5.13 (2006-08-11)
+Message-Id: <E1I1QYO-0001ca-86@intern.SerNet.DE>
+Organization: SerNet GmbH, Goettingen, Germany
+Subject: Consolidating kernel-related parts of opening a file?
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: Volker.Lendecke@SerNet.DE
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+
+--9zSXsLTf0vkW971A
+Content-Type: multipart/mixed; boundary="oyUTqETQ0mS9luUI"
+Content-Disposition: inline
+
+
+--oyUTqETQ0mS9luUI
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+
+Hi!
+
+Attached find a patch that consolidates the open(2) call,
+setting the kernel share mode and kernel oplocks into
+fd_open(). Survives make test, I'm now doing tests with
+kernel oplocks activated.
+
+Why? People with more createfile semantics (i.e. real share
+modes and/or real oplocks) have a cleaner place to plug in,
+and from my point of view these three steps logically belong
+together, thus our error paths might be cleaned up a bit.
+
+Volker
+
+--oyUTqETQ0mS9luUI
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: attachment; filename=look
+Content-Transfer-Encoding: quoted-printable
+
+Index: smbd/open.c
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D
+--- smbd/open.c	(Revision 23569)
++++ smbd/open.c	(Arbeitskopie)
+@@ -38,11 +38,15 @@
+ **************************************************************************=
+**/
+=20
+ static NTSTATUS fd_open(struct connection_struct *conn,
+-		    const char *fname,=20
+-		    files_struct *fsp,
+-		    int flags,
+-		    mode_t mode)
++			const char *fname,=20
++			files_struct *fsp,
++			int flags,
++			mode_t mode,
++			uint32 share_access,
++			int requested_oplock,
++			int *granted_oplock)
+ {
++	int ret_flock;
+ 	NTSTATUS status =3D NT_STATUS_OK;
+=20
+ #ifdef O_NOFOLLOW
+@@ -57,15 +61,35 @@
+ #endif
+=20
+ 	fsp->fh->fd =3D SMB_VFS_OPEN(conn,fname,fsp,flags,mode);
+-	if (fsp->fh->fd =3D=3D -1) {
+-		status =3D map_nt_error_from_unix(errno);
+-	}
+=20
+ 	DEBUG(10,("fd_open: name %s, flags =3D 0%o mode =3D 0%o, fd =3D %d. %s\n",
+ 		    fname, flags, (int)mode, fsp->fh->fd,
+ 		(fsp->fh->fd =3D=3D -1) ? strerror(errno) : "" ));
+=20
+-	return status;
++	if (fsp->fh->fd =3D=3D -1) {
++		return map_nt_error_from_unix(errno);
++	}
++
++	ret_flock =3D SMB_VFS_KERNEL_FLOCK(fsp, fsp->fh->fd, share_access);
++	if (ret_flock =3D=3D -1 ){
++		return NT_STATUS_SHARING_VIOLATION;
++	}
++
++	if (requested_oplock =3D=3D 0) {
++		return NT_STATUS_OK;
++	}
++
++	status =3D set_kernel_oplock(fsp, requested_oplock);
++
++	DEBUG(10, ("fd_open: set_kernel_oplock returned %s\n",
++		   nt_errstr(status)));
++
++	if (granted_oplock !=3D NULL) {
++		*granted_oplock =3D NT_STATUS_IS_OK(status)
++			? requested_oplock : NO_OPLOCK;
++	}
++
++	return NT_STATUS_OK;
+ }
+=20
+ /*************************************************************************=
+***
+@@ -208,7 +232,10 @@
+ 			  int flags,
+ 			  mode_t unx_mode,
+ 			  uint32 access_mask, /* client requested access mask. */
+-			  uint32 open_access_mask) /* what we're actually using in the open. */
++			  uint32 open_access_mask, /* what we're actually using in the open. */
++			  uint32 share_access,
++			  int requested_oplock,
++			  int *granted_oplock)
+ {
+ 	NTSTATUS status =3D NT_STATUS_OK;
+ 	int accmode =3D (flags & O_ACCMODE);
+@@ -293,7 +320,9 @@
+ 		}
+=20
+ 		/* Actually do the open */
+-		status =3D fd_open(conn, path, fsp, local_flags, unx_mode);
++		status =3D fd_open(conn, path, fsp, local_flags, unx_mode,
++				 share_access, requested_oplock,
++				 granted_oplock);
+ 		if (!NT_STATUS_IS_OK(status)) {
+ 			DEBUG(3,("Error opening file %s (%s) (local_flags=3D%d) "
+ 				 "(flags=3D%d)\n",
+@@ -1134,7 +1163,6 @@
+ 	struct share_mode_lock *lck =3D NULL;
+ 	uint32 open_access_mask =3D access_mask;
+ 	NTSTATUS status;
+-	int ret_flock;
+ 	char *parent_dir;
+ 	const char *newname;
+=20
+@@ -1603,12 +1631,11 @@
+=20
+ 	fsp_open =3D open_file(fsp, conn, parent_dir, newname, fname, psbuf,
+ 			     flags|flags2, unx_mode, access_mask,
+-			     open_access_mask);
++			     open_access_mask, share_access,
++			     fsp->oplock_type, &fsp->oplock_type);
+=20
+ 	if (!NT_STATUS_IS_OK(fsp_open)) {
+-		if (lck !=3D NULL) {
+-			TALLOC_FREE(lck);
+-		}
++		TALLOC_FREE(lck);
+ 		file_free(fsp);
+ 		return fsp_open;
+ 	}
+@@ -1701,24 +1728,6 @@
+=20
+ 	SMB_ASSERT(lck !=3D NULL);
+=20
+-	/* note that we ignore failure for the following. It is
+-           basically a hack for NFS, and NFS will never set one of
+-           these only read them. Nobody but Samba can ever set a deny
+-           mode and we have already checked our more authoritative
+-           locking database for permission to set this deny mode. If
+-           the kernel refuses the operations then the kernel is wrong.
+-	   note that GPFS supports it as well - jmcd */
+-
+-	ret_flock =3D SMB_VFS_KERNEL_FLOCK(fsp, fsp->fh->fd, share_access);
+-	if(ret_flock =3D=3D -1 ){
+-
+-		TALLOC_FREE(lck);
+-		fd_close(conn, fsp);
+-		file_free(fsp);
+-	=09
+-		return NT_STATUS_SHARING_VIOLATION;
+-	}
+-
+ 	/*
+ 	 * At this point onwards, we can guarentee that the share entry
+ 	 * is locked, whether we created the file or not, and that the
+@@ -1775,10 +1784,7 @@
+=20
+ 	if ((fsp->oplock_type !=3D NO_OPLOCK) &&
+ 	    (fsp->oplock_type !=3D FAKE_LEVEL_II_OPLOCK)) {
+-		if (!set_file_oplock(fsp, fsp->oplock_type)) {
+-			/* Could not get the kernel oplock */
+-			fsp->oplock_type =3D NO_OPLOCK;
+-		}
++		set_file_oplock(fsp, fsp->oplock_type);
+ 	}
+=20
+ 	if (info =3D=3D FILE_WAS_OVERWRITTEN || info =3D=3D FILE_WAS_CREATED || i=
+nfo =3D=3D FILE_WAS_SUPERSEDED) {
+@@ -1893,7 +1899,8 @@
+ 	/* note! we must use a non-zero desired access or we don't get
+            a real file descriptor. Oh what a twisted web we weave. */
+ 	status =3D open_file(fsp, conn, NULL, NULL, fname, psbuf, O_WRONLY, 0,
+-			   FILE_WRITE_DATA, FILE_WRITE_DATA);
++			   FILE_WRITE_DATA, FILE_WRITE_DATA,
++			   0, 0, NULL);
+=20
+ 	/*=20
+ 	 * This is not a user visible file open.
+Index: smbd/oplock.c
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D
+--- smbd/oplock.c	(Revision 23569)
++++ smbd/oplock.c	(Arbeitskopie)
+@@ -99,18 +99,29 @@
+ 	}
+ }
+=20
++NTSTATUS set_kernel_oplock(files_struct *fsp, int oplock_type)
++{
++	DEBUG(10, ("setting kernel oplock %d for file %s\n",
++		   oplock_type, fsp->fsp_name));
++
++	if (!koplocks) {
++		return NT_STATUS_OK;
++	}
++
++	if (!koplocks->set_oplock(fsp, oplock_type)) {
++		return map_nt_error_from_unix(errno);
++	}
++
++	return NT_STATUS_OK;
++}
++
+ /*************************************************************************=
+***
+  Attempt to set an oplock on a file. Always succeeds if kernel oplocks are
+  disabled (just sets flags). Returns True if oplock set.
+ **************************************************************************=
+**/
+=20
+-BOOL set_file_oplock(files_struct *fsp, int oplock_type)
++void set_file_oplock(files_struct *fsp, int oplock_type)
+ {
+-	if (koplocks && !koplocks->set_oplock(fsp, oplock_type)) {
+-		return False;
+-	}
+-
+-	fsp->oplock_type =3D oplock_type;
+ 	fsp->sent_oplock_break =3D NO_BREAK_SENT;
+ 	if (oplock_type =3D=3D LEVEL_II_OPLOCK) {
+ 		level_II_oplocks_open++;
+@@ -123,8 +134,6 @@
+ 		 fsp->fsp_name, file_id_static_string(&fsp->file_id),
+ 		 fsp->fh->gen_id, (int)fsp->open_time.tv_sec,
+ 		 (int)fsp->open_time.tv_usec ));
+-
+-	return True;
+ }
+=20
+ /*************************************************************************=
+***
+
+--oyUTqETQ0mS9luUI--
+
+--9zSXsLTf0vkW971A
+Content-Type: application/pgp-signature
+Content-Disposition: inline
+
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.5 (GNU/Linux)
+
+iD8DBQFGeraspZr5CauZH5wRApwlAKCL1Ai6Y/qwSLpXoDNXVI5pK7XWxwCg549I
+Nfe3IlfRHEB2FgsLGnk/oqw=
+=b29L
+-----END PGP SIGNATURE-----
+
+--9zSXsLTf0vkW971A--
+

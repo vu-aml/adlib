@@ -1,0 +1,94 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Jun 22 10:29:21 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5METLL9007326
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 22 Jun 2007 10:29:21 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id D45AC164179
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 22 Jun 2007 14:29:18 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.0 required=3.8 tests=AWL,BAYES_20,HTML_00_10,
+	HTML_MESSAGE,RCVD_IN_DSBL,SPF_PASS autolearn=no version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: from wa-out-1112.google.com (wa-out-1112.google.com [209.85.146.177])
+	by lists.samba.org (Postfix) with ESMTP id 13A4A1643FE
+	for <samba-technical@samba.org>; Fri, 22 Jun 2007 14:21:50 +0000 (GMT)
+Received: by wa-out-1112.google.com with SMTP id l24so802874waf
+	for <samba-technical@samba.org>; Fri, 22 Jun 2007 07:21:50 -0700 (PDT)
+DKIM-Signature: a=rsa-sha1; c=relaxed/relaxed; d=gmail.com; s=beta;
+	h=domainkey-signature:received:received:message-id:date:from:sender:to:subject:mime-version:content-type:x-google-sender-auth;
+	b=qtwGNoWrCFTrYiJOP5b5bg0TnWt27YUiB8hX988NKasofF4EhvHEV/rcZTtRW9Vrwv/JLTmx0Ud39MwDZfPR00+CKIPRQgBDo6PRaA69B4ur7O7hTM9Zio4/7nphamUD53eH/2fhXnYWeBWPOZL0IgOVKVm2NNIgyp12H23enc0=
+DomainKey-Signature: a=rsa-sha1; c=nofws; d=gmail.com; s=beta;
+	h=received:message-id:date:from:sender:to:subject:mime-version:content-type:x-google-sender-auth;
+	b=kQAXGOA5FfY9U2bDXxmm8eBFndn+2GcI8AiJohQuW7NIUnu0pexGhwU3mRQuZtn5tawWVaxrEZAfiAfa4h38B3lgTgpVb8VJqza6kSjcf7UJtR0AQNtqGAeXK89vJmvc8koMMagsGdGxO3h4Uhok7/A8U62R0UgUMJjGNhFJ7lY=
+Received: by 10.115.55.1 with SMTP id h1mr3009467wak.1182521724783;
+	Fri, 22 Jun 2007 07:15:24 -0700 (PDT)
+Received: by 10.114.24.4 with HTTP; Fri, 22 Jun 2007 07:15:24 -0700 (PDT)
+Message-ID: <517eb05c0706220715n5c32f802g31e0b381371fe721@mail.gmail.com>
+Date: Fri, 22 Jun 2007 10:15:24 -0400
+From: "Jim McDonough" <jmcd@samba.org>
+To: jerry@samba.org, samba-technical@samba.org
+MIME-Version: 1.0
+X-Google-Sender-Auth: cc878c1454bce911
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+X-Content-Filtered-By: Mailman/MimeDel 2.1.5
+Subject: winbindd 32/64 offset issues
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Jerry,
+Despite your comments about testing with 32bit libs on 64bit platforms in
+the winbindd_request struct in winbindd_nss.h, it seems we're out of sync,
+and the following comment may be part of the issue:
+
+nsswitch/winbindd_nss.h:40
+-------
+/* Have to deal with time_t being 4 or 8 bytes due to structure alignment.
+   On a 64bit Linux box, we have to support a constant structure size
+   between /lib/libnss_winbind.so.2 and /li64/libnss_winbind.so.2.
+   The easiest way to do this is to always use 8byte values for time_t. */
+------
+
+I can say that I've recently found this to not be true.  On multiple
+platforms (RHEL4 at a customer site, ubuntu Edgy on my laptop right now),
+the stabs output shows the extra_data union (containing the SMB_TIME_T for
+alignment) to start at 16544 bits offset, which is 2068 bytes..._not_ a
+multiple of 8.  This is on 3.0.25...on 3.0.26 there is an extra enum earlier
+that hides this problem, I think.  I tried several approaches, but there is
+simply not a guarantee on a 32-bit platform that anything I tried is going
+to be aligned on an 8-byte boundary.
+
+The only solution I found was the old method that hasn't been updated in the
+code in a while...the padding member of the huge data union needs to be set
+to that 8-byte boundary, and still, since that data union isn't guaranteed
+to be on an 8-byte boundary to start, we have to really just look at the
+offset in stabs output and see if each union lines up between architectures.
+
+Or we could just start up that marshalling discussion again :-)
+
+In any case, before I check anything in, can someone run any quick tests of
+your various binaries on 64-bit platforms using 32-bit winbind libs?
+
+-- 
+-------------------
+Jim McDonough
+Samba Team
+jmcd at samba dot org
+

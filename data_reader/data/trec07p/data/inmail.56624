@@ -1,0 +1,203 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Jun 13 08:53:11 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5DCrAL9007761
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 13 Jun 2007 08:53:10 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id A0A0516386A
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 13 Jun 2007 12:53:09 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id 42C2C162AD9; Wed, 13 Jun 2007 12:52:37 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070613125237.42C2C162AD9@lists.samba.org>
+Date: Wed, 13 Jun 2007 12:52:37 +0000 (GMT)
+Subject: svn commit: samba r23467 - in branches: SAMBA_3_0/source/smbd
+	SAMBA_3_0_26/source/smbd
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-06-13 12:52:36 +0000 (Wed, 13 Jun 2007)
+New Revision: 23467
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23467
+
+Log:
+Next little simplification: In rename_internals it's a bit pointless to
+first ask for existence of a file when we do the open_file_ntcreate in
+can_rename later on anyway. That also gets us the right error message in
+case the file is not there automatically.
+
+Modified:
+   branches/SAMBA_3_0/source/smbd/reply.c
+   branches/SAMBA_3_0_26/source/smbd/reply.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/smbd/reply.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/reply.c	2007-06-13 11:32:46 UTC (rev 23466)
++++ branches/SAMBA_3_0/source/smbd/reply.c	2007-06-13 12:52:36 UTC (rev 23467)
+@@ -4588,38 +4588,9 @@
+ 		}
+ 
+ 		/*
+-		 * The source object must exist.
++		 * The source object must exist, and it may not have a
++		 * conflicting share mode.
+ 		 */
+-
+-		if (!vfs_object_exist(conn, directory, &sbuf1)) {
+-			DEBUG(3, ("rename_internals: source doesn't exist "
+-				  "doing rename %s -> %s\n",
+-				directory,newname));
+-
+-			if (errno == ENOTDIR || errno == EISDIR
+-			    || errno == ENOENT) {
+-				/*
+-				 * Must return different errors depending on
+-				 * whether the parent directory existed or
+-				 * not.
+-				 */
+-
+-				p = strrchr_m(directory, '/');
+-				if (!p)
+-					return NT_STATUS_OBJECT_NAME_NOT_FOUND;
+-				*p = '\0';
+-				if (vfs_object_exist(conn, directory, NULL))
+-					return NT_STATUS_OBJECT_NAME_NOT_FOUND;
+-				return NT_STATUS_OBJECT_PATH_NOT_FOUND;
+-			}
+-			status = map_nt_error_from_unix(errno);
+-			DEBUG(3, ("rename_internals: Error %s rename %s -> "
+-				  "%s\n", nt_errstr(status), directory,
+-				  newname));
+-
+-			return status;
+-		}
+-
+ 		status = can_rename(conn,directory,attrs,&sbuf1,False);
+ 
+ 		if (!NT_STATUS_IS_OK(status)) {
+@@ -4740,15 +4711,19 @@
+ 			return status;
+ 		}
+ 
+-		if (!vfs_object_exist(conn, fname, &sbuf1)) {
+-			status = NT_STATUS_OBJECT_NAME_NOT_FOUND;
+-			DEBUG(6, ("rename %s failed. Error %s\n",
+-				  fname, nt_errstr(status)));
+-			continue;
+-		}
++		/*
++		 * can_rename does an open_file_ntcreate which needs a valid
++		 * stat in case the file exists
++		 */
++
++		ZERO_STRUCT(sbuf1);
++		SMB_VFS_STAT(conn, fname, &sbuf1);
++
+ 		status = can_rename(conn,fname,attrs,&sbuf1,False);
++
+ 		if (!NT_STATUS_IS_OK(status)) {
+-			DEBUG(6, ("rename %s refused\n", fname));
++			DEBUG(6, ("rename %s refused: %s\n", fname,
++				  nt_errstr(status)));
+ 			continue;
+ 		}
+ 		pstrcpy(destname,newname);
+
+Modified: branches/SAMBA_3_0_26/source/smbd/reply.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/smbd/reply.c	2007-06-13 11:32:46 UTC (rev 23466)
++++ branches/SAMBA_3_0_26/source/smbd/reply.c	2007-06-13 12:52:36 UTC (rev 23467)
+@@ -4586,38 +4586,9 @@
+ 		}
+ 
+ 		/*
+-		 * The source object must exist.
++		 * The source object must exist, and it may not have a
++		 * conflicting share mode.
+ 		 */
+-
+-		if (!vfs_object_exist(conn, directory, &sbuf1)) {
+-			DEBUG(3, ("rename_internals: source doesn't exist "
+-				  "doing rename %s -> %s\n",
+-				directory,newname));
+-
+-			if (errno == ENOTDIR || errno == EISDIR
+-			    || errno == ENOENT) {
+-				/*
+-				 * Must return different errors depending on
+-				 * whether the parent directory existed or
+-				 * not.
+-				 */
+-
+-				p = strrchr_m(directory, '/');
+-				if (!p)
+-					return NT_STATUS_OBJECT_NAME_NOT_FOUND;
+-				*p = '\0';
+-				if (vfs_object_exist(conn, directory, NULL))
+-					return NT_STATUS_OBJECT_NAME_NOT_FOUND;
+-				return NT_STATUS_OBJECT_PATH_NOT_FOUND;
+-			}
+-			status = map_nt_error_from_unix(errno);
+-			DEBUG(3, ("rename_internals: Error %s rename %s -> "
+-				  "%s\n", nt_errstr(status), directory,
+-				  newname));
+-
+-			return status;
+-		}
+-
+ 		status = can_rename(conn,directory,attrs,&sbuf1,False);
+ 
+ 		if (!NT_STATUS_IS_OK(status)) {
+@@ -4738,15 +4709,19 @@
+ 			return status;
+ 		}
+ 
+-		if (!vfs_object_exist(conn, fname, &sbuf1)) {
+-			status = NT_STATUS_OBJECT_NAME_NOT_FOUND;
+-			DEBUG(6, ("rename %s failed. Error %s\n",
+-				  fname, nt_errstr(status)));
+-			continue;
+-		}
++		/*
++		 * can_rename does an open_file_ntcreate which needs a valid
++		 * stat in case the file exists
++		 */
++
++		ZERO_STRUCT(sbuf1);
++		SMB_VFS_STAT(conn, fname, &sbuf1);
++
+ 		status = can_rename(conn,fname,attrs,&sbuf1,False);
++
+ 		if (!NT_STATUS_IS_OK(status)) {
+-			DEBUG(6, ("rename %s refused\n", fname));
++			DEBUG(6, ("rename %s refused: %s\n", fname,
++				  nt_errstr(status)));
+ 			continue;
+ 		}
+ 		pstrcpy(destname,newname);
+

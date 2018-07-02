@@ -1,0 +1,100 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Jul  3 20:35:04 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l640Z4L9003532
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 3 Jul 2007 20:35:04 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id CB8A6162C3F
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed,  4 Jul 2007 00:34:59 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 501)
+	id 0B749162AEF; Wed,  4 Jul 2007 00:34:18 +0000 (GMT)
+To: samba-cvs@samba.org
+From: abartlet@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070704003418.0B749162AEF@lists.samba.org>
+Date: Wed,  4 Jul 2007 00:34:18 +0000 (GMT)
+Subject: svn commit: samba r23693 - in branches/SAMBA_4_0/source/selftest: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: abartlet
+Date: 2007-07-04 00:34:16 +0000 (Wed, 04 Jul 2007)
+New Revision: 23693
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23693
+
+Log:
+Give the process a chance to write out it's coverage data, before we
+blast a kill -9 at it.
+
+Andrew Bartlett
+
+Modified:
+   branches/SAMBA_4_0/source/selftest/Samba4.pm
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/selftest/Samba4.pm
+===================================================================
+--- branches/SAMBA_4_0/source/selftest/Samba4.pm	2007-07-03 23:48:02 UTC (rev 23692)
++++ branches/SAMBA_4_0/source/selftest/Samba4.pm	2007-07-04 00:34:16 UTC (rev 23693)
+@@ -514,19 +514,34 @@
+ sub teardown_env($$)
+ {
+ 	my ($self, $envvars) = @_;
++	my $pid;
+ 
+ 	close(DATA);
+ 
+-	sleep(2);
+-
+-	my $failed = $? >> 8;
+-
+ 	if (-f "$envvars->{PIDDIR}/smbd.pid" ) {
+ 		open(IN, "<$envvars->{PIDDIR}/smbd.pid") or die("unable to open smbd pid file");
+-		kill 9, <IN>;
++		$pid = <IN>;
+ 		close(IN);
++
++		# Give the process 20 seconds to exit.  gcov needs
++		# this time to write out the covarge data
++		my $count = 0;
++		until (kill(0, $pid) == 0) {
++		    # if no process sucessfully signalled, then we are done
++		    sleep(1);
++		    $count++;
++		    last if $count > 20;
++		}
++		
++		# If it is still around, kill it
++		if ($count > 20) {
++		    print "smbd process $pid took more than $count seconds to exit, killing\n";
++		    kill 9, $pid;
++		}
+ 	}
+ 
++	my $failed = $? >> 8;
++
+ 	$self->slapd_stop($envvars) if ($self->{ldap});
+ 
+ 	print $self->getlog_env($envvars);
+

@@ -1,0 +1,116 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon May  7 08:22:46 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l47CMkqD031134
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 7 May 2007 08:22:46 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id E85FA162BDD
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon,  7 May 2007 12:22:44 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-2.2 required=3.8 tests=ALL_TRUSTED,AWL,BAYES_00,
+	RCVD_IN_DSBL autolearn=ham version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from [127.0.0.1] (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id DB93D162AE0;
+	Mon,  7 May 2007 12:21:56 +0000 (GMT)
+From: simo <idra@samba.org>
+To: "Gerald (Jerry) Carter" <jerry@samba.org>
+In-Reply-To: <463F1480.9020803@samba.org>
+References: <20070506210431.33FEB162AD7@lists.samba.org>
+	<1178497691.28758.170.camel@localhost.localdomain>
+	<463E810E.6050207@samba.org>
+	<1178537863.28758.200.camel@localhost.localdomain>
+	<463F1480.9020803@samba.org>
+Content-Type: text/plain
+Organization: Samba Team
+Date: Mon, 07 May 2007 12:21:56 +0000
+Message-Id: <1178540516.28758.219.camel@localhost.localdomain>
+Mime-Version: 1.0
+X-Mailer: Evolution 2.8.1 
+Content-Transfer-Encoding: 7bit
+Cc: samba-technical@lists.samba.org
+Subject: Re: svn commit: samba r22713 -
+	in	branches:	SAMBA_3_0/source/nsswitch SAMBA_3_0_26/source/nsswitch
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+On Mon, 2007-05-07 at 06:58 -0500, Gerald (Jerry) Carter wrote:
+> -----BEGIN PGP SIGNED MESSAGE-----
+> Hash: SHA1
+> 
+> simo wrote:
+> 
+> > Yes, the cache should help, but there are still some backends 
+> > that can safely be queried when offline.
+> 
+> I spent some more time thinking about this and it doesn't
+> really matter.    For example, idmap_nss is really only
+> needed by applications that deal in tokens like smbd.
+> The offlne logon geature is strictly for use by PAM
+> enabled applications,  And in that case, the process will
+> only deal in gids.  So if a user has logged in once
+> (which he or she must have in order to logon while offline),
+> the the appropriate SID/uid/gid mappings have been cached.
+> Same thing fro idmap_passdb.
+> 
+> idmap_rid should not be used for SIDs that you cannot
+> determine the type for which means that by definition you
+> have already cached that information as well.
+> 
+> I think you are dealing in theoreticals without actually
+> having tested a working system.
+
+Yeah maybe I am over-concerned here :)
+
+> > In fact you shouldn't allocate if you are not able to 
+> > validate the SID. When offline allocation functions should
+> > probably not be called (previously the validation code
+> > was in idmap so it was easy to avoid problems ...)
+> 
+> You misunderstand the design of the offline logon feature
+> then.  The basic premise is that the core winbindd code does
+> not change.  So we don't have to have special code in each
+> winbindd API call (auth being the exception).  The cache manager
+> must be able to answer the query without calling the underlying
+> backends which are not guaranteed to work offline.  The fact
+> that some can is irrelevant.  The idmap cache manager must
+> not be required to know which ones can and which one cannot.
+> This is why you cannot delete expired entries from the
+> idmap_cache.tdb as you were previously doing.
+
+Well, deleting negative cached entries is not a big deal, you are going
+to return a missing mapping anyway without hitting the backends, so the
+behavior should be the same. But I am ok with your change.
+
+> After I've finished regression testing in the next day or so,
+> if you can give me a specific example where it is necessary
+> to actually call into an idmap backend while offline to make
+> something work wecan deal with that case.  But talking about
+> theoretical possibilities leads to bloated code.
+
+Sure, make sense to me, I just needed some more explanation and I think
+you are right here. Thanks.
+
+Simo.
+
+-- 
+Simo Sorce
+Samba Team GPL Compliance Officer
+email: idra@samba.org
+http://samba.org
+

@@ -1,0 +1,225 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu May 10 20:41:03 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4B0f2qD016458
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 10 May 2007 20:41:03 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id A59B1162BD1
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 11 May 2007 00:41:00 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 7948D162AC1; Fri, 11 May 2007 00:40:40 +0000 (GMT)
+Date: Fri, 11 May 2007 10:33:44 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070511004040.7948D162AC1@lists.samba.org>
+Subject: Rev 276: - merge from ronnie in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 276
+revision-id: tridge@samba.org-20070511003343-mdcfsv1todutp5mz
+parent: tridge@samba.org-20070510074345-gp2mm5z8rqhytnvu
+parent: sahlberg@ronnie-20070510200817-cd0cc3a541930600
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Fri 2007-05-11 10:33:43 +1000
+message:
+  - merge from ronnie
+  - increment rsn only in become_dmaster
+  - add torture check for rsn regression in ctdb_ltdb_store
+modified:
+  common/ctdb_call.c             ctdb_call.c-20061128065342-to93h6eejj5kon81-1
+  common/ctdb_client.c           ctdb_client.c-20070411010216-3kd8v37k61steeya-1
+  common/ctdb_ltdb.c             ctdb_ltdb.c-20061128065342-to93h6eejj5kon81-2
+    ------------------------------------------------------------
+    revno: 197.1.100
+    merged: sahlberg@ronnie-20070510200817-cd0cc3a541930600
+    parent: sahlberg@ronnie-20070510194011-4b6a20e4195d6b18
+    committer: Ronnie Sahlberg <sahlberg@ronnie>
+    branch nick: ctdb
+    timestamp: Fri 2007-05-11 06:08:17 +1000
+    message:
+      we must bump the rsn everytime we do a REQ_DMASTER or a REPLY_DMASTER
+      to make sure that the "merge records based on rsn during recovery" will
+      merge correctly.
+      
+      this is extra important since samba3 never bumps the record when it 
+      writes new data to it !
+    ------------------------------------------------------------
+    revno: 197.1.99
+    merged: sahlberg@ronnie-20070510194011-4b6a20e4195d6b18
+    parent: sahlberg@ronnie-20070510075951-10d944d8d76842c0
+    committer: Ronnie Sahlberg <sahlberg@ronnie>
+    branch nick: ctdb
+    timestamp: Fri 2007-05-11 05:40:11 +1000
+    message:
+      make ctdb_control catdb work again
+    ------------------------------------------------------------
+    revno: 197.1.98
+    merged: sahlberg@ronnie-20070510075951-10d944d8d76842c0
+    parent: sahlberg@ronnie-20070510001058-a7ac6eddce1344a8
+    parent: tridge@samba.org-20070510074345-gp2mm5z8rqhytnvu
+    committer: Ronnie Sahlberg <sahlberg@ronnie>
+    branch nick: ctdb
+    timestamp: Thu 2007-05-10 17:59:51 +1000
+    message:
+      merge from tridge
+=== modified file 'common/ctdb_call.c'
+--- a/common/ctdb_call.c	2007-05-10 07:43:45 +0000
++++ b/common/ctdb_call.c	2007-05-11 00:33:43 +0000
+@@ -295,7 +295,7 @@
+ 	DEBUG(2,("vnn %u dmaster response %08x\n", ctdb->vnn, ctdb_hash(&key)));
+ 
+ 	ZERO_STRUCT(header);
+-	header.rsn = rsn;
++	header.rsn = rsn + 1;
+ 	header.dmaster = ctdb->vnn;
+ 
+ 	if (ctdb_ltdb_store(ctdb_db, key, &header, data) != 0) {
+
+=== modified file 'common/ctdb_client.c'
+--- a/common/ctdb_client.c	2007-05-10 07:43:45 +0000
++++ b/common/ctdb_client.c	2007-05-10 19:40:11 +0000
+@@ -1037,17 +1037,16 @@
+ {
+ 	int i, ret;
+ 	TDB_DATA indata, outdata;
++	struct ctdb_control_pulldb pull;
++	struct ctdb_control_pulldb_reply *reply;
++	struct ctdb_rec_data *rec;
+ 	int32_t res;
+-	unsigned char *ptr;
+-
+-	DEBUG(0,("ronnie to fix!\n"));
+-	return -1;
+-
+-	indata.dsize = 2*sizeof(uint32_t);
+-	indata.dptr  = (unsigned char *)talloc_array(mem_ctx, uint32_t, 2);
+-
+-	((uint32_t *)(&indata.dptr[0]))[0] = dbid;
+-	((uint32_t *)(&indata.dptr[0]))[1] = lmaster;
++
++	pull.db_id   = dbid;
++	pull.lmaster = lmaster;
++
++	indata.dsize = sizeof(struct ctdb_control_pulldb);
++	indata.dptr  = (unsigned char *)&pull;
+ 
+ 	ret = ctdb_control(ctdb, destnode, 0, 
+ 			   CTDB_CONTROL_PULL_DB, 0, indata, 
+@@ -1058,45 +1057,34 @@
+ 	}
+ 
+ 
+-	keys->dbid   = ((uint32_t *)(&outdata.dptr[0]))[0];
+-	keys->num    = ((uint32_t *)(&outdata.dptr[0]))[1];
+-	keys->keys   =talloc_array(mem_ctx, TDB_DATA, keys->num);
+-	keys->headers=talloc_array(mem_ctx, struct ctdb_ltdb_header, keys->num);
+-	keys->lmasters=talloc_array(mem_ctx, uint32_t, keys->num);
+-	keys->data=talloc_array(mem_ctx, TDB_DATA, keys->num);
+-
+-	/* loop over all key/data pairs */
+-	ptr=&outdata.dptr[8];
+-	for(i=0;i<keys->num;i++){
+-		TDB_DATA *key, *data;
+-
+-		keys->lmasters[i] = *((uint32_t *)ptr);
+-		ptr += 4;
+-
+-		key = &keys->keys[i];
+-		key->dsize = *((uint32_t *)ptr);
+-		key->dptr = talloc_size(mem_ctx, key->dsize);
+-		ptr += 4;
+-
+-		data = &keys->data[i];
+-		data->dsize = *((uint32_t *)ptr);
+-		data->dptr = talloc_size(mem_ctx, data->dsize);
+-		ptr += 4;
+-
+-		ptr = outdata.dptr+(((ptr-outdata.dptr)+CTDB_DS_ALIGNMENT-1)& ~(CTDB_DS_ALIGNMENT-1));
+-		memcpy(key->dptr, ptr, key->dsize);
+-		ptr += key->dsize;
+-
+-		ptr = outdata.dptr+(((ptr-outdata.dptr)+CTDB_DS_ALIGNMENT-1)& ~(CTDB_DS_ALIGNMENT-1));
+-		memcpy(&keys->headers[i], ptr, sizeof(struct ctdb_ltdb_header));
+-		ptr += sizeof(struct ctdb_ltdb_header);
+-
+-		ptr = outdata.dptr+(((ptr-outdata.dptr)+CTDB_DS_ALIGNMENT-1)& ~(CTDB_DS_ALIGNMENT-1));
+-		memcpy(data->dptr, ptr, data->dsize);
+-		ptr += data->dsize;
+-
+-		ptr = outdata.dptr+(((ptr-outdata.dptr)+CTDB_DS_ALIGNMENT-1)& ~(CTDB_DS_ALIGNMENT-1));
+-	}
++	reply = (struct ctdb_control_pulldb_reply *)outdata.dptr;
++	keys->dbid     = reply->db_id;
++	keys->num      = reply->count;
++	
++	keys->keys     = talloc_array(mem_ctx, TDB_DATA, keys->num);
++	keys->headers  = talloc_array(mem_ctx, struct ctdb_ltdb_header, keys->num);
++	keys->lmasters = talloc_array(mem_ctx, uint32_t, keys->num);
++	keys->data     = talloc_array(mem_ctx, TDB_DATA, keys->num);
++
++	rec = (struct ctdb_rec_data *)&reply->data[0];
++
++	for (i=0;i<reply->count;i++) {
++		keys->keys[i].dptr = talloc_memdup(mem_ctx, &rec->data[0], rec->keylen);
++		keys->keys[i].dsize = rec->keylen;
++
++		keys->data[i].dptr = talloc_memdup(mem_ctx, &rec->data[keys->keys[i].dsize], rec->datalen);
++		keys->data[i].dsize = rec->datalen;
++
++		if (keys->data[i].dsize < sizeof(struct ctdb_ltdb_header)) {
++			DEBUG(0,(__location__ " bad ltdb record\n"));
++			return -1;
++		}
++		memcpy(&keys->headers[i], keys->data[i].dptr, sizeof(struct ctdb_ltdb_header));
++		keys->data[i].dptr += sizeof(struct ctdb_ltdb_header);
++		keys->data[i].dsize -= sizeof(struct ctdb_ltdb_header);
++
++		rec = (struct ctdb_rec_data *)(rec->length + (uint8_t *)rec);
++	}	    
+ 
+ 	return 0;
+ }
+
+=== modified file 'common/ctdb_ltdb.c'
+--- a/common/ctdb_ltdb.c	2007-05-10 07:43:45 +0000
++++ b/common/ctdb_ltdb.c	2007-05-11 00:33:43 +0000
+@@ -145,6 +145,17 @@
+ 	TDB_DATA rec;
+ 	int ret;
+ 
++	if (ctdb->flags & CTDB_FLAG_TORTURE) {
++		struct ctdb_ltdb_header *h2;
++		rec = tdb_fetch(ctdb_db->ltdb->tdb, key);
++		h2 = (struct ctdb_ltdb_header *)rec.dptr;
++		if (rec.dptr && rec.dsize >= sizeof(h2) && h2->rsn > header->rsn) {
++			DEBUG(0,("RSN regression! %llu %llu\n",
++				 (unsigned long long)h2->rsn, (unsigned long long)header->rsn));
++		}
++		if (rec.dptr) free(rec.dptr);
++	}
++
+ 	rec.dsize = sizeof(*header) + data.dsize;
+ 	rec.dptr = talloc_size(ctdb, rec.dsize);
+ 	CTDB_NO_MEMORY(ctdb, rec.dptr);
+

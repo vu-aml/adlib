@@ -1,0 +1,134 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu May 17 03:54:25 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4H7sOqD029242
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 17 May 2007 03:54:24 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 02456163891
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 17 May 2007 07:54:22 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.6 required=3.8 tests=AWL,BAYES_00,
+	DATE_IN_PAST_03_06,NO_REAL_NAME,NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 074D3162ACA; Thu, 17 May 2007 07:53:56 +0000 (GMT)
+Date: Thu, 17 May 2007 14:10:41 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070517075356.074D3162ACA@lists.samba.org>
+Subject: Rev 313: removed the CTDB_CTRL_FLAG_NOREQUEUE flag in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 313
+revision-id: tridge@samba.org-20070517041038-4t1bimu6vhoywhao
+parent: tridge@samba.org-20070517024650-i4at8m57g4gzoasu
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Thu 2007-05-17 14:10:38 +1000
+message:
+  removed the CTDB_CTRL_FLAG_NOREQUEUE flag
+modified:
+  common/ctdb_client.c           ctdb_client.c-20070411010216-3kd8v37k61steeya-1
+  common/ctdb_control.c          ctdb_control.c-20070426122724-j6gkpiofhbwdin63-1
+  include/ctdb_private.h         ctdb_private.h-20061117234101-o3qt14umlg9en8z0-13
+=== modified file 'common/ctdb_client.c'
+--- a/common/ctdb_client.c	2007-05-17 02:07:29 +0000
++++ b/common/ctdb_client.c	2007-05-17 04:10:38 +0000
+@@ -705,13 +705,6 @@
+ 		ctdb_socket_connect(ctdb);
+ 	}
+ 
+-	/* if the caller specified a timeout it makes no sense for the
+-	   daemon to requeue the packet if the destination is unavailable
+-	 */
+-	if (timeout) {
+-		flags |= CTDB_CTRL_FLAG_NOREQUEUE;
+-	}
+-
+ 	state = talloc_zero(ctdb, struct ctdb_client_control_state);
+ 	CTDB_NO_MEMORY(ctdb, state);
+ 
+
+=== modified file 'common/ctdb_control.c'
+--- a/common/ctdb_control.c	2007-05-17 00:45:31 +0000
++++ b/common/ctdb_control.c	2007-05-17 04:10:38 +0000
+@@ -32,6 +32,7 @@
+ 	uint32_t reqid;
+ 	ctdb_control_callback_fn_t callback;
+ 	void *private_data;
++	unsigned flags;
+ };
+ 
+ /*
+@@ -362,19 +363,15 @@
+ 		       struct timeval t, void *private_data)
+ {
+ 	struct ctdb_control_state *state = talloc_get_type(private_data, struct ctdb_control_state);
+-	struct ctdb_req_control *c = (struct ctdb_req_control *)state->private_data;
+ 	TALLOC_CTX *tmp_ctx = talloc_new(ev);
+ 
+ 	state->ctdb->status.timeouts.control++;
+ 
+ 	talloc_steal(tmp_ctx, state);
+ 
+-	/* Dont retry the control if the caller asked for NOREQUEUE */
+-	if (!(c->flags & CTDB_CTRL_FLAG_NOREQUEUE)) {
+-		state->callback(state->ctdb, -1, tdb_null,
+-				"ctdb_control timed out", 
+-				state->private_data);
+-	}
++	state->callback(state->ctdb, -1, tdb_null,
++			"ctdb_control timed out", 
++			state->private_data);
+ 	talloc_free(tmp_ctx);
+ }
+ 
+@@ -407,6 +404,7 @@
+ 	state->callback = callback;
+ 	state->private_data = private_data;
+ 	state->ctdb = ctdb;
++	state->flags = flags;
+ 
+ 	talloc_set_destructor(state, ctdb_control_destructor);
+ 
+
+=== modified file 'include/ctdb_private.h'
+--- a/include/ctdb_private.h	2007-05-17 00:45:31 +0000
++++ b/include/ctdb_private.h	2007-05-17 04:10:38 +0000
+@@ -295,8 +295,8 @@
+    re-issue the call */
+ #define CTDB_CALL_TIMEOUT 2
+ 
+-/* timeout for ctdb control calls */
+-#define CTDB_CONTROL_TIMEOUT 10
++/* maximum timeout for ctdb control calls */
++#define CTDB_CONTROL_TIMEOUT 60
+ 
+ /* timeout for ctdb traverse calls. When this is reached we cut short
+    the traverse */
+@@ -520,7 +520,6 @@
+ 	uint64_t srvid;
+ 	uint32_t client_id;
+ #define CTDB_CTRL_FLAG_NOREPLY   1
+-#define CTDB_CTRL_FLAG_NOREQUEUE 2
+ 	uint32_t flags;
+ 	uint32_t datalen;
+ 	uint8_t data[1];
+

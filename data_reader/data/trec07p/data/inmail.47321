@@ -1,0 +1,192 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May 30 21:10:37 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4V1AahB021541
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 30 May 2007 21:10:36 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id A485C1638AF
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 31 May 2007 01:10:31 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.3 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id D698F162AFD; Thu, 31 May 2007 01:09:58 +0000 (GMT)
+Date: Thu, 31 May 2007 11:09:45 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070531010958.D698F162AFD@lists.samba.org>
+Subject: Rev 406: added hooks to make nfs statd behave correctly on failover
+	in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 406
+revision-id: tridge@samba.org-20070531010945-9ep7p4ayvrdgartq
+parent: tridge@samba.org-20070530080657-cltwez2ku257i2tr
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Thu 2007-05-31 11:09:45 +1000
+message:
+  added hooks to make nfs statd behave correctly on failover
+removed:
+  README                         readme-20061117235635-y14mgeg2d0t13ms5-1
+added:
+  packaging/RHEL/setup/statd-callout statdcallout-20070531010857-6sdlz455vusye5y5-1
+modified:
+  .bzrignore                     bzrignore-20061117235536-slq8jlz2b5161dfm-1
+  packaging/RHEL/ctdb.spec       ctdb.spec-20070527204758-biuh7znabuwan3zn-3
+  packaging/RHEL/setup/ctdb.sysconfig ctdb.sysconfig-20070527204758-biuh7znabuwan3zn-7
+  tools/events                   events-20070529030121-04fjh63cxfh8v1pj-1
+=== removed file 'README'
+--- a/README	2006-11-17 23:57:01 +0000
++++ b/README	1970-01-01 00:00:00 +0000
+@@ -1,3 +0,0 @@
+-To build this you need a recent copy of talloc, libreplace and tdb in
+-the directory above this directory.
+-
+
+=== added file 'packaging/RHEL/setup/statd-callout'
+--- a/packaging/RHEL/setup/statd-callout	1970-01-01 00:00:00 +0000
++++ b/packaging/RHEL/setup/statd-callout	2007-05-31 01:09:45 +0000
+@@ -0,0 +1,44 @@
++#!/bin/sh
++
++. /etc/sysconfig/ctdb
++
++[ -z "$STATD_SHARED_DIRECTORY" ] && exit 0
++
++[ -d $STATD_SHARED_DIRECTORY ] || exit 0
++
++case "$1" in
++  add-client)
++        for f in `/bin/ls /etc/ctdb/ip.*`; do
++	    fname=`/bin/basename $f`
++	    ip=`echo $fname | cut -d. -f2-`
++	    [ -d $STATD_SHARED_DIRECTORY/$ip ] || /bin/mkdir $STATD_SHARED_DIRECTORY/$ip
++	    /bin/touch $STATD_SHARED_DIRECTORY/$ip/$2
++	done
++	;;
++  del-client)
++        for f in `/bin/ls /etc/ctdb/ip.*`; do
++	    fname=`/bin/basename $f`
++	    ip=`echo $fname | cut -d. -f2-`
++	    /bin/rm -f $STATD_SHARED_DIRECTORY/$ip/$2
++	done
++	;;
++  copy)
++	restart_needed=0
++        for f in `/bin/ls /etc/ctdb/ip.*`; do
++	    fname=`/bin/basename $f`
++	    ip=`echo $fname | cut -d. -f2-`
++	    [ -d $STATD_SHARED_DIRECTORY/$ip ] && {
++		/bin/mv $STATD_SHARED_DIRECTORY/$ip $STATD_SHARED_DIRECTORY/$ip.$$
++		/bin/cp -a $STATD_SHARED_DIRECTORY/$ip.$$/. /var/lib/nfs/statd/sm/
++		/bin/rm -rf $STATD_SHARED_DIRECTORY/$ip.$$
++		restart_needed=1
++	    }
++	done
++	# restart lockd if necessary
++	[ $restart_needed -eq 1 ] && {
++		( /sbin/service nfslock status > /dev/null 2>&1 && 
++                      /sbin/service nfslock restart > /dev/null 2>&1 ) &
++	} > /dev/null 2>&1
++	;;
++esac
++
+
+=== modified file '.bzrignore'
+--- a/.bzrignore	2007-04-26 13:40:14 +0000
++++ b/.bzrignore	2007-05-31 01:09:45 +0000
+@@ -15,3 +15,4 @@
+ ctdb-2
+ ctdb-3
+ nodes.txt
++TAGS
+
+=== modified file 'packaging/RHEL/ctdb.spec'
+--- a/packaging/RHEL/ctdb.spec	2007-05-30 01:17:52 +0000
++++ b/packaging/RHEL/ctdb.spec	2007-05-31 01:09:45 +0000
+@@ -66,6 +66,7 @@
+ install -m644 setup/ctdb.sysconfig $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig/ctdb
+ install -m755 setup/ctdb.init $RPM_BUILD_ROOT%{initdir}/ctdb
+ install -m755 tools/events $RPM_BUILD_ROOT%{_sysconfdir}/ctdb/events
++install -m755 tools/statd-callout $RPM_BUILD_ROOT%{_sysconfdir}/ctdb/statd-callout
+ install -m755 tools/onnode.ssh $RPM_BUILD_ROOT%{_bindir}
+ install -m755 tools/onnode.rsh $RPM_BUILD_ROOT%{_bindir}
+ ln -sf %{_bindir}/onnode.ssh $RPM_BUILD_ROOT%{_bindir}/onnode
+@@ -107,6 +108,7 @@
+ %attr(755,root,root) %config %{initdir}/ctdb
+ 
+ %{_sysconfdir}/ctdb/events
++%{_sysconfdir}/ctdb/statd-callout
+ %{_sbindir}/ctdbd
+ %{_bindir}/ctdb
+ %{_bindir}/onnode.ssh
+@@ -114,4 +116,3 @@
+ %{_bindir}/onnode
+ %{_includedir}/ctdb.h
+ %{_includedir}/ctdb_private.h
+-
+
+=== modified file 'packaging/RHEL/setup/ctdb.sysconfig'
+--- a/packaging/RHEL/setup/ctdb.sysconfig	2007-05-30 02:37:03 +0000
++++ b/packaging/RHEL/setup/ctdb.sysconfig	2007-05-31 01:09:45 +0000
+@@ -47,6 +47,11 @@
+ # the default is not to wait for any local services
+ # CTDB_WAIT_TCP_PORTS="445 139"
+ 
++# the shared directory where you want to put statd information on
++# which clients to notify on a NFS restart
++# there is no default
++# STATD_SHARED_DIRECTORY="/some/shared/directory"
++
+ # any other options you might want. Run ctdbd --help for a list
+ # CTDB_OPTIONS=
+ 
+
+=== modified file 'tools/events'
+--- a/tools/events	2007-05-30 06:11:39 +0000
++++ b/tools/events	2007-05-31 01:09:45 +0000
+@@ -43,6 +43,10 @@
+ 	}
+ 	# if we have a local arp entry for this IP then remove it
+ 	/sbin/arp -d $ip 2> /dev/null
++
++	# having a list of what IPs we have allows statd to do the right 
++	# thing via /etc/ctdb/statd-callout
++	/bin/touch /etc/ctdb/ip.$ip
+ 	exit 0
+ 	;;
+ 
+@@ -61,12 +65,14 @@
+ 	# if we have a local arp entry for this IP then remove it
+ 	/sbin/arp -d $ip 2> /dev/null
+ 	echo $ip >> /etc/ctdb/released_ips
++	/bin/rm -f /etc/ctdb/ip.$ip
+ 	exit 0
+ 	;;
+ 
+      recovered)
+         # restart any services as necessary, like NFS
+ 	# 
++	[ -x /etc/ctdb/statd-callout ] && /etc/ctdb/statd-callout copy
+ 	[ -f /etc/ctdb/released_ips ] && {
+ 		( /sbin/service nfs status > /dev/null 2>&1 && 
+                       /sbin/service nfs restart > /dev/null 2>&1 ) &
+

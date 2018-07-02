@@ -1,0 +1,509 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu May 17 04:47:39 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4H8ldqD030043
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 17 May 2007 04:47:39 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 18D0A163867
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 17 May 2007 08:47:36 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id D32BA162ACA; Thu, 17 May 2007 08:47:07 +0000 (GMT)
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070517084707.D32BA162ACA@lists.samba.org>
+Date: Thu, 17 May 2007 08:47:07 +0000 (GMT)
+Subject: svn commit: samba r22969 - in branches/SAMBA_4_0/source:
+	auth/credentials auth/gensec auth/kerberos client dsdb/samdb
+	dsdb/samdb/ldb_modules kdc torture torture/auth torture/basic
+	torture/libnet torture/local torture/raw torture/rpc
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: tridge
+Date: 2007-05-17 08:47:04 +0000 (Thu, 17 May 2007)
+New Revision: 22969
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22969
+
+Log:
+
+fix some more places where we could end up with more than one event
+context. We now have an event context on the torture_context, and we
+can also get one from the cli_credentials structure
+
+Modified:
+   branches/SAMBA_4_0/source/auth/credentials/credentials.c
+   branches/SAMBA_4_0/source/auth/credentials/credentials.h
+   branches/SAMBA_4_0/source/auth/credentials/credentials_krb5.c
+   branches/SAMBA_4_0/source/auth/gensec/gensec_gssapi.c
+   branches/SAMBA_4_0/source/auth/kerberos/krb5_init_context.c
+   branches/SAMBA_4_0/source/auth/kerberos/krb5_init_context.h
+   branches/SAMBA_4_0/source/client/client.c
+   branches/SAMBA_4_0/source/dsdb/samdb/cracknames.c
+   branches/SAMBA_4_0/source/dsdb/samdb/ldb_modules/password_hash.c
+   branches/SAMBA_4_0/source/kdc/kdc.c
+   branches/SAMBA_4_0/source/torture/auth/pac.c
+   branches/SAMBA_4_0/source/torture/basic/misc.c
+   branches/SAMBA_4_0/source/torture/libnet/libnet_BecomeDC.c
+   branches/SAMBA_4_0/source/torture/local/irpc.c
+   branches/SAMBA_4_0/source/torture/local/messaging.c
+   branches/SAMBA_4_0/source/torture/local/resolve.c
+   branches/SAMBA_4_0/source/torture/raw/composite.c
+   branches/SAMBA_4_0/source/torture/raw/open.c
+   branches/SAMBA_4_0/source/torture/rpc/async_bind.c
+   branches/SAMBA_4_0/source/torture/torture.c
+   branches/SAMBA_4_0/source/torture/ui.h
+   branches/SAMBA_4_0/source/torture/util_smb.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/auth/credentials/credentials.c
+===================================================================
+--- branches/SAMBA_4_0/source/auth/credentials/credentials.c	2007-05-17 07:52:33 UTC (rev 22968)
++++ branches/SAMBA_4_0/source/auth/credentials/credentials.c	2007-05-17 08:47:04 UTC (rev 22969)
+@@ -27,6 +27,7 @@
+ #include "auth/credentials/credentials.h"
+ #include "auth/credentials/credentials_krb5.h"
+ #include "libcli/auth/libcli_auth.h"
++#include "lib/events/events.h"
+ 
+ /**
+  * Create a new credentials structure
+@@ -61,6 +62,7 @@
+ 
+ 	cred->tries = 3;
+ 	cred->callback_running = False;
++	cred->ev = NULL;
+ 
+ 	cli_credentials_set_kerberos_state(cred, CRED_AUTO_USE_KERBEROS);
+ 	cli_credentials_set_gensec_features(cred, 0);
+@@ -747,3 +749,22 @@
+ 
+ 	return (cred->tries > 0);
+ }
++
++/*
++  set the common event context for this set of credentials
++ */
++void cli_credentials_set_event_context(struct cli_credentials *cred, struct event_context *ev)
++{
++	cred->ev = ev;
++}
++
++/*
++  set the common event context for this set of credentials
++ */
++struct event_context *cli_credentials_get_event_context(struct cli_credentials *cred)
++{
++	if (cred->ev == NULL) {
++		cred->ev = event_context_find(cred);
++	}
++	return cred->ev;
++}
+
+Modified: branches/SAMBA_4_0/source/auth/credentials/credentials.h
+===================================================================
+--- branches/SAMBA_4_0/source/auth/credentials/credentials.h	2007-05-17 07:52:33 UTC (rev 22968)
++++ branches/SAMBA_4_0/source/auth/credentials/credentials.h	2007-05-17 08:47:04 UTC (rev 22969)
+@@ -114,6 +114,9 @@
+ 
+ 	/* Whether any callback is currently running */
+ 	BOOL callback_running;
++
++	/* an event context for anyone wanting to use the credentials */
++	struct event_context *ev;
+ };
+ 
+ struct ldb_context;
+
+Modified: branches/SAMBA_4_0/source/auth/credentials/credentials_krb5.c
+===================================================================
+--- branches/SAMBA_4_0/source/auth/credentials/credentials_krb5.c	2007-05-17 07:52:33 UTC (rev 22968)
++++ branches/SAMBA_4_0/source/auth/credentials/credentials_krb5.c	2007-05-17 08:47:04 UTC (rev 22969)
+@@ -37,7 +37,8 @@
+ 		return 0;
+ 	}
+ 
+-	ret = smb_krb5_init_context(cred, &cred->smb_krb5_context);
++	ret = smb_krb5_init_context(cred, cli_credentials_get_event_context(cred), 
++				    &cred->smb_krb5_context);
+ 	if (ret) {
+ 		return ret;
+ 	}
+
+Modified: branches/SAMBA_4_0/source/auth/gensec/gensec_gssapi.c
+===================================================================
+--- branches/SAMBA_4_0/source/auth/gensec/gensec_gssapi.c	2007-05-17 07:52:33 UTC (rev 22968)
++++ branches/SAMBA_4_0/source/auth/gensec/gensec_gssapi.c	2007-05-17 08:47:04 UTC (rev 22969)
+@@ -23,6 +23,7 @@
+ */
+ 
+ #include "includes.h"
++#include "lib/events/events.h"
+ #include "system/kerberos.h"
+ #include "heimdal/lib/gssapi/gssapi/gssapi.h"
+ #include "auth/kerberos/kerberos.h"
+@@ -226,6 +227,7 @@
+ 	}
+ 
+ 	ret = smb_krb5_init_context(gensec_gssapi_state, 
++				    gensec_security->event_ctx,
+ 				    &gensec_gssapi_state->smb_krb5_context);
+ 	if (ret) {
+ 		DEBUG(1,("gensec_krb5_start: krb5_init_context failed (%s)\n",
+
+Modified: branches/SAMBA_4_0/source/auth/kerberos/krb5_init_context.c
+===================================================================
+--- branches/SAMBA_4_0/source/auth/kerberos/krb5_init_context.c	2007-05-17 07:52:33 UTC (rev 22968)
++++ branches/SAMBA_4_0/source/auth/kerberos/krb5_init_context.c	2007-05-17 08:47:04 UTC (rev 22969)
+@@ -355,11 +355,11 @@
+ }
+ 
+ krb5_error_code smb_krb5_init_context(void *parent_ctx, 
++				      struct event_context *ev,
+ 				       struct smb_krb5_context **smb_krb5_context) 
+ {
+ 	krb5_error_code ret;
+ 	TALLOC_CTX *tmp_ctx;
+-	struct event_context *ev;
+ 	char **config_files;
+ 	const char *config_file;
+ 	
+@@ -446,7 +446,6 @@
+ 	}
+ 	krb5_set_warn_dest((*smb_krb5_context)->krb5_context, (*smb_krb5_context)->logf);
+ 
+-	ev = event_context_find(*smb_krb5_context);
+ 	/* Set use of our socket lib */
+ 	ret = krb5_set_send_to_kdc_func((*smb_krb5_context)->krb5_context, 
+ 					smb_krb5_send_and_recv_func, 
+
+Modified: branches/SAMBA_4_0/source/auth/kerberos/krb5_init_context.h
+===================================================================
+--- branches/SAMBA_4_0/source/auth/kerberos/krb5_init_context.h	2007-05-17 07:52:33 UTC (rev 22968)
++++ branches/SAMBA_4_0/source/auth/kerberos/krb5_init_context.h	2007-05-17 08:47:04 UTC (rev 22969)
+@@ -23,7 +23,8 @@
+ 	krb5_log_facility *logf;
+ };
+ 	
+-krb5_error_code smb_krb5_init_context(void *parent_ctx, 
++struct event_context;
++krb5_error_code smb_krb5_init_context(void *parent_ctx, struct event_context *ev,
+ 				      struct smb_krb5_context **smb_krb5_context); 
+ void smb_krb5_free_context(struct smb_krb5_context *smb_krb5_context);
+ 
+
+Modified: branches/SAMBA_4_0/source/client/client.c
+===================================================================
+--- branches/SAMBA_4_0/source/client/client.c	2007-05-17 07:52:33 UTC (rev 22968)
++++ branches/SAMBA_4_0/source/client/client.c	2007-05-17 08:47:04 UTC (rev 22969)
+@@ -2994,7 +2994,8 @@
+ 	ctx->remote_cur_dir = talloc_strdup(ctx, "\\");
+ 	
+ 	status = smbcli_full_connection(ctx, &ctx->cli, server,
+-					share, NULL, cred, NULL);
++					share, NULL, cred, 
++					cli_credentials_get_event_context(cred));
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		d_printf("Connection to \\\\%s\\%s failed - %s\n", 
+ 			 server, share, nt_errstr(status));
+
+Modified: branches/SAMBA_4_0/source/dsdb/samdb/cracknames.c
+===================================================================
+--- branches/SAMBA_4_0/source/dsdb/samdb/cracknames.c	2007-05-17 07:52:33 UTC (rev 22968)
++++ branches/SAMBA_4_0/source/dsdb/samdb/cracknames.c	2007-05-17 08:47:04 UTC (rev 22969)
+@@ -348,7 +348,9 @@
+ 	struct ldb_dn *name_dn = NULL;
+ 
+ 	struct smb_krb5_context *smb_krb5_context;
+-	ret = smb_krb5_init_context(mem_ctx, &smb_krb5_context);
++	ret = smb_krb5_init_context(mem_ctx, 
++				    ldb_get_opaque(sam_ctx, "EventContext"), 
++				    &smb_krb5_context);
+ 				
+ 	if (ret) {
+ 		return WERR_NOMEM;
+
+Modified: branches/SAMBA_4_0/source/dsdb/samdb/ldb_modules/password_hash.c
+===================================================================
+--- branches/SAMBA_4_0/source/dsdb/samdb/ldb_modules/password_hash.c	2007-05-17 07:52:33 UTC (rev 22968)
++++ branches/SAMBA_4_0/source/dsdb/samdb/ldb_modules/password_hash.c	2007-05-17 08:47:04 UTC (rev 22969)
+@@ -1430,7 +1430,9 @@
+ 	}
+ 
+ 	/* Some operations below require kerberos contexts */
+-	if (smb_krb5_init_context(ac->down_req, &smb_krb5_context) != 0) {
++	if (smb_krb5_init_context(ac->down_req, 
++				  ldb_get_opaque(h->module->ldb, "EventContext"), 
++				  &smb_krb5_context) != 0) {
+ 		return LDB_ERR_OPERATIONS_ERROR;
+ 	}
+ 
+@@ -1760,7 +1762,9 @@
+ 	msg->dn = ac->orig_req->op.mod.message->dn;
+ 
+ 	/* Some operations below require kerberos contexts */
+-	if (smb_krb5_init_context(ac->mod_req, &smb_krb5_context) != 0) {
++	if (smb_krb5_init_context(ac->mod_req, 
++				  ldb_get_opaque(h->module->ldb, "EventContext"), 
++				  &smb_krb5_context) != 0) {
+ 		return LDB_ERR_OPERATIONS_ERROR;
+ 	}
+ 
+
+Modified: branches/SAMBA_4_0/source/kdc/kdc.c
+===================================================================
+--- branches/SAMBA_4_0/source/kdc/kdc.c	2007-05-17 07:52:33 UTC (rev 22968)
++++ branches/SAMBA_4_0/source/kdc/kdc.c	2007-05-17 08:47:04 UTC (rev 22969)
+@@ -582,7 +582,7 @@
+ 
+ 	initialize_krb5_error_table();
+ 
+-	ret = smb_krb5_init_context(kdc, &kdc->smb_krb5_context);
++	ret = smb_krb5_init_context(kdc, task->event_ctx, &kdc->smb_krb5_context);
+ 	if (ret) {
+ 		DEBUG(1,("kdc_task_init: krb5_init_context failed (%s)\n", 
+ 			 error_message(ret)));
+
+Modified: branches/SAMBA_4_0/source/torture/auth/pac.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/auth/pac.c	2007-05-17 07:52:33 UTC (rev 22968)
++++ branches/SAMBA_4_0/source/torture/auth/pac.c	2007-05-17 08:47:04 UTC (rev 22969)
+@@ -56,7 +56,9 @@
+ 
+ 	TALLOC_CTX *mem_ctx = tctx;
+ 
+-	torture_assert(tctx, 0 == smb_krb5_init_context(mem_ctx, &smb_krb5_context), 
++	torture_assert(tctx, 0 == smb_krb5_init_context(mem_ctx, 
++							NULL,
++							&smb_krb5_context), 
+ 		       "smb_krb5_init_context");
+ 
+ 	generate_random_buffer(server_bytes, 16);
+@@ -282,7 +284,8 @@
+ 	time_t authtime;
+ 	TALLOC_CTX *mem_ctx = tctx;
+ 
+-	torture_assert(tctx, 0 == smb_krb5_init_context(mem_ctx, &smb_krb5_context),
++	torture_assert(tctx, 0 == smb_krb5_init_context(mem_ctx, NULL,
++							&smb_krb5_context),
+ 		       "smb_krb5_init_context");
+ 
+ 	pac_kdc_key = torture_setting_string(tctx, "pac_kdc_key", 
+
+Modified: branches/SAMBA_4_0/source/torture/basic/misc.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/basic/misc.c	2007-05-17 07:52:33 UTC (rev 22968)
++++ branches/SAMBA_4_0/source/torture/basic/misc.c	2007-05-17 08:47:04 UTC (rev 22969)
+@@ -843,7 +843,7 @@
+ 			torture_numops, torture_nprocs);
+ 
+ 	/*init talloc context*/
+-	ev = event_context_init(tctx);
++	ev = tctx->ev;
+ 	state = talloc_array(tctx, struct benchrw_state *, torture_nprocs);
+ 
+ 	/* init params using lp_parm_xxx */
+
+Modified: branches/SAMBA_4_0/source/torture/libnet/libnet_BecomeDC.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/libnet/libnet_BecomeDC.c	2007-05-17 07:52:33 UTC (rev 22968)
++++ branches/SAMBA_4_0/source/torture/libnet/libnet_BecomeDC.c	2007-05-17 08:47:04 UTC (rev 22969)
+@@ -755,7 +755,7 @@
+ 		return False;
+ 	}
+ 
+-	s->ctx = libnet_context_init(event_context_init(s));
++	s->ctx = libnet_context_init(torture->ev);
+ 	s->ctx->cred = cmdline_credentials;
+ 
+ 	s->ldb = ldb_init(s);
+
+Modified: branches/SAMBA_4_0/source/torture/local/irpc.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/local/irpc.c	2007-05-17 07:52:33 UTC (rev 22968)
++++ branches/SAMBA_4_0/source/torture/local/irpc.c	2007-05-17 08:47:04 UTC (rev 22969)
+@@ -217,7 +217,7 @@
+ 
+ 	lp_set_cmdline("lock dir", "lockdir.tmp");
+ 
+-	data->ev = event_context_init(tctx);
++	data->ev = tctx->ev;
+ 	torture_assert(tctx, data->msg_ctx1 = 
+ 		       messaging_init(tctx, 
+ 				      cluster_id(MSG_ID1), data->ev),
+
+Modified: branches/SAMBA_4_0/source/torture/local/messaging.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/local/messaging.c	2007-05-17 07:52:33 UTC (rev 22968)
++++ branches/SAMBA_4_0/source/torture/local/messaging.c	2007-05-17 08:47:04 UTC (rev 22969)
+@@ -70,7 +70,7 @@
+ 
+ 	lp_set_cmdline("pid directory", "piddir.tmp");
+ 
+-	ev = event_context_init(mem_ctx);
++	ev = tctx->ev;
+ 
+ 	msg_server_ctx = messaging_init(mem_ctx, cluster_id(1), ev);
+ 	
+
+Modified: branches/SAMBA_4_0/source/torture/local/resolve.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/local/resolve.c	2007-05-17 07:52:33 UTC (rev 22968)
++++ branches/SAMBA_4_0/source/torture/local/resolve.c	2007-05-17 08:47:04 UTC (rev 22969)
+@@ -35,7 +35,7 @@
+ 	struct timeval tv = timeval_current();
+ 	TALLOC_CTX *mem_ctx = tctx;
+ 
+-	ev = event_context_init(mem_ctx);
++	ev = tctx->ev;
+ 
+ 	ZERO_STRUCT(n);
+ 	n.name = host;
+
+Modified: branches/SAMBA_4_0/source/torture/raw/composite.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/raw/composite.c	2007-05-17 07:52:33 UTC (rev 22968)
++++ branches/SAMBA_4_0/source/torture/raw/composite.c	2007-05-17 08:47:04 UTC (rev 22969)
+@@ -164,7 +164,7 @@
+ 
+ 	printf("testing parallel fetchfile with %d ops\n", torture_numops);
+ 
+-	event_ctx = event_context_init(mem_ctx);
++	event_ctx = cli->transport->socket->event.ctx;
+ 	c = talloc_array(mem_ctx, struct composite_context *, torture_numops);
+ 
+ 	for (i=0; i<torture_numops; i++) {
+
+Modified: branches/SAMBA_4_0/source/torture/raw/open.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/raw/open.c	2007-05-17 07:52:33 UTC (rev 22968)
++++ branches/SAMBA_4_0/source/torture/raw/open.c	2007-05-17 08:47:04 UTC (rev 22969)
+@@ -27,6 +27,8 @@
+ #include "lib/events/events.h"
+ #include "libcli/libcli.h"
+ #include "torture/util.h"
++#include "auth/credentials/credentials.h"
++#include "lib/cmdline/popt_common.h"
+ 
+ /* enum for whether reads/writes are possible on a file */
+ enum rdwr_mode {RDWR_NONE, RDWR_RDONLY, RDWR_WRONLY, RDWR_RDWR};
+@@ -1351,7 +1353,7 @@
+ 	int num_ok = 0;
+ 	int num_collision = 0;
+ 	
+-	ev = event_context_init(mem_ctx);
++	ev = cli_credentials_get_event_context(cmdline_credentials);
+ 	clients = talloc_array(mem_ctx, struct smbcli_state *, num_files);
+ 	requests = talloc_array(mem_ctx, struct smbcli_request *, num_files);
+ 	ios = talloc_array(mem_ctx, union smb_open, num_files);
+
+Modified: branches/SAMBA_4_0/source/torture/rpc/async_bind.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/rpc/async_bind.c	2007-05-17 07:52:33 UTC (rev 22968)
++++ branches/SAMBA_4_0/source/torture/rpc/async_bind.c	2007-05-17 08:47:04 UTC (rev 22969)
+@@ -68,13 +68,13 @@
+ 	table    = talloc_array(torture, const struct dcerpc_interface_table*, torture_numasync);
+ 	if (table == NULL) return False;
+ 	
++	/* credentials */
++	creds = cmdline_credentials;
++
+ 	/* event context */
+-	evt_ctx = event_context_init(mem_ctx);
++	evt_ctx = cli_credentials_get_event_context(creds);
+ 	if (evt_ctx == NULL) return False;
+ 
+-	/* credentials */
+-	creds = cmdline_credentials;
+-
+ 	/* send bind requests */
+ 	for (i = 0; i < torture_numasync; i++) {
+ 		table[i] = &dcerpc_table_lsarpc;
+
+Modified: branches/SAMBA_4_0/source/torture/torture.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/torture.c	2007-05-17 07:52:33 UTC (rev 22968)
++++ branches/SAMBA_4_0/source/torture/torture.c	2007-05-17 08:47:04 UTC (rev 22969)
+@@ -24,6 +24,8 @@
+ #include "torture/torture.h"
+ #include "build.h"
+ #include "lib/util/dlinklist.h"
++#include "auth/credentials/credentials.h"
++#include "lib/cmdline/popt_common.h"
+ 
+ _PUBLIC_ int torture_numops=10;
+ _PUBLIC_ int torture_entries=1000;
+@@ -42,12 +44,13 @@
+ }
+ 
+ struct torture_context *torture_context_init(TALLOC_CTX *mem_ctx, 
+-											 const struct torture_ui_ops *ui_ops)
++					     const struct torture_ui_ops *ui_ops)
+ {
+ 	struct torture_context *torture = talloc_zero(mem_ctx, 
+-												  struct torture_context);
++						      struct torture_context);
+ 	torture->ui_ops = ui_ops;
+ 	torture->returncode = true;
++	torture->ev = cli_credentials_get_event_context(cmdline_credentials);
+ 
+ 	if (ui_ops->init)
+ 		ui_ops->init(torture);
+
+Modified: branches/SAMBA_4_0/source/torture/ui.h
+===================================================================
+--- branches/SAMBA_4_0/source/torture/ui.h	2007-05-17 07:52:33 UTC (rev 22968)
++++ branches/SAMBA_4_0/source/torture/ui.h	2007-05-17 08:47:04 UTC (rev 22969)
+@@ -90,6 +90,7 @@
+ 
+ 	char *outputdir;
+ 	int level;
++	struct event_context *ev;
+ };
+ 
+ /* 
+
+Modified: branches/SAMBA_4_0/source/torture/util_smb.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/util_smb.c	2007-05-17 07:52:33 UTC (rev 22968)
++++ branches/SAMBA_4_0/source/torture/util_smb.c	2007-05-17 08:47:04 UTC (rev 22969)
+@@ -31,6 +31,7 @@
+ #include "torture/ui.h"
+ #include "torture/torture.h"
+ #include "util/dlinklist.h"
++#include "auth/credentials/credentials.h"
+ 
+ 
+ /**
+@@ -541,7 +542,8 @@
+ 
+ _PUBLIC_ bool torture_open_connection(struct smbcli_state **c, int conn_index)
+ {
+-	return torture_open_connection_ev(c, conn_index, NULL);
++	return torture_open_connection_ev(c, conn_index, 
++					  cli_credentials_get_event_context(cmdline_credentials));
+ }
+ 
+ 
+

@@ -1,0 +1,483 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon May 14 01:54:02 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4E5s1qD017061
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 14 May 2007 01:54:01 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 87DA6163828
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 14 May 2007 05:53:59 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.7 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 501)
+	id 021DB162AD7; Mon, 14 May 2007 05:53:26 +0000 (GMT)
+To: samba-cvs@samba.org
+From: abartlet@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070514055327.021DB162AD7@lists.samba.org>
+Date: Mon, 14 May 2007 05:53:26 +0000 (GMT)
+Subject: svn commit: samba r22838 - in branches/SAMBA_4_0/source: librpc/rpc
+	torture torture/raw
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: abartlet
+Date: 2007-05-14 05:53:26 +0000 (Mon, 14 May 2007)
+New Revision: 22838
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22838
+
+Log:
+Add in an explority test for what QFSINFO operations are valid on IPC$
+
+It seems most opertaions are supported, but that the values are not
+consistant.  I think these are very much hand-hacked stubs, which is
+what they will be on Samba4 too.
+
+I'll need to add some more 'don't fail for...' hacks before this
+passes against Win2k3.
+
+Andrew Bartlett
+
+
+Modified:
+   branches/SAMBA_4_0/source/librpc/rpc/dcerpc_smb.c
+   branches/SAMBA_4_0/source/torture/raw/notify.c
+   branches/SAMBA_4_0/source/torture/raw/qfileinfo.c
+   branches/SAMBA_4_0/source/torture/raw/qfsinfo.c
+   branches/SAMBA_4_0/source/torture/raw/raw.c
+   branches/SAMBA_4_0/source/torture/raw/search.c
+   branches/SAMBA_4_0/source/torture/util_smb.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/librpc/rpc/dcerpc_smb.c
+===================================================================
+--- branches/SAMBA_4_0/source/librpc/rpc/dcerpc_smb.c	2007-05-14 03:49:42 UTC (rev 22837)
++++ branches/SAMBA_4_0/source/librpc/rpc/dcerpc_smb.c	2007-05-14 05:53:26 UTC (rev 22838)
+@@ -561,3 +561,18 @@
+ 
+ 	return smb->tree;
+ }
++
++/*
++  return the SMB fnum used for a dcerpc over SMB pipe (hack for torture operations)
++*/
++uint16_t dcerpc_smb_fnum(struct dcerpc_connection *c)
++{
++	struct smb_private *smb;
++
++	if (c->transport.transport != NCACN_NP) return 0;
++
++	smb = talloc_get_type(c->transport.private, struct smb_private);
++	if (!smb) return 0;
++
++	return smb->fnum;
++}
+
+Modified: branches/SAMBA_4_0/source/torture/raw/notify.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/raw/notify.c	2007-05-14 03:49:42 UTC (rev 22837)
++++ branches/SAMBA_4_0/source/torture/raw/notify.c	2007-05-14 05:53:26 UTC (rev 22838)
+@@ -45,7 +45,7 @@
+ 	}} while (0)
+ 
+ #define CHECK_WSTR(field, value, flags) do { \
+-	if (!field.s || strcmp(field.s, value) || wire_bad_flags(&field, flags, cli)) { \
++	if (!field.s || strcmp(field.s, value) || wire_bad_flags(&field, flags, cli->transport)) { \
+ 		printf("(%d) %s [%s] != %s\n",  __LINE__, #field, field.s, value); \
+ 			ret = False; \
+ 		goto done; \
+@@ -278,7 +278,7 @@
+ 			if ((actions[i].name.s == NULL)
+ 			    || (strcmp(actions[i].name.s, name) != 0)
+ 			    || (wire_bad_flags(&actions[i].name, STR_UNICODE,
+-					       cli))) {
++					       cli->transport))) {
+ 				printf("(%d) name [%s] != %s\n", line,
+ 				       actions[i].name.s, name);
+ 				return False;
+
+Modified: branches/SAMBA_4_0/source/torture/raw/qfileinfo.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/raw/qfileinfo.c	2007-05-14 03:49:42 UTC (rev 22837)
++++ branches/SAMBA_4_0/source/torture/raw/qfileinfo.c	2007-05-14 05:53:26 UTC (rev 22838)
+@@ -23,6 +23,8 @@
+ #include "libcli/raw/libcliraw.h"
+ #include "libcli/libcli.h"
+ #include "torture/util.h"
++#include "librpc/rpc/dcerpc.h"
++#include "torture/rpc/rpc.h"
+ 
+ static struct {
+ 	const char *name;
+@@ -67,6 +69,8 @@
+ 	{ NULL, }
+ };
+ 
++static bool is_ipc;
++
+ /*
+   compare a dos time (2 second resolution) to a nt time
+ */
+@@ -100,6 +104,9 @@
+ static union smb_fileinfo *fname_find(const char *name)
+ {
+ 	int i;
++	if (is_ipc) {
++		return NULL;
++	}
+ 	for (i=0; levels[i].name; i++) {
+ 		if (NT_STATUS_IS_OK(levels[i].fname_status) &&
+ 		    strcmp(name, levels[i].name) == 0 && 
+@@ -153,56 +160,39 @@
+    for each call we test that it succeeds, and where possible test 
+    for consistency between the calls. 
+ */
+-BOOL torture_raw_qfileinfo(struct torture_context *torture)
++static BOOL torture_raw_qfileinfo_internals(struct torture_context *torture, TALLOC_CTX *mem_ctx, 	
++					    struct smbcli_tree *tree, int fnum, const char *fname)
+ {
+-	struct smbcli_state *cli;
+ 	int i;
+ 	BOOL ret = True;
+ 	int count;
+ 	union smb_fileinfo *s1, *s2;	
+-	TALLOC_CTX *mem_ctx;
+-	int fnum;
+-	const char *fname = "\\torture_qfileinfo.txt";
+ 	NTTIME correct_time;
+ 	uint64_t correct_size;
+ 	uint32_t correct_attrib;
+ 	const char *correct_name;
+ 	BOOL skip_streams = False;
+ 
+-	if (!torture_open_connection(&cli, 0)) {
+-		return False;
+-	}
+-
+-	mem_ctx = talloc_init("torture_qfileinfo");
+-
+-	fnum = create_complex_file(cli, mem_ctx, fname);
+-	if (fnum == -1) {
+-		printf("ERROR: open of %s failed (%s)\n", fname, smbcli_errstr(cli->tree));
+-		ret = False;
+-		goto done;
+-	}
+-	
+-	
+ 	/* scan all the fileinfo and pathinfo levels */
+ 	for (i=0; levels[i].name; i++) {
+ 		if (!levels[i].only_paths) {
+ 			levels[i].fnum_finfo.generic.level = levels[i].level;
+ 			levels[i].fnum_finfo.generic.in.file.fnum = fnum;
+-			levels[i].fnum_status = smb_raw_fileinfo(cli->tree, mem_ctx, 
++			levels[i].fnum_status = smb_raw_fileinfo(tree, mem_ctx, 
+ 								 &levels[i].fnum_finfo);
+ 		}
+ 
+ 		if (!levels[i].only_handles) {
+ 			levels[i].fname_finfo.generic.level = levels[i].level;
+ 			levels[i].fname_finfo.generic.in.file.path = talloc_strdup(mem_ctx, fname);
+-			levels[i].fname_status = smb_raw_pathinfo(cli->tree, mem_ctx, 
++			levels[i].fname_status = smb_raw_pathinfo(tree, mem_ctx, 
+ 								  &levels[i].fname_finfo);
+ 		}
+ 	}
+ 
+ 	/* check for completely broken levels */
+ 	for (count=i=0; levels[i].name; i++) {
+-		uint32_t cap = cli->transport->negotiate.capabilities;
++		uint32_t cap = tree->session->transport->negotiate.capabilities;
+ 		/* see if this server claims to support this level */
+ 		if ((cap & levels[i].capability_mask) != levels[i].capability_mask) {
+ 			continue;
+@@ -213,7 +203,7 @@
+ 			       levels[i].name, nt_errstr(levels[i].fnum_status));
+ 			count++;
+ 		}
+-		if (!levels[i].only_handles && !NT_STATUS_IS_OK(levels[i].fname_status)) {
++		if (!(is_ipc || levels[i].only_handles) && !NT_STATUS_IS_OK(levels[i].fname_status)) {
+ 			printf("ERROR: level %s failed - %s\n", 
+ 			       levels[i].name, nt_errstr(levels[i].fname_status));
+ 			count++;
+@@ -232,8 +222,10 @@
+ 	/* see if we can do streams */
+ 	s1 = fnum_find("STREAM_INFO");
+ 	if (!s1 || s1->stream_info.out.num_streams == 0) {
+-		printf("STREAM_INFO broken (%d) - skipping streams checks\n",
+-		       s1 ? s1->stream_info.out.num_streams : -1);
++		if (!is_ipc) {
++			printf("STREAM_INFO broken (%d) - skipping streams checks\n",
++			       s1 ? s1->stream_info.out.num_streams : -1);
++		}
+ 		skip_streams = True;
+ 	}	
+ 
+@@ -511,14 +503,14 @@
+ #define NAME_CHECK(sname, stype, tfield, flags) do { \
+ 	s1 = fnum_find(sname); \
+ 	if (s1 && (strcmp_safe(s1->stype.out.tfield.s, correct_name) != 0 || \
+-	    		wire_bad_flags(&s1->stype.out.tfield, flags, cli))) { \
++	    		wire_bad_flags(&s1->stype.out.tfield, flags, tree->session->transport))) { \
+ 		printf("(%d) handle %s/%s incorrect - '%s/%d'\n", __LINE__, #stype, #tfield,  \
+ 		       s1->stype.out.tfield.s, s1->stype.out.tfield.private_length); \
+ 		ret = False; \
+ 	} \
+ 	s1 = fname_find(sname); \
+ 	if (s1 && (strcmp_safe(s1->stype.out.tfield.s, correct_name) != 0 || \
+-	    		wire_bad_flags(&s1->stype.out.tfield, flags, cli))) { \
++	    		wire_bad_flags(&s1->stype.out.tfield, flags, tree->session->transport))) { \
+ 		printf("(%d) path %s/%s incorrect - '%s/%d'\n", __LINE__, #stype, #tfield,  \
+ 		       s1->stype.out.tfield.s, s1->stype.out.tfield.private_length); \
+ 		ret = False; \
+@@ -546,42 +538,44 @@
+ 				ret = False;
+ 			}
+ 		}
+-		if (wire_bad_flags(&s1->all_info.out.fname, STR_UNICODE, cli)) {
++		if (wire_bad_flags(&s1->all_info.out.fname, STR_UNICODE, tree->session->transport)) {
+ 			printf("Should not null terminate all_info/fname\n");
+ 			ret = False;
+ 		}
+ 	}
+ 
+ 	s1 = fnum_find("ALT_NAME_INFO");
+-	correct_name = s1->alt_name_info.out.fname.s;
+-	printf("alt_name: %s\n", correct_name);
+-
+-	NAME_CHECK("ALT_NAME_INFO",        alt_name_info, fname, STR_UNICODE);
+-	NAME_CHECK("ALT_NAME_INFORMATION", alt_name_info, fname, STR_UNICODE);
+-
+-	/* and make sure we can open by alternate name */
+-	smbcli_close(cli->tree, fnum);
+-	fnum = smbcli_nt_create_full(cli->tree, correct_name, 0, 
+-				     SEC_RIGHTS_FILE_ALL,
+-				     FILE_ATTRIBUTE_NORMAL,
+-				     NTCREATEX_SHARE_ACCESS_DELETE|
+-				     NTCREATEX_SHARE_ACCESS_READ|
+-				     NTCREATEX_SHARE_ACCESS_WRITE, 
+-				     NTCREATEX_DISP_OVERWRITE_IF, 
+-				     0, 0);
+-	if (fnum == -1) {
+-		printf("Unable to open by alt_name - %s\n", smbcli_errstr(cli->tree));
+-		ret = False;
++	if (s1) {
++		correct_name = s1->alt_name_info.out.fname.s;
++		printf("alt_name: %s\n", correct_name);
++		
++		NAME_CHECK("ALT_NAME_INFO",        alt_name_info, fname, STR_UNICODE);
++		NAME_CHECK("ALT_NAME_INFORMATION", alt_name_info, fname, STR_UNICODE);
++		
++		/* and make sure we can open by alternate name */
++		smbcli_close(tree, fnum);
++		fnum = smbcli_nt_create_full(tree, correct_name, 0, 
++					     SEC_RIGHTS_FILE_ALL,
++					     FILE_ATTRIBUTE_NORMAL,
++					     NTCREATEX_SHARE_ACCESS_DELETE|
++					     NTCREATEX_SHARE_ACCESS_READ|
++					     NTCREATEX_SHARE_ACCESS_WRITE, 
++					     NTCREATEX_DISP_OVERWRITE_IF, 
++					     0, 0);
++		if (fnum == -1) {
++			printf("Unable to open by alt_name - %s\n", smbcli_errstr(tree));
++			ret = False;
++		}
++		
++		if (!skip_streams) {
++			correct_name = "::$DATA";
++			printf("stream_name: %s\n", correct_name);
++			
++			NAME_CHECK("STREAM_INFO",        stream_info, streams[0].stream_name, STR_UNICODE);
++			NAME_CHECK("STREAM_INFORMATION", stream_info, streams[0].stream_name, STR_UNICODE);
++		}
+ 	}
+-
+-	if (!skip_streams) {
+-		correct_name = "::$DATA";
+-		printf("stream_name: %s\n", correct_name);
+-
+-		NAME_CHECK("STREAM_INFO",        stream_info, streams[0].stream_name, STR_UNICODE);
+-		NAME_CHECK("STREAM_INFORMATION", stream_info, streams[0].stream_name, STR_UNICODE);
+-	}
+-
++		
+ 	/* make sure the EAs look right */
+ 	s1 = fnum_find("ALL_EAS");
+ 	s2 = fnum_find("ALL_INFO");
+@@ -714,10 +708,85 @@
+ 	
+ 
+ done:
++
++	return ret;
++}
++
++/* basic testing of all RAW_FILEINFO_* calls 
++   for each call we test that it succeeds, and where possible test 
++   for consistency between the calls. 
++*/
++BOOL torture_raw_qfileinfo(struct torture_context *torture)
++{
++	struct smbcli_state *cli;
++	BOOL ret = True;
++	TALLOC_CTX *mem_ctx;
++	int fnum;
++	const char *fname = "\\torture_qfileinfo.txt";
++
++	is_ipc = 0;
++
++	if (!torture_open_connection(&cli, 0)) {
++		return False;
++	}
++
++	mem_ctx = talloc_init("torture_qfileinfo");
++
++	fnum = create_complex_file(cli, mem_ctx, fname);
++	if (fnum == -1) {
++		printf("ERROR: open of %s failed (%s)\n", fname, smbcli_errstr(cli->tree));
++		ret = False;
++		goto done;
++	}
++
++	ret = torture_raw_qfileinfo_internals(torture, mem_ctx, cli->tree, fnum, fname);
++	
+ 	smbcli_close(cli->tree, fnum);
+ 	smbcli_unlink(cli->tree, fname);
+ 
++done:
+ 	torture_close_connection(cli);
+ 	talloc_free(mem_ctx);
+ 	return ret;
+ }
++
++BOOL torture_raw_qfileinfo_pipe(struct torture_context *torture)
++{
++	TALLOC_CTX *mem_ctx;
++	BOOL ret = True;
++	int fnum;
++	const char *fname = "\\lsass";
++	struct smbcli_state *cli;
++	struct dcerpc_pipe *p;
++	struct smbcli_tree *ipc_tree;
++	NTSTATUS status;
++
++	is_ipc = True;
++	
++	if (!torture_open_connection(&cli, 0)) {
++		return False;
++	}
++
++	mem_ctx = talloc_init("torture_qfileinfo_pipe");
++
++	if (!(p = dcerpc_pipe_init(mem_ctx, 
++				   cli->tree->session->transport->socket->event.ctx))) {
++		return False;
++	}
++
++	status = dcerpc_pipe_open_smb(p, cli->tree, fname);
++	if (!NT_STATUS_IS_OK(status)) {
++		d_printf("dcerpc_pipe_open_smb failed: %s\n",
++			 nt_errstr(status));
++		talloc_free(p);
++		return False;
++	}
++
++	ipc_tree = dcerpc_smb_tree(p->conn);
++	fnum = dcerpc_smb_fnum(p->conn);
++
++	ret = torture_raw_qfileinfo_internals(torture, mem_ctx, ipc_tree, fnum, fname);
++	
++	talloc_free(p);
++	return ret;
++}
+
+Modified: branches/SAMBA_4_0/source/torture/raw/qfsinfo.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/raw/qfsinfo.c	2007-05-14 03:49:42 UTC (rev 22837)
++++ branches/SAMBA_4_0/source/torture/raw/qfsinfo.c	2007-05-14 05:53:26 UTC (rev 22838)
+@@ -289,7 +289,7 @@
+ #define STR_CHECK(sname, stype, field, flags) do { \
+ 	s1 = find(sname); \
+ 	if (s1) { \
+-		if (s1->stype.out.field.s && wire_bad_flags(&s1->stype.out.field, flags, cli)) { \
++		if (s1->stype.out.field.s && wire_bad_flags(&s1->stype.out.field, flags, cli->transport)) { \
+ 			printf("(%d) incorrect string termination in %s/%s\n", \
+ 			       __LINE__, #stype, #field); \
+ 			ret = False; \
+
+Modified: branches/SAMBA_4_0/source/torture/raw/raw.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/raw/raw.c	2007-05-14 03:49:42 UTC (rev 22837)
++++ branches/SAMBA_4_0/source/torture/raw/raw.c	2007-05-14 05:53:26 UTC (rev 22838)
+@@ -34,6 +34,7 @@
+ 	torture_suite_add_simple_test(suite, "BENCH-OPEN", torture_bench_open);
+ 	torture_suite_add_simple_test(suite, "QFSINFO", torture_raw_qfsinfo);
+ 	torture_suite_add_simple_test(suite, "QFILEINFO", torture_raw_qfileinfo);
++	torture_suite_add_simple_test(suite, "QFILEINFO-IPC", torture_raw_qfileinfo_pipe);
+ 	torture_suite_add_simple_test(suite, "SFILEINFO", torture_raw_sfileinfo);
+ 	torture_suite_add_simple_test(suite, "SFILEINFO-BUG", torture_raw_sfileinfo_bug);
+ 	torture_suite_add_simple_test(suite, "SEARCH", torture_raw_search);
+
+Modified: branches/SAMBA_4_0/source/torture/raw/search.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/raw/search.c	2007-05-14 03:49:42 UTC (rev 22837)
++++ branches/SAMBA_4_0/source/torture/raw/search.c	2007-05-14 05:53:26 UTC (rev 22838)
+@@ -391,7 +391,7 @@
+ 	if (s) { \
+ 		if (!s->sname1.field1.s || \
+ 		    strcmp(s->sname1.field1.s, v.sname2.out.field2.s) || \
+-		    wire_bad_flags(&s->sname1.field1, flags, cli)) { \
++		    wire_bad_flags(&s->sname1.field1, flags, cli->transport)) { \
+ 			printf("(%s) %s/%s [%s] != %s/%s [%s]\n", \
+ 			       __location__, \
+ 				#sname1, #field1, s->sname1.field1.s, \
+@@ -405,7 +405,7 @@
+ 	if (s) { \
+ 		if (!s->sname1.field1.s || \
+ 		    strcmp(s->sname1.field1.s, fname) || \
+-		    wire_bad_flags(&s->sname1.field1, flags, cli)) { \
++		    wire_bad_flags(&s->sname1.field1, flags, cli->transport)) { \
+ 			printf("(%s) %s/%s [%s] != %s\n", \
+ 			       __location__, \
+ 				#sname1, #field1, s->sname1.field1.s, \
+
+Modified: branches/SAMBA_4_0/source/torture/util_smb.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/util_smb.c	2007-05-14 03:49:42 UTC (rev 22837)
++++ branches/SAMBA_4_0/source/torture/util_smb.c	2007-05-14 05:53:26 UTC (rev 22838)
+@@ -282,7 +282,7 @@
+   check that a wire string matches the flags specified 
+   not 100% accurate, but close enough for testing
+ */
+-bool wire_bad_flags(struct smb_wire_string *str, int flags, struct smbcli_state *cli)
++bool wire_bad_flags(struct smb_wire_string *str, int flags, struct smbcli_transport *transport)
+ {
+ 	bool server_unicode;
+ 	int len;
+@@ -290,7 +290,7 @@
+ 	len = strlen(str->s);
+ 	if (flags & STR_TERMINATE) len++;
+ 
+-	server_unicode = (cli->transport->negotiate.capabilities&CAP_UNICODE)?True:False;
++	server_unicode = (transport->negotiate.capabilities&CAP_UNICODE)?True:False;
+ 	if (getenv("CLI_FORCE_ASCII") || !lp_unicode()) {
+ 		server_unicode = False;
+ 	}
+

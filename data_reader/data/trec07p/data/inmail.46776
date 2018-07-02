@@ -1,0 +1,198 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May 30 05:54:56 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4U9suhB012347
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 30 May 2007 05:54:56 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 03DB7163859
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 30 May 2007 09:54:50 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1004)
+	id 6893F162C2D; Wed, 30 May 2007 09:54:20 +0000 (GMT)
+To: samba-cvs@samba.org
+From: gd@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070530095420.6893F162C2D@lists.samba.org>
+Date: Wed, 30 May 2007 09:54:20 +0000 (GMT)
+Subject: svn commit: samba r23239 - in branches/SAMBA_4_0/source: librpc/idl
+	rpc_server/drsuapi torture/rpc
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: gd
+Date: 2007-05-30 09:54:19 +0000 (Wed, 30 May 2007)
+New Revision: 23239
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23239
+
+Log:
+Fill in drsuapi_QuerySitesByCost.
+
+Guenther
+
+Modified:
+   branches/SAMBA_4_0/source/librpc/idl/drsuapi.idl
+   branches/SAMBA_4_0/source/rpc_server/drsuapi/dcesrv_drsuapi.c
+   branches/SAMBA_4_0/source/torture/rpc/drsuapi.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/librpc/idl/drsuapi.idl
+===================================================================
+--- branches/SAMBA_4_0/source/librpc/idl/drsuapi.idl	2007-05-30 08:15:49 UTC (rev 23238)
++++ branches/SAMBA_4_0/source/librpc/idl/drsuapi.idl	2007-05-30 09:54:19 UTC (rev 23239)
+@@ -1457,5 +1457,37 @@
+ 
+ 	/*****************/
+         /* Function 0x18 */
+-	WERROR DRSUAPI_QUERY_SITES_BY_COST();
++	typedef struct {
++		WERROR error_code;
++		uint32 site_cost;
++	} drsuapi_DsSiteCostInfo;
++
++	typedef struct {
++		[range(0,10000)] uint32 num_info;
++		[size_is(num_info)] drsuapi_DsSiteCostInfo *info;
++		uint32 unknown;
++	} drsuapi_QuerySitesByCostCtr1;
++
++	typedef [switch_type(int32)] union {
++		[case(1)] drsuapi_QuerySitesByCostCtr1 ctr1;
++	} drsuapi_QuerySitesByCostCtr;
++
++	typedef struct {
++		[charset(UTF16),string] uint16 *site_from;
++		[range(1,10000)] uint32 num_req;
++		[size_is(num_req)] [charset(UTF16),string] uint16 **site_to;
++		uint32 flags;
++	} drsuapi_QuerySitesByCostRequest1;
++
++	typedef [switch_type(int32)] union {
++		[case(1)] drsuapi_QuerySitesByCostRequest1 req1;
++	} drsuapi_QuerySitesByCostRequest;
++
++	WERROR drsuapi_QuerySitesByCost(
++		[in] policy_handle *bind_handle,
++		[in] int32 level,
++		[in] [switch_is(level)] drsuapi_QuerySitesByCostRequest req,
++		[out] int32 level_out,
++		[out] [switch_is(level_out)] drsuapi_QuerySitesByCostCtr ctr
++	);
+ }
+
+Modified: branches/SAMBA_4_0/source/rpc_server/drsuapi/dcesrv_drsuapi.c
+===================================================================
+--- branches/SAMBA_4_0/source/rpc_server/drsuapi/dcesrv_drsuapi.c	2007-05-30 08:15:49 UTC (rev 23238)
++++ branches/SAMBA_4_0/source/rpc_server/drsuapi/dcesrv_drsuapi.c	2007-05-30 09:54:19 UTC (rev 23239)
+@@ -798,10 +798,10 @@
+ 
+ 
+ /* 
+-  DRSUAPI_QUERY_SITES_BY_COST 
++  drsuapi_QuerySitesByCost 
+ */
+-static WERROR dcesrv_DRSUAPI_QUERY_SITES_BY_COST(struct dcesrv_call_state *dce_call, TALLOC_CTX *mem_ctx,
+-		       struct DRSUAPI_QUERY_SITES_BY_COST *r)
++static WERROR dcesrv_drsuapi_QuerySitesByCost(struct dcesrv_call_state *dce_call, TALLOC_CTX *mem_ctx,
++		       struct drsuapi_QuerySitesByCost *r)
+ {
+ 	DCESRV_FAULT(DCERPC_FAULT_OP_RNG_ERROR);
+ }
+
+Modified: branches/SAMBA_4_0/source/torture/rpc/drsuapi.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/rpc/drsuapi.c	2007-05-30 08:15:49 UTC (rev 23238)
++++ branches/SAMBA_4_0/source/torture/rpc/drsuapi.c	2007-05-30 09:54:19 UTC (rev 23239)
+@@ -646,6 +646,61 @@
+ 	return ret;
+ }
+ 
++BOOL test_QuerySitesByCost(struct dcerpc_pipe *p, TALLOC_CTX *mem_ctx,
++			   struct DsPrivate *priv)
++{
++	NTSTATUS status;
++	struct drsuapi_QuerySitesByCost r;
++	BOOL ret = True;
++
++	const char *my_site = "Default-First-Site-Name";
++	const char *remote_site1 = "smbtorture-nonexisting-site1";
++	const char *remote_site2 = "smbtorture-nonexisting-site2";
++
++	r.in.bind_handle = &priv->bind_handle;
++	r.in.level = 1;
++	r.in.req.req1.site_from = talloc_strdup(mem_ctx, my_site);
++	r.in.req.req1.num_req = 2;
++	r.in.req.req1.site_to = talloc_zero_array(mem_ctx, const char *, r.in.req.req1.num_req);
++	r.in.req.req1.site_to[0] = talloc_strdup(mem_ctx, remote_site1);
++	r.in.req.req1.site_to[1] = talloc_strdup(mem_ctx, remote_site2);
++	r.in.req.req1.flags = 0;
++
++	status = dcerpc_drsuapi_QuerySitesByCost(p, mem_ctx, &r);
++	if (!NT_STATUS_IS_OK(status)) {
++		const char *errstr = nt_errstr(status);
++		if (NT_STATUS_EQUAL(status, NT_STATUS_NET_WRITE_FAULT)) {
++			errstr = dcerpc_errstr(mem_ctx, p->last_fault_code);
++		}
++		printf("drsuapi_QuerySitesByCost - %s\n", errstr);
++		ret = False;
++	} else if (!W_ERROR_IS_OK(r.out.result)) {
++		printf("QuerySitesByCost failed - %s\n", win_errstr(r.out.result));
++		ret = False;
++	}
++
++	if (W_ERROR_IS_OK(r.out.result)) {
++
++		if (!W_ERROR_EQUAL(r.out.ctr.ctr1.info[0].error_code, WERR_DS_OBJ_NOT_FOUND) ||
++		    !W_ERROR_EQUAL(r.out.ctr.ctr1.info[1].error_code, WERR_DS_OBJ_NOT_FOUND)) {	
++			printf("expected error_code WERR_DS_OBJ_NOT_FOUND, got %s\n", 
++				win_errstr(r.out.ctr.ctr1.info[0].error_code));
++			ret = False;
++		}
++
++		if ((r.out.ctr.ctr1.info[0].site_cost != (uint32_t) -1) ||
++		    (r.out.ctr.ctr1.info[1].site_cost != (uint32_t) -1)) {
++			printf("expected site_cost %d, got %d\n", 
++				(uint32_t) -1, r.out.ctr.ctr1.info[0].site_cost);
++			ret = False;
++		}
++	}
++
++	return ret;
++
++
++}
++
+ BOOL test_DsUnbind(struct dcerpc_pipe *p, TALLOC_CTX *mem_ctx, 
+ 		   struct DsPrivate *priv)
+ {
+@@ -705,7 +760,9 @@
+ 	}
+ 
+ 	ret &= test_DsBind(p, mem_ctx, &priv);
+-
++#if 0
++	ret &= test_QuerySitesByCost(p, mem_ctx, &priv);
++#endif
+ 	ret &= test_DsGetDomainControllerInfo(p, mem_ctx, &priv);
+ 
+ 	ret &= test_DsCrackNames(p, mem_ctx, &priv);
+

@@ -1,0 +1,194 @@
+From perl6-all-return-80853-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue Apr 24 21:06:11 2007
+Return-Path: <perl6-all-return-80853-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3P1696w021085
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 24 Apr 2007 21:06:10 -0400
+Received: (qmail 21771 invoked by uid 514); 25 Apr 2007 01:06:05 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 21762 invoked from network); 25 Apr 2007 01:06:03 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-1.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO,NO_REAL_NAME
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-language-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-language
+List-Id: <perl6-language.perl.org>
+Delivered-To: mailing list perl6-language@perl.org
+Delivered-To: perl6-language@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: larry@cvs.develooper.com
+To: perl6-language@perl.org
+Subject: [svn:perl6-synopsis] r14380 - doc/trunk/design/syn
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Message-Id: <20070425010537.60F2CCB9B8@x12.develooper.com>
+Date: Tue, 24 Apr 2007 18:05:37 -0700 (PDT)
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-3.4 required=8.0
+	tests=ALL_TRUSTED,BAYES_00,DK_POLICY_SIGNSOME,NO_REAL_NAME
+Status: O
+Content-Length: 6726
+Lines: 151
+
+Author: larry
+Date: Tue Apr 24 18:05:36 2007
+New Revision: 14380
+
+Modified:
+   doc/trunk/design/syn/S10.pod
+
+Log:
+Clarifications to CANDO suggested by TheDamian++
+
+
+Modified: doc/trunk/design/syn/S10.pod
+==============================================================================
+--- doc/trunk/design/syn/S10.pod	(original)
++++ doc/trunk/design/syn/S10.pod	Tue Apr 24 18:05:36 2007
+@@ -12,9 +12,9 @@
+ 
+   Maintainer: Larry Wall <larry@wall.org>
+   Date: 27 Oct 2004
+-  Last Modified: 6 Apr 2006
++  Last Modified: 24 Apr 2007
+   Number: 10
+-  Version: 6
++  Version: 7
+ 
+ =head1 Overview
+ 
+@@ -88,7 +88,7 @@
+ that distinguish declaration from definition, but are not restricted
+ to declaring subs.  A run-time declarator multisub is declared as:
+ 
+-    multi CANDO ( MyPackage, $type, $name; *%args --> Container)
++    multi CANDO ( MyPackage, $type, $name, *%args --> Container)
+ 
+ which stands in for the declaration of a container object within
+ another container object; it is called when anyone is searching for
+@@ -100,22 +100,34 @@
+ name requested.  In any case, there may be multiple C<CANDO> routines
+ that are dispatched via MMD:
+ 
+-    multi CANDO ( MyPackage, Item, $name; *%args --> Container)
+-    multi CANDO ( MyPackage, Array, $name; *%args --> Container)
+-    multi CANDO ( MyPackage, Hash, $name; *%args --> Container)
+-    multi CANDO ( MyPackage, Code, $name; *%args --> Container)
+-
+-The package itself is just passed as the
+-first argument, since it's the container object.  Subsequent arguments
+-identify the desired type of the inner container and the "name" or
+-"key" by which the object is to be looked up in the outer container.
+-Such a name does not include its container name, unlike Perl 5's magical
+-C<$AUTOLOAD> variable.
+-
+-The C<CANDO> is expected to return an inner container object of the proper
+-sort (i.e. a variable, subroutine, or method object), or to a proxy
+-object that can "autovivify" lazily, or C<undef> if that name is not to be
+-considered declared in the namespace in question.
++    multi CANDO ( MyPackage, Item, $name, *%args --> Container)
++    multi CANDO ( MyPackage, Array, $name, *%args --> Container)
++    multi CANDO ( MyPackage, Hash, $name, *%args --> Container)
++    multi CANDO ( MyPackage, Code, $name, *%args --> Container)
++
++The package itself is just passed as the first argument, since it's
++the container object.  Subsequent arguments identify the desired type
++of the inner container and the "name" or "key" by which the object is
++to be looked up in the outer container.  Such a name does not include
++its container name, unlike Perl 5's magical C<$AUTOLOAD> variable.
++Nor does it include the type information of a Code object's "long
++name"; this information comes in via the type parameter, and may be
++matched against using ordinary subsignature matching:
++
++    multi CANDO ( MyPackage, &:($), $name, *%args --> Container)     # 1 arg
++    multi CANDO ( MyPackage, &:($,$), $name, *%args --> Container)   # 2 args
++
++The slurpy C<%args> hash is likely to be empty in standard Perl 6
++usage, but it's possible that some dialects of Perl will desire
++a mechanism to pass in additional contextual information, so this
++parameter is reserved for such purposes.
++
++The C<CANDO> is expected to return an inner container object of
++the proper sort (i.e. a variable, subroutine, or method object),
++or a proxy object that can "autovivify" lazily, or C<undef> if that
++name is not to be considered declared in the namespace in question.
++(Only bare C<undef> is interpreted as "not there", since typed undefs
++may function as autovivifiable proxy objects.  See S12.)
+ 
+ The declaration merely defines the interface to the new object.  That object
+ need not be completely defined yet, though the C<CANDO> routine is certainly
+@@ -129,61 +141,12 @@
+ When the package in question is a class, it is also possible to declare 
+ real methods or submethods:
+ 
+-    multi method CANDO ($self: Code, $name; *%args --> Container)
++    multi method CANDO ($self: Code, $name, *%args --> Container)
+ 
+-    multi submethod CANDO ($self: Item, $name; *%args --> Container)
++    multi submethod CANDO ($self: Item, $name, *%args --> Container)
+ 
+ The method form is inherited by subclasses.  Submethods are never
+ inherited but may still do MMD within the class.   (Ordinary multisubs
+ are inherited only to the extent allowed by the MMD mechanism.)
+ 
+-=for DISCUSSION
+-The following should really be in S12 if really works this way, but
+-I'm not sure it does.  Seems like something is wrong, but I can't
+-quite put my finger on it.  Something like, different containers want
+-different default values, but we've probably lost track of the container.
+-So anyway, the rest of this section is considered conjectural.
+-
+-When someone tries to actually call or access an undefined object
+-(which may have come from one of the routines above, or might have just
+-been declared with a body of C<{...}>), or might just be a variable
+-declared without an initializer, a different hook is used to define
+-actual behavior at the last moment:
+-
+-    submethod AUTODEF ($self:) { ... }
+-
+-(Unlike the C<CANDO> interface, we do not pass the package.)
+-
+-This routine is passed an uninitialized (or underinitialized) object,
+-and is expected to define or build the object, but not to call it,
+-since the call is already "scheduled" from somewhere else.  (Perl 5's
+-C<goto &$AUTOLOAD> is implicit, in other words.  But you can hijack
+-the call via the C<call> builtin, in which case the autoloader behaves
+-just like a wrapper--see S06.)
+-
+-In any case, there is no longer any magical C<$AUTOLOAD> variable.
+-The C<AUTODEF> is a mutator, and thus is not expected to return the
+-object.  No name is passed to C<AUTODEF>--in a context where a name
+-is being declared at call time, the name is automatically introduced
+-with C<CANDO> before C<AUTODEF> is called.  The outer container,
+-if available, is accessed via C<$+CONTAINER>.  In the case of a
+-sub call, the call's unbound C<ArgList> object will be available
+-via C<$+ARGLIST>.  C<$+ARGLIST> is a rw variable, and mutations to it
+-will be seen by the eventual "real" call.
+-
+-If a C<AUTODEF> submethod wishes merely to perform some action without
+-defining C<$self>, that is fine.  It needs to signal that desire by
+-use of an explicit "return;" statement.
+-
+-A C<AUTODEF> submethod is really just a variant of C<BUILD> with no named
+-arguments.  As with C<BUILD>, default values for attributes are applied at
+-the end for any attributes not explicitly set.  A typical C<AUTODEF>
+-definition might be:
+-
+-    submethod AUTODEF { self.=BUILD }
+-
+-or maybe even just:
+-
+-    our &AUTODEF ::= &BUILD;
+-
+ =for vim:set expandtab sw=4:
+

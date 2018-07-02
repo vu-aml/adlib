@@ -1,0 +1,106 @@
+From perl6-all-return-80794-ktwarwic=speedy.uwaterloo.ca@perl.org  Sun Apr 22 20:58:22 2007
+Return-Path: <perl6-all-return-80794-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3N0wK0I025979
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 22 Apr 2007 20:58:20 -0400
+Received: (qmail 10877 invoked by uid 514); 23 Apr 2007 00:57:54 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 10872 invoked from network); 23 Apr 2007 00:57:54 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: domain of alek.storm@gmail.com designates 209.85.134.189 as permitted sender)
+DKIM-Signature: a=rsa-sha1; c=relaxed/relaxed;
+        d=gmail.com; s=beta;
+        h=domainkey-signature:received:received:message-id:date:from:to:subject:cc:in-reply-to:mime-version:content-type:content-transfer-encoding:content-disposition:references;
+        b=SVAYwskqkqABHQP9OalhDNF80FPH2MgLxPDPRb+6Tu3Xf2krwxgrYXez/I62AEwfNnxDZl8jV2P5Bfw87RJ4+qQqnTrgc5TV0NFzoWaubyQWVaGNoPpxr4+C0IBPAk+TGUV39x7oZ1iXFBLMBgiwTREDSi0NqMOJ23inBvctVC0=
+DomainKey-Signature: a=rsa-sha1; c=nofws;
+        d=gmail.com; s=beta;
+        h=received:message-id:date:from:to:subject:cc:in-reply-to:mime-version:content-type:content-transfer-encoding:content-disposition:references;
+        b=nHGHyEXFOSOIR/VdQg3iRw4VSSbSuz/F8V8kx6xj3TTPn4s6b4jEy2p0+VLfgnmrcLyhIasDtdXPu+tUnLXZLV5qN6cmgnlMVgQKZbBYKJU+zE6mXOuxvGrrFkH5QLlzfMEgdahX5cthO6pgITxKQtyPsB8+pw1qsKQCDUlexiE=
+Message-ID: <189adbd0704221757l838bdbft9fe56c48b5bdf59@mail.gmail.com>
+Date: Mon, 23 Apr 2007 00:57:33 +0000
+From: "Alek Storm" <alek.storm@gmail.com>
+To: chromatic <chromatic@wgz.org>
+Subject: Re: [perl #42408] Re: [PATCH] refactor vtable overriding, delegate.c generation
+Cc: perl6-internals@perl.org, bugs-bitbucket@netlabs.develooper.com
+In-Reply-To: <200704212200.15380.chromatic@wgz.org>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+References: <RT-Ticket-42408@perl.org>
+	 <rt-3.6.HEAD-30557-1176172677-694.42408-72-0@perl.org>
+	 <189adbd0704211820t49a11ee0u7f62d123d5d65aea@mail.gmail.com>
+	 <200704212200.15380.chromatic@wgz.org>
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED,SPF_PASS
+Status: O
+Content-Length: 2454
+Lines: 49
+
+On 4/22/07, chromatic <chromatic@wgz.org> wrote:
+> It came in just before the release and it touched a lot of files, so I 
+> (speaking only for myself) let it sit for a couple of days.  Unfortunately, 
+> it also came in after Steve Peters's "No C++ Keywords" patch, so it didn't 
+> apply cleanly.
+
+Thanks.  I should've checked that.
+
+> That's as far as I've been able to trace however.  The tests do pass if I 
+> revert the patch.  Any ideas?
+
+I think the patch exposed either a GC or SMOP bug.  Here's the smallest I could get the test case and still have it segfault without gdb's help:
+
+.sub _main :main
+  load_bytecode 'library/Test/More.pir'
+
+  # import test routines
+  .local pmc exports, curr_namespace, test_namespace
+  curr_namespace = get_namespace
+  test_namespace = get_namespace [ "Test::More" ]
+  exports = split " ", "plan ok is isa_ok"
+  test_namespace.export_to(curr_namespace, exports)
+
+  plan( 9 )
+
+  $P0 = new 'SMOP_Attribute'
+  isa_ok ($P0, 'SMOP_Attribute')
+
+  $S1 = $P0.'name'()
+  is ($S1, 'TestClass1', 'test the SMOP_Attribute name method')
+
+  $P0 = new 'SMOP_Attribute'
+  $S0 = $P0.'type'("TestTypeClass1")
+  is ($S0, 'TestTypeClass1', 'test the SMOP_Attribute name method')
+
+  $S1 = $P0.'type'()
+  is ($S1, 'TestTypeClass1', 'test the SMOP_Attribute name method')
+.end
+
+However, we can make it segfault earlier using gdb, because the problem only shows up when a DOD run is triggered.  We can test whether the memory has been corrupted yet from anywhere in Parrot by issuing this:
+
+call (*interp->arena_base->pmc_pool->more_objects)(interp, interp->arena_base->pmc_pool)
+
+If it runs and exits, no problem.  If it segfaults, problem.  I was able to track the cause down to smop_init() in src/pmc/smop_attribute.pmc.  Running the aforementioned command before the call to mem_sys_allocate_zeroed() exits cleanly, but running it afterwards causes a segfault, so mem_sys_allocate_zeroed() (and the calloc() inside it) corrupts something.  That's as far as I can get for now - looking at the code immediately preceding the segfault doesn't help any.
+
+The exact same thing happens without the patch, but for some reason the test case above doesn't trigger a DOD run on an unpatched parrot, so it doesn't show up unless you use gdb.  At least it's Not My Fault(TM), but this one looks like a doozy to fix.  Someone more familiar with the garbage collector than I needs to sort this out.  Should we start a new ticket?
+
+-- 
+Alek Storm
+

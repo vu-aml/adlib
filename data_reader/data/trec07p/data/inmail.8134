@@ -1,0 +1,208 @@
+From perl6-all-return-80564-ktwarwic=speedy.uwaterloo.ca@perl.org  Fri Apr 13 19:57:23 2007
+Return-Path: <perl6-all-return-80564-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3DNvL0I028439
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 13 Apr 2007 19:57:22 -0400
+Received: (qmail 30739 invoked by uid 514); 13 Apr 2007 23:56:57 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 30734 invoked from network); 13 Apr 2007 23:56:57 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-4.4 required=8.0
+	tests=ALL_TRUSTED,BAYES_00,DK_POLICY_SIGNSOME
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: moderator for perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+Subject: [perl #41894] segfault happens when invoking poll op 
+From: "Nuno Carvalho via RT" <parrotbug-followup@parrotcode.org>
+Reply-To: parrotbug-followup@parrotcode.org
+In-Reply-To: <rt-3.6.HEAD-30201-1174535376-997.41894-15-0@perl.org>
+References: <RT-Ticket-41894@perl.org> <f8ce6a800703180823j44ccdad8se648d68a8be9039a@mail.gmail.com> <rt-3.6.HEAD-30201-1174535376-997.41894-15-0@perl.org>
+Message-ID: <rt-3.6.HEAD-30557-1176482955-1955.41894-15-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #41894
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: mestre.smash@gmail.com
+Cc: perl6-internals@perl.org
+To: "OtherRecipients of perl Ticket #41894": ;
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+X-RT-Original-Encoding: utf-8
+Date: Fri, 13 Apr 2007 09:49:17 -0700
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-4.4 required=8.0
+	tests=ALL_TRUSTED,BAYES_00,DK_POLICY_SIGNSOME
+Status: O
+Content-Length: 5037
+Lines: 154
+
+Greetings,
+
+On Wed Mar 21 20:49:36 2007, coke wrote:
+> The following patch avoids the segfault:
+> 
+> Index: src/io/io.c
+> =========================================================
+> ==========
+> --- src/io/io.c (revision 17678)
+> +++ src/io/io.c (working copy)
+> @@ -1325,6 +1325,9 @@
+>  INTVAL
+>  PIO_poll(Interp *interp, PMC *pmc, INTVAL which, INTVAL sec, INTVAL
+> usec)
+>  {
+> +    if (pmc == PMCNULL) {
+> +     real_exception(interp, NULL, E_ValueError, "Can't poll NULL
+> pmc");
+> +    }
+>      ParrotIOLayer * const l = PMC_struct_val(pmc);
+>      ParrotIO * const io = PMC_data0(pmc);
+>      return PIO_poll_down(interp, l, io, which, sec, usec);
+
+Applied Coke's patch by hand, this seems a sane check to prevent the
+segmentation fault. Also, 'make test' did not complaint:
+
+All tests successful, 9 tests and 577 subtests skipped.
+Files=276, Tests=6765, 1240 wallclock secs (670.61 cusr + 117.22 csys =
+787.83 CPU)
+
+I'm closing this ticket, please reopen the ticket if you find any issues
+regarding this topic. Committed in revision 18180.
+
+./smash
+> 
+> On Sun Mar 18 08:24:21 2007, jmckim@gmail.com wrote:
+> > ---
+> > osname= linux
+> > osvers= 2.6.15-gentoo-alt2
+> > arch=   x86_64-linux
+> > cc=     x86_64-pc-linux-gnu-gcc
+> > ---
+> > Flags:
+> >     category=core
+> >     severity=low
+> >     ack=no
+> > ---
+> > This short test program demonstrates the problem, at least using my
+> > default-configured parrot:
+> >
+> > .sub main :main
+> >         .local pmc pfd
+> >         pfd = null
+> >         $I0 = poll pfd, 0, 0, 0
+> > .end
+> >
+> > Here's gdb's output:
+> >
+> > GNU gdb 6.4
+> > Copyright 2005 Free Software Foundation, Inc.
+> > GDB is free software, covered by the GNU General Public License, and
+> you are
+> > welcome to change it and/or distribute copies of it under certain
+> > conditions.
+> > Type "show copying" to see the conditions.
+> > There is absolutely no warranty for GDB.  Type "show warranty" for
+> details.
+> > This GDB was configured as "x86_64-pc-linux-gnu"...Using host
+> libthread_db
+> > library "/lib/libthread_db.so.1".
+> >
+> > (gdb) r poll_test.pir
+> > Starting program: /home/mckim/src/parrot-0.4.9/parrot poll_test.pir
+> > [Thread debugging using libthread_db enabled]
+> > [New Thread 46912533592688 (LWP 4202)]
+> > [New Thread 1082132816 (LWP 4205)]
+> > [New Thread 1090525520 (LWP 4206)]
+> >
+> > Program received signal SIGSEGV, Segmentation fault.
+> > [Switching to Thread 46912533592688 (LWP 4202)]
+> > 0x00002aaaaae4631b in PIO_poll_down (interp=0x50c010,
+> layer=0xdeadbeef,
+> >     io=0x0, which=0, sec=0, usec=0) at io_passdown.c:453
+> > 453             if (layer->api->Poll) {
+> > (gdb) where
+> > #0  0x00002aaaaae4631b in PIO_poll_down (interp=0x50c010,
+> layer=0xdeadbeef,
+> >     io=0x0, which=0, sec=0, usec=0) at io_passdown.c:453
+> > #1  0x00002aaaaae41e9f in PIO_poll (interp=0x50c010, pmc=0x5546c0,
+> which=0,
+> >     sec=0, usec=0) at io.c:1330
+> > #2  0x00002aaaaad2c6b0 in Parrot_poll_i_p_ic_ic_ic
+> (cur_opcode=0x835340,
+> >     interp=0x50c010) at io.ops:571
+> > #3  0x00002aaaaadf0d1f in runops_slow_core (interp=0x50c010,
+> pc=0x835340)
+> >     at runops_cores.c:184
+> > #4  0x00002aaaaadd9e81 in runops_int (interp=0x50c010, offset=0)
+> >     at interpreter.c:775
+> > #5  0x00002aaaaaddf36e in runops (interp=0x50c010, offs=0) at
+> inter_run.c:88
+> > #6  0x00002aaaaaddf5e3 in runops_args (interp=0x50c010,
+> sub=0x7f9878,
+> >     obj=0x5546c0, meth=0x0, sig=0x2aaaaaf189c2 "vP",
+> ap=0x7fffffb92690)
+> >     at inter_run.c:202
+> > #7  0x00002aaaaaddf7b9 in Parrot_runops_fromc_args (interp=0x50c010,
+> >     sub=0x7f9878, sig=0x2aaaaaf189c2 "vP") at inter_run.c:304
+> > #8  0x00002aaaaadfe701 in Parrot_runcode (interp=0x50c010, argc=1,
+> >     argv=0x7fffffb92950) at embed.c:805
+> > #9  0x0000000000403510 in main (argc=1, argv=0x7fffffb92950) at
+> main.c:732
+> > (gdb)
+> >
+> > ---
+> > Summary of my parrot 0.4.9 (r0) configuration:
+> >   configdate='Sat Mar 17 18:52:26 2007'
+> >   Platform:
+> >     osname=linux, archname=x86_64-linux
+> >     jitcapable=0, jitarchname=nojit,
+> >     jitosname=linux, jitcpuarch=x86_64
+> >     execcapable=0
+> >     perl=/usr/bin/perl5.8.8
+> >   Compiler:
+> >     cc='x86_64-pc-linux-gnu-gcc', ccflags=' -pipe
+> > -Wdeclaration-after-statement -D_LARGEFILE_SOURCE
+> -D_FILE_OFFSET_BITS=64
+> > -D_GNU_SOURCE -fPIC -I /usr/include',
+> >   Linker and Libraries:
+> >     ld='x86_64-pc-linux-gnu-gcc', ldflags=' -L/usr/local/lib64',
+> >     cc_ldflags='',
+> >     libs='-lpthread -lnsl -ldl -lm -lcrypt -lutil -lrt -lgmp
+> -lreadline
+> > -lncurses'
+> >   Dynamic Linking:
+> >     share_ext='.so', ld_share_flags='-shared -L/usr/local/lib64
+> -fPIC',
+> >     load_ext='.so', ld_load_flags='-shared -L/usr/local/lib64 -fPIC'
+> >   Types:
+> >     iv=long, intvalsize=8, intsize=4, opcode_t=long,
+> opcode_t_size=8,
+> >     ptrsize=8, ptr_alignment=1 byteorder=12345678,
+> >     nv=double, numvalsize=8, doublesize=8
+> >
+> > ---
+> > Environment:
+> >     HOME    LANG    LANGUAGE    LD_LIBRARY_PATH    LOGDIR    PATH
+> SHELL
+> 
+> 
+
+
+-- 
+./smash
+

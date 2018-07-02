@@ -1,0 +1,675 @@
+From sugar-bounces@laptop.org  Mon May 28 12:59:30 2007
+Return-Path: <sugar-bounces@laptop.org>
+Received: from pedal.laptop.org (pedal.laptop.org [18.85.2.148])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4SGxUqD016816
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 28 May 2007 12:59:30 -0400
+Received: from pedal.laptop.org (localhost [127.0.0.1])
+	by pedal.laptop.org (Postfix) with ESMTP id F234A4F6C8;
+	Mon, 28 May 2007 12:58:35 -0400 (EDT)
+X-Original-To: sugar@laptop.org
+Delivered-To: sugar@laptop.org
+Received: from spam.laptop.org (spam.laptop.org [18.85.46.23])
+	by pedal.laptop.org (Postfix) with ESMTP id B2A2F4F6C8
+	for <sugar@laptop.org>; Mon, 28 May 2007 12:58:34 -0400 (EDT)
+X-ASG-Debug-ID: 1180371560-3f1000000000-3Xmyjt
+X-Barracuda-URL: http://18.85.46.23:8000/cgi-bin/mark.cgi
+X-Barracuda-Connect: dhansak.collabora.co.uk[195.10.223.134]
+X-Barracuda-Start-Time: 1180371560
+X-Barracuda-Encrypted: DHE-RSA-AES256-SHA
+Received: from dhansak.collabora.co.uk (dhansak.collabora.co.uk
+	[195.10.223.134])
+	(using TLSv1 with cipher DHE-RSA-AES256-SHA (256/256 bits))
+	(No client certificate requested)
+	by spam.laptop.org (Spam Firewall) with ESMTP id 63E9510330
+	for <sugar@laptop.org>; Mon, 28 May 2007 12:59:21 -0400 (EDT)
+Received: by dhansak.collabora.co.uk (Postfix, from userid 1014)
+	id DE18B308FD43; Mon, 28 May 2007 17:59:19 +0100 (BST)
+Date: Mon, 28 May 2007 17:59:11 +0100
+From: Simon McVittie <simon.mcvittie@collabora.co.uk>
+To: sugar@laptop.org
+X-ASG-Orig-Subj: [PATCH] services/presence/: identify Buddies by "key ID"
+	(pubkey hash), not whole key.
+Message-ID: <20070528165911.GA26201@celebrin.pseudorandom.co.uk>
+Mail-Followup-To: sugar@laptop.org
+MIME-Version: 1.0
+User-Agent: Mutt/1.5.13 (2006-08-11)
+X-Barracuda-Bayes: INNOCENT GLOBAL 0.0000 1.0000 -2.0210
+X-Barracuda-Virus-Scanned: by Barracuda Spam Firewall at laptop.org
+X-Barracuda-Spam-Score: -2.02
+X-Barracuda-Spam-Status: No, SCORE=-2.02 using global scores of TAG_LEVEL=3.5
+	QUARANTINE_LEVEL=1000.0 KILL_LEVEL=5.5 tests=
+X-Barracuda-Spam-Report: Code version 3.1, rules version 3.1.18281
+	Rule breakdown below
+	pts rule name              description
+	---- ----------------------
+	--------------------------------------------------
+Subject: [sugar] [PATCH] services/presence/: identify Buddies by "key ID"
+	(pubkey hash), not whole key.
+X-BeenThere: sugar@laptop.org
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Discussion of OLPC design,
+	desktop platform and user experience" <sugar.laptop.org>
+List-Unsubscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=unsubscribe>
+List-Archive: <http://mailman.laptop.org/pipermail/sugar>
+List-Post: <mailto:sugar@laptop.org>
+List-Help: <mailto:sugar-request@laptop.org?subject=help>
+List-Subscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=subscribe>
+Content-Type: multipart/mixed; boundary="===============3605945052899074239=="
+Mime-version: 1.0
+Sender: sugar-bounces@laptop.org
+Errors-To: sugar-bounces@laptop.org
+
+
+--===============3605945052899074239==
+Content-Type: multipart/signed; micalg=pgp-sha1;
+	protocol="application/pgp-signature"; boundary="y0ulUmNC+osPPQO6"
+Content-Disposition: inline
+
+
+--y0ulUmNC+osPPQO6
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+Content-Transfer-Encoding: quoted-printable
+
+I thought I should send this one in for dcbw's approval, since it's a
+behaviour change...
+
+"""
+services/presence/: identify Buddies by "key ID" (pubkey hash), not whole k=
+ey.
+
+This allows us to create Buddy objects as soon as we see a contact on the
+server. For contacts not on trusted servers, or seen in anonymous MUCs, we
+create a Buddy identified by JID instead (so we have some way to talk
+about the anonymous contact within the Sugar API).
+
+The concept of "trusted server" means a server which we trust to validate t=
+hat
+users with a keyID as the username part of their JID do in fact have that k=
+ey.
+Currently we just pretend that olpc.collabora.co.uk does this - in future, =
+the
+school servers will do this validation by using key rather than password
+authentication.
+
+Also create Buddy object paths based on the keyID or JID (for easier debugg=
+ing).
+"""
+
+This will allow me to improve the Sugar-visible API by mapping from
+Buddies to handles (and back) in a synchronous way, so we can track
+buddies entering and leaving activities in a sane way, for instance. Also, =
+we
+can interoperate with non-OLPC servers correctly (with a Buddy object
+present even for non-OLPC users).
+
+I'm assuming here that the key-ID is "sufficiently unique" across all
+trusted servers. It's a SHA-1 of the public key, so basically the
+same strength as GnuPG key fingerprints and git object hashes.
+(Actually, for hysterical raisins, it's a SHA-1 of Base64(public_key) -
+we should probably change this before we ship.)
+
+The actual function used for the key-ID can be changed (if it
+is, old and new versions of Sugar will be incompatible, but that's not
+really a problem yet) so if any crypto gurus want to specify something
+different, now would be a really good time. As currently implemented, its
+output must be short enough to put in the JID (for which a hex SHA-1 is
+somewhat long already).
+
+---
+ services/presence/buddy.py           |   49 +++++++++-------
+ services/presence/presenceservice.py |   48 +++++++++------
+ services/presence/pstest.py          |   10 ++-
+ services/presence/server_plugin.py   |  108 ++++++++++++++++++++++++++++++=
+++--
+ 4 files changed, 166 insertions(+), 49 deletions(-)
+
+diff --git a/services/presence/buddy.py b/services/presence/buddy.py
+index 1b45fd5..b858b41 100644
+--- a/services/presence/buddy.py
++++ b/services/presence/buddy.py
+@@ -37,6 +37,7 @@ _PROP_CURACT =3D "current-activity"
+ _PROP_COLOR =3D "color"
+ _PROP_OWNER =3D "owner"
+ _PROP_VALID =3D "valid"
++_PROP_OBJID =3D 'objid'
+=20
+ # Will go away soon
+ _PROP_IP4_ADDRESS =3D "ip4-address"
+@@ -90,15 +91,14 @@ class Buddy(ExportedGObject):
+     }
+=20
+     __gproperties__ =3D {
+-        _PROP_KEY          : (str, None, None, None,
+-                              gobject.PARAM_READWRITE |
+-                              gobject.PARAM_CONSTRUCT_ONLY),
++        _PROP_KEY          : (str, None, None, None, gobject.PARAM_READWRI=
+TE),
+         _PROP_ICON         : (object, None, None, gobject.PARAM_READWRITE),
+         _PROP_NICK         : (str, None, None, None, gobject.PARAM_READWRI=
+TE),
+         _PROP_COLOR        : (str, None, None, None, gobject.PARAM_READWRI=
+TE),
+         _PROP_CURACT       : (str, None, None, None, gobject.PARAM_READWRI=
+TE),
+         _PROP_VALID        : (bool, None, None, False, gobject.PARAM_READA=
+BLE),
+         _PROP_OWNER        : (bool, None, None, False, gobject.PARAM_READA=
+BLE),
++        _PROP_OBJID        : (str, None, None, None, gobject.PARAM_READABL=
+E),
+         _PROP_IP4_ADDRESS  : (str, None, None, None, gobject.PARAM_READWRI=
+TE)
+     }
+=20
+@@ -106,16 +106,16 @@ class Buddy(ExportedGObject):
+         """Initialize the Buddy object
+=20
+         bus -- connection to the D-Bus session bus
+-        object_id -- the activity's unique identifier
++        object_id -- the buddy's unique identifier, either based on their
++            key-ID or JID
+         kwargs -- used to initialize the object's properties
+=20
+         constructs a DBUS "object path" from the _BUDDY_PATH
+         and object_id
+         """
+-        if not object_id or not isinstance(object_id, int):
+-            raise ValueError("object id must be a valid number")
+=20
+-        self._object_path =3D _BUDDY_PATH + str(object_id)
++        self._object_id =3D object_id
++        self._object_path =3D dbus.ObjectPath(_BUDDY_PATH + object_id)
+=20
+         self._activities =3D {}   # Activity ID -> Activity
+         self._activity_sigids =3D {}
+@@ -130,9 +130,6 @@ class Buddy(ExportedGObject):
+         self._color =3D None
+         self._ip4_address =3D None
+=20
+-        if not kwargs.get(_PROP_KEY):
+-            raise ValueError("key required")
+-
+         _ALLOWED_INIT_PROPS =3D [_PROP_NICK, _PROP_KEY, _PROP_ICON,
+                                _PROP_CURACT, _PROP_COLOR, _PROP_IP4_ADDRES=
+S]
+         for (key, value) in kwargs.items():
+@@ -158,7 +155,9 @@ class Buddy(ExportedGObject):
+=20
+         pspec -- property specifier with a "name" attribute
+         """
+-        if pspec.name =3D=3D _PROP_KEY:
++        if pspec.name =3D=3D _PROP_OBJID:
++            return self._object_id
++        elif pspec.name =3D=3D _PROP_KEY:
+             return self._key
+         elif pspec.name =3D=3D _PROP_ICON:
+             return self._icon
+@@ -422,32 +421,40 @@ class Buddy(ExportedGObject):
+         """
+         changed =3D False
+         changed_props =3D {}
+-        if _PROP_NICK in properties.keys():
++        if _PROP_NICK in properties:
+             nick =3D properties[_PROP_NICK]
+             if nick !=3D self._nick:
+                 self._nick =3D nick
+                 changed_props[_PROP_NICK] =3D nick
+                 changed =3D True
+-        if _PROP_COLOR in properties.keys():
++        if _PROP_COLOR in properties:
+             color =3D properties[_PROP_COLOR]
+             if color !=3D self._color:
+                 self._color =3D color
+                 changed_props[_PROP_COLOR] =3D color
+                 changed =3D True
+-        if _PROP_CURACT in properties.keys():
++        if _PROP_CURACT in properties:
+             curact =3D properties[_PROP_CURACT]
+             if curact !=3D self._current_activity:
+                 self._current_activity =3D curact
+                 changed_props[_PROP_CURACT] =3D curact
+                 changed =3D True
+-        if _PROP_IP4_ADDRESS in properties.keys():
++        if _PROP_IP4_ADDRESS in properties:
+             ip4addr =3D properties[_PROP_IP4_ADDRESS]
+             if ip4addr !=3D self._ip4_address:
+                 self._ip4_address =3D ip4addr
+                 changed_props[_PROP_IP4_ADDRESS] =3D ip4addr
+                 changed =3D True
+-
+-        if not changed or not len(changed_props.keys()):
++        if _PROP_KEY in properties:
++            # don't allow key to be set more than once
++            if self._key is None:
++                key =3D properties[_PROP_KEY]
++                if key is not None:
++                    self._key =3D key
++                    changed_props[_PROP_KEY] =3D key
++                    changed =3D True
++
++        if not changed or not changed_props:
+             return
+=20
+         # Try emitting PropertyChanged before updating validity
+@@ -558,13 +565,11 @@ class ShellOwner(GenericOwner):
+     _SHELL_OWNER_INTERFACE =3D "org.laptop.Shell.Owner"
+     _SHELL_PATH =3D "/org/laptop/Shell"
+=20
+-    def __init__(self, ps, bus, object_id, test=3DFalse):
++    def __init__(self, ps, bus):
+         """Initialize the ShellOwner instance
+=20
+         ps -- presenceservice.PresenceService object
+         bus -- a connection to the D-Bus session bus
+-        object_id -- the activity's unique identifier
+-        test -- ignored
+=20
+         Retrieves initial property values from the profile
+         module.  Loads the buddy icon from file as well.
+@@ -584,8 +589,8 @@ class ShellOwner(GenericOwner):
+         icon =3D f.read()
+         f.close()
+=20
+-        GenericOwner.__init__(self, ps, bus, object_id, key=3Dkey,
+-                nick=3Dnick, color=3Dcolor, icon=3Dicon, server=3Dserver,
++        GenericOwner.__init__(self, ps, bus, psutils.pubkey_to_keyid(key),
++                key=3Dkey, nick=3Dnick, color=3Dcolor, icon=3Dicon, server=
+=3Dserver,
+                 key_hash=3Dkey_hash, registered=3Dregistered)
+=20
+         # Ask to get notifications on Owner object property changes in the
+diff --git a/services/presence/presenceservice.py b/services/presence/prese=
+nceservice.py
+index bf058d3..4f84a3b 100644
+--- a/services/presence/presenceservice.py
++++ b/services/presence/presenceservice.py
+@@ -1,4 +1,5 @@
+ # Copyright (C) 2007, Red Hat, Inc.
++# Copyright (C) 2007 Collabora Ltd. <http://www.collabora.co.uk/>
+ #
+ # This program is free software; you can redistribute it and/or modify
+ # it under the terms of the GNU General Public License as published by
+@@ -33,6 +34,7 @@ from sugar import util
+=20
+ from buddy import Buddy, ShellOwner
+ from activity import Activity
++from psutils import pubkey_to_keyid
+=20
+ _PRESENCE_SERVICE =3D "org.laptop.Sugar.Presence"
+ _PRESENCE_INTERFACE =3D "org.laptop.Sugar.Presence"
+@@ -57,15 +59,17 @@ class PresenceService(ExportedGObject):
+=20
+     def _create_owner(self):
+         # Overridden by TestPresenceService
+-        return ShellOwner(self, self._session_bus, self._get_next_object_i=
+d())
++        return ShellOwner(self, self._session_bus)
+=20
+     def __init__(self):
+         self._next_object_id =3D 0
+         self._connected =3D False
+=20
+-        self._buddies =3D {}      # key -> Buddy
++        self._buddies =3D {}              # identifier -> Buddy
++        self._buddies_by_pubkey =3D {}    # base64 public key -> Buddy
+         self._handles_buddies =3D {}      # tp client -> (handle -> Buddy)
+-        self._activities =3D {}   # activity id -> Activity
++
++        self._activities =3D {}           # activity id -> Activity
+=20
+         self._session_bus =3D dbus.SessionBus()
+         self._session_bus.add_signal_receiver(self._connection_disconnecte=
+d_cb,
+@@ -74,7 +78,10 @@ class PresenceService(ExportedGObject):
+=20
+         # Create the Owner object
+         self._owner =3D self._create_owner()
+-        self._buddies[self._owner.props.key] =3D self._owner
++        key =3D self._owner.props.key
++        keyid =3D pubkey_to_keyid(key)
++        self._buddies['keyid/' + keyid] =3D self._owner
++        self._buddies_by_pubkey[key] =3D self._owner
+=20
+         self._registry =3D ManagerRegistry()
+         self._registry.LoadManagers()
+@@ -133,31 +140,35 @@ class PresenceService(ExportedGObject):
+         if self._connected !=3D old_status:
+             self.emit('connection-status', self._connected)
+=20
+-    def _contact_online(self, tp, handle, props):
+-        new_buddy =3D False
+-        key =3D props["key"]
+-        buddy =3D self._buddies.get(key)
+-        if not buddy:
++    def get_buddy(self, objid):
++        buddy =3D self._buddies.get(objid)
++        if buddy is None:
++            _logger.debug('Creating new buddy at .../%s', objid)
+             # we don't know yet this buddy
+-            objid =3D self._get_next_object_id()
+-            buddy =3D Buddy(self._session_bus, objid, key=3Dkey)
++            buddy =3D Buddy(self._session_bus, objid)
+             buddy.connect("validity-changed", self._buddy_validity_changed=
+_cb)
+             buddy.connect("disappeared", self._buddy_disappeared_cb)
+-            self._buddies[key] =3D buddy
++            self._buddies[objid] =3D buddy
++        return buddy
++
++    def _contact_online(self, tp, objid, handle, props):
++        _logger.debug('Handle %u, .../%s is now online', handle, objid)
++        buddy =3D self.get_buddy(objid)
+=20
+         self._handles_buddies[tp][handle] =3D buddy
+         # store the handle of the buddy for this CM
+         buddy.add_telepathy_handle(tp, handle)
+-
+         buddy.set_properties(props)
+=20
+     def _buddy_validity_changed_cb(self, buddy, valid):
+         if valid:
+             self.BuddyAppeared(buddy.object_path())
++            self._buddies_by_pubkey[buddy.props.key] =3D buddy
+             _logger.debug("New Buddy: %s (%s)", buddy.props.nick,
+                           buddy.props.color)
+         else:
+             self.BuddyDisappeared(buddy.object_path())
++            self._buddies_by_pubkey.pop(buddy.props.key, None)
+             _logger.debug("Buddy left: %s (%s)", buddy.props.nick,
+                           buddy.props.color)
+=20
+@@ -166,16 +177,17 @@ class PresenceService(ExportedGObject):
+             self.BuddyDisappeared(buddy.object_path())
+             _logger.debug('Buddy left: %s (%s)', buddy.props.nick,
+                           buddy.props.color)
+-        self._buddies.pop(buddy.props.key)
++            self._buddies_by_pubkey.pop(buddy.props.key, None)
++        self._buddies.pop(buddy.props.objid, None)
+=20
+     def _contact_offline(self, tp, handle):
+         if not self._handles_buddies[tp].has_key(handle):
+             return
+=20
+         buddy =3D self._handles_buddies[tp].pop(handle)
+-        key =3D buddy.props.key
+-
+         # the handle of the buddy for this CM is not valid anymore
++        # (this might trigger _buddy_disappeared_cb if they are not visible
++        # via any CM)
+         buddy.remove_telepathy_handle(tp, handle)
+=20
+     def _get_next_object_id(self):
+@@ -326,8 +338,8 @@ class PresenceService(ExportedGObject):
+                          in_signature=3D"ay", out_signature=3D"o",
+                          byte_arrays=3DTrue)
+     def GetBuddyByPublicKey(self, key):
+-        if self._buddies.has_key(key):
+-            buddy =3D self._buddies[key]
++        buddy =3D self._buddies_by_pubkey.get(key)
++        if buddy is not None:
+             if buddy.props.valid:
+                 return buddy.object_path()
+         raise NotFoundError("The buddy was not found.")
+diff --git a/services/presence/pstest.py b/services/presence/pstest.py
+index 1900993..3054e48 100644
+--- a/services/presence/pstest.py
++++ b/services/presence/pstest.py
+@@ -26,6 +26,7 @@ from sugar import env, util
+=20
+ from buddy import GenericOwner, _PROP_NICK, _PROP_CURACT, _PROP_COLOR
+ from presenceservice import PresenceService
++from psutils import pubkey_to_keyid
+=20
+=20
+ _logger =3D logging.getLogger('s-p-s.pstest')
+@@ -37,7 +38,7 @@ class TestOwner(GenericOwner):
+=20
+     __gtype_name__ =3D "TestOwner"
+=20
+-    def __init__(self, ps, bus, object_id, test_num, randomize):
++    def __init__(self, ps, bus, test_num, randomize):
+         self._cp =3D ConfigParser()
+         self._section =3D "Info"
+         self._test_activities =3D []
+@@ -62,8 +63,9 @@ class TestOwner(GenericOwner):
+         icon =3D _get_random_image()
+=20
+         _logger.debug("pubkey is %s" % pubkey)
+-        GenericOwner.__init__(self, ps, bus, object_id, key=3Dpubkey, nick=
+=3Dnick,
+-                color=3Dcolor, icon=3Dicon, registered=3Dregistered, key_h=
+ash=3Dprivkey_hash)
++        GenericOwner.__init__(self, ps, bus, pubkey_to_keyid(pubkey),
++                key=3Dpubkey, nick=3Dnick, color=3Dcolor, icon=3Dicon,
++                registered=3Dregistered, key_hash=3Dprivkey_hash)
+=20
+         # Only do the random stuff if randomize is true
+         if randomize:
+@@ -169,7 +171,7 @@ class TestPresenceService(PresenceService):
+         PresenceService.__init__(self)
+=20
+     def _create_owner(self):
+-        return TestOwner(self, self._session_bus, self._get_next_object_id=
+(),
++        return TestOwner(self, self._session_bus,
+                          self.__test_num, self.__randomize)
+=20
+     def internal_get_activity(self, actid):
+diff --git a/services/presence/server_plugin.py b/services/presence/server_=
+plugin.py
+index 26adba9..b020286 100644
+--- a/services/presence/server_plugin.py
++++ b/services/presence/server_plugin.py
+@@ -20,6 +20,7 @@
+ import logging
+ import os
+ import sys
++from string import hexdigits
+ try:
+     # Python >=3D 2.5
+     from hashlib import md5
+@@ -42,6 +43,7 @@ from telepathy.constants import (HANDLE_TYPE_CONTACT,
+     CONNECTION_STATUS_CONNECTING,
+     CONNECTION_STATUS_REASON_AUTHENTICATION_FAILED,
+     CONNECTION_STATUS_REASON_NONE_SPECIFIED,
++    CHANNEL_GROUP_FLAG_CHANNEL_SPECIFIC_HANDLES,
+     PROPERTY_FLAG_WRITE)
+ from sugar import util
+=20
+@@ -105,8 +107,11 @@ class ServerPlugin(gobject.GObject):
+         'contact-online':
+             # Contact has come online and we've discovered all their buddy
+             # properties.
+-            # args: contact handle: int; dict {name: str =3D> property: ob=
+ject}
+-            (gobject.SIGNAL_RUN_FIRST, None, [object, object]),
++            # args:
++            #   contact identification (based on key ID or JID): str
++            #   contact handle: int or long
++            #   dict {name: str =3D> property: object}
++            (gobject.SIGNAL_RUN_FIRST, None, [str, object, object]),
+         'contact-offline':
+             # Contact has gone offline.
+             # args: contact handle
+@@ -263,7 +268,7 @@ class ServerPlugin(gobject.GObject):
+=20
+         account_info['server'] =3D self._owner.get_server()
+=20
+-        khash =3D util.printable_hash(util._sha_data(self._owner.props.key=
+))
++        khash =3D psutils.pubkey_to_keyid(self._owner.props.key)
+         account_info['account'] =3D "%s@%s" % (khash, account_info['server=
+'])
+=20
+         account_info['password'] =3D self._owner.get_key_hash()
+@@ -770,10 +775,13 @@ class ServerPlugin(gobject.GObject):
+             return
+=20
+         props['nick'] =3D aliases[0]
++
+         jid =3D self._conn[CONN_INTERFACE].InspectHandles(HANDLE_TYPE_CONT=
+ACT,
+                                                         [handle])[0]
+         self._online_contacts[handle] =3D jid
+-        self.emit("contact-online", handle, props)
++        objid =3D self.identify_contacts(None, [handle])[handle]
++
++        self.emit("contact-online", objid, handle, props)
+=20
+         self._conn[CONN_INTERFACE_BUDDY_INFO].GetActivities(handle,
+             reply_handler=3Dlambda *args: self._contact_online_activities_=
+cb(
+@@ -841,7 +849,7 @@ class ServerPlugin(gobject.GObject):
+                 handle not in self._subscribe_local_pending and
+                 handle not in self._subscribe_remote_pending):
+             # it's probably a channel-specific handle - can't create a Bud=
+dy
+-            # object
++            # object for those yet
+             return
+=20
+         self._online_contacts[handle] =3D None
+@@ -1063,3 +1071,93 @@ class ServerPlugin(gobject.GObject):
+             if room =3D=3D act_handle:
+                 self.emit("activity-properties-changed", act_id, propertie=
+s)
+                 return
++
++    def _server_is_trusted(self, hostname):
++        """Return True if the server with the given hostname is trusted to
++        verify public-key ownership correctly, and only allows users to
++        register JIDs whose username part is either a public key fingerpri=
+nt,
++        or of the wrong form to be a public key fingerprint (to allow for
++        ejabberd's admin@example.com address).
++
++        If we trust the server, we can skip verifying the key ourselves,
++        which leads to simplifications. In the current implementation we
++        never verify that people actually own the key they claim to, so
++        we will always give contacts on untrusted servers a JID- rather th=
+an
++        key-based identity.
++
++        For the moment we assume that the test server, olpc.collabora.co.u=
+k,
++        does this verification.
++        """
++        return (hostname =3D=3D 'olpc.collabora.co.uk')
++
++    def identify_contacts(self, tp_chan, handles):
++        """Work out the "best" unique identifier we can for the given hand=
+les,
++        in the context of the given channel (which may be None), using only
++        'fast' connection manager API (that does not involve network
++        round-trips).
++
++        For the XMPP server case, we proceed as follows:
++
++        * Find the owners of the given handles, if the channel has
++          channel-specific handles
++        * If the owner (globally-valid JID) is on a trusted server, return
++          'keyid/' plus the 'key fingerprint' (the user part of their JID,
++          currently implemented as the SHA-1 of the Base64 blob in
++          owner.key.pub)
++        * If the owner (globally-valid JID) cannot be found or is on an
++          untrusted server, return 'xmpp/' plus an escaped form of the JID
++
++        The idea is that we identify buddies by key-ID (i.e. by key, assum=
+ing
++        no collisions) if we can find it without making network round-trip=
+s,
++        but if that's not possible we just use their JIDs.
++
++        :Parameters:
++            `tp_chan` : telepathy.client.Channel or None
++                The channel in which the handles were found, or None if th=
+ey
++                are known to be channel-specific handles
++            `handles` : iterable over (int or long)
++                The contacts' handles in that channel
++        :Returns:
++            A dict mapping the provided handles to the best available
++            unique identifier, which is a string that could be used as a
++            suffix to an object path
++        """
++        # we need to be able to index into handles, so force them to
++        # be a sequence
++        if not isinstance(handles, (tuple, list)):
++            handles =3D tuple(handles)
++
++        owners =3D handles
++
++        if tp_chan is not None and CHANNEL_INTERFACE_GROUP in tp_chan:
++
++            group =3D tp_chan[CHANNEL_INTERFACE_GROUP]
++            if group.GetFlags() & CHANNEL_GROUP_FLAG_CHANNEL_SPECIFIC_HAND=
+LES:
++
++                owners =3D group.GetHandleOwners(handles)
++                for i, owner in enumerate(owners):
++                    if owner =3D=3D 0:
++                        owners[i] =3D handles[i]
++
++        jids =3D self._conn[CONN_INTERFACE].InspectHandles(HANDLE_TYPE_CON=
+TACT,
++                                                         owners)
++
++        ret =3D {}
++        for handle, jid in zip(handles, jids):
++            if '/' in jid:
++                # the contact is unidentifiable (in an anonymous MUC) - cr=
+eate
++                # a temporary identity for them, based on their room-JID
++                ret[handle] =3D 'xmpp/' + psutils.escape_identifier(jid)
++            else:
++                user, host =3D jid.split('@', 1)
++                if (self._server_is_trusted(host) and len(user) =3D=3D 40 =
+and
++                    user.strip(hexdigits) =3D=3D ''):
++                    # they're on a trusted server and their username looks
++                    # like a key-ID
++                    ret[handle] =3D 'keyid/' + user.lower()
++                else:
++                    # untrusted server, or not the right format to be a
++                    # key-ID - identify the contact by their JID
++                    ret[handle] =3D 'xmpp/' + psutils.escape_identifier(ji=
+d)
++
++        return ret
+--=20
+1.5.2-rc3.GIT
+
+
+--y0ulUmNC+osPPQO6
+Content-Type: application/pgp-signature; name="signature.asc"
+Content-Description: Digital signature
+Content-Disposition: inline
+
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.6 (GNU/Linux)
+Comment: OpenPGP key: http://www.pseudorandom.co.uk/2003/contact/ or pgp.net
+
+iD8DBQFGWwpfWSc8zVUw7HYRAti/AJ91+rt0bA+s/nXOk5tkfDIcEeLa5wCffwcL
+h6LbEzz/ZBaAkr+nxGa6bRo=
+=eQyW
+-----END PGP SIGNATURE-----
+
+--y0ulUmNC+osPPQO6--
+
+--===============3605945052899074239==
+Content-Type: text/plain; charset="us-ascii"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+
+_______________________________________________
+Sugar mailing list
+Sugar@laptop.org
+http://mailman.laptop.org/mailman/listinfo/sugar
+
+--===============3605945052899074239==--
+

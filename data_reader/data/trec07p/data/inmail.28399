@@ -1,0 +1,80 @@
+From perl6-all-return-81107-ktwarwic=speedy.uwaterloo.ca@perl.org  Fri May  4 05:55:24 2007
+Return-Path: <perl6-all-return-81107-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l449tNqD013985
+	for <ktwarwic@flax9.uwaterloo.ca>; Fri, 4 May 2007 05:55:23 -0400
+Received: (qmail 30915 invoked by uid 514); 4 May 2007 09:55:21 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 30909 invoked from network); 4 May 2007 09:55:20 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Delivered-To: parrotbug-followup@parrotcode.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+X-Virus-Scanned: by both ClamAV and Kaspersky at http://aliencamel.com/
+Message-ID: <463B02A3.8010402@perl.org>
+Date: Fri, 04 May 2007 02:53:39 -0700
+From: Allison Randal <allison@perl.org>
+User-Agent: Thunderbird 1.5.0.10 (Macintosh/20070221)
+MIME-Version: 1.0
+To: Mark Glines <mark@glines.org>
+CC: perl6-internals@perl.org, parrotbug-followup@parrotcode.org,
+   bugs-bitbucket@netlabs.develooper.com
+Subject: Re: [perl #42774] [PATCH] Configure.pl --gc=libc doesn't compile
+References: <RT-Ticket-42774@perl.org>	<Pine.LNX.4.62.0704271411010.17934@fractal.phys.lafayette.edu>	<rt-3.6.HEAD-30557-1177698000-905.42774-72-0@perl.org> <20070501061021.6488ca6f@chirp>
+In-Reply-To: <20070501061021.6488ca6f@chirp>
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-1.9 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_NEUTRAL
+
+Mark Glines wrote:
+> On Fri, 27 Apr 2007 11:19:59 -0700
+> Andy Spieherty (via RT) <parrotbug-followup@parrotcode.org> wrote:
+>> "src/gc/dod.c", line 462: undefined symbol:
+>> PObj_bufstart_external_FLAG
+> 
+> I hunted for this a bit lastnight, so I'm posting my progress.
+> 
+> The source lines in question are:
+> 
+> 461         /* the real external flag */
+> 462>>       if (PObj_bufstart_external_TEST(b))    <<
+> 463             PObj_external_SET(b);
+> 
+> PObj_bufstart_external_FLAG used to be defined in
+> include/parrot/pobj.h, but it was removed in svn r10582:
+> [...]
+> Strange that r10582 removed the flag itself, but not the accessors
+> (PObj_bufstart_external_TEST and PObj_bufstart_external_SET).
+
+And, on to the next step: Whether you remove the check for 
+PObj_bufstart_external_TEST(b), or readd the PObj_bufstart_external_FLAG 
+(as 1 << 31, since that's the next available flag), that error 
+disappears, to be replaced with an error in src/gc/res_lea.c that 
+Parrot_reallocate, Parrot_allocate, and Parrot_reallocate_string are 
+redeclared with conflicting types, and that Parrot_allocate_zeroed is 
+never prototyped, and STRING_ALIGNMENT is undeclared.
+
+Looks to me like we've got a few incomplete refactors on our hands that 
+happen to live on rarely exercised code paths. (Automated multi-platform 
+smokes will help this.) I've started working on src/gc/res_lea.c, after 
+removing the check for the no-longer-used flag.
+
+Allison
+

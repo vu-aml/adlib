@@ -1,0 +1,228 @@
+From perl6-all-return-80771-ktwarwic=speedy.uwaterloo.ca@perl.org  Sun Apr 22 03:12:28 2007
+Return-Path: <perl6-all-return-80771-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3M7CP0I003807
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 22 Apr 2007 03:12:25 -0400
+Received: (qmail 3054 invoked by uid 514); 22 Apr 2007 07:11:59 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 3049 invoked from network); 22 Apr 2007 07:11:59 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: domain of rutski89@gmail.com designates 209.85.132.241 as permitted sender)
+DKIM-Signature: a=rsa-sha1; c=relaxed/relaxed;
+        d=gmail.com; s=beta;
+        h=domainkey-signature:received:received:in-reply-to:references:mime-version:content-type:message-id:cc:content-transfer-encoding:from:subject:date:to:x-mailer;
+        b=kEaRS7PLzpDXlwYGt8oeqqRtBCGnxSGqx/qu9CmmlF4KrGTw5UgTrvLvnUVuFXjMpGJNaiJT7yfN6lI8+q4buwWd+JrygN9Fqa9Rl/3Y1rXBhxZWR8EYbFS68O0etBEVX078DuqPIkJ+NvuuOeOK1EscH7LPZViFr3w6uIDAu8A=
+DomainKey-Signature: a=rsa-sha1; c=nofws;
+        d=gmail.com; s=beta;
+        h=received:in-reply-to:references:mime-version:content-type:message-id:cc:content-transfer-encoding:from:subject:date:to:x-mailer;
+        b=VO1zKTrMiYHjHIZafpcSxNJNoiSjAWUA5dMc9EeRq/854jR32B7KRQviErXTQW2R5H/hc5F8vFtwF3gI9xtkDeWsDstsOATv8g+CUmW0xyDhx6BpB0Q1+YdEwYQayOenbIuXk4FGcMUekBgK/Jar623EeYM8Ur5+veuz3Q+lRXI=
+In-Reply-To: <ef04c7728061e200914c84b6cbbc987a@gmail.com>
+References: <200704211824.18554.chromatic@wgz.org> <ef04c7728061e200914c84b6cbbc987a@gmail.com>
+Mime-Version: 1.0 (Apple Message framework v752.2)
+Content-Type: text/plain; charset=US-ASCII; delsp=yes; format=flowed
+Message-Id: <C77C50D7-1F2A-4D33-8489-253E9A5659A2@gmail.com>
+Cc: chromatic <chromatic@wgz.org>, perl6-internals@perl.org, lt@toetsch.at
+Content-Transfer-Encoding: 7bit
+From: Patrick Rutkowski <rutski89@gmail.com>
+Subject: Re: I Don't Understand The Context Allocation/Destruction Code
+Date: Sun, 22 Apr 2007 03:11:20 -0400
+To: Joshua Isom <jrisom@gmail.com>
+X-Mailer: Apple Mail (2.752.2)
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED,SPF_PASS
+Status: O
+Content-Length: 6373
+Lines: 172
+
+I think Leo would be the best person to go to for an explanation,
+especially if you plan to dramatically rework the code. He moved the
+whole Parrot_alloc_context() routine from inter_create.c to
+gc/register.c in r9645. Along with the move in r9645 he added the slot
+variable and all of its side effects; so he's likely to have a good
+understanding of these functions and their purpose as a whole.
+
+However, r9645 was 1.5 years ago; so I'm crossing my fingers that he
+still remembers enough of this to be of any help.
+
+I'm CC-ing him to make sure that he gets wind of the issue.
+
+P.S. If you look at the r9645 version of Parrot_alloc_context() in
+inter_create.c then don't let the ifdef'd CHUNKED_CTX_MEM
+version throw you; scroll down to after the #else and there's another
+version of Parrot_alloc_context() (that's the right one). I hear that  
+the
+CHUNKED_CTX_MEM idea has since been abandoned.
+
+On Apr 22, 2007, at 2:18 AM, Joshua Isom wrote:
+
+>
+> On Apr 21, 2007, at 8:24 PM, chromatic wrote:
+>
+>> Parrot_alloc_context() performs some calculations about the number of
+>> registers used to determine how much memory to allocate:
+>>
+>>     const size_t size_n = sizeof (FLOATVAL) * n_regs_used[REGNO_NUM];
+>>     const size_t size_nip = size_n +
+>>         sizeof (INTVAL) *   n_regs_used[REGNO_INT] +
+>>         sizeof (PMC*) *     n_regs_used[REGNO_PMC];
+>>     size_t reg_alloc = size_nip +
+>>         sizeof (STRING*) *  n_regs_used[REGNO_STR];
+>>
+>> Then it calculates a slot value:
+>>
+>>     const int slot = (reg_alloc + 7) >> 3;
+>>     reg_alloc = slot << 3;
+>>
+>> This is where I start not to understand.  Why reg_alloc + 7?  Why  
+>> shift left
+>> and right by 3?
+>>
+>
+> I'm not sure if it is actually doing anything that needs to be that  
+> complicated to code that way.  It could be able to be written as:
+>
+>     const int slot = (reg_alloc + 7) / 8; /* divide by eight for  
+> some reason and round up on remainder */
+>     reg_alloc = slot * 8; /* reg_alloc is now evenly divisible by 8 */
+>
+> The difference is that if any of the last three bits are set, the  
+> +7 will let it round up, whereas without it it would round down.   
+> That's what it does, don't ask me why(other than maybe guaranteeing  
+> alignment?).  Might be using eight for an eight byte int, but if  
+> so, it should be using sizeof(void *) instead, I'm assuming would  
+> have been used.  Now, slot is multiplied by sizeof(void*) later on,  
+> which may be why it's divided by eight in the first place.
+>
+> The n = slot + 1 I find a little odd, because the number is already  
+> rounded up, so it's rounding up and then adding an extra place of  
+> memory.
+>
+>> It gets less clear.  The interpreter holds a structure for context  
+>> memory with
+>> a free list (an array of void pointers) and the number of free slots,
+>> presumably in this list.
+>>
+>> After all of that calculation of slot, the function uses it as an  
+>> index into
+>> the free list.
+>>
+>> I don't understand that at all.
+>>
+>> I do understand the purpose of the resizing code, but not how slot  
+>> relates to
+>> it:
+>>
+>>     if (slot >= interp->ctx_mem.n_free_slots) {
+>>         const int n = slot + 1;
+>>         int i;
+>>
+>>         interp->ctx_mem.free_list = (void **)mem_sys_realloc(
+>>                 interp->ctx_mem.free_list, n * sizeof (void*));
+>>
+>>         for (i = interp->ctx_mem.n_free_slots; i < n; ++i)
+>>             interp->ctx_mem.free_list[i] = NULL;
+>>         interp->ctx_mem.n_free_slots = n;
+>>     }
+>>
+>> This is doubly weird because when Parrot initializes the free list in
+>> create_initial_context(), it allocates a small number of free slots:
+>>
+>> #define INITIAL_FREE_SLOTS 8
+>>
+>>     interp->ctx_mem.n_free_slots = INITIAL_FREE_SLOTS;
+>>     interp->ctx_mem.free_list    =
+>>         (void **)mem_sys_allocate(INITIAL_FREE_SLOTS * sizeof  
+>> (void *));
+>>
+>>     for (i = 0; i < INITIAL_FREE_SLOTS; ++i)
+>>         interp->ctx_mem.free_list[i] = NULL;
+>>
+>> The result is that the free_list extends quite a bit over the initial
+>> allocation, but it's mostly just an array of null.  It's fairly  
+>> sparse apart
+>> from that.
+>>
+>> Here's another curious thing when allocating a context:
+>>
+>>     ptr = interp->ctx_mem.free_list[slot];
+>>     old = CONTEXT(interp->ctx);
+>>     if (ptr) {
+>>         interp->ctx_mem.free_list[slot] = *(void **) ptr;
+>>     }
+>>
+>> I wish I could tell you what the assignments to and from ptr do  
+>> here, but I
+>> can't, nor what they signify.  There's a similar form to free a  
+>> context:
+>>
+>>         ptr = ctxp;
+>>         slot = ctxp->regs_mem_size >> 3;
+>>
+>>         assert(slot < interp->ctx_mem.n_free_slots);
+>>         *(void **)ptr = interp->ctx_mem.free_list[slot];
+>>         interp->ctx_mem.free_list[slot] = ptr;
+>>
+>
+> The *(void **) has been confusing me for a long time.  It's also in  
+> smallobject.c where a seg fault sometimes happens.  But I've never  
+> been able to find out how to decipher it.  I can look at the dump  
+> of it with `objdump -dS src/gc/smallobject.c` but still get lost in  
+> it all(although looking at assembly, even intermixed with source  
+> code, requires a little too much of an understanding of the machine  
+> to figure out).
+>
+>> I originally thought the free_list was an array of recycled  
+>> contexts to avoid
+>> malloc() and free() pairs by reusing already-allocated-but-unused  
+>> memory, but
+>> now I can't tell what it's doing.  I tried to change this into a  
+>> linked list,
+>> but that failed with invalid reads.
+>>
+>
+> I thought it was a list of items to be freed, but that may be a  
+> different free_list sadly.  We have more than one in parrot.
+>
+>> My best guess is that this is an odd way to store contexts of a  
+>> specific size
+>> in an array structure so that they're reusable with our new  
+>> variable-sized
+>> register sets... but the code is unclear and undocumented.  I  
+>> think it's also
+>> leaking memory.
+>>
+>
+> Enable the context alloc and free, but probably change what's  
+> printed to make it easy to run through sort, and it might help, maybe.
+>
+>> I'd like to find a simpler scheme, if it's possible.  Otherwise,  
+>> I'd like to
+>> figure out what's going on so we can at least explain it somehow.
+>>
+>> -- c
+>>
+>>
+>
+> Rule one of writing in C for a project for many people to code,  
+> document the (you decide the explicative) out of it.
+>
+

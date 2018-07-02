@@ -1,0 +1,138 @@
+From sugar-bounces@lists.laptop.org  Mon Jun 25 08:11:08 2007
+Return-Path: <sugar-bounces@lists.laptop.org>
+Received: from mail.laptop.org (pedal.laptop.org [18.85.2.148])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5PCB7L9027760
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 25 Jun 2007 08:11:07 -0400
+Received: from [127.0.1.1] (localhost [127.0.0.1])
+	by mail.laptop.org (Postfix) with ESMTP id 9DAAA58BC7CC;
+	Fri, 22 Jun 2007 12:43:08 -0400 (EDT)
+Received: from osprey.sccs.swarthmore.edu (osprey.sccs.swarthmore.edu
+	[130.58.218.6])
+	by mail.laptop.org (Postfix) with ESMTP id 2403A58BC7CC
+	for <sugar@lists.laptop.org>; Fri, 22 Jun 2007 12:43:07 -0400 (EDT)
+Received: by osprey.sccs.swarthmore.edu (Postfix, from userid 2526)
+	id 86F3B9F71B; Fri, 22 Jun 2007 12:43:20 -0400 (EDT)
+Date: Fri, 22 Jun 2007 12:43:20 -0400
+From: Michael Stone <michael@laptop.org>
+To: sugar@lists.laptop.org
+Message-ID: <20070622164320.GA9142@sccs.swarthmore.edu>
+Mime-Version: 1.0
+Content-Disposition: inline
+User-Agent: Mutt/1.5.5.1+cvs20040105i
+Subject: [sugar] Activity Launching Change Proposal
+X-BeenThere: sugar@lists.laptop.org
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Discussion of OLPC design,
+	desktop platform and user experience" <sugar.lists.laptop.org>
+List-Unsubscribe: <http://lists.laptop.org/listinfo/sugar>,
+	<mailto:sugar-request@lists.laptop.org?subject=unsubscribe>
+List-Archive: <http://lists.laptop.org/pipermail/sugar>
+List-Post: <mailto:sugar@lists.laptop.org>
+List-Help: <mailto:sugar-request@lists.laptop.org?subject=help>
+List-Subscribe: <http://lists.laptop.org/listinfo/sugar>,
+	<mailto:sugar-request@lists.laptop.org?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: sugar-bounces@lists.laptop.org
+Errors-To: sugar-bounces@lists.laptop.org
+
+Dear Sugar Developers,
+
+Noah Kantrowitz (coderanger) and myself (Michael Stone, ashsong) are
+presently implementing the Bitfrost security spec. Since one of the core
+ideas of Bitfrost is to isolate activities from one another and from
+critical parts of the system using the Linux-VServer virtualization
+technology, we're presently changing Sugar to allow activities to be
+started in controlled VServer environments called "containers".
+
+Unfortunately, it is difficult to start activities in containers using
+the present model of DBus service activation. We would therefore like to
+revise the mechanism used to start activities and are seeking input on
+how best to do this. 
+
+As background, I will first describe how activities are presently launched.
+Then, I will explain the incompatibility between the present DBus-activation
+based model and a world with containers. Finally, I will describe our proposed
+solution.
+
+Present Situation:
+
+  "Activities" are presently launched as follows:
+
+  1. Clicking on an activity launch icon in Sugar triggers the
+     `sugar.shell.view.frame.ActivitiesBox._activity_clicked_cb' callback which
+     in turn fires off a call to `sugar.shell.view.start_activity(...)'
+  2. `sugar.Shell.start_activity' calls
+     `sugar.activity.activityfactory.create()' which constructs a
+     `sugar.activity.activityfactory.ActivityCreationHandler', initialized with
+     an `ActivityHandle' describing the activity being started.
+  3. The `__init__' method of ActivityCreationHandler connects to the DBus
+     session bus, uses a well-known name to locate an appropriate
+     ActivityFactory _DBus object_, and calls this _DBus object's_ `create'
+     method.
+     (The ActivityCreationHandler also installs callbacks to log the success or
+     failure of the attempt to launch the activity)
+  4. The appropriate `ActivityServiceFactory' DBus service is automatically
+     launched by DBus from a service file if necessary. Then its `create' method
+     is dispatched, which results in the activity itself being constructed and
+     presented.
+
+Problem:
+
+  The basic incompatibility between the present activation-based model and
+  containerization lies in step (4) above; namely, that creating and
+  manipulating containers is a privileged operation which the DBus session
+  daemon is neither permitted, nor designed to effect and is one which demands
+  detailed knowledge of the Bitfrost security model to operate correctly.
+
+  The solution proposed by the Bitfrost spec is to encapsulate (to the extent
+  possible) the implementation of Bitfrost in a privileged security daemon
+  which we are calling "Rainbow".  Rainbow is designed to, among other things,
+  start activities in appropriately restricted containers. Ideally, we would
+  just replace step (3) with something like:
+
+    3b. The `__init__' method of ActivityCreationHandler connects to the DBus
+    system bus, locates the `org.laptop.security.Rainbow' service, and calls
+    the `create_activity' method of Rainbow's `org.laptop.security.Rainbow'
+    interface. 
+
+  where Rainbow's `create_activity' method would handle all the details.
+  
+  Unfortunately, in attempting to implement this `create_activity' method, we
+  discovered that it is very inconvenient to start activities through DBus
+  *inside containers*.
+
+  The low-level problem is that, after a Rainbow-child-process enters a
+  container to start the desired activity, the Rainbow-child-process must
+  actually start the activity's 'ActivityFactory', then send it a 'create'
+  message *over the session bus*
+
+Solution:
+
+  The procedure described in the preceding paragraph for actually starting
+  activities inside an active container is overly-complicated at best and is
+  highly error-prone at worst. A much simpler, more robust procedure would be
+  leave out the DBus call to the factory's 'create' method and would merely
+  rely on the execution of the factory process itself to perform whatever
+  activity is appropriate to make a new activity instance inside the container.
+  
+Feedback on this proposal in general and on the appropriate information to pass
+to the proposed factory executable would be most appreciated.
+
+Thanks,
+
+Michael and Noah
+
+ 
+
+
+
+
+
+  
+_______________________________________________
+Sugar mailing list
+Sugar@lists.laptop.org
+http://lists.laptop.org/listinfo/sugar
+

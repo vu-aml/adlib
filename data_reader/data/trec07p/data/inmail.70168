@@ -1,0 +1,177 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat Jun 30 05:16:09 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5U9G9L9005221
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 30 Jun 2007 05:16:09 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 60728163824
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 30 Jun 2007 09:16:05 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id A79DB162AE8; Sat, 30 Jun 2007 09:15:34 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070630091534.A79DB162AE8@lists.samba.org>
+Date: Sat, 30 Jun 2007 09:15:34 +0000 (GMT)
+Subject: svn commit: samba r23665 - in branches: SAMBA_3_0/source/lib
+	SAMBA_3_0/source/rpc_parse SAMBA_3_0_26/source/lib
+	SAMBA_3_0_26/source/rpc_parse
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-06-30 09:15:33 +0000 (Sat, 30 Jun 2007)
+New Revision: 23665
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23665
+
+Log:
+Remove two unneeded global variables
+
+Modified:
+   branches/SAMBA_3_0/source/lib/privileges_basic.c
+   branches/SAMBA_3_0/source/rpc_parse/parse_lsa.c
+   branches/SAMBA_3_0_26/source/lib/privileges_basic.c
+   branches/SAMBA_3_0_26/source/rpc_parse/parse_lsa.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/lib/privileges_basic.c
+===================================================================
+--- branches/SAMBA_3_0/source/lib/privileges_basic.c	2007-06-30 00:22:59 UTC (rev 23664)
++++ branches/SAMBA_3_0/source/lib/privileges_basic.c	2007-06-30 09:15:33 UTC (rev 23665)
+@@ -364,15 +364,10 @@
+ 
+ int count_all_privileges( void )
+ {
+-	static int count;
+-	
+-	if ( count )
+-		return count;
+-
+-	/* loop over the array and count it */	
+-	for ( count=0; !se_priv_equal(&privs[count].se_priv, &se_priv_end); count++ ) ;
+-
+-	return count;
++	/*
++	 * The -1 is due to the weird SE_END record...
++	 */
++	return (sizeof(privs) / sizeof(privs[0])) - 1;
+ }
+ 
+ 
+@@ -404,9 +399,8 @@
+  Convert a LUID to a named string
+ ****************************************************************************/
+ 
+-char* luid_to_privilege_name(const LUID *set)
++const char *luid_to_privilege_name(const LUID *set)
+ {
+-	static fstring name;
+ 	int i;
+ 
+ 	if (set->high != 0)
+@@ -414,8 +408,7 @@
+ 
+ 	for ( i=0; !se_priv_equal(&privs[i].se_priv, &se_priv_end); i++ ) {
+ 		if ( set->low == privs[i].luid.low ) {
+-			fstrcpy( name, privs[i].name );
+-			return name;
++			return privs[i].name;
+ 		}
+ 	}
+ 	
+
+Modified: branches/SAMBA_3_0/source/rpc_parse/parse_lsa.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpc_parse/parse_lsa.c	2007-06-30 00:22:59 UTC (rev 23664)
++++ branches/SAMBA_3_0/source/rpc_parse/parse_lsa.c	2007-06-30 09:15:33 UTC (rev 23665)
+@@ -3216,7 +3216,7 @@
+ NTSTATUS init_r_enum_acct_rights( LSA_R_ENUM_ACCT_RIGHTS *out, PRIVILEGE_SET *privileges )
+ {
+ 	uint32 i;
+-	char *privname;
++	const char *privname;
+ 	const char **privname_array = NULL;
+ 	int num_priv = 0;
+ 
+
+Modified: branches/SAMBA_3_0_26/source/lib/privileges_basic.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/lib/privileges_basic.c	2007-06-30 00:22:59 UTC (rev 23664)
++++ branches/SAMBA_3_0_26/source/lib/privileges_basic.c	2007-06-30 09:15:33 UTC (rev 23665)
+@@ -364,15 +364,10 @@
+ 
+ int count_all_privileges( void )
+ {
+-	static int count;
+-	
+-	if ( count )
+-		return count;
+-
+-	/* loop over the array and count it */	
+-	for ( count=0; !se_priv_equal(&privs[count].se_priv, &se_priv_end); count++ ) ;
+-
+-	return count;
++	/*
++	 * The -1 is due to the weird SE_END record...
++	 */
++	return (sizeof(privs) / sizeof(privs[0])) - 1;
+ }
+ 
+ 
+@@ -404,9 +399,8 @@
+  Convert a LUID to a named string
+ ****************************************************************************/
+ 
+-char* luid_to_privilege_name(const LUID *set)
++const char *luid_to_privilege_name(const LUID *set)
+ {
+-	static fstring name;
+ 	int i;
+ 
+ 	if (set->high != 0)
+@@ -414,8 +408,7 @@
+ 
+ 	for ( i=0; !se_priv_equal(&privs[i].se_priv, &se_priv_end); i++ ) {
+ 		if ( set->low == privs[i].luid.low ) {
+-			fstrcpy( name, privs[i].name );
+-			return name;
++			return privs[i].name;
+ 		}
+ 	}
+ 	
+
+Modified: branches/SAMBA_3_0_26/source/rpc_parse/parse_lsa.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/rpc_parse/parse_lsa.c	2007-06-30 00:22:59 UTC (rev 23664)
++++ branches/SAMBA_3_0_26/source/rpc_parse/parse_lsa.c	2007-06-30 09:15:33 UTC (rev 23665)
+@@ -3172,7 +3172,7 @@
+ NTSTATUS init_r_enum_acct_rights( LSA_R_ENUM_ACCT_RIGHTS *out, PRIVILEGE_SET *privileges )
+ {
+ 	uint32 i;
+-	char *privname;
++	const char *privname;
+ 	const char **privname_array = NULL;
+ 	int num_priv = 0;
+ 
+

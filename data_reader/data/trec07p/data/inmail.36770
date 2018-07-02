@@ -1,0 +1,167 @@
+From r-help-bounces@stat.math.ethz.ch  Tue May 15 08:32:39 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4FCWbqD004877
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 15 May 2007 08:32:38 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4FCVwwh001747;
+	Tue, 15 May 2007 14:32:10 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=5.0 tests=AWL, BAYES_50,
+	FORGED_RCVD_HELO autolearn=no version=3.1.8
+Received: from rusty.kulnet.kuleuven.ac.be (rusty.kulnet.kuleuven.ac.be
+	[134.58.240.42])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4FCUeXR001446
+	for <r-help@stat.math.ethz.ch>; Tue, 15 May 2007 14:30:41 +0200
+Received: from localhost (localhost [127.0.0.1])
+	by rusty.kulnet.kuleuven.ac.be (Postfix) with ESMTP
+	id A17481D77DA; Tue, 15 May 2007 14:30:40 +0200 (CEST)
+Received: from smtp02.kuleuven.be (lepidus.kulnet.kuleuven.ac.be
+	[134.58.240.72]) by rusty.kulnet.kuleuven.ac.be (Postfix) with ESMTP
+	id 7B97C1D74D2; Tue, 15 May 2007 14:30:39 +0200 (CEST)
+Received: from smtp02.kuleuven.be (localhost.localdomain [127.0.0.1])
+	by smtp02.kuleuven.be (Postfix) with ESMTP id 576B32CAADA;
+	Tue, 15 May 2007 14:30:39 +0200 (CEST)
+Received: from PC178 (pc-10-33-64-5.med.kuleuven.ac.be [10.33.64.5])
+	by smtp02.kuleuven.be (Postfix) with SMTP id 4779F2CAACB;
+	Tue, 15 May 2007 14:30:39 +0200 (CEST)
+Message-ID: <002c01c796ec$d4154340$0540210a@www.domain>
+From: "Dimitris Rizopoulos" <dimitris.rizopoulos@med.kuleuven.be>
+To: "Benilton Carvalho" <bcarvalh@jhsph.edu>
+References: <16610DB9-7162-4914-AA7E-4B7543E133B8@jhsph.edu>
+Date: Tue, 15 May 2007 14:30:31 +0200
+MIME-Version: 1.0
+X-Priority: 3
+X-MSMail-Priority: Normal
+X-Mailer: Microsoft Outlook Express 6.00.2900.3028
+X-MimeOLE: Produced By Microsoft MimeOLE V6.00.2900.3028
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] Efficient computation of trimmed stats?
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+the following seems a bit better:
+
+set.seed(1)
+nc <- 30
+nr <- 25000
+x <- matrix(rnorm(nc*nr), ncol = nc)
+g <- matrix(sample(1:3, nr*nc, rep = TRUE), ncol = nc)
+
+#################################
+
+trimmedMeanByGroup1 <- function(y, grp, trim=.05)
+   tapply(y, factor(grp, levels=1:3), mean, trim=trim)
+
+trimmedMeanByGroup2 <- function(y, grp, trim = .05){
+   unlist(lapply(split(y, grp), mean, trim = trim))
+}
+
+out1 <- out2 <- matrix(0, nr, 3)
+system.time(for(i in 1:nr) out1[i, ] <- trimmedMeanByGroup1(x[i, ], 
+g[i, ]))
+system.time(for(i in 1:nr) out2[i, ] <- trimmedMeanByGroup2(x[i, ], 
+g[i, ]))
+
+all.equal(out1, out2)
+
+
+I hope it helps.
+
+Best,
+Dimitris
+
+----
+Dimitris Rizopoulos
+Ph.D. Student
+Biostatistical Centre
+School of Public Health
+Catholic University of Leuven
+
+Address: Kapucijnenvoer 35, Leuven, Belgium
+Tel: +32/(0)16/336899
+Fax: +32/(0)16/337015
+Web: http://med.kuleuven.be/biostat/
+     http://www.student.kuleuven.be/~m0390867/dimitris.htm
+
+----- Original Message ----- 
+From: "Benilton Carvalho" <bcarvalh@jhsph.edu>
+To: "r-help@lists.r-project.org server posting" 
+<r-help@stat.math.ethz.ch>
+Sent: Monday, May 14, 2007 6:58 PM
+Subject: [R] Efficient computation of trimmed stats?
+
+
+> Hi everyone,
+>
+> I was wondering if there is anything already implemented for
+> efficient ("row-wise") computation of group-specific trimmed stats
+> (mean and sd on the trimmed vector) on large matrices.
+>
+> For example:
+>
+> set.seed(1)
+> nc = 300
+> nr = 250000
+> x = matrix(rnorm(nc*nr), ncol=nc)
+> g = matrix(sample(1:3, nr*nc, rep=T), ncol=nc)
+>
+> trimmedMeanByGroup <- function(y, grp, trim=.05)
+>   tapply(y, factor(grp, levels=1:3), mean, trim=trim)
+>
+> sapply(1:10, function(i) trimmedMeanByGroup(x[i,], g[i,]))
+>
+> works fine... but:
+>
+> > system.time(sapply(1:nr, function(i) trimmedMeanByGroup(x[i,], g
+> [i,])))
+>    user  system elapsed
+> 399.928   0.019 399.988
+>
+> does not look interesting for me.
+>
+> Maybe some package has some implementation of the above?
+>
+> Thank you very much,
+> -b
+>
+> --
+> Benilton Carvalho
+> PhD Candidate
+> Department of Biostatistics
+> Bloomberg School of Public Health
+> Johns Hopkins University
+> bcarvalh@jhsph.edu
+>
+> ______________________________________________
+> R-help@stat.math.ethz.ch mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-help
+> PLEASE do read the posting guide 
+> http://www.R-project.org/posting-guide.html
+> and provide commented, minimal, self-contained, reproducible code.
+> 
+
+
+Disclaimer: http://www.kuleuven.be/cwis/email_disclaimer.htm
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

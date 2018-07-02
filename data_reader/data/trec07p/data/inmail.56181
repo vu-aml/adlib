@@ -1,0 +1,343 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Jun 12 16:00:00 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5CK00L9031206
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 12 Jun 2007 16:00:00 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 695BA16381D
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 12 Jun 2007 19:59:59 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 549)
+	id F170A162ACD; Tue, 12 Jun 2007 19:59:41 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jra@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070612195941.F170A162ACD@lists.samba.org>
+Date: Tue, 12 Jun 2007 19:59:41 +0000 (GMT)
+Subject: svn commit: samba r23450 - in branches: SAMBA_3_0/source/smbd
+	SAMBA_3_0_25/source/smbd SAMBA_3_0_26/source/smbd
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: jra
+Date: 2007-06-12 19:59:38 +0000 (Tue, 12 Jun 2007)
+New Revision: 23450
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23450
+
+Log:
+max_params_return is complete fiction when getting a changenotify
+request. Ignore it. Should fix bug #4689 but more tests and
+valgrinding will follow.
+Jeremy.
+
+Modified:
+   branches/SAMBA_3_0/source/smbd/notify.c
+   branches/SAMBA_3_0/source/smbd/nttrans.c
+   branches/SAMBA_3_0_25/source/smbd/notify.c
+   branches/SAMBA_3_0_25/source/smbd/nttrans.c
+   branches/SAMBA_3_0_26/source/smbd/notify.c
+   branches/SAMBA_3_0_26/source/smbd/nttrans.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/smbd/notify.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/notify.c	2007-06-12 19:55:07 UTC (rev 23449)
++++ branches/SAMBA_3_0/source/smbd/notify.c	2007-06-12 19:59:38 UTC (rev 23450)
+@@ -27,7 +27,6 @@
+ 	struct files_struct *fsp;	/* backpointer for cancel by mid */
+ 	char request_buf[smb_size];
+ 	uint32 filter;
+-	uint32 max_param_count;
+ 	uint32 current_bufsize;
+ 	struct notify_mid_map *mid_map;
+ 	void *backend_data;
+@@ -127,12 +126,12 @@
+ 				    "failed.");
+ }
+ 
+-void change_notify_reply(const char *request_buf, uint32 max_param_count,
++void change_notify_reply(const char *request_buf,
+ 			 struct notify_change_buf *notify_buf)
+ {
+ 	char *outbuf = NULL;
+ 	prs_struct ps;
+-	size_t buflen = smb_size+38+max_param_count;
++	size_t buflen;
+ 
+ 	if (notify_buf->num_changes == -1) {
+ 		change_notify_reply_packet(request_buf, NT_STATUS_OK);
+@@ -146,14 +145,7 @@
+ 		goto done;
+ 	}
+ 
+-	if (prs_offset(&ps) > max_param_count) {
+-		/*
+-		 * We exceed what the client is willing to accept. Send
+-		 * nothing.
+-		 */
+-		change_notify_reply_packet(request_buf, NT_STATUS_OK);
+-		goto done;
+-	}
++	buflen = smb_size+38+prs_offset(&ps) + 4 /* padding */;
+ 
+ 	if (!(outbuf = SMB_MALLOC_ARRAY(char, buflen))) {
+ 		change_notify_reply_packet(request_buf, NT_STATUS_NO_MEMORY);
+@@ -215,7 +207,7 @@
+ 	return status;
+ }
+ 
+-NTSTATUS change_notify_add_request(const char *inbuf, uint32 max_param_count,
++NTSTATUS change_notify_add_request(const char *inbuf, 
+ 				   uint32 filter, BOOL recursive,
+ 				   struct files_struct *fsp)
+ {
+@@ -232,7 +224,6 @@
+ 	map->req = request;
+ 
+ 	memcpy(request->request_buf, inbuf, sizeof(request->request_buf));
+-	request->max_param_count = max_param_count;
+ 	request->current_bufsize = 0;
+ 	request->filter = filter;
+ 	request->fsp = fsp;
+@@ -409,7 +400,6 @@
+ 	 */
+ 
+ 	change_notify_reply(fsp->notify->requests->request_buf,
+-			    fsp->notify->requests->max_param_count,
+ 			    fsp->notify);
+ 
+ 	change_notify_remove_request(fsp->notify->requests);
+
+Modified: branches/SAMBA_3_0/source/smbd/nttrans.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/nttrans.c	2007-06-12 19:55:07 UTC (rev 23449)
++++ branches/SAMBA_3_0/source/smbd/nttrans.c	2007-06-12 19:59:38 UTC (rev 23450)
+@@ -1985,8 +1985,7 @@
+ 		 * here.
+ 		 */
+ 
+-		change_notify_reply(inbuf, max_param_count,
+-				    fsp->notify);
++		change_notify_reply(inbuf, fsp->notify);
+ 
+ 		/*
+ 		 * change_notify_reply() above has independently sent its
+@@ -1999,8 +1998,7 @@
+ 	 * No changes pending, queue the request
+ 	 */
+ 
+-	status = change_notify_add_request(inbuf, max_param_count, filter,
+-					   recursive, fsp);
++	status = change_notify_add_request(inbuf, filter, recursive, fsp);
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		return ERROR_NT(status);
+ 	}
+
+Modified: branches/SAMBA_3_0_25/source/smbd/notify.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/smbd/notify.c	2007-06-12 19:55:07 UTC (rev 23449)
++++ branches/SAMBA_3_0_25/source/smbd/notify.c	2007-06-12 19:59:38 UTC (rev 23450)
+@@ -27,7 +27,6 @@
+ 	struct files_struct *fsp;	/* backpointer for cancel by mid */
+ 	char request_buf[smb_size];
+ 	uint32 filter;
+-	uint32 max_param_count;
+ 	uint32 current_bufsize;
+ 	struct notify_mid_map *mid_map;
+ 	void *backend_data;
+@@ -126,12 +125,12 @@
+ 				    "failed.");
+ }
+ 
+-void change_notify_reply(const char *request_buf, uint32 max_param_count,
++void change_notify_reply(const char *request_buf,
+ 			 struct notify_change_buf *notify_buf)
+ {
+ 	char *outbuf = NULL;
+ 	prs_struct ps;
+-	size_t buflen = smb_size+38+max_param_count;
++	size_t buflen;
+ 
+ 	if (notify_buf->num_changes == -1) {
+ 		change_notify_reply_packet(request_buf, NT_STATUS_OK);
+@@ -145,14 +144,7 @@
+ 		goto done;
+ 	}
+ 
+-	if (prs_offset(&ps) > max_param_count) {
+-		/*
+-		 * We exceed what the client is willing to accept. Send
+-		 * nothing.
+-		 */
+-		change_notify_reply_packet(request_buf, NT_STATUS_OK);
+-		goto done;
+-	}
++	buflen = smb_size+38+prs_offset(&ps) + 4 /* padding */;
+ 
+ 	if (!(outbuf = SMB_MALLOC_ARRAY(char, buflen))) {
+ 		change_notify_reply_packet(request_buf, NT_STATUS_NO_MEMORY);
+@@ -214,7 +206,7 @@
+ 	return status;
+ }
+ 
+-NTSTATUS change_notify_add_request(const char *inbuf, uint32 max_param_count,
++NTSTATUS change_notify_add_request(const char *inbuf, 
+ 				   uint32 filter, BOOL recursive,
+ 				   struct files_struct *fsp)
+ {
+@@ -231,7 +223,6 @@
+ 	map->req = request;
+ 
+ 	memcpy(request->request_buf, inbuf, sizeof(request->request_buf));
+-	request->max_param_count = max_param_count;
+ 	request->current_bufsize = 0;
+ 	request->filter = filter;
+ 	request->fsp = fsp;
+@@ -408,7 +399,6 @@
+ 	 */
+ 
+ 	change_notify_reply(fsp->notify->requests->request_buf,
+-			    fsp->notify->requests->max_param_count,
+ 			    fsp->notify);
+ 
+ 	change_notify_remove_request(fsp->notify->requests);
+
+Modified: branches/SAMBA_3_0_25/source/smbd/nttrans.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/smbd/nttrans.c	2007-06-12 19:55:07 UTC (rev 23449)
++++ branches/SAMBA_3_0_25/source/smbd/nttrans.c	2007-06-12 19:59:38 UTC (rev 23450)
+@@ -1979,8 +1979,7 @@
+ 		 * here.
+ 		 */
+ 
+-		change_notify_reply(inbuf, max_param_count,
+-				    fsp->notify);
++		change_notify_reply(inbuf, fsp->notify);
+ 
+ 		/*
+ 		 * change_notify_reply() above has independently sent its
+@@ -1993,8 +1992,7 @@
+ 	 * No changes pending, queue the request
+ 	 */
+ 
+-	status = change_notify_add_request(inbuf, max_param_count, filter,
+-					   recursive, fsp);
++	status = change_notify_add_request(inbuf, filter, recursive, fsp);
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		return ERROR_NT(status);
+ 	}
+
+Modified: branches/SAMBA_3_0_26/source/smbd/notify.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/smbd/notify.c	2007-06-12 19:55:07 UTC (rev 23449)
++++ branches/SAMBA_3_0_26/source/smbd/notify.c	2007-06-12 19:59:38 UTC (rev 23450)
+@@ -27,7 +27,6 @@
+ 	struct files_struct *fsp;	/* backpointer for cancel by mid */
+ 	char request_buf[smb_size];
+ 	uint32 filter;
+-	uint32 max_param_count;
+ 	uint32 current_bufsize;
+ 	struct notify_mid_map *mid_map;
+ 	void *backend_data;
+@@ -126,12 +125,12 @@
+ 				    "failed.");
+ }
+ 
+-void change_notify_reply(const char *request_buf, uint32 max_param_count,
++void change_notify_reply(const char *request_buf,
+ 			 struct notify_change_buf *notify_buf)
+ {
+ 	char *outbuf = NULL;
+ 	prs_struct ps;
+-	size_t buflen = smb_size+38+max_param_count;
++	size_t buflen;
+ 
+ 	if (notify_buf->num_changes == -1) {
+ 		change_notify_reply_packet(request_buf, NT_STATUS_OK);
+@@ -145,14 +144,7 @@
+ 		goto done;
+ 	}
+ 
+-	if (prs_offset(&ps) > max_param_count) {
+-		/*
+-		 * We exceed what the client is willing to accept. Send
+-		 * nothing.
+-		 */
+-		change_notify_reply_packet(request_buf, NT_STATUS_OK);
+-		goto done;
+-	}
++	buflen = smb_size+38+prs_offset(&ps) + 4 /* padding */;
+ 
+ 	if (!(outbuf = SMB_MALLOC_ARRAY(char, buflen))) {
+ 		change_notify_reply_packet(request_buf, NT_STATUS_NO_MEMORY);
+@@ -214,7 +206,7 @@
+ 	return status;
+ }
+ 
+-NTSTATUS change_notify_add_request(const char *inbuf, uint32 max_param_count,
++NTSTATUS change_notify_add_request(const char *inbuf, 
+ 				   uint32 filter, BOOL recursive,
+ 				   struct files_struct *fsp)
+ {
+@@ -231,7 +223,6 @@
+ 	map->req = request;
+ 
+ 	memcpy(request->request_buf, inbuf, sizeof(request->request_buf));
+-	request->max_param_count = max_param_count;
+ 	request->current_bufsize = 0;
+ 	request->filter = filter;
+ 	request->fsp = fsp;
+@@ -408,7 +399,6 @@
+ 	 */
+ 
+ 	change_notify_reply(fsp->notify->requests->request_buf,
+-			    fsp->notify->requests->max_param_count,
+ 			    fsp->notify);
+ 
+ 	change_notify_remove_request(fsp->notify->requests);
+
+Modified: branches/SAMBA_3_0_26/source/smbd/nttrans.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/smbd/nttrans.c	2007-06-12 19:55:07 UTC (rev 23449)
++++ branches/SAMBA_3_0_26/source/smbd/nttrans.c	2007-06-12 19:59:38 UTC (rev 23450)
+@@ -1979,8 +1979,7 @@
+ 		 * here.
+ 		 */
+ 
+-		change_notify_reply(inbuf, max_param_count,
+-				    fsp->notify);
++		change_notify_reply(inbuf, fsp->notify);
+ 
+ 		/*
+ 		 * change_notify_reply() above has independently sent its
+@@ -1993,8 +1992,7 @@
+ 	 * No changes pending, queue the request
+ 	 */
+ 
+-	status = change_notify_add_request(inbuf, max_param_count, filter,
+-					   recursive, fsp);
++	status = change_notify_add_request(inbuf, filter, recursive, fsp);
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		return ERROR_NT(status);
+ 	}
+

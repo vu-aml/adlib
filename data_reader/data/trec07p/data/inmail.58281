@@ -1,0 +1,457 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Jun 15 12:25:13 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5FGPDL9004318
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 15 Jun 2007 12:25:13 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id D62CA163989
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 15 Jun 2007 16:25:11 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=3.8 tests=AWL,BAYES_00,RCVD_IN_DSBL,
+	UNPARSEABLE_RELAY autolearn=no version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: from mail.SerNet.de (mail1.SerNet.DE [193.175.80.2])
+	by lists.samba.org (Postfix) with ESMTP id 14CCD162BC3;
+	Fri, 15 Jun 2007 16:24:26 +0000 (GMT)
+Received: from intern.SerNet.DE by mail.SerNet.DE with esmtp (Exim 4.51 #1)
+	id 1HzEb3-0000lq-Mf; Fri, 15 Jun 2007 18:24:25 +0200
+Received: by intern.SerNet.DE
+	id 1HzEb3-0008Dd-GF; Fri, 15 Jun 2007 18:24:25 +0200
+Received: by intern.SerNet.DE
+	id 1HzEb3-0008DZ-9g; Fri, 15 Jun 2007 18:24:25 +0200
+Date: Fri, 15 Jun 2007 18:24:22 +0200
+From: Volker Lendecke <Volker.Lendecke@SerNet.DE>
+To: Jeremy Allison <jra@samba.org>
+References: <E1HyxUK-0000tY-P2@intern.SerNet.DE>
+	<20070614222222.GB9466@jeremy-laptop>
+MIME-Version: 1.0
+Content-Type: multipart/signed; micalg=pgp-sha1;
+	protocol="application/pgp-signature"; boundary="rS8CxjVDS/+yyDmU"
+Content-Disposition: inline
+In-Reply-To: <20070614222222.GB9466@jeremy-laptop>
+User-Agent: Mutt/1.5.13 (2006-08-11)
+Message-Id: <E1HzEb3-0008Dd-GF@intern.SerNet.DE>
+Organization: SerNet GmbH, Goettingen, Germany
+Cc: samba-technical@samba.org
+Subject: Re: rename_internals and rename_internals_fsp consolidated
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: Volker.Lendecke@SerNet.DE
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+
+--rS8CxjVDS/+yyDmU
+Content-Type: multipart/mixed; boundary="1yeeQ81UyVL57Vl7"
+Content-Disposition: inline
+
+
+--1yeeQ81UyVL57Vl7
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+Content-Transfer-Encoding: quoted-printable
+
+On Thu, Jun 14, 2007 at 03:22:22PM -0700, Jeremy Allison wrote:
+> Just one not of caution...
+>=20
+> Currently it doesn't map NT_STATUS_SHARING_VIOLATION into
+> NT_STATUS_ACCESS_DENIED as the old code used to do. Do we
+> have a torture test for this case ?
+>=20
+> I don't think we have to handle deferred opens (I don't
+> think the old code does) but do we have enough test
+> coverage to be sure ?
+
+Attached find a patch that just survived make test for me,
+I'll look for the things you noted now.
+
+Volker
+
+--1yeeQ81UyVL57Vl7
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: attachment; filename=look
+Content-Transfer-Encoding: quoted-printable
+
+Index: smbd/reply.c
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D
+--- smbd/reply.c	(Revision 23503)
++++ smbd/reply.c	(Arbeitskopie)
+@@ -1791,17 +1791,16 @@
+  Check if a user is allowed to rename a file.
+ ********************************************************************/
+=20
+-static NTSTATUS can_rename(connection_struct *conn, char *fname, uint16 di=
+rtype, SMB_STRUCT_STAT *pst, BOOL self_open)
++static NTSTATUS can_rename_fsp(connection_struct *conn, files_struct *fsp,
++			       uint16 dirtype, SMB_STRUCT_STAT *pst)
+ {
+-	files_struct *fsp;
+ 	uint32 fmode;
+-	NTSTATUS status;
+=20
+ 	if (!CAN_WRITE(conn)) {
+ 		return NT_STATUS_MEDIA_WRITE_PROTECTED;
+ 	}
+=20
+-	fmode =3D dos_mode(conn,fname,pst);
++	fmode =3D dos_mode(conn, fsp->fsp_name, pst);
+ 	if ((fmode & ~dirtype) & (aHIDDEN | aSYSTEM)) {
+ 		return NT_STATUS_NO_SUCH_FILE;
+ 	}
+@@ -1810,23 +1809,11 @@
+ 		return NT_STATUS_OK;
+ 	}
+=20
+-	status =3D open_file_ntcreate(conn, fname, pst,
+-				DELETE_ACCESS,
+-				/* If we're checking our fsp don't deny for delete. */
+-				self_open ?
+-					FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE :
+-					FILE_SHARE_READ|FILE_SHARE_WRITE,
+-				FILE_OPEN,
+-				0,
+-				FILE_ATTRIBUTE_NORMAL,
+-				0,
+-				NULL, &fsp);
+-
+-	if (!NT_STATUS_IS_OK(status)) {
+-		return status;
++	if (fsp->access_mask & DELETE_ACCESS) {
++		return NT_STATUS_OK;
+ 	}
+-	close_file(fsp,NORMAL_CLOSE);
+-	return NT_STATUS_OK;
++
++	return NT_STATUS_ACCESS_DENIED;
+ }
+=20
+ /*******************************************************************
+@@ -4361,7 +4348,7 @@
+ 		return NT_STATUS_OBJECT_NAME_COLLISION;
+ 	}
+=20
+-	if (file_find_di_first(file_id_sbuf(&sbuf1)) !=3D NULL) {
++	if (dst_exists && file_find_di_first(file_id_sbuf(&sbuf1)) !=3D NULL) {
+ 		DEBUG(3, ("rename_internals_fsp: Target file open\n"));
+ 		return NT_STATUS_ACCESS_DENIED;
+ 	}
+@@ -4377,7 +4364,7 @@
+ 		}
+ 	}
+=20
+-	status =3D can_rename(conn,fsp->fsp_name,attrs,&sbuf,True);
++	status =3D can_rename_fsp(conn, fsp, attrs, &sbuf);
+=20
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		DEBUG(3,("rename_internals_fsp: Error %s rename %s -> %s\n",
+@@ -4469,7 +4456,6 @@
+ 	int count=3D0;
+ 	NTSTATUS status =3D NT_STATUS_OK;
+ 	SMB_STRUCT_STAT sbuf1, sbuf2;
+-	struct share_mode_lock *lck =3D NULL;
+ 	struct smb_Dir *dir_hnd =3D NULL;
+ 	const char *dname;
+ 	long offset =3D 0;
+@@ -4524,6 +4510,8 @@
+ 	}
+=20
+ 	if (!src_has_wild) {
++		files_struct *fsp;
++
+ 		/*
+ 		 * No wildcards - just process the one file.
+ 		 */
+@@ -4550,125 +4538,45 @@
+ 			  conn->short_case_preserve, directory,=20
+ 			  newname, last_component_dest, is_short_name));
+=20
+-		/* Ensure the source name is valid for us to access. */
+-		status =3D check_name(conn, directory);
+-		if (!NT_STATUS_IS_OK(status)) {
+-			return status;
+-		}
+-
+ 		/* The dest name still may have wildcards. */
+ 		if (dest_has_wild) {
+ 			if (!resolve_wildcards(directory,newname)) {
+-				DEBUG(6, ("rename_internals: resolve_wildcards %s %s failed\n",=20
++				DEBUG(6, ("rename_internals: "
++					  "resolve_wildcards %s %s failed\n",=20
+ 					  directory,newname));
+ 				return NT_STATUS_NO_MEMORY;
+ 			}
+ 		}
+ 			=09
+-		/*
+-		 * Check for special case with case preserving and not
+-		 * case sensitive, if directory and newname are identical,
+-		 * and the old last component differs from the original
+-		 * last component only by case, then we should allow
+-		 * the rename (user is trying to change the case of the
+-		 * filename).
+-		 */
+-		if((conn->case_sensitive =3D=3D False) &&=20
+-		   (((conn->case_preserve =3D=3D True) &&=20
+-		     (is_short_name =3D=3D False)) ||=20
+-		    ((conn->short_case_preserve =3D=3D True) &&=20
+-		     (is_short_name =3D=3D True))) &&
+-		   strcsequal(directory, newname)) {
+-			pstring modified_last_component;
++		ZERO_STRUCT(sbuf1);
++		SMB_VFS_STAT(conn, directory, &sbuf1);
+=20
+-			/*
+-			 * Get the last component of the modified name.
+-			 * Note that we guarantee that newname contains a '/'
+-			 * character above.
+-			 */
+-			p =3D strrchr_m(newname,'/');
+-			pstrcpy(modified_last_component,p+1);
+-		=09
+-			if(strcsequal(modified_last_component,=20
+-				      last_component_dest) =3D=3D False) {
+-				/*
+-				 * Replace the modified last component with
+-				 * the original.
+-				 */
+-				pstrcpy(p+1, last_component_dest);
+-			}
+-		}
+-=09
+-		/* Ensure the dest name is valid for us to access. */
+-		status =3D check_name(conn, newname);
+-		if (!NT_STATUS_IS_OK(status)) {
+-			return status;
+-		}
++		status =3D S_ISDIR(sbuf1.st_mode) ?
++			open_directory(conn, directory, &sbuf1,
++				       DELETE_ACCESS,
++				       FILE_SHARE_READ|FILE_SHARE_WRITE,
++				       FILE_OPEN, 0, 0, NULL,
++				       &fsp)
++			: open_file_ntcreate(conn, directory, &sbuf1,
++					     DELETE_ACCESS,
++					     FILE_SHARE_READ|FILE_SHARE_WRITE,
++					     FILE_OPEN, 0, 0, 0, NULL,
++					     &fsp);
+=20
+-		/*
+-		 * The source object must exist, and it may not have a
+-		 * conflicting share mode.
+-		 */
+-		status =3D can_rename(conn,directory,attrs,&sbuf1,False);
+-
+ 		if (!NT_STATUS_IS_OK(status)) {
+-			DEBUG(3,("rename_internals: Error %s rename %s -> "
+-				 "%s\n", nt_errstr(status), directory,
+-				 newname));
++			DEBUG(3, ("Could not open rename source %s: %s\n",
++				  directory, nt_errstr(status)));
+ 			return status;
+ 		}
+=20
+-		/*
+-		 * If the src and dest names are identical - including case,
+-		 * don't do the rename, just return success.
+-		 */
++		status =3D rename_internals_fsp(conn, fsp, newname, attrs,
++					      replace_if_exists);
+=20
+-		if (strcsequal(directory, newname)) {
+-			DEBUG(3, ("rename_internals: identical names in "
+-				  "rename %s - returning success\n",
+-				  directory));
+-			return NT_STATUS_OK;
+-		}
++		close_file(fsp, NORMAL_CLOSE);
+=20
+-		if(!replace_if_exists && vfs_object_exist(conn,newname,NULL)) {
+-			DEBUG(3,("rename_internals: dest exists doing "
+-				 "rename %s -> %s\n", directory, newname));
+-			return NT_STATUS_OBJECT_NAME_COLLISION;
+-		}
++		DEBUG(3, ("rename_internals: Error %s rename %s -> %s\n",
++			  nt_errstr(status), directory,newname));
+=20
+-		if (rename_path_prefix_equal(directory, newname)) {
+-			return NT_STATUS_SHARING_VIOLATION;
+-		}
+-
+-		lck =3D get_share_mode_lock(NULL, file_id_sbuf(&sbuf1),
+-					  NULL, NULL);
+-
+-		if(SMB_VFS_RENAME(conn,directory, newname) =3D=3D 0) {
+-			DEBUG(3,("rename_internals: succeeded doing rename "
+-				 "on %s -> %s\n", directory, newname));
+-			if (lck !=3D NULL) {
+-				/*
+-				 * Only in this case there are open files at
+-				 * all.
+-				 */
+-				rename_open_files(conn, lck, newname);
+-			}
+-			TALLOC_FREE(lck);
+-			notify_rename(conn, S_ISDIR(sbuf1.st_mode),
+-				      directory, newname);
+-			return NT_STATUS_OK;=09
+-		}
+-
+-		TALLOC_FREE(lck);
+-		if (errno =3D=3D ENOTDIR || errno =3D=3D EISDIR) {
+-			status =3D NT_STATUS_OBJECT_NAME_COLLISION;
+-		} else {
+-			status =3D map_nt_error_from_unix(errno);
+-		}
+-	=09
+-		DEBUG(3,("rename_internals: Error %s rename %s -> %s\n",
+-			nt_errstr(status), directory,newname));
+-
+ 		return status;
+ 	}
+=20
+@@ -4696,6 +4604,7 @@
+ 	 */
+ 		=09
+ 	while ((dname =3D ReadDirName(dir_hnd, &offset))) {
++		files_struct *fsp;
+ 		pstring fname;
+ 		BOOL sysdir_entry =3D False;
+=20
+@@ -4725,30 +4634,8 @@
+ 			break;
+ 		}
+=20
+-		status =3D NT_STATUS_ACCESS_DENIED;
+ 		slprintf(fname, sizeof(fname)-1, "%s/%s", directory, dname);
+=20
+-		/* Ensure the source name is valid for us to access. */
+-		status =3D check_name(conn, fname);
+-		if (!NT_STATUS_IS_OK(status)) {
+-			return status;
+-		}
+-
+-		/*
+-		 * can_rename does an open_file_ntcreate which needs a valid
+-		 * stat in case the file exists
+-		 */
+-
+-		ZERO_STRUCT(sbuf1);
+-		SMB_VFS_STAT(conn, fname, &sbuf1);
+-
+-		status =3D can_rename(conn,fname,attrs,&sbuf1,False);
+-
+-		if (!NT_STATUS_IS_OK(status)) {
+-			DEBUG(6, ("rename %s refused: %s\n", fname,
+-				  nt_errstr(status)));
+-			continue;
+-		}
+ 		pstrcpy(destname,newname);
+ 		=09
+ 		if (!resolve_wildcards(fname,destname)) {
+@@ -4757,46 +4644,42 @@
+ 			continue;
+ 		}
+ 			=09
+-		/* Ensure the dest name is valid for us to access. */
+-		status =3D check_name(conn, destname);
++		ZERO_STRUCT(sbuf1);
++		SMB_VFS_STAT(conn, fname, &sbuf1);
++
++		status =3D S_ISDIR(sbuf1.st_mode) ?
++			open_directory(conn, fname, &sbuf1,
++				       DELETE_ACCESS,
++				       FILE_SHARE_READ|FILE_SHARE_WRITE,
++				       FILE_OPEN, 0, 0, NULL,
++				       &fsp)
++			: open_file_ntcreate(conn, fname, &sbuf1,
++					     DELETE_ACCESS,
++					     FILE_SHARE_READ|FILE_SHARE_WRITE,
++					     FILE_OPEN, 0, 0, 0, NULL,
++					     &fsp);
++
+ 		if (!NT_STATUS_IS_OK(status)) {
++			DEBUG(3,("rename_internals: open_file_ntcreate "
++				 "returned %s rename %s -> %s\n",
++				 nt_errstr(status), directory, newname));
+ 			return status;
+ 		}
+=20
+-		if (strcsequal(fname,destname)) {
+-			DEBUG(3,("rename_internals: identical names "
+-				 "in wildcard rename %s - success\n",
+-				 fname));
+-			count++;
+-			status =3D NT_STATUS_OK;
+-			continue;
+-		}
++		status =3D rename_internals_fsp(conn, fsp, destname, attrs,
++					      replace_if_exists);
+=20
+-		if (!replace_if_exists && vfs_file_exist(conn,destname, NULL)) {
+-			DEBUG(6,("file_exist %s\n", destname));
+-			status =3D NT_STATUS_OBJECT_NAME_COLLISION;
+-			continue;
++		close_file(fsp, NORMAL_CLOSE);
++
++		if (!NT_STATUS_IS_OK(status)) {
++			DEBUG(3, ("rename_internals_fsp returned %s for "
++				  "rename %s -> %s\n", nt_errstr(status),
++				  directory, newname));
++			return status;
+ 		}
+-			=09
+-		if (rename_path_prefix_equal(fname, destname)) {
+-			return NT_STATUS_SHARING_VIOLATION;
+-		}
+=20
+-		lck =3D get_share_mode_lock(NULL, file_id_sbuf(&sbuf1), NULL,
+-					  NULL);
++		count++;
+=20
+-		if (!SMB_VFS_RENAME(conn,fname,destname)) {
+-			if (lck !=3D NULL) {
+-				/*
+-				 * Only in this case there are open files at
+-				 * all.
+-				 */
+-				rename_open_files(conn, lck, newname);
+-			}
+-			count++;
+-			status =3D NT_STATUS_OK;
+-		}
+-		TALLOC_FREE(lck);
+ 		DEBUG(3,("rename_internals: doing rename on %s -> "
+ 			 "%s\n",fname,destname));
+ 	}
+
+--1yeeQ81UyVL57Vl7--
+
+--rS8CxjVDS/+yyDmU
+Content-Type: application/pgp-signature
+Content-Disposition: inline
+
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.5 (GNU/Linux)
+
+iD8DBQFGcr00pZr5CauZH5wRAoKbAJwLfjybgx/f+2ReZJ7e6E9ddH+5hQCgiEmr
+9b6GKyIgB7IInG7dGAf3BW0=
+=fd6c
+-----END PGP SIGNATURE-----
+
+--rS8CxjVDS/+yyDmU--
+

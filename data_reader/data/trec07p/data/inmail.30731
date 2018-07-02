@@ -1,0 +1,122 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon May  7 13:41:04 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l47Hf3qD001519
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 7 May 2007 13:41:03 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 6FFD9163B8E
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon,  7 May 2007 17:41:02 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.0 required=3.8 tests=AWL, BAYES_00, FORGED_RCVD_HELO,
+	NO_REAL_NAME,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from amber.vis-av.com (dsl092-075-243.bos1.dsl.speakeasy.net
+	[66.92.75.243]) by lists.samba.org (Postfix) with SMTP id E907D163B34
+	for <samba-technical@lists.samba.org>;
+	Mon,  7 May 2007 17:37:14 +0000 (GMT)
+Received: (qmail 12111 invoked from network); 7 May 2007 17:37:14 -0000
+Received: from unknown (HELO oberon-mail.internal) (192.168.1.71)
+	by amber.internal with SMTP; 7 May 2007 17:37:14 -0000
+Received: (nullmailer pid 7532 invoked by uid 0);
+	Mon, 07 May 2007 17:37:14 -0000
+From: derrell@samba.org
+To: "Stefan \(metze\) Metzmacher" <metze@samba.org>
+References: <20070507030225.E0925162AD2@lists.samba.org>
+	<463ED152.9070405@samba.org>
+Date: Mon, 07 May 2007 13:37:13 -0400
+In-Reply-To: <463ED152.9070405@samba.org> (Stefan Metzmacher's message of
+	"Mon, 07 May 2007 09:12:18 +0200")
+Message-ID: <6474fsc6.fsf@oberon-mail.internal>
+User-Agent: Gnus/5.110004 (No Gnus v0.4) XEmacs/21.4.17 (linux)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Cc: samba-technical@lists.samba.org, samba-cvs@samba.org
+Subject: Re: svn commit: samba r22731 - in branches/SAMBA_3_0/source: . tests
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: derrell@samba.org
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+"Stefan (metze) Metzmacher" <metze@samba.org> writes:
+
+> derrell@samba.org schrieb:
+>> Author: derrell
+>> Date: 2007-05-07 03:02:24 +0000 (Mon, 07 May 2007)
+>> New Revision: 22731
+>> 
+>> WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22731
+>> 
+>> Log:
+>> 
+>> - Fix bug #4594.
+>>   
+>>   configure.in determines if -Werror-implicit-function-declaration is
+>>   available, and if so it enables that flag if --enable-developer is
+>>   specified.  Since the configure tests themselves did not use that flag, it
+>>   was possible for a configure test to succeed, followed by a failed
+>>   compilation due to a facility being available but not having a proper
+>>   declaration in a header file.  (This bit me with readahead().)  This patch
+>>   ensures that if implicit function declarations will kill the build, the
+>>   feature being tested is deselected so the build will succeed.
+>> 
+>>   The autoconf manual suggests using return instead of exit in configure
+>>   tests because the declaration for exit is often missing.  We require this
+>>   now, since we error if prototypes are missing.  See section 5.5.1 of
+>>   http://www.gnu.org/software/autoconf/manual/autoconf.html.  This patch makes
+>>   these changes, because in fact, an external declaration for exit is missing
+>>   here (and likely elsewhere).
+>> 
+>>   I've verified that the features selected (here) with the original
+>>   configure.in and the new one are the same except for, in my case,
+>>   readahead.  I've also confirmed that the generated Makefile is identical.
+>> 
+>>   These changes are not being applied to the 3.0.26 branch because it does not
+>>   exhibit the initial problem this patch is supposed to solve since it doesn't
+>>   attempt to use -Werror-implicit-function-declaration.
+>
+> Hi Derell,
+>
+> I don't think it's correct to use -Werror-implicit-function-declaration
+> within the configure checks. Because the configure result now may
+> differs between the normal and developer build.
+
+Yes, that's exactly what I want (need) to do.  The configure tests must differ
+between the builds so that functions which are available during a
+non-developer build will be used, whereas functions that will cause the
+compile to barf during a developer build are excluded during a developer
+build.
+
+> The correct fix would be to use a AC_CHECK_DECL() or AC_HAVE_DECL()
+> for the specific function.
+
+The problem is that these macros use whatever CFLAGS are defined.  If
+-Werror-implicit-function-declaration is not defined in CFLAGS during
+configure, configure will determine that a function is available when in fact,
+during a compile with -Werror-implicit-function-declaration, the compile will
+fail.  I don't think it's appropriate for configure to decide a feature should
+be used when using it causes the compile to barf.  This is exactly the case I
+encountered.  readahead() is available on my system, but is not declared in a
+header file, similarly to exit().  Without that flag, a developer configure
+will determine that readahead() is available but a compile will fail.  By
+consistently testing for and using the warnings-are-errors flag, the problem
+is eliminated.  During a developer build, readahead() is found to _not_ exist
+so the compilation works fine.  During a production build, readahead() is
+found to exist and the compilation works fine since it doesn't use the
+warnings-are-errors flag.
+
+Derrell
+

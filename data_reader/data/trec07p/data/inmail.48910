@@ -1,0 +1,170 @@
+From perl6-all-return-81726-ktwarwic=speedy.uwaterloo.ca@perl.org  Fri Jun  1 18:13:22 2007
+Return-Path: <perl6-all-return-81726-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l51MDKhB015452
+	for <ktwarwic@flax9.uwaterloo.ca>; Fri, 1 Jun 2007 18:13:21 -0400
+Received: (qmail 15158 invoked by uid 514); 1 Jun 2007 22:13:14 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 15153 invoked from network); 1 Jun 2007 22:13:14 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: moderator for perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: Mark Glines (via RT) <parrotbug-followup@parrotcode.org>
+X-RT-NewTicket: yes
+To: bugs-bitbucket@netlabs.develooper.com
+Resent-To: perl6-internals@perl.org
+Mail-Followup-To: perl6-internals@perl.org
+Reply-To: perl6-internals@perl.org
+Date: Fri, 01 Jun 2007 08:42:43 -0700
+Subject: [perl #43102] t/pmc/threads.t tests 5,7 fail with --gc=libc 
+In-Reply-To: <20070601084101.2183376d@chirp>
+References: <RT-Ticket-43102@perl.org> <20070601084101.2183376d@chirp>
+Message-ID: <rt-3.6.HEAD-1668-1180712563-548.43102-72-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #43102
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: mark@glines.org
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+X-RT-Original-Encoding: utf-8
+Resent-Message-Id: <20070601154244.070952AFD7@x3.develooper.com>
+Resent-Date: Fri,  1 Jun 2007 08:42:44 -0700 (PDT)
+Resent-From: rt-mark=glines.org@netlabs.develooper.com
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+
+# New Ticket Created by  Mark Glines 
+# Please include the string:  [perl #43102]
+# in the subject line of all future correspondence about this issue. 
+# <URL: http://rt.perl.org/rt3/Ticket/Display.html?id=43102 >
+
+
+While testing/trying to fix RT #42938, I noticed an additional test
+failure in t/pmc/threads.t.  Test 7 crashes with a signal 11
+(segmentation fault), on my Gentoo Linux-x86 box.  This is with svn
+r18722.
+
+I've stared at gdb, header files and preprocessor output for a while.
+I'll include all the info I think is relevant.
+
+
+t/pmc/threads....NOK 7/20
+#     Failed test (t/pmc/threads.t at line 290)
+# Exited with error code: [SIGNAL 11]
+# Received:
+# thread
+#
+# Expected:
+# /(done\nthread\n)|(thread\ndone\n)/
+#
+
+Starting program: /home/paranoid/parrot/parrot detach.pir
+[Thread debugging using libthread_db enabled]
+[New Thread -1227352400 (LWP 25907)]
+warning: Lowest section in /usr/lib/libicudata.so.36 is .hash at 000000d4
+[New Thread -1227355216 (LWP 25910)]
+[New Thread -1235747920 (LWP 25911)]
+[New Thread -1244140624 (LWP 25912)]
+thread
+
+Program received signal SIGSEGV, Segmentation fault.
+[Switching to Thread -1244140624 (LWP 25912)]
+0xb7da53ab in clear_cow (interp=0x82256f0, pool=0x82285c8, cleanup=1)
+    at src/gc/dod.c:469
+469                         *refcount               = 0;
+(gdb) print refcount
+$1 = (INTVAL * const) 0xb7eb4b41
+
+
+The code in question:
+                    INTVAL * const refcount = PObj_bufrefcountptr(b);
+                    *refcount               = 0;
+
+Which expands to:
+                    INTVAL * const refcount = (&(((Buffer_alloc_unit *)((char *) (b)->obj.u._b._bufstart - (((size_t) &((Buffer_alloc_unit *)0)->buffer))))->ref_ count));
+                    *refcount = 0;
+
+(gdb) bt
+#0  0xb7da53ab in clear_cow (interp=0x82256f0, pool=0x82285c8,
+    cleanup=1) at src/gc/dod.c:469
+#1  0xb7da30ae in sweep_cb_buf (interp=0x82256f0, pool=0x82285c8, flag=6,
+    arg=0x0) at src/headers.c:691
+#2  0xb7da2f56 in Parrot_forall_header_pools (interp=0x82256f0, flag=6,
+    arg=0x0, func=0xb7da3080 <sweep_cb_buf>) at src/headers.c:640
+#3  0xb7da318f in Parrot_destroy_header_pools (interp=0x82256f0)
+    at src/headers.c:732
+#4  0xb7d490bb in Parrot_really_destroy (interp=0x82256f0, exit_code=0,
+    arg=0x0) at src/inter_create.c:390
+#5  0xb7dc5399 in thread_func (arg=0x83c0c28) at src/thread.c:403
+#6  0xb7b6f380 in start_thread () from /lib/libpthread.so.0
+#7  0xb6f1554e in clone () from /lib/libc.so.6
+(gdb) print *b
+$3 = {obj = {u = {_b = {_bufstart = 0xb7eb4b45, _buflen = 6}, _ptrs = {
+        _struct_val = 0xb7eb4b45, _pmc_val = 0x6}, _i = {
+        _int_val = -1209316539, _int_val2 = 6},
+      _num_val = 1.425648877988937e-313, _string_val = 0xb7eb4b45},
+    flags = 196864}}
+(gdb) print ((char*)(b->obj.u._b._bufstart))
+$4 = 0xb7eb4b45 "parrot"
+
+
+So it looks to me like it's expecting to find a refcount integer right
+before the buffer, in memory.  But the buffer is a null-terminated
+string, packed in memory with another string directly preceding it...
+no refcount integer!
+
+Here's a hexdump of the memory:
+
+b7eb4b30  75 70 2e 63 00 28 73 65  6c 66 29 2d 3e 70 6d 63  |up.c~(self)->pmc|
+b7eb4b40  5f 65 78 74 00 70 61 72  72 6f 74 00 00 00 00 00  |_ext~parrot~~~~~|
+_bufstart pointer:       ^^                                       ^
+
+(in the ASCII part of that hexdump, "~" means null.)
+
+I'm in way over my head here, but I see 3 warning signs telling me
+this is a bug:
+
+1.  The SIGSEGV, obviously.
+2.  The lack of refcount integer where the code expects to find one.
+3.  The buffer isn't dword-aligned.  (Aren't allocated buffers aligned
+by default?  Could this be a constant string defined at compile time,
+instead?)
+
+
+I also get an intermittant failure of test 5 (occurs about once every 5
+runs).  I believe it is likely to be caused by the same issue, but I
+have not debugged it to the same extent.
+
+#     Failed test (t/pmc/threads.t at line 204)
+# Exited with error code: [SIGNAL 11]
+# Received:
+# start 1
+# in thread
+# done
+#
+# Expected:
+# start 1
+# in thread
+# done
+
+ 
+Mark
+

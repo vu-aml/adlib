@@ -1,0 +1,127 @@
+From r-help-bounces@stat.math.ethz.ch  Tue May  1 18:01:15 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l41M1Db9013843
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 1 May 2007 18:01:14 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l41EKJGg027321;
+	Tue, 1 May 2007 16:20:43 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: ***
+X-Spam-Status: No, score=3.1 required=5.0 tests=AWL, BAYES_95, FORGED_RCVD_HELO,
+	RCVD_NUMERIC_HELO autolearn=no version=3.1.8
+Received: from heisenberg.zen.co.uk (heisenberg.zen.co.uk [212.23.3.141])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l41DopZQ017766
+	for <r-help@stat.math.ethz.ch>; Tue, 1 May 2007 15:50:52 +0200
+Received: from [88.96.44.206] (helo=88.96.44.206)
+	by heisenberg.zen.co.uk with esmtp (Exim 4.50)
+	id 1Hiskk-0007lV-KT; Tue, 01 May 2007 13:50:50 +0000
+Received: (from efh@localhost) by 88.96.44.206 (8.8.8/8.8.5) id OAA00903;
+	Tue, 1 May 2007 14:50:48 +0100
+Message-ID: <XFMail.070501145048.ted.harding@nessie.mcc.ac.uk>
+X-Mailer: XFMail 1.3-alpha-031298 [p0] on Linux
+X-Priority: 3 (Normal)
+MIME-Version: 1.0
+In-Reply-To: <46372976.2040103@bitwrit.com.au>
+Date: Tue, 01 May 2007 14:50:48 +0100 (BST)
+From: (Ted Harding) <ted.harding@nessie.mcc.ac.uk>
+To: r-help@stat.math.ethz.ch
+X-Originating-Heisenberg-IP: [88.96.44.206]
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+X-Mailman-Approved-At: Tue, 01 May 2007 16:20:13 +0200
+Subject: Re: [R] to draw a smooth arc
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+Reply-To: ted.harding@manchester.ac.uk
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+This thread prompts me to ask about something I've
+been pondering for a while, as to whether there's an
+implementation somewhere ticked away in the R resources.
+
+So far, people have been responding to the original query
+in terms of increasing the numbers of points, and joining
+these by lines.
+
+However, if you're using PostScript output, you can draw
+really smooth curves by exploiting PS's "curveto" operator.
+This draws a cubic-curve segment in the following way:
+
+The two points you want to join with a curve will be denoted
+by (X0,Y0) and (X3,Y3) in the following (for reasons which
+will appear). The PS command is of the form
+
+  x1 y1  x2 y2  X3 Y3  curevto
+
+At (X0,Y0) the tangent to the curve (as it departs from (X0,Y0)
+is in the direction of the directed line from (X0,Y0) to (x1,y1),
+and at (X3,Y3) (as it arrives) the tangent to the curve is
+in the direction of the directed line from (x2,y3) to (X3,Y3).
+
+The location of (X0,Y0) is not part of the command, since
+it is implicit in the PS "currentpoint" which is the starting
+point of the curve.
+
+The result is (in theory, and in practice to within the resolution
+of the output device) a perfectly smooth curve, provided the
+consecutive cubic segments have the same tangent at each of
+the points being joined. This can be achieved by appropriate
+choice of the "intermediate" points -- (x1,y2), (x2,y2) above.
+
+So far, when I've done this myself (including when using the
+output from R to give the points being joined), I've done the
+computation of the "intermediate" points "by hand". This basically
+involves deciding, at each of the points being joined, what the
+tangent to the smooth curve shouold be.
+
+Of course, there is an element of arbitrariness in this, unless
+there is an analytic representation of the curve on which the
+points lie (e.g. you're plotting sin(x)/x every pi/8, and
+want to join them smoothly), when all you need is the derivatives
+at the points.
+
+Crudely, you might evaluate the direction at a point in terms
+os a weighted average of the directions to its two immediate
+neighbours (the nearer meghbour ges the greater weight); less
+crudely, you might fit a quadratic through the point and its
+2 neighbours and use the gradient at the middle point; and so on.
+
+Once you've decided on the tangent at each point, it's then
+straightforward to compute suitable "intermediate points"
+to serve as (x1,y2) and (x2,y2).
+
+(One application where this sort of approach is needed is in
+joining computed points on iso-contours, where the individual
+points have been determined by interpolation of spot-measurements
+at nearby measuring stations).
+
+Anyway. The Question: is there a general function for the
+above kind of smooth curve-drawing?
+
+With thanks,
+Ted.
+
+--------------------------------------------------------------------
+E-Mail: (Ted Harding) <ted.harding@nessie.mcc.ac.uk>
+Fax-to-email: +44 (0)870 094 0861
+Date: 01-May-07                                       Time: 14:50:38
+------------------------------ XFMail ------------------------------
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

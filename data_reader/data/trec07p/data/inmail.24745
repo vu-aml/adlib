@@ -1,0 +1,275 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun Apr 29 17:41:33 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3TLfW6w005066
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 29 Apr 2007 17:41:32 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 86B00162BC2
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 29 Apr 2007 21:41:31 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.7 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 501)
+	id 2203F162AFD; Sun, 29 Apr 2007 21:40:49 +0000 (GMT)
+To: samba-cvs@samba.org
+From: abartlet@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070429214049.2203F162AFD@lists.samba.org>
+Date: Sun, 29 Apr 2007 21:40:49 +0000 (GMT)
+Subject: svn commit: samba r22582 - in branches/SAMBA_4_0/source: auth
+	librpc/idl winbind
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 9090
+Lines: 232
+
+Author: abartlet
+Date: 2007-04-29 21:40:48 +0000 (Sun, 29 Apr 2007)
+New Revision: 22582
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22582
+
+Log:
+Cleanups towards making winbind work again.  We still have a long way to go, as this has bitrotted over the past months.
+
+This change in particular catches winbind up with the next
+composite_create() function.
+
+We also needed to remove an unused flags field, and fill in the lm
+response.
+
+Andrew Bartlett
+
+Modified:
+   branches/SAMBA_4_0/source/auth/auth_winbind.c
+   branches/SAMBA_4_0/source/librpc/idl/winbind.idl
+   branches/SAMBA_4_0/source/winbind/wb_connect_lsa.c
+   branches/SAMBA_4_0/source/winbind/wb_connect_sam.c
+   branches/SAMBA_4_0/source/winbind/wb_dom_info.c
+   branches/SAMBA_4_0/source/winbind/wb_init_domain.c
+   branches/SAMBA_4_0/source/winbind/wb_pam_auth.c
+   branches/SAMBA_4_0/source/winbind/wb_sam_logon.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/auth/auth_winbind.c
+===================================================================
+--- branches/SAMBA_4_0/source/auth/auth_winbind.c	2007-04-29 21:40:17 UTC (rev 22581)
++++ branches/SAMBA_4_0/source/auth/auth_winbind.c	2007-04-29 21:40:48 UTC (rev 22582)
+@@ -210,8 +210,8 @@
+ 		network_info->nt.length = user_info->password.response.nt.length;
+ 		network_info->nt.data	= user_info->password.response.nt.data;
+ 
+-		network_info->nt.length = user_info->password.response.lanman.length;
+-		network_info->nt.data	= user_info->password.response.lanman.data;
++		network_info->lm.length = user_info->password.response.lanman.length;
++		network_info->lm.data	= user_info->password.response.lanman.data;
+ 
+ 		identity_info = &network_info->identity_info;
+ 		s->req.in.logon_level	= 2;
+@@ -226,6 +226,9 @@
+ 	identity_info->workstation.string	= user_info->workstation_name;
+ 
+ 	s->req.in.validation_level	= 3;
++
++	NDR_PRINT_IN_DEBUG(winbind_SamLogon, &s->req);
++
+ 	status = IRPC_CALL(ctx->auth_ctx->msg_ctx, winbind_servers[0],
+ 			   winbind, WINBIND_SAMLOGON,
+ 			   &s->req, s);
+
+Modified: branches/SAMBA_4_0/source/librpc/idl/winbind.idl
+===================================================================
+--- branches/SAMBA_4_0/source/librpc/idl/winbind.idl	2007-04-29 21:40:17 UTC (rev 22581)
++++ branches/SAMBA_4_0/source/librpc/idl/winbind.idl	2007-04-29 21:40:48 UTC (rev 22582)
+@@ -33,7 +33,6 @@
+ 		[in]  [switch_is(logon_level)] netr_LogonLevel logon,
+ 		[in]  uint16 validation_level,
+ 		[out] [switch_is(validation_level)] netr_Validation validation,
+-		[out] uint8 authoritative,
+-		[in,out] uint32 flags
++		[out] uint8 authoritative
+ 	);
+ }
+
+Modified: branches/SAMBA_4_0/source/winbind/wb_connect_lsa.c
+===================================================================
+--- branches/SAMBA_4_0/source/winbind/wb_connect_lsa.c	2007-04-29 21:40:17 UTC (rev 22581)
++++ branches/SAMBA_4_0/source/winbind/wb_connect_lsa.c	2007-04-29 21:40:48 UTC (rev 22582)
+@@ -55,11 +55,8 @@
+ 	struct composite_context *result, *ctx;
+ 	struct init_lsa_state *state;
+ 
+-	result = talloc(mem_ctx, struct composite_context);
++	result = composite_create(mem_ctx, tree->session->transport->socket->event.ctx);
+ 	if (result == NULL) goto failed;
+-	result->state = COMPOSITE_STATE_IN_PROGRESS;
+-	result->async.fn = NULL;
+-	result->event_ctx = tree->session->transport->socket->event.ctx;
+ 
+ 	state = talloc(result, struct init_lsa_state);
+ 	if (state == NULL) goto failed;
+@@ -237,11 +234,8 @@
+ 	struct composite_context *result, *ctx;
+ 	struct connect_lsa_state *state;
+ 
+-	result = talloc(mem_ctx, struct composite_context);
++	result = composite_create(mem_ctx, tree->session->transport->socket->event.ctx);
+ 	if (result == NULL) goto failed;
+-	result->state = COMPOSITE_STATE_IN_PROGRESS;
+-	result->async.fn = NULL;
+-	result->event_ctx = tree->session->transport->socket->event.ctx;
+ 
+ 	state = talloc(result, struct connect_lsa_state);
+ 	if (state == NULL) goto failed;
+
+Modified: branches/SAMBA_4_0/source/winbind/wb_connect_sam.c
+===================================================================
+--- branches/SAMBA_4_0/source/winbind/wb_connect_sam.c	2007-04-29 21:40:17 UTC (rev 22581)
++++ branches/SAMBA_4_0/source/winbind/wb_connect_sam.c	2007-04-29 21:40:48 UTC (rev 22582)
+@@ -61,11 +61,8 @@
+ 	struct composite_context *result, *ctx;
+ 	struct connect_samr_state *state;
+ 
+-	result = talloc(mem_ctx, struct composite_context);
++	result = composite_create(mem_ctx, tree->session->transport->socket->event.ctx);
+ 	if (result == NULL) goto failed;
+-	result->state = COMPOSITE_STATE_IN_PROGRESS;
+-	result->async.fn = NULL;
+-	result->event_ctx = tree->session->transport->socket->event.ctx;
+ 
+ 	state = talloc(result, struct connect_samr_state);
+ 	if (state == NULL) goto failed;
+
+Modified: branches/SAMBA_4_0/source/winbind/wb_dom_info.c
+===================================================================
+--- branches/SAMBA_4_0/source/winbind/wb_dom_info.c	2007-04-29 21:40:17 UTC (rev 22581)
++++ branches/SAMBA_4_0/source/winbind/wb_dom_info.c	2007-04-29 21:40:48 UTC (rev 22582)
+@@ -50,11 +50,8 @@
+ 	struct get_dom_info_state *state;
+ 	struct nbt_name name;
+ 
+-	result = talloc(mem_ctx, struct composite_context);
++	result = composite_create(mem_ctx, service->task->event_ctx);
+ 	if (result == NULL) goto failed;
+-	result->state = COMPOSITE_STATE_IN_PROGRESS;
+-	result->async.fn = NULL;
+-	result->event_ctx = service->task->event_ctx;
+ 
+ 	state = talloc(result, struct get_dom_info_state);
+ 	if (state == NULL) goto failed;
+
+Modified: branches/SAMBA_4_0/source/winbind/wb_init_domain.c
+===================================================================
+--- branches/SAMBA_4_0/source/winbind/wb_init_domain.c	2007-04-29 21:40:17 UTC (rev 22581)
++++ branches/SAMBA_4_0/source/winbind/wb_init_domain.c	2007-04-29 21:40:48 UTC (rev 22582)
+@@ -85,11 +85,8 @@
+ 	struct composite_context *result, *ctx;
+ 	struct init_domain_state *state;
+ 
+-	result = talloc(mem_ctx, struct composite_context);
++	result = composite_create(mem_ctx, service->task->event_ctx);
+ 	if (result == NULL) goto failed;
+-	result->state = COMPOSITE_STATE_IN_PROGRESS;
+-	result->async.fn = NULL;
+-	result->event_ctx = service->task->event_ctx;
+ 
+ 	state = talloc_zero(result, struct init_domain_state);
+ 	if (state == NULL) goto failed;
+
+Modified: branches/SAMBA_4_0/source/winbind/wb_pam_auth.c
+===================================================================
+--- branches/SAMBA_4_0/source/winbind/wb_pam_auth.c	2007-04-29 21:40:17 UTC (rev 22581)
++++ branches/SAMBA_4_0/source/winbind/wb_pam_auth.c	2007-04-29 21:40:48 UTC (rev 22582)
+@@ -267,6 +267,8 @@
+ 	composite_done(state->ctx);
+ }
+ 
++/* Having received a NTLM authentication reply, parse out the useful
++ * reply data for the caller */
+ NTSTATUS wb_cmd_pam_auth_crap_recv(struct composite_context *c,
+ 				   TALLOC_CTX *mem_ctx,
+ 				   DATA_BLOB *info3,
+@@ -288,25 +290,8 @@
+ 	return status;
+ }
+ 
+-NTSTATUS wb_cmd_pam_auth_crap(TALLOC_CTX *mem_ctx,
+-			      struct wbsrv_service *service,
+-			      uint32_t logon_parameters,
+-			      const char *domain, const char *user,
+-			      const char *workstation,
+-			      DATA_BLOB chal, DATA_BLOB nt_resp,
+-			      DATA_BLOB lm_resp,
+-			      DATA_BLOB *info3,
+-			      struct netr_UserSessionKey *user_session_key,
+-			      struct netr_LMSessionKey *lm_key,
+-			      char **unix_username)
+-{
+-	struct composite_context *c =
+-		wb_cmd_pam_auth_crap_send(mem_ctx, service, logon_parameters, 
+-					  domain, user, workstation,
+-					  chal, nt_resp, lm_resp);
+-	return wb_cmd_pam_auth_crap_recv(c, mem_ctx, info3, user_session_key,
+-					 lm_key, unix_username);
+-}
++/* Handle plaintext authentication, by encrypting the password and
++ * then sending via the NTLM calls */
+ 
+ struct composite_context *wb_cmd_pam_auth_send(TALLOC_CTX *mem_ctx,
+ 					       struct wbsrv_service *service,
+@@ -371,18 +356,9 @@
+ 
+ NTSTATUS wb_cmd_pam_auth_recv(struct composite_context *c)
+ {
+-	struct pam_auth_crap_state *state =
+-		talloc_get_type(c->private_data, struct pam_auth_crap_state);
+-	NTSTATUS status = composite_wait(c);
+-	talloc_free(state);
+-	return status;
++       struct pam_auth_crap_state *state =
++               talloc_get_type(c->private_data, struct pam_auth_crap_state);
++       NTSTATUS status = composite_wait(c);
++       talloc_free(state);
++       return status;
+ }
+-
+-NTSTATUS wb_cmd_pam_auth(TALLOC_CTX *mem_ctx, struct wbsrv_service *service,
+-			 const char *domain, const char *user,
+-			 const char *password)
+-{
+-	struct composite_context *c =
+-		wb_cmd_pam_auth_send(mem_ctx, service, domain, user, password);
+-	return wb_cmd_pam_auth_recv(c);
+-}
+
+Modified: branches/SAMBA_4_0/source/winbind/wb_sam_logon.c
+===================================================================
+--- branches/SAMBA_4_0/source/winbind/wb_sam_logon.c	2007-04-29 21:40:17 UTC (rev 22581)
++++ branches/SAMBA_4_0/source/winbind/wb_sam_logon.c	2007-04-29 21:40:48 UTC (rev 22582)
+@@ -160,7 +160,6 @@
+ 		talloc_steal(mem_ctx, s->r_mem_ctx);
+ 		req->out.validation	= s->r.out.validation;
+ 		req->out.authoritative	= 1;
+-		req->out.flags		= 0;
+ 	}
+ 
+ 	talloc_free(s);
+

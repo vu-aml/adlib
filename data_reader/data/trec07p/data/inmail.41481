@@ -1,0 +1,101 @@
+From r-help-bounces@stat.math.ethz.ch  Tue May 22 08:51:55 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4MCpsqD012387
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 22 May 2007 08:51:54 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4MCoQk1016375;
+	Tue, 22 May 2007 14:50:39 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.9 required=5.0 tests=AWL, BAYES_50,
+	NO_REAL_NAME autolearn=no version=3.1.8
+Received: from wx-out-0506.google.com (wx-out-0506.google.com [66.249.82.236])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4MCoJRK016338
+	for <r-help@stat.math.ethz.ch>; Tue, 22 May 2007 14:50:20 +0200
+Received: by wx-out-0506.google.com with SMTP id r21so1284438wxc
+	for <r-help@stat.math.ethz.ch>; Tue, 22 May 2007 05:50:19 -0700 (PDT)
+Received: by 10.90.89.5 with SMTP id m5mr4687406agb.1179838219356;
+	Tue, 22 May 2007 05:50:19 -0700 (PDT)
+Received: by 10.90.119.3 with HTTP; Tue, 22 May 2007 05:50:19 -0700 (PDT)
+Message-ID: <afea0ae80705220550u657a72a2q2b470cb028632d79@mail.gmail.com>
+Date: Tue, 22 May 2007 13:50:19 +0100
+From: gatemaze@gmail.com
+To: r-help <r-help@stat.math.ethz.ch>
+MIME-Version: 1.0
+Content-Disposition: inline
+X-Google-Sender-Auth: f87ce07c2d4aa55b
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Subject: [R] partial correlation function
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+Hi,
+
+after reading the archives I found some methods... adopted and
+modified one of them to the following. I think it is correct after
+checking and comparing the results with other software... but if
+possible someone could have a look and spot any mistakes I would be
+grateful. Thanks
+
+pcor3 <- function (x, test = T, p = 0.05, alternative="two.sided") {
+  nvar <- ncol(x)
+  ndata <- nrow(x)
+  conc <- solve(cor(x))
+  resid.sd <- 1/sqrt(diag(conc))
+  pcc <- -sweep(sweep(conc, 1, resid.sd, "*"), 2, resid.sd, "*")
+  #colnames(pcc) <- rownames(pcc) <- colnames(x)
+  if (test) {
+    t.df <- ndata - nvar
+    t <- pcc/sqrt((1 - pcc^2)/t.df)
+    #pcc <- list(coefs = pcc, sig = t > qt(1 - (p/2), df = t.df)); #
+original statement
+    if (alternative == "two.sided") {
+      pcc <- list(coefs = pcc, sig = t > qt(1 - (p/2), df = t.df),
+p.value = 2 * pmin(pt(t, t.df), 1-pt(t, t.df))) # two.sided
+    } else if (alternative == "greater") {
+      pcc <- list(coefs = pcc, sig = t > qt(1 - p, df = t.df), p.value
+= 1-pt(t, t.df)) # greater
+    } else if (alternative == "less") {
+      pcc <- list(coefs = pcc, sig = t > qt(1 - p, df = t.df), p.value
+= 2*(1-pt(t, t.df)))
+    }
+  }
+  str <- sprintf("Partial correlation for:"); print(str, quote=FALSE);
+  str <- sprintf("%s", colnames(x)); print(str, quote=FALSE);
+  str <- sprintf("p: %.2f, alternative: %s", p, alternative);
+print(str, quote=FALSE);
+  if (test) {
+    str <- sprintf("df: %d", t.df); print(str, quote=FALSE);
+  }
+
+  return(pcc)
+}
+
+
+
+The function was adopted from the following email:
+http://tolstoy.newcastle.edu.au/R/help/00a/0518.html
+
+-- 
+yianni
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

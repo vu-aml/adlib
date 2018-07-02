@@ -1,0 +1,204 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Apr 24 09:55:38 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3ODtc6w014772
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 24 Apr 2007 09:55:38 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id E22101639A0
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 24 Apr 2007 13:55:37 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 539)
+	id 006E6162C23; Tue, 24 Apr 2007 13:55:06 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jelmer@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070424135507.006E6162C23@lists.samba.org>
+Date: Tue, 24 Apr 2007 13:55:06 +0000 (GMT)
+Subject: svn commit: samba r22503 - in branches/SAMBA_4_0: .
+	source/lib/socket
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 4210
+Lines: 161
+
+Author: jelmer
+Date: 2007-04-24 13:55:04 +0000 (Tue, 24 Apr 2007)
+New Revision: 22503
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22503
+
+Log:
+Add support for dgram to socket_ipv6. No tests yet...
+Modified:
+   branches/SAMBA_4_0/
+   branches/SAMBA_4_0/source/lib/socket/socket_ipv6.c
+
+
+Changeset:
+
+Property changes on: branches/SAMBA_4_0
+___________________________________________________________________
+Name: bzr:merge
+...skipped...
+
+Modified: branches/SAMBA_4_0/source/lib/socket/socket_ipv6.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/socket/socket_ipv6.c	2007-04-24 12:56:23 UTC (rev 22502)
++++ branches/SAMBA_4_0/source/lib/socket/socket_ipv6.c	2007-04-24 13:55:04 UTC (rev 22503)
+@@ -190,7 +190,12 @@
+ 	struct sockaddr_in cli_addr;
+ 	socklen_t cli_addr_len = sizeof(cli_addr);
+ 	int new_fd;
++	
++	if (sock->type != SOCKET_TYPE_STREAM) {
++		return NT_STATUS_INVALID_PARAMETER;
++	}
+ 
++
+ 	new_fd = accept(sock->fd, (struct sockaddr *)&cli_addr, &cli_addr_len);
+ 	if (new_fd == -1) {
+ 		return map_nt_error_from_unix(errno);
+@@ -249,6 +254,62 @@
+ 	return NT_STATUS_OK;
+ }
+ 
++static NTSTATUS ipv6_recvfrom(struct socket_context *sock, void *buf, 
++			      size_t wantlen, size_t *nread, 
++			      TALLOC_CTX *addr_ctx, struct socket_address **_src)
++{
++	ssize_t gotlen;
++	struct sockaddr_in6 *from_addr;
++	socklen_t from_len = sizeof(*from_addr);
++	struct socket_address *src;
++	struct hostent *he;
++	
++	src = talloc(addr_ctx, struct socket_address);
++	if (!src) {
++		return NT_STATUS_NO_MEMORY;
++	}
++	
++	src->family = sock->backend_name;
++
++	from_addr = talloc(src, struct sockaddr_in6);
++	if (!from_addr) {
++		talloc_free(src);
++		return NT_STATUS_NO_MEMORY;
++	}
++
++	src->sockaddr = (struct sockaddr *)from_addr;
++
++	*nread = 0;
++
++	gotlen = recvfrom(sock->fd, buf, wantlen, 0, 
++			  src->sockaddr, &from_len);
++	if (gotlen == 0) {
++		talloc_free(src);
++		return NT_STATUS_END_OF_FILE;
++	} else if (gotlen == -1) {
++		talloc_free(src);
++		return map_nt_error_from_unix(errno);
++	}
++
++	src->sockaddrlen = from_len;
++
++	he = gethostbyaddr((void *)&from_addr->sin6_addr, sizeof(from_addr->sin6_addr), AF_INET6);
++	if (he == NULL) {
++		talloc_free(src);
++		return NT_STATUS_INTERNAL_ERROR;
++	}
++	src->addr = talloc_strdup(src, he->h_name);
++	if (src->addr == NULL) {
++		talloc_free(src);
++		return NT_STATUS_NO_MEMORY;
++	}
++	src->port = ntohs(from_addr->sin6_port);
++
++	*nread	= gotlen;
++	*_src	= src;
++	return NT_STATUS_OK;
++}
++
+ static NTSTATUS ipv6_tcp_send(struct socket_context *sock, 
+ 			      const DATA_BLOB *blob, size_t *sendlen)
+ {
+@@ -266,6 +327,42 @@
+ 	return NT_STATUS_OK;
+ }
+ 
++static NTSTATUS ipv6_sendto(struct socket_context *sock, 
++			    const DATA_BLOB *blob, size_t *sendlen, 
++			    const struct socket_address *dest_addr)
++{
++	ssize_t len;
++
++	if (dest_addr->sockaddr) {
++		len = sendto(sock->fd, blob->data, blob->length, 0, 
++			     dest_addr->sockaddr, dest_addr->sockaddrlen);
++	} else {
++		struct sockaddr_in6 srv_addr;
++		struct in6_addr addr;
++		
++		ZERO_STRUCT(srv_addr);
++		addr                     = interpret_addr6(dest_addr->addr);
++		if (addr.s6_addr == 0) {
++			return NT_STATUS_HOST_UNREACHABLE;
++		}
++		srv_addr.sin6_addr = addr;
++		srv_addr.sin6_port        = htons(dest_addr->port);
++		srv_addr.sin6_family      = PF_INET6;
++		
++		*sendlen = 0;
++		
++		len = sendto(sock->fd, blob->data, blob->length, 0, 
++			     (struct sockaddr *)&srv_addr, sizeof(srv_addr));
++	}
++	if (len == -1) {
++		return map_nt_error_from_unix(errno);
++	}	
++
++	*sendlen = len;
++
++	return NT_STATUS_OK;
++}
++
+ static NTSTATUS ipv6_tcp_set_option(struct socket_context *sock, const char *option, const char *val)
+ {
+ 	set_socket_options(sock->fd, option);
+@@ -410,6 +507,8 @@
+ 	.fn_listen		= ipv6_tcp_listen,
+ 	.fn_accept		= ipv6_tcp_accept,
+ 	.fn_recv		= ipv6_tcp_recv,
++	.fn_recvfrom 	= ipv6_recvfrom,
++	.fn_sendto		= ipv6_sendto,
+ 	.fn_send		= ipv6_tcp_send,
+ 	.fn_close		= ipv6_tcp_close,
+ 	.fn_pending		= ipv6_pending,
+@@ -425,8 +524,5 @@
+ 
+ const struct socket_ops *socket_ipv6_ops(enum socket_type type)
+ {
+-	if (type != SOCKET_TYPE_STREAM) {
+-		return NULL;
+-	}
+ 	return &ipv6_tcp_ops;
+ }
+

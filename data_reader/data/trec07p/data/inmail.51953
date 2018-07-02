@@ -1,0 +1,107 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Jun  5 20:10:56 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l560AuhB015354
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 5 Jun 2007 20:10:56 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 00361163838
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed,  6 Jun 2007 00:10:49 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id C33E6162ADF; Wed,  6 Jun 2007 00:09:14 +0000 (GMT)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Transfer-Encoding: 7bit
+Message-ID: <18021.64361.164851.672386@samba.org>
+Date: Wed, 6 Jun 2007 10:10:17 +1000
+To: James Peach <jpeach@samba.org>
+In-Reply-To: <089D1CE1-5D21-4711-918B-48E2C36C5D1D@samba.org>
+References: <D4ADD9E4-9613-466E-9618-6DC251575315@samba.org>
+	<1180906540.24923.198.camel@localhost.localdomain>
+	<46636B0C.2030202@samba.org>
+	<1180928372.24923.238.camel@localhost.localdomain>
+	<089D1CE1-5D21-4711-918B-48E2C36C5D1D@samba.org>
+X-Mailer: VM 7.19 under Emacs 22.0.95.1
+From: tridge@samba.org
+Cc: "Gerald \(Jerry\) Carter" <jerry@samba.org>, simo <idra@samba.org>,
+   samba-technical@lists.samba.org
+Subject: Re: getting rid of mkproto.sh from Samba3
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: tridge@samba.org
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+James,
+
+ > If I have a decent header file, I can see the full interface in a  
+ > single screen, along with comments, macros and typedefs. I don't think  
+ > the argument about the extra typing involved in changing headers by  
+ > hand is very strong, since the code needs to be read and understood  
+ > thousands more times than it needs to be written.
+
+It is not the extra typing, it's the mistakes. Before we had auto
+prototypes in Samba the following mistakes were common:
+
+ *) leaving a prototype in a header for a function that has been
+  removed. I don't know of any tool that will find/remove those.
+
+ *) getting details in the prototype wrong, especially the varargs
+  functions with printf arguments. 
+
+ *) when the arguments to a function change, and the prototype isn't
+  updated. This is especially insidious when the new and old arguments
+  are type compatible, but change their meaning, so the old prototype
+  is completely misleading (ie. is still takes an int as the 3rd
+  argument, but now its a set of flags, not a counter)
+
+ *) once you start breaking up your includes out of a single
+  includes.h, then you risk getting the prototype completely wrong if
+  the source file of the function doesn't include the prototype
+  header. The compiler won't complain.
+
+ *) programmers add nice comments to the prototype header, which is in
+  a completely different file to the code. Those comments will degrade
+  over time as the code changes and the comment is not upgraded, so
+  those nice docs that you do this month will become completely wrong
+  by next year, and the person updating the function will not notice,
+  as the prototype is not on the same screen as the code they are
+  changing.
+
+There is a very basic principle in programming that you should only
+have a piece of information in one place in a program. If you have it
+in two places then the two can become inconsistent. Auto generating
+prototypes is an application of that principle.
+
+If you want docs available when you haven't run make yet, then
+generate them using funnelweb or similar tools. 
+
+If you want to make finding functions easy, then break up the code
+into modules, and use a module prefix for each module so all functions
+in that module have an obvious xxxx_ at the start of the name. That is
+the root cause of the name_to_fqdn(), global_myname(),
+get_mydnsfullname() mess.
+
+You should also be running findstatic.pl regularly to find unused
+functions and functions that can be made static in a C file. That
+means you won't have unused and redundent functions sitting around for
+people to use. 
+
+Cheers, Tridge
+

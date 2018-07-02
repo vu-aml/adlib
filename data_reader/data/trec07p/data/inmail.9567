@@ -1,0 +1,117 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun Apr 15 16:58:41 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3FKwe0I029672
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 15 Apr 2007 16:58:40 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id E4966162C37
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 15 Apr 2007 20:58:16 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 620)
+	id 68206162AC6; Sun, 15 Apr 2007 20:57:49 +0000 (GMT)
+To: samba-cvs@samba.org
+From: metze@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070415205749.68206162AC6@lists.samba.org>
+Date: Sun, 15 Apr 2007 20:57:49 +0000 (GMT)
+Subject: svn commit: samba r22224 - in
+	branches/SAMBA_3_0/source/lib/replace/test: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 1924
+Lines: 74
+
+Author: metze
+Date: 2007-04-15 20:57:48 +0000 (Sun, 15 Apr 2007)
+New Revision: 22224
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22224
+
+Log:
+merge from samba4:
+
+make comparing of struct tm more verbose and portable
+
+metze
+Modified:
+   branches/SAMBA_3_0/source/lib/replace/test/strptime.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/lib/replace/test/strptime.c
+===================================================================
+--- branches/SAMBA_3_0/source/lib/replace/test/strptime.c	2007-04-15 20:55:52 UTC (rev 22223)
++++ branches/SAMBA_3_0/source/lib/replace/test/strptime.c	2007-04-15 20:57:48 UTC (rev 22224)
+@@ -8,6 +8,10 @@
+ #define true 1
+ #define false 0
+ 
++#ifndef __STRING
++#define __STRING(x)    #x
++#endif
++
+ /* make printf a no-op */
+ #define printf if(0) printf
+ 
+@@ -24,6 +28,9 @@
+ 	char *ret;
+ 	struct tm t, t2;
+ 
++	memset(&t, 0, sizeof(t));
++	memset(&t2, 0, sizeof(t2));
++
+ 	printf("test: strptime\n");
+ 
+ 	ret = strptime(s, "%Y%m%d%H%M%S", &t);
+@@ -56,13 +63,26 @@
+ 		return false;
+ 	}
+ 
+-	if (memcmp(&t, &t2, sizeof(t)) == 0) {
+-		printf("failure: strptime [\n"
+-		       "result differs if the format string has a 'Z' at the end\n"
+-		       "]\n");
+-		return false;
++#define CMP_TM_ELEMENT(t1,t2,elem) \
++	if (t1.elem != t2.elem) { \
++		printf("failure: strptime [\n" \
++		       "result differs if the format string has a 'Z' at the end\n" \
++		       "element: %s %d != %d\n" \
++		       "]\n", \
++		       __STRING(elen), t1.elem, t2.elem); \
++		return false; \
+ 	}
+ 
++	CMP_TM_ELEMENT(t,t2,tm_sec);
++	CMP_TM_ELEMENT(t,t2,tm_min);
++	CMP_TM_ELEMENT(t,t2,tm_hour);
++	CMP_TM_ELEMENT(t,t2,tm_mday);
++	CMP_TM_ELEMENT(t,t2,tm_mon);
++	CMP_TM_ELEMENT(t,t2,tm_year);
++	CMP_TM_ELEMENT(t,t2,tm_wday);
++	CMP_TM_ELEMENT(t,t2,tm_yday);
++	CMP_TM_ELEMENT(t,t2,tm_isdst);
++
+ 	if (t.tm_sec != 46) {
+ 		printf("failure: strptime [\n"
+ 		       "tm_sec: expected: 46, got: %d\n"
+

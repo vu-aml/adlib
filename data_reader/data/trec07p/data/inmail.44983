@@ -1,0 +1,79 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun May 27 18:44:08 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4RMi8qD007027
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 27 May 2007 18:44:08 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id AA51C163826
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 27 May 2007 22:44:03 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id F39D3162AC7; Sun, 27 May 2007 22:43:36 +0000 (GMT)
+Date: Mon, 28 May 2007 08:37:54 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070527224336.F39D3162AC7@lists.samba.org>
+Subject: Rev 365: another place where we could send a partial packet in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 365
+revision-id: tridge@samba.org-20070527223754-wb7q9bje7rd7dfxi
+parent: tridge@samba.org-20070527145110-4dwpd6btx287elvc
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Mon 2007-05-28 08:37:54 +1000
+message:
+  another place where we could send a partial packet
+modified:
+  common/ctdb_io.c               ctdb_io.c-20070409200335-dzfc7f3rra5rcf60-1
+=== modified file 'common/ctdb_io.c'
+--- a/common/ctdb_io.c	2007-05-26 06:41:32 +0000
++++ b/common/ctdb_io.c	2007-05-27 22:37:54 +0000
+@@ -225,7 +225,7 @@
+ int ctdb_queue_send(struct ctdb_queue *queue, uint8_t *data, uint32_t length)
+ {
+ 	struct ctdb_queue_pkt *pkt;
+-	uint32_t length2;
++	uint32_t length2, full_length;
+ 
+ 	if (queue->alignment) {
+ 		/* enforce the length and alignment rules from the tcp packet allocator */
+@@ -238,6 +238,8 @@
+ 	if (length2 != length) {
+ 		memset(data+length, 0, length2-length);
+ 	}
++
++	full_length = length2;
+ 	
+ 	/* if the queue is empty then try an immediate write, avoiding
+ 	   queue overhead. This relies on non-blocking sockets */
+@@ -268,7 +270,7 @@
+ 	CTDB_NO_MEMORY(queue->ctdb, pkt->data);
+ 
+ 	pkt->length = length2;
+-	pkt->full_length = length2;
++	pkt->full_length = full_length;
+ 
+ 	if (queue->out_queue == NULL && queue->fd != -1) {
+ 		EVENT_FD_WRITEABLE(queue->fde);
+

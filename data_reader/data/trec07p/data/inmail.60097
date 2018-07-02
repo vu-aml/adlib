@@ -1,0 +1,158 @@
+From perl6-all-return-82052-ktwarwic=speedy.uwaterloo.ca@perl.org  Mon Jun 18 16:51:17 2007
+Return-Path: <perl6-all-return-82052-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l5IKpGL9021685
+	for <ktwarwic@flax9.uwaterloo.ca>; Mon, 18 Jun 2007 16:51:16 -0400
+Received: (qmail 4775 invoked by uid 514); 18 Jun 2007 20:51:14 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 4770 invoked from network); 18 Jun 2007 20:51:13 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: domain of chromatic@wgz.org designates 63.105.17.39 as permitted sender)
+From: chromatic <chromatic@wgz.org>
+Organization: Snafu
+To: perl6-internals@perl.org
+Subject: Re: [perl #39197] [RESOLVED] [CAGE] lib/Parrot/Test.pm ignores core dumps
+Date: Mon, 18 Jun 2007 13:50:38 -0700
+User-Agent: KMail/1.9.6
+Cc: Andy Spieherty <spiehera@lafayette.edu>
+References: <Pine.LNX.4.64.0706181236320.30224@fractal.phys.lafayette.edu>
+In-Reply-To: <Pine.LNX.4.64.0706181236320.30224@fractal.phys.lafayette.edu>
+MIME-Version: 1.0
+Content-Type: Multipart/Mixed;
+  boundary="Boundary-00=_eAvdGLMfwXzpVYp"
+Message-Id: <200706181350.38739.chromatic@wgz.org>
+X-Virus-Scanned: by amavisd-new at wgz.org
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+
+--Boundary-00=_eAvdGLMfwXzpVYp
+Content-Type: text/plain;
+  charset="iso-8859-1"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+
+On Monday 18 June 2007 09:54:01 Andy Spieherty wrote:
+
+> I'm sorry to report it, but this one isn't fixed.  For example, consider
+> test t/src_hash_6.  If I compile and run it manually, I get
+>
+>     $ t/src/hash_6
+>     42
+>     Segmentation Fault(coredump)
+>
+> But if I run it via the test harness, I get
+>
+>     $ perl5.8 -Ilib t/src/hash.t
+>     1..11
+>     ok 1 - parrot_new_hash
+>     ok 2 - parrot_hash_put
+>     ok 3 - parrot_hash_get
+>     ok 4 - parrot_hash_get with NULL key
+>     ok 5 - parrot_hash_get with empty string key
+>     ok 6 - parrot_hash_get with big key
+>     ok 7 - parrot_hash_size
+>     ok 8 - parrot_hash_delete
+>     ok 9 - parrot_hash_clone
+>     ok 10 - hash iteration
+>     ok 11 - hash iteration on empty hash
+>
+> I think the exit code stuff has been changed (this test used to get
+> reported as failing) but the $builder->diag weirdness is unchanged.
+
+Ah, I didn't add the exit code checking to c_*() tests.  Does this patch pass 
+along the error?
+
+-- c
+
+
+--Boundary-00=_eAvdGLMfwXzpVYp
+Content-Type: text/x-diff;
+  charset="iso-8859-1";
+  name="spew_segfaults.patch"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: attachment;
+	filename="spew_segfaults.patch"
+
+=== lib/Parrot/Test.pm
+==================================================================
+--- lib/Parrot/Test.pm	(revision 4100)
++++ lib/Parrot/Test.pm	(local)
+@@ -812,15 +812,15 @@
+             # $test_no will be part of temporary file
+             my $test_no = $builder->current_test() + 1;
+ 
+-            $expected =~ s/\cM\cJ/\n/g;
++            $expected    =~ s/\cM\cJ/\n/g;
+             my $source_f = per_test( '.c',          $test_no );
+             my $obj_f    = per_test( $PConfig{o},   $test_no );
+             my $exe_f    = per_test( $PConfig{exe}, $test_no );
+-            $exe_f =~ s@[\\/:]@$PConfig{slash}@g;
+-            my $out_f   = per_test( '.out',   $test_no );
+-            my $build_f = per_test( '.build', $test_no );
+-            my $pdb_f   = per_test( '.pdb',   $test_no );
+-            my $ilk_f   = per_test( '.ilk',   $test_no );
++            $exe_f       =~ s@[\\/:]@$PConfig{slash}@g;
++            my $out_f    = per_test( '.out',   $test_no );
++            my $build_f  = per_test( '.build', $test_no );
++            my $pdb_f    = per_test( '.pdb',   $test_no );
++            my $ilk_f    = per_test( '.ilk',   $test_no );
+ 
+             open my $SOURCE, '>', $source_f or die "Unable to open '$source_f'";
+             binmode $SOURCE;
+@@ -884,13 +884,22 @@
+                 return 0;
+             }
+ 
+-            $cmd = ".$PConfig{slash}$exe_f";
++            $cmd       = ".$PConfig{slash}$exe_f";
+             $exit_code = run_command( $cmd, 'STDOUT' => $out_f, 'STDERR' => $out_f );
++            my $output = slurp_file($out_f);
++            my $pass;
+ 
+-            my $meth = $c_test_map{$func};
+-            my $pass = $builder->$meth( slurp_file($out_f), $expected, $desc );
+-            $builder->diag("'$cmd' failed with exit code $exit_code")
+-                if $exit_code and not $pass;
++            if ($exit_code) {
++                $pass = $builder->ok(0, $desc);
++                $builder->diag("Exited with error code: $exit_code\n" .
++                    "Received:\n$output\nExpected:\n$expected\n" );
++            }
++            else {
++                my $meth = $c_test_map{$func};
++                $pass    = $builder->$meth($output, $expected, $desc);
++                $builder->diag("'$cmd' failed with exit code $exit_code")
++                    unless $pass;
++            }
+ 
+             unless ( $ENV{POSTMORTEM} ) {
+                 unlink $out_f;
+@@ -902,7 +911,7 @@
+             }
+ 
+             return $pass;
+-            }
++        }
+     }
+ }
+ 
+
+--Boundary-00=_eAvdGLMfwXzpVYp--
+

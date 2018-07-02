@@ -1,0 +1,124 @@
+From bounce-debian-mirrors=ktwarwic=speedy.uwaterloo.ca@lists.debian.org  Mon Apr  9 20:46:53 2007
+Return-Path: <bounce-debian-mirrors=ktwarwic=speedy.uwaterloo.ca@lists.debian.org>
+Received: from murphy.debian.org (murphy.debian.org [70.103.162.31])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3A0kr0I022025
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 9 Apr 2007 20:46:53 -0400
+Received: from localhost (localhost [127.0.0.1])
+	by murphy.debian.org (Postfix) with QMQP
+	id 2AB302EB0D; Mon,  9 Apr 2007 19:46:30 -0500 (CDT)
+Old-Return-Path: <carlos@fisica.ufpr.br>
+X-Spam-Checker-Version: SpamAssassin 3.1.4 (2006-07-26) on murphy.debian.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.6 required=4.0 tests=AWL,BAYES_00,IMPRONONCABLE_2,
+	MDO_CABLE_TV3 autolearn=no version=3.1.4
+X-Original-To: debian-mirrors@lists.debian.org
+Received: from fisica.ufpr.br (fisica.ufpr.br [200.17.209.129])
+	by murphy.debian.org (Postfix) with ESMTP id 78B4E2E4E3
+	for <debian-mirrors@lists.debian.org>; Mon,  9 Apr 2007 19:29:36 -0500 (CDT)
+Received: by fisica.ufpr.br (Postfix)
+	id 5BBC0205FD2; Mon,  9 Apr 2007 21:29:35 -0300 (BRT)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Transfer-Encoding: 7bit
+Message-ID: <17946.55909.366172.757549@fisica.ufpr.br>
+Date: Mon, 9 Apr 2007 21:29:25 -0300
+To: debian-mirrors@lists.debian.org
+Subject: Re: Mirroring ISOs
+In-Reply-To: <461A5E82.1040605@iweb.ca>
+References: <461A34DB.3020909@iweb.ca>
+	<20070409153454.GC5482@dedibox>
+	<461A5E82.1040605@iweb.ca>
+X-Mailer: VM 7.19 under Emacs 21.4.1
+From: carlos@fisica.ufpr.br (Carlos Carvalho)
+X-Rc-Spam: 2007-01-18_01
+X-Rc-Virus: 2006-10-25_01
+X-Rc-Spam: 2007-01-18_01
+Resent-Message-ID: <LWEQ.A.6vC.m5tGGB@murphy>
+Resent-From: debian-mirrors@lists.debian.org
+X-Mailing-List: <debian-mirrors@lists.debian.org> 
+X-Loop: debian-mirrors@lists.debian.org
+List-Id: <debian-mirrors.lists.debian.org>
+List-Post: <mailto:debian-mirrors@lists.debian.org>
+List-Help: <mailto:debian-mirrors-request@lists.debian.org?subject=help>
+List-Subscribe: <mailto:debian-mirrors-request@lists.debian.org?subject=subscribe>
+List-Unsubscribe: <mailto:debian-mirrors-request@lists.debian.org?subject=unsubscribe>
+Precedence: list
+Resent-Sender: debian-mirrors-request@lists.debian.org
+Resent-Date: Mon,  9 Apr 2007 19:46:30 -0500 (CDT)
+Status: O
+Content-Length: 2745
+Lines: 72
+
+Jean-Francois Chevrette (mirrors@iweb.ca) wrote on 9 April 2007 11:40:
+ >Simon Paillard wrote:
+ >> On Mon, Apr 09, 2007 at 08:43:07AM -0400, Jean-Francois Chevrette wrote:
+ >>> Hi,
+ >>>
+ >>> does anyone have a straightforward guide on how to use jigdo to build
+ >>> and mirror ISOs? I've been reading both jigdo documentation and debian's
+ >>> webpage on the subjet and it just won't work.
+ >> 
+ >> Maybe with this one : http://www.debian.org/CD/mirroring/#jigdomirror
+ >> and the related links ?
+ >
+ >Yes I've been using the suggested scripts however there appears to be a 
+ >problem with the template checksums.
+ >
+ > From what I've read these jigdo checksum errors are normal when there's 
+ >a new release?
+
+No, it's a bug in jigdo-file. To workaround it put this
+
+jigdoFile="jigdo-file --cache=$tmpDir/jigdo-cache.db --cache-expiry=1w --report=noprogress"
+
+in jigdo-mirror.conf.in. It gets slower but works. This is what I sent
+yesterday to the debian-cd mailing list:
+
+Date: Sun, 8 Apr 2007 17:37:22 -0300
+To: debian-cd@lists.debian.org
+Subject: followup: jigdo template mdsum mismatch??
+X-Mailer: VM 7.19 under Emacs 21.4.1
+
+Looking at this portion of jigdo-mirror,
+
+    # If possible, check md5sum of template data
+    if test "$templateMD5"; then
+        set -- `$jigdoFile md5sum --report=quiet "template"`
+        if test "$1" = "$templateMD5"; then
+            log "    Template checksum is correct"
+        else
+            log "    Error - template checksum mismatch"
+            exitCode=1
+            rm -f "image" "template"
+            return 0
+        fi
+    else
+
+$jigdoFile is "jigdo-file --cache=$tmpDir/jigdo-cache.db
+--cache-expiry=1w --report=noprogress --no-check-files",
+
+as usual (this is the default in jigdo-mirror). However when used with
+--no-check-files jigdo-file does NOT produce any md5sum! Taking a
+trace of jigdo-mirror I get this:
+
++ test OLshs7sHh08k63h8bLp8-Q   <-- This is the md5sum of the template,
+
+++ jigdo-file --cache=/home/debian-cd-sync/alpha.cd/jigdo-cache.db --cache-expir
+y=1w --report=noprogress --no-check-files md5sum --report=quiet template
++ set --
++ test '' = OLshs7sHh08k63h8bLp8-Q
++ log '    Error - template checksum mismatch'
+
+This shows that jigdo-file is returning an empty checksum. Running
+the command by hand does produce nothing, with an exit status of zero.
+Removing the --no-check-files argument yields the correct checksum.
+
+This is a bug in jigdo-file, for not ignoring the option when used
+with a md5sum command, since the man page says "All options are
+silently ignored if they are not applicable to the current command."
+
+
+-- 
+To UNSUBSCRIBE, email to debian-mirrors-REQUEST@lists.debian.org
+with a subject of "unsubscribe". Trouble? Contact listmaster@lists.debian.org
+

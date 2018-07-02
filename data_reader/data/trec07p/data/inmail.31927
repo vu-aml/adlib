@@ -1,0 +1,187 @@
+From perl6-all-return-81205-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue May  8 21:57:02 2007
+Return-Path: <perl6-all-return-81205-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l491v1qD022952
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 8 May 2007 21:57:02 -0400
+Received: (qmail 21260 invoked by uid 514); 9 May 2007 01:56:59 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 21255 invoked from network); 9 May 2007 01:56:59 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=0.0 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+X-Virus-Scanned: by both ClamAV and Kaspersky at http://aliencamel.com/
+Message-ID: <464124ED.2090102@perl.org>
+Date: Tue, 08 May 2007 18:33:33 -0700
+From: Allison Randal <allison@perl.org>
+User-Agent: Thunderbird 1.5.0.10 (Macintosh/20070221)
+MIME-Version: 1.0
+To: perl6-internals@perl.org
+Subject: Re: [perl #42905] [PATCH] implement vtable overriding for PDD15,
+ bugfix
+References: <RT-Ticket-42905@perl.org> <189adbd0705071821l427409d9v94895cc11b9a374@mail.gmail.com> <rt-3.6.HEAD-12281-1178587398-1986.42905-72-0@perl.org>
+In-Reply-To: <rt-3.6.HEAD-12281-1178587398-1986.42905-72-0@perl.org>
+Content-Type: text/plain; charset=UTF-8; format=flowed
+Content-Transfer-Encoding: 7bit
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=0.7 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_NEUTRAL
+
+On general development styles, you've altered the spec, the tests, and 
+the code all in one massive patch. It's better to make changes in 
+smaller steps. That gives the whole list an opportunity to discuss the 
+changes, and accept or reject individual components.
+
+If you have spec changes, it's best to talk about those on the list 
+before you start implementing the code for the spec changes. (At the 
+very least, it's less work for you, since it saves you the trouble of 
+implementing and reimplementing code depending on which of your proposed 
+spec changes are accepted.)
+
+When you change existing tests, that means you could be breaking 
+existing code, so it's likely that the code changes that go with the 
+test changes will need at least a full deprecation cycle. If you split 
+the code and test changes for that feature out into a separate patch, 
+then you won't have to delay all your changes waiting for the 
+deprecation cycle.
+
+Alek Storm (via RT) wrote:
+> 
+> I've attached a patch to implement vtable overriding for PDD15.  The basic
+> idea is to wrap all Object vtable methods in code that searches up the
+> parent stack for the corresponding vtable method, call it if found, and if
+> it's not found, call the original implementation of the method, or throw an
+> exception.  Any variables used in the wrapper code are prefixed with '__' to
+> avoid name collisions.
+
+The existing code does need a refactor, and given how it's written now I 
+can understand why you went in this direction. But, the direction I want 
+the refactor to go is increased encapsulation. src/objects.c should be 
+stripped down to as little code as possible, and should have no 
+knowledge of the specific object model it's operating on, or the 
+internals of the class or object. The details of the implementation 
+should live in the Class PMC (or ParrotClass PMC, or MyHLLsCustomClass PMC).
+
+ParrotObject has the right idea here. The C-level definitions of the 
+vtable entries are responsible for checking whether they've been 
+overridden. (A lot of that code is boiler-plate and could be refactored 
+down to a few internal utility functions, but the basic implementation 
+strategy is sound.)
+
+> The PCCMETHOD 'add_vtable_method' is added to Class.  Using two separate
+> methods for adding normal methods and vtable methods is much cleaner and
+> more logical, since they are two completely separate functionalities.
+
+The methods aren't a core part of the Class implementation, they'll just 
+be added as a role. So, technically it doesn't matter much whether we do 
+or don't have an 'add_vtable_method'. But from an interface perspective, 
+it doesn't seem like much of an advantage over passing a flag to 
+'add_method', especially since it would mean you have to call both 
+'add_method' and 'add_vtable_method' separately when you want a 
+particular chunk of code to be both a method and a vtable function.
+
+> In
+> fact, using this interface, the :vtable pragma is completely unnecessary, so
+> we could remove it if we wanted to.  Because I was unsure exactly how the
+> interface is going to end up, 'add_method' also adds vtable methods also, if
+> :vtable is set on the method. If we decide to go with this interface, I'd
+> like to take it out, along with the :vtable pragma.
+
+The fact that there's a verbose way to overload a vtable function at 
+runtime is not enough justification to remove the :vtable syntax. It stays.
+
+> Trying to override 'mark', 'destroy', or 'morph' throws an exception,
+> because overriding them might be dangerous.  An exception is also thrown for
+> 'init_pmc', see below.
+
+Why do these throw an exception? You should be able to override them.
+
+> The 'init' vtable method in Object is not wrapped by pmc2c, since its
+> override is called from Class.new().  Class.new() is changed from accepting
+> a named slurpy of attributes to an unnamed slurpy of initializer
+> parameters.  This slurpy is :flattened and passed to 'init'.  This is really
+> cool, because now 'init' acts like a normal method, and can accept a
+> variable-sized parameter list.  This makes 'init_pmc' obsolete, so trying to
+> override it throws an exception.  Named parameters don't work, but c'mon,
+> you can't have it all, right?
+
+'init' isn't a normal method, it's a vtable function. And it's never 
+called directly, so how is it useful to make it take a variable sized 
+parameter list? Named parameters stay. Just slurp them up and pass them 
+on to init_pmc as a hash.
+
+> Currently, passing arguments to Class.new() when 'init' is not overridden
+> doesn't throw an exception.  Should it?
+
+No. There's no reason to require every class to override 'init'.
+
+> This patch also fixes a bug with 'invoke' in both ParrotObject and Object:
+> 'self' had to be explicitly passed to the override.  This is fixed by adding
+> the signature flag PARROT_ARG_OBJECT, and unshifting that OR-ed with
+> PARROT_ARG_PMC onto the args signature.  This has a counterpart already used
+> in fetch_arg_sig() in src/inter_call.c.
+
+What bug? Submit a separate ticket with example code.
+
+> The old double-underscore method of vtable overriding can die along with the
+> old object system, but I would prefer to submit a patch to get rid of it
+> sooner, since I don't know how long the old object system will stick around.
+
+Pending complete resolution of RT#40626. This can go in the next 
+deprecation cycle if we add a test for that last (resolved?) bug, and 
+verify that no code in the repository is using the old double-underscore 
+override.
+
+> Tests are included for 'init', 'invoke', and vtable method lookup through
+> the parent stack.  Also, I fixed some tests in t/pmc/parrotobject.t that
+> overrode 'invoke' without using the :method pragma, and removed the test for
+> #41372, which is now obsolete.
+
+Obsolete how? Does it test for a feature that no longer exists? (In 
+which case why isn't it failing?) Or does it test for a bug that's been 
+fixed? (In which case, it's a useful regression test.)
+
+> Also, a question: what exactly is the '_namespace' member of Parrot_Class
+> used for?  I don't see it used anywhere; it can be gotten and set, but is
+> otherwise useless, since methods are added using a separate mechanism.
+
+It's used to store a pointer to the namespace object associated with the 
+class.
+
+ >  lib/Parrot/Pmc2c/Object.pm    |  158
+
+Why do we need this file? Objects don't need that much custom code 
+generation, and it's highly unlikely that the code here will be useful 
+for any object implementation other than PDD 15.
+
+ >  src/pmc/class.pmc             |  150
+
+Adding a (global) interpreter entry for "current_object", "current_args" 
+and "args_signature" is not a good solution to anything.
+
+> Well, that's about it.  I realize some people (especially Allison ;)) will
+> probably disagree with parts of this patch, 
+
+I'll take that as a compliment. :) It's my job to keep the numerous and 
+diverse contributions to Parrot headed in a consistent and coherent 
+direction.
+
+Many thanks,
+Allison
+

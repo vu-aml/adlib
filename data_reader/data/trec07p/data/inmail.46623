@@ -1,0 +1,120 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May 30 01:11:25 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4U5BOhB009404
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 30 May 2007 01:11:24 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id D4E8E162C1D
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 30 May 2007 05:11:19 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 0CAA9162ACD; Wed, 30 May 2007 05:10:42 +0000 (GMT)
+Date: Wed, 30 May 2007 14:46:15 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070530051042.0CAA9162ACD@lists.samba.org>
+Subject: Rev 401: we need to listen at transport initialise stage to find
+	our own node number in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 401
+revision-id: tridge@samba.org-20070530044614-e6rt2yb1v1345p34
+parent: tridge@samba.org-20070530043522-e7fwbj5jcoq6m8b1
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Wed 2007-05-30 14:46:14 +1000
+message:
+  we need to listen at transport initialise stage to find our own node number
+modified:
+  common/ctdb_monitor.c          ctdb_monitor.c-20070518100625-8jf4ft1mjzmb22ck-1
+  ib/ibw_ctdb_init.c             ibw_ctdb_init.c-20070102171305-cn2z4k7ibx8141d5-1
+  tcp/tcp_init.c                 tcp_init.c-20061128004937-x70q1cu5xzg5g2tm-2
+=== modified file 'common/ctdb_monitor.c'
+--- a/common/ctdb_monitor.c	2007-05-20 23:24:34 +0000
++++ b/common/ctdb_monitor.c	2007-05-30 04:46:14 +0000
+@@ -64,13 +64,14 @@
+ 
+ 		if (node->dead_count >= CTDB_MONITORING_DEAD_COUNT) {
+ 			ctdb_node_dead(node);
++			ctdb_send_keepalive(ctdb, node->vnn);
+ 			/* maybe tell the transport layer to kill the
+ 			   sockets as well?
+ 			*/
+ 			continue;
+ 		}
+ 		
+-		if (node->tx_cnt == 0) {
++		if (node->tx_cnt == 0 && (node->flags & NODE_FLAGS_CONNECTED)) {
+ 			ctdb_send_keepalive(ctdb, node->vnn);
+ 		}
+ 
+
+=== modified file 'ib/ibw_ctdb_init.c'
+--- a/ib/ibw_ctdb_init.c	2007-05-30 03:26:50 +0000
++++ b/ib/ibw_ctdb_init.c	2007-05-30 04:46:14 +0000
+@@ -88,6 +88,10 @@
+ 		}
+ 	}
+ 
++	/* listen on our own address */
++	if (ctdb_ibw_listen(ctdb, 10)) /* TODO: backlog as param */
++		return -1;
++
+ 	return 0;
+ }
+ 
+@@ -99,10 +103,6 @@
+ {
+ 	int i, ret;
+ 
+-	/* listen on our own address */
+-	if (ctdb_ibw_listen(ctdb, 10)) /* TODO: backlog as param */
+-		return -1;
+-
+ 	/* everything async here */
+ 	for (i=0;i<ctdb->num_nodes;i++) {
+ 		struct ctdb_node *node = ctdb->nodes[i];
+
+=== modified file 'tcp/tcp_init.c'
+--- a/tcp/tcp_init.c	2007-05-30 03:26:50 +0000
++++ b/tcp/tcp_init.c	2007-05-30 04:46:14 +0000
+@@ -52,6 +52,9 @@
+ {
+ 	int i;
+ 
++	/* listen on our own address */
++	if (ctdb_tcp_listen(ctdb) != 0) return -1;
++
+ 	for (i=0; i<ctdb->num_nodes; i++) {
+ 		if (ctdb_tcp_add_node(ctdb->nodes[i]) != 0) {
+ 			DEBUG(0, ("methods->add_node failed at %d\n", i));
+@@ -69,9 +72,6 @@
+ {
+ 	int i;
+ 
+-	/* listen on our own address */
+-	if (ctdb_tcp_listen(ctdb) != 0) return -1;
+-
+ 	/* startup connections to the other servers - will happen on
+ 	   next event loop */
+ 	for (i=0;i<ctdb->num_nodes;i++) {
+

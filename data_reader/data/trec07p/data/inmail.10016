@@ -1,0 +1,154 @@
+From perl6-all-return-80624-ktwarwic=speedy.uwaterloo.ca@perl.org  Mon Apr 16 04:19:39 2007
+Return-Path: <perl6-all-return-80624-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3G8Jc0I003539
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 16 Apr 2007 04:19:39 -0400
+Received: (qmail 5931 invoked by uid 514); 16 Apr 2007 08:19:14 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 5890 invoked from network); 16 Apr 2007 08:19:13 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-4.4 required=8.0
+	tests=ALL_TRUSTED,BAYES_00,DK_POLICY_SIGNSOME
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: moderator for perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: "Alek Storm" (via RT) <parrotbug-followup@parrotcode.org>
+X-RT-NewTicket: yes
+To: bugs-bitbucket@netlabs.develooper.com
+Resent-To: perl6-internals@perl.org
+Mail-Followup-To: perl6-internals@perl.org
+Reply-To: perl6-internals@perl.org
+Date: Sun, 15 Apr 2007 18:37:18 -0700
+Subject: [perl #42547] [PATCH] fix segfault by implementing init() in Object.pmc 
+In-Reply-To: <189adbd0704151836y6f042f49h3c17e6a701613449@mail.gmail.com>
+References: <RT-Ticket-42547@perl.org> <189adbd0704151836y6f042f49h3c17e6a701613449@mail.gmail.com>
+Message-ID: <rt-3.6.HEAD-30557-1176687438-1016.42547-72-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #42547
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: alek.storm@gmail.com
+MIME-Version: 1.0
+X-RT-Original-Encoding: utf-8
+Content-type: multipart/mixed; boundary="----------=_1176687438-30557-79"
+Resent-Message-Id: <20070416013720.16CEC2AFE4@x3.develooper.com>
+Resent-Date: Sun, 15 Apr 2007 18:37:20 -0700 (PDT)
+Resent-From: rt-alek.storm=gmail.com@netlabs.develooper.com
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-4.4 required=8.0
+	tests=ALL_TRUSTED,BAYES_00,DK_POLICY_SIGNSOME
+Status: O
+Content-Length: 2509
+Lines: 98
+
+------------=_1176687438-30557-79
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+# New Ticket Created by  "Alek Storm" 
+# Please include the string:  [perl #42547]
+# in the subject line of all future correspondence about this issue. 
+# <URL: http://rt.perl.org/rt3/Ticket/Display.html?id=42547 >
+
+
+The following code causes a segfault:
+.sub main :main
+  $P0 = new "Object"
+  $P0.'foo'()
+.end
+
+This is because the vtable methods in Object assume a valid pointer to
+the object's internal representation, which is only initialized in
+init_pmc.  I've attached two patches solving the problem by
+implementing init(), the first of which creates an empty, anonymous
+Class for the Object; the second throws an exception when init() is
+called.  I prefer the former, because it follows the programmer's
+instinct of what should happen: a completely empty Object is created.
+
+-- 
+Alek Storm
+
+------------=_1176687438-30557-79
+Content-Type: text/x-diff;
+ charset="ANSI_X3.4-1968";
+ name="init_newclass.patch"
+Content-Disposition: inline; filename="init_newclass.patch"
+Content-Transfer-Encoding: 7bit
+RT-Attachment: 42547/246012/110467
+
+Index: src/pmc/object.pmc
+===================================================================
+--- src/pmc/object.pmc	(revision 18231)
++++ src/pmc/object.pmc	(working copy)
+@@ -31,6 +31,21 @@
+ 
+ /*
+ 
++=item C<void init()>
++
++Allocates an empty, anonymous class to initialize the object.
++
++=cut
++
++*/
++
++    void init() {
++        PMC *class = pmc_new(interp, enum_class_Class);
++        VTABLE_init_pmc(interp, SELF, class);
++    }
++
++/*
++
+ =item C<void init_pmc(PMC *class)>
+ 
+ Instantiates an object of the given class.
+
+------------=_1176687438-30557-79
+Content-Type: text/x-diff;
+ charset="ANSI_X3.4-1968";
+ name="init_exception.patch"
+Content-Disposition: inline; filename="init_exception.patch"
+Content-Transfer-Encoding: 7bit
+RT-Attachment: 42547/246012/110468
+
+Index: src/pmc/object.pmc
+===================================================================
+--- src/pmc/object.pmc	(revision 18231)
++++ src/pmc/object.pmc	(working copy)
+@@ -31,6 +31,21 @@
+ 
+ /*
+ 
++=item C<void init()>
++
++Raises an exception to make sure that objects are initialized with a class.
++
++=cut
++
++*/
++
++    void init() {
++        real_exception(interp, NULL, E_NotImplementedError,
++                "Cannot create Object without a class");
++    }
++
++/*
++
+ =item C<void init_pmc(PMC *class)>
+ 
+ Instantiates an object of the given class.
+
+------------=_1176687438-30557-79--
+

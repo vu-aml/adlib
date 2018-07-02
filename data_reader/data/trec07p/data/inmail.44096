@@ -1,0 +1,157 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat May 26 04:47:52 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4Q8lqqD005938
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 26 May 2007 04:47:52 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id F01D3162C44
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 26 May 2007 08:47:47 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id DCBC7162AD4; Sat, 26 May 2007 08:47:27 +0000 (GMT)
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070526084727.DCBC7162AD4@lists.samba.org>
+Date: Sat, 26 May 2007 08:47:27 +0000 (GMT)
+Subject: svn commit: samba r23153 - in
+	branches/SAMBA_4_0/source/lib/messaging: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: tridge
+Date: 2007-05-26 08:47:27 +0000 (Sat, 26 May 2007)
+New Revision: 23153
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23153
+
+Log:
+
+a first cut at a fix for the dgram flood problem that volker
+found. Not sure this is the best solution, but it should work.
+
+Modified:
+   branches/SAMBA_4_0/source/lib/messaging/messaging.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/lib/messaging/messaging.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/messaging/messaging.c	2007-05-26 03:24:08 UTC (rev 23152)
++++ branches/SAMBA_4_0/source/lib/messaging/messaging.c	2007-05-26 08:47:27 UTC (rev 23153)
+@@ -48,11 +48,12 @@
+ 	uint32_t num_types;
+ 	struct idr_context *dispatch_tree;
+ 	struct messaging_rec *pending;
++	struct messaging_rec *retry_queue;
+ 	struct irpc_list *irpc;
+ 	struct idr_context *idr;
+ 	const char **names;
+ 	struct timeval start_time;
+-
++	struct timed_event *retry_te;
+ 	struct {
+ 		struct event_context *ev;
+ 		struct fd_event *fde;
+@@ -83,6 +84,7 @@
+ 	} *header;
+ 
+ 	DATA_BLOB packet;
++	uint32_t retries;
+ };
+ 
+ 
+@@ -168,6 +170,7 @@
+ 	rec->path          = msg->path;
+ 	rec->header        = (struct messaging_header *)packet.data;
+ 	rec->packet        = packet;
++	rec->retries       = 0;
+ 
+ 	if (packet.length != sizeof(*rec->header) + rec->header->length) {
+ 		DEBUG(0,("messaging: bad message header size %d should be %d\n", 
+@@ -211,6 +214,26 @@
+ }
+ 
+ /*
++  retry backed off messages
++*/
++static void msg_retry_timer(struct event_context *ev, struct timed_event *te, 
++			    struct timeval t, void *private)
++{
++	struct messaging_context *msg = talloc_get_type(private, 
++							struct messaging_context);
++	msg->retry_te = NULL;
++
++	/* put the messages back on the main queue */
++	while (msg->retry_queue) {
++		struct messaging_rec *rec = msg->retry_queue;
++		DLIST_REMOVE(msg->retry_queue, rec);
++		DLIST_ADD_END(msg->pending, rec, struct messaging_rec *);
++	}
++
++	EVENT_FD_WRITEABLE(msg->event.fde);	
++}
++
++/*
+   handle a socket write event
+ */
+ static void messaging_send_handler(struct messaging_context *msg)
+@@ -220,8 +243,23 @@
+ 		NTSTATUS status;
+ 		status = try_send(rec);
+ 		if (NT_STATUS_EQUAL(status, STATUS_MORE_ENTRIES)) {
++			rec->retries++;
++			if (rec->retries > 3) {
++				/* we're getting continuous write errors -
++				   backoff this record */
++				DLIST_REMOVE(msg->pending, rec);
++				DLIST_ADD_END(msg->retry_queue, rec, 
++					      struct messaging_rec *);
++				if (msg->retry_te == NULL) {
++					msg->retry_te = 
++						event_add_timed(msg->event.ev, msg, 
++								timeval_current_ofs(1, 0), 
++								msg_retry_timer, msg);
++				}
++			}
+ 			break;
+ 		}
++		rec->retries = 0;
+ 		if (!NT_STATUS_IS_OK(status)) {
+ 			DEBUG(1,("messaging: Lost message from %u to %u of type %u - %s\n", 
+ 				 rec->header->from.id, rec->header->to.id, rec->header->msg_type, 
+@@ -281,6 +319,7 @@
+ 	rec->path          = msg->path;
+ 	rec->header        = (struct messaging_header *)packet.data;
+ 	rec->packet        = packet;
++	rec->retries       = 0;
+ 
+ 	if (msize != sizeof(*rec->header) + rec->header->length) {
+ 		DEBUG(0,("messaging: bad message header size %d should be %d\n", 
+@@ -415,6 +454,7 @@
+ 		return NT_STATUS_NO_MEMORY;
+ 	}
+ 
++	rec->retries       = 0;
+ 	rec->msg              = msg;
+ 	rec->header           = (struct messaging_header *)rec->packet.data;
+ 	rec->header->version  = MESSAGING_VERSION;
+

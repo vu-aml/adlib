@@ -1,0 +1,134 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 15 06:51:06 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4FAp6qD003966
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 06:51:06 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id C5FF9163853
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 10:51:03 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 620)
+	id 0623F162AD4; Tue, 15 May 2007 10:50:33 +0000 (GMT)
+To: samba-cvs@samba.org
+From: metze@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070515105033.0623F162AD4@lists.samba.org>
+Date: Tue, 15 May 2007 10:50:33 +0000 (GMT)
+Subject: svn commit: samba r22894 - in
+	branches/SAMBA_4_0/source/torture/smb2: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: metze
+Date: 2007-05-15 10:50:25 +0000 (Tue, 15 May 2007)
+New Revision: 22894
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22894
+
+Log:
+don't send a 2nd request before the last one returned (at least with
+STATUS_PENDING) otherwise longhorn beta3 just drops the connection
+
+metze
+Modified:
+   branches/SAMBA_4_0/source/torture/smb2/notify.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/torture/smb2/notify.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/smb2/notify.c	2007-05-15 10:47:40 UTC (rev 22893)
++++ branches/SAMBA_4_0/source/torture/smb2/notify.c	2007-05-15 10:50:25 UTC (rev 22894)
+@@ -27,6 +27,9 @@
+ #include "torture/torture.h"
+ #include "torture/smb2/proto.h"
+ 
++#include "libcli/raw/libcliraw.h"
++#include "lib/events/events.h"
++
+ #define CHECK_STATUS(status, correct) do { \
+ 	if (!NT_STATUS_EQUAL(status, correct)) { \
+ 		printf("(%s) Incorrect status %s - should be %s\n", \
+@@ -71,6 +74,12 @@
+ 	n.in.unknown		= 0x00000000;
+ 	req = smb2_notify_send(tree, &n);
+ 
++	while (!req->cancel.can_cancel && req->state <= SMB2_REQUEST_RECV) {
++		if (event_loop_once(req->transport->socket->event.ctx) != 0) {
++			break;
++		}
++	}
++
+ 	status = torture_setup_complex_file(tree, FNAME);
+ 	CHECK_STATUS(status, NT_STATUS_OK);
+ 
+@@ -87,6 +96,12 @@
+ 	n.in.buffer_size	= 0x00000000;
+ 	req = smb2_notify_send(tree, &n);
+ 
++	while (!req->cancel.can_cancel && req->state <= SMB2_REQUEST_RECV) {
++		if (event_loop_once(req->transport->socket->event.ctx) != 0) {
++			break;
++		}
++	}
++
+ 	status = torture_setup_complex_file(tree, FNAME);
+ 	CHECK_STATUS(status, NT_STATUS_OK);
+ 
+@@ -100,6 +115,12 @@
+ 	n.in.buffer_size	= 0x00080000;
+ 	req = smb2_notify_send(tree, &n);
+ 
++	while (!req->cancel.can_cancel && req->state <= SMB2_REQUEST_RECV) {
++		if (event_loop_once(req->transport->socket->event.ctx) != 0) {
++			break;
++		}
++	}
++
+ 	status = torture_setup_complex_file(tree, FNAME);
+ 	CHECK_STATUS(status, NT_STATUS_OK);
+ 
+@@ -126,6 +147,12 @@
+ 	n.in.unknown		= 0x00000000;
+ 	req = smb2_notify_send(tree, &n);
+ 
++	while (!req->cancel.can_cancel && req->state <= SMB2_REQUEST_RECV) {
++		if (event_loop_once(req->transport->socket->event.ctx) != 0) {
++			break;
++		}
++	}
++
+ 	status = torture_setup_complex_file(tree, FNAME);
+ 	CHECK_STATUS(status, NT_STATUS_OK);
+ 
+@@ -134,6 +161,11 @@
+ 
+ 	n.in.buffer_size	= 0x00080000;
+ 	req = smb2_notify_send(tree, &n);
++	while (!req->cancel.can_cancel && req->state <= SMB2_REQUEST_RECV) {
++		if (event_loop_once(req->transport->socket->event.ctx) != 0) {
++			break;
++		}
++	}
+ 
+ 	status = torture_setup_complex_file(tree, FNAME);
+ 	CHECK_STATUS(status, NT_STATUS_OK);
+

@@ -1,0 +1,166 @@
+From r-help-bounces@stat.math.ethz.ch  Thu May 17 22:30:16 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4I2UFqD007504
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 17 May 2007 22:30:15 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4I2TKcV007707;
+	Fri, 18 May 2007 04:29:39 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.8 required=5.0 tests=AWL,
+	BAYES_50 autolearn=no version=3.1.8
+Received: from relay6.mail.ox.ac.uk (relay6.mail.ox.ac.uk [163.1.2.167])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4I2SlUf007251
+	for <r-help@stat.math.ethz.ch>; Fri, 18 May 2007 04:28:48 +0200
+Received: from smtp0.mail.ox.ac.uk ([129.67.1.205])
+	by relay6.mail.ox.ac.uk with esmtp (Exim 4.62)
+	(envelope-from <ramasamy@cancer.org.uk>)
+	id 1HosD1-0000Q1-Ls; Fri, 18 May 2007 03:28:47 +0100
+Received: from dhcp-132.wolf.ox.ac.uk ([163.1.180.132] helo=[127.0.0.1])
+	by smtp0.mail.ox.ac.uk with esmtpsa (TLSv1:AES256-SHA:256)
+	(Exim 4.63) (envelope-from <ramasamy@cancer.org.uk>)
+	id 1HosD1-0005wM-24; Fri, 18 May 2007 03:28:47 +0100
+Message-ID: <464D0F5B.3030504@cancer.org.uk>
+Date: Fri, 18 May 2007 03:28:43 +0100
+From: Adaikalavan Ramasamy <ramasamy@cancer.org.uk>
+User-Agent: Thunderbird 1.5.0.10 (Windows/20070221)
+MIME-Version: 1.0
+To: kapatp@gmail.com
+References: <200705171956.13095.kapatp@gmail.com>
+In-Reply-To: <200705171956.13095.kapatp@gmail.com>
+X-Oxford-Username: scro0777
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] use loop or use apply?
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+Can you check if the following gives you what you want?
+
+    tmp <- rbind( A, B )
+    dis <- dist( tmp )
+    nA  <- nrow(A)
+    nB  <- nrow(B)
+    dis[ 1:nA, nA + 1:nB ] ## output
+
+If it works, this suggestion comes with the caveat that it might be 
+computationally inefficient compared with using for() loops for very 
+large values of (a,b) or highly discordant values of (a,b). However I am 
+hoping the gain from dist() being coded in C should offset it.
+
+Try experimenting to find the optimal speed etc. Also have a look at 
+mapply() examples to see if they are useful.
+
+Regards, Adai
+
+
+
+Prasenjit Kapat wrote:
+> Hi,
+> 
+> I have two matrices, A (axd) and B (bxd). I want to get another matrix C (axb) 
+> such that, C[i,j] is the Euclidean distance between the ith row of A and jth 
+> row of B. In general, I can say that C[i,j] = some.function (A[i,], B[j,]). 
+> What is the best method for doing so? (assume a < b)
+> 
+> I have been doing some exploration myself: Consider the following function: 
+> get.f, in which, 'method=1' is the rudimentary double for loop; 'method=2' 
+> avoids one loop by constructing a bigger matrix, but doesn't use 
+> apply(); 'method=3' avoids both the loops by using apply() and constructing 
+> bigger matrices; 'method=4' avoids constructing bigger matrices by using 
+> apply() twice.
+> 
+> get.f <- function (A, B, method=2) {
+> 	if (method == 1){
+> 		a <- nrow(A); b <- nrow(B);
+> 		C <- matrix(NA, nrow=a, ncol=b);
+> 		for (i in 1:a) 
+> 			for (j in 1:b) 
+> 				C[i,j] <- sum((A[i,]-B[j,])^2)
+> 	} else if (method == 2 ) {
+> 		a <- nrow(A); b <- nrow(B); d <- ncol(A);
+> 		C <- matrix(NA, nrow=a, ncol=b);
+> 		for (i in 1:a) 
+> 			C[i,] <- rowSums((matrix(A[i,], nrow=b, ncol=d, byrow=TRUE) - B) ^ 2)
+> 	} else if (method == 3) {
+> 			C <- t(apply(A, MARGIN=1, FUN="FUN1", BB=B)); # transpose is needed
+> 	} else if (method == 4) {
+> 			C <- t(apply(A, MARGIN=1, FUN="FUN2", BB=B))
+> 	}
+> }
+> 
+> FUN1 <- function(aa, BB)
+>   return(rowSums(
+> 		(matrix(aa, nrow=nrow(BB), ncol=ncol(BB), byrow=TRUE) - BB)^2)
+>   )
+> 
+> FUN2 <- function(aa, BB)
+> 	return(apply(BB, MARGIN=1, FUN="FUN3", aa=aa))
+> 
+> FUN3 <- function(bb,aa) return(sum((aa-bb)^2))
+> 
+> ### With these methods and the following intitializations,
+> 
+> a <- 100; b <- 1000; d <- 100; n.loop <- 20;
+> 
+> A <- matrix(rnorm(a*d), ncol=d)
+> B <- matrix(rnorm(b*d), ncol=d)
+> 
+> all.times <- matrix(0,nrow=5,ncol=4)
+> rownames(all.times) <- rownames(as.matrix(system.time(NULL)))
+> 
+> for (i in 1:4)  
+> 	for (j in 1:n.loop)
+> 		all.times[,i] <- all.times[,i] + 
+> 				as.matrix(system.time(C <- get.f(A=A, B=B, method=i)))
+> 
+> all.times <- all.times / n.loop
+> print(all.times)
+> 
+>                [,1]    [,2]    [,3]    [,4]
+> user.self   4.0554 1.50010 1.50130 4.51285
+> sys.self     0.0370 0.02420 0.01800 0.04260
+> elapsed    4.2705 1.58865 1.59475 6.07535
+> user.child 0.0000 0.00000 0.00000 0.00000
+> sys.child   0.0000 0.00000 0.00000 0.00000
+> 
+> 'method=2' stands out be the best and 'method=1' (for loops) beats 'method=4' 
+> (two apply()s)... Is that expected?
+> 
+> Is it possible to improve over 'method=2'?
+> 
+> Thanks
+> PK
+> 
+> PS: The mail text seems fine in my composer, I hope, it looks decent in your 
+> reader.
+> 
+> ______________________________________________
+> R-help@stat.math.ethz.ch mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-help
+> PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+> and provide commented, minimal, self-contained, reproducible code.
+> 
+> 
+>
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

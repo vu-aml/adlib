@@ -1,0 +1,474 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Apr 13 18:30:49 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3DMUm0I027695
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 13 Apr 2007 18:30:48 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 6F5C2162AD0
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 13 Apr 2007 22:30:25 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.5 required=3.8 tests=AWL,BAYES_50,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 549)
+	id 4BBFE162AC1; Fri, 13 Apr 2007 22:29:52 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jra@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070413222952.4BBFE162AC1@lists.samba.org>
+Date: Fri, 13 Apr 2007 22:29:52 +0000 (GMT)
+Subject: svn commit: samba r22209 - in branches: SAMBA_3_0/source/nsswitch
+	SAMBA_3_0_25/source/nsswitch
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 12239
+Lines: 431
+
+Author: jra
+Date: 2007-04-13 22:29:50 +0000 (Fri, 13 Apr 2007)
+New Revision: 22209
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22209
+
+Log:
+Fix the storage of time_t -> make it 64 bits (use the
+same load/store function as NTTIME). Add a version number
+string to the winbindd cache so we can tell if it needs
+upgrading. THIS WILL DELETE ANY EXISTING winbindd_cache.tdb
+on first startup regardless of offline auth status. Once
+this is done we're in good shape though.
+Jeremy.
+
+Modified:
+   branches/SAMBA_3_0/source/nsswitch/winbindd.c
+   branches/SAMBA_3_0/source/nsswitch/winbindd_cache.c
+   branches/SAMBA_3_0_25/source/nsswitch/winbindd.c
+   branches/SAMBA_3_0_25/source/nsswitch/winbindd_cache.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/nsswitch/winbindd.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/winbindd.c	2007-04-13 05:37:08 UTC (rev 22208)
++++ branches/SAMBA_3_0/source/nsswitch/winbindd.c	2007-04-13 22:29:50 UTC (rev 22209)
+@@ -1081,6 +1081,11 @@
+ 		exit(1);
+ 	}
+ 	
++	/* Initialize cache (ensure version is correct). */
++	if (!initialize_winbindd_cache()) {
++		exit(1);
++	}
++
+ 	/* React on 'smbcontrol winbindd reload-config' in the same way
+ 	   as to SIGHUP signal */
+ 	message_register(MSG_SMB_CONF_UPDATED, msg_reload_services, NULL);
+
+Modified: branches/SAMBA_3_0/source/nsswitch/winbindd_cache.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/winbindd_cache.c	2007-04-13 05:37:08 UTC (rev 22208)
++++ branches/SAMBA_3_0/source/nsswitch/winbindd_cache.c	2007-04-13 22:29:50 UTC (rev 22209)
+@@ -29,12 +29,53 @@
+ #undef DBGC_CLASS
+ #define DBGC_CLASS DBGC_WINBIND
+ 
++#define WINBINDD_CACHE_VERSION 1
++#define WINBINDD_CACHE_VERSION_KEYSTR "WINBINDD_CACHE_VERSION"
++
+ extern struct winbindd_methods reconnect_methods;
+ extern BOOL opt_nocache;
+ #ifdef HAVE_ADS
+ extern struct winbindd_methods ads_methods;
+ #endif
+ 
++/*
++ * JRA. KEEP THIS LIST UP TO DATE IF YOU ADD CACHE ENTRIES.
++ * Here are the list of entry types that are *not* stored
++ * as form struct cache_entry in the cache.
++ */
++
++static const char *non_centry_keys[] = {
++	"SEQNUM/",
++	"DR/",
++	"DE/",
++	"WINBINDD_OFFLINE",
++	WINBINDD_CACHE_VERSION_KEYSTR,
++	NULL
++};
++
++/************************************************************************
++ Is this key a non-centry type ?
++************************************************************************/
++
++static BOOL is_non_centry_key(TDB_DATA kbuf)
++{
++	int i;
++
++	if (kbuf.dptr == NULL || kbuf.dsize == 0) {
++		return False;
++	}
++	for (i = 0; non_centry_keys[i] != NULL; i++) {
++		size_t namelen = strlen(non_centry_keys[i]);
++		if (kbuf.dsize <= namelen) {
++			continue;
++		}
++		if (strncmp(non_centry_keys[i], (const char *)kbuf.dptr, namelen) == 0) {
++			return True;
++		}
++	}
++	return False;
++}
++
+ /* Global online/offline state - False when online. winbindd starts up online
+    and sets this to true if the first query fails and there's an entry in
+    the cache tdb telling us to stay offline. */
+@@ -237,18 +278,11 @@
+ }
+ 
+ /*
+-  pull a time_t from a cache entry 
++  pull a time_t from a cache entry. time_t stored portably as a 64-bit time.
+ */
+ static time_t centry_time(struct cache_entry *centry)
+ {
+-	time_t ret;
+-	if (centry_check_bytes(centry, sizeof(time_t))) {
+-		smb_panic_fn("centry_time");
+-		return (time_t)-1;
+-	}
+-	ret = IVAL(centry->data, centry->ofs); /* FIXME: correct ? */
+-	centry->ofs += sizeof(time_t);
+-	return ret;
++	return (time_t)centry_nttime(centry);
+ }
+ 
+ /* pull a string from a cache entry, using the supplied
+@@ -719,13 +753,13 @@
+ }
+ 
+ /*
+-  push a time_t into a centry 
++  push a time_t into a centry - use a 64 bit size.
++  NTTIME here is being used as a convenient 64-bit size.
+ */
+ static void centry_put_time(struct cache_entry *centry, time_t t)
+ {
+-	centry_expand(centry, sizeof(time_t));
+-	SIVAL(centry->data, centry->ofs, t); /* FIXME: is this correct ?? */
+-	centry->ofs += sizeof(time_t);
++	NTTIME nt = (NTTIME)t;
++	return centry_put_nttime(centry, nt);
+ }
+ 
+ /*
+@@ -2164,6 +2198,61 @@
+ 	return True;
+ }
+ 
++/************************************************************************
++ This is called by the parent to initialize the cache file.
++ We don't need sophisticated locking here as we know we're the
++ only opener.
++************************************************************************/
++
++BOOL initialize_winbindd_cache(void)
++{
++	BOOL cache_bad = True;
++	uint32 vers;
++
++	if (!init_wcache()) {
++		DEBUG(0,("initialize_winbindd_cache: init_wcache failed.\n"));
++		return False;
++	}
++
++	/* Check version number. */
++	if (tdb_fetch_uint32(wcache->tdb, WINBINDD_CACHE_VERSION_KEYSTR, &vers) &&
++			vers == WINBINDD_CACHE_VERSION) {
++		cache_bad = False;
++	}
++
++	if (cache_bad) {
++		DEBUG(0,("initialize_winbindd_cache: clearing cache "
++			"and re-creating with version number %d\n",
++			WINBINDD_CACHE_VERSION ));
++
++		tdb_close(wcache->tdb);
++		wcache->tdb = NULL;
++
++		if (unlink(lock_path("winbindd_cache.tdb")) == -1) {
++			DEBUG(0,("initialize_winbindd_cache: unlink %s failed %s ",
++				lock_path("winbindd_cache.tdb"),
++				strerror(errno) ));
++			return False;
++		}
++		if (!init_wcache()) {
++			DEBUG(0,("initialize_winbindd_cache: re-initialization "
++					"init_wcache failed.\n"));
++			return False;
++		}
++
++		/* Write the version. */
++		if (!tdb_store_uint32(wcache->tdb, WINBINDD_CACHE_VERSION_KEYSTR, WINBINDD_CACHE_VERSION)) {
++			DEBUG(0,("initialize_winbindd_cache: version number store failed %s\n",
++				tdb_errorstr(wcache->tdb) ));
++			return False;
++		}
++	}
++
++	tdb_close(wcache->tdb);
++	wcache->tdb = NULL;
++	return True;
++}
++
+ void cache_store_response(pid_t pid, struct winbindd_response *response)
+ {
+ 	fstring key_str;
+@@ -2360,12 +2449,21 @@
+ 				sid, type);
+ }
+ 
+-/* delete all centries that don't have NT_STATUS_OK set */
++/*
++ * The original idea that this cache only contains centries has
++ * been blurred - now other stuff gets put in here. Ensure we
++ * ignore these things on cleanup.
++ */
++
+ static int traverse_fn_cleanup(TDB_CONTEXT *the_tdb, TDB_DATA kbuf, 
+ 			       TDB_DATA dbuf, void *state)
+ {
+ 	struct cache_entry *centry;
+ 
++	if (is_non_centry_key(kbuf)) {
++		return 0;
++	}
++
+ 	centry = wcache_fetch_raw((char *)kbuf.dptr);
+ 	if (!centry) {
+ 		return 0;
+
+Modified: branches/SAMBA_3_0_25/source/nsswitch/winbindd.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/nsswitch/winbindd.c	2007-04-13 05:37:08 UTC (rev 22208)
++++ branches/SAMBA_3_0_25/source/nsswitch/winbindd.c	2007-04-13 22:29:50 UTC (rev 22209)
+@@ -1065,6 +1065,11 @@
+ 		exit(1);
+ 	}
+ 	
++	/* Initialize cache (ensure version is correct). */
++	if (!initialize_winbindd_cache()) {
++		exit(1);
++	}
++
+ 	/* React on 'smbcontrol winbindd reload-config' in the same way
+ 	   as to SIGHUP signal */
+ 	message_register(MSG_SMB_CONF_UPDATED, msg_reload_services, NULL);
+
+Modified: branches/SAMBA_3_0_25/source/nsswitch/winbindd_cache.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/nsswitch/winbindd_cache.c	2007-04-13 05:37:08 UTC (rev 22208)
++++ branches/SAMBA_3_0_25/source/nsswitch/winbindd_cache.c	2007-04-13 22:29:50 UTC (rev 22209)
+@@ -29,12 +29,53 @@
+ #undef DBGC_CLASS
+ #define DBGC_CLASS DBGC_WINBIND
+ 
++#define WINBINDD_CACHE_VERSION 1
++#define WINBINDD_CACHE_VERSION_KEYSTR "WINBINDD_CACHE_VERSION"
++
+ extern struct winbindd_methods reconnect_methods;
+ extern BOOL opt_nocache;
+ #ifdef HAVE_ADS
+ extern struct winbindd_methods ads_methods;
+ #endif
+ 
++/*
++ * JRA. KEEP THIS LIST UP TO DATE IF YOU ADD CACHE ENTRIES.
++ * Here are the list of entry types that are *not* stored
++ * as form struct cache_entry in the cache.
++ */
++
++static const char *non_centry_keys[] = {
++	"SEQNUM/",
++	"DR/",
++	"DE/",
++	"WINBINDD_OFFLINE",
++	WINBINDD_CACHE_VERSION_KEYSTR,
++	NULL
++};
++
++/************************************************************************
++ Is this key a non-centry type ?
++************************************************************************/
++
++static BOOL is_non_centry_key(TDB_DATA kbuf)
++{
++	int i;
++
++	if (kbuf.dptr == NULL || kbuf.dsize == 0) {
++		return False;
++	}
++	for (i = 0; non_centry_keys[i] != NULL; i++) {
++		size_t namelen = strlen(non_centry_keys[i]);
++		if (kbuf.dsize <= namelen) {
++			continue;
++		}
++		if (strncmp(non_centry_keys[i], (const char *)kbuf.dptr, namelen) == 0) {
++			return True;
++		}
++	}
++	return False;
++}
++
+ /* Global online/offline state - False when online. winbindd starts up online
+    and sets this to true if the first query fails and there's an entry in
+    the cache tdb telling us to stay offline. */
+@@ -227,19 +268,11 @@
+ }
+ 
+ /*
+-  pull a time_t from a cache entry 
++  pull a time_t from a cache entry. time_t stored portably as a 64-bit time.
+ */
+ static time_t centry_time(struct cache_entry *centry)
+ {
+-	time_t ret;
+-	if (centry->len - centry->ofs < sizeof(time_t)) {
+-		DEBUG(0,("centry corruption? needed %u bytes, have %u\n", 
+-			 (unsigned int)sizeof(time_t), (unsigned int)(centry->len - centry->ofs)));
+-		smb_panic("centry_time");
+-	}
+-	ret = IVAL(centry->data, centry->ofs); /* FIXME: correct ? */
+-	centry->ofs += sizeof(time_t);
+-	return ret;
++	return (time_t)centry_nttime(centry);
+ }
+ 
+ /* pull a string from a cache entry, using the supplied
+@@ -713,13 +746,13 @@
+ }
+ 
+ /*
+-  push a time_t into a centry 
++  push a time_t into a centry - use a 64 bit size.
++  NTTIME here is being used as a convenient 64-bit size.
+ */
+ static void centry_put_time(struct cache_entry *centry, time_t t)
+ {
+-	centry_expand(centry, sizeof(time_t));
+-	SIVAL(centry->data, centry->ofs, t); /* FIXME: is this correct ?? */
+-	centry->ofs += sizeof(time_t);
++	NTTIME nt = (NTTIME)t;
++	return centry_put_nttime(centry, nt);
+ }
+ 
+ /*
+@@ -2119,7 +2152,7 @@
+ 	}
+ }
+ 
+-BOOL init_wcache(void)
++static BOOL init_wcache(void)
+ {
+ 	if (wcache == NULL) {
+ 		wcache = SMB_XMALLOC_P(struct winbind_cache);
+@@ -2143,6 +2176,61 @@
+ 	return True;
+ }
+ 
++/************************************************************************
++ This is called by the parent to initialize the cache file.
++ We don't need sophisticated locking here as we know we're the
++ only opener.
++************************************************************************/
++
++BOOL initialize_winbindd_cache(void)
++{
++	BOOL cache_bad = True;
++	uint32 vers;
++
++	if (!init_wcache()) {
++		DEBUG(0,("initialize_winbindd_cache: init_wcache failed.\n"));
++		return False;
++	}
++
++	/* Check version number. */
++	if (tdb_fetch_uint32(wcache->tdb, WINBINDD_CACHE_VERSION_KEYSTR, &vers) &&
++			vers == WINBINDD_CACHE_VERSION) {
++		cache_bad = False;
++	}
++
++	if (cache_bad) {
++		DEBUG(0,("initialize_winbindd_cache: clearing cache "
++			"and re-creating with version number %d\n",
++			WINBINDD_CACHE_VERSION ));
++
++		tdb_close(wcache->tdb);
++		wcache->tdb = NULL;
++
++		if (unlink(lock_path("winbindd_cache.tdb")) == -1) {
++			DEBUG(0,("initialize_winbindd_cache: unlink %s failed %s ",
++				lock_path("winbindd_cache.tdb"),
++				strerror(errno) ));
++			return False;
++		}
++		if (!init_wcache()) {
++			DEBUG(0,("initialize_winbindd_cache: re-initialization "
++					"init_wcache failed.\n"));
++			return False;
++		}
++
++		/* Write the version. */
++		if (!tdb_store_uint32(wcache->tdb, WINBINDD_CACHE_VERSION_KEYSTR, WINBINDD_CACHE_VERSION)) {
++			DEBUG(0,("initialize_winbindd_cache: version number store failed %s\n",
++				tdb_errorstr(wcache->tdb) ));
++			return False;
++		}
++	}
++
++	tdb_close(wcache->tdb);
++	wcache->tdb = NULL;
++	return True;
++}
++
+ void cache_store_response(pid_t pid, struct winbindd_response *response)
+ {
+ 	fstring key_str;
+@@ -2340,11 +2428,21 @@
+ }
+ 
+ /* delete all centries that don't have NT_STATUS_OK set */
++/*
++ * The original idea that this cache only contains centries has
++ * been blurred - now other stuff gets put in here. Ensure we
++ * ignore these things on cleanup.
++ */
++
+ static int traverse_fn_cleanup(TDB_CONTEXT *the_tdb, TDB_DATA kbuf, 
+ 			       TDB_DATA dbuf, void *state)
+ {
+ 	struct cache_entry *centry;
+ 
++	if (is_non_centry_key(kbuf)) {
++		return 0;
++	}
++
+ 	centry = wcache_fetch_raw(kbuf.dptr);
+ 	if (!centry) {
+ 		return 0;
+

@@ -1,0 +1,155 @@
+From perl6-all-return-80677-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue Apr 17 21:17:57 2007
+Return-Path: <perl6-all-return-80677-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3I1Ht0I003234
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 21:17:56 -0400
+Received: (qmail 9168 invoked by uid 514); 18 Apr 2007 01:17:30 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 9163 invoked from network); 18 Apr 2007 01:17:30 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-1.1 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO,USERPASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: domain of chromatic@wgz.org designates 63.105.17.39 as permitted sender)
+From: chromatic <chromatic@wgz.org>
+Organization: Snafu
+To: perl6-internals@perl.org
+Subject: Re: [perl #42594] [PATCH] Probable buffer overflow in compilers/imcc/parser_util.c
+Date: Tue, 17 Apr 2007 18:16:42 -0700
+User-Agent: KMail/1.9.5
+Cc: Steve Peters (via RT) <parrotbug-followup@parrotcode.org>,
+   bugs-bitbucket@netlabs.develooper.com
+References: <RT-Ticket-42594@perl.org> <20070417214743.GB3315@kirk.peters.homeunix.org> <rt-3.6.HEAD-30557-1176846484-1248.42594-72-0@perl.org>
+In-Reply-To: <rt-3.6.HEAD-30557-1176846484-1248.42594-72-0@perl.org>
+MIME-Version: 1.0
+Content-Type: text/plain;
+  charset="utf-8"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+Message-Id: <200704171816.42305.chromatic@wgz.org>
+X-Virus-Scanned: by amavisd-new at wgz.org
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-1.1 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO,SPF_PASS,USERPASS
+Status: O
+Content-Length: 2442
+Lines: 104
+
+On Tuesday 17 April 2007 14:48, Steve Peters wrote:
+
+> I don't know how easily this is reached, but since the "fmt" variable
+> is only NULL checked, it seems like this would be possible to reached.
+
+Hm, this patch breaks some tests for me:
+
+t/compilers/imcc/imcpasm/optc.t    1   256    43    1  8
+t/compilers/imcc/imcpasm/sub.t     2   512     2    2  1-2
+
+It looks like it's eating the first source register of certain opcodes.  
+Changing (format - 1) to (format) in both patched lines fixes it for me, but 
+I'm not confident enough in the patch after that to check it in.  Here's the 
+verbose output.
+
+-- c
+
+t/compilers/imcc/imcpasm/optc.t 
+not ok 8 - in P param
+#     Failed test (t/compilers/imcc/imcpasm/optc.t at line 226)
+#                   '# IMCC does produce b0rken PASM files
+# # see http://guest@rt.perl.org/rt3/Ticket/Display.html?id=32392
+# _main:
+#  new P0,
+#  set P0, 42
+# @pcc_sub_call_0:
+#  set_args
+#  set_p_pc P1, foo
+#  get_results
+#  invokecc P1
+#  noop
+#  end
+# foo:
+#  get_params
+#  print P0
+#  set_returns
+#  returncc
+# '
+#     doesn't match '/_main:
+#  new (P\d+), \d+ # \.Undef
+#  set \1, 42
+# @pcc_sub_call_\d:
+#  set_args
+#  set_p_pc (P\d+), foo
+#  get_results
+#  invokecc \2
+#  noop
+#  end
+# foo:
+#  get_params
+#  print P0
+#  set_returns
+#  returncc/
+# '
+
+t/compilers/imcc/imcpasm/sub.t
+not ok 1 - non-constant dest bsr, invoke
+#     Failed test (t/compilers/imcc/imcpasm/sub.t at line 11)
+#                   '# IMCC does produce b0rken PASM files
+# # see http://guest@rt.perl.org/rt3/Ticket/Display.html?id=32392
+# _main:
+#  new P0,
+#  set_addr I0, _sub1
+#  set P0, I0
+#  invokecc P0
+#  ret
+# _sub1:
+#  ret
+# '
+#     doesn't match '/^# IMCC does produce b0rken PASM files
+# # see http://guest@rt.perl.org/rt3/Ticket/Display.html\?id=32392
+# _main:
+#  new P(\d+), \d+ # \.Sub
+#  set_addr I(\d+), _sub1
+#  set P\1, I\2
+#  invokecc P\1
+#  ret
+# _sub1:
+#  ret/
+# '
+not ok 2 - nonlocal bsr
+#     Failed test (t/compilers/imcc/imcpasm/sub.t at line 34)
+#                   '# IMCC does produce b0rken PASM files
+# # see http://guest@rt.perl.org/rt3/Ticket/Display.html?id=32392
+# _main:
+#  new P0,
+#  set_addr I0, _f
+#  set P0, I0
+#  invokecc P0
+#  ret
+# _f:
+#  ret
+# '
+#     doesn't match '/^# IMCC does produce b0rken PASM files
+# # see http://guest@rt.perl.org/rt3/Ticket/Display.html\?id=32392
+# _main:
+#  new P(\d+), \d+ # \.Sub
+#  set_addr I(\d+), _f
+#  set P\1, I\2
+#  invokecc P\1
+#  ret
+# _f:
+#  ret/
+# '
+

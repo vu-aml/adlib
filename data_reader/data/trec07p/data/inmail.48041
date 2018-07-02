@@ -1,0 +1,146 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu May 31 18:03:49 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4VM3nhB001221
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 31 May 2007 18:03:49 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 33D15163869
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 31 May 2007 22:03:44 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1017)
+	id 4BE04163875; Thu, 31 May 2007 22:02:52 +0000 (GMT)
+To: samba-cvs@samba.org
+From: obnox@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070531220252.4BE04163875@lists.samba.org>
+Date: Thu, 31 May 2007 22:02:52 +0000 (GMT)
+Subject: svn commit: samba r23279 - in branches: SAMBA_3_0/source/nsswitch
+	SAMBA_3_0_26/source/nsswitch
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: obnox
+Date: 2007-05-31 22:02:49 +0000 (Thu, 31 May 2007)
+New Revision: 23279
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23279
+
+Log:
+Replace occurrence of sid_binstring inside lookup_groupmem 
+by sid_string_static.
+
+
+Modified:
+   branches/SAMBA_3_0/source/nsswitch/winbindd_ads.c
+   branches/SAMBA_3_0_26/source/nsswitch/winbindd_ads.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/nsswitch/winbindd_ads.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/winbindd_ads.c	2007-05-31 21:15:53 UTC (rev 23278)
++++ branches/SAMBA_3_0/source/nsswitch/winbindd_ads.c	2007-05-31 22:02:49 UTC (rev 23279)
+@@ -901,7 +901,6 @@
+ 	ADS_STRUCT *ads = NULL;
+ 	char *ldap_exp;
+ 	NTSTATUS status = NT_STATUS_UNSUCCESSFUL;
+-	char *sidstr;
+ 	char **members = NULL;
+ 	int i;
+ 	size_t num_members = 0;
+@@ -914,7 +913,6 @@
+ 	char **domains_nocache = NULL;     /* only needed for rpccli_lsa_lookup_sids */
+ 	uint32 num_nocache = 0;
+ 
+-
+ 	DEBUG(10,("ads: lookup_groupmem %s sid=%s\n", domain->name, 
+ 		  sid_string_static(group_sid)));
+ 
+@@ -933,19 +931,14 @@
+ 		goto done;
+ 	}
+ 
+-	if ((sidstr = sid_binstring(group_sid)) == NULL) {
+-		status = NT_STATUS_NO_MEMORY;
+-		goto done;
+-	}
+-
+ 	/* search for all members of the group */
+-	if (!(ldap_exp = talloc_asprintf(mem_ctx, "(objectSid=%s)",sidstr))) {
+-		SAFE_FREE(sidstr);
+-		DEBUG(1, ("ads: lookup_groupmem: tallloc_asprintf for ldap_exp failed!\n"));
++	if (!(ldap_exp = talloc_asprintf(mem_ctx, "(objectSid=%s)",
++					 sid_string_static(group_sid)))) 
++	{
++		DEBUG(1, ("ads: lookup_groupmem: talloc_asprintf for ldap_exp failed!\n"));
+ 		status = NT_STATUS_NO_MEMORY;
+ 		goto done;
+ 	}
+-	SAFE_FREE(sidstr);
+ 
+ 	args.control = ADS_EXTENDED_DN_OID;
+ 	args.val = ADS_EXTENDED_DN_HEX_STRING;
+
+Modified: branches/SAMBA_3_0_26/source/nsswitch/winbindd_ads.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/nsswitch/winbindd_ads.c	2007-05-31 21:15:53 UTC (rev 23278)
++++ branches/SAMBA_3_0_26/source/nsswitch/winbindd_ads.c	2007-05-31 22:02:49 UTC (rev 23279)
+@@ -901,7 +901,6 @@
+ 	ADS_STRUCT *ads = NULL;
+ 	char *ldap_exp;
+ 	NTSTATUS status = NT_STATUS_UNSUCCESSFUL;
+-	char *sidstr;
+ 	char **members = NULL;
+ 	int i;
+ 	size_t num_members = 0;
+@@ -914,7 +913,6 @@
+ 	char **domains_nocache = NULL;     /* only needed for rpccli_lsa_lookup_sids */
+ 	uint32 num_nocache = 0;
+ 
+-
+ 	DEBUG(10,("ads: lookup_groupmem %s sid=%s\n", domain->name, 
+ 		  sid_string_static(group_sid)));
+ 
+@@ -933,19 +931,14 @@
+ 		goto done;
+ 	}
+ 
+-	if ((sidstr = sid_binstring(group_sid)) == NULL) {
+-		status = NT_STATUS_NO_MEMORY;
+-		goto done;
+-	}
+-
+ 	/* search for all members of the group */
+-	if (!(ldap_exp = talloc_asprintf(mem_ctx, "(objectSid=%s)",sidstr))) {
+-		SAFE_FREE(sidstr);
+-		DEBUG(1, ("ads: lookup_groupmem: tallloc_asprintf for ldap_exp failed!\n"));
++	if (!(ldap_exp = talloc_asprintf(mem_ctx, "(objectSid=%s)",
++				         sid_string_static(group_sid)))) 
++	{
++		DEBUG(1, ("ads: lookup_groupmem: talloc_asprintf for ldap_exp failed!\n"));
+ 		status = NT_STATUS_NO_MEMORY;
+ 		goto done;
+ 	}
+-	SAFE_FREE(sidstr);
+ 
+ 	args.control = ADS_EXTENDED_DN_OID;
+ 	args.val = ADS_EXTENDED_DN_HEX_STRING;
+

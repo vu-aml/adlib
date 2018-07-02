@@ -1,0 +1,107 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 29 07:03:42 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4TB3ghB029833
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 07:03:42 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 23D54162C20
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 11:03:37 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,UPPERCASE_25_50 autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 620)
+	id 038C3162B71; Tue, 29 May 2007 11:03:09 +0000 (GMT)
+To: samba-cvs@samba.org
+From: metze@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070529110310.038C3162B71@lists.samba.org>
+Date: Tue, 29 May 2007 11:03:09 +0000 (GMT)
+Subject: svn commit: samba r23187 - in
+	branches/SAMBA_4_0/source/heimdal_build: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: metze
+Date: 2007-05-29 11:03:07 +0000 (Tue, 29 May 2007)
+New Revision: 23187
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23187
+
+Log:
+revert 23145 and 23135 to fix the build on solaris...
+
+metze
+
+Modified:
+   branches/SAMBA_4_0/source/heimdal_build/config.m4
+   branches/SAMBA_4_0/source/heimdal_build/config.mk
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/heimdal_build/config.m4
+===================================================================
+--- branches/SAMBA_4_0/source/heimdal_build/config.m4	2007-05-29 10:50:25 UTC (rev 23186)
++++ branches/SAMBA_4_0/source/heimdal_build/config.m4	2007-05-29 11:03:07 UTC (rev 23187)
+@@ -70,7 +70,9 @@
+ 	atexit					\
+ 	cgetent					\
+ 	getprogname				\
++	inet_ntop				\
+ 	inet_aton				\
++	inet_pton				\
+ 	gethostname				\
+ 	getnameinfo				\
+ 	iruserok				\
+@@ -239,6 +241,18 @@
+ 	SMB_ENABLE(HEIMDAL_ROKEN_INET_ATON, YES)
+ fi
+ 
++if test x"$ac_cv_func_inet_pton" = x"no"; then
++    AC_CHECK_LIB_EXT(nsl_s, NSL_LIBS, inet_pton)
++    AC_CHECK_LIB_EXT(nsl, NSL_LIBS, inet_pton)
++    SMB_ENABLE(NSL,YES)
++    if test x"$ac_cv_lib_ext_nsl_s_inet_pton" != x"yes" &&
++       test x"$ac_cv_lib_ext_nsl_inet_pton" != x"yes"; then
++	AC_MSG_ERROR([no inet_pton() function available!])
++    fi
++fi
++
++SMB_EXT_LIB(NSL,[${NSL_LIBS}],[],[],[])
++
+ # only add closefrom if needed
+ SMB_ENABLE(HEIMDAL_ROKEN_CLOSEFROM, NO)
+ if test t$ac_cv_func_closefrom != tyes; then
+
+Modified: branches/SAMBA_4_0/source/heimdal_build/config.mk
+===================================================================
+--- branches/SAMBA_4_0/source/heimdal_build/config.mk	2007-05-29 10:50:25 UTC (rev 23186)
++++ branches/SAMBA_4_0/source/heimdal_build/config.mk	2007-05-29 11:03:07 UTC (rev 23187)
+@@ -439,9 +439,9 @@
+ 			HEIMDAL_ROKEN_GETPROGNAME \
+ 			HEIMDAL_ROKEN_CLOSEFROM \
+ 			GAI \
++			NSL \
+ 			RESOLV \
+-			EXT_SOCKET \
+-			EXT_NSL
++			EXT_SOCKET
+ # End SUBSYSTEM HEIMDAL_ROKEN
+ #######################
+ 
+

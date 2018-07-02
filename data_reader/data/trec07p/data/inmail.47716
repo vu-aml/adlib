@@ -1,0 +1,227 @@
+From perl6-all-return-81681-ktwarwic=speedy.uwaterloo.ca@perl.org  Thu May 31 10:40:21 2007
+Return-Path: <perl6-all-return-81681-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4VEeIhB029067
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 31 May 2007 10:40:19 -0400
+Received: (qmail 18132 invoked by uid 514); 31 May 2007 14:40:12 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 18127 invoked from network); 31 May 2007 14:40:12 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-0.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,KARMA_CONNECT_NEGATIVE,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: Steve Peters (via RT) <parrotbug-followup@parrotcode.org>
+X-RT-NewTicket: yes
+To: bugs-bitbucket@netlabs.develooper.com
+Resent-To: perl6-internals@perl.org
+Mail-Followup-To: perl6-internals@perl.org
+Reply-To: perl6-internals@perl.org
+Date: Thu, 31 May 2007 07:19:11 -0700
+Subject: [perl #43089] [PATCH] Move src/ops/*.c function prototypes to the generated header files 
+In-Reply-To: <20070531141817.GA5905@kirk.peters.homeunix.org>
+References: <RT-Ticket-43089@perl.org> <20070531141817.GA5905@kirk.peters.homeunix.org>
+Message-ID: <rt-3.6.HEAD-1668-1180621151-517.43089-72-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #43089
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: steve@fisharerojo.org
+MIME-Version: 1.0
+X-RT-Original-Encoding: utf-8
+Content-type: multipart/mixed; boundary="----------=_1180621151-1668-26"
+Resent-Message-Id: <20070531141912.54D532AFE3@x3.develooper.com>
+Resent-Date: Thu, 31 May 2007 07:19:12 -0700 (PDT)
+Resent-From: rt-steve=fisharerojo.org@netlabs.develooper.com
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+
+------------=_1180621151-1668-26
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+# New Ticket Created by  Steve Peters 
+# Please include the string:  [perl #43089]
+# in the subject line of all future correspondence about this issue. 
+# <URL: http://rt.perl.org/rt3/Ticket/Display.html?id=43089 >
+
+
+Function prototypes in C work much better when they are living in a header
+file rather than in .c files.  The attached patch below moves the prototypes
+generated in the src/ops/*.c files to the header files created from the
+*.ops files.
+
+This change does cause a single new warning to appear, but I'm working
+on completing that fix now (that fix will probably mean that g++ will be
+compiling Parrot).
+
+Steve Peters
+steve@fisharerojo.org
+
+------------=_1180621151-1668-26
+Content-Type: text/plain; charset="us-ascii"; name="protos.diff"
+Content-Disposition: inline; filename="protos.diff"
+Content-Transfer-Encoding: 7bit
+RT-Attachment: 43089/261306/114199
+
+Index: lib/Parrot/Ops2c/Utils.pm
+===================================================================
+--- lib/Parrot/Ops2c/Utils.pm	(revision 18699)
++++ lib/Parrot/Ops2c/Utils.pm	(working copy)
+@@ -201,7 +201,9 @@
+     $argsref->{defines}      = $argsref->{trans}->defines();
+ 
+     $argsref->{flag}         = $flagref;
+-    return bless $argsref, $class;
++    my $self = bless $argsref, $class;
++    $self->_iterate_over_ops();
++    return $self;
+ }
+ 
+ sub _prepare_core {
+@@ -293,6 +295,11 @@
+ 
+     $self->_print_preamble_header($HEADER);
+ 
++    my @op_protos = @{ $self->{op_protos} };
++    foreach my $proto (@op_protos) {
++        print $HEADER "$proto;\n";
++    }
++
+     $self->_print_run_core_func_decl_header($HEADER);
+ 
+     $self->_print_guard_suffix($HEADER);
+@@ -436,9 +443,6 @@
+ 
+     $self->_print_run_core_func_decl_source($SOURCE);
+ 
+-    # Iterate over the ops, appending HEADER and SOURCE fragments:
+-    $self->_iterate_over_ops();
+-
+     $self->_print_cg_jump_table($SOURCE);
+ 
+     $self->_print_goto_opcode($SOURCE);
+@@ -494,6 +498,7 @@
+ sub _iterate_over_ops {
+     my $self = shift;
+     my @op_funcs;
++    my @op_protos;
+     my @op_func_table;
+     my @cg_jump_table;
+     my $index = 0;
+@@ -518,7 +523,7 @@
+             $comment    = "/* " . $op->full_name() . " */";
+         }
+         else {
+-            $definition = "$prototype;\n$self->{opsarraytype} *\n$func_name ($args)";
++            $definition = "$self->{opsarraytype} *\n$func_name ($args)";
+         }
+ 
+         my $src = $op->source( $self->{trans} );
+@@ -542,6 +547,7 @@
+         else {
+             $one_op .= "$definition $comment {\n$src}\n\n";
+             push @op_funcs, $one_op;
++            push @op_protos, $prototype;
+             $prev_src = $src if ( $self->{suffix} eq '_cgp' || $self->{suffix} eq '_switch' );
+             $prev_index = $index;
+         }
+@@ -549,6 +555,7 @@
+     }
+     $self->{index}         = $index;
+     $self->{op_funcs}      = \@op_funcs;
++    $self->{op_protos}     = \@op_protos;
+     $self->{op_func_table} = \@op_func_table;
+     $self->{cg_jump_table} = \@cg_jump_table;
+ }
+@@ -577,7 +584,7 @@
+ #ifdef __GNUC__
+ # ifdef I386
+     else if (cur_opcode == (void **) 1)
+-    asm ("jmp *4(%ebp)");  /* jump to ret addr, used by JIT */
++    __asm__ ("jmp *4(%ebp)");  /* jump to ret addr, used by JIT */
+ # endif
+ #endif
+     _reg_base = (char*)interp->ctx.bp.regs_i;
+Index: lib/Parrot/OpTrans/CSwitch.pm
+===================================================================
+--- lib/Parrot/OpTrans/CSwitch.pm	(revision 18699)
++++ lib/Parrot/OpTrans/CSwitch.pm	(working copy)
+@@ -153,8 +153,8 @@
+     return <<END_C;
+ /* run_core_func_start - $0 -> $type */
+ #if defined(__GNUC__) && defined(I386) && defined(PARROT_SWITCH_REGS)
+-    register void **   cur_opcode asm ("esi") = cur_op;
+-    register char *   _reg_base   asm ("edi");
++    register void **   cur_opcode __asm__ ("esi") = cur_op;
++    register char *   _reg_base   __asm__ ("edi");
+ #else
+     void ** cur_opcode = cur_op;
+     char * _reg_base;
+Index: lib/Parrot/OpTrans/CGP.pm
+===================================================================
+--- lib/Parrot/OpTrans/CGP.pm	(revision 18699)
++++ lib/Parrot/OpTrans/CGP.pm	(working copy)
+@@ -132,8 +132,8 @@
+      * (gdb) disas l_ops_addr[1191] l_ops_addr[1192]
+      */
+ #if defined(__GNUC__) && defined(I386) && defined(PARROT_CGP_REGS)
+-    register void **   cur_opcode asm ("esi") = cur_op;
+-    register char *   _reg_base   asm ("edi");
++    register void **   cur_opcode __asm__ ("esi") = cur_op;
++    register char *   _reg_base   __asm__ ("edi");
+ #else
+     void **cur_opcode = cur_op;
+     char * _reg_base;
+Index: lib/Parrot/OpTrans/CGoto.pm
+===================================================================
+--- lib/Parrot/OpTrans/CGoto.pm	(revision 18699)
++++ lib/Parrot/OpTrans/CGoto.pm	(working copy)
+@@ -278,7 +278,7 @@
+ sub run_core_func_start {
+     return <<END_C;
+ #if defined(__GNUC__) && defined(I386) /* && defined(NO_DYNOPS) */
+-    register opcode_t *cur_opcode asm ("esi") = cur_op;
++    register opcode_t *cur_opcode __asm__ ("esi") = cur_op;
+ #else
+     opcode_t *cur_opcode = cur_op;
+ #endif
+Index: lib/Parrot/OpTrans/CPrederef.pm
+===================================================================
+--- lib/Parrot/OpTrans/CPrederef.pm	(revision 18699)
++++ lib/Parrot/OpTrans/CPrederef.pm	(working copy)
+@@ -44,16 +44,6 @@
+ END
+ }
+ 
+-=item C<opsarraytype()>
+-
+-The ops array type is C<void *>.
+-
+-=cut
+-
+-sub opsarraytype {
+-    return 'void *';
+-}
+-
+ =item expr_address($addr)
+ 
+ =item expr_address($offset)
+
+------------=_1180621151-1668-26--
+

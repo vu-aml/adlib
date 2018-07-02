@@ -1,0 +1,112 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Apr 12 04:16:39 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3C8Gd0I027529
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 12 Apr 2007 04:16:39 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 699F6163935
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 12 Apr 2007 08:16:15 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.7 required=3.8 tests=AWL,BAYES_50,
+	DNS_FROM_RFC_ABUSE,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from relay.sgi.com (netops-testserver-4-out.sgi.com [192.48.171.29])
+	by lists.samba.org (Postfix) with ESMTP id 6D6B5162AE1
+	for <samba-technical@lists.samba.org>;
+	Thu, 12 Apr 2007 08:15:33 +0000 (GMT)
+Received: from larry.melbourne.sgi.com (larry.melbourne.sgi.com
+	[134.14.52.130])
+	by netops-testserver-4.corp.sgi.com (Postfix) with SMTP id 0DE7661C20; 
+	Thu, 12 Apr 2007 01:15:30 -0700 (PDT)
+Received: from [134.14.55.78] (redback.melbourne.sgi.com [134.14.55.78]) by
+	larry.melbourne.sgi.com (950413.SGI.8.6.12/950213.SGI.AUTOCF)
+	via ESMTP id SAA15266; Thu, 12 Apr 2007 18:15:27 +1000
+Message-ID: <461DEA9F.5070407@sgi.com>
+Date: Thu, 12 Apr 2007 18:15:27 +1000
+From: Alison Winters <alisonw@sgi.com>
+User-Agent: Thunderbird 1.5.0.10 (Windows/20070221)
+MIME-Version: 1.0
+To: James Peach <jpeach@samba.org>
+References: <461C5C7C.20000@sgi.com>
+	<D1E2CFB3-F872-4BE0-8C55-52AC3CD0C56D@samba.org>
+	<461D8CA0.6000209@sgi.com>
+	<220FFB6F-15AE-4A7D-8061-F96212F491BA@samba.org>
+In-Reply-To: <220FFB6F-15AE-4A7D-8061-F96212F491BA@samba.org>
+Content-Type: text/plain; charset=ISO-8859-1
+Content-Transfer-Encoding: 7bit
+Cc: samba-technical@lists.samba.org
+Subject: Re: samba profiling and pcp pmda
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2443
+Lines: 52
+
+James Peach wrote:
+> I mean to use one mmap per record type. The current scheme is ugly
+> because it really doesn't want to be a proper allocator but it has to
+> deal with 2 different sizes of records in the mmap. If you have a
+> separate mmap for each record type, the allocator goes back to being
+> nice and simple.
+> 
+Surely the only benefit of splitting out record types per-file (i.e.
+client and share) is that you can step through the allocated records as
+an array rather than a linked list?  Is there really much performance
+gain there?  I imagine the code to step through the list and add/remove
+records will stay pretty much the same.
+
+>> That's in the pipeline :)  What i'm planning is to just add a bit of
+>> extra magic to the existing Samba profiling macros that allow us to
+>> split it out per-client and per-share along with the existing recording
+>> of global counts and times.  I'm pretty sure this is going to be fairly
+>> elegant and small if i get it right.
+> That sounds neat. It would be great if you had some code to reconcile
+> the existing profiling stats with these metrics.
+> 
+That's pretty much the plan.  Each class of extended stats when summed
+together should equal the existing profiling stats (in theory).
+
+>> I have a separate patch which i can't submit yet (it's copyright SGI)
+>> that splits out all of the current profiling statistics into smaller
+>> groups that we can turn on and off independently.
+> Do you mean the stats that currently live in the sysv shared memory
+> segment?
+> 
+Yep.
+
+> IIRC you only get a big performance hit when you are timing operations.
+> You can probably avoid this (to some degree) by using platform-specific
+> timers.
+> 
+I'll look into it, thanks :)  Right now there's just the regular
+GetTimeOfDay calls.
+
+> IMHO, the Samba PMDA belongs in the PCP tree, not in the Samba tree.
+> Since you are going to be the one maintaining it, it's easier all round
+> if it lives there. We can simply remove the existing PMDA from the Samba
+> tree.
+> 
+Sure that makes sense.  So, with that in mind, what's the best way to
+export a Samba header file for consumer apps?  For instance, in the case
+of the smbprofile.h header, it uses stuff like enum flush_reason_enum
+and typedef BOOL which are defined elsewhere that third-party apps can't
+see.  Is the correct approach to write a script that munges the header
+into something that could potentially stand alone in a "devel" package?
+
+Alison
+

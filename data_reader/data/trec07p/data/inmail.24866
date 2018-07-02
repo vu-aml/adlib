@@ -1,0 +1,456 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun Apr 29 21:18:21 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3U1IK6w007440
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 29 Apr 2007 21:18:20 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 8A81016388F
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 30 Apr 2007 01:18:19 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL,UPPERCASE_25_50 autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 549)
+	id 0B7BF162AE4; Mon, 30 Apr 2007 01:17:37 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jra@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070430011737.0B7BF162AE4@lists.samba.org>
+Date: Mon, 30 Apr 2007 01:17:37 +0000 (GMT)
+Subject: svn commit: samba r22587 - in branches: SAMBA_3_0/source/rpc_server
+	SAMBA_3_0_25/source/rpc_server
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 12273
+Lines: 413
+
+Author: jra
+Date: 2007-04-30 01:17:34 +0000 (Mon, 30 Apr 2007)
+New Revision: 22587
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22587
+
+Log:
+Ensure TALLOC_ZERO_ARRAY is consistent.
+Jeremy.
+
+Modified:
+   branches/SAMBA_3_0/source/rpc_server/srv_lsa_nt.c
+   branches/SAMBA_3_0/source/rpc_server/srv_samr_nt.c
+   branches/SAMBA_3_0/source/rpc_server/srv_spoolss_nt.c
+   branches/SAMBA_3_0_25/source/rpc_server/srv_lsa_nt.c
+   branches/SAMBA_3_0_25/source/rpc_server/srv_samr_nt.c
+   branches/SAMBA_3_0_25/source/rpc_server/srv_spoolss_nt.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/rpc_server/srv_lsa_nt.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpc_server/srv_lsa_nt.c	2007-04-30 00:53:17 UTC (rev 22586)
++++ branches/SAMBA_3_0/source/rpc_server/srv_lsa_nt.c	2007-04-30 01:17:34 UTC (rev 22587)
+@@ -1066,8 +1066,19 @@
+ 	}
+ 
+ 	ref = TALLOC_ZERO_P(p->mem_ctx, DOM_R_REF);
+-	rids = TALLOC_ZERO_ARRAY(p->mem_ctx, DOM_RID, num_entries);
++	if (!ref) {
++		return NT_STATUS_NO_MEMORY;
++	}
+ 
++	if (num_entries) {
++		rids = TALLOC_ZERO_ARRAY(p->mem_ctx, DOM_RID, num_entries);
++		if (!rids) {
++			return NT_STATUS_NO_MEMORY;
++		}
++	} else {
++		rids = NULL;
++	}
++
+ 	if (!find_policy_by_hnd(p, &q_u->pol, (void **)(void *)&handle)) {
+ 		r_u->status = NT_STATUS_INVALID_HANDLE;
+ 		goto done;
+@@ -1079,9 +1090,6 @@
+ 		goto done;
+ 	}
+ 
+-	if (!ref || !rids)
+-		return NT_STATUS_NO_MEMORY;
+-
+ 	/* set up the LSA Lookup RIDs response */
+ 	become_root(); /* lookup_name can require root privs */
+ 	r_u->status = lookup_lsa_rids(p->mem_ctx, ref, rids, num_entries,
+@@ -1128,14 +1136,23 @@
+ 	}
+ 
+ 	ref = TALLOC_ZERO_P(p->mem_ctx, DOM_R_REF);
+-	rids = TALLOC_ZERO_ARRAY(p->mem_ctx, DOM_RID, num_entries);
+-	rids2 = TALLOC_ZERO_ARRAY(p->mem_ctx, DOM_RID2, num_entries);
+-
+-	if ((ref == NULL) || (rids == NULL) || (rids2 == NULL)) {
++	if (ref == NULL) {
+ 		r_u->status = NT_STATUS_NO_MEMORY;
+ 		return NT_STATUS_NO_MEMORY;
+ 	}
+ 
++	if (num_entries) {
++		rids = TALLOC_ZERO_ARRAY(p->mem_ctx, DOM_RID, num_entries);
++		rids2 = TALLOC_ZERO_ARRAY(p->mem_ctx, DOM_RID2, num_entries);
++		if ((rids == NULL) || (rids2 == NULL)) {
++			r_u->status = NT_STATUS_NO_MEMORY;
++			return NT_STATUS_NO_MEMORY;
++		}
++	} else {
++		rids = NULL;
++		rids2 = NULL;
++	}
++
+ 	if (!find_policy_by_hnd(p, &q_u->pol, (void **)(void *)&handle)) {
+ 		r_u->status = NT_STATUS_INVALID_HANDLE;
+ 		goto done;
+@@ -1200,7 +1217,17 @@
+ 	}
+ 
+ 	ref = TALLOC_ZERO_P(p->mem_ctx, DOM_R_REF);
+-	trans_sids = TALLOC_ZERO_ARRAY(p->mem_ctx, LSA_TRANSLATED_SID3, num_entries);
++	if (ref == NULL) {
++		return NT_STATUS_NO_MEMORY;
++	}
++	if (num_entries) {
++		trans_sids = TALLOC_ZERO_ARRAY(p->mem_ctx, LSA_TRANSLATED_SID3, num_entries);
++		if (!trans_sids) {
++			return NT_STATUS_NO_MEMORY;
++		}
++	} else {
++		trans_sids = NULL;
++	}
+ 
+ 	if (!find_policy_by_hnd(p, &q_u->pol, (void **)(void *)&handle)) {
+ 		r_u->status = NT_STATUS_INVALID_HANDLE;
+@@ -1213,10 +1240,6 @@
+ 		goto done;
+ 	}
+ 
+-	if (!ref || !trans_sids) {
+-		return NT_STATUS_NO_MEMORY;
+-	}
+-
+ 	/* set up the LSA Lookup SIDs response */
+ 	become_root(); /* lookup_name can require root privs */
+ 	r_u->status = lookup_lsa_sids(p->mem_ctx, ref, trans_sids, num_entries,
+@@ -1268,12 +1291,19 @@
+ 	}
+ 
+ 	ref = TALLOC_ZERO_P(p->mem_ctx, DOM_R_REF);
+-	trans_sids = TALLOC_ZERO_ARRAY(p->mem_ctx, LSA_TRANSLATED_SID3, num_entries);
+-
+-	if (!ref || !trans_sids) {
++	if (!ref) {
+ 		return NT_STATUS_NO_MEMORY;
+ 	}
+ 
++	if (num_entries) {
++		trans_sids = TALLOC_ZERO_ARRAY(p->mem_ctx, LSA_TRANSLATED_SID3, num_entries);
++		if (!trans_sids) {
++			return NT_STATUS_NO_MEMORY;
++		}
++	} else {
++		trans_sids = NULL;
++	}
++
+ 	/* set up the LSA Lookup SIDs response */
+ 	become_root(); /* lookup_name can require root privs */
+ 	r_u->status = lookup_lsa_sids(p->mem_ctx, ref, trans_sids, num_entries,
+@@ -1384,8 +1414,12 @@
+ 	if (!(handle->access & POLICY_VIEW_LOCAL_INFORMATION))
+ 		return NT_STATUS_ACCESS_DENIED;
+ 
+-	if ( !(entries = TALLOC_ZERO_ARRAY(p->mem_ctx, LSA_PRIV_ENTRY, num_privs )) )
+-		return NT_STATUS_NO_MEMORY;
++	if (num_privs) {
++		if ( !(entries = TALLOC_ZERO_ARRAY(p->mem_ctx, LSA_PRIV_ENTRY, num_privs )) )
++			return NT_STATUS_NO_MEMORY;
++	} else {
++		entries = NULL;
++	}
+ 
+ 	for (i = 0; i < num_privs; i++) {
+ 		if( i < enum_context) {
+@@ -1489,12 +1523,17 @@
+ 	if (q_u->enum_context >= num_entries)
+ 		return NT_STATUS_NO_MORE_ENTRIES;
+ 
+-	sids->ptr_sid = TALLOC_ZERO_ARRAY(p->mem_ctx, uint32, num_entries-q_u->enum_context);
+-	sids->sid = TALLOC_ZERO_ARRAY(p->mem_ctx, DOM_SID2, num_entries-q_u->enum_context);
++	if (num_entries-q_u->enum_context) {
++		sids->ptr_sid = TALLOC_ZERO_ARRAY(p->mem_ctx, uint32, num_entries-q_u->enum_context);
++		sids->sid = TALLOC_ZERO_ARRAY(p->mem_ctx, DOM_SID2, num_entries-q_u->enum_context);
+ 
+-	if (sids->ptr_sid==NULL || sids->sid==NULL) {
+-		SAFE_FREE(sid_list);
+-		return NT_STATUS_NO_MEMORY;
++		if (sids->ptr_sid==NULL || sids->sid==NULL) {
++			SAFE_FREE(sid_list);
++			return NT_STATUS_NO_MEMORY;
++		}
++	} else {
++		sids->ptr_sid = NULL;
++		sids->sid = NULL;
+ 	}
+ 
+ 	for (i = q_u->enum_context, j = 0; i < num_entries; i++, j++) {
+
+Modified: branches/SAMBA_3_0/source/rpc_server/srv_samr_nt.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpc_server/srv_samr_nt.c	2007-04-30 00:53:17 UTC (rev 22586)
++++ branches/SAMBA_3_0/source/rpc_server/srv_samr_nt.c	2007-04-30 01:17:34 UTC (rev 22587)
+@@ -3939,11 +3939,15 @@
+ 	if (!NT_STATUS_IS_OK(result))
+ 		return result;
+ 
+-	attr=TALLOC_ZERO_ARRAY(p->mem_ctx, uint32, num_members);
++	if (num_members) {
++		attr=TALLOC_ZERO_ARRAY(p->mem_ctx, uint32, num_members);
++		if (attr == NULL) {
++			return NT_STATUS_NO_MEMORY;
++		}
++	} else {
++		attr = NULL;
++	}
+ 	
+-	if ((num_members!=0) && (attr==NULL))
+-		return NT_STATUS_NO_MEMORY;
+-	
+ 	for (i=0; i<num_members; i++)
+ 		attr[i] = SID_NAME_USER;
+ 
+
+Modified: branches/SAMBA_3_0/source/rpc_server/srv_spoolss_nt.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpc_server/srv_spoolss_nt.c	2007-04-30 00:53:17 UTC (rev 22586)
++++ branches/SAMBA_3_0/source/rpc_server/srv_spoolss_nt.c	2007-04-30 01:17:34 UTC (rev 22587)
+@@ -2495,9 +2495,8 @@
+ 				if ( printer ) 
+ 					free_a_printer( &printer, 2 );
+ 				return WERR_NOMEM;
+-		} 
+-		} 
+-		else {
++			} 
++		} else {
+ 			*data = NULL;
+ 		}
+ 	}
+
+Modified: branches/SAMBA_3_0_25/source/rpc_server/srv_lsa_nt.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/rpc_server/srv_lsa_nt.c	2007-04-30 00:53:17 UTC (rev 22586)
++++ branches/SAMBA_3_0_25/source/rpc_server/srv_lsa_nt.c	2007-04-30 01:17:34 UTC (rev 22587)
+@@ -1069,8 +1069,19 @@
+ 	}
+ 
+ 	ref = TALLOC_ZERO_P(p->mem_ctx, DOM_R_REF);
+-	rids = TALLOC_ZERO_ARRAY(p->mem_ctx, DOM_RID, num_entries);
++	if (!ref) {
++		return NT_STATUS_NO_MEMORY;
++	}
+ 
++	if (num_entries) {
++		rids = TALLOC_ZERO_ARRAY(p->mem_ctx, DOM_RID, num_entries);
++		if (!rids) {
++			return NT_STATUS_NO_MEMORY;
++		}
++	} else {
++		rids = NULL;
++	}
++
+ 	if (!find_policy_by_hnd(p, &q_u->pol, (void **)(void *)&handle)) {
+ 		r_u->status = NT_STATUS_INVALID_HANDLE;
+ 		goto done;
+@@ -1082,9 +1093,6 @@
+ 		goto done;
+ 	}
+ 
+-	if (!ref || !rids)
+-		return NT_STATUS_NO_MEMORY;
+-
+ 	/* set up the LSA Lookup RIDs response */
+ 	become_root(); /* lookup_name can require root privs */
+ 	r_u->status = lookup_lsa_rids(p->mem_ctx, ref, rids, num_entries,
+@@ -1131,14 +1139,23 @@
+ 	}
+ 
+ 	ref = TALLOC_ZERO_P(p->mem_ctx, DOM_R_REF);
+-	rids = TALLOC_ZERO_ARRAY(p->mem_ctx, DOM_RID, num_entries);
+-	rids2 = TALLOC_ZERO_ARRAY(p->mem_ctx, DOM_RID2, num_entries);
+-
+-	if ((ref == NULL) || (rids == NULL) || (rids2 == NULL)) {
++	if (ref == NULL) {
+ 		r_u->status = NT_STATUS_NO_MEMORY;
+ 		return NT_STATUS_NO_MEMORY;
+ 	}
+ 
++	if (num_entries) {
++		rids = TALLOC_ZERO_ARRAY(p->mem_ctx, DOM_RID, num_entries);
++		rids2 = TALLOC_ZERO_ARRAY(p->mem_ctx, DOM_RID2, num_entries);
++		if ((rids == NULL) || (rids2 == NULL)) {
++			r_u->status = NT_STATUS_NO_MEMORY;
++			return NT_STATUS_NO_MEMORY;
++		}
++	} else {
++		rids = NULL;
++		rids2 = NULL;
++	}
++
+ 	if (!find_policy_by_hnd(p, &q_u->pol, (void **)(void *)&handle)) {
+ 		r_u->status = NT_STATUS_INVALID_HANDLE;
+ 		goto done;
+@@ -1203,7 +1220,17 @@
+ 	}
+ 
+ 	ref = TALLOC_ZERO_P(p->mem_ctx, DOM_R_REF);
+-	trans_sids = TALLOC_ZERO_ARRAY(p->mem_ctx, LSA_TRANSLATED_SID3, num_entries);
++	if (ref == NULL) {
++		return NT_STATUS_NO_MEMORY;
++	}
++	if (num_entries) {
++		trans_sids = TALLOC_ZERO_ARRAY(p->mem_ctx, LSA_TRANSLATED_SID3, num_entries);
++		if (!trans_sids) {
++			return NT_STATUS_NO_MEMORY;
++		}
++	} else {
++		trans_sids = NULL;
++	}
+ 
+ 	if (!find_policy_by_hnd(p, &q_u->pol, (void **)(void *)&handle)) {
+ 		r_u->status = NT_STATUS_INVALID_HANDLE;
+@@ -1216,10 +1243,6 @@
+ 		goto done;
+ 	}
+ 
+-	if (!ref || !trans_sids) {
+-		return NT_STATUS_NO_MEMORY;
+-	}
+-
+ 	/* set up the LSA Lookup SIDs response */
+ 	become_root(); /* lookup_name can require root privs */
+ 	r_u->status = lookup_lsa_sids(p->mem_ctx, ref, trans_sids, num_entries,
+@@ -1271,12 +1294,19 @@
+ 	}
+ 
+ 	ref = TALLOC_ZERO_P(p->mem_ctx, DOM_R_REF);
+-	trans_sids = TALLOC_ZERO_ARRAY(p->mem_ctx, LSA_TRANSLATED_SID3, num_entries);
+-
+-	if (!ref || !trans_sids) {
++	if (!ref) {
+ 		return NT_STATUS_NO_MEMORY;
+ 	}
+ 
++	if (num_entries) {
++		trans_sids = TALLOC_ZERO_ARRAY(p->mem_ctx, LSA_TRANSLATED_SID3, num_entries);
++		if (!trans_sids) {
++			return NT_STATUS_NO_MEMORY;
++		}
++	} else {
++		trans_sids = NULL;
++	}
++
+ 	/* set up the LSA Lookup SIDs response */
+ 	become_root(); /* lookup_name can require root privs */
+ 	r_u->status = lookup_lsa_sids(p->mem_ctx, ref, trans_sids, num_entries,
+@@ -1387,8 +1417,12 @@
+ 	if (!(handle->access & POLICY_VIEW_LOCAL_INFORMATION))
+ 		return NT_STATUS_ACCESS_DENIED;
+ 
+-	if ( !(entries = TALLOC_ZERO_ARRAY(p->mem_ctx, LSA_PRIV_ENTRY, num_privs )) )
+-		return NT_STATUS_NO_MEMORY;
++	if (num_privs) {
++		if ( !(entries = TALLOC_ZERO_ARRAY(p->mem_ctx, LSA_PRIV_ENTRY, num_privs )) )
++			return NT_STATUS_NO_MEMORY;
++	} else {
++		entries = NULL;
++	}
+ 
+ 	for (i = 0; i < num_privs; i++) {
+ 		if( i < enum_context) {
+@@ -1492,12 +1526,17 @@
+ 	if (q_u->enum_context >= num_entries)
+ 		return NT_STATUS_NO_MORE_ENTRIES;
+ 
+-	sids->ptr_sid = TALLOC_ZERO_ARRAY(p->mem_ctx, uint32, num_entries-q_u->enum_context);
+-	sids->sid = TALLOC_ZERO_ARRAY(p->mem_ctx, DOM_SID2, num_entries-q_u->enum_context);
++	if (num_entries-q_u->enum_context) {
++		sids->ptr_sid = TALLOC_ZERO_ARRAY(p->mem_ctx, uint32, num_entries-q_u->enum_context);
++		sids->sid = TALLOC_ZERO_ARRAY(p->mem_ctx, DOM_SID2, num_entries-q_u->enum_context);
+ 
+-	if (sids->ptr_sid==NULL || sids->sid==NULL) {
+-		SAFE_FREE(sid_list);
+-		return NT_STATUS_NO_MEMORY;
++		if (sids->ptr_sid==NULL || sids->sid==NULL) {
++			SAFE_FREE(sid_list);
++			return NT_STATUS_NO_MEMORY;
++		}
++	} else {
++		sids->ptr_sid = NULL;
++		sids->sid = NULL;
+ 	}
+ 
+ 	for (i = q_u->enum_context, j = 0; i < num_entries; i++, j++) {
+
+Modified: branches/SAMBA_3_0_25/source/rpc_server/srv_samr_nt.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/rpc_server/srv_samr_nt.c	2007-04-30 00:53:17 UTC (rev 22586)
++++ branches/SAMBA_3_0_25/source/rpc_server/srv_samr_nt.c	2007-04-30 01:17:34 UTC (rev 22587)
+@@ -3954,11 +3954,15 @@
+ 	if (!NT_STATUS_IS_OK(result))
+ 		return result;
+ 
+-	attr=TALLOC_ZERO_ARRAY(p->mem_ctx, uint32, num_members);
++	if (num_members) {
++		attr=TALLOC_ZERO_ARRAY(p->mem_ctx, uint32, num_members);
++		if (attr == NULL) {
++			return NT_STATUS_NO_MEMORY;
++		}
++	} else {
++		attr = NULL;
++	}
+ 	
+-	if ((num_members!=0) && (attr==NULL))
+-		return NT_STATUS_NO_MEMORY;
+-	
+ 	for (i=0; i<num_members; i++)
+ 		attr[i] = SID_NAME_USER;
+ 
+
+Modified: branches/SAMBA_3_0_25/source/rpc_server/srv_spoolss_nt.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/rpc_server/srv_spoolss_nt.c	2007-04-30 00:53:17 UTC (rev 22586)
++++ branches/SAMBA_3_0_25/source/rpc_server/srv_spoolss_nt.c	2007-04-30 01:17:34 UTC (rev 22587)
+@@ -2496,9 +2496,8 @@
+ 				if ( printer ) 
+ 					free_a_printer( &printer, 2 );
+ 				return WERR_NOMEM;
+-		} 
+-		} 
+-		else {
++			} 
++		} else {
+ 			*data = NULL;
+ 		}
+ 	}
+

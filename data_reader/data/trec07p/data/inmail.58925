@@ -1,0 +1,489 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat Jun 16 14:54:32 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5GIsWL9018476
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 16 Jun 2007 14:54:32 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 433DE163856
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 16 Jun 2007 18:54:31 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 535)
+	id D04E7162B70; Sat, 16 Jun 2007 18:54:13 +0000 (GMT)
+To: samba-cvs@samba.org
+From: idra@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070616185413.D04E7162B70@lists.samba.org>
+Date: Sat, 16 Jun 2007 18:54:13 +0000 (GMT)
+Subject: svn commit: samba r23524 - in branches: SAMBA_3_0/source/client
+	SAMBA_3_0_25/source/client SAMBA_3_0_26/source/client
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: idra
+Date: 2007-06-16 18:54:13 +0000 (Sat, 16 Jun 2007)
+New Revision: 23524
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23524
+
+Log:
+
+Fix bug 2319.
+Got report this is all ok form a tester. Close a loong
+standing bug preventing people to freely use any character
+in their password when printing via cups were involved.
+
+
+Modified:
+   branches/SAMBA_3_0/source/client/smbspool.c
+   branches/SAMBA_3_0_25/source/client/smbspool.c
+   branches/SAMBA_3_0_26/source/client/smbspool.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/client/smbspool.c
+===================================================================
+--- branches/SAMBA_3_0/source/client/smbspool.c	2007-06-16 18:19:42 UTC (rev 23523)
++++ branches/SAMBA_3_0/source/client/smbspool.c	2007-06-16 18:54:13 UTC (rev 23524)
+@@ -47,6 +47,7 @@
+ static struct cli_state *smb_complete_connection(const char *, const char *,int , const char *, const char *, const char *, const char *, int);
+ static struct cli_state	*smb_connect(const char *, const char *, int, const char *, const char *, const char *, const char *);
+ static int		smb_print(struct cli_state *, char *, FILE *);
++static char *		uri_unescape_alloc(const char *);
+ 
+ 
+ /*
+@@ -62,8 +63,9 @@
+   int 		port;		/* Port number */
+   char		uri[1024],	/* URI */
+ 		*sep,		/* Pointer to separator */
++		*tmp, *tmp2,	/* Temp pointers to do escaping */
+ 		*password;	/* Password */
+-  const char	*username,	/* Username */
++  char		*username,	/* Username */
+ 		*server,	/* Server name */
+ 		*printer;	/* Printer name */
+   const char	*workgroup;	/* Workgroup */
+@@ -152,19 +154,24 @@
+ 
+   if ((sep = strrchr_m(uri, '@')) != NULL)
+   {
+-    username = uri + 6;
++    tmp = uri + 6;
+     *sep++ = '\0';
+ 
++    /* username is in tmp */
++
+     server = sep;
+ 
+    /*
+     * Extract password as needed...
+     */
+ 
+-    if ((password = strchr_m(username, ':')) != NULL)
+-      *password++ = '\0';
+-    else
++    if ((tmp2 = strchr_m(tmp, ':')) != NULL) {
++      *tmp2++ = '\0';
++      password = uri_unescape_alloc(tmp2);
++    } else {
+       password = null_str;
++    }
++    username = uri_unescape_alloc(tmp);
+   }
+   else
+   {
+@@ -173,16 +180,18 @@
+     server   = uri + 6;
+   }
+ 
+-  if ((sep = strchr_m(server, '/')) == NULL)
++  tmp = server;
++
++  if ((sep = strchr_m(tmp, '/')) == NULL)
+   {
+     fputs("ERROR: Bad URI - need printer name!\n", stderr);
+     return (1);
+   }
+ 
+   *sep++ = '\0';
+-  printer = sep;
++  tmp2 = sep;
+ 
+-  if ((sep = strchr_m(printer, '/')) != NULL)
++  if ((sep = strchr_m(tmp2, '/')) != NULL)
+   {
+    /*
+     * Convert to smb://[username:password@]workgroup/server/printer...
+@@ -190,12 +199,15 @@
+ 
+     *sep++ = '\0';
+ 
+-    workgroup = server;
+-    server    = printer;
+-    printer   = sep;
++    workgroup = uri_unescape_alloc(tmp);
++    server    = uri_unescape_alloc(tmp2);
++    printer   = uri_unescape_alloc(sep);
+   }
+-  else
++  else {
+     workgroup = NULL;
++    server = uri_unescape_alloc(tmp);
++    printer = uri_unescape_alloc(tmp2);
++  }
+   
+   if ((sep = strrchr_m(server, ':')) != NULL)
+   {
+@@ -203,7 +215,7 @@
+ 
+     port=atoi(sep);
+   }
+-  else
++  else 
+   	port=0;
+ 	
+  
+@@ -588,3 +600,38 @@
+   else
+     return (0);
+ }
++
++static char *uri_unescape_alloc(const char *uritok)
++{
++	char *t, *ret;
++	const char *p;
++	long int val;
++	char eval[3];
++
++	ret = (char *)SMB_MALLOC(strlen(uritok)+1);
++
++	if (!ret) return NULL;
++
++	eval[2] = '\0';
++
++	for (p = uritok, t = ret; *p; p++, t++) {
++		if (*p == '%') { /* unescape hex */
++			p++;
++			eval[0] = *p;
++			p++;
++			eval[1] = *p;
++			val = strtol(eval, NULL, 16);
++			if ((val == LONG_MIN || val == LONG_MAX) && errno == ERANGE) {
++				SAFE_FREE(ret);
++				return NULL;
++			}
++			*t = (char)val;
++		} else {
++			*t = *p;
++		}
++	}
++
++	*t = '\0'; /*terminate*/
++
++	return ret;
++}
+
+Modified: branches/SAMBA_3_0_25/source/client/smbspool.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/client/smbspool.c	2007-06-16 18:19:42 UTC (rev 23523)
++++ branches/SAMBA_3_0_25/source/client/smbspool.c	2007-06-16 18:54:13 UTC (rev 23524)
+@@ -47,6 +47,7 @@
+ static struct cli_state *smb_complete_connection(const char *, const char *,int , const char *, const char *, const char *, const char *, int);
+ static struct cli_state	*smb_connect(const char *, const char *, int, const char *, const char *, const char *, const char *);
+ static int		smb_print(struct cli_state *, char *, FILE *);
++static char *		uri_unescape_alloc(const char *);
+ 
+ 
+ /*
+@@ -62,8 +63,9 @@
+   int 		port;		/* Port number */
+   char		uri[1024],	/* URI */
+ 		*sep,		/* Pointer to separator */
++		*tmp, *tmp2,	/* Temp pointers to do escaping */
+ 		*password;	/* Password */
+-  const char	*username,	/* Username */
++  char		*username,	/* Username */
+ 		*server,	/* Server name */
+ 		*printer;	/* Printer name */
+   const char	*workgroup;	/* Workgroup */
+@@ -152,19 +154,24 @@
+ 
+   if ((sep = strrchr_m(uri, '@')) != NULL)
+   {
+-    username = uri + 6;
++    tmp = uri + 6;
+     *sep++ = '\0';
+ 
++    /* username is in tmp */
++
+     server = sep;
+ 
+    /*
+     * Extract password as needed...
+     */
+ 
+-    if ((password = strchr_m(username, ':')) != NULL)
+-      *password++ = '\0';
+-    else
++    if ((tmp2 = strchr_m(tmp, ':')) != NULL) {
++      *tmp2++ = '\0';
++      password = uri_unescape_alloc(tmp2);
++    } else {
+       password = null_str;
++    }
++    username = uri_unescape_alloc(tmp);
+   }
+   else
+   {
+@@ -173,16 +180,18 @@
+     server   = uri + 6;
+   }
+ 
+-  if ((sep = strchr_m(server, '/')) == NULL)
++  tmp = server;
++
++  if ((sep = strchr_m(tmp, '/')) == NULL)
+   {
+     fputs("ERROR: Bad URI - need printer name!\n", stderr);
+     return (1);
+   }
+ 
+   *sep++ = '\0';
+-  printer = sep;
++  tmp2 = sep;
+ 
+-  if ((sep = strchr_m(printer, '/')) != NULL)
++  if ((sep = strchr_m(tmp2, '/')) != NULL)
+   {
+    /*
+     * Convert to smb://[username:password@]workgroup/server/printer...
+@@ -190,12 +199,15 @@
+ 
+     *sep++ = '\0';
+ 
+-    workgroup = server;
+-    server    = printer;
+-    printer   = sep;
++    workgroup = uri_unescape_alloc(tmp);
++    server    = uri_unescape_alloc(tmp2);
++    printer   = uri_unescape_alloc(sep);
+   }
+-  else
++  else {
+     workgroup = NULL;
++    server = uri_unescape_alloc(tmp);
++    printer = uri_unescape_alloc(tmp2);
++  }
+   
+   if ((sep = strrchr_m(server, ':')) != NULL)
+   {
+@@ -203,7 +215,7 @@
+ 
+     port=atoi(sep);
+   }
+-  else
++  else 
+   	port=0;
+ 	
+  
+@@ -588,3 +600,38 @@
+   else
+     return (0);
+ }
++
++static char *uri_unescape_alloc(const char *uritok)
++{
++	char *t, *ret;
++	const char *p;
++	long int val;
++	char eval[3];
++
++	ret = (char *)SMB_MALLOC(strlen(uritok)+1);
++
++	if (!ret) return NULL;
++
++	eval[2] = '\0';
++
++	for (p = uritok, t = ret; *p; p++, t++) {
++		if (*p == '%') { /* unescape hex */
++			p++;
++			eval[0] = *p;
++			p++;
++			eval[1] = *p;
++			val = strtol(eval, NULL, 16);
++			if ((val == LONG_MIN || val == LONG_MAX) && errno == ERANGE) {
++				SAFE_FREE(ret);
++				return NULL;
++			}
++			*t = (char)val;
++		} else {
++			*t = *p;
++		}
++	}
++
++	*t = '\0'; /*terminate*/
++
++	return ret;
++}
+
+Modified: branches/SAMBA_3_0_26/source/client/smbspool.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/client/smbspool.c	2007-06-16 18:19:42 UTC (rev 23523)
++++ branches/SAMBA_3_0_26/source/client/smbspool.c	2007-06-16 18:54:13 UTC (rev 23524)
+@@ -47,6 +47,7 @@
+ static struct cli_state *smb_complete_connection(const char *, const char *,int , const char *, const char *, const char *, const char *, int);
+ static struct cli_state	*smb_connect(const char *, const char *, int, const char *, const char *, const char *, const char *);
+ static int		smb_print(struct cli_state *, char *, FILE *);
++static char *		uri_unescape_alloc(const char *);
+ 
+ 
+ /*
+@@ -62,8 +63,9 @@
+   int 		port;		/* Port number */
+   char		uri[1024],	/* URI */
+ 		*sep,		/* Pointer to separator */
++		*tmp, *tmp2,	/* Temp pointers to do escaping */
+ 		*password;	/* Password */
+-  const char	*username,	/* Username */
++  char		*username,	/* Username */
+ 		*server,	/* Server name */
+ 		*printer;	/* Printer name */
+   const char	*workgroup;	/* Workgroup */
+@@ -152,19 +154,24 @@
+ 
+   if ((sep = strrchr_m(uri, '@')) != NULL)
+   {
+-    username = uri + 6;
++    tmp = uri + 6;
+     *sep++ = '\0';
+ 
++    /* username is in tmp */
++
+     server = sep;
+ 
+    /*
+     * Extract password as needed...
+     */
+ 
+-    if ((password = strchr_m(username, ':')) != NULL)
+-      *password++ = '\0';
+-    else
++    if ((tmp2 = strchr_m(tmp, ':')) != NULL) {
++      *tmp2++ = '\0';
++      password = uri_unescape_alloc(tmp2);
++    } else {
+       password = null_str;
++    }
++    username = uri_unescape_alloc(tmp);
+   }
+   else
+   {
+@@ -173,16 +180,18 @@
+     server   = uri + 6;
+   }
+ 
+-  if ((sep = strchr_m(server, '/')) == NULL)
++  tmp = server;
++
++  if ((sep = strchr_m(tmp, '/')) == NULL)
+   {
+     fputs("ERROR: Bad URI - need printer name!\n", stderr);
+     return (1);
+   }
+ 
+   *sep++ = '\0';
+-  printer = sep;
++  tmp2 = sep;
+ 
+-  if ((sep = strchr_m(printer, '/')) != NULL)
++  if ((sep = strchr_m(tmp2, '/')) != NULL)
+   {
+    /*
+     * Convert to smb://[username:password@]workgroup/server/printer...
+@@ -190,12 +199,15 @@
+ 
+     *sep++ = '\0';
+ 
+-    workgroup = server;
+-    server    = printer;
+-    printer   = sep;
++    workgroup = uri_unescape_alloc(tmp);
++    server    = uri_unescape_alloc(tmp2);
++    printer   = uri_unescape_alloc(sep);
+   }
+-  else
++  else {
+     workgroup = NULL;
++    server = uri_unescape_alloc(tmp);
++    printer = uri_unescape_alloc(tmp2);
++  }
+   
+   if ((sep = strrchr_m(server, ':')) != NULL)
+   {
+@@ -203,7 +215,7 @@
+ 
+     port=atoi(sep);
+   }
+-  else
++  else 
+   	port=0;
+ 	
+  
+@@ -588,3 +600,38 @@
+   else
+     return (0);
+ }
++
++static char *uri_unescape_alloc(const char *uritok)
++{
++	char *t, *ret;
++	const char *p;
++	long int val;
++	char eval[3];
++
++	ret = (char *)SMB_MALLOC(strlen(uritok)+1);
++
++	if (!ret) return NULL;
++
++	eval[2] = '\0';
++
++	for (p = uritok, t = ret; *p; p++, t++) {
++		if (*p == '%') { /* unescape hex */
++			p++;
++			eval[0] = *p;
++			p++;
++			eval[1] = *p;
++			val = strtol(eval, NULL, 16);
++			if ((val == LONG_MIN || val == LONG_MAX) && errno == ERANGE) {
++				SAFE_FREE(ret);
++				return NULL;
++			}
++			*t = (char)val;
++		} else {
++			*t = *p;
++		}
++	}
++
++	*t = '\0'; /*terminate*/
++
++	return ret;
++}
+

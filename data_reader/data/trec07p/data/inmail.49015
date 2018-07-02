@@ -1,0 +1,85 @@
+From perl6-all-return-81736-ktwarwic=speedy.uwaterloo.ca@perl.org  Fri Jun  1 21:13:44 2007
+Return-Path: <perl6-all-return-81736-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l521DghB017141
+	for <ktwarwic@flax9.uwaterloo.ca>; Fri, 1 Jun 2007 21:13:42 -0400
+Received: (qmail 15556 invoked by uid 514); 2 Jun 2007 01:13:36 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 15551 invoked from network); 2 Jun 2007 01:13:36 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: domain of chromatic@wgz.org designates 63.105.17.39 as permitted sender)
+From: chromatic <chromatic@wgz.org>
+Organization: Snafu
+To: perl6-internals@perl.org
+Subject: Re: [perl #43108] [PATCH] Getting Parrot compiled with C++ - Part one
+Date: Fri, 1 Jun 2007 18:10:51 -0700
+User-Agent: KMail/1.9.6
+References: <RT-Ticket-43108@perl.org> <20070601234912.GA1754@kirk.peters.homeunix.org> <rt-3.6.HEAD-1668-1180741878-817.43108-72-0@perl.org>
+In-Reply-To: <rt-3.6.HEAD-1668-1180741878-817.43108-72-0@perl.org>
+MIME-Version: 1.0
+Content-Type: text/plain;
+  charset="utf-8"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+Message-Id: <200706011810.51348.chromatic@wgz.org>
+X-Virus-Scanned: by amavisd-new at wgz.org
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,SPF_PASS
+
+On Friday 01 June 2007 16:51:18 Steve Peters wrote:
+
+> The attached patch gets Parrot partially compiles with C++ (g++ actually).
+> This work gets the compile going through the start of the imcc compiler.
+
+Danger!
+
+The patch to src/stm/waitlist.c causes segfaults in t/stm/runtime.t, test 3:
+
+Program received signal SIGSEGV, Segmentation fault.
+[Switching to Thread -1230156912 (LWP 30260)]
+0xb7e02645 in alloc_entry (interp=0x8231358) at src/stm/waitlist.c:57
+57          assert(thr->entries[i]->head == NULL);
+(gdb) x thr
+0x8237700:      0x00000000
+(gdb) p thr
+$1 = (struct waitlist_thread_data *) 0x8237700
+
+The patch to Parrot::Ops2c::Utils causes errors about multiple definitions of 
+`core_numops' in interpreter.o and core_ops.o.
+
+This patch to the CGP core:
+
+--- lib/Parrot/OpTrans/CGP.pm.  (revision 3741)
++++ lib/Parrot/OpTrans/CGP.pm.  (local)
+@@ -68,7 +68,7 @@
+     return $pred_def . <<END;
+ /* defines - $0 -> $type */
+ #  define opcode_to_prederef(i, op)   \\
+-     (void**) (op   - CONTEXT(i->ctx)->pred_offset)
++     (opcode_t*) (op   - (opcode_t*)CONTEXT(i->ctx)->pred_offset)
+
+... causes segfaults for me in the shootout tests (probably because they run 
+with -jC).  If I remove the second cast from the line, the segfault goes 
+away.
+
+I applied the rest as r18744.  Thanks!
+
+-- c
+

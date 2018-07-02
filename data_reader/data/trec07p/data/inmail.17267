@@ -1,0 +1,267 @@
+From perl6-all-return-80800-ktwarwic=speedy.uwaterloo.ca@perl.org  Mon Apr 23 02:33:36 2007
+Return-Path: <perl6-all-return-80800-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3N6XY0I029524
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 23 Apr 2007 02:33:34 -0400
+Received: (qmail 27410 invoked by uid 514); 23 Apr 2007 06:33:08 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 27405 invoked from network); 23 Apr 2007 06:33:08 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: domain of chromatic@wgz.org designates 63.105.17.39 as permitted sender)
+From: chromatic <chromatic@wgz.org>
+Organization: Snafu
+To: "Alek Storm" <alek.storm@gmail.com>,
+   Jonathan Worthington <jonathan@jnthn.net>
+Subject: Re: [perl #42408] Re: [PATCH] refactor vtable overriding, delegate.c generation
+Date: Sun, 22 Apr 2007 23:32:13 -0700
+User-Agent: KMail/1.9.5
+Cc: perl6-internals@perl.org, bugs-bitbucket@netlabs.develooper.com
+References: <RT-Ticket-42408@perl.org> <200704212200.15380.chromatic@wgz.org> <189adbd0704221757l838bdbft9fe56c48b5bdf59@mail.gmail.com>
+In-Reply-To: <189adbd0704221757l838bdbft9fe56c48b5bdf59@mail.gmail.com>
+MIME-Version: 1.0
+Content-Type: Multipart/Mixed;
+  boundary="Boundary-00=_tLFLGZXInEpfNi3"
+Message-Id: <200704222332.13701.chromatic@wgz.org>
+X-Virus-Scanned: by amavisd-new at wgz.org
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=1.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO,RCVD_IN_CBL,SPF_PASS
+Status: O
+Content-Length: 7133
+Lines: 216
+
+--Boundary-00=_tLFLGZXInEpfNi3
+Content-Type: text/plain;
+  charset="iso-8859-1"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+
+On Sunday 22 April 2007 17:57, Alek Storm wrote:
+
+> > That's as far as I've been able to trace however.  The tests do pass if I
+> > revert the patch.  Any ideas?
+>
+> I think the patch exposed either a GC or SMOP bug.  Here's the smallest I
+> could get the test case and still have it segfault without gdb's help:
+>
+> .sub _main :main
+>   load_bytecode 'library/Test/More.pir'
+>
+>   # import test routines
+>   .local pmc exports, curr_namespace, test_namespace
+>   curr_namespace = get_namespace
+>   test_namespace = get_namespace [ "Test::More" ]
+>   exports = split " ", "plan ok is isa_ok"
+>   test_namespace.export_to(curr_namespace, exports)
+>
+>   plan( 9 )
+>
+>   $P0 = new 'SMOP_Attribute'
+>   isa_ok ($P0, 'SMOP_Attribute')
+>
+>   $S1 = $P0.'name'()
+>   is ($S1, 'TestClass1', 'test the SMOP_Attribute name method')
+>
+>   $P0 = new 'SMOP_Attribute'
+>   $S0 = $P0.'type'("TestTypeClass1")
+>   is ($S0, 'TestTypeClass1', 'test the SMOP_Attribute name method')
+>
+>   $S1 = $P0.'type'()
+>   is ($S1, 'TestTypeClass1', 'test the SMOP_Attribute name method')
+> .end
+>
+> However, we can make it segfault earlier using gdb, because the problem
+> only shows up when a DOD run is triggered.  We can test whether the memory
+> has been corrupted yet from anywhere in Parrot by issuing this:
+>
+> call (*interp->arena_base->pmc_pool->more_objects)(interp,
+> interp->arena_base->pmc_pool)
+>
+> If it runs and exits, no problem.  If it segfaults, problem.  I was able to
+> track the cause down to smop_init() in src/pmc/smop_attribute.pmc.  Running
+> the aforementioned command before the call to mem_sys_allocate_zeroed()
+> exits cleanly, but running it afterwards causes a segfault, so
+> mem_sys_allocate_zeroed() (and the calloc() inside it) corrupts something. 
+> That's as far as I can get for now - looking at the code immediately
+> preceding the segfault doesn't help any.
+>
+> The exact same thing happens without the patch, but for some reason the
+> test case above doesn't trigger a DOD run on an unpatched parrot, so it
+> doesn't show up unless you use gdb.  At least it's Not My Fault(TM), but
+> this one looks like a doozy to fix.  Someone more familiar with the garbage
+> collector than I needs to sort this out.  Should we start a new ticket?
+
+Nice analysis.  I added the run_gc() method to the interpreter a few weeks ago 
+to help with this sort of thing.  Here's a patch to the tests to demonstrate 
+the bug and a patch to SMOP_Attribute to fix the thing.
+
+Jonathan, can you help us figure out why deleting these lines out of init() 
+fixes the problem?  Are they vestigial?
+
+	    /* turn on marking of the class_data array */
+	    PObj_data_is_PMC_array_SET(self);
+
+-- c
+
+
+--Boundary-00=_tLFLGZXInEpfNi3
+Content-Type: text/x-diff;
+  charset="iso-8859-1";
+  name="smop_attr_fix.patch"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: attachment;
+	filename="smop_attr_fix.patch"
+
+=== src/pmc/smop_attribute.pmc
+==================================================================
+--- src/pmc/smop_attribute.pmc	(revision 3272)
++++ src/pmc/smop_attribute.pmc	(local)
+@@ -30,13 +30,13 @@
+ 
+ static void smop_init(Interp *interp, PMC *self) {
+     SMOP_Attribute *smop = NULL;
+-    /* turn on marking of the class_data array */
+-    PObj_data_is_PMC_array_SET(self);
+-    /* turn on custom destruction since our PMC* array is dynamically allocated */
++
++    /* turn on custom destruction since our PMC* array is dynamically allocated
++     */
+     PObj_active_destroy_SET(self);
+ 
+-    PMC_data(self) = mem_sys_allocate_zeroed(sizeof(SMOP_Attribute));
+-    smop = SMOP_attr(self);
++    PMC_data(self) = mem_allocate_zeroed_typed(SMOP_Attribute);
++    smop           = SMOP_attr(self);
+ }
+ 
+ 
+@@ -75,7 +75,10 @@
+ 
+ */
+     void destroy() {
++        if (PMC_data(SELF)) {
+             mem_sys_free(PMC_data(SELF));
++            PMC_data(SELF) = NULL;
++        }
+     }
+ 
+ 
+=== t/pmc/smop_attribute.t
+==================================================================
+--- t/pmc/smop_attribute.t	(revision 3272)
++++ t/pmc/smop_attribute.t	(local)
+@@ -6,7 +6,6 @@
+ 
+ t/pmc/smop_attribute.t - test the new SMOP Attribute PMC
+ 
+-
+ =head1 SYNOPSIS
+ 
+     % prove t/pmc/smop_attribute.t
+@@ -32,48 +31,52 @@
+     $P0 = new 'SMOP_Attribute'
+     isa_ok ($P0, 'SMOP_Attribute')
+ 
++    # SMOP_Attribute used to cause segfaults when GC ran (RT #42408)
++    $P1 = getinterp
++    $P1.'run_gc'()
+ 
+-  $P0 = new 'SMOP_Attribute'
+-  $S0 = $P0.'name'("TestClass1")
+-  is ($S0, 'TestClass1', 'test the SMOP_Attribute name method')
++    $P0 = new 'SMOP_Attribute'
++    $S0 = $P0.'name'("TestClass1")
++    is ($S0, 'TestClass1', 'test the SMOP_Attribute name method')
+ 
+-  $S1 = $P0.'name'()
+-  is ($S1, 'TestClass1', 'test the SMOP_Attribute name method')
++    $S1 = $P0.'name'()
++    is ($S1, 'TestClass1', 'test the SMOP_Attribute name method')
+ 
+-  $P0 = new 'SMOP_Attribute'
+-  $S0 = $P0.'type'("TestTypeClass1")
+-  is ($S0, 'TestTypeClass1', 'test the SMOP_Attribute name method')
+-  $S1 = $P0.'type'()
+-  is ($S1, 'TestTypeClass1', 'test the SMOP_Attribute name method')
++    $P0 = new 'SMOP_Attribute'
++    $S0 = $P0.'type'("TestTypeClass1")
++    is ($S0, 'TestTypeClass1', 'test the SMOP_Attribute name method')
++    $S1 = $P0.'type'()
++    is ($S1, 'TestTypeClass1', 'test the SMOP_Attribute name method')
+ 
+-  $P1 = new 'ResizableIntegerArray'
+-  push $P1, 1
+-  push $P1, 2
+-  push $P1, 3
++    $P1 = new 'ResizableIntegerArray'
++    push $P1, 1
++    push $P1, 2
++    push $P1, 3
+ 
+-  $P0 = new 'SMOP_Attribute'
+-  $P2 = $P0.'class'($P1)
+-  get_repr $S0, $P2
+-  is ($S0, '[ 1, 2, 3 ]', 'test the SMOP_Attribute type method with a ResizableIntegerArray' )
+-  $P3 = $P0.'class'()
+-  get_repr $S1, $P3
+-  is ($S1, '[ 1, 2, 3 ]', 'test the SMOP_Attribute type method with a ResizableIntegerArray' )
++    $P0 = new 'SMOP_Attribute'
++    $P2 = $P0.'class'($P1)
++    get_repr $S0, $P2
++    is ($S0, '[ 1, 2, 3 ]', 'test the SMOP_Attribute type method with a ResizableIntegerArray' )
++    $P3 = $P0.'class'()
++    get_repr $S1, $P3
++    is ($S1, '[ 1, 2, 3 ]', 'test the SMOP_Attribute type method with a ResizableIntegerArray' )
+ 
+ 
+-  $P1 = new 'FixedIntegerArray'
+-  set $P1, 3
+-  $P1[0]= 1
+-  $P1[1]= 2
+-  $P1[2]= 3
++    $P1 = new 'FixedIntegerArray'
++    set $P1, 3
++    $P1[0]= 1
++    $P1[1]= 2
++    $P1[2]= 3
+ 
+-  $P0 = new 'SMOP_Attribute'
+-  $P2 = $P0.'class'($P1)
+-  get_repr $S0, $P2
+-  is( $S0, '[ 1, 2, 3 ]', 'test the SMOP_Attribute class method with a FixedIntegerArray' )
+-  $P3 = $P0.'class'()
+-  get_repr $S1, $P3
+-  is( $S1, '[ 1, 2, 3 ]', 'test the SMOP_Attribute class method with a FixedIntegerArray' )
++    $P0 = new 'SMOP_Attribute'
++    $P2 = $P0.'class'($P1)
++    get_repr $S0, $P2
++    is( $S0, '[ 1, 2, 3 ]', 'test the SMOP_Attribute class method with a FixedIntegerArray' )
+ 
++    $P3 = $P0.'class'()
++    get_repr $S1, $P3
++    is( $S1, '[ 1, 2, 3 ]', 'test the SMOP_Attribute class method with a FixedIntegerArray' )
++
+ .end
+ 
+ # Local Variables:
+
+--Boundary-00=_tLFLGZXInEpfNi3--
+

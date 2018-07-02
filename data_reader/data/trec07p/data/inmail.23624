@@ -1,0 +1,189 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat Apr 28 11:42:31 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3SFgU6w009158
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 28 Apr 2007 11:42:30 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id BC3711638BF
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 28 Apr 2007 15:42:29 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id A59B6162BC1; Sat, 28 Apr 2007 15:42:13 +0000 (GMT)
+Date: Sat, 28 Apr 2007 17:13:30 +0200
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070428154213.A59B6162BC1@lists.samba.org>
+Subject: Rev 215: added status all and debug all control operations in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 4509
+Lines: 148
+
+------------------------------------------------------------
+revno: 215
+revision-id: tridge@samba.org-20070428151330-t6lvd3jhu28vr1gl
+parent: tridge@samba.org-20070428151302-5gdl26m1r156w6xb
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Sat 2007-04-28 17:13:30 +0200
+message:
+  added status all and debug all control operations
+modified:
+  common/ctdb_call.c             ctdb_call.c-20061128065342-to93h6eejj5kon81-1
+  include/ctdb_private.h         ctdb_private.h-20061117234101-o3qt14umlg9en8z0-13
+  tools/ctdb_control.c           ctdb_control.c-20070426122705-9ehj1l5lu2gn9kuj-1
+=== modified file 'common/ctdb_call.c'
+--- a/common/ctdb_call.c	2007-04-28 08:50:32 +0000
++++ b/common/ctdb_call.c	2007-04-28 15:13:30 +0000
+@@ -729,12 +729,14 @@
+ 					   struct ctdb_req_call);
+ 	CTDB_NO_MEMORY_NULL(ctdb, state->c);
+ 	state->c->hdr.destnode  = header->dmaster;
+-	/*
+-	   always sending the remote call straight to the lmaster
++
++#if 0
++	/*always sending the remote call straight to the lmaster
+ 	   improved performance slightly in some tests.
+ 	   worth investigating further in the future
++	*/
+ 	state->c->hdr.destnode  = ctdb_lmaster(ctdb_db->ctdb, &(call->key));
+-	*/
++#endif
+ 
+ 
+ 	/* this limits us to 16k outstanding messages - not unreasonable */
+
+=== modified file 'include/ctdb_private.h'
+--- a/include/ctdb_private.h	2007-04-28 13:15:21 +0000
++++ b/include/ctdb_private.h	2007-04-28 15:13:30 +0000
+@@ -157,6 +157,7 @@
+ 	uint32_t pending_calls;
+ 	uint32_t lockwait_calls;
+ 	uint32_t pending_lockwait_calls;
++	uint32_t __last_uint32; /* hack for control_status_all */
+ 	uint32_t max_redirect_count;
+ 	double max_call_latency;
+ 	double max_lockwait_latency;
+
+=== modified file 'tools/ctdb_control.c'
+--- a/tools/ctdb_control.c	2007-04-28 13:15:21 +0000
++++ b/tools/ctdb_control.c	2007-04-28 15:13:30 +0000
+@@ -35,8 +35,8 @@
+ 	printf("\nControls:\n");
+ 	printf("  ping\n");
+ 	printf("  process-exists <vnn:pid>           see if a process exists\n");
+-	printf("  status <vnn>                       show ctdb status on a node\n");
+-	printf("  debug <vnn> <level>                set ctdb debug level on a node\n");
++	printf("  status <vnn|all>                   show ctdb status on a node\n");
++	printf("  debug <vnn|all> <level>            set ctdb debug level on a node\n");
+ 	printf("  debuglevel                         display ctdb debug levels\n");
+ 	printf("  getvnnmap <vnn>                    display ctdb vnnmap\n");
+ 	printf("  setvnnmap <vnn> <generation> <numslots> <lmaster>*\n");
+@@ -106,6 +106,41 @@
+ }
+ 
+ /*
++  display remote ctdb status combined from all nodes
++ */
++static int control_status_all(struct ctdb_context *ctdb)
++{
++	int ret, i;
++	struct ctdb_status status;
++	ZERO_STRUCT(status);
++
++	for (i=0;i<ctdb->num_nodes;i++) {
++		struct ctdb_status s1;
++		int j;
++		uint32_t *v1 = (uint32_t *)&s1;
++		uint32_t *v2 = (uint32_t *)&status;
++		uint32_t num_ints = 
++			offsetof(struct ctdb_status, __last_uint32) / sizeof(uint32_t);
++		ret = ctdb_status(ctdb, i, &s1);
++		if (ret != 0) {
++			printf("Unable to get status from node %u\n", i);
++			return ret;
++		}
++		for (j=0;j<num_ints;j++) {
++			v2[j] += v1[j];
++		}
++		status.max_redirect_count = 
++			MAX(status.max_redirect_count, s1.max_redirect_count);
++		status.max_call_latency = 
++			MAX(status.max_call_latency, s1.max_call_latency);
++		status.max_lockwait_latency = 
++			MAX(status.max_lockwait_latency, s1.max_lockwait_latency);
++	}
++	show_status(&status);
++	return 0;
++}
++
++/*
+   display remote ctdb status
+  */
+ static int control_status(struct ctdb_context *ctdb, int argc, const char **argv)
+@@ -117,6 +152,10 @@
+ 		usage();
+ 	}
+ 
++	if (strcmp(argv[0], "all") == 0) {
++		return control_status_all(ctdb);
++	}
++
+ 	vnn = strtoul(argv[0], NULL, 0);
+ 
+ 	ret = ctdb_status(ctdb, vnn, &status);
+@@ -297,19 +336,31 @@
+ static int control_debug(struct ctdb_context *ctdb, int argc, const char **argv)
+ {
+ 	int ret;
+-	uint32_t vnn, level;
++	uint32_t vnn, level, i;
+ 
+ 	if (argc < 2) {
+ 		usage();
+ 	}
+ 
+-	vnn   = strtoul(argv[0], NULL, 0);
+ 	level = strtoul(argv[1], NULL, 0);
+ 
++	if (strcmp(argv[0], "all") == 0) {
++		for (i=0;i<ctdb->num_nodes;i++) {
++			ret = ctdb_set_debuglevel(ctdb, i, level);
++			if (ret != 0) {
++				printf("Unable to set debug level on node %u\n", i);
++				break;
++			}
++		}
++		return 0;
++	}
++
++	vnn = strtoul(argv[0], NULL, 0);
+ 	ret = ctdb_set_debuglevel(ctdb, vnn, level);
+ 	if (ret != 0) {
+ 		printf("Unable to set debug level on node %u\n", vnn);
+ 	}
++
+ 	return 0;
+ }
+ 
+

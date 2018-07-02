@@ -1,0 +1,366 @@
+From r-help-bounces@stat.math.ethz.ch  Thu May 10 01:25:27 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4A5PQqD005436
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 10 May 2007 01:25:27 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4A5NPSH000385;
+	Thu, 10 May 2007 07:24:05 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.6 required=5.0 tests=AWL,
+	BAYES_50 autolearn=no version=3.1.8
+Received: from wr-out-0506.google.com (wr-out-0506.google.com [64.233.184.236])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4A5N9kJ032723
+	for <r-help@stat.math.ethz.ch>; Thu, 10 May 2007 07:23:10 +0200
+Received: by wr-out-0506.google.com with SMTP id i21so503546wra
+	for <r-help@stat.math.ethz.ch>; Wed, 09 May 2007 22:23:09 -0700 (PDT)
+Received: by 10.114.56.1 with SMTP id e1mr351646waa.1178774588608;
+	Wed, 09 May 2007 22:23:08 -0700 (PDT)
+Received: by 10.114.133.5 with HTTP; Wed, 9 May 2007 22:23:08 -0700 (PDT)
+Message-ID: <13e802630705092223j333f9998u2fceff33774f3fd0@mail.gmail.com>
+Date: Thu, 10 May 2007 00:23:08 -0500
+From: "Paul Johnson" <pauljohn32@gmail.com>
+To: r-help@stat.math.ethz.ch
+MIME-Version: 1.0
+Content-Disposition: inline
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+X-MIME-Autoconverted: from quoted-printable to 8bit by hypatia.math.ethz.ch id
+	l4A5N9kJ032723
+Subject: [R] Follow-up about ordinal logit with mixtures: how about
+	'continuation ratio' strategy?
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="windows-1252"
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+Content-Transfer-Encoding: 8bit
+X-MIME-Autoconverted: from quoted-printable to 8bit by flax9.uwaterloo.ca id l4A5PQqD005436
+
+This is a follow up to the message I posted 3 days ago about how to
+estimate mixed ordinal logit models.  I hope you don't mind that I am
+just pasting in the code and comments from an R file for your
+feedback.  Actual estimates are at the end of the post.
+
+### Subject: mixed ordinal logit via "augmented" data setup.
+
+### I've been interested in estimating an ordinal logit model with
+### a random parameter.  I asked in r-help about it. It appears to be
+### a difficult problem because even well established commercial
+### programs like SAS are prone to provide unreliable estimates.
+
+### So far, I've found 3 avenues for research.  1) Go Bayesian and use
+### MCMC to estimate the model.  2) Specify a likelihood function and
+### then use R's optim function (as described in Laura A. Thompson,
+### 2007, S-PLUS (and R) Manual to Accompany Agresti's Categorical
+### Data Analysis (2002) 2nd edition).  My guess is that either of
+### those approaches would be worth the while, but I might have
+### trouble persuading a target audience that they have good
+### properties.  3) Adapt a "continuation ratio" approach.
+
+### This latter approach was suggested by a post in r-help by Daniel
+### Farewell <farewelld_at_Cardiff.ac.uk>
+### http://tolstoy.newcastle.edu.au/R/help/06/08/32398.html#start
+### It pointed me in the direction of "continuation ratio" logit models
+### and one way to estimate an ordinal logit model with random
+### parameters.
+
+### Farewell's post gives working example code that shows a way to
+### convert a K category ordinal variable into K-1 dichotomous
+### indicators (a "continuation ratio" model). Those K-1 indicators
+### can be "stacked" into one column and then a logistic regression
+### program that is written for a two-valued output can be used.
+### Farewell reasoned that one might then use a program for two-valued
+### outputs including mixed effects.  In his proposal, one would use
+### the program lmer (package: lme4) ( a binomial family with a logit
+### link) to estimate parameters for a dichotomous logit model with
+### random parameters.
+
+### This is the sort of magic trick I had suspected might be possible.
+### Still, it is hard to believe it would work.  But in the r-help
+### response to the post by Farewell, there is no general objection
+### against his modeling strategy.
+
+### I had not studied "continuation ratio" logit models before, so I
+### looked up a few articles on estimation of ordinal models by
+### re-coding the output as a sequence of binary comparisons (stop
+### ratios, continuation ratios, etc).  The article that is most clear
+### on how this can be done to estimate a proportional odds logistic
+### model is
+
+### Stephen R. Cole, Paul D. Allison, and Cande V. Ananth,
+### Estimation of Cumulative Odds Ratios
+### Ann Epidemiol 2004;14:172–178.
+
+### They claim that one can recode an n-chotomy into n-1 dichotomous
+### indicators.  Each observation in the original dataset begets n-1
+### lines in the augmented version.  After creating the dichotomous
+### indicator, one uses an ordinary dichotomous logit model to
+### estimate parameters and cutpoints for an ordinal logit
+### model. Cole, et al., are very clear.
+
+### There is an additional benefit to the augmented data approach.
+### One can explicitly test the proportional odds assumption by checking
+### for interactions between the included independent variables and the
+### "level" of the dependent variable being considered.  The Cole
+### article shows some examples where the proportional assumption appears
+### to be violated.
+
+### To test it, I created the following example.  This shows the
+### results of maximum likelihood estimation with the programs "polr"
+### (package:MASS) and "lrm" (package: Design).  The estimates from
+### the augmented data approach are not exactly the same as polr or
+### lrm, but they are close.  It appears to me the claims about the
+### augmented data approach are mostly correct.  The parameter
+### estimates are pretty close to the true values, while the estimates
+### of the ordinal cutpoints are a bit difficult to interpret.
+
+### I don't know what to make of the model diagnostics for the augmented
+### data model. Should I have confidence in the standard errors?
+#### How to interpret the degrees of freedom when 3 lines
+### of data are manufactured from 1 observation?  Are likelihood-ratio
+### (anova) tests valid in this context?  Are these estimates from the
+### augmented data "equivalent to maximum likelihood"?  What does it
+### mean that the t-ratios are so different?  That seems to be prima-facie
+### evidence that the estimates based on the augmented data set are not
+### trustworthy.
+
+### Suppose I convince myself that the estimates of the ordinal model
+### are "as good as" maximum likelihood.  Is it reasonable to take the
+### next step, and follow Farewell's idea of using this kind of model
+### to estimate a mixture model?  There are K-1 lines per case
+### in the augmented data set. Suppose the observations were grouped
+### into M sets and one hypothesized a random parameter across those M
+### groups.  Will the lmer (or other mixed model for dichotomous
+### logits) be affected by the multiple lines?
+
+### I'll probably stew over this and add a mixture component in the
+### example below and find out how lmer does.
+
+
+### File: ordLogit_Simulation-01.R
+### Create a 4 category ordinal dependent variable Y valued 1,2,3,4
+### with predictors "x" and "afactor".  The "True" model has the
+### linear predictor
+
+### eta = 0.3 * x + 0 (afactor==1)+ 0.4 * (afactor==2) + 0.5
+(afactor==3)+ 0.9 (afactor==4)
+### and the "cutpoints" between categories are -2.3, -0.5, and 0.66.
+
+
+N <- 1000
+A <- -1
+B <- 0.3
+cutpoint <- c( -2.3, -0.5, 0.66 )
+
+
+afactor <- gl (n=4, k = N/4)
+afactorImpacts <- c( 0, 0.4, .5, .9 )
+
+### Make "first" impact 0 so it does not confuse our study of
+intercept & cutpoints.
+### Any other value gets up getting added into the intercept and/or
+first cutpoint.
+
+set.seed(333)
+x <- 1 + 10 * rnorm(N)
+eta <- B * x  + afactorImpacts[as.numeric(afactor)]
+rand <- rlogis (N)
+input <- eta + rand
+
+y <- numeric(N)
+
+dat <- data.frame(respno = 1:N, x, afactor,  eta, rand, input,  y )
+#set y values
+dat$y[ dat$input <= cutpoint[1] ] <- 1
+dat$y[ cutpoint[1] < dat$input & dat$input <= cutpoint[2] ] <- 2
+dat$y[ cutpoint[2] < dat$input & dat$input <= cutpoint[3] ] <- 3
+dat$y[ cutpoint[3] <= dat$input ] <- 4
+#convert to factor for analysis
+dat$y <- factor(dat$y, ordered=T)
+
+### Here's the "usual" proportional odds logistic regression
+summary(polr(y ~ x + afactor, data=dat, Hess=T))
+
+### Create a new augmented data frame as recommended by
+### STEPHEN R. COLE, PAUL D. ALLISON, AND CANDE V. ANANTH,
+### Estimation of Cumulative Odds Ratios
+###
+### Ann Epidemiol 2004;14:172–178.
+### This new data frame has 3 lines for each original case,
+### and a new dichotomous "response" variable called D
+
+augmentedDat <- NULL
+newdf <- dat
+
+for (i in 2: length(levels(dat$y))) {
+  D <- ifelse ( dat$y >= i , 1, 0)
+  newone <- data.frame(newdf, i, D)
+  augmentedDat <- rbind(augmentedDat, newone)
+}
+
+### Compare previous POLR output to this model
+summary(glm(D~ -1 + factor(i) + x + afactor , data=augmentedDat,
+family=binomial))
+### Well, the estimates for "x" and "afactor" are consistent with the
+POLR output,
+### but the estimates of the cutpoints come out with the unexpected
+signs.  No big deal,
+### but I will have to figure it out.
+
+
+### Might as well see what lrm says.
+library(Design)
+
+lrm (y ~ x + afactor, data=dat)
+### Interesting. The cutpoint estimates come out with the "wrong"
+sign, same as the
+### augmented df estimates.
+
+
+
+lrm( D ~ -1 + factor(i) + x + afactor, data=augmentedDat)
+### Hmm. The estimates of factor(i) are, at first, baffling. It appears that
+### the estimates for i=3 and i=4 are "delta" estimates--changes
+against the intercept.
+### I mean, the Intercept is an estimate of cutpoint[3] and the the estimate of
+### cutpoint[2] = intercept + i=3
+### and estimate of cutpoint[1] = intercept + i=2.
+### Oh, and then reverse the signs.
+
+===============================================================
+
+In case you do not want to run this for yourself, here are the results
+of the 4 regressions.
+
+
+> summary(polr(y ~ x + afactor, data=dat, Hess=T))
+Call:
+polr(formula = y ~ x + afactor, data = dat, Hess = T)
+
+Coefficients:
+             Value Std. Error   t value
+x        0.3194385 0.01534613 20.815566
+afactor2 0.4829818 0.21012233  2.298574
+afactor3 0.7186079 0.21405603  3.357102
+afactor4 1.2058896 0.21511922  5.605681
+
+Intercepts:
+    Value    Std. Error t value
+1|2  -2.2643   0.1782   -12.7059
+2|3  -0.5304   0.1587    -3.3434
+3|4   0.7312   0.1582     4.6229
+
+Residual Deviance: 1502.426
+AIC: 1516.426
+
+
+
+> summary(glm(D~ -1 + factor(i) + x + afactor , data=augmentedDat, family=binomial))
+
+Call:
+glm(formula = D ~ -1 + factor(i) + x + afactor, family = binomial,
+    data = augmentedDat)
+
+Deviance Residuals:
+    Min       1Q   Median       3Q      Max
+-3.1563  -0.3113   0.1191   0.4392   2.9441
+
+Coefficients:
+           Estimate Std. Error z value Pr(>|z|)
+factor(i)2  2.29647    0.16395  14.007  < 2e-16 ***
+factor(i)3  0.55764    0.13968   3.992 6.55e-05 ***
+factor(i)4 -0.69938    0.13918  -5.025 5.03e-07 ***
+x           0.31961    0.01265  25.256  < 2e-16 ***
+afactor2    0.40112    0.16424   2.442   0.0146 *
+afactor3    0.66854    0.16712   4.000 6.33e-05 ***
+afactor4    1.16989    0.16995   6.884 5.82e-12 ***
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
+(Dispersion parameter for binomial family taken to be 1)
+
+    Null deviance: 4158.9  on 3000  degrees of freedom
+Residual deviance: 1837.1  on 2993  degrees of freedom
+AIC: 1851.1
+
+Number of Fisher Scoring iterations: 6
+
+
+
+
+
+> lrm (y ~ x + afactor, data=dat)
+
+Logistic Regression Model
+
+lrm(formula = y ~ x + afactor, data = dat)
+
+
+Frequencies of Responses
+  1   2   3   4
+184 155 138 523
+
+       Obs  Max Deriv Model L.R.       d.f.          P          C        Dxy
+      1000      6e-11     923.08          4          0      0.897      0.793
+     Gamma      Tau-a         R2      Brier
+     0.794      0.516      0.661      0.077
+
+          Coef    S.E.    Wald Z P
+y>=2       2.2643 0.17821 12.71  0.0000
+y>=3       0.5304 0.15865  3.34  0.0008
+y>=4      -0.7312 0.15817 -4.62  0.0000
+x          0.3194 0.01535 20.82  0.0000
+afactor=2  0.4830 0.21012  2.30  0.0215
+afactor=3  0.7186 0.21406  3.36  0.0008
+afactor=4  1.2059 0.21512  5.61  0.0000
+
+
+
+> lrm( D ~ -1 + factor(i) + x + afactor, data=augmentedDat)
+
+Logistic Regression Model
+
+lrm(formula = D ~ -1 + factor(i) + x + afactor, data = augmentedDat)
+
+
+Frequencies of Responses
+   0    1
+1000 2000
+
+       Obs  Max Deriv Model L.R.       d.f.          P          C        Dxy
+      3000      2e-12    1981.99          6          0      0.933      0.867
+     Gamma      Tau-a         R2      Brier
+     0.868      0.385      0.671      0.097
+
+          Coef    S.E.    Wald Z P
+Intercept  2.2965 0.16396  14.01 0.0000
+i=3       -1.7388 0.16135 -10.78 0.0000
+i=4       -2.9959 0.17392 -17.23 0.0000
+x          0.3196 0.01266  25.25 0.0000
+afactor=2  0.4011 0.16424   2.44 0.0146
+afactor=3  0.6685 0.16713   4.00 0.0001
+afactor=4  1.1699 0.16995   6.88 0.0000
+
+
+-- 
+Paul E. Johnson
+Professor, Political Science
+1541 Lilac Lane, Room 504
+University of Kansas
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

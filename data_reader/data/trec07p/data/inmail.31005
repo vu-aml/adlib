@@ -1,0 +1,96 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon May  7 21:32:39 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l481WcqD005466
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 7 May 2007 21:32:38 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 881D4162C19
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue,  8 May 2007 01:32:37 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.9 required=3.8 tests=AWL, BAYES_00, FORGED_RCVD_HELO,
+	NO_REAL_NAME,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: from amber.vis-av.com (dsl092-075-243.bos1.dsl.speakeasy.net
+	[66.92.75.243]) by lists.samba.org (Postfix) with SMTP id 65559162B71
+	for <samba-technical@samba.org>; Tue,  8 May 2007 01:31:13 +0000 (GMT)
+Received: (qmail 10595 invoked from network); 8 May 2007 01:31:12 -0000
+Received: from unknown (HELO oberon-mail.internal) (192.168.1.71)
+	by amber.internal with SMTP; 8 May 2007 01:31:12 -0000
+Received: (nullmailer pid 10502 invoked by uid 0);
+	Tue, 08 May 2007 01:31:12 -0000
+From: derrell@samba.org
+To: Andrew Bartlett <abartlet@samba.org>
+References: <20070507030225.E0925162AD2@lists.samba.org>
+	<463ED152.9070405@samba.org> <6474fsc6.fsf@oberon-mail.internal>
+	<1178583646.4852.2.camel@thinker>
+Date: Mon, 07 May 2007 21:31:11 -0400
+In-Reply-To: <1178583646.4852.2.camel@thinker> (Andrew Bartlett's message of
+	"Tue, 08 May 2007 10:20:46 +1000")
+Message-ID: <1whsw17k.fsf@oberon-mail.internal>
+User-Agent: Gnus/5.110004 (No Gnus v0.4) XEmacs/21.4.17 (linux)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Cc: "Stefan \(metze\) Metzmacher" <metze@samba.org>,
+   samba-technical@lists.samba.org, samba-technical@samba.org
+Subject: Re: svn commit: samba r22731 - in branches/SAMBA_3_0/source: . tests
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: derrell@samba.org
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Andrew Bartlett <abartlet@samba.org> writes:
+
+> On Mon, 2007-05-07 at 13:37 -0400, derrell@samba.org wrote:
+>> By
+>> consistently testing for and using the warnings-are-errors flag, the problem
+>> is eliminated.  During a developer build, readahead() is found to _not_ exist
+>> so the compilation works fine.  During a production build, readahead() is
+>> found to exist and the compilation works fine since it doesn't use the
+>> warnings-are-errors flag.
+>
+> This sounds like a disaster!
+>
+> We shouldn't be gaining or loosing features just because we are in a
+> developer build.  That way leads to madness, particularly if a user or
+> developer encounters a problem, then rebuilds with --enable-developer to
+> trace it down.
+
+I'm open to suggestions.  Prior to this change, I couldn't do a developer
+build.  Configure determined that readahead() was available, and the compile
+failed because readahead() didn't have an external declaration.  Although the
+problem occurred on my system in regards to readahead(), it is actually a
+generic issue (it could be any function that is missing an external
+declaration) and I fixed it in what should be a generic fashion.
+
+Maybe the correct solution is to NOT use -Werror-implicit-function-declaration
+for the compilation if --enable-developer is specified, but rather to have to
+specifically request it, e.g. via something like
+--enable-error-implicit-function-declaration.  That way, when one wants to
+look for missing declarations, one can enable that feature.  When not, the
+current problem goes away.
+
+IMO, it's worthwhile for developer builds to error upon missing declaration so
+I prefer the existing implementation which enables it for all developer
+builds.  It should not, however, be enabled at the expense of not being able
+to do a compile with a developer build.
+
+Suggestions?
+
+Cheers,
+
+Derrell
+

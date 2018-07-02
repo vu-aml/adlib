@@ -1,0 +1,1061 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat Jun  2 05:56:01 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l529u0hB021723
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 2 Jun 2007 05:56:01 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id A1294162C34
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat,  2 Jun 2007 09:55:54 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.8 required=3.8 tests=ALL_TRUSTED,AWL,BAYES_00 
+	autolearn=ham version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from blackjack.home.nowhere-productions.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 333D6162ACA
+	for <samba-technical@lists.samba.org>;
+	Sat,  2 Jun 2007 09:54:38 +0000 (GMT)
+From: Kai Blin <kai@samba.org>
+To: samba-technical@lists.samba.org
+Date: Sat, 2 Jun 2007 11:54:29 +0200
+User-Agent: KMail/1.9.6
+Organization: Samba Team
+MIME-Version: 1.0
+Content-Type: multipart/signed; boundary="nextPart5601883.KVZrAB6MeQ";
+	protocol="application/pgp-signature"; micalg=pgp-sha1
+Content-Transfer-Encoding: 7bit
+Message-Id: <200706021154.33249.kai@samba.org>
+Subject: [Samba4][PATCH] Updating the winbind protocol used in Samba4
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+--nextPart5601883.KVZrAB6MeQ
+Content-Type: multipart/mixed;
+  boundary="Boundary-01=_V5TYG4MI4X6xtrV"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+
+--Boundary-01=_V5TYG4MI4X6xtrV
+Content-Type: text/plain;
+  charset="us-ascii"
+Content-Transfer-Encoding: quoted-printable
+Content-Disposition: inline
+
+Hi folks,
+
+attached is my go at updating the samba4 winbind protocol to version 18.
+
+nsswitch/winbindd_nss.h is just copied from SAMBA_3_0.=20
+nsswitch/winbind_nss_config.h is copied from SAMBA_3_0, too, but I had to=20
+drop some of the defines to make things build again.
+
+Specifically, I had to drop the BOOL defines and I had to change the sockle=
+n_t=20
+ifdef.
+
+The other changes are pretty obvious adaptions to the new winbind_request a=
+nd=20
+winbind_response structures.
+
+In order to not change anything in nsswitch/winbindd_nss.h, I left the=20
+different data types winbind_request and winbind_response use for=20
+extra_data.data. Is this difference intentional?
+
+Cheers,
+Kai
+
+=2D-=20
+Kai Blin
+WorldForge developer  http://www.worldforge.org/
+Wine developer        http://wiki.winehq.org/KaiBlin
+Samba team member     http://us1.samba.org/samba/team/
+=2D-
+Will code for cotton.
+
+--Boundary-01=_V5TYG4MI4X6xtrV
+Content-Type: text/x-diff;
+  charset="us-ascii";
+  name="2007060201.diff"
+Content-Transfer-Encoding: quoted-printable
+Content-Disposition: attachment;
+	filename="2007060201.diff"
+
+Index: winbind/wb_server.h
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D
+=2D-- winbind/wb_server.h	(revision 23266)
++++ winbind/wb_server.h	(working copy)
+@@ -20,6 +20,7 @@
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ */
+=20
++#include "nsswitch/winbind_nss_config.h"
+ #include "nsswitch/winbindd_nss.h"
+=20
+=20
+Index: winbind/wb_samba3_protocol.c
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D
+=2D-- winbind/wb_samba3_protocol.c	(revision 23266)
++++ winbind/wb_samba3_protocol.c	(working copy)
+@@ -21,6 +21,7 @@
+ */
+=20
+ #include "includes.h"
++#include "nsswitch/winbind_nss_config.h"
+ #include "nsswitch/winbindd_nss.h"
+ #include "winbind/wb_server.h"
+ #include "smbd/service_stream.h"
+@@ -138,14 +139,21 @@
+ 	case WINBINDD_ENDGRENT:
+ 	case WINBINDD_GETGRENT:
+ 	case WINBINDD_PAM_CHAUTHTOK:
++	case WINBINDD_PAM_LOGOFF:
++	case WINBINDD_PAM_CHNG_PSWD_AUTH_CRAP:
+ 	case WINBINDD_LIST_USERS:
+ 	case WINBINDD_LIST_GROUPS:
++	case WINBINDD_LOOKUPRIDS:
+ 	case WINBINDD_SID_TO_UID:
+ 	case WINBINDD_SID_TO_GID:
++	case WINBINDD_SIDS_TO_XIDS:
+ 	case WINBINDD_UID_TO_SID:
+ 	case WINBINDD_GID_TO_SID:
+=2D	case WINBINDD_ALLOCATE_RID:
+=2D	case WINBINDD_ALLOCATE_RID_AND_GID:
++	case WINBINDD_ALLOCATE_UID:
++	case WINBINDD_ALLOCATE_GID:
++	case WINBINDD_SET_MAPPING:
++	case WINBINDD_SET_HWM:
++	case WINBINDD_DUMP_MAPS:
+ 	case WINBINDD_CHECK_MACHACC:
+ 	case WINBINDD_DOMAIN_INFO:
+ 	case WINBINDD_SHOW_SEQUENCE:
+@@ -155,13 +163,19 @@
+ 	case WINBINDD_INIT_CONNECTION:
+ 	case WINBINDD_DUAL_SID2UID:
+ 	case WINBINDD_DUAL_SID2GID:
+=2D	case WINBINDD_DUAL_IDMAPSET:
++	case WINBINDD_DUAL_SIDS2XIDS:
++	case WINBINDD_DUAL_UID2SID:
++	case WINBINDD_DUAL_GID2SID:
++	case WINBINDD_DUAL_SET_MAPPING:
++	case WINBINDD_DUAL_SET_HWM:
++	case WINBINDD_DUAL_DUMP_MAPS:
+ 	case WINBINDD_DUAL_UID2NAME:
+ 	case WINBINDD_DUAL_NAME2UID:
+ 	case WINBINDD_DUAL_GID2NAME:
+ 	case WINBINDD_DUAL_NAME2GID:
+ 	case WINBINDD_DUAL_USERINFO:
+ 	case WINBINDD_DUAL_GETSIDALIASES:
++	case WINBINDD_CCACHE_NTLMAUTH:
+ 	case WINBINDD_NUM_CMDS:
+ 		DEBUG(10, ("Unimplemented winbind samba3 request %d\n",=20
+ 			   s3call->request.cmd));
+@@ -178,7 +192,7 @@
+ 	uint8_t *extra_data;
+ 	size_t extra_data_len =3D 0;
+=20
+=2D	extra_data =3D call->response.extra_data;
++	extra_data =3D call->response.extra_data.data;
+ 	if (extra_data) {
+ 		extra_data_len =3D call->response.length -
+ 			sizeof(call->response);
+@@ -189,11 +203,11 @@
+=20
+ 	/* don't push real pointer values into sockets */
+ 	if (extra_data) {
+=2D		call->response.extra_data =3D (void *)0xFFFFFFFF;
++		call->response.extra_data.data =3D (void *)0xFFFFFFFF;
+ 	}
+ 	memcpy(blob.data, &call->response, sizeof(call->response));
+ 	/* set back the pointer */
+=2D	call->response.extra_data =3D extra_data;
++	call->response.extra_data.data =3D extra_data;
+=20
+ 	if (extra_data) {
+ 		memcpy(blob.data + sizeof(call->response), extra_data, extra_data_len);
+Index: winbind/wb_samba3_cmd.c
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D
+=2D-- winbind/wb_samba3_cmd.c	(revision 23266)
++++ winbind/wb_samba3_cmd.c	(working copy)
+@@ -22,6 +22,7 @@
+ */
+=20
+ #include "includes.h"
++#include "nsswitch/winbind_nss_config.h"
+ #include "nsswitch/winbindd_nss.h"
+ #include "winbind/wb_server.h"
+ #include "winbind/wb_async_helpers.h"
+@@ -111,9 +112,9 @@
+ NTSTATUS wbsrv_samba3_priv_pipe_dir(struct wbsrv_samba3_call *s3call)
+ {
+ 	s3call->response.result			=3D WINBINDD_OK;
+=2D	s3call->response.extra_data =3D
++	s3call->response.extra_data.data =3D
+ 		smbd_tmp_path(s3call, WINBINDD_SAMBA3_PRIVILEGED_SOCKET);
+=2D	NT_STATUS_HAVE_NO_MEMORY(s3call->response.extra_data);
++	NT_STATUS_HAVE_NO_MEMORY(s3call->response.extra_data.data);
+ 	return NT_STATUS_OK;
+ }
+=20
+@@ -262,7 +263,7 @@
+ 	}
+=20
+ 	s3call->response.result =3D WINBINDD_OK;
+=2D	s3call->response.extra_data =3D sids_string;
++	s3call->response.extra_data.data =3D sids_string;
+ 	s3call->response.length +=3D strlen(sids_string)+1;
+ 	s3call->response.data.num_entries =3D num_sids;
+=20
+@@ -328,7 +329,7 @@
+ 	}
+=20
+ 	s3call->response.result =3D WINBINDD_OK;
+=2D	s3call->response.extra_data =3D sids_string;
++	s3call->response.extra_data.data =3D sids_string;
+ 	s3call->response.length +=3D strlen(sids_string);
+ 	s3call->response.data.num_entries =3D num_sids;
+=20
+@@ -510,7 +511,7 @@
+ 	}
+=20
+ 	if (s3call->request.flags & WBFLAG_PAM_INFO3_NDR) {
+=2D		s3call->response.extra_data =3D info3.data;
++		s3call->response.extra_data.data =3D info3.data;
+ 		s3call->response.length +=3D info3.length;
+ 	}
+=20
+@@ -521,7 +522,7 @@
+ 	}
+ =09
+ 	if (s3call->request.flags & WBFLAG_PAM_UNIX_NAME) {
+=2D		s3call->response.extra_data =3D unix_username;
++		s3call->response.extra_data.data =3D unix_username;
+ 		s3call->response.length +=3D strlen(unix_username)+1;
+ 	}
+=20
+@@ -654,7 +655,7 @@
+=20
+ 	s3call->response.result =3D WINBINDD_OK;
+ 	if (num_domains > 0) {
+=2D		s3call->response.extra_data =3D result;
++		s3call->response.extra_data.data =3D result;
+ 		s3call->response.length +=3D strlen(result)+1;
+ 	}
+=20
+Index: auth/auth_winbind.c
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D
+=2D-- auth/auth_winbind.c	(revision 23266)
++++ auth/auth_winbind.c	(working copy)
+@@ -36,7 +36,7 @@
+ 		NTSTATUS status;
+ 		DATA_BLOB blob;
+ 		blob.length =3D len - 4;
+=2D		blob.data =3D (uint8_t *)(((char *)response->extra_data) + 4);
++		blob.data =3D (uint8_t *)(((char *)response->extra_data.data) + 4);
+=20
+ 		status =3D ndr_pull_struct_blob(&blob, mem_ctx, info3,
+ 					      (ndr_pull_flags_fn_t)ndr_pull_netr_SamInfo3);
+@@ -91,12 +91,12 @@
+=20
+ 	request.data.auth_crap.logon_parameters =3D user_info->logon_parameters;
+=20
+=2D	winbind_strcpy(request.data.auth_crap.user,=20
+=2D		       user_info->client.account_name);
+=2D	winbind_strcpy(request.data.auth_crap.domain,=20
+=2D		       user_info->client.domain_name);
+=2D	winbind_strcpy(request.data.auth_crap.workstation,=20
+=2D		       user_info->workstation_name);
++	safe_strcpy(request.data.auth_crap.user,
++		       user_info->client.account_name, sizeof(fstring));
++	safe_strcpy(request.data.auth_crap.domain,
++		       user_info->client.domain_name, sizeof(fstring));
++	safe_strcpy(request.data.auth_crap.workstation,
++		       user_info->workstation_name, sizeof(fstring));
+=20
+ 	memcpy(request.data.auth_crap.chal, ctx->auth_ctx->challenge.data.data, s=
+izeof(request.data.auth_crap.chal));
+=20
+@@ -115,11 +115,11 @@
+ 	nt_status =3D NT_STATUS(response.data.auth.nt_status);
+ 	NT_STATUS_NOT_OK_RETURN(nt_status);
+=20
+=2D	if (result =3D=3D NSS_STATUS_SUCCESS && response.extra_data) {
++	if (result =3D=3D NSS_STATUS_SUCCESS && response.extra_data.data) {
+ 		union netr_Validation validation;
+=20
+ 		nt_status =3D get_info3_from_ndr(mem_ctx, &response, &info3);
+=2D		SAFE_FREE(response.extra_data);
++		SAFE_FREE(response.extra_data.data);
+ 		NT_STATUS_NOT_OK_RETURN(nt_status);=20
+=20
+ 		validation.sam3 =3D &info3;
+@@ -128,7 +128,7 @@
+ 								 3, &validation,
+ 								 server_info);
+ 		return nt_status;
+=2D	} else if (result =3D=3D NSS_STATUS_SUCCESS && !response.extra_data) {
++	} else if (result =3D=3D NSS_STATUS_SUCCESS && !response.extra_data.data)=
+ {
+ 		DEBUG(0, ("Winbindd authenticated the user [%s]\\[%s], "
+ 			  "but did not include the required info3 reply!\n",=20
+ 			  user_info->client.domain_name, user_info->client.account_name));
+Index: nsswitch/wb_common.c
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D
+=2D-- nsswitch/wb_common.c	(revision 23294)
++++ nsswitch/wb_common.c	(working copy)
+@@ -38,7 +38,7 @@
+ 	/* Free any allocated extra_data */
+=20
+ 	if (response)
+=2D		SAFE_FREE(response->extra_data);
++		SAFE_FREE(response->extra_data.data);
+ }
+=20
+ /* Initialise a request structure */
+@@ -324,13 +324,13 @@
+=20
+ 	if (winbindd_request(WINBINDD_PRIV_PIPE_DIR, &request, &response) =3D=3D =
+NSS_STATUS_SUCCESS) {
+ 		int fd;
+=2D		if ((fd =3D winbind_named_pipe_sock(response.extra_data)) !=3D -1) {
++		if ((fd =3D winbind_named_pipe_sock(response.extra_data.data)) !=3D -1) {
+ 			close(winbindd_fd);
+ 			winbindd_fd =3D fd;
+ 		}
+ 	}
+=20
+=2D	SAFE_FREE(response.extra_data);
++	SAFE_FREE(response.extra_data.data);
+=20
+ 	return winbindd_fd;
+ #else
+@@ -488,7 +488,7 @@
+ 	   the server.  This has no meaning in the client's address space
+ 	   so we clear it out. */
+=20
+=2D	response->extra_data =3D NULL;
++	response->extra_data.data =3D NULL;
+=20
+ 	/* Read variable length response */
+ =09
+@@ -498,11 +498,11 @@
+ 	=09
+ 		/* Mallocate memory for extra data */
+ 	=09
+=2D		if (!(response->extra_data =3D malloc(extra_data_len))) {
++		if (!(response->extra_data.data =3D malloc(extra_data_len))) {
+ 			return -1;
+ 		}
+ 	=09
+=2D		if ((result2 =3D read_sock(response->extra_data, extra_data_len))
++		if ((result2 =3D read_sock(response->extra_data.data, extra_data_len))
+ 		    =3D=3D -1) {
+ 			free_response(response);
+ 			return -1;
+Index: nsswitch/winbindd_nss.h
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D
+=2D-- nsswitch/winbindd_nss.h	(revision 23294)
++++ nsswitch/winbindd_nss.h	(working copy)
+@@ -4,6 +4,7 @@
+    Winbind daemon for ntdom nss module
+=20
+    Copyright (C) Tim Potter 2000
++   Copyright (C) Gerald Carter 2006
+   =20
+    You are free to use this interface definition in any way you see
+    fit, including without restriction, using this header in your own
+@@ -27,20 +28,33 @@
+ #define _WINBINDD_NTDOM_H
+=20
+ #define WINBINDD_SOCKET_NAME "pipe"            /* Name of PF_UNIX socket */
++
++/* Let the build environment override the public winbindd socket location.=
+ This
++ * is needed for launchd support -- jpeach.
++ */
+ #ifndef WINBINDD_SOCKET_DIR
+ #define WINBINDD_SOCKET_DIR  "/tmp/.winbindd"  /* Name of PF_UNIX dir */
+ #endif
++
+ #define WINBINDD_PRIV_SOCKET_SUBDIR "winbindd_privileged" /* name of subdi=
+rectory of lp_lockdir() to hold the 'privileged' pipe */
+ #define WINBINDD_DOMAIN_ENV  "WINBINDD_DOMAIN" /* Environment variables */
+ #define WINBINDD_DONT_ENV    "_NO_WINBINDD"
+=20
+=2Dtypedef char winbind_string[256];
+=2D#define winbind_strcpy(d,s) safe_strcpy((d),(s),sizeof(winbind_string));
+=2D
+ /* Update this when you change the interface.  */
+=20
+=2D#define WINBIND_INTERFACE_VERSION 11
++#define WINBIND_INTERFACE_VERSION 18
+=20
++/* Have to deal with time_t being 4 or 8 bytes due to structure alignment.
++   On a 64bit Linux box, we have to support a constant structure size
++   between /lib/libnss_winbind.so.2 and /li64/libnss_winbind.so.2.
++   The easiest way to do this is to always use 8byte values for time_t. */
++
++#if defined(int64)
++#  define SMB_TIME_T int64
++#else
++#  define SMB_TIME_T time_t
++#endif
++
+ /* Socket commands */
+=20
+ enum winbindd_cmd {
+@@ -69,6 +83,8 @@
+ 	WINBINDD_PAM_AUTH,
+ 	WINBINDD_PAM_AUTH_CRAP,
+ 	WINBINDD_PAM_CHAUTHTOK,
++	WINBINDD_PAM_LOGOFF,
++	WINBINDD_PAM_CHNG_PSWD_AUTH_CRAP,
+=20
+ 	/* List various things */
+=20
+@@ -80,18 +96,25 @@
+=20
+ 	WINBINDD_LOOKUPSID,
+ 	WINBINDD_LOOKUPNAME,
++	WINBINDD_LOOKUPRIDS,
+=20
+ 	/* Lookup functions */
+=20
+=2D	WINBINDD_SID_TO_UID,      =20
++	WINBINDD_SID_TO_UID,
+ 	WINBINDD_SID_TO_GID,
++	WINBINDD_SIDS_TO_XIDS,
+ 	WINBINDD_UID_TO_SID,
+ 	WINBINDD_GID_TO_SID,
+=2D	WINBINDD_ALLOCATE_RID,
+=2D	WINBINDD_ALLOCATE_RID_AND_GID,
+=20
++	WINBINDD_ALLOCATE_UID,
++	WINBINDD_ALLOCATE_GID,
++	WINBINDD_SET_MAPPING,
++	WINBINDD_SET_HWM,
++
+ 	/* Miscellaneous other stuff */
+=20
++	WINBINDD_DUMP_MAPS,
++
+ 	WINBINDD_CHECK_MACHACC,     /* Check machine account pw works */
+ 	WINBINDD_PING,              /* Just tell me winbind is running */
+ 	WINBINDD_INFO,              /* Various bit of info.  Currently just tidbi=
+ts */
+@@ -119,7 +142,7 @@
+ 	/* return a list of group sids for a user sid */
+ 	WINBINDD_GETUSERSIDS,
+=20
+=2D	/* Return the domain groups a user is in */
++	/* Various group queries */
+ 	WINBINDD_GETUSERDOMGROUPS,
+=20
+ 	/* Initialize connection in a child */
+@@ -129,7 +152,12 @@
+ 	 * between parent and children */
+ 	WINBINDD_DUAL_SID2UID,
+ 	WINBINDD_DUAL_SID2GID,
+=2D	WINBINDD_DUAL_IDMAPSET,
++	WINBINDD_DUAL_SIDS2XIDS,
++	WINBINDD_DUAL_UID2SID,
++	WINBINDD_DUAL_GID2SID,
++	WINBINDD_DUAL_SET_MAPPING,
++	WINBINDD_DUAL_SET_HWM,
++	WINBINDD_DUAL_DUMP_MAPS,
+=20
+ 	/* Wrapper around possibly blocking unix nss calls */
+ 	WINBINDD_DUAL_UID2NAME,
+@@ -140,27 +168,30 @@
+ 	WINBINDD_DUAL_USERINFO,
+ 	WINBINDD_DUAL_GETSIDALIASES,
+=20
++	/* Complete the challenge phase of the NTLM authentication
++	   protocol using cached password. */
++	WINBINDD_CCACHE_NTLMAUTH,
++
+ 	WINBINDD_NUM_CMDS
+ };
+=20
+ typedef struct winbindd_pw {
+=2D	winbind_string pw_name;
+=2D	winbind_string pw_passwd;
++	fstring pw_name;
++	fstring pw_passwd;
+ 	uid_t pw_uid;
+ 	gid_t pw_gid;
+=2D	winbind_string pw_gecos;
+=2D	winbind_string pw_dir;
+=2D	winbind_string pw_shell;
++	fstring pw_gecos;
++	fstring pw_dir;
++	fstring pw_shell;
+ } WINBINDD_PW;
+=20
+=20
+ typedef struct winbindd_gr {
+=2D	winbind_string gr_name;
+=2D	winbind_string gr_passwd;
++	fstring gr_name;
++	fstring gr_passwd;
+ 	gid_t gr_gid;
+=2D	int num_gr_mem;
+=2D	int gr_mem_ofs;   /* offset to group membership */
+=2D	char **gr_mem;
++	uint32 num_gr_mem;
++	uint32 gr_mem_ofs;   /* offset to group membership */
+ } WINBINDD_GR;
+=20
+=20
+@@ -170,7 +201,6 @@
+ #define WBFLAG_PAM_LMKEY      		0x0008
+ #define WBFLAG_PAM_CONTACT_TRUSTDOM 	0x0010
+ #define WBFLAG_QUERY_ONLY		0x0020
+=2D#define WBFLAG_ALLOCATE_RID		0x0040
+ #define WBFLAG_PAM_UNIX_NAME            0x0080
+ #define WBFLAG_PAM_AFS_TOKEN            0x0100
+ #define WBFLAG_PAM_NT_STATUS_SQUASH     0x0200
+@@ -180,74 +210,131 @@
+ /* Flag to say this is a winbindd internal send - don't recurse. */
+ #define WBFLAG_RECURSE			0x0800
+=20
++#define WBFLAG_PAM_KRB5			0x1000
++#define WBFLAG_PAM_FALLBACK_AFTER_KRB5	0x2000
++#define WBFLAG_PAM_CACHED_LOGIN		0x4000
++#define WBFLAG_PAM_GET_PWD_POLICY	0x8000	/* not used */
++
++#define WINBINDD_MAX_EXTRA_DATA (128*1024)
++
+ /* Winbind request structure */
+=20
++/*************************************************************************=
+******
++ * This structure MUST be the same size in the 32bit and 64bit builds
++ * for compatibility between /lib64/libnss_winbind.so and /lib/libnss_winb=
+ind.so
++ *=20
++ * DO NOT CHANGE THIS STRUCTURE WITHOUT TESTING THE 32BIT NSS LIB AGAINST
++ * A 64BIT WINBINDD    --jerry
++ *************************************************************************=
+*****/
++
+ struct winbindd_request {
+=2D	uint32_t length;
++	uint32 length;
+ 	enum winbindd_cmd cmd;   /* Winbindd command to execute */
++	enum winbindd_cmd original_cmd;   /* Original Winbindd command
++					     issued to parent process */
+ 	pid_t pid;               /* pid of calling process */
+=2D	uint32_t flags;            /* flags relavant to a given request */
+=2D	winbind_string domain_name;	/* name of domain for which the request app=
+lies */
++	uint32 flags;            /* flags relavant to a given request */
++	fstring domain_name;	/* name of domain for which the request applies */
+=20
+ 	union {
+=2D		winbind_string winsreq;     /* WINS request */
+=2D		winbind_string username;    /* getpwnam */
+=2D		winbind_string groupname;   /* getgrnam */
++		fstring winsreq;     /* WINS request */
++		fstring username;    /* getpwnam */
++		fstring groupname;   /* getgrnam */
+ 		uid_t uid;           /* getpwuid, uid_to_sid */
+ 		gid_t gid;           /* getgrgid, gid_to_sid */
+ 		struct {
+ 			/* We deliberatedly don't split into domain/user to
+                            avoid having the client know what the separator
+                            character is. */=09
+=2D			winbind_string user;
+=2D			winbind_string pass;
+=2D		        winbind_string require_membership_of_sid;
++			fstring user;
++			fstring pass;
++			pstring require_membership_of_sid;
++			fstring krb5_cc_type;
++			uid_t uid;
+ 		} auth;              /* pam_winbind auth module */
+                 struct {
+                         unsigned char chal[8];
+=2D			uint32_t logon_parameters;
+=2D                        winbind_string user;
+=2D                        winbind_string domain;
+=2D                        winbind_string lm_resp;
+=2D                        uint16_t lm_resp_len;
+=2D                        winbind_string nt_resp;
+=2D                        uint16_t nt_resp_len;
+=2D			winbind_string workstation;
+=2D		        winbind_string require_membership_of_sid;
++			uint32 logon_parameters;
++                        fstring user;
++                        fstring domain;
++                        fstring lm_resp;
++                        uint32 lm_resp_len;
++                        fstring nt_resp;
++                        uint32 nt_resp_len;
++			fstring workstation;
++		        fstring require_membership_of_sid;
+                 } auth_crap;
+                 struct {
+=2D                    winbind_string user;
+=2D                    winbind_string oldpass;
+=2D                    winbind_string newpass;
++                    fstring user;
++                    fstring oldpass;
++                    fstring newpass;
+                 } chauthtok;         /* pam_winbind passwd module */
+=2D		winbind_string sid;         /* lookupsid, sid_to_[ug]id */
+ 		struct {
+=2D			winbind_string dom_name;       /* lookupname */
+=2D			winbind_string name;      =20
++			fstring user;
++			fstring domain;
++			unsigned char new_nt_pswd[516];
++			uint16	new_nt_pswd_len;
++			unsigned char old_nt_hash_enc[16];
++			uint16 	old_nt_hash_enc_len;
++			unsigned char new_lm_pswd[516];
++			uint16	new_lm_pswd_len;
++			unsigned char old_lm_hash_enc[16];
++			uint16	old_lm_hash_enc_len;
++		} chng_pswd_auth_crap;/* pam_winbind passwd module */
++		struct {
++			fstring user;
++			fstring krb5ccname;
++			uid_t uid;
++		} logoff;              /* pam_winbind session module */
++		fstring sid;         /* lookupsid, sid_to_[ug]id */
++		struct {
++			fstring dom_name;       /* lookupname */
++			fstring name;      =20
+ 		} name;
+=2D		uint32_t num_entries;  /* getpwent, getgrent */
++		uint32 num_entries;  /* getpwent, getgrent */
+ 		struct {
+=2D			winbind_string username;
+=2D			winbind_string groupname;
++			fstring username;
++			fstring groupname;
+ 		} acct_mgt;
+ 		struct {
+ 			BOOL is_primary;
+=2D			winbind_string dcname;
++			fstring dcname;
+ 		} init_conn;
+ 		struct {
+=2D			winbind_string sid;
+=2D			winbind_string name;
+=2D			BOOL alloc;
++			fstring sid;
++			fstring name;
+ 		} dual_sid2id;
+ 		struct {
+=2D			int type;
++			fstring sid;
++			uint32 type;
++			uint32 id;
++		} dual_idmapset;
++		BOOL list_all_domains;
++
++		struct {
+ 			uid_t uid;
+=2D			gid_t gid;
+=2D			winbind_string sid;
+=2D		} dual_idmapset;
++			fstring user;
++			/* the effective uid of the client, must be the uid for 'user'.
++			   This is checked by the main daemon, trusted by children. */
++			/* if the blobs are length zero, then this doesn't
++			   produce an actual challenge response. It merely
++			   succeeds if there are cached credentials available
++			   that could be used. */
++			uint32 initial_blob_len; /* blobs in extra_data */
++			uint32 challenge_blob_len;
++		} ccache_ntlm_auth;
++
++		/* padding -- needed to fix alignment between 32bit and 64bit libs.
++		   The size is the sizeof the union without the padding aligned on=20
++		   an 8 byte boundary.   --jerry */
++
++		char padding[1560];
+ 	} data;
+=2D	char *extra_data;
+=2D	size_t extra_len;
++	union {
++		SMB_TIME_T padding;
++		char *data;
++	} extra_data;
++	uint32 extra_len;
+ 	char null_term;
+ };
+=20
+@@ -261,11 +348,19 @@
+=20
+ /* Winbind response structure */
+=20
++/*************************************************************************=
+******
++ * This structure MUST be the same size in the 32bit and 64bit builds
++ * for compatibility between /lib64/libnss_winbind.so and /lib/libnss_winb=
+ind.so
++ *=20
++ * DO NOT CHANGE THIS STRUCTURE WITHOUT TESTING THE 32BIT NSS LIB AGAINST
++ * A 64BIT WINBINDD    --jerry
++ *************************************************************************=
+*****/
++
+ struct winbindd_response {
+    =20
+ 	/* Header information */
+=20
+=2D	uint32_t length;                        /* Length of response */
++	uint32 length;                        /* Length of response */
+ 	enum winbindd_result result;          /* Result code */
+=20
+ 	/* Fixed length return data */
+@@ -273,7 +368,7 @@
+ 	union {
+ 		int interface_version;  /* Try to ensure this is always in the same spot=
+=2E.. */
+ 	=09
+=2D		winbind_string winsresp;		/* WINS response */
++		fstring winsresp;		/* WINS response */
+=20
+ 		/* getpwnam, getpwuid */
+ 	=09
+@@ -283,60 +378,125 @@
+=20
+ 		struct winbindd_gr gr;
+=20
+=2D		uint32_t num_entries; /* getpwent, getgrent */
++		uint32 num_entries; /* getpwent, getgrent */
+ 		struct winbindd_sid {
+=2D			winbind_string sid;        /* lookupname, [ug]id_to_sid */
++			fstring sid;        /* lookupname, [ug]id_to_sid */
+ 			int type;
+ 		} sid;
+ 		struct winbindd_name {
+=2D			winbind_string dom_name;       /* lookupsid */
+=2D			winbind_string name;      =20
++			fstring dom_name;       /* lookupsid */
++			fstring name;
+ 			int type;
+ 		} name;
+ 		uid_t uid;          /* sid_to_uid */
+ 		gid_t gid;          /* sid_to_gid */
+ 		struct winbindd_info {
+ 			char winbind_separator;
+=2D			winbind_string samba_version;
++			fstring samba_version;
+ 		} info;
+=2D		winbind_string domain_name;
+=2D		winbind_string netbios_name;
+=2D		winbind_string dc_name;
++		fstring domain_name;
++		fstring netbios_name;
++		fstring dc_name;
+=20
+ 		struct auth_reply {
+=2D			uint32_t nt_status;
+=2D			winbind_string nt_status_string;
+=2D			winbind_string error_string;
++			uint32 nt_status;
++			fstring nt_status_string;
++			fstring error_string;
+ 			int pam_error;
+ 			char user_session_key[16];
+ 			char first_8_lm_hash[8];
++			fstring krb5ccname;
++			uint32 reject_reason;
++			uint32 padding;
++			struct policy_settings {
++				uint32 min_length_password;
++				uint32 password_history;
++				uint32 password_properties;
++				uint32 padding;
++				SMB_TIME_T expire;
++				SMB_TIME_T min_passwordage;
++			} policy;
++			struct info3_text {
++				SMB_TIME_T logon_time;
++				SMB_TIME_T logoff_time;
++				SMB_TIME_T kickoff_time;
++				SMB_TIME_T pass_last_set_time;
++				SMB_TIME_T pass_can_change_time;
++				SMB_TIME_T pass_must_change_time;
++				uint32 logon_count;
++				uint32 bad_pw_count;
++				uint32 user_rid;
++				uint32 group_rid;
++				uint32 num_groups;
++				uint32 user_flgs;
++				uint32 acct_flags;
++				uint32 num_other_sids;
++				fstring dom_sid;
++				fstring user_name;
++				fstring full_name;
++				fstring logon_script;
++				fstring profile_path;
++				fstring home_dir;
++				fstring dir_drive;
++				fstring logon_srv;
++				fstring logon_dom;
++			} info3;
+ 		} auth;
+=2D		uint32_t rid;	/* create user or group or allocate rid */
+ 		struct {
+=2D			uint32_t rid;
+=2D			gid_t gid;
+=2D		} rid_and_gid;
+=2D		struct {
+=2D			winbind_string name;
+=2D			winbind_string alt_name;
+=2D			winbind_string sid;
++			fstring name;
++			fstring alt_name;
++			fstring sid;
+ 			BOOL native_mode;
+ 			BOOL active_directory;
+ 			BOOL primary;
+=2D			uint32_t sequence_number;
++			uint32 sequence_number;
+ 		} domain_info;
+ 		struct {
+=2D			winbind_string acct_name;
+=2D			winbind_string full_name;
+=2D			winbind_string homedir;
+=2D			winbind_string shell;
+=2D			uint32_t group_rid;
++			fstring acct_name;
++			fstring full_name;
++			fstring homedir;
++			fstring shell;
++			uint32 primary_gid;		=09
++			uint32 group_rid;
+ 		} user_info;
++		struct {
++			uint32 auth_blob_len; /* blob in extra_data */
++		} ccache_ntlm_auth;
+ 	} data;
+=20
+ 	/* Variable length return data */
+=20
+=2D	void *extra_data;               /* getgrnam, getgrgid, getgrent */
++	union {
++		SMB_TIME_T padding;
++		void *data;
++	} extra_data;
+ };
+=20
++struct WINBINDD_MEMORY_CREDS {
++	struct WINBINDD_MEMORY_CREDS *next, *prev;
++	const char *username; /* lookup key. */
++	uid_t uid;
++	int ref_count;
++	size_t len;
++	unsigned char *nt_hash; /* Base pointer for the following 2 */
++	unsigned char *lm_hash;
++	char *pass;
++};
++
++struct WINBINDD_CCACHE_ENTRY {
++	struct WINBINDD_CCACHE_ENTRY *next, *prev;
++	const char *principal_name;
++	const char *ccname;
++	const char *service;
++	const char *username;
++	const char *realm;
++	struct WINBINDD_MEMORY_CREDS *cred_ptr;
++	int ref_count;
++	uid_t uid;
++	time_t create_time;
++	time_t renew_until;
++	time_t refresh_time;
++	struct timed_event *event;
++};
++
+ #endif
+Index: nsswitch/winbind_nss_config.h
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D
+=2D-- nsswitch/winbind_nss_config.h	(revision 23294)
++++ nsswitch/winbind_nss_config.h	(working copy)
+@@ -24,78 +24,75 @@
+ #ifndef _WINBIND_NSS_CONFIG_H
+ #define _WINBIND_NSS_CONFIG_H
+=20
+=2D/* Include header files from data in config.h file */
+=2D
+=2D#ifndef NO_CONFIG_H
+=2D#include <config.h>
++/* shutup the compiler warnings due to krb5.h on 64-bit sles9 */
++#ifdef SIZEOF_LONG
++#undef SIZEOF_LONG
+ #endif
+=20
+=2D#include <stdio.h>
+=20
+=2D#ifdef HAVE_STDLIB_H
+=2D#include <stdlib.h>
+=2D#endif
++/* Include header files from data in config.h file */
+=20
+=2D#ifdef HAVE_UNISTD_H
+=2D#include <unistd.h>
++#ifndef NO_CONFIG_H
++#include "lib/replace/replace.h"
+ #endif
+=20
+=2D#ifdef HAVE_SYS_SELECT_H
+=2D#include <sys/select.h>
+=2D#endif
++#include "system/passwd.h"
++#include "system/filesys.h"
++#include "system/network.h"
+=20
+=2D#ifdef HAVE_SYS_SOCKET_H
+=2D#include <sys/socket.h>
+=2D#endif
++#include "nsswitch/winbind_nss.h"
+=20
+=2D#ifdef HAVE_UNIXSOCKET
+=2D#include <sys/un.h>
+=2D#endif
++/* I'm trying really hard not to include anything from smb.h with the
++   result of some silly looking redeclaration of structures. */
+=20
+=2D#ifdef HAVE_SYS_TIME_H
+=2D#include <sys/time.h>
++#ifndef _PSTRING
++#define _PSTRING
++#define PSTRING_LEN 1024
++#define FSTRING_LEN 256
++typedef char pstring[PSTRING_LEN];
++typedef char fstring[FSTRING_LEN];
+ #endif
+=20
+=2D#ifdef HAVE_GRP_H
+=2D#include <grp.h>
++#if !defined(uint32)
++#if (SIZEOF_INT =3D=3D 4)
++#define uint32 unsigned int
++#elif (SIZEOF_LONG =3D=3D 4)
++#define uint32 unsigned long
++#elif (SIZEOF_SHORT =3D=3D 4)
++#define uint32 unsigned short
+ #endif
+=2D
+=2D#ifdef HAVE_STRING_H
+=2D#include <string.h>
+ #endif
+=20
+=2D#ifdef HAVE_FCNTL_H
+=2D#include <fcntl.h>
+=2D#else
+=2D#ifdef HAVE_SYS_FCNTL_H
+=2D#include <sys/fcntl.h>
++#if !defined(uint16)
++#if (SIZEOF_SHORT =3D=3D 4)
++#define uint16 __ERROR___CANNOT_DETERMINE_TYPE_FOR_INT16;
++#else /* SIZEOF_SHORT !=3D 4 */
++#define uint16 unsigned short
++#endif /* SIZEOF_SHORT !=3D 4 */
+ #endif
+=2D#endif
+=20
+=2D#include <sys/types.h>
+=2D#include <sys/stat.h>
+=2D#include <errno.h>
+=2D
+=2D#ifdef HAVE_PWD_H
+=2D#include <pwd.h>
++#ifndef uint8
++#define uint8 unsigned char
+ #endif
+=2D#include "nsswitch/winbind_nss.h"
+=20
+=2D#ifndef Auto
+=2D#define False (0)
+=2D#define True (1)
+=2D#define Auto (2)
+=2Dtypedef int BOOL;
+=2D#endif
++/*
++ * check for 8 byte long long
++ */
+=20
+=2D/* zero a structure */
+=2D#ifndef ZERO_STRUCT
+=2D#define ZERO_STRUCT(x) memset((char *)&(x), 0, sizeof(x))
++#if !defined(uint64)
++#if (SIZEOF_LONG =3D=3D 8)
++#define uint64 unsigned long
++#elif (SIZEOF_LONG_LONG =3D=3D 8)
++#define uint64 unsigned long long
++#endif  /* don't lie.  If we don't have it, then don't use it */
+ #endif
+=20
+=2D/* zero a structure given a pointer to the structure */
+=2D#ifndef ZERO_STRUCTP
+=2D#define ZERO_STRUCTP(x) { if ((x) !=3D NULL) memset((char *)(x), 0, size=
+of(*(x))); }
++#if !defined(int64)
++#if (SIZEOF_LONG =3D=3D 8)
++#define int64 long
++#elif (SIZEOF_LONG_LONG =3D=3D 8)
++#define int64 long long
++#endif  /* don't lie.  If we don't have it, then don't use it */
+ #endif
+=20
+ /* Some systems (SCO) treat UNIX domain sockets as FIFOs */
+@@ -108,4 +105,9 @@
+ #define S_ISSOCK(mode)  ((mode & S_IFSOCK) =3D=3D S_IFSOCK)
+ #endif
+=20
++#ifndef HAVE_SOCKLEN_T
++#define HAVE_SOCKLEN_T
++typedef int socklen_t;
+ #endif
++
++#endif
+
+--Boundary-01=_V5TYG4MI4X6xtrV--
+
+--nextPart5601883.KVZrAB6MeQ
+Content-Type: application/pgp-signature
+
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.7 (GNU/Linux)
+
+iD8DBQBGYT5VEKXX/bF2FpQRAjUuAJ45jO3bKj6rsHusJQoVIaoSseTsrgCgjwcf
+A0mp7fLYJaaCDUnIzCKyd9o=
+=JbUE
+-----END PGP SIGNATURE-----
+
+--nextPart5601883.KVZrAB6MeQ--
+

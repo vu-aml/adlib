@@ -1,0 +1,154 @@
+From perl6-all-return-81034-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue May  1 15:42:00 2007
+Return-Path: <perl6-all-return-81034-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l41Jg0b9012278
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 1 May 2007 15:42:00 -0400
+Received: (qmail 8046 invoked by uid 514); 1 May 2007 19:41:59 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 8041 invoked from network); 1 May 2007 19:41:59 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: domain of chromatic@wgz.org designates 63.105.17.39 as permitted sender)
+From: chromatic <chromatic@wgz.org>
+Organization: Snafu
+To: perl6-internals@perl.org
+Subject: Re: [perl #42792] GC bug added in r18323
+Date: Tue, 1 May 2007 12:11:56 -0700
+User-Agent: KMail/1.9.6
+Cc: Joshua Isom <jrisom@gmail.com>,
+   "Patrick R.Michaud via RT" <parrotbug-followup@parrotcode.org>
+References: <RT-Ticket-42792@perl.org> <rt-3.6.HEAD-30557-1177869306-997.42792-74-0@perl.org> <8c9bbcc5dae9e98464677b25864c0fc3@gmail.com>
+In-Reply-To: <8c9bbcc5dae9e98464677b25864c0fc3@gmail.com>
+MIME-Version: 1.0
+Content-Type: Multipart/Mixed;
+  boundary="Boundary-00=_8D5NGEMAIQZQjuf"
+Message-Id: <200705011211.56401.chromatic@wgz.org>
+X-Virus-Scanned: by amavisd-new at wgz.org
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,FORGED_RCVD_HELO
+Status: O
+Content-Length: 2795
+Lines: 105
+
+--Boundary-00=_8D5NGEMAIQZQjuf
+Content-Type: text/plain;
+  charset="iso-8859-1"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+
+On Sunday 29 April 2007 11:18:20 Joshua Isom wrote:
+
+> I've done realclean a few times actually.  If I run with r18322, it
+> runs just fine, but r18323, which dealt with zero length mallocs for
+> strings, caused it to start crashing.  Here's a backtrace.  This is one
+> of those tests where with -G it succeeds, so you'll have to make sure
+> that gc is enabled.  I'm not having any trouble on my darwin/ppc
+> machine, but my only two running platforms are darwin/ppc and
+> freebsd/amd64.
+
+Here's a patch that fixes a related bug in Tcl on certain platforms.  How does 
+it fare for you?
+
+-- c
+
+
+--Boundary-00=_8D5NGEMAIQZQjuf
+Content-Type: text/x-diff;
+  charset="iso-8859-1";
+  name="fix_string_copy.patch"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: attachment;
+	filename="fix_string_copy.patch"
+
+=== src/string.c
+==================================================================
+--- src/string.c	(revision 3342)
++++ src/string.c	(local)
+@@ -399,24 +399,22 @@
+ */
+ 
+ STRING *
+-string_append(Interp *interp,
+-    STRING *a, STRING *b)
++string_append(Interp *interp, STRING *a, STRING *b)
+ {
+-    UINTVAL a_capacity, b_len;
+-    UINTVAL total_length;
+-    CHARSET *cs;
++    UINTVAL   a_capacity, b_len;
++    UINTVAL   total_length;
++    CHARSET  *cs;
+     ENCODING *enc;
+ 
+     /* XXX should this be a CHARSET method? */
+ 
+     /* If B isn't real, we just bail */
+     b_len = string_length(interp, b);
+-    if (!b_len) {
++    if (!b_len)
+         return a;
+-    }
+ 
+-    /* Is A real? */
+-    if (a == NULL)
++    /* Is A real and non-empty? */
++    if (a == NULL || PObj_bufstart(a) == NULL)
+         return string_copy(interp, b);
+ 
+     saneify_string(a);
+@@ -424,9 +422,8 @@
+ 
+     /* If the destination's constant, or external then just fall back to
+        string_concat */
+-    if (PObj_is_cowed_TESTALL(a)) {
++    if (PObj_is_cowed_TESTALL(a))
+         return string_concat(interp, a, b, 0);
+-    }
+ 
+     cs = string_rep_compatible(interp, a, b, &enc);
+     if (cs != NULL) {
+@@ -444,10 +441,9 @@
+         if (b->encoding == Parrot_utf16_encoding_ptr)
+             a->encoding = Parrot_utf16_encoding_ptr;
+     }
+-    /*
+-     * calc usable and total bytes
+-     */
+-    a_capacity = string_capacity(interp, a);
++
++    /* calc usable and total bytes */
++    a_capacity   = string_capacity(interp, a);
+     total_length = a->bufused + b->bufused;
+ 
+     /* make sure A's big enough for both  */
+@@ -463,8 +459,9 @@
+             b->strstart, b->bufused);
+ 
+     a->bufused += b->bufused;
+-    a->strlen += b_len;
+-    a->hashval = 0;
++    a->strlen  += b_len;
++    a->hashval  = 0;
++
+     return a;
+ }
+ 
+
+--Boundary-00=_8D5NGEMAIQZQjuf--
+

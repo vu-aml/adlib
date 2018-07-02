@@ -1,0 +1,578 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun Apr 29 22:53:24 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3U2rO6w008127
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 29 Apr 2007 22:53:24 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id E4BC41638F9
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 30 Apr 2007 02:53:22 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 549)
+	id 71F11163993; Mon, 30 Apr 2007 02:51:31 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jra@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070430025131.71F11163993@lists.samba.org>
+Date: Mon, 30 Apr 2007 02:51:31 +0000 (GMT)
+Subject: svn commit: samba r22590 - in branches: SAMBA_3_0/source/lib
+	SAMBA_3_0/source/libads SAMBA_3_0/source/libgpo
+	SAMBA_3_0/source/libmsrpc SAMBA_3_0/source/nsswitch
+	SAMBA_3_0/source/registry SAMBA_3_0/source/smbd
+	SAMBA_3_0/source/utils SAMBA_3_0_25/source/lib
+	SAMBA_3_0_25/source/libads SAMBA_3_0_25/source/libgpo
+	SAMBA_3_0_25/source/libmsrpc SAMBA_3_0_25/source/nsswitch
+	SAMBA_3_0_25/source/registry SAMBA_3_0_25/source/smbd
+	SAMBA_3_0_25/source/utils
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 19271
+Lines: 528
+
+Author: jra
+Date: 2007-04-30 02:51:26 +0000 (Mon, 30 Apr 2007)
+New Revision: 22590
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22590
+
+Log:
+Make TALLOC_ARRAY consistent across all uses.
+That should be it....
+Jeremy.
+
+Modified:
+   branches/SAMBA_3_0/source/lib/secace.c
+   branches/SAMBA_3_0/source/libads/dns.c
+   branches/SAMBA_3_0/source/libgpo/gpo_ldap.c
+   branches/SAMBA_3_0/source/libmsrpc/libmsrpc_internal.c
+   branches/SAMBA_3_0/source/nsswitch/idmap.c
+   branches/SAMBA_3_0/source/nsswitch/winbindd_ads.c
+   branches/SAMBA_3_0/source/registry/regfio.c
+   branches/SAMBA_3_0/source/smbd/msdfs.c
+   branches/SAMBA_3_0/source/utils/net_rpc_samsync.c
+   branches/SAMBA_3_0_25/source/lib/secace.c
+   branches/SAMBA_3_0_25/source/libads/dns.c
+   branches/SAMBA_3_0_25/source/libgpo/gpo_ldap.c
+   branches/SAMBA_3_0_25/source/libmsrpc/libmsrpc_internal.c
+   branches/SAMBA_3_0_25/source/nsswitch/idmap.c
+   branches/SAMBA_3_0_25/source/nsswitch/winbindd_ads.c
+   branches/SAMBA_3_0_25/source/registry/regfio.c
+   branches/SAMBA_3_0_25/source/smbd/msdfs.c
+   branches/SAMBA_3_0_25/source/utils/net_rpc_samsync.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/lib/secace.c
+===================================================================
+--- branches/SAMBA_3_0/source/lib/secace.c	2007-04-30 02:39:34 UTC (rev 22589)
++++ branches/SAMBA_3_0/source/lib/secace.c	2007-04-30 02:51:26 UTC (rev 22590)
+@@ -122,8 +122,12 @@
+ 
+ 	if (!ctx || !pp_new || !old || !sid || !num)  return NT_STATUS_INVALID_PARAMETER;
+ 
+-	if((pp_new[0] = TALLOC_ZERO_ARRAY(ctx, SEC_ACE, *num )) == 0)
+-		return NT_STATUS_NO_MEMORY;
++	if (*num) {
++		if((pp_new[0] = TALLOC_ZERO_ARRAY(ctx, SEC_ACE, *num )) == 0)
++			return NT_STATUS_NO_MEMORY;
++	} else {
++		pp_new[0] = NULL;
++	}
+ 
+ 	for (i = 0; i < *num; i ++) {
+ 		if (sid_compare(&old[i].trustee, sid) != 0)
+
+Modified: branches/SAMBA_3_0/source/libads/dns.c
+===================================================================
+--- branches/SAMBA_3_0/source/libads/dns.c	2007-04-30 02:39:34 UTC (rev 22589)
++++ branches/SAMBA_3_0/source/libads/dns.c	2007-04-30 02:51:26 UTC (rev 22590)
+@@ -355,10 +355,14 @@
+ 	DEBUG(4,("ads_dns_lookup_srv: %d records returned in the answer section.\n", 
+ 		answer_count));
+ 		
+-	if ( (dcs = TALLOC_ZERO_ARRAY(ctx, struct dns_rr_srv, answer_count)) == NULL ) {
+-		DEBUG(0,("ads_dns_lookup_srv: talloc() failure for %d char*'s\n", 
+-			answer_count));
+-		return NT_STATUS_NO_MEMORY;
++	if (answer_count) {
++		if ( (dcs = TALLOC_ZERO_ARRAY(ctx, struct dns_rr_srv, answer_count)) == NULL ) {
++			DEBUG(0,("ads_dns_lookup_srv: talloc() failure for %d char*'s\n", 
++				answer_count));
++			return NT_STATUS_NO_MEMORY;
++		}
++	} else {
++		dcs = NULL;
+ 	}
+ 
+ 	/* now skip the header */
+
+Modified: branches/SAMBA_3_0/source/libgpo/gpo_ldap.c
+===================================================================
+--- branches/SAMBA_3_0/source/libgpo/gpo_ldap.c	2007-04-30 02:39:34 UTC (rev 22589)
++++ branches/SAMBA_3_0/source/libgpo/gpo_ldap.c	2007-04-30 02:51:26 UTC (rev 22590)
+@@ -47,19 +47,26 @@
+ 
+ 	gp_ext->num_exts = i;
+ 	
+-	gp_ext->extensions = TALLOC_ZERO_ARRAY(mem_ctx, char *, gp_ext->num_exts);
+-	gp_ext->extensions_guid = TALLOC_ZERO_ARRAY(mem_ctx, char *, gp_ext->num_exts);
+-	gp_ext->snapins = TALLOC_ZERO_ARRAY(mem_ctx, char *, gp_ext->num_exts);
+-	gp_ext->snapins_guid = TALLOC_ZERO_ARRAY(mem_ctx, char *, gp_ext->num_exts);
++	if (gp_ext->num_exts) {
++		gp_ext->extensions = TALLOC_ZERO_ARRAY(mem_ctx, char *, gp_ext->num_exts);
++		gp_ext->extensions_guid = TALLOC_ZERO_ARRAY(mem_ctx, char *, gp_ext->num_exts);
++		gp_ext->snapins = TALLOC_ZERO_ARRAY(mem_ctx, char *, gp_ext->num_exts);
++		gp_ext->snapins_guid = TALLOC_ZERO_ARRAY(mem_ctx, char *, gp_ext->num_exts);
++	} else {
++		gp_ext->extensions = NULL;
++		gp_ext->extensions_guid = NULL;
++		gp_ext->snapins = NULL;
++		gp_ext->snapins_guid = NULL;
++	}
+ 
+-	gp_ext->gp_extension = talloc_strdup(mem_ctx, extension_raw);
+-
+ 	if (gp_ext->extensions == NULL || gp_ext->extensions_guid == NULL || 
+ 	    gp_ext->snapins == NULL || gp_ext->snapins_guid == NULL || 
+ 	    gp_ext->gp_extension == NULL) {
+ 		goto parse_error;
+ 	}
+ 
++	gp_ext->gp_extension = talloc_strdup(mem_ctx, extension_raw);
++
+ 	for (i = 0; ext_list[i] != NULL; i++) {
+ 
+ 		int k;
+@@ -161,8 +168,13 @@
+ 	gp_link->gp_opts = options;
+ 	gp_link->num_links = i;
+ 	
+-	gp_link->link_names = TALLOC_ZERO_ARRAY(mem_ctx, char *, gp_link->num_links);
+-	gp_link->link_opts = TALLOC_ZERO_ARRAY(mem_ctx, uint32, gp_link->num_links);
++	if (gp_link->num_links) {
++		gp_link->link_names = TALLOC_ZERO_ARRAY(mem_ctx, char *, gp_link->num_links);
++		gp_link->link_opts = TALLOC_ZERO_ARRAY(mem_ctx, uint32, gp_link->num_links);
++	} else {
++		gp_link->link_names = NULL;
++		gp_link->link_opts = NULL;
++	}
+ 	
+ 	gp_link->gp_link = talloc_strdup(mem_ctx, gp_link_raw);
+ 
+
+Modified: branches/SAMBA_3_0/source/libmsrpc/libmsrpc_internal.c
+===================================================================
+--- branches/SAMBA_3_0/source/libmsrpc/libmsrpc_internal.c	2007-04-30 02:39:34 UTC (rev 22589)
++++ branches/SAMBA_3_0/source/libmsrpc/libmsrpc_internal.c	2007-04-30 02:51:26 UTC (rev 22590)
+@@ -713,9 +713,13 @@
+ 	if ( !mem_ctx || !svc )
+ 		return NULL;
+ 
+-	services = TALLOC_ZERO_ARRAY( mem_ctx, CacService, num_services );
+-	if ( !services )
+-		return NULL;
++	if (num_services) {
++		services = TALLOC_ZERO_ARRAY( mem_ctx, CacService, num_services );
++		if ( !services )
++			return NULL;
++	} else {
++		services = NULL;
++	}
+ 
+ 	for ( i = 0; i < num_services; i++ ) {
+ 		services[i].service_name =
+
+Modified: branches/SAMBA_3_0/source/nsswitch/idmap.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/idmap.c	2007-04-30 02:39:34 UTC (rev 22589)
++++ branches/SAMBA_3_0/source/nsswitch/idmap.c	2007-04-30 02:51:26 UTC (rev 22590)
+@@ -1026,9 +1026,15 @@
+ 
+ 	/* split list per domain */
+ 
+-	dom_ids = TALLOC_ZERO_ARRAY(ctx, struct id_map **, num_domains);
+-	IDMAP_CHECK_ALLOC(dom_ids);
+-	counters = TALLOC_ZERO_ARRAY(ctx, int, num_domains);
++	if (num_domains) {
++		dom_ids = TALLOC_ZERO_ARRAY(ctx, struct id_map **, num_domains);
++		IDMAP_CHECK_ALLOC(dom_ids);
++		counters = TALLOC_ZERO_ARRAY(ctx, int, num_domains);
++		IDMAP_CHECK_ALLOC(counters);
++	} else {
++		dom_ids = NULL;
++		counters = NULL;
++	}
+ 
+ 	/* partition the requests by domain */
+ 
+
+Modified: branches/SAMBA_3_0/source/nsswitch/winbindd_ads.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/winbindd_ads.c	2007-04-30 02:39:34 UTC (rev 22589)
++++ branches/SAMBA_3_0/source/nsswitch/winbindd_ads.c	2007-04-30 02:51:26 UTC (rev 22590)
+@@ -907,16 +907,21 @@
+ 	   the problem is that the members are in the form of distinguised names
+ 	*/
+ 
+-	(*sid_mem) = TALLOC_ZERO_ARRAY(mem_ctx, DOM_SID, num_members);
+-	(*name_types) = TALLOC_ZERO_ARRAY(mem_ctx, uint32, num_members);
+-	(*names) = TALLOC_ZERO_ARRAY(mem_ctx, char *, num_members);
++	if (num_members) {
++		(*sid_mem) = TALLOC_ZERO_ARRAY(mem_ctx, DOM_SID, num_members);
++		(*name_types) = TALLOC_ZERO_ARRAY(mem_ctx, uint32, num_members);
++		(*names) = TALLOC_ZERO_ARRAY(mem_ctx, char *, num_members);
+ 
+-	if ((num_members != 0) &&
+-	    ((members == NULL) || (*sid_mem == NULL) ||
+-	     (*name_types == NULL) || (*names == NULL))) {
+-		DEBUG(1, ("talloc failed\n"));
+-		status = NT_STATUS_NO_MEMORY;
+-		goto done;
++		if ((members == NULL) || (*sid_mem == NULL) ||
++		     (*name_types == NULL) || (*names == NULL)) {
++			DEBUG(1, ("talloc failed\n"));
++			status = NT_STATUS_NO_MEMORY;
++			goto done;
++		}
++	} else {
++		(*sid_mem) = NULL;
++		(*name_types) = NULL;
++		(*names) = NULL;
+ 	}
+  
+ 	for (i=0;i<num_members;i++) {
+
+Modified: branches/SAMBA_3_0/source/registry/regfio.c
+===================================================================
+--- branches/SAMBA_3_0/source/registry/regfio.c	2007-04-30 02:39:34 UTC (rev 22589)
++++ branches/SAMBA_3_0/source/registry/regfio.c	2007-04-30 02:51:26 UTC (rev 22590)
+@@ -1823,8 +1823,12 @@
+ 		memcpy( nk->subkeys.header, "lf", REC_HDR_SIZE );
+ 		
+ 		nk->subkeys.num_keys = nk->num_subkeys;
+-		if ( !(nk->subkeys.hashes = TALLOC_ZERO_ARRAY( file->mem_ctx, REGF_HASH_REC, nk->subkeys.num_keys )) )
+-			return NULL;
++		if (nk->subkeys.num_keys) {
++			if ( !(nk->subkeys.hashes = TALLOC_ZERO_ARRAY( file->mem_ctx, REGF_HASH_REC, nk->subkeys.num_keys )) )
++				return NULL;
++		} else {
++			nk->subkeys.hashes = NULL;
++		}
+ 		nk->subkey_index = 0;
+ 
+ 		/* update the max_bytes_subkey{name,classname} fields */
+
+Modified: branches/SAMBA_3_0/source/smbd/msdfs.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/msdfs.c	2007-04-30 02:39:34 UTC (rev 22589)
++++ branches/SAMBA_3_0/source/smbd/msdfs.c	2007-04-30 02:51:26 UTC (rev 22590)
+@@ -264,10 +264,14 @@
+ 
+ 	DEBUG(10,("parse_msdfs_symlink: count=%d\n", count));
+ 
+-	reflist = *preflist = TALLOC_ZERO_ARRAY(ctx, struct referral, count);
+-	if(reflist == NULL) {
+-		DEBUG(0,("parse_msdfs_symlink: talloc failed!\n"));
+-		return False;
++	if (count) {
++		reflist = *preflist = TALLOC_ZERO_ARRAY(ctx, struct referral, count);
++		if(reflist == NULL) {
++			DEBUG(0,("parse_msdfs_symlink: talloc failed!\n"));
++			return False;
++		}
++	} else {
++		reflist = *preflist = NULL;
+ 	}
+ 	
+ 	for(i=0;i<count;i++) {
+
+Modified: branches/SAMBA_3_0/source/utils/net_rpc_samsync.c
+===================================================================
+--- branches/SAMBA_3_0/source/utils/net_rpc_samsync.c	2007-04-30 02:39:34 UTC (rev 22589)
++++ branches/SAMBA_3_0/source/utils/net_rpc_samsync.c	2007-04-30 02:51:26 UTC (rev 22590)
+@@ -670,10 +670,14 @@
+ 		return NT_STATUS_NO_MEMORY;
+ 	}
+ 
+-	if ((nt_members = TALLOC_ZERO_ARRAY(t, char *, delta->num_members)) == NULL) {
+-		DEBUG(0, ("talloc failed\n"));
+-		talloc_free(t);
+-		return NT_STATUS_NO_MEMORY;
++	if (delta->num_members) {
++		if ((nt_members = TALLOC_ZERO_ARRAY(t, char *, delta->num_members)) == NULL) {
++			DEBUG(0, ("talloc failed\n"));
++			talloc_free(t);
++			return NT_STATUS_NO_MEMORY;
++		}
++	} else {
++		nt_members = NULL;
+ 	}
+ 
+ 	for (i=0; i<delta->num_members; i++) {
+
+Modified: branches/SAMBA_3_0_25/source/lib/secace.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/lib/secace.c	2007-04-30 02:39:34 UTC (rev 22589)
++++ branches/SAMBA_3_0_25/source/lib/secace.c	2007-04-30 02:51:26 UTC (rev 22590)
+@@ -124,8 +124,12 @@
+ 
+ 	if (!ctx || !pp_new || !old || !sid || !num)  return NT_STATUS_INVALID_PARAMETER;
+ 
+-	if((pp_new[0] = TALLOC_ZERO_ARRAY(ctx, SEC_ACE, *num )) == 0)
+-		return NT_STATUS_NO_MEMORY;
++	if (*num) {
++		if((pp_new[0] = TALLOC_ZERO_ARRAY(ctx, SEC_ACE, *num )) == 0)
++			return NT_STATUS_NO_MEMORY;
++	} else {
++		pp_new[0] = NULL;
++	}
+ 
+ 	for (i = 0; i < *num; i ++) {
+ 		if (sid_compare(&old[i].trustee, sid) != 0)
+
+Modified: branches/SAMBA_3_0_25/source/libads/dns.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/libads/dns.c	2007-04-30 02:39:34 UTC (rev 22589)
++++ branches/SAMBA_3_0_25/source/libads/dns.c	2007-04-30 02:51:26 UTC (rev 22590)
+@@ -355,10 +355,14 @@
+ 	DEBUG(4,("ads_dns_lookup_srv: %d records returned in the answer section.\n", 
+ 		answer_count));
+ 		
+-	if ( (dcs = TALLOC_ZERO_ARRAY(ctx, struct dns_rr_srv, answer_count)) == NULL ) {
+-		DEBUG(0,("ads_dns_lookup_srv: talloc() failure for %d char*'s\n", 
+-			answer_count));
+-		return NT_STATUS_NO_MEMORY;
++	if (answer_count) {
++		if ( (dcs = TALLOC_ZERO_ARRAY(ctx, struct dns_rr_srv, answer_count)) == NULL ) {
++			DEBUG(0,("ads_dns_lookup_srv: talloc() failure for %d char*'s\n", 
++				answer_count));
++			return NT_STATUS_NO_MEMORY;
++		}
++	} else {
++		dcs = NULL;
+ 	}
+ 
+ 	/* now skip the header */
+
+Modified: branches/SAMBA_3_0_25/source/libgpo/gpo_ldap.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/libgpo/gpo_ldap.c	2007-04-30 02:39:34 UTC (rev 22589)
++++ branches/SAMBA_3_0_25/source/libgpo/gpo_ldap.c	2007-04-30 02:51:26 UTC (rev 22590)
+@@ -47,19 +47,26 @@
+ 
+ 	gp_ext->num_exts = i;
+ 	
+-	gp_ext->extensions = TALLOC_ZERO_ARRAY(mem_ctx, char *, gp_ext->num_exts);
+-	gp_ext->extensions_guid = TALLOC_ZERO_ARRAY(mem_ctx, char *, gp_ext->num_exts);
+-	gp_ext->snapins = TALLOC_ZERO_ARRAY(mem_ctx, char *, gp_ext->num_exts);
+-	gp_ext->snapins_guid = TALLOC_ZERO_ARRAY(mem_ctx, char *, gp_ext->num_exts);
++	if (gp_ext->num_exts) {
++		gp_ext->extensions = TALLOC_ZERO_ARRAY(mem_ctx, char *, gp_ext->num_exts);
++		gp_ext->extensions_guid = TALLOC_ZERO_ARRAY(mem_ctx, char *, gp_ext->num_exts);
++		gp_ext->snapins = TALLOC_ZERO_ARRAY(mem_ctx, char *, gp_ext->num_exts);
++		gp_ext->snapins_guid = TALLOC_ZERO_ARRAY(mem_ctx, char *, gp_ext->num_exts);
++	} else {
++		gp_ext->extensions = NULL;
++		gp_ext->extensions_guid = NULL;
++		gp_ext->snapins = NULL;
++		gp_ext->snapins_guid = NULL;
++	}
+ 
+-	gp_ext->gp_extension = talloc_strdup(mem_ctx, extension_raw);
+-
+ 	if (gp_ext->extensions == NULL || gp_ext->extensions_guid == NULL || 
+ 	    gp_ext->snapins == NULL || gp_ext->snapins_guid == NULL || 
+ 	    gp_ext->gp_extension == NULL) {
+ 		goto parse_error;
+ 	}
+ 
++	gp_ext->gp_extension = talloc_strdup(mem_ctx, extension_raw);
++
+ 	for (i = 0; ext_list[i] != NULL; i++) {
+ 
+ 		int k;
+@@ -161,8 +168,13 @@
+ 	gp_link->gp_opts = options;
+ 	gp_link->num_links = i;
+ 	
+-	gp_link->link_names = TALLOC_ZERO_ARRAY(mem_ctx, char *, gp_link->num_links);
+-	gp_link->link_opts = TALLOC_ZERO_ARRAY(mem_ctx, uint32, gp_link->num_links);
++	if (gp_link->num_links) {
++		gp_link->link_names = TALLOC_ZERO_ARRAY(mem_ctx, char *, gp_link->num_links);
++		gp_link->link_opts = TALLOC_ZERO_ARRAY(mem_ctx, uint32, gp_link->num_links);
++	} else {
++		gp_link->link_names = NULL;
++		gp_link->link_opts = NULL;
++	}
+ 	
+ 	gp_link->gp_link = talloc_strdup(mem_ctx, gp_link_raw);
+ 
+
+Modified: branches/SAMBA_3_0_25/source/libmsrpc/libmsrpc_internal.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/libmsrpc/libmsrpc_internal.c	2007-04-30 02:39:34 UTC (rev 22589)
++++ branches/SAMBA_3_0_25/source/libmsrpc/libmsrpc_internal.c	2007-04-30 02:51:26 UTC (rev 22590)
+@@ -713,9 +713,13 @@
+ 	if ( !mem_ctx || !svc )
+ 		return NULL;
+ 
+-	services = TALLOC_ZERO_ARRAY( mem_ctx, CacService, num_services );
+-	if ( !services )
+-		return NULL;
++	if (num_services) {
++		services = TALLOC_ZERO_ARRAY( mem_ctx, CacService, num_services );
++		if ( !services )
++			return NULL;
++	} else {
++		services = NULL;
++	}
+ 
+ 	for ( i = 0; i < num_services; i++ ) {
+ 		services[i].service_name =
+
+Modified: branches/SAMBA_3_0_25/source/nsswitch/idmap.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/nsswitch/idmap.c	2007-04-30 02:39:34 UTC (rev 22589)
++++ branches/SAMBA_3_0_25/source/nsswitch/idmap.c	2007-04-30 02:51:26 UTC (rev 22590)
+@@ -1026,9 +1026,15 @@
+ 
+ 	/* split list per domain */
+ 
+-	dom_ids = TALLOC_ZERO_ARRAY(ctx, struct id_map **, num_domains);
+-	IDMAP_CHECK_ALLOC(dom_ids);
+-	counters = TALLOC_ZERO_ARRAY(ctx, int, num_domains);
++	if (num_domains) {
++		dom_ids = TALLOC_ZERO_ARRAY(ctx, struct id_map **, num_domains);
++		IDMAP_CHECK_ALLOC(dom_ids);
++		counters = TALLOC_ZERO_ARRAY(ctx, int, num_domains);
++		IDMAP_CHECK_ALLOC(counters);
++	} else {
++		dom_ids = NULL;
++		counters = NULL;
++	}
+ 
+ 	/* partition the requests by domain */
+ 
+
+Modified: branches/SAMBA_3_0_25/source/nsswitch/winbindd_ads.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/nsswitch/winbindd_ads.c	2007-04-30 02:39:34 UTC (rev 22589)
++++ branches/SAMBA_3_0_25/source/nsswitch/winbindd_ads.c	2007-04-30 02:51:26 UTC (rev 22590)
+@@ -961,16 +961,21 @@
+ 	   the problem is that the members are in the form of distinguised names
+ 	*/
+ 
+-	(*sid_mem) = TALLOC_ZERO_ARRAY(mem_ctx, DOM_SID, num_members);
+-	(*name_types) = TALLOC_ZERO_ARRAY(mem_ctx, uint32, num_members);
+-	(*names) = TALLOC_ZERO_ARRAY(mem_ctx, char *, num_members);
++	if (num_members) {
++		(*sid_mem) = TALLOC_ZERO_ARRAY(mem_ctx, DOM_SID, num_members);
++		(*name_types) = TALLOC_ZERO_ARRAY(mem_ctx, uint32, num_members);
++		(*names) = TALLOC_ZERO_ARRAY(mem_ctx, char *, num_members);
+ 
+-	if ((num_members != 0) &&
+-	    ((members == NULL) || (*sid_mem == NULL) ||
+-	     (*name_types == NULL) || (*names == NULL))) {
+-		DEBUG(1, ("talloc failed\n"));
+-		status = NT_STATUS_NO_MEMORY;
+-		goto done;
++		if ((members == NULL) || (*sid_mem == NULL) ||
++		     (*name_types == NULL) || (*names == NULL)) {
++			DEBUG(1, ("talloc failed\n"));
++			status = NT_STATUS_NO_MEMORY;
++			goto done;
++		}
++	} else {
++		(*sid_mem) = NULL;
++		(*name_types) = NULL;
++		(*names) = NULL;
+ 	}
+  
+ 	for (i=0;i<num_members;i++) {
+
+Modified: branches/SAMBA_3_0_25/source/registry/regfio.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/registry/regfio.c	2007-04-30 02:39:34 UTC (rev 22589)
++++ branches/SAMBA_3_0_25/source/registry/regfio.c	2007-04-30 02:51:26 UTC (rev 22590)
+@@ -1823,8 +1823,12 @@
+ 		memcpy( nk->subkeys.header, "lf", REC_HDR_SIZE );
+ 		
+ 		nk->subkeys.num_keys = nk->num_subkeys;
+-		if ( !(nk->subkeys.hashes = TALLOC_ZERO_ARRAY( file->mem_ctx, REGF_HASH_REC, nk->subkeys.num_keys )) )
+-			return NULL;
++		if (nk->subkeys.num_keys) {
++			if ( !(nk->subkeys.hashes = TALLOC_ZERO_ARRAY( file->mem_ctx, REGF_HASH_REC, nk->subkeys.num_keys )) )
++				return NULL;
++		} else {
++			nk->subkeys.hashes = NULL;
++		}
+ 		nk->subkey_index = 0;
+ 
+ 		/* update the max_bytes_subkey{name,classname} fields */
+
+Modified: branches/SAMBA_3_0_25/source/smbd/msdfs.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/smbd/msdfs.c	2007-04-30 02:39:34 UTC (rev 22589)
++++ branches/SAMBA_3_0_25/source/smbd/msdfs.c	2007-04-30 02:51:26 UTC (rev 22590)
+@@ -264,10 +264,14 @@
+ 
+ 	DEBUG(10,("parse_msdfs_symlink: count=%d\n", count));
+ 
+-	reflist = *preflist = TALLOC_ZERO_ARRAY(ctx, struct referral, count);
+-	if(reflist == NULL) {
+-		DEBUG(0,("parse_msdfs_symlink: talloc failed!\n"));
+-		return False;
++	if (count) {
++		reflist = *preflist = TALLOC_ZERO_ARRAY(ctx, struct referral, count);
++		if(reflist == NULL) {
++			DEBUG(0,("parse_msdfs_symlink: talloc failed!\n"));
++			return False;
++		}
++	} else {
++		reflist = *preflist = NULL;
+ 	}
+ 	
+ 	for(i=0;i<count;i++) {
+
+Modified: branches/SAMBA_3_0_25/source/utils/net_rpc_samsync.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/utils/net_rpc_samsync.c	2007-04-30 02:39:34 UTC (rev 22589)
++++ branches/SAMBA_3_0_25/source/utils/net_rpc_samsync.c	2007-04-30 02:51:26 UTC (rev 22590)
+@@ -670,10 +670,14 @@
+ 		return NT_STATUS_NO_MEMORY;
+ 	}
+ 
+-	if ((nt_members = TALLOC_ZERO_ARRAY(t, char *, delta->num_members)) == NULL) {
+-		DEBUG(0, ("talloc failed\n"));
+-		talloc_free(t);
+-		return NT_STATUS_NO_MEMORY;
++	if (delta->num_members) {
++		if ((nt_members = TALLOC_ZERO_ARRAY(t, char *, delta->num_members)) == NULL) {
++			DEBUG(0, ("talloc failed\n"));
++			talloc_free(t);
++			return NT_STATUS_NO_MEMORY;
++		}
++	} else {
++		nt_members = NULL;
+ 	}
+ 
+ 	for (i=0; i<delta->num_members; i++) {
+

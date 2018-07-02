@@ -1,0 +1,157 @@
+From perl6-all-return-80854-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue Apr 24 21:29:24 2007
+Return-Path: <perl6-all-return-80854-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3P1TN6w021285
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 24 Apr 2007 21:29:23 -0400
+Received: (qmail 7008 invoked by uid 514); 25 Apr 2007 01:29:22 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 7003 invoked from network); 25 Apr 2007 01:29:22 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-1.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO,NO_REAL_NAME
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-language-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-language
+List-Id: <perl6-language.perl.org>
+Delivered-To: mailing list perl6-language@perl.org
+Delivered-To: perl6-language@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: larry@cvs.develooper.com
+To: perl6-language@perl.org
+Subject: [svn:perl6-synopsis] r14381 - doc/trunk/design/syn
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Message-Id: <20070425012903.C4695CB9B8@x12.develooper.com>
+Date: Tue, 24 Apr 2007 18:29:03 -0700 (PDT)
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-3.4 required=8.0
+	tests=ALL_TRUSTED,BAYES_00,DK_POLICY_SIGNSOME,NO_REAL_NAME
+Status: O
+Content-Length: 4023
+Lines: 116
+
+Author: larry
+Date: Tue Apr 24 18:29:02 2007
+New Revision: 14381
+
+Modified:
+   doc/trunk/design/syn/S11.pod
+
+Log:
+Clarifications to module naming suggested by TheDamian++.
+
+
+Modified: doc/trunk/design/syn/S11.pod
+==============================================================================
+--- doc/trunk/design/syn/S11.pod	(original)
++++ doc/trunk/design/syn/S11.pod	Tue Apr 24 18:29:02 2007
+@@ -12,9 +12,9 @@
+ 
+   Maintainer: Larry Wall <larry@wall.org>
+   Date: 27 Oct 2004
+-  Last Modified: 16 Apr 2007
++  Last Modified: 24 Apr 2007
+   Number: 11
+-  Version: 18
++  Version: 19
+ 
+ =head1 Overview
+ 
+@@ -44,9 +44,10 @@
+ or use the sigil-like C<::ModuleName> syntax.  The C<::> prefix does not
+ imply top-levelness as it does in Perl 5.  (Use C<::*> or C<GLOBAL::> for that.)
+ 
+-A bare C<module> declarator declares an C<our> module name in the current
+-package.  At the start of the file, the current package is C<*>, so the
+-first declaration in the file is automatically global.
++A bare (unscoped) C<module> declarator declares a nested C<our> module
++name within the current package.  However, at the start of the file,
++the current package is C<*>, so the first such declaration in the
++file is automatically global.
+ 
+ You can use C<our module> to explicitly
+ declare a module in the current package (or module, or class).
+@@ -149,25 +150,33 @@
+ 
+ =head1 Runtime Importation
+ 
+-Importing via C<require> also binds into the current lexical scope by
+-default, but performs the binding at runtime:
++Importing via C<require> also installs names into the current lexical scope by
++default, but delays the actual binding till runtime:
+ 
+     require Sense <common @horse>;
+     require "/home/non/Sense.pm" <common @horse>;
+ 
+-Tagsets are not recognized in the default import list to C<:MY>, but you can
+-explicitly request to put them into the C<:OUR> scope:
++Only explicitly mentioned names may be so installed.  In order
++to protect the run-time sanctity of the lexical pad, it may not be
++modified by C<require>.  Tagsets are assumed to be unknown at compile
++time, hence tagsets are not allowed in the default import list to
++C<:MY>, but you can explicitly request to put names into the C<:OUR>
++scope, since that is modifiable at run time:
+ 
+     require Sense <:ALL>    # does not work
+     require Sense :MY<ALL>  # this doesn't work either
+     require Sense :OUR<ALL> # but this works
+ 
+-If the import list is omitted, then nothing is imported.  Calling C<.import>
+-at runtime cannot import into the lexical scope:
++If the import list is omitted, then nothing is imported.  Since you
++may not modify the lexical pad, calling an importation routine at
++runtime cannot import into the lexical scope, and defaults to importation
++to the package scope instead:
+ 
+     require Sense;
+     Sense.EXPORTALL;   # goes to the OUR scope by default, not MY
+ 
++(Such a routine I<may> rebind existing lexicals, however.)
++
+ =head1 Importing from a pseudo-package
+ 
+ You may also import symbols from the various pseudo-packages listed in S02.
+@@ -236,6 +245,24 @@
+ 
+     class Dog:<1.2.1 cpan:JRANDOM>
+ 
++The pieces are interpreted as follows:
++=over
++
++=item *
++
++Anything matching C<< [<ident> '::']* <ident> >> is treated as a
++package name
++
++=item *
++
++Anything matching C<< v? [\d+ '.']* \d+ >> is treated as a version number
++
++=item *
++
++Anything matching C<< <alpha>+ \: \S+ >> is treated as an author(ity)
++
++=back
++
+ These declarations automatically alias the full name of the class
+ (or module) to the short name.  So for the rest of the lexical scope,
+ C<Dog> refers to the longer name.  The real library name can be
+@@ -286,7 +313,8 @@
+ When specifying the version of your own module, C<1.2> is equivalent
+ to C<1.2.0>, C<1.2.0.0>, and so on.  However C<use> searches for
+ modules matching a version prefix, so the subversions are wildcarded,
+-and in this context C<1.2> really means C<1.2.*>.  If you say:
++and in this context C<< :vers<1.2> >> really means C<< :vers<1.2.*> >>.
++If you say:
+ 
+     use v6;
+ 
+

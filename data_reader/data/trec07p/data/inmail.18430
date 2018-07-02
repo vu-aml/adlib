@@ -1,0 +1,148 @@
+From r-help-bounces@stat.math.ethz.ch  Tue Apr 24 03:04:47 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3O74j6w006112
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 24 Apr 2007 03:04:46 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3O73oNB030661;
+	Tue, 24 Apr 2007 09:04:00 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.4 required=5.0 tests=BAYES_50,
+	FORGED_RCVD_HELO autolearn=no version=3.1.8
+Received: from ykdmp02.yokohama.riken.jp (ykdmp02.yokohama.riken.go.jp
+	[134.160.82.31])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with SMTP id l3O73gWq030634
+	for <r-help@stat.math.ethz.ch>; Tue, 24 Apr 2007 09:03:44 +0200
+Received: (qmail 10219 invoked by uid 98); 24 Apr 2007 07:03:40 -0000
+Received: from 134.160.82.32 by ykdmp02.yokohama.riken.jp (envelope-from
+	<nbertin@gsc.riken.jp>, uid 82) with qmail-scanner-1.25 
+	(sophie: 3.04/2.31/3.98. spamassassin: 3.1.0.  
+	Clear:RC:1(134.160.82.32):. 
+	Processed in 0.02747 secs); 24 Apr 2007 07:03:40 -0000
+Received: from unknown (HELO ykmail01.yokohama.riken.go.jp) (134.160.82.32)
+	by ykdmp02.yokohama.riken.go.jp with SMTP; 24 Apr 2007 07:03:40 -0000
+Received: (qmail 17924 invoked by uid 98); 24 Apr 2007 16:03:40 +0900
+Received: from 134.160.85.58 by ykmail01.yokohama.riken.jp (envelope-from
+	<nbertin@gsc.riken.jp>, uid 82) with qmail-scanner-1.25 
+	(sophie: 3.04/2.38/4.10.  Clear:RC:1(134.160.85.58):. 
+	Processed in 0.025627 secs); 24 Apr 2007 07:03:40 -0000
+Received: from unknown (HELO ?10.64.132.133?) (134.160.85.58)
+	by ykmail01.yokohama.riken.go.jp with SMTP; 24 Apr 2007 16:03:40 +0900
+From: nicolas bertin <nbertin@gsc.riken.jp>
+To: r-help@stat.math.ethz.ch
+Date: Tue, 24 Apr 2007 16:03:40 +0900
+Message-Id: <1177398220.3363.281.camel@anx133.gsc.riken.jp>
+Mime-Version: 1.0
+X-Mailer: Evolution 2.8.3 (2.8.3-2.fc6) 
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Subject: [R] Error in clusterApply(): recursive default argument reference
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+Status: O
+Content-Length: 2282
+Lines: 89
+
+Hi,
+
+I want to compute a distribution of the intersection of a graph and
+'randomized' graphs induced by the permutations of node labels (to
+preserve the graph topology).
+Since I ll have many permutations to perform, I was thinking of using
+the snow package and in particular "parSapply" to divide the work
+between my 4 CPUs.
+But I get the following error message :
+
+Error in clusterApply(cl, splitList(x, length(cl)), lapply, fun, ...) : 
+        recursive default argument reference
+
+What am i doing wrong ?
+
+Some details about my platform and R version :
+-----------------------------------------------
+$platform
+[1] "x86_64-redhat-linux-gnu"
+$version.string
+[1] "R version 2.4.1 (2006-12-18)"
+
+
+Below is the snippet of code generating the error message :
+-----------------------------------------------------------
+### libraries ###
+library(graph)
+library(snow)
+
+### functions ###
+nullDistribIntersection <- function(g1, g2, perm=1000)
+{
+  n1 <- nodes(g1)
+  sapply(1:perm,
+	  function(i)
+	  {
+            nodes(g1) <- sample(n1)
+	    numEdges(intersection(g1,g2))
+	  }
+	 )
+}
+
+
+parNullDistribIntersection <- function(g1, g2, perm=1000, cl=cl)
+{
+  n1 <- nodes(g1)
+  parSapply(cl, 1:perm,
+	  function(i)
+	  {
+            nodes(g1) <- sample(n1)
+	    numEdges(intersection(g1,g2))
+	  }
+	 )
+}
+
+
+## initialize the graph and the rand seed
+set.seed(123)
+g <- randomEGraph(LETTERS[1:15], edges = 100)
+
+## compute a distribution of the intersection of the graph 
+## and a 'randomized' graph induced by the permutations of
+## node labels (to preserve the graph topology)
+cat("1CPU sys time:",
+    system.time(
+                 dist <- nullDistribIntersection(g,g)
+               ),
+    "\n"
+    )
+
+cl <- makeCluster(c("localhost", "localhost"), type = "SOCK")
+cat("Cluster sys time:",
+    system.time(
+                 dist <- parNullDistribIntersection(g,g)
+               ),
+    "\n"
+    )
+----------------------------------------------------------------
+
+Thanks in advance.
+
+Nicolas Bertin 
+GSC / RIKEN Yokohama
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

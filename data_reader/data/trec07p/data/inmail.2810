@@ -1,0 +1,155 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Apr 11 08:18:18 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3BCIH0I016491
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 11 Apr 2007 08:18:17 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id BFD6A163826
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 11 Apr 2007 12:17:53 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.8 required=3.8 tests=AWL,BAYES_40,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id ECA30162AC0; Wed, 11 Apr 2007 12:17:15 +0000 (GMT)
+Date: Wed, 11 Apr 2007 22:17:24 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070411121715.ECA30162AC0@lists.samba.org>
+Subject: Rev 95: merge from volker in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 3558
+Lines: 115
+
+------------------------------------------------------------
+revno: 95
+revision-id: tridge@samba.org-20070411121724-5e763a4a0a3fc6ac
+parent: tridge@samba.org-20070411121107-b9d7c18f685f344f
+parent: vl@samba.org-20070411115758-oua7f39sry0tw1z9
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Wed 2007-04-11 22:17:24 +1000
+message:
+  merge from volker
+modified:
+  common/ctdb_call.c             ctdb_call.c-20061128065342-to93h6eejj5kon81-1
+  common/ctdb_daemon.c           ctdb_daemon.c-20070409200331-3el1kqgdb9m4ib0g-1
+  direct/ctdbd.c                 ctdbd.c-20070411085044-dqmhr6mfeexnyt4m-1
+    ------------------------------------------------------------
+    merged: vl@samba.org-20070411115758-oua7f39sry0tw1z9
+    parent: ronniesahlberg@gmail.com-20070411103224-hvqzewjcfhpxcgbg
+    parent: vl@samba.org-20070411111736-rllo7o2u3tnzq0pg
+    committer: Volker Lendecke <vl@samba.org>
+    branch nick: ctdb-vl
+    timestamp: Wed 2007-04-11 13:57:58 +0200
+    message:
+      merge
+    ------------------------------------------------------------
+    merged: vl@samba.org-20070411111736-rllo7o2u3tnzq0pg
+    parent: vl@samba.org-20070411104910-78d551d2qsfxpytz
+    committer: Volker Lendecke <vl@samba.org>
+    branch nick: ctdb
+    timestamp: Wed 2007-04-11 13:17:36 +0200
+    message:
+      Handle a client that exited correctly: We need to ignore SIGPIPE and when the
+      read returns 0 bytes this means the client has exited. Close the connection
+      then.
+    ------------------------------------------------------------
+    merged: vl@samba.org-20070411104910-78d551d2qsfxpytz
+    parent: ronniesahlberg@gmail.com-20070411103224-hvqzewjcfhpxcgbg
+    committer: Volker Lendecke <vl@samba.org>
+    branch nick: ctdb
+    timestamp: Wed 2007-04-11 12:49:10 +0200
+    message:
+      Fix uninitialized variable warnings
+=== modified file 'common/ctdb_call.c'
+--- a/common/ctdb_call.c	2007-04-11 01:58:28 +0000
++++ b/common/ctdb_call.c	2007-04-11 10:49:10 +0000
+@@ -248,7 +248,9 @@
+ 		}
+ 	}
+ 	if (!ctdb_db) {
+-		ctdb_send_error(ctdb, hdr, ret, "Unknown database in request. db_id==0x%08x",c->db_id);
++		ctdb_send_error(ctdb, hdr, -1,
++				"Unknown database in request. db_id==0x%08x",
++				c->db_id);
+ 		return;
+ 	}
+ 	
+@@ -315,7 +317,9 @@
+ 		}
+ 	}
+ 	if (!ctdb_db) {
+-		ctdb_send_error(ctdb, hdr, ret, "Unknown database in request. db_id==0x%08x",c->db_id);
++		ctdb_send_error(ctdb, hdr, -1,
++				"Unknown database in request. db_id==0x%08x",
++				c->db_id);
+ 		return;
+ 	}
+ 
+
+=== modified file 'common/ctdb_daemon.c'
+--- a/common/ctdb_daemon.c	2007-04-11 09:04:09 +0000
++++ b/common/ctdb_daemon.c	2007-04-11 11:17:36 +0000
+@@ -283,6 +283,11 @@
+ 	struct ctdb_client *client = talloc_get_type(args, struct ctdb_client);
+ 	struct ctdb_req_header *hdr;
+ 
++	if (cnt == 0) {
++		talloc_free(client);
++		return;
++	}
++
+ 	if (cnt < sizeof(*hdr)) {
+ 		ctdb_set_error(client->ctdb, "Bad packet length %d\n", cnt);
+ 		return;
+
+=== modified file 'direct/ctdbd.c'
+--- a/direct/ctdbd.c	2007-04-11 08:54:22 +0000
++++ b/direct/ctdbd.c	2007-04-11 11:17:36 +0000
+@@ -22,6 +22,19 @@
+ #include "lib/events/events.h"
+ #include "system/filesys.h"
+ #include "popt.h"
++#include <signal.h>
++
++static void block_signal(int signum)
++{
++	struct sigaction act;
++
++	memset(&act, 0, sizeof(act));
++
++	act.sa_handler = SIG_IGN;
++	sigemptyset(&act.sa_mask);
++	sigaddset(&act.sa_mask, signum);
++	sigaction(signum, &act, NULL);
++}
+ 
+ 
+ /*
+@@ -75,6 +88,8 @@
+ 		exit(1);
+ 	}
+ 
++	block_signal(SIGPIPE);
++
+ 	ev = event_context_init(NULL);
+ 
+ 	/* initialise ctdb */
+

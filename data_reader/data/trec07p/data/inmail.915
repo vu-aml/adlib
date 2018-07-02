@@ -1,0 +1,174 @@
+From r-help-bounces@stat.math.ethz.ch  Mon Apr  9 13:07:28 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l39H7M0I017013
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 9 Apr 2007 13:07:24 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l39H64Lo002042;
+	Mon, 9 Apr 2007 19:06:15 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.1 required=5.0 tests=AWL,
+	BAYES_50 autolearn=no version=3.1.8
+Received: from rwcrmhc13.comcast.net (rwcrmhc13.comcast.net [216.148.227.153])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l39H5tDg001903
+	for <R-help@stat.math.ethz.ch>; Mon, 9 Apr 2007 19:05:55 +0200
+Received: from [192.168.0.64]
+	(74-94-87-209-minnesota.hfc.comcastbusiness.net?[74.94.87.209])
+	by comcast.net (rwcrmhc13) with SMTP
+	id <20070409170553m13003f20ve>; Mon, 9 Apr 2007 17:05:53 +0000
+From: Marc Schwartz <marc_schwartz@comcast.net>
+To: "Muenchen, Robert A (Bob)" <muenchen@utk.edu>
+In-Reply-To: <D028EEB4CA113D4EAFDD485CCC998277AF9B9D@UTKFSVS4.utk.tennessee.edu>
+References: <D028EEB4CA113D4EAFDD485CCC998277AF9B9D@UTKFSVS4.utk.tennessee.edu>
+Date: Mon, 09 Apr 2007 12:05:52 -0500
+Message-Id: <1176138352.5098.54.camel@localhost.localdomain>
+Mime-Version: 1.0
+X-Mailer: Evolution 2.8.3 (2.8.3-2.fc6) 
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: R-help@stat.math.ethz.ch
+Subject: Re: [R] do.call vs. lapply for lists
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+Reply-To: marc_schwartz@comcast.net
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+Status: O
+Content-Length: 3446
+Lines: 123
+
+On Mon, 2007-04-09 at 12:45 -0400, Muenchen, Robert A (Bob) wrote:
+> Hi All,
+> 
+> I'm trying to understand the difference between do.call and lapply for
+> applying a function to a list. Below is one of the variations of
+> programs (by Marc Schwartz) discussed here recently to select the first
+> and last n observations per group.
+> 
+> I've looked in several books, the R FAQ and searched the archives, but I
+> can't find enough to figure out why lapply doesn't do what do.call does
+> in this case. The help files & newsletter descriptions of do.call sound
+> like it would do the same thing, but I'm sure that's due to my lack of
+> understanding about their specific terminology. I would appreciate it if
+> you could take a moment to enlighten me. 
+> 
+> Thanks,
+> Bob
+> 
+> mydata <- data.frame(
+>   id      = c('001','001','001','002','003','003'),
+>   math    = c(80,75,70,65,65,70),
+>   reading = c(65,70,88,NA,90,NA)
+> )
+> mydata
+> 
+> mylast <- lapply( split(mydata,mydata$id), tail, n=1)
+> mylast
+> class(mylast) #It's a list, so lapply will so *something* with it.
+> 
+> #This gets the desired result:
+> do.call("rbind", mylast)
+> 
+> #This doesn't do the same thing, which confuses me:
+> lapply(mylast,rbind)
+> 
+> #...and data.frame won't fix it as I've seen it do in other
+> circumstances:
+> data.frame( lapply(mylast,rbind) )
+
+Bob,
+
+A key difference is that do.call() operates (in the above example) as if
+the actual call was:
+
+> rbind(mylast[[1]], mylast[[2]], mylast[[3]])
+   id math reading
+3 001   70      88
+4 002   65      NA
+6 003   70      NA
+
+In other words, do.call() takes the quoted function and passes the list
+object as if it was a list of individual arguments. So rbind() is only
+called once.
+
+In this case, rbind() internally handles all of the factor level issues,
+etc. to enable a single common data frame to be created from the three
+independent data frames contained in 'mylast':
+
+> str(mylast)
+List of 3
+ $ 001:'data.frame':    1 obs. of  3 variables:
+  ..$ id     : Factor w/ 3 levels "001","002","003": 1
+  ..$ math   : num 70
+  ..$ reading: num 88
+ $ 002:'data.frame':    1 obs. of  3 variables:
+  ..$ id     : Factor w/ 3 levels "001","002","003": 2
+  ..$ math   : num 65
+  ..$ reading: num NA
+ $ 003:'data.frame':    1 obs. of  3 variables:
+  ..$ id     : Factor w/ 3 levels "001","002","003": 3
+  ..$ math   : num 70
+  ..$ reading: num NA
+
+
+On the other hand, lapply() (as above) calls rbind() _separately_ for
+each component of mylast.  It therefore acts as if the following series
+of three separate calls were made:
+
+
+> rbind(mylast[[1]])
+   id math reading
+3 001   70      88
+
+> rbind(mylast[[2]])
+   id math reading
+4 002   65      NA
+
+> rbind(mylast[[3]])
+   id math reading
+6 003   70      NA
+
+
+Of course, the result of lapply() is that the above are combined into a
+single R list object and returned:
+
+> lapply(mylast, rbind)
+$`001`
+   id math reading
+3 001   70      88
+
+$`002`
+   id math reading
+4 002   65      NA
+
+$`003`
+   id math reading
+6 003   70      NA
+
+
+It is a subtle, but of course critical, difference in how the internal
+function is called and how the arguments are passed.
+
+Does that help?
+
+Regards,
+
+Marc Schwartz
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

@@ -1,0 +1,237 @@
+From r-help-bounces@stat.math.ethz.ch  Fri May 25 04:13:33 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4P8DUqD025820
+	for <ktwarwic@flax9.uwaterloo.ca>; Fri, 25 May 2007 04:13:31 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4P8Bkla021204;
+	Fri, 25 May 2007 10:12:11 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-3.4 required=5.0 tests=AWL, BAYES_50, NO_REAL_NAME,
+	RCVD_IN_BSP_TRUSTED autolearn=ham version=3.1.8
+Received: from act-MTAout6.csiro.au (act-MTAout6.csiro.au [150.229.7.43])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4P8BXVh021104
+	(version=TLSv1/SSLv3 cipher=RC4-SHA bits=128 verify=FAIL)
+	for <r-help@stat.math.ethz.ch>; Fri, 25 May 2007 10:11:35 +0200
+X-IronPort-AV: E=Sophos;i="4.14,578,1170594000"; d="scan'208";a="159767943"
+Received: from exgw1-mel.nexus.csiro.au ([138.194.3.56])
+	by act-ironport-int.csiro.au with ESMTP; 25 May 2007 18:11:25 +1000
+Received: from exvicn1-mel.nexus.csiro.au ([138.194.3.60]) by
+	exgw1-mel.nexus.csiro.au with Microsoft SMTPSVC(5.0.2195.6713); 
+	Fri, 25 May 2007 18:11:31 +1000
+Received: from EXQLD2-BNE.nexus.csiro.au ([140.253.131.52]) by
+	exvicn1-mel.nexus.csiro.au with Microsoft SMTPSVC(5.0.2195.6713); 
+	Fri, 25 May 2007 18:11:31 +1000
+X-MimeOLE: Produced By Microsoft Exchange V6.0.6619.12
+Content-class: urn:content-classes:message
+MIME-Version: 1.0
+Date: Fri, 25 May 2007 18:11:30 +1000
+Message-ID: <B998A44C8986644EA8029CFE6396A924B67A83@exqld2-bne.nexus.csiro.au>
+X-MS-Has-Attach: 
+X-MS-TNEF-Correlator: 
+Thread-Topic: [R] Speeding up resampling of rows from a large matrix
+Thread-Index: AceekuMmXJsVj2ykSDSsPRPCGebiqgAEHI+g
+References: <0JIL00HJZ27L1KD0@msg-mx5.usc.edu>
+From: <Bill.Venables@csiro.au>
+To: <lewinger@usc.edu>, <r-help@stat.math.ethz.ch>
+X-OriginalArrivalTime: 25 May 2007 08:11:31.0530 (UTC)
+	FILETIME=[4D7E5AA0:01C79EA4]
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+X-MIME-Autoconverted: from quoted-printable to 8bit by hypatia.math.ethz.ch id
+	l4P8BXVh021104
+Subject: Re: [R] Speeding up resampling of rows from a large matrix
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+Here is a possibility.  The only catch is that if a pair of rows is
+selected twice you will get the results in a block, not scattered at
+random throughout the columns of G.  I can't see that as a problem.
+
+### --- start code excerpt ---
+nSNPs <- 1000
+H <- matrix(sample(0:1, 120*nSNPs , replace=T), nrow=120)
+
+# G <- matrix(0, nrow=3, ncol=nSNPs)
+
+# Keep in mind that the real H is 120 x 65000
+
+ij <- as.matrix(subset(expand.grid(i = 1:120, j = 1:120), i < j))
+
+nResamples <- 3000
+sel <- sample(1:nrow(ij), nResamples, rep = TRUE)
+repf <- table(sel)                   # replication factors
+ij <- ij[as.numeric(names(repf)), ]  # distinct choice made
+
+G <- matrix(0, nrow = 3, ncol = nrow(ij))  # for now
+
+for(j in 1:ncol(G))
+  G[,j] <- rowSums(outer(0:2, colSums(H[ij[j, ], ]), "=="))
+
+G <- G[, rep(1:ncol(G), repf)]         # bulk up the result
+
+# _
+# _
+# _
+# _pair <- replicate(nResamples, sample(1:120, 2))
+# _
+# _gen <- function(x){g <- sum(x); c(g==0, g==1, g==2)}
+# _
+# _for (i in 1:nResamples){
+# _    G <- G + apply(H[pair[,i],], 2, gen)
+# _}
+### --- end of code excerpt ---
+
+I did a timing on my machine which is a middle-of-the range windows
+monstrosity...
+
+> system.time({
++ 
++ nSNPs <- 1000
++ H <- matrix(sample(0:1, 120*nSNPs , replace=T), nrow=120)
++ 
++ # G <- matrix(0, nrow=3, ncol=nSNPs)
++ 
++ # Keep in mind that the real H is 120 x 65000
++ 
++ ij <- as.matrix(subset(expand.grid(i = 1:120, j = 1:120), i < j))
++ 
++ nResamples <- 3000
++ sel <- sample(1:nrow(ij), nResamples, rep = TRUE)
++ repf <- table(sel)                   # replication factors
++ ij <- ij[as.numeric(names(repf)), ]  # distinct choice made
++ 
++ G <- matrix(0, nrow = 3, ncol = nrow(ij))  # for now
++ 
++ for(j in 1:ncol(G))
++   G[,j] <- rowSums(outer(0:2, colSums(H[ij[j, ], ]), "=="))
++ 
++ G <- G[, rep(1:ncol(G), repf)]         # bulk up the result
++ 
++ # _
++ # _
++ # _
++ # _pair <- replicate(nResamples, sample(1:120, 2))
++ # _
++ # _gen <- function(x){g <- sum(x); c(g==0, g==1, g==2)}
++ # _
++ # _for (i in 1:nResamples){
++ # _    G <- G + apply(H[pair[,i],], 2, gen)
++ # _}
++ #
+_#----------------------------------------------------------------------
+---------
++ # _
++ })
+   user  system elapsed 
+   0.97    0.00    0.99 
+
+
+Less than a second.  Somewhat of an improvement on the 80 minutes, I
+reckon.  This will increase, of course when you step the size of the H
+matrix up from 1000 to 65000 columns
+
+Bill Venables
+CSIRO Laboratories
+PO Box 120, Cleveland, 4163
+AUSTRALIA
+Office Phone (email preferred): +61 7 3826 7251
+Fax (if absolutely necessary):  +61 7 3826 7304
+Mobile:                (I don't have one!)
+Home Phone:                     +61 7 3286 7700
+mailto:Bill.Venables@csiro.au
+http://www.cmis.csiro.au/bill.venables/ 
+
+-----Original Message-----
+From: r-help-bounces@stat.math.ethz.ch
+[mailto:r-help-bounces@stat.math.ethz.ch] On Behalf Of Juan Pablo
+Lewinger
+Sent: Friday, 25 May 2007 4:04 PM
+To: r-help@stat.math.ethz.ch
+Subject: [R] Speeding up resampling of rows from a large matrix
+
+I'm trying to:
+
+Resample with replacement pairs of distinct rows from a 120 x 65,000 
+matrix H of 0's and 1's. For each resampled pair sum the resulting 2 
+x 65,000 matrix by column:
+
+     0 1 0 1 ...
++
+     0 0 1 1 ...
+    _______
+=  0 1 1 2 ...
+
+For each column accumulate the number of 0's, 1's and 2's over the 
+resamples to obtain a 3 x 65,000 matrix G.
+
+For those interested in the background, H is a matrix of haplotypes, 
+each pair of haplotypes forms a genotype, and each column corresponds 
+to a SNP. I'm using resampling to compute the null distribution of 
+the maximum over correlated SNPs of a simple statistic.
+
+
+The code:
+#-----------------------------------------------------------------------
+--------
+nSNPs <- 1000
+H <- matrix(sample(0:1, 120*nSNPs , replace=T), nrow=120)
+G <- matrix(0, nrow=3, ncol=nSNPs)
+# Keep in mind that the real H is 120 x 65000
+
+nResamples <- 3000
+pair <- replicate(nResamples, sample(1:120, 2))
+
+gen <- function(x){g <- sum(x); c(g==0, g==1, g==2)}
+
+for (i in 1:nResamples){
+    G <- G + apply(H[pair[,i],], 2, gen)
+}
+#-----------------------------------------------------------------------
+--------
+The problem is that the loop takes about 80 mins to complete and I 
+need to repeat the whole thing 10,000 times, which would then take 
+over a year and a half!
+
+Is there a way to speed this up so that the full 10,000 iterations 
+take a reasonable amount of time (say a week)?
+
+My machine has an Intel Xeon 3.40GHz CPU with 1GB of RAM
+
+ > sessionInfo()
+R version 2.5.0 (2007-04-23)
+i386-pc-mingw32
+
+I would greatly appreciate any help.
+
+Juan Pablo Lewinger
+Department of Preventive Medicine
+Keck School of Medicine
+University of Southern California
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide
+http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

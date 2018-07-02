@@ -1,0 +1,98 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat Apr 21 17:10:59 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3LLAw0I031708
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 21 Apr 2007 17:10:58 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id CE46E162C1F
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 21 Apr 2007 21:10:33 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.7 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 501)
+	id 6C677162AC6; Sat, 21 Apr 2007 21:09:57 +0000 (GMT)
+To: samba-cvs@samba.org
+From: abartlet@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070421210957.6C677162AC6@lists.samba.org>
+Date: Sat, 21 Apr 2007 21:09:57 +0000 (GMT)
+Subject: svn commit: samba r22427 - in
+	branches/SAMBA_4_0/source/script/tests: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2922
+Lines: 55
+
+Author: abartlet
+Date: 2007-04-21 21:09:56 +0000 (Sat, 21 Apr 2007)
+New Revision: 22427
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22427
+
+Log:
+Abort in a few more cases of failure to provision.
+
+Andrew Bartlett
+
+Modified:
+   branches/SAMBA_4_0/source/script/tests/Samba4.pm
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/script/tests/Samba4.pm
+===================================================================
+--- branches/SAMBA_4_0/source/script/tests/Samba4.pm	2007-04-21 20:44:19 UTC (rev 22426)
++++ branches/SAMBA_4_0/source/script/tests/Samba4.pm	2007-04-21 21:09:56 UTC (rev 22427)
+@@ -257,7 +257,7 @@
+ ";
+ 	close(LDIF);
+ 
+-	system("$self->{bindir}/ad2oLschema $configuration -H $privatedir/sam.ldb --option=convert:target=fedora-ds -I $self->{setupdir}/schema-map-fedora-ds-1.0 -O $fedora_ds_dir/schema/99_ad.ldif >&2");
++	system("$self->{bindir}/ad2oLschema $configuration -H $privatedir/sam.ldb --option=convert:target=fedora-ds -I $self->{setupdir}/schema-map-fedora-ds-1.0 -O $fedora_ds_dir/schema/99_ad.ldif >&2") == 0 or die("schema conversion for Fedora DS failed");
+ 
+ 	return ($fedora_ds_dir, $pidfile);
+ }
+@@ -359,10 +359,10 @@
+ 	close(CONF);
+ 
+ 	#This uses the provision we just did, to read out the schema
+-	system("$self->{bindir}/ad2oLschema $configuration -H $privatedir/sam.ldb -I $self->{setupdir}/schema-map-openldap-2.3 -O $ldapdir/ad.schema >&2");
++	system("$self->{bindir}/ad2oLschema $configuration -H $privatedir/sam.ldb -I $self->{setupdir}/schema-map-openldap-2.3 -O $ldapdir/ad.schema >&2") == 0 or die("schema conversion for OpenLDAP failed");
+ 
+ 	#Now create an LDAP baseDN
+-	system("$self->{bindir}/smbscript $self->{setupdir}/provision $provision_options --ldap-base >&2");
++	system("$self->{bindir}/smbscript $self->{setupdir}/provision $provision_options --ldap-base >&2") == 0 or die("creating an OpenLDAP basedn failed");
+ 
+ 	my $oldpath = $ENV{PATH};
+ 	$ENV{PATH} = "/usr/local/sbin:/usr/sbin:/sbin:$ENV{PATH}";
+@@ -531,10 +531,10 @@
+ #Ensure the config file is valid before we start
+ 	if (system("$self->{bindir}/testparm $configuration -v --suppress-prompt >/dev/null 2>&1") != 0) {
+ 		system("$self->{bindir}/testparm $configuration >&2");
+-		die("Failed to create configuration!");
++		die("Failed to create a valid smb.conf configuration!");
+ 	}
+ 
+-	(system("($self->{bindir}/testparm $configuration -v --suppress-prompt --parameter-name=\"netbios name\" --section-name=global 2> /dev/null | grep -i ^$netbiosname ) >/dev/null 2>&1") == 0) or die("Failed to create configuration!");
++	(system("($self->{bindir}/testparm $configuration -v --suppress-prompt --parameter-name=\"netbios name\" --section-name=global 2> /dev/null | grep -i ^$netbiosname ) >/dev/null 2>&1") == 0) or die("Failed to create a valid smb.conf configuration!");
+ 
+ 	my @provision_options = ($configuration);
+ 	push (@provision_options, "--host-name=$netbiosname");
+

@@ -1,0 +1,115 @@
+From r-help-bounces@stat.math.ethz.ch  Thu Jun 14 05:05:11 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5E959L9019399
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 14 Jun 2007 05:05:10 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5E94S07030920;
+	Thu, 14 Jun 2007 11:04:44 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: *
+X-Spam-Status: No, score=1.0 required=5.0 tests=BAYES_60,
+	DKIM_POLICY_SIGNSOME autolearn=no version=3.2.0
+Received: from mailout2.zih.tu-dresden.de (mailout2.zih.tu-dresden.de
+	[141.30.67.73])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5E94IaV030822
+	for <r-help@stat.math.ethz.ch>; Thu, 14 Jun 2007 11:04:19 +0200
+Received: from rmc67-31.zih.tu-dresden.de ([141.30.67.31] helo=server-n)
+	by mailout2.zih.tu-dresden.de with esmtp (Exim 4.63)
+	(envelope-from <thpe@simecol.de>)
+	id 1HylFU-0001Wf-5W; Thu, 14 Jun 2007 11:04:18 +0200
+Received: from [192.168.101.43] (hhb-a.wasser.tu-dresden.de [141.30.20.2])
+	by server-n (Postfix) with ESMTP id 04A53100BD96;
+	Thu, 14 Jun 2007 11:04:12 +0200 (CEST)
+Message-ID: <4671047E.5030709@simecol.de>
+Date: Thu, 14 Jun 2007 11:03:58 +0200
+From: Thomas Petzoldt <thpe@simecol.de>
+User-Agent: Thunderbird 1.5.0.7 (Windows/20060909)
+MIME-Version: 1.0
+To: R-Help <r-help@stat.math.ethz.ch>
+References: <4666A5D0.896D.005E.0@hsph.harvard.edu>
+In-Reply-To: <4666A5D0.896D.005E.0@hsph.harvard.edu>
+X-TUD-Virus-Scanned: mailout2.zih.tu-dresden.de
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: Jeremy Goldhaber-Fiebert <JGOLDHAB@hsph.harvard.edu>
+Subject: Re: [R] Using odesolve to produce non-negative solutions
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+Dear Jeremy,
+
+a few notes about your model: The equations of your derivatives are 
+designed in a way that can lead to negative state variables with certain 
+parameter combinations. In order to avoid this, you are using "if 
+constructions" which are intended to correct this. This method is 
+however (as far as I have learned from theory and own experience ;-) a 
+bad idea and should be strictly avoided.
+
+This trick may violate assumptions of the ODE solvers and in many cases 
+also mass-balances (or similar).
+
+Instead of this, processes should be modeled in a way that avoids 
+"crossing zero", e.g. exponential decay (x, k > 0):
+
+dx = - k * x  (1)
+
+and not a linear decay like
+
+dx = -k       (2)
+
+which by its nature can lead to negative state values.
+
+Case (1) can be managed almost perfectly by lsoda with his automatic 
+internal time step algorithm. hmax is intended for non-autonomous models 
+to ensure that external signals are not skipped by the automatism, which 
+may be appropriate in your case because p seems to contain time 
+dependent functions.
+
+As far as I can see, your equations belong to type (1) and should not 
+need any of the if and for constructs, as long as your parameters (which 
+are not given in your post) do have the correct sign and range (for 
+example, vax <= 1, death >= 0  etc.).
+
+If you perform optimization, you must ensure that parameters stay in the 
+plausible range is met using transformations of the parameters or 
+constraints in the optimization procedure.
+
+Thomas
+
+PS: another question, what is the purpose of the state variable N?
+I guess it can be derived from the other states.
+
+
+Jeremy Goldhaber-Fiebert wrote:
+> Hello,
+> 
+> I am using odesolve to simulate a group of people moving through time
+> and transmitting infections to one another.
+> 
+> In Matlab, there is a NonNegative option which tells the Matlab
+> solver to keep the vector elements of the ODE solution non-negative
+> at all times. What is the right way to do this in R?
+> 
+> Thanks, Jeremy
+
+[... code deleted, see original post ...]
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

@@ -1,0 +1,113 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May  2 09:20:50 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l42DKnb9022356
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 2 May 2007 09:20:49 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 7B46B1638E1
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed,  2 May 2007 13:20:49 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.9 required=3.8 tests=AWL, BAYES_00, FORGED_RCVD_HELO,
+	RCVD_IN_BLARS_RBL,RCVD_IN_DSBL,SPF_NEUTRAL autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from mail.plainjoe.org (68-117-186-136.dhcp.mtgm.al.charter.com
+	[68.117.186.136])
+	by lists.samba.org (Postfix) with ESMTP id AA614162B71;
+	Wed,  2 May 2007 13:19:41 +0000 (GMT)
+Received: from [192.168.1.47] (oak.plainjoe.org [192.168.1.47])
+	by mail.plainjoe.org (Postfix) with ESMTP id 207D12F1D1;
+	Wed,  2 May 2007 08:19:41 -0500 (CDT)
+Message-ID: <46388FEE.4060603@samba.org>
+Date: Wed, 02 May 2007 08:19:42 -0500
+From: "Gerald (Jerry) Carter" <jerry@samba.org>
+User-Agent: Thunderbird 1.5.0.10 (X11/20070306)
+MIME-Version: 1.0
+To: Nik Conwell <nik@bu.edu>
+References: <6B138B39-DA56-4580-B8BA-36059D5FA2BD@bu.edu>
+In-Reply-To: <6B138B39-DA56-4580-B8BA-36059D5FA2BD@bu.edu>
+X-Enigmail-Version: 0.94.0.0
+Content-Type: text/plain; charset=ISO-8859-1
+Content-Transfer-Encoding: 7bit
+Cc: samba-technical@lists.samba.org
+Subject: Re: Inconsistency between groupmap "Domain Admins"
+ and	_lsa_add_acct_rights() checking
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA1
+
+Nik Conwell wrote:
+> (I guess this could be a HOWTO bug as well.)
+> 
+> I'm part of an AD domain.
+> 
+> To be considered an admin on the samba box, the howto
+> http://www.samba.org/samba/docs/man/Samba-HOWTO-Collection/groupmapping.html
+> 
+> says:
+> 
+>   net groupmap add ntgroup="Domain Admins" unixgroup=domadm rid=512 type=d
+> 
+> When I do that net groupmap list shows:
+> 
+> Domain Admins ([LOCALSID]-512) -> domadm
+> 
+> 
+> But, when assigning privs by a member of the unix group domadm via:
+> 
+>   net -Unik rpc rights grant joe SePrintOperatorPrivilege
+> 
+> it ends up checking Domain Admins with the [DOMAINSID]-512.
+> 
+> In _lsa_add_acct_rights() if you're not root it calls
+> nt_token_check_domain_rid(), which ends up using the domain_sid.  But,
+> since my account sid includes [LOCALSID]-512 and not [DOMAINSID]-512 I
+> never get a good sid match and so get denied.
+> 
+> Certainly, adding my groupmap "Domain Admins" with sid [DOMAINSID]-512
+> is enough to get the net rpc rights grant working.
+> 
+> I don't know enough to stipulate that groupmap add type=d should use the
+> DOMAINSID, but it seems that way.  Or, should _lsa_add_acct_rights() but
+> updated to also check the [LOCALSID]-512 sid as well as the
+> [DOMAINSID]-512 sid?
+
+Specify the full sid instead of just the rid to "net groupmap add".
+The HOWTO is for a Samba DC IIRC.
+
+Hope this helps.
+
+
+
+
+
+cheers, jerry
+=====================================================================
+Samba                                    ------- http://www.samba.org
+Centeris                         -----------  http://www.centeris.com
+"What man is a man who does not make the world better?"      --Balian
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.3 (GNU/Linux)
+Comment: Using GnuPG with Mozilla - http://enigmail.mozdev.org
+
+iD8DBQFGOI/uIR7qMdg1EfYRAlafAJ9AoevLST4TjjhiHkDSGVXqGTzjoQCeMQrX
+VpckJ0MGg4qbHIlaXq/HSbU=
+=9GGI
+-----END PGP SIGNATURE-----
+

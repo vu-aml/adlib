@@ -1,0 +1,243 @@
+From sugar-bounces@laptop.org  Sun May 27 13:29:26 2007
+Return-Path: <sugar-bounces@laptop.org>
+Received: from pedal.laptop.org (pedal.laptop.org [18.85.2.148])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4RHTQqD004370
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 27 May 2007 13:29:26 -0400
+Received: from pedal.laptop.org (localhost [127.0.0.1])
+	by pedal.laptop.org (Postfix) with ESMTP id DC93F4F69A;
+	Sun, 27 May 2007 13:28:33 -0400 (EDT)
+X-Original-To: sugar@laptop.org
+Delivered-To: sugar@laptop.org
+Received: from spam.laptop.org (spam.laptop.org [18.85.46.23])
+	by pedal.laptop.org (Postfix) with ESMTP id F27504F69A
+	for <sugar@laptop.org>; Sun, 27 May 2007 13:28:32 -0400 (EDT)
+X-ASG-Debug-ID: 1180286958-654700000000-3Xmyjt
+X-Barracuda-URL: http://18.85.46.23:8000/cgi-bin/mark.cgi
+X-Barracuda-Connect: mail.gmx.net[213.165.64.20]
+X-Barracuda-Start-Time: 1180286958
+Received: from mail.gmx.net (mail.gmx.net [213.165.64.20])
+	by spam.laptop.org (Spam Firewall) with SMTP id CFF39FF0E
+	for <sugar@laptop.org>; Sun, 27 May 2007 13:29:18 -0400 (EDT)
+Received: (qmail invoked by alias); 27 May 2007 17:29:17 -0000
+Received: from p5b01e66a.dip.t-dialin.net (EHLO [192.168.2.25]) [91.1.230.106]
+	by mail.gmx.net (mp058) with SMTP; 27 May 2007 19:29:17 +0200
+X-Authenticated: #37528645
+X-Provags-ID: V01U2FsdGVkX18jaPgvcOYjhOAST2LOP+THnw8UniFSAu7zEFXo2x
+	fg81CF/J6QcbNE
+Message-ID: <4659BFEC.40202@gmx.de>
+Date: Sun, 27 May 2007 19:29:16 +0200
+From: Konrad Kleine <konrad.kleine@gmx.de>
+User-Agent: Thunderbird 1.5.0.10 (X11/20070403)
+MIME-Version: 1.0
+To: sugar@laptop.org
+X-ASG-Orig-Subj: [PATCH] I've fixed bug #590.
+Content-Type: multipart/mixed; boundary="------------050804010102090409080307"
+X-Y-GMX-Trusted: 0
+X-Barracuda-Bayes: INNOCENT GLOBAL 0.2926 1.0000 -0.3802
+X-Barracuda-Virus-Scanned: by Barracuda Spam Firewall at laptop.org
+X-Barracuda-Spam-Score: -0.38
+X-Barracuda-Spam-Status: No, SCORE=-0.38 using global scores of TAG_LEVEL=3.5
+	QUARANTINE_LEVEL=1000.0 KILL_LEVEL=5.5 tests=
+X-Barracuda-Spam-Report: Code version 3.1, rules version 3.1.18187
+	Rule breakdown below
+	pts rule name              description
+	---- ----------------------
+	--------------------------------------------------
+Subject: [sugar] [PATCH] I've fixed bug #590.
+X-BeenThere: sugar@laptop.org
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Discussion of OLPC design,
+	desktop platform and user experience" <sugar.laptop.org>
+List-Unsubscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=unsubscribe>
+List-Archive: <http://mailman.laptop.org/pipermail/sugar>
+List-Post: <mailto:sugar@laptop.org>
+List-Help: <mailto:sugar-request@laptop.org?subject=help>
+List-Subscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=subscribe>
+Sender: sugar-bounces@laptop.org
+Errors-To: sugar-bounces@laptop.org
+
+This is a multi-part message in MIME format.
+--------------050804010102090409080307
+Content-Type: text/plain; charset=ISO-8859-15; format=flowed
+Content-Transfer-Encoding: 7bit
+
+ From 0ad3f322cb39373f939ac71b40816986ae812e8a Mon Sep 17 00:00:00 2001
+From: Konrad Kleine <konrad.kleine@gmx.de>
+Date: Sun, 27 May 2007 19:21:44 +0200
+Subject: [PATCH] I've fixed bug #590.
+
+The fix removes all non-shell logfiles from the
+~/.sugar/default/logs directory (as usual) and keeps
+the ten most recent shell logfile.
+
+The backed up shell.log files carry their creation time as an
+additional extension to their filename (e.g. shell.log.1180272197)
+
+Konrad Kleine
+---
+  sugar/logger.py |   39 +++++++++++++++++++++++++++++++++++++--
+  1 files changed, 37 insertions(+), 2 deletions(-)
+
+diff --git a/sugar/logger.py b/sugar/logger.py
+old mode 100755
+new mode 100644
+index 2cfc730..670edaf
+--- a/sugar/logger.py
++++ b/sugar/logger.py
+@@ -34,7 +34,6 @@ formatter = logging.Formatter('%(name)s: %(message)s')
+  class LogWriter:
+      def __init__(self, module_id):
+          self._module_id = module_id
+-
+          logs_dir = _get_logs_dir()
+          log_path = os.path.join(logs_dir, module_id + '.log')
+          self._log_file = open(log_path, 'w')
+@@ -114,6 +113,42 @@ def start(module_id):
+
+  def cleanup():
+      logs_dir = _get_logs_dir()
++
++    """
++    Prevents the shell logfiles from being deleted (fixes bug #590).
++    Backup the current shell logfile with its ctime appended.
++    All other logfiles will be deleted!
++    """
+
++    shell_logfiles = []             # List of all shell logfiles
++
+      for f in os.listdir(logs_dir):
+-        os.remove(os.path.join(logs_dir, f))
++
++        filepath = os.path.join(logs_dir, f)
++
++        if f.startswith('shell.log'):
++            if f == 'shell.log':
++                ctime = os.stat(filepath).st_ctime
++                backup_name = filepath + '.' + str(ctime)
++                os.rename(filepath, backup_name)
++                shell_logfiles.append(backup_name)
++            else:
++                shell_logfiles.append(filepath)
++        else:
++            # Delete non-shell logfiles
++            os.remove(filepath)
++
++    """
++    Delete all shell logfiles except the 10 most recent.
++    """
++
++    to_keep = 10                # How many files to keep in logs dir
++
++    if len(shell_logfiles) > to_keep:
++
++        shell_logfiles.sort()
++        shell_logfiles.reverse()
++
++        for i in range(to_keep, len(shell_logfiles)):
++            os.remove(shell_logfiles[i])
++
+-- 
+1.4.4.2
+
+--------------050804010102090409080307
+Content-Type: text/plain;
+ name="0001-I-ve-fixed-bug-590.txt"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline;
+ filename="0001-I-ve-fixed-bug-590.txt"
+
+>From 0ad3f322cb39373f939ac71b40816986ae812e8a Mon Sep 17 00:00:00 2001
+From: Konrad Kleine <konrad@vaio.(none)>
+Date: Sun, 27 May 2007 19:21:44 +0200
+Subject: [PATCH] I've fixed bug #590.
+
+The fix removes all non-shell logfiles from the
+~/.sugar/default/logs directory (as usual) and keeps
+the ten most recent shell logfile.
+
+The backed up shell.log files carry their creation time as an
+additional extension to their filename (e.g. shell.log.1180272197)
+
+Konrad Kleine
+---
+ sugar/logger.py |   39 +++++++++++++++++++++++++++++++++++++--
+ 1 files changed, 37 insertions(+), 2 deletions(-)
+
+diff --git a/sugar/logger.py b/sugar/logger.py
+old mode 100755
+new mode 100644
+index 2cfc730..670edaf
+--- a/sugar/logger.py
++++ b/sugar/logger.py
+@@ -34,7 +34,6 @@ formatter = logging.Formatter('%(name)s: %(message)s')
+ class LogWriter:
+     def __init__(self, module_id):
+         self._module_id = module_id
+-
+         logs_dir = _get_logs_dir()
+         log_path = os.path.join(logs_dir, module_id + '.log')
+         self._log_file = open(log_path, 'w')
+@@ -114,6 +113,42 @@ def start(module_id):
+ 
+ def cleanup():
+     logs_dir = _get_logs_dir()
++
++    """
++    Prevents the shell logfiles from being deleted (fixes bug #590).
++    Backup the current shell logfile with its ctime appended.
++    All other logfiles will be deleted!
++    """
+     
++    shell_logfiles = []             # List of all shell logfiles
++
+     for f in os.listdir(logs_dir):
+-        os.remove(os.path.join(logs_dir, f))
++
++        filepath = os.path.join(logs_dir, f)
++
++        if f.startswith('shell.log'):
++            if f == 'shell.log':
++                ctime = os.stat(filepath).st_ctime
++                backup_name = filepath + '.' + str(ctime)
++                os.rename(filepath, backup_name)
++                shell_logfiles.append(backup_name)
++            else:
++                shell_logfiles.append(filepath)
++        else:
++            # Delete non-shell logfiles
++            os.remove(filepath)
++
++    """
++    Delete all shell logfiles except the 10 most recent.
++    """
++    
++    to_keep = 10                # How many files to keep in logs dir
++    
++    if len(shell_logfiles) > to_keep:
++
++        shell_logfiles.sort()
++        shell_logfiles.reverse()
++
++        for i in range(to_keep, len(shell_logfiles)):
++            os.remove(shell_logfiles[i])
++            
+-- 
+1.4.4.2
+
+
+--------------050804010102090409080307
+Content-Type: text/plain; charset="us-ascii"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+
+_______________________________________________
+Sugar mailing list
+Sugar@laptop.org
+http://mailman.laptop.org/mailman/listinfo/sugar
+
+--------------050804010102090409080307--
+

@@ -1,0 +1,221 @@
+From perl6-all-return-81009-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue May  1 14:40:45 2007
+Return-Path: <perl6-all-return-81009-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l41Iehb9011621
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 1 May 2007 14:40:44 -0400
+Received: (qmail 17421 invoked by uid 514); 30 Apr 2007 21:49:26 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 17416 invoked from network); 30 Apr 2007 21:49:26 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Delivered-To: parrotbug-followup@parrotcode.org
+Received-SPF: pass (x1.develooper.com: domain of chromatic@wgz.org designates 63.105.17.39 as permitted sender)
+From: chromatic <chromatic@wgz.org>
+Organization: Snafu
+To: perl6-internals@perl.org
+Subject: Re: [perl #42230] Parrot::Test Eats Segfaults
+Date: Mon, 30 Apr 2007 14:41:11 -0700
+User-Agent: KMail/1.9.5
+Cc: chromatic (via RT) <parrotbug-followup@parrotcode.org>,
+   bugs-bitbucket@netlabs.develooper.com
+References: <RT-Ticket-42230@perl.org> <200703302251.40293.chromatic@wgz.org> <rt-3.6.HEAD-30557-1175320338-529.42230-72-0@perl.org>
+In-Reply-To: <rt-3.6.HEAD-30557-1175320338-529.42230-72-0@perl.org>
+MIME-Version: 1.0
+Content-Type: Multipart/Mixed;
+  boundary="Boundary-00=_4JmNG9ciq2vDOB+"
+Message-Id: <200704301441.12298.chromatic@wgz.org>
+X-Virus-Scanned: by amavisd-new at wgz.org
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO,SPF_PASS
+Status: O
+Content-Length: 5485
+Lines: 169
+
+--Boundary-00=_4JmNG9ciq2vDOB+
+Content-Type: text/plain;
+  charset="utf-8"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+
+On Friday 30 March 2007 22:52, chromatic wrote:
+
+> Parrot::Test reports tests that produce the right output but crash instead
+> of exiting cleanly as successes.
+>
+> The attached patch (not for applying) demonstrates the problematic lines.
+>
+> Note that certain tests deliberately feed bad output to Parrot so that it
+> will exit with a non-zero status.  Parrot::Test should support both goals
+> simultaneously.
+>
+> One option is to add an extra option to the test, such as:
+>
+> 	exit => 'unclean'
+
+I used this approach.  Here's a (fairly minimal) patch to Parrot::Test as well 
+as a patch for all tests that legitimately expect exits.
+
+If there are no objections, I'll apply this patch in three days.
+
+-- c
+
+
+--Boundary-00=_4JmNG9ciq2vDOB+
+Content-Type: text/x-diff;
+  charset="utf-8";
+  name="check_test_exit_code.patch"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: attachment;
+	filename="check_test_exit_code.patch"
+
+=== lib/Parrot/Test.pm
+==================================================================
+--- lib/Parrot/Test.pm	(revision 3327)
++++ lib/Parrot/Test.pm	(local)
+@@ -513,9 +513,14 @@
+             local *{ $call_pkg . '::TODO' } = \$extra{todo}
+                 if defined $extra{todo};
+ 
++            unless ($extra{expect_error})
++            {
++                $real_output .= "\nExit code: $exit_code\n" if $exit_code;
++            }
++
+             my $pass = $builder->$meth( $real_output, $expected, $desc );
+             $builder->diag("'$cmd' failed with exit code $exit_code")
+-                if $exit_code and not $pass;
++                if $exit_code and not $pass and not $extra{expect_error};
+ 
+             unless ( $ENV{POSTMORTEM} ) {
+                 unlink $out_f;
+=== t/compilers/imcc/syn/const.t
+==================================================================
+--- t/compilers/imcc/syn/const.t	(revision 3327)
++++ t/compilers/imcc/syn/const.t	(local)
+@@ -418,7 +418,7 @@
+ The line above is empty.
+ OUT
+ 
+-pir_output_like( <<'CODE', <<'OUT', "PIR heredoc: line numbers" );
++pir_output_like( <<'CODE', <<'OUT', "PIR heredoc: line numbers", expect_error => 1 );
+ .sub main :main
+     .local string s
+     .local pmc nil
+=== t/compilers/imcc/syn/errors.t
+==================================================================
+--- t/compilers/imcc/syn/errors.t	(revision 3327)
++++ t/compilers/imcc/syn/errors.t	(local)
+@@ -46,7 +46,7 @@
+ }
+ $test_3_pir_code .= ".end\n";
+ 
+-pir_output_like( $test_3_pir_code, <<'OUT', "check parser recovery patience." );
++pir_output_like( $test_3_pir_code, <<'OUT', "check parser recovery patience.", expect_error => 1);
+ /Too many errors. Correct some first.\n$/
+ OUT
+ 
+=== t/op/debuginfo.t
+==================================================================
+--- t/op/debuginfo.t	(revision 3327)
++++ t/op/debuginfo.t	(local)
+@@ -37,7 +37,7 @@
+ \d/
+ OUTPUT
+ 
+-pir_output_like( <<'CODE', <<'OUTPUT', "debug backtrace - Null PMC access" );
++pir_output_like( <<'CODE', <<'OUTPUT', "debug backtrace - Null PMC access", expect_error => 1 );
+ .sub main
+     print "ok 1\n"
+     a()
+@@ -78,7 +78,7 @@
+ called from Sub 'main' pc (\d+|-1) \(.*?:(\d+|-1)\)$/
+ OUTPUT
+ 
+-pir_output_like( <<'CODE', <<'OUTPUT', "debug backtrace - method not found" );
++pir_output_like( <<'CODE', <<'OUTPUT', "debug backtrace - method not found", expect_error => 1 );
+ .namespace ["Test1"]
+ .sub main
+     print "ok 1\n"
+@@ -101,7 +101,7 @@
+ called from Sub 'parrot;Test1;main' pc (\d+|-1) \(.*?:(\d+|-1)\)$/
+ OUTPUT
+ 
+-pir_output_like( <<'CODE', <<'OUTPUT', "debug backtrace - fetch of unknown lexical" );
++pir_output_like( <<'CODE', <<'OUTPUT', "debug backtrace - fetch of unknown lexical", expect_error => 1 );
+ .namespace ["Test2"]
+ .sub main
+     print "ok 1\n"
+@@ -137,7 +137,7 @@
+ \.\.\. call repeated 1000 times/
+ OUTPUT
+ 
+-pir_output_like( <<'CODE', <<'OUTPUT', "debug backtrace - recursion 2" );
++pir_output_like( <<'CODE', <<'OUTPUT', "debug backtrace - recursion 2", expect_error => 1 );
+ .sub main
+     rec(91)
+ .end
+=== t/op/stacks.t
+==================================================================
+--- t/op/stacks.t	(revision 3327)
++++ t/op/stacks.t	(local)
+@@ -294,7 +294,7 @@
+ 43
+ OUTPUT
+ 
+-pasm_output_is( <<"CODE", <<'OUTPUT', 'rotate up by more than stack size' );
++pasm_output_is( <<"CODE", <<'OUTPUT', 'rotate up by more than stack size', expect_error => 1 );
+     set I0, 1
+     save I0
+     set I0, 2
+@@ -305,7 +305,7 @@
+ Stack too shallow!
+ OUTPUT
+ 
+-pasm_output_is( <<"CODE", <<'OUTPUT', 'rotate down by more than stack size' );
++pasm_output_is( <<"CODE", <<'OUTPUT', 'rotate down by more than stack size', expect_error => 1 );
+     set I0, 1
+     save I0
+     set I0, 2
+@@ -448,7 +448,7 @@
+ done
+ OUTPUT
+ 
+-pasm_output_is( <<CODE, <<OUTPUT, "entrytype, beyond stack depth" );
++pasm_output_is( <<CODE, <<OUTPUT, "entrytype, beyond stack depth", expect_error => 1 );
+         save    12
+         print   "ready\\n"
+         entrytype       I0, 1
+=== t/op/string.t
+==================================================================
+--- t/op/string.t	(revision 3327)
++++ t/op/string.t	(local)
+@@ -1274,7 +1274,7 @@
+ >< done
+ OUTPUT
+ 
+-pasm_output_is( <<'CODE', "Cannot repeat with negative arg\n", 'repeat OOB' );
++pasm_output_is( <<'CODE', "Cannot repeat with negative arg\n", 'repeat OOB', expect_error => 1 );
+ 	repeat S0, "japh", -1
+ 	end
+ CODE
+
+--Boundary-00=_4JmNG9ciq2vDOB+--
+

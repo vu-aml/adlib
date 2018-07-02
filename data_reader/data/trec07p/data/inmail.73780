@@ -1,0 +1,558 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Jul  4 10:03:40 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l64E3dL9011346
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 4 Jul 2007 10:03:39 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id E4832163844
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed,  4 Jul 2007 14:03:34 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.3 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1007)
+	id E3E98162B74; Wed,  4 Jul 2007 14:03:10 +0000 (GMT)
+To: samba-cvs@samba.org
+From: lmuelle@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070704140310.E3E98162B74@lists.samba.org>
+Date: Wed,  4 Jul 2007 14:03:10 +0000 (GMT)
+Subject: svn commit: samba r23704 - in branches:
+	SAMBA_3_0/examples/pam_winbind SAMBA_3_0/source/nsswitch
+	SAMBA_3_0_26/examples/pam_winbind SAMBA_3_0_26/source/nsswitch
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: lmuelle
+Date: 2007-07-04 14:03:10 +0000 (Wed, 04 Jul 2007)
+New Revision: 23704
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23704
+
+Log:
+Add pam_pwd_expire feature as discussed on samba-technical.
+
+This is a slightly modified version to set warn_pwd_expire to the
+default value if 0, no, or a broken value is set.
+
+This version also has one if statement less in get_config_item_int().
+
+Thanks a lot to Andreas 'GlaDiaC' Schneider for this feature!
+
+Modified:
+   branches/SAMBA_3_0/examples/pam_winbind/pam_winbind.conf
+   branches/SAMBA_3_0/source/nsswitch/pam_winbind.c
+   branches/SAMBA_3_0/source/nsswitch/pam_winbind.h
+   branches/SAMBA_3_0_26/examples/pam_winbind/pam_winbind.conf
+   branches/SAMBA_3_0_26/source/nsswitch/pam_winbind.c
+   branches/SAMBA_3_0_26/source/nsswitch/pam_winbind.h
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/examples/pam_winbind/pam_winbind.conf
+===================================================================
+--- branches/SAMBA_3_0/examples/pam_winbind/pam_winbind.conf	2007-07-04 11:06:32 UTC (rev 23703)
++++ branches/SAMBA_3_0/examples/pam_winbind/pam_winbind.conf	2007-07-04 14:03:10 UTC (rev 23704)
+@@ -28,5 +28,8 @@
+ # (can also take a name)
+ ;require_membership_of =
+ 
++# password expiry warning period in days
++;warn_pwd_expire = 14
++
+ # omit pam conversations
+ ;silent = no
+
+Modified: branches/SAMBA_3_0/source/nsswitch/pam_winbind.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/pam_winbind.c	2007-07-04 11:06:32 UTC (rev 23703)
++++ branches/SAMBA_3_0/source/nsswitch/pam_winbind.c	2007-07-04 14:03:10 UTC (rev 23704)
+@@ -561,7 +561,12 @@
+  * @return boolean Returns True if message has been sent, False if not.
+  */
+ 
+-static BOOL _pam_send_password_expiry_message(pam_handle_t *pamh, int ctrl, time_t next_change, time_t now, BOOL *already_expired)
++static BOOL _pam_send_password_expiry_message(pam_handle_t *pamh,
++					      int ctrl,
++					      time_t next_change,
++					      time_t now,
++					      int warn_pwd_expire,
++					      BOOL *already_expired)
+ {
+ 	int days = 0;
+ 	struct tm tm_now, tm_next_change;
+@@ -579,7 +584,7 @@
+ 	}
+ 
+ 	if ((next_change < 0) ||
+-	    (next_change > now + DAYS_TO_WARN_BEFORE_PWD_EXPIRES * SECONDS_PER_DAY)) {
++	    (next_change > now + warn_pwd_expire * SECONDS_PER_DAY)) {
+ 		return False;
+ 	}
+ 
+@@ -595,7 +600,7 @@
+ 		return True;
+ 	} 
+ 	
+-	if (days > 0 && days < DAYS_TO_WARN_BEFORE_PWD_EXPIRES) {
++	if (days > 0 && days < warn_pwd_expire) {
+ 		_make_remark_format(pamh, ctrl, PAM_TEXT_INFO, "Your password will expire in %d %s", 
+ 			days, (days > 1) ? "days":"day");
+ 		return True;
+@@ -618,6 +623,7 @@
+ static void _pam_warn_password_expiry(pam_handle_t *pamh, 
+ 				      int flags, 
+ 				      const struct winbindd_response *response,
++				      int warn_pwd_expire,
+ 				      BOOL *already_expired)
+ {
+ 	time_t now = time(NULL);
+@@ -640,7 +646,8 @@
+ 	/* check if the info3 must change timestamp has been set */
+ 	next_change = response->data.auth.info3.pass_must_change_time;
+ 
+-	if (_pam_send_password_expiry_message(pamh, flags, next_change, now, 
++	if (_pam_send_password_expiry_message(pamh, flags, next_change, now,
++					      warn_pwd_expire,
+ 					      already_expired)) {
+ 		return;
+ 	}
+@@ -655,7 +662,8 @@
+ 	next_change = response->data.auth.info3.pass_last_set_time + 
+ 		      response->data.auth.policy.expire;
+ 
+-	if (_pam_send_password_expiry_message(pamh, flags, next_change, now, 
++	if (_pam_send_password_expiry_message(pamh, flags, next_change, now,
++					      warn_pwd_expire,
+ 					      already_expired)) {
+ 		return;
+ 	}
+@@ -1029,6 +1037,7 @@
+ 				const char *pass, 
+ 				const char *member, 
+ 				const char *cctype,
++				const int warn_pwd_expire,
+ 				struct winbindd_response *p_response,
+ 				time_t *pwd_last_set,
+ 				char **user_ret)
+@@ -1134,7 +1143,9 @@
+ 	if (ret == PAM_SUCCESS) {
+ 
+ 		/* warn a user if the password is about to expire soon */
+-		_pam_warn_password_expiry(pamh, ctrl, &response, &already_expired);
++		_pam_warn_password_expiry(pamh, ctrl, &response,
++					  warn_pwd_expire,
++					  &already_expired);
+ 
+ 		if (already_expired == True) {
+ 			_pam_log_debug(pamh, ctrl, LOG_DEBUG, "Password has expired "
+@@ -1519,6 +1530,52 @@
+ 	return parm_opt;
+ }
+ 
++int get_config_item_int(const pam_handle_t *pamh,
++			      int argc,
++			      const char **argv,
++			      int ctrl,
++			      dictionary *d,
++			      const char *item)
++{
++	int parm_opt = -1, i = 0;
++	char *key = NULL;
++
++	/* let the pam opt take precedence over the pam_winbind.conf option */
++	for (i = 0; i < argc; i++) {
++
++		if ((strncmp(argv[i], item, strlen(item)) == 0)) {
++			char *p;
++
++			if ( (p = strchr( argv[i], '=' )) == NULL) {
++				_pam_log(pamh, ctrl, LOG_INFO,
++					 "no \"=\" delimiter for \"%s\" found\n",
++					 item);
++				goto out;
++			}
++			parm_opt = atoi(p + 1);
++			_pam_log_debug(pamh, ctrl, LOG_INFO,
++				       "PAM config: %s '%d'\n",
++				       item, parm_opt);
++			return parm_opt;
++		}
++	}
++
++	if (d != NULL) {
++		if (!asprintf(&key, "global:%s", item)) {
++			goto out;
++		}
++
++		parm_opt = iniparser_getint(d, key, -1);
++		SAFE_FREE(key);
++
++		_pam_log_debug(pamh, ctrl, LOG_INFO,
++			       "CONFIG file: %s '%d'\n",
++			       item, parm_opt);
++	}
++out:
++	return parm_opt;
++}
++
+ const char *get_krb5_cc_type_from_config(const pam_handle_t *pamh, int argc, const char **argv, int ctrl, dictionary *d)
+ {
+ 	return get_conf_item_string(pamh, argc, argv, ctrl, d, "krb5_ccache_type", WINBIND_KRB5_CCACHE_TYPE);
+@@ -1534,6 +1591,22 @@
+ 	return get_conf_item_string(pamh, argc, argv, ctrl, d, "require-membership-of", WINBIND_REQUIRED_MEMBERSHIP);
+ }
+ 
++int get_warn_pwd_expire_from_config(const pam_handle_t *pamh,
++							  int argc,
++							  const char **argv,
++							  int ctrl,
++							  dictionary *d)
++{
++	int ret;
++	ret = get_config_item_int(pamh, argc, argv, ctrl, d,
++				  "warn_pwd_expire");
++	/* no or broken setting */
++	if (ret <= 0) {
++		return DEFAULT_DAYS_TO_WARN_BEFORE_PWD_EXPIRES;
++	}
++	return ret;
++}
++
+ PAM_EXTERN
+ int pam_sm_authenticate(pam_handle_t *pamh, int flags,
+ 			int argc, const char **argv)
+@@ -1542,6 +1615,7 @@
+ 	const char *password;
+ 	const char *member = NULL;
+ 	const char *cctype = NULL;
++	int warn_pwd_expire;
+ 	int retval = PAM_AUTH_ERR;
+ 	dictionary *d = NULL;
+ 	char *username_ret = NULL;
+@@ -1612,9 +1686,13 @@
+ 
+ 	cctype = get_krb5_cc_type_from_config(pamh, argc, argv, ctrl, d);
+ 
++	warn_pwd_expire = get_warn_pwd_expire_from_config(pamh, argc, argv,
++							  ctrl, d);
++
+ 	/* Now use the username to look up password */
+ 	retval = winbind_auth_request(pamh, ctrl, username, password, member,
+-				      cctype, NULL, NULL, &username_ret);
++				      cctype, warn_pwd_expire, NULL, NULL,
++				      &username_ret);
+ 
+ 	if (retval == PAM_NEW_AUTHTOK_REQD ||
+ 	    retval == PAM_AUTHTOK_EXPIRED) {
+@@ -2064,7 +2142,8 @@
+ 		/* verify that this is the password for this user */
+ 		
+ 		ret = winbind_auth_request(pamh, ctrl, user, pass_old,
+-					NULL, NULL, &response, &pwdlastset_prelim, NULL);
++					   NULL, NULL, 0, &response,
++					   &pwdlastset_prelim, NULL);
+ 
+ 		if (ret != PAM_ACCT_EXPIRED && 
+ 		    ret != PAM_AUTHTOK_EXPIRED &&
+@@ -2156,9 +2235,13 @@
+ 
+ 			const char *member = get_member_from_config(pamh, argc, argv, ctrl, d);
+ 			const char *cctype = get_krb5_cc_type_from_config(pamh, argc, argv, ctrl, d);
++			const int warn_pwd_expire =
++			 get_warn_pwd_expire_from_config(pamh, argc, argv, ctrl,
++							 d);
+ 
+ 			ret = winbind_auth_request(pamh, ctrl, user, pass_new,
+-							member, cctype, &response, NULL, &username_ret);
++						   member, cctype, 0, &response,
++						   NULL, &username_ret);
+ 			_pam_overwrite(pass_new);
+ 			_pam_overwrite(pass_old);
+ 			pass_old = pass_new = NULL;
+@@ -2166,7 +2249,8 @@
+ 			if (ret == PAM_SUCCESS) {
+ 			
+ 				/* warn a user if the password is about to expire soon */
+-				_pam_warn_password_expiry(pamh, ctrl, &response, NULL);
++				_pam_warn_password_expiry(pamh, ctrl, &response,
++							  warn_pwd_expire , NULL);
+ 
+ 				/* set some info3 info for other modules in the stack */
+ 				_pam_set_data_info3(pamh, ctrl, &response);
+
+Modified: branches/SAMBA_3_0/source/nsswitch/pam_winbind.h
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/pam_winbind.h	2007-07-04 11:06:32 UTC (rev 23703)
++++ branches/SAMBA_3_0/source/nsswitch/pam_winbind.h	2007-07-04 14:03:10 UTC (rev 23704)
+@@ -116,7 +116,7 @@
+ 
+ #define SECONDS_PER_DAY 86400
+ 
+-#define DAYS_TO_WARN_BEFORE_PWD_EXPIRES 5
++#define DEFAULT_DAYS_TO_WARN_BEFORE_PWD_EXPIRES 14
+ 
+ #include "winbind_client.h"
+ 
+
+Modified: branches/SAMBA_3_0_26/examples/pam_winbind/pam_winbind.conf
+===================================================================
+--- branches/SAMBA_3_0_26/examples/pam_winbind/pam_winbind.conf	2007-07-04 11:06:32 UTC (rev 23703)
++++ branches/SAMBA_3_0_26/examples/pam_winbind/pam_winbind.conf	2007-07-04 14:03:10 UTC (rev 23704)
+@@ -28,5 +28,8 @@
+ # (can also take a name)
+ ;require_membership_of =
+ 
++# password expiry warning period in days
++;warn_pwd_expire = 14
++
+ # omit pam conversations
+ ;silent = no
+
+Modified: branches/SAMBA_3_0_26/source/nsswitch/pam_winbind.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/nsswitch/pam_winbind.c	2007-07-04 11:06:32 UTC (rev 23703)
++++ branches/SAMBA_3_0_26/source/nsswitch/pam_winbind.c	2007-07-04 14:03:10 UTC (rev 23704)
+@@ -561,7 +561,12 @@
+  * @return boolean Returns True if message has been sent, False if not.
+  */
+ 
+-static BOOL _pam_send_password_expiry_message(pam_handle_t *pamh, int ctrl, time_t next_change, time_t now, BOOL *already_expired)
++static BOOL _pam_send_password_expiry_message(pam_handle_t *pamh,
++					      int ctrl,
++					      time_t next_change,
++					      time_t now,
++					      int warn_pwd_expire,
++					      BOOL *already_expired)
+ {
+ 	int days = 0;
+ 	struct tm tm_now, tm_next_change;
+@@ -579,7 +584,7 @@
+ 	}
+ 
+ 	if ((next_change < 0) ||
+-	    (next_change > now + DAYS_TO_WARN_BEFORE_PWD_EXPIRES * SECONDS_PER_DAY)) {
++	    (next_change > now + warn_pwd_expire * SECONDS_PER_DAY)) {
+ 		return False;
+ 	}
+ 
+@@ -595,7 +600,7 @@
+ 		return True;
+ 	} 
+ 	
+-	if (days > 0 && days < DAYS_TO_WARN_BEFORE_PWD_EXPIRES) {
++	if (days > 0 && days < warn_pwd_expire) {
+ 		_make_remark_format(pamh, ctrl, PAM_TEXT_INFO, "Your password will expire in %d %s", 
+ 			days, (days > 1) ? "days":"day");
+ 		return True;
+@@ -618,6 +623,7 @@
+ static void _pam_warn_password_expiry(pam_handle_t *pamh, 
+ 				      int flags, 
+ 				      const struct winbindd_response *response,
++				      int warn_pwd_expire,
+ 				      BOOL *already_expired)
+ {
+ 	time_t now = time(NULL);
+@@ -640,7 +646,8 @@
+ 	/* check if the info3 must change timestamp has been set */
+ 	next_change = response->data.auth.info3.pass_must_change_time;
+ 
+-	if (_pam_send_password_expiry_message(pamh, flags, next_change, now, 
++	if (_pam_send_password_expiry_message(pamh, flags, next_change, now,
++					      warn_pwd_expire,
+ 					      already_expired)) {
+ 		return;
+ 	}
+@@ -655,7 +662,8 @@
+ 	next_change = response->data.auth.info3.pass_last_set_time + 
+ 		      response->data.auth.policy.expire;
+ 
+-	if (_pam_send_password_expiry_message(pamh, flags, next_change, now, 
++	if (_pam_send_password_expiry_message(pamh, flags, next_change, now,
++					      warn_pwd_expire,
+ 					      already_expired)) {
+ 		return;
+ 	}
+@@ -1029,6 +1037,7 @@
+ 				const char *pass, 
+ 				const char *member, 
+ 				const char *cctype,
++				const int warn_pwd_expire,
+ 				struct winbindd_response *p_response,
+ 				time_t *pwd_last_set,
+ 				char **user_ret)
+@@ -1134,7 +1143,9 @@
+ 	if (ret == PAM_SUCCESS) {
+ 
+ 		/* warn a user if the password is about to expire soon */
+-		_pam_warn_password_expiry(pamh, ctrl, &response, &already_expired);
++		_pam_warn_password_expiry(pamh, ctrl, &response,
++					  warn_pwd_expire,
++					  &already_expired);
+ 
+ 		if (already_expired == True) {
+ 			_pam_log_debug(pamh, ctrl, LOG_DEBUG, "Password has expired "
+@@ -1519,6 +1530,52 @@
+ 	return parm_opt;
+ }
+ 
++int get_config_item_int(const pam_handle_t *pamh,
++			      int argc,
++			      const char **argv,
++			      int ctrl,
++			      dictionary *d,
++			      const char *item)
++{
++	int parm_opt = -1, i = 0;
++	char *key = NULL;
++
++	/* let the pam opt take precedence over the pam_winbind.conf option */
++	for (i = 0; i < argc; i++) {
++
++		if ((strncmp(argv[i], item, strlen(item)) == 0)) {
++			char *p;
++
++			if ( (p = strchr( argv[i], '=' )) == NULL) {
++				_pam_log(pamh, ctrl, LOG_INFO,
++					 "no \"=\" delimiter for \"%s\" found\n",
++					 item);
++				goto out;
++			}
++			parm_opt = atoi(p + 1);
++			_pam_log_debug(pamh, ctrl, LOG_INFO,
++				       "PAM config: %s '%d'\n",
++				       item, parm_opt);
++			return parm_opt;
++		}
++	}
++
++	if (d != NULL) {
++		if (!asprintf(&key, "global:%s", item)) {
++			goto out;
++		}
++
++		parm_opt = iniparser_getint(d, key, -1);
++		SAFE_FREE(key);
++
++		_pam_log_debug(pamh, ctrl, LOG_INFO,
++			       "CONFIG file: %s '%d'\n",
++			       item, parm_opt);
++	}
++out:
++	return parm_opt;
++}
++
+ const char *get_krb5_cc_type_from_config(const pam_handle_t *pamh, int argc, const char **argv, int ctrl, dictionary *d)
+ {
+ 	return get_conf_item_string(pamh, argc, argv, ctrl, d, "krb5_ccache_type", WINBIND_KRB5_CCACHE_TYPE);
+@@ -1534,6 +1591,22 @@
+ 	return get_conf_item_string(pamh, argc, argv, ctrl, d, "require-membership-of", WINBIND_REQUIRED_MEMBERSHIP);
+ }
+ 
++int get_warn_pwd_expire_from_config(const pam_handle_t *pamh,
++							  int argc,
++							  const char **argv,
++							  int ctrl,
++							  dictionary *d)
++{
++	int ret;
++	ret = get_config_item_int(pamh, argc, argv, ctrl, d,
++				  "warn_pwd_expire");
++	/* no or broken setting */
++	if (ret <= 0) {
++		return DEFAULT_DAYS_TO_WARN_BEFORE_PWD_EXPIRES;
++	}
++	return ret;
++}
++
+ PAM_EXTERN
+ int pam_sm_authenticate(pam_handle_t *pamh, int flags,
+ 			int argc, const char **argv)
+@@ -1542,6 +1615,7 @@
+ 	const char *password;
+ 	const char *member = NULL;
+ 	const char *cctype = NULL;
++	int warn_pwd_expire;
+ 	int retval = PAM_AUTH_ERR;
+ 	dictionary *d = NULL;
+ 	char *username_ret = NULL;
+@@ -1612,9 +1686,13 @@
+ 
+ 	cctype = get_krb5_cc_type_from_config(pamh, argc, argv, ctrl, d);
+ 
++	warn_pwd_expire = get_warn_pwd_expire_from_config(pamh, argc, argv,
++							  ctrl, d);
++
+ 	/* Now use the username to look up password */
+ 	retval = winbind_auth_request(pamh, ctrl, username, password, member,
+-				      cctype, NULL, NULL, &username_ret);
++				      cctype, warn_pwd_expire, NULL, NULL,
++				      &username_ret);
+ 
+ 	if (retval == PAM_NEW_AUTHTOK_REQD ||
+ 	    retval == PAM_AUTHTOK_EXPIRED) {
+@@ -2064,7 +2142,8 @@
+ 		/* verify that this is the password for this user */
+ 		
+ 		ret = winbind_auth_request(pamh, ctrl, user, pass_old,
+-					NULL, NULL, &response, &pwdlastset_prelim, NULL);
++					   NULL, NULL, 0, &response,
++					   &pwdlastset_prelim, NULL);
+ 
+ 		if (ret != PAM_ACCT_EXPIRED && 
+ 		    ret != PAM_AUTHTOK_EXPIRED &&
+@@ -2156,9 +2235,13 @@
+ 
+ 			const char *member = get_member_from_config(pamh, argc, argv, ctrl, d);
+ 			const char *cctype = get_krb5_cc_type_from_config(pamh, argc, argv, ctrl, d);
++			const int warn_pwd_expire =
++			 get_warn_pwd_expire_from_config(pamh, argc, argv, ctrl,
++							 d);
+ 
+ 			ret = winbind_auth_request(pamh, ctrl, user, pass_new,
+-							member, cctype, &response, NULL, &username_ret);
++						   member, cctype, 0, &response,
++						   NULL, &username_ret);
+ 			_pam_overwrite(pass_new);
+ 			_pam_overwrite(pass_old);
+ 			pass_old = pass_new = NULL;
+@@ -2166,7 +2249,8 @@
+ 			if (ret == PAM_SUCCESS) {
+ 			
+ 				/* warn a user if the password is about to expire soon */
+-				_pam_warn_password_expiry(pamh, ctrl, &response, NULL);
++				_pam_warn_password_expiry(pamh, ctrl, &response,
++							  warn_pwd_expire , NULL);
+ 
+ 				/* set some info3 info for other modules in the stack */
+ 				_pam_set_data_info3(pamh, ctrl, &response);
+
+Modified: branches/SAMBA_3_0_26/source/nsswitch/pam_winbind.h
+===================================================================
+--- branches/SAMBA_3_0_26/source/nsswitch/pam_winbind.h	2007-07-04 11:06:32 UTC (rev 23703)
++++ branches/SAMBA_3_0_26/source/nsswitch/pam_winbind.h	2007-07-04 14:03:10 UTC (rev 23704)
+@@ -116,7 +116,7 @@
+ 
+ #define SECONDS_PER_DAY 86400
+ 
+-#define DAYS_TO_WARN_BEFORE_PWD_EXPIRES 5
++#define DEFAULT_DAYS_TO_WARN_BEFORE_PWD_EXPIRES 14
+ 
+ #include "winbind_client.h"
+ 
+

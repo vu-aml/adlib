@@ -1,0 +1,406 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 15 11:14:57 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4FFEvqD006400
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 11:14:57 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id C3246163895
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 15:14:54 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id 0DBEC162B71; Tue, 15 May 2007 15:14:37 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070515151437.0DBEC162B71@lists.samba.org>
+Date: Tue, 15 May 2007 15:14:37 +0000 (GMT)
+Subject: svn commit: samba r22908 - in branches: SAMBA_3_0/source/lib
+	SAMBA_3_0/source/libsmb SAMBA_3_0/source/nmbd
+	SAMBA_3_0/source/nsswitch SAMBA_3_0/source/smbd
+	SAMBA_3_0/source/torture SAMBA_3_0/source/utils
+	SAMBA_3_0_26/source/lib SAMBA_3_0_26/source/libsmb
+	SAMBA_3_0_26/source/nmbd SAMBA_3_0_26/source/nsswitch
+	SAMBA_3_0_26/source/smbd SAMBA_3_0_26/source/torture
+	SAMBA_3_0_26/source/utils
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-05-15 15:14:32 +0000 (Tue, 15 May 2007)
+New Revision: 22908
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22908
+
+Log:
+All callers of message_init now also call messaging_init. Unify those.
+
+Modified:
+   branches/SAMBA_3_0/source/lib/debug.c
+   branches/SAMBA_3_0/source/lib/messages.c
+   branches/SAMBA_3_0/source/libsmb/clidgram.c
+   branches/SAMBA_3_0/source/nmbd/nmbd.c
+   branches/SAMBA_3_0/source/nsswitch/winbindd.c
+   branches/SAMBA_3_0/source/smbd/server.c
+   branches/SAMBA_3_0/source/torture/msgtest.c
+   branches/SAMBA_3_0/source/utils/smbcontrol.c
+   branches/SAMBA_3_0_26/source/lib/debug.c
+   branches/SAMBA_3_0_26/source/lib/messages.c
+   branches/SAMBA_3_0_26/source/libsmb/clidgram.c
+   branches/SAMBA_3_0_26/source/nmbd/nmbd.c
+   branches/SAMBA_3_0_26/source/nsswitch/winbindd.c
+   branches/SAMBA_3_0_26/source/smbd/server.c
+   branches/SAMBA_3_0_26/source/torture/msgtest.c
+   branches/SAMBA_3_0_26/source/utils/smbcontrol.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/lib/debug.c
+===================================================================
+--- branches/SAMBA_3_0/source/lib/debug.c	2007-05-15 14:58:01 UTC (rev 22907)
++++ branches/SAMBA_3_0/source/lib/debug.c	2007-05-15 15:14:32 UTC (rev 22908)
+@@ -492,19 +492,6 @@
+ }
+ 
+ /****************************************************************************
+- Send a "set debug level" message.
+-****************************************************************************/
+-
+-void debug_message_send(pid_t pid, const char *params_str)
+-{
+-	if (!params_str)
+-		return;
+-	message_send_pid(pid_to_procid(pid), MSG_DEBUG,
+-			 params_str, strlen(params_str) + 1,
+-			 False);
+-}
+-
+-/****************************************************************************
+  Return current debug level.
+ ****************************************************************************/
+ 
+@@ -539,14 +526,17 @@
+ 
+ 	initialised = True;
+ 
+-	message_register(MSG_DEBUG, debug_message, NULL);
+-	message_register(MSG_REQ_DEBUGLEVEL, debuglevel_message, NULL);
+-
+ 	for(p = default_classname_table; *p; p++) {
+ 		debug_add_class(*p);
+ 	}
+ }
+ 
++void debug_register_msgs(void)
++{
++	message_register(MSG_DEBUG, debug_message, NULL);
++	message_register(MSG_REQ_DEBUGLEVEL, debuglevel_message, NULL);
++}
++
+ /***************************************************************************
+  Get ready for syslog stuff
+ **************************************************************************/
+
+Modified: branches/SAMBA_3_0/source/lib/messages.c
+===================================================================
+--- branches/SAMBA_3_0/source/lib/messages.c	2007-05-15 14:58:01 UTC (rev 22907)
++++ branches/SAMBA_3_0/source/lib/messages.c	2007-05-15 15:14:32 UTC (rev 22908)
+@@ -117,7 +117,7 @@
+  Initialise the messaging functions. 
+ ****************************************************************************/
+ 
+-BOOL message_init(void)
++static BOOL message_init(struct messaging_context *msg_ctx)
+ {
+ 	sec_init();
+ 
+@@ -144,6 +144,7 @@
+ 
+ 	register_msg_pool_usage();
+ 	register_dmalloc_msgs();
++	debug_register_msgs();
+ 
+ 	return True;
+ }
+@@ -757,6 +758,12 @@
+ 
+ 	ctx->id = server_id;
+ 	talloc_set_destructor(ctx, messaging_context_destructor);
++
++	if (!message_init(ctx)) {
++		DEBUG(0, ("message_init failed: %s\n", strerror(errno)));
++		TALLOC_FREE(ctx);
++	}
++
+ 	return ctx;
+ }
+ 
+
+Modified: branches/SAMBA_3_0/source/libsmb/clidgram.c
+===================================================================
+--- branches/SAMBA_3_0/source/libsmb/clidgram.c	2007-05-15 14:58:01 UTC (rev 22907)
++++ branches/SAMBA_3_0/source/libsmb/clidgram.c	2007-05-15 15:14:32 UTC (rev 22908)
+@@ -45,9 +45,6 @@
+ 		return False;
+ 	}
+ 
+-	if (!message_init())
+-		return False;
+-
+ 	memset((char *)&p, '\0', sizeof(p));
+ 
+ 	/*
+
+Modified: branches/SAMBA_3_0/source/nmbd/nmbd.c
+===================================================================
+--- branches/SAMBA_3_0/source/nmbd/nmbd.c	2007-05-15 14:58:01 UTC (rev 22907)
++++ branches/SAMBA_3_0/source/nmbd/nmbd.c	2007-05-15 15:14:32 UTC (rev 22908)
+@@ -753,7 +753,6 @@
+ 		setpgid( (pid_t)0, (pid_t)0 );
+ #endif
+ 
+-	message_init();
+ 	if (nmbd_messaging_context() == NULL) {
+ 		return 1;
+ 	}
+
+Modified: branches/SAMBA_3_0/source/nsswitch/winbindd.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/winbindd.c	2007-05-15 14:58:01 UTC (rev 22907)
++++ branches/SAMBA_3_0/source/nsswitch/winbindd.c	2007-05-15 15:14:32 UTC (rev 22908)
+@@ -1125,7 +1125,7 @@
+ 
+ 	/* Initialise messaging system */
+ 
+-	if (!message_init()) {
++	if (winbind_messaging_context() == NULL) {
+ 		DEBUG(0, ("unable to initialize messaging system\n"));
+ 		exit(1);
+ 	}
+
+Modified: branches/SAMBA_3_0/source/smbd/server.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/server.c	2007-05-15 14:58:01 UTC (rev 22907)
++++ branches/SAMBA_3_0/source/smbd/server.c	2007-05-15 15:14:32 UTC (rev 22908)
+@@ -967,7 +967,7 @@
+ 	}
+ 
+ 	/* Setup all the TDB's - including CLEAR_IF_FIRST tdb's. */
+-	if (!message_init())
++	if (smbd_messaging_context() == NULL)
+ 		exit(1);
+ 
+ 	/* Initialise the password backed before the global_sam_sid
+
+Modified: branches/SAMBA_3_0/source/torture/msgtest.c
+===================================================================
+--- branches/SAMBA_3_0/source/torture/msgtest.c	2007-05-15 14:58:01 UTC (rev 22907)
++++ branches/SAMBA_3_0/source/torture/msgtest.c	2007-05-15 15:14:32 UTC (rev 22908)
+@@ -52,8 +52,6 @@
+ 	
+ 	lp_load(dyn_CONFIGFILE,False,False,False,True);
+ 
+-	message_init();
+-
+ 	if (!(evt_ctx = event_context_init(NULL)) ||
+ 	    !(msg_ctx = messaging_init(NULL, server_id_self(), evt_ctx))) {
+ 		fprintf(stderr, "could not init messaging context\n");
+
+Modified: branches/SAMBA_3_0/source/utils/smbcontrol.c
+===================================================================
+--- branches/SAMBA_3_0/source/utils/smbcontrol.c	2007-05-15 14:58:01 UTC (rev 22907)
++++ branches/SAMBA_3_0/source/utils/smbcontrol.c	2007-05-15 15:14:32 UTC (rev 22908)
+@@ -55,9 +55,6 @@
+ 	BOOL ret;
+ 	int n_sent = 0;
+ 
+-	if (!message_init())
+-		return False;
+-
+ 	if (procid_to_pid(&pid) != 0)
+ 		return NT_STATUS_IS_OK(
+ 			messaging_send_buf(msg_ctx, pid, msg_type,
+
+Modified: branches/SAMBA_3_0_26/source/lib/debug.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/lib/debug.c	2007-05-15 14:58:01 UTC (rev 22907)
++++ branches/SAMBA_3_0_26/source/lib/debug.c	2007-05-15 15:14:32 UTC (rev 22908)
+@@ -492,19 +492,6 @@
+ }
+ 
+ /****************************************************************************
+- Send a "set debug level" message.
+-****************************************************************************/
+-
+-void debug_message_send(pid_t pid, const char *params_str)
+-{
+-	if (!params_str)
+-		return;
+-	message_send_pid(pid_to_procid(pid), MSG_DEBUG,
+-			 params_str, strlen(params_str) + 1,
+-			 False);
+-}
+-
+-/****************************************************************************
+  Return current debug level.
+ ****************************************************************************/
+ 
+@@ -539,14 +526,17 @@
+ 
+ 	initialised = True;
+ 
+-	message_register(MSG_DEBUG, debug_message, NULL);
+-	message_register(MSG_REQ_DEBUGLEVEL, debuglevel_message, NULL);
+-
+ 	for(p = default_classname_table; *p; p++) {
+ 		debug_add_class(*p);
+ 	}
+ }
+ 
++void debug_register_msgs(void)
++{
++	message_register(MSG_DEBUG, debug_message, NULL);
++	message_register(MSG_REQ_DEBUGLEVEL, debuglevel_message, NULL);
++}
++
+ /***************************************************************************
+  Get ready for syslog stuff
+ **************************************************************************/
+
+Modified: branches/SAMBA_3_0_26/source/lib/messages.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/lib/messages.c	2007-05-15 14:58:01 UTC (rev 22907)
++++ branches/SAMBA_3_0_26/source/lib/messages.c	2007-05-15 15:14:32 UTC (rev 22908)
+@@ -117,7 +117,7 @@
+  Initialise the messaging functions. 
+ ****************************************************************************/
+ 
+-BOOL message_init(void)
++static BOOL message_init(struct messaging_context *msg_ctx)
+ {
+ 	sec_init();
+ 
+@@ -144,6 +144,7 @@
+ 
+ 	register_msg_pool_usage();
+ 	register_dmalloc_msgs();
++	debug_register_msgs();
+ 
+ 	return True;
+ }
+@@ -757,6 +758,12 @@
+ 
+ 	ctx->id = server_id;
+ 	talloc_set_destructor(ctx, messaging_context_destructor);
++
++	if (!message_init(ctx)) {
++		DEBUG(0, ("message_init failed: %s\n", strerror(errno)));
++		TALLOC_FREE(ctx);
++	}
++
+ 	return ctx;
+ }
+ 
+
+Modified: branches/SAMBA_3_0_26/source/libsmb/clidgram.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/libsmb/clidgram.c	2007-05-15 14:58:01 UTC (rev 22907)
++++ branches/SAMBA_3_0_26/source/libsmb/clidgram.c	2007-05-15 15:14:32 UTC (rev 22908)
+@@ -45,9 +45,6 @@
+ 		return False;
+ 	}
+ 
+-	if (!message_init())
+-		return False;
+-
+ 	memset((char *)&p, '\0', sizeof(p));
+ 
+ 	/*
+
+Modified: branches/SAMBA_3_0_26/source/nmbd/nmbd.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/nmbd/nmbd.c	2007-05-15 14:58:01 UTC (rev 22907)
++++ branches/SAMBA_3_0_26/source/nmbd/nmbd.c	2007-05-15 15:14:32 UTC (rev 22908)
+@@ -752,7 +752,6 @@
+ 		setpgid( (pid_t)0, (pid_t)0 );
+ #endif
+ 
+-	message_init();
+ 	if (nmbd_messaging_context() == NULL) {
+ 		return 1;
+ 	}
+
+Modified: branches/SAMBA_3_0_26/source/nsswitch/winbindd.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/nsswitch/winbindd.c	2007-05-15 14:58:01 UTC (rev 22907)
++++ branches/SAMBA_3_0_26/source/nsswitch/winbindd.c	2007-05-15 15:14:32 UTC (rev 22908)
+@@ -1070,7 +1070,7 @@
+ 
+ 	/* Initialise messaging system */
+ 
+-	if (!message_init()) {
++	if (winbind_messaging_context() == NULL) {
+ 		DEBUG(0, ("unable to initialize messaging system\n"));
+ 		exit(1);
+ 	}
+
+Modified: branches/SAMBA_3_0_26/source/smbd/server.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/smbd/server.c	2007-05-15 14:58:01 UTC (rev 22907)
++++ branches/SAMBA_3_0_26/source/smbd/server.c	2007-05-15 15:14:32 UTC (rev 22908)
+@@ -1015,7 +1015,7 @@
+ 		pidfile_create("smbd");
+ 
+ 	/* Setup all the TDB's - including CLEAR_IF_FIRST tdb's. */
+-	if (!message_init())
++	if (smbd_messaging_context() == NULL)
+ 		exit(1);
+ 
+ 	/* Initialise the password backed before the global_sam_sid
+
+Modified: branches/SAMBA_3_0_26/source/torture/msgtest.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/torture/msgtest.c	2007-05-15 14:58:01 UTC (rev 22907)
++++ branches/SAMBA_3_0_26/source/torture/msgtest.c	2007-05-15 15:14:32 UTC (rev 22908)
+@@ -52,8 +52,6 @@
+ 	
+ 	lp_load(dyn_CONFIGFILE,False,False,False,True);
+ 
+-	message_init();
+-
+ 	if (!(evt_ctx = event_context_init(NULL)) ||
+ 	    !(msg_ctx = messaging_init(NULL, server_id_self(), evt_ctx))) {
+ 		fprintf(stderr, "could not init messaging context\n");
+
+Modified: branches/SAMBA_3_0_26/source/utils/smbcontrol.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/utils/smbcontrol.c	2007-05-15 14:58:01 UTC (rev 22907)
++++ branches/SAMBA_3_0_26/source/utils/smbcontrol.c	2007-05-15 15:14:32 UTC (rev 22908)
+@@ -55,9 +55,6 @@
+ 	BOOL ret;
+ 	int n_sent = 0;
+ 
+-	if (!message_init())
+-		return False;
+-
+ 	if (procid_to_pid(&pid) != 0)
+ 		return NT_STATUS_IS_OK(
+ 			messaging_send_buf(msg_ctx, pid, msg_type,
+

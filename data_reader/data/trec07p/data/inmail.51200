@@ -1,0 +1,192 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Jun  5 01:36:29 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l555aShB004398
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 5 Jun 2007 01:36:28 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id AE597163871
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue,  5 Jun 2007 05:36:22 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.5 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 501)
+	id 9CF84162AE8; Tue,  5 Jun 2007 05:35:39 +0000 (GMT)
+To: samba-cvs@samba.org
+From: abartlet@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070605053539.9CF84162AE8@lists.samba.org>
+Date: Tue,  5 Jun 2007 05:35:39 +0000 (GMT)
+Subject: svn commit: samba r23351 - in branches/SAMBA_4_0:
+	source/scripting/libjs webapps/install
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: abartlet
+Date: 2007-06-05 05:35:39 +0000 (Tue, 05 Jun 2007)
+New Revision: 23351
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23351
+
+Log:
+Merge from SAMBA_4_0_RELEASE:
+
+Fix a nasty issue we had with SWAT.  We could not provision into a
+different domain, as we didn't re-calcuate the DOMAINDN after the user
+changed it in the form.
+
+Andrew Bartlett
+
+Modified:
+   branches/SAMBA_4_0/source/scripting/libjs/provision.js
+   branches/SAMBA_4_0/webapps/install/provision.esp
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/scripting/libjs/provision.js
+===================================================================
+--- branches/SAMBA_4_0/source/scripting/libjs/provision.js	2007-06-05 05:15:15 UTC (rev 23350)
++++ branches/SAMBA_4_0/source/scripting/libjs/provision.js	2007-06-05 05:35:39 UTC (rev 23351)
+@@ -436,7 +436,7 @@
+ 	return true;
+ }
+ 
+-function provision_fix_subobj(subobj, message, paths)
++function provision_fix_subobj(subobj, paths)
+ {
+ 	subobj.REALM       = strupper(subobj.REALM);
+ 	subobj.HOSTNAME    = strlower(subobj.HOSTNAME);
+@@ -444,6 +444,19 @@
+ 	assert(valid_netbios_name(subobj.DOMAIN));
+ 	subobj.NETBIOSNAME = strupper(subobj.HOSTNAME);
+ 	assert(valid_netbios_name(subobj.NETBIOSNAME));
++	subobj.DNSDOMAIN    = strlower(subobj.REALM);
++	subobj.DNSNAME      = sprintf("%s.%s", 
++				      strlower(subobj.HOSTNAME), 
++				      subobj.DNSDOMAIN);
++	rdn_list = split(".", subobj.DNSDOMAIN);
++	subobj.DOMAINDN     = "DC=" + join(",DC=", rdn_list);
++	subobj.DOMAINDN_LDB = "users.ldb";
++	subobj.ROOTDN       = subobj.DOMAINDN;
++	subobj.CONFIGDN     = "CN=Configuration," + subobj.ROOTDN;
++	subobj.CONFIGDN_LDB = "configuration.ldb";
++	subobj.SCHEMADN     = "CN=Schema," + subobj.CONFIGDN;
++	subobj.SCHEMADN_LDB = "schema.ldb";
++
+ 	var rdns = split(",", subobj.DOMAINDN);
+ 	subobj.RDN_DC = substr(rdns[0], strlen("DC="));
+ 
+@@ -461,7 +474,7 @@
+ 	var sys = sys_init();
+ 	var info = new Object();
+ 
+-	var ok = provision_fix_subobj(subobj, message, paths);
++	var ok = provision_fix_subobj(subobj, paths);
+ 	assert(ok);
+ 
+ 	info.subobj = subobj;
+@@ -511,7 +524,7 @@
+ 	var sys = sys_init();
+ 	var info = new Object();
+ 
+-	var ok = provision_fix_subobj(subobj, message, paths);
++	var ok = provision_fix_subobj(subobj, paths);
+ 	assert(ok);
+ 
+ 	if (subobj.DOMAINGUID != undefined) {
+@@ -714,13 +727,13 @@
+ 	var sys = sys_init();
+ 	var info = new Object();
+ 
+-	var ok = provision_fix_subobj(subobj, message, paths);
++	var ok = provision_fix_subobj(subobj, paths);
+ 	assert(ok);
+ 
+ 	info.subobj = subobj;
+ 	info.message = message;
+ 
+-	message("Setting up " + tmp_schema_path + " as a temporary database to store the schema\n");
++	message("Setting up sam.ldb partitions\n");
+ 
+ 	/* This will erase anything in the tmp db */
+ 	var samdb = open_ldb(info, tmp_schema_path, true);
+@@ -787,6 +800,9 @@
+ /* Write out a DNS zone file, from the info in the current database */
+ function provision_ldapbase(subobj, message, paths)
+ {
++	var ok = provision_fix_subobj(subobj, paths);
++	assert(ok);
++
+ 	message("Setting up LDAP base entry: " + subobj.DOMAINDN + " \n");
+ 	var rdns = split(",", subobj.DOMAINDN);
+ 	subobj.EXTENSIBLEOBJECT = "objectClass: extensibleObject";
+@@ -850,19 +866,6 @@
+ 	subobj.BACKUP       = findnss(nss.getgrnam, "backup", "wheel", "root", "staff");
+ 	subobj.USERS        = findnss(nss.getgrnam, "users", "guest", "other", "unknown", "usr");
+ 
+-	subobj.DNSDOMAIN    = strlower(subobj.REALM);
+-	subobj.DNSNAME      = sprintf("%s.%s", 
+-				      strlower(subobj.HOSTNAME), 
+-				      subobj.DNSDOMAIN);
+-	rdn_list = split(".", subobj.DNSDOMAIN);
+-	subobj.DOMAINDN     = "DC=" + join(",DC=", rdn_list);
+-	subobj.DOMAINDN_LDB = "users.ldb";
+-	subobj.ROOTDN       = subobj.DOMAINDN;
+-	subobj.CONFIGDN     = "CN=Configuration," + subobj.ROOTDN;
+-	subobj.CONFIGDN_LDB = "configuration.ldb";
+-	subobj.SCHEMADN     = "CN=Schema," + subobj.CONFIGDN;
+-	subobj.SCHEMADN_LDB = "schema.ldb";
+-
+ 	//Add modules to the list to activate them by default
+ 	//beware often order is important
+ 	//
+@@ -892,6 +895,7 @@
+ 
+ 	subobj.EXTENSIBLEOBJECT = "# no objectClass: extensibleObject for local ldb";
+ 	subobj.ACI		= "# no aci for local ldb";
++
+ 	return subobj;
+ }
+ 
+
+Modified: branches/SAMBA_4_0/webapps/install/provision.esp
+===================================================================
+--- branches/SAMBA_4_0/webapps/install/provision.esp	2007-06-05 05:15:15 UTC (rev 23350)
++++ branches/SAMBA_4_0/webapps/install/provision.esp	2007-06-05 05:35:39 UTC (rev 23351)
+@@ -16,7 +16,6 @@
+ 	lp.set("realm", lp.get("workgroup") + ".example.com");
+ }
+ 
+-
+ var subobj = provision_guess();
+ /* Don't supply default password for web interface */
+ subobj.ADMINPASS = "";
+@@ -47,10 +46,11 @@
+ }
+ 
+ if (form['submit'] == "Provision") {
++
+         /* overcome an initially blank smb.conf */
+ 	lp.set("realm", subobj.REALM);
+ 	lp.set("workgroup", subobj.DOMAIN);
+-	lp.reload()
++	lp.reload();
+ 	var goodpass = (subobj.CONFIRM == subobj.ADMINPASS);
+ 
+ 	if (!goodpass) {
+

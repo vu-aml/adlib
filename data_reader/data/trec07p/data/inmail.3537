@@ -1,0 +1,183 @@
+From perl6-all-return-80498-ktwarwic=speedy.uwaterloo.ca@perl.org  Wed Apr 11 23:21:32 2007
+Return-Path: <perl6-all-return-80498-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3C3LU0I025199
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 11 Apr 2007 23:21:31 -0400
+Received: (qmail 25347 invoked by uid 514); 12 Apr 2007 03:21:06 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 25342 invoked from network); 12 Apr 2007 03:21:06 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+Delivered-To: perlmail-parrot-porters@onion.perl.org
+Delivered-To: parrot-porters@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Transfer-Encoding: 7bit
+Message-ID: <17949.42366.701237.632831@rgrjr.dyndns.org>
+Date: Wed, 11 Apr 2007 23:20:30 -0400
+From: Bob Rogers <rogers-perl6@rgrjr.dyndns.org>
+To: Allison Randal <allison@perl.org>
+CC: Alek Storm <alek.storm@gmail.com>, p2 <parrot-porters@perl.org>
+Subject: Re: modifying classes after they're instantiated
+In-Reply-To: <461C9889.5010800@perl.org>
+References: <461C0EEF.1010107@perl.org>
+	<189adbd0704101702g34d86254t75708dd9035094f2@mail.gmail.com>
+	<17948.15469.601953.730369@rgrjr.dyndns.org>
+	<189adbd0704101917j758f43afj5fe0d800f684e891@mail.gmail.com>
+	<461C9889.5010800@perl.org>
+X-Mailer: VM 7.19 under Emacs 22.0.96.1
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=1.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO,RCVD_IN_NJABL_DUL,RCVD_IN_PBL,RCVD_IN_SORBS_DUL
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+Status: O
+Content-Length: 6203
+Lines: 124
+
+   From: Allison Randal <allison@perl.org>
+   Date: Wed, 11 Apr 2007 01:12:57 -0700
+
+   Alek Storm wrote:
+   > On 4/11/07, Bob Rogers <rogers-perl6@rgrjr.dyndns.org> wrote:
+   >> Surely you are not suggesting that any random "add_method" should
+   >> require creating a new class?  Did you mean "add_attribute" (or
+   >> whatever)?
+
+   I did mean that, but only if the class has already been instantiated. 
+   ('add_method' can add an additional multi, for example, so it can modify 
+   existing behavior.)
+
+Hmm.  If a Lisp implementation ever worked this way, FWIW, it would be
+considered buggy.  It would also make developing Lisp code harder than
+necessary, as it is normal to start development of a class by defining
+it interactively, creating a few instances, adding methods, calling
+them, adding more methods, making more instances, and so on, all within
+the same session.  Lisp uses expect that newly-defined methods will work
+immediately for old instances of those classes.
+
+   Come to think of it, I also do the same sort of thing in Perl 5:  At
+some time during the execution of my program, I load a file that adds
+methods to another class defined elsewhere (though the class may not
+actually have instances at that point).  It's not terribly clean in Perl
+5, 'tis true, but it can't be that rare.
+
+   But now that I've brought up Lisp, I should clarify my position.  I'm
+still not sure how I would go about implementing ANSI-compliant Lisp
+objects for Parrot.  As a result, I have stayed mostly silent on objects
+because (a) I don't know what I want yet, and (b) I assume I will have
+to do a lot of PMC subclassing anyway, so that would allow me to
+override whatever doesn't work for me.  In any case, Lisp only uses
+multimethods -- the first arg to add-method (and remove-method) is a
+generic function, not a class -- so I don't expect to need add_method
+anyway.
+
+   So I mention Lisp behavior not because I think Parrot ought to behave
+that way, but as a way of explaining why this surprises me.
+
+   >> The remove_* operations could stay, they would just
+   >> throw errors on instantiated classes.
+
+   They could, but how often are people going to add a bunch of attributes 
+   and methods and then remove them immediately before they ever 
+   instantiate the class? . . .
+
+When the class is cloned, the 'instantiated' bit should be cleared,
+because there are as yet no instances of the cloned class.  So then
+remove_* would be useful on the clone.  True?
+
+   > Not all languages want to clone their classes on modification.  These
+   > languages would use their own class PMCs that don't clone themselves.
+
+   They might not clone their classes from the user perspective, but 
+   internally it's the only truly safe way to modify a class that already 
+   has objects instantiated (especially when you're talking about remove 
+   operations). Otherwise, you have objects referencing attributes that 
+   don't exist any longer in the class, or methods referencing attributes 
+   that were never initialized in the object. The closest they can come is 
+   the option 1) I listed.
+
+Note that Lisp uses a form of option 1, where an old instance is updated
+to the new class structure at some time before its slots (attributes)
+are next accessed [1].  I understand there are ways of making this
+update relatively cheap, without slowing down other method dispatch, but
+I'm afraid I'm not familiar with them.  In any case, it need not be all
+that cheap, because it's not really needed in production code.
+
+   > If one of their classes is passed to and cloned by a different HLL,
+   > their class system will be screwed up/inconsistent.  I'm not sure how
+   > requiring HLLs to deal with explicit cloning would be simpler than
+   > having it abstracted away.  This system is much more flexible.
+
+The normal use case for this class-changing API, it seems to me, is to
+redefine an HLL class definition incrementally by recompiling it.
+Having one HLL mutate the class of another HLL seems relatively arcane.
+Are you suggesting that this is a bad idea simply because it can be
+abused in this manner?
+
+   Despite being arcane, and assuming the operation makes sense at all,
+I would argue that this scenario still ought to work.  If the basic
+Parrot classes support mutation, then even an HLL that normally defines
+inflexible classes ought to inherit that mutability, unless it does
+something explicit to disable it.  In which case, it ought to disable
+the "clone" op as well.
+
+   The point about abstraction is a good one. It can also be satisfied by 
+   the 'clone' method/vtable. If a class has a different way of handling 
+   modifications, it can return a modified version of itself instead of 
+   returning a new clone (in those cases where the cloning operation was 
+   flagged as a modification of an existing class).
+
+Would the code that does the class mutation need to do anything
+different with the result in the "clone" vs. "no clone" case?  I.e. in
+terms of mutating it further, or doing something to finalize the
+changes?
+
+   What if the mutated class has subclasses?  I imagine they would need
+to be cloned (automatically or not) as well?
+
+   >> Error recovery would also be easier for explicit cloning; what happens
+   >> if one of the class-mutating methods throws an error?
+   > 
+   > I'm afraid you lost me.  How would this be different?  Could you
+   > provide some more information?
+
+   Essentially, what if you call 'add_method', it automatically clones the 
+   class, and the automatic cloning fails for some reason? Then you get a 
+   mysterious exception about "failed to clone class", leaving the average 
+   user wondering why it was trying to clone a class in the first place.
+
+   Allison
+
+Here's another example:  Suppose you change a class definition in such a
+way that several attributes are deleted, and a few more are added.  If
+that looks like an single operation at the HLL level, even though it
+takes a slew of Parrot ops, then you want to be sure that the class
+manipulation succeeds completely before replacing the original class
+definition as the one that find_class should return.
+
+					-- Bob
+
+[1]  http://www.lispworks.com/documentation/HyperSpec/Body/04_cf.htm
+

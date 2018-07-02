@@ -1,0 +1,465 @@
+From perl6-all-return-81914-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue Jun 12 14:34:22 2007
+Return-Path: <perl6-all-return-81914-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l5CIYKL9030405
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 12 Jun 2007 14:34:21 -0400
+Received: (qmail 1673 invoked by uid 514); 12 Jun 2007 18:34:18 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 1668 invoked from network); 12 Jun 2007 18:34:18 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=0.0 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-language-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-language
+List-Id: <perl6-language.perl.org>
+Delivered-To: mailing list perl6-language@perl.org
+Delivered-To: perl6-language@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: larry@cvs.develooper.com
+To: perl6-language@perl.org
+Subject: [svn:perl6-synopsis] r14418 - doc/trunk/design/syn
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Message-Id: <20070612183356.C5B69CB9B8@x12.develooper.com>
+Date: Tue, 12 Jun 2007 11:33:56 -0700 (PDT)
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=0.0 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+
+Author: larry
+Date: Tue Jun 12 11:33:55 2007
+New Revision: 14418
+
+Modified:
+   doc/trunk/design/syn/S02.pod
+   doc/trunk/design/syn/S03.pod
+
+Log:
+Line-initial #{ is no longer a line-end comment, but starts a "block comment",
+    guaranteed to catch at compile time the accidental use of "#{...} foo();".
+    (Old behavior would silently not execute foo().)
+Also some more random filling-out of S3.  Work in progress.
+
+
+Modified: doc/trunk/design/syn/S02.pod
+==============================================================================
+--- doc/trunk/design/syn/S02.pod	(original)
++++ doc/trunk/design/syn/S02.pod	Tue Jun 12 11:33:55 2007
+@@ -12,9 +12,9 @@
+ 
+   Maintainer: Larry Wall <larry@wall.org>
+   Date: 10 Aug 2004
+-  Last Modified: 8 Jun 2007
++  Last Modified: 12 Jun 2007
+   Number: 2
+-  Version: 110
++  Version: 111
+ 
+ This document summarizes Apocalypse 2, which covers small-scale
+ lexical items and typological issues.  (These Synopses also contain
+@@ -97,19 +97,14 @@
+ 
+ =item *
+ 
+-Single-line comments work as in Perl 5, starting with a C<#> character
+-and ending at the subsequent newline.  They count as whitespace
+-equivalent to newline for purposes of separation.  Unlike in Perl 5,
+-C<#> may not be used as the delimiter in quoting constructs.
+-
+-=item *
+-
+-Multiline comments are provided by extending the syntax of POD
+-to nest C<=begin comment>/C<=end comment> correctly without the need
+-for C<=cut>.  The format name does not have to be C<comment> -- any
+-unrecognized format name will do to make it a comment.  (However,
+-bare C<=begin> and C<=end> probably aren't good enough, because all
+-comments in them will show up in the formatted output.)
++POD sections may be used reliably as multiline comments in Perl 6.
++Unlike in Perl 5, POD syntax now requires that C<=begin comment>
++and C<=end comment> delimit a POD block correctly without the need
++for C<=cut>.  (In fact, C<=cut> is now gone.)  The format name does
++not have to be C<comment> -- any unrecognized format name will do
++to make it a comment.  (However, bare C<=begin> and C<=end> probably
++aren't good enough, because all comments in them will show up in the
++formatted output.)
+ 
+ We have single paragraph comments with C<=for comment> as well.
+ That lets C<=for> keep its meaning as the equivalent of a C<=begin>
+@@ -121,6 +116,19 @@
+ 
+ =item *
+ 
++Except when quoted, a C<#> character always introduces a comment in
++Perl 6.  There are three forms of comment based on C<#>.  Embedded
++comments and block comments require the C<#> to be followed by one
++or more opening bracketing character.
++
++All other uses of C<#> are interpreted as single-line comments that
++work just as in Perl 5, starting with a C<#> character and
++ending at the subsequent newline.  They count as whitespace equivalent
++to newline for purposes of separation.  Unlike in Perl 5, C<#>
++may not be used as the delimiter in quoting constructs.
++
++=item *
++
+ Embedded comments are supported as a variant on quoting syntax, introduced
+ by C<#> plus any user-selected bracket characters (as defined in
+ L</Lexical Conventions> above):
+@@ -139,12 +147,47 @@
+ (There may be the I<visual appearance> of space for some double-wide
+ characters, however, such as the corner quotes above.)
+ 
++An embedded comment is not allowed as the first thing on the line since it
++would instead be parsed as a block comment, as described next.
++
+ =item *
+ 
+-As a special case to facilitate commenting out sections of code with
+-C<s/^/#/>, C<#> on the beginning of line is always considered a line-end
+-comment rather than an embedded comment, even if followed by a bracketing
+-character.
++Unlike embedded comments, which are character-oriented, block comments
++are line-oriented.  To facilitate the common practice of commenting out
++sections of code by prefixing each line with C<#>, if the initial C<#>
++on the line is immediately followed by one or more opening brackets,
++it is treated as a line-oriented form of bracket quoting, and may
++be terminated I<only> by a line matching the corresponding close
++bracket, which (unlike embedded comments) must also be prefixed with
++an initial C<#>.  For example, a opening line matching
++
++    /^^ '#{' \s /
++
++it may be terminated I<only> by a line matching
++
++    /^^ '#}' \s /
++
++The entire final line counts as part of the comment.  It does
++not matter whether the intervening lines start with C<#> or not.
++Block comments may be nested within other block comments (with
++the same or differing brackets) but will ignore any other comment
++mechanism including POD, so this mechanism may be used to hide POD
++even from the pod parser, along with any associated code.  The parser
++must report mismatched openers or closers to prevent, for example,
++unwitting use of bare C<}> as a closer for an opening C<#{>.
++
++In addition to supporting the practice of commenting out code with
++line comments, an additional motivation for this is to promote human
++recognition of the end of the comment when the opener could be quite
++far away, without requiring that all intervening lines use C</^'#'/> comments.
++Also, using the ordinary embedded comment mechanism tends to be fragile
++in the face of strings containing bracket characters, and the probability
++of such bracket skew increases with the length of the commented code.
++
++The POD parser must also recognize these comments in order to ignore
++them.  For instance, it could treat C<#[[> and C<#]]> as a shorthand for
++C<=begin comment_2square> and C<=end comment_2square>.  (The C<2> indicates
++degree of repetition, as described below.)
+ 
+ =item *
+ 
+
+Modified: doc/trunk/design/syn/S03.pod
+==============================================================================
+--- doc/trunk/design/syn/S03.pod	(original)
++++ doc/trunk/design/syn/S03.pod	Tue Jun 12 11:33:55 2007
+@@ -605,7 +605,7 @@
+ 
+ =item *
+ 
+-infix:<x>, string replication
++infix:<x>, string/buffer replication
+ 
+     $string x $count
+ 
+@@ -647,34 +647,34 @@
+ 
+ infix:{'+<'}, numeric shift left
+ 
+-    +<
++    $integer +< $bits
+ 
+ =item *
+ 
+ infix:{'+>'}, numeric shift right
+ 
+-    +>
++    $integer +> $bits
+ 
+ By default, signed types do sign extension, while unsigned types do not, but
+ this may be enabled or disabled with a C<:signed> or C<:!signed> adverb.
+ 
+ =item *
+ 
+-infix:<~&>, string bitwise and
++infix:<~&>, buffer bitwise and
+ 
+-    ~&
++    $x ~& $y
+ 
+ =item *
+ 
+ infix:{'~<'}, buffer bitwise shift left
+ 
+-    ~<
++    $buf ~< $bits
+ 
+ =item *
+ 
+ infix:{'~>'}, buffer bitwise shift right
+ 
+-    ~>
++    $buf ~> $bits
+ 
+ Sign extension is not done by default but may be enabled with a C<:signed>
+ adverb.
+@@ -683,7 +683,7 @@
+ 
+ infix:<?&>, boolean bitwise and
+ 
+-    ?&
++    $x ?& $y
+ 
+ =back
+ 
+@@ -699,55 +699,55 @@
+ 
+ infix:<+>, numeric addition
+ 
+-    +
++    $x + $y
+ 
+ =item *
+ 
+ infix:<->, numeric subtraction
+ 
+-    -
++    $x - $y
+ 
+ =item *
+ 
+-infix:<~>, string concatenation
++infix:<~>, string/buffer concatenation
+ 
+-    ~
++    $x ~ $y
+ 
+ =item *
+ 
+ infix:<+|>, numeric bitwise inclusive or
+ 
+-    +|
++    $x +| $y
+ 
+ =item *
+ 
+ infix:<+^> numeric bitwise exclusive or
+ 
+-    +^
++    $x +^ $y
+ 
+ =item *
+ 
+-infix:<~|>, string bitwise inclusive or
++infix:<~|>, buffer bitwise inclusive or
+ 
+-    ~|
++    $x ~| $y
+ 
+ =item *
+ 
+-infix:<~^> string bitwise exclusive or
++infix:<~^> buffer bitwise exclusive or
+ 
+-    ~^
++    $x ~^ $y
+ 
+ =item *
+ 
+ infix:<?|>, boolean bitwise inclusive or
+ 
+-    ?|
++    $x ?| $y
+ 
+ =item *
+ 
+ infix:<?^> boolean bitwise exclusive or
+ 
+-    ?^
++    $x ?^ $y
+ 
+ =back
+ 
+@@ -759,7 +759,7 @@
+ 
+ infix:<&>, all() operator
+ 
+-    &
++    $x & $y
+ 
+ =back
+ 
+@@ -771,13 +771,13 @@
+ 
+ infix:<|>, any() operator
+ 
+-    |
++    $x | $y
+ 
+ =item *
+ 
+ infix:<^>, one() operator
+ 
+-    ^
++    $x ^ $y
+ 
+ =back
+ 
+@@ -804,13 +804,13 @@
+ 
+ infix:<but>
+ 
+-    but
++    $value but Mixin
+ 
+ =item *
+ 
+ infix:<does>
+ 
+-    does
++    $object does Mixin
+ 
+ =item *
+ 
+@@ -891,7 +891,7 @@
+ 
+ Smart match
+ 
+-    ~~
++    $obj ~~ $pattern
+ 
+ Perl 5's C<=~> becomes the "smart match" operator C<~~>, with an
+ extended set of semantics.  See L</Smart matching> for details.
+@@ -958,7 +958,7 @@
+ 
+ infix:<&&>, short-circuit and
+ 
+-    &&
++    $condition && $whentrue
+ 
+ Returns the left argument if the left argument is false, otherwise
+ evaluates and returns the right argument.  In list context forces
+@@ -975,7 +975,7 @@
+ 
+ infix:<||>, short-circuiting inclusive-or
+ 
+-    ||
++    $condition || $whenfalse
+ 
+ Returns the left argument if it's true, otherwise evaluates and returns
+ the right argument.  It is specifically allowed to use a list or array
+@@ -990,7 +990,7 @@
+ 
+ infix:<^^>, exclusive-or
+ 
+-    ^^
++    $x ^^ $y
+ 
+ Returns the true argument if there is one (and only one).  Returns
+ C<Bool::False> if both arguments are false or both arguments are true.
+@@ -1001,7 +1001,7 @@
+ 
+ infix:<//>, defined-or
+ 
+-    //
++    $value // $default
+ 
+ Returns the left argument if it's defined, otherwise evaluates and
+ returns the right argument.  In list context forces a false return
+@@ -1026,7 +1026,7 @@
+ 
+ =item *
+ 
+-?? !!
++Conditional operator
+ 
+     say "My answer is: ", $maybe ?? "yes" !! "no";
+ 
+@@ -1092,7 +1092,7 @@
+ 
+ infix:<:=>, run-time binding
+ 
+-    :=
++    $signature := $capture
+ 
+ A new form of assignment is present in Perl 6, called I<binding>, used in
+ place of typeglob assignment.  It is performed with the C<:=> operator.
+@@ -1127,7 +1127,7 @@
+ 
+ infix:<::=>, compile-time binding
+ 
+-    ::=
++    $signature ::= $capture
+ 
+ This does the same as C<:=> except it does it at compile time.  (This implies
+ that the expression on the right is also evaluated at compile time; it does
+@@ -1250,9 +1250,9 @@
+ 
+ Cross hyperoperators
+ 
+-    X~X
+-    X*X
+-    XeqvX
++    @files X~X '.' X~X @extensions
++    1..10 X*X 1..10
++    @x XeqvX @y
+     etc.
+ 
+ See L</Cross operators>.
+@@ -1437,7 +1437,7 @@
+ 
+ infix:<and>, short-circuit and
+ 
+-    and
++    $condition and $whentrue
+ 
+ Returns the left argument if the left argument is false, otherwise
+ evaluates and returns the right argument.  In list context forces
+@@ -1454,7 +1454,7 @@
+ 
+ infix:<or>, short-circuit inclusive or
+ 
+-    or
++    $condition or $whenfalse
+ 
+ Returns the left argument if it's true, otherwise evaluates and
+ returns the right argument.  In list context forces a false return
+@@ -1464,7 +1464,7 @@
+ 
+ infix:<xor>, exclusive or
+ 
+-    xor
++    $x xor $y
+ 
+ Returns the true argument if there is one (and only one).  Returns
+ C<Bool::False> if both arguments are false or both arguments are true.
+@@ -1475,7 +1475,7 @@
+ 
+ infix:<err>, short-circuit defined-or
+ 
+-    err
++    $value err $default
+ 
+ Returns the left argument if it's defined, otherwise evaluates and
+ returns the right argument.  In list context forces a false return
+

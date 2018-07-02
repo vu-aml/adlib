@@ -1,0 +1,91 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Jun 26 19:56:17 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5QNuHL9019360
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 26 Jun 2007 19:56:17 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 343621638A4
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 26 Jun 2007 23:56:14 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.4 required=3.8 tests=BAYES_00,HTML_MESSAGE,
+	RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: from seaxch05.isilon.com (seaxch05.isilon.com [70.103.106.43])
+	by lists.samba.org (Postfix) with ESMTP id 3661E162AD7;
+	Tue, 26 Jun 2007 23:54:59 +0000 (GMT)
+Received: from [10.8.6.239] ([10.8.6.239]) by seaxch05.isilon.com with
+	Microsoft SMTPSVC(6.0.3790.211); Tue, 26 Jun 2007 16:54:59 -0700
+Mime-Version: 1.0 (Apple Message framework v752.3)
+To: samba-technical <samba-technical@samba.org>,
+   "'Jeremy Allison'" <jra@samba.org>,
+   "Gerald (Jerry) Carter" <jerry@samba.org>,
+   Andrew Bartlett <abartlet@samba.org>
+Message-Id: <932A69D3-74F5-4E59-9DDA-978B3B2C61BD@isilon.com>
+From: Todd Stecher <todd.stecher@isilon.com>
+Date: Tue, 26 Jun 2007 16:53:07 -0700
+X-Mailer: Apple Mail (2.752.3)
+X-OriginalArrivalTime: 26 Jun 2007 23:54:59.0285 (UTC)
+	FILETIME=[67904850:01C7B84D]
+Content-Type: text/plain;
+	charset=US-ASCII;
+	delsp=yes;
+	format=flowed
+Content-Transfer-Encoding: 7bit
+X-Content-Filtered-By: Mailman/MimeDel 2.1.5
+Subject: High load server getting NTLM messages mixed?
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+A client with extremely high load on their Samba server is  
+intermittently hitting this code in smbd/sesssetup.c:
+
+if (!global_ntlmssp_state) {
+		/* auth before negotiatiate? */
+		return ERROR_NT(NT_STATUS_INVALID_PARAMETER);
+	}
+
+
+This is 3.0.11 - apparently he tried this on a later version with  
+minimal problems (unfortunately, we have not as yet released a  
+"newer" version of Samba on our product :( ) - does anyone know if  
+this was an issue that was specifically fixed?  I didn't see anything  
+obvious in bugzilla.samba.org.
+
+There is a literal ton of NTLMSSP traffic against this server, and in  
+many cases different auth contexts are interleaved in the wire - it  
+seems that the errors I'm seeing in the sniff occur when these  
+messages get intertwined.
+
+Given that, and the presence of a "global" static struct  
+auth_ntlmssp_state *global_ntlmssp_state, I suspect this was fixed by  
+revision 8472 2 years ago (dang - we are dangerously out of date here).
+
+http://viewcvs.samba.org/cgi-bin/viewcvs.cgi?rev=8472&view=rev
+
+
+Andrew / Jerry - Can you confirm?  I could not find anything related  
+to parallel NTLM processing in bugzilla...
+
+
+
+Todd Stecher | Windows Interop Dev
+Isilon Systems    P +1-206-315-7500     F  +1-206-315-7501
+www.isilon.com    D +1-206-315-7638    M +1-425-205-1180
+
+
+

@@ -1,0 +1,384 @@
+From perl6-all-return-81121-ktwarwic=speedy.uwaterloo.ca@perl.org  Sat May  5 13:13:47 2007
+Return-Path: <perl6-all-return-81121-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l45HDkqD029626
+	for <ktwarwic@flax9.uwaterloo.ca>; Sat, 5 May 2007 13:13:46 -0400
+Received: (qmail 14226 invoked by uid 514); 5 May 2007 17:13:45 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 14221 invoked from network); 5 May 2007 17:13:44 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+Delivered-To: perlmail-parrot-porters@onion.perl.org
+Delivered-To: parrot-porters@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="K8N6CLwWfD"
+Content-Transfer-Encoding: 7bit
+Message-ID: <17980.47771.881294.663414@rgrjr.dyndns.org>
+Date: Sat, 5 May 2007 13:10:51 -0400
+From: Bob Rogers <rogers-perl6@rgrjr.dyndns.org>
+To: parrot-porters@perl.org
+Subject: BigInt shl/shr:  Fix negative shifts, promote Integers
+X-Mailer: VM 7.19 under Emacs 22.1.50.1
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=0.7 required=8.0
+	tests=BAYES_00,FH_HOST_EQ_D_D_D_D,KARMA_CONNECT_NEGATIVE,RDNS_DYNAMIC,SPF_PASS
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-1.9 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,SPF_NEUTRAL
+
+--K8N6CLwWfD
+Content-Type: text/plain; charset=us-ascii
+Content-Description: message body text
+Content-Disposition: inline
+Content-Transfer-Encoding: 7bit
+
+   The attached change to src/pmc/bigint.pmc fixes a bug in shl/shr when
+given a negative shift:  The shift amount argument to the underlying GMP
+operations is unsigned, so GMP tries consumes a huge amount of memory.
+The patch also adds four tests for negative shifts.
+
+   The src/pmc/scalar.pmc changes promote the result to BigInt on
+overflow for shl (but not shr yet).  Comments would be greatly
+appreciated.  I have two questions in particular:  (1) Is there a
+cleaner way to do the code-sharing?  and (2) Should the code throw an
+error if attempting to morph a non-numeric type (and if so, what's the
+best way of detecting that)?  TIA.
+
+   If there are no objections, I will commit the negative shift fix
+first, then work on finishing BigInt promotion by adding overflow
+signalling (see PARROT_ERRORS_OVERFLOW_FLAG) and making shr behave
+symmetrically.
+
+					-- Bob Rogers
+					   http://rgrjr.dyndns.org/
+
+
+--K8N6CLwWfD
+Content-Type: text/plain
+Content-Description: 
+Content-Disposition: inline;
+	filename="shl-shr-1.patch"
+Content-Transfer-Encoding: 7bit
+
+* src/pmc/bigint.pmc:
+   + (bigint_bitwise_shl_bigint_int, bigint_bitwise_shr_bigint_int):
+     Handle negative shift values by shifting in the opposite
+     direction.  This fixes a bug where GMP would run out of memory; the
+     shift amount is unsigned.
+* src/pmc/scalar.pmc:
+   + (bitwise_shl_int, i_bitwise_shl_int):  Promote to BigInt on
+     overflow.  [Arguably, this should throw an error rather than morph
+     SELF from a non-numeric type.]
+   + (bitwise_shl):  Use bitwise_shl_int.
+   + (i_bitwise_shl):  Use i_bitwise_shl_int.
+* t/pmc/bigint.t:
+   + Four new tests for negative bignum shifts, and one new shl overflow
+     test.  [Still need to tackle shr overflow.]
+
+Diffs between last version checked in and current workfile(s):
+
+Index: src/pmc/bigint.pmc
+===================================================================
+--- src/pmc/bigint.pmc	(revision 18426)
++++ src/pmc/bigint.pmc	(working copy)
+@@ -267,13 +267,19 @@
+ bigint_bitwise_shl_bigint_int(Interp *interp, PMC* self,
+                               INTVAL value, PMC *dest)
+ {
+-    mpz_mul_2exp(BN(dest), BN(self), value);
++    if (value >= 0)
++        mpz_mul_2exp(BN(dest), BN(self), value);
++    else
++        mpz_tdiv_q_2exp(BN(dest), BN(self), -value);
+ }
+ static void
+ bigint_bitwise_shr_bigint_int(Interp *interp, PMC* self,
+                               INTVAL value, PMC *dest)
+ {
+-    mpz_tdiv_q_2exp(BN(dest), BN(self), value);
++    if (value >= 0)
++        mpz_tdiv_q_2exp(BN(dest), BN(self), value);
++    else
++        mpz_mul_2exp(BN(dest), BN(self), -value);
+ }
+ 
+ #else /* ifdef PARROT_HAS_GMP */
+Index: src/pmc/scalar.pmc
+===================================================================
+--- src/pmc/scalar.pmc	(revision 18426)
++++ src/pmc/scalar.pmc	(working copy)
+@@ -20,6 +20,9 @@
+ 
+ #include "parrot/parrot.h"
+ 
++extern PMC*
++Parrot_BigInt_bitwise_shl_int(Interp *interp, PMC* pmc, INTVAL value, PMC* dest);
++
+ pmclass scalar abstract noinit {
+ 
+ /*
+@@ -1083,38 +1086,51 @@
+ 
+ */
+ 
+-    PMC* bitwise_shl(PMC* value, PMC* dest) {
+-        INTVAL result;
+-
+-        result = DYNSELF.get_integer() << VTABLE_get_integer(INTERP, value);
+-        if (!dest)
+-            dest = pmc_new(INTERP, SELF->vtable->base_type);
+-        VTABLE_set_integer_native(INTERP, dest, result);
+-        return dest;
++    PMC* bitwise_shl(PMC* shift_value, PMC* dest) {
++        Parrot_scalar_bitwise_shl_int(interp, SELF,
++                                      VTABLE_get_integer(INTERP, shift_value),
++                                      dest);
+     }
+ 
+-    PMC* bitwise_shl_int(INTVAL value, PMC* dest) {
+-        INTVAL result;
++    PMC* bitwise_shl_int(INTVAL shift_amount, PMC* dest) {
++        INTVAL base = DYNSELF.get_integer();
++        INTVAL result = base << shift_amount;
+ 
+-        result = DYNSELF.get_integer() << value;
+-        if (!dest)
+-            dest = pmc_new(INTERP, SELF->vtable->base_type);
+-        VTABLE_set_integer_native(INTERP, dest, result);
++        if ((result >> shift_amount) != base) {
++            /* Overflow; must promote dest or SELF to bigint. */
++            if (dest)
++                VTABLE_morph(INTERP, dest, enum_class_BigInt);
++            else
++                dest = pmc_new(INTERP, enum_class_BigInt);
++            VTABLE_set_integer_native(INTERP, dest, base);
++            Parrot_BigInt_bitwise_shl_int(interp, dest, shift_amount, dest);
++        }
++        else {
++            if (!dest)
++                dest = pmc_new(INTERP, SELF->vtable->base_type);
++            VTABLE_set_integer_native(INTERP, dest, result);
++        }
+         return dest;
+     }
+ 
+-    void i_bitwise_shl(PMC* value) {
+-        INTVAL result;
+-
+-        result = DYNSELF.get_integer() << VTABLE_get_integer(INTERP, value);
+-        DYNSELF.set_integer_native(result);
++    void i_bitwise_shl(PMC* shift_value) {
++        Parrot_scalar_i_bitwise_shl_int(interp, SELF,
++                                        VTABLE_get_integer(INTERP, shift_value));
+     }
+ 
+-    void i_bitwise_shl_int(INTVAL value) {
+-        INTVAL result;
++    void i_bitwise_shl_int(INTVAL shift_amount) {
++        INTVAL base = DYNSELF.get_integer();
++        INTVAL result = base << shift_amount;
+ 
+-        result = DYNSELF.get_integer() << value;
+-        DYNSELF.set_integer_native(result);
++        if ((result >> shift_amount) != base) {
++            /* Overflow. */
++            VTABLE_morph(INTERP, SELF, enum_class_BigInt);
++            DYNSELF.set_integer_native(base);
++            Parrot_BigInt_bitwise_shl_int(interp, SELF, shift_amount, SELF);
++        }
++        else {
++            DYNSELF.set_integer_native(result);
++        }
+     }
+ 
+ /*
+Index: t/pmc/bigint.t
+===================================================================
+--- t/pmc/bigint.t	(revision 18426)
++++ t/pmc/bigint.t	(working copy)
+@@ -25,7 +25,7 @@
+ =cut
+ 
+ if ( $PConfig{gmp} ) {
+-    plan tests => 36;
++    plan tests => 41;
+ }
+ else {
+     plan skip_all => "No BigInt Lib configured";
+@@ -759,6 +759,26 @@
+ 102400000000000
+ OUT
+ 
++pir_output_is( <<'CODE', <<'OUT', "shl_bigint with a negative shift" );
++## cf the shr_bigint case.
++.sub main :main
++   new $P0, .BigInt
++   set $P0, 8
++   new $P1, .BigInt
++   set $P1, -2
++   new $P2, .BigInt
++   shl $P2, $P0, $P1
++   say $P2
++   set $P0, "102400000000000"
++   set $P1, -10
++   shl $P2, $P0, $P1
++   say $P2
++.end
++CODE
++2
++100000000000
++OUT
++
+ pasm_output_is( <<'CODE', <<'OUT', "shl_int" );
+    new P0, .BigInt
+    set P0, 2
+@@ -788,6 +808,66 @@
+ 102400000000000
+ OUT
+ 
++pir_output_is( <<'CODE', <<'OUT', "shl_int with a negative shift" );
++## cf the shr_int case.
++.sub main :main
++   new $P0, .BigInt
++   set $P0, 4
++   new $P1, .Integer
++   set $P1, -1
++   new $P2, .BigInt
++   shl $P2, $P0, $P1
++   say $P2
++   set $P0, "200000000000"
++   set $P1, -1
++   shl $P2, $P0, $P1
++   say $P2
++   set $P0, "102400000000000"
++   set $P1, -10
++   shl $P2, $P0, $P1
++   say $P2
++.end
++CODE
++2
++100000000000
++100000000000
++OUT
++
++pir_output_is( <<'CODE', <<'OUT', "shl_int promotes Integer to Bigint" );
++.sub main :main
++   new $P0, .Integer
++   set $P0, 1000001
++   new $P1, .Integer
++   set $P1, 10
++   new $P2, .Integer
++   ## shift by 10 bits . . .
++   shl $P2, $P0, $P1
++   $S2 = typeof $P2
++   print $S2
++   print ' '
++   say $P2
++   ## then by 20 bits . . .
++   $P1 = 20
++   new $P3, .Integer
++   $P3 = 1000001
++   shl $P3, $P0, $P1
++   $S2 = typeof $P3
++   print $S2
++   print ' '
++   say $P3
++   ## then by another 20 bits (total 30) in place.
++   shl $P2, $P2, $P1
++   $S2 = typeof $P2
++   print $S2
++   print ' '
++   say $P2
++.end
++CODE
++Integer 1024001024
++BigInt 1048577048576
++BigInt 1073742897741824
++OUT
++
+ pasm_output_is( <<'CODE', <<'OUT', "shr_bigint" );
+    new P0, .BigInt
+    set P0, 8
+@@ -810,6 +890,26 @@
+ 100000000000
+ OUT
+ 
++pir_output_is( <<'CODE', <<'OUT', "shr_bigint with a negative shift" );
++## cf the shl_bigint case.
++.sub main :main
++   new $P0, .BigInt
++   set $P0, 2
++   new $P1, .BigInt
++   set $P1, -2
++   new $P2, .BigInt
++   shr $P2, $P0, $P1
++   say $P2
++   set $P0, "100000000000"
++   set $P1, -10
++   shr $P2, $P0, $P1
++   say $P2
++.end
++CODE
++8
++102400000000000
++OUT
++
+ pasm_output_is( <<'CODE', <<'OUT', "shr_int" );
+    new P0, .BigInt
+    set P0, 4
+@@ -839,6 +939,30 @@
+ 100000000000
+ OUT
+ 
++pir_output_is( <<'CODE', <<'OUT', "shr_int with a negative shift" );
++## cf the shl_int case.
++.sub main :main
++   new $P0, .BigInt
++   set $P0, 2
++   new $P1, .Integer
++   set $P1, -1
++   new $P2, .BigInt
++   shr $P2, $P0, $P1
++   say $P2
++   set $P0, "100000000000"
++   set $P1, -1
++   shr $P2, $P0, $P1
++   say $P2
++   set $P1, -10
++   shr $P2, $P0, $P1
++   say $P2
++.end
++CODE
++4
++200000000000
++102400000000000
++OUT
++
+ pir_output_is( <<'CODE', <<'OUT', "BUG #34949 gt" );
+ .sub main :main
+     .local pmc b
+
+End of diffs.
+
+--K8N6CLwWfD--
+

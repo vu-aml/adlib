@@ -1,0 +1,566 @@
+From perl6-all-return-81133-ktwarwic=speedy.uwaterloo.ca@perl.org  Sun May  6 13:44:24 2007
+Return-Path: <perl6-all-return-81133-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l46HiMqD021153
+	for <ktwarwic@flax9.uwaterloo.ca>; Sun, 6 May 2007 13:44:22 -0400
+Received: (qmail 19022 invoked by uid 514); 6 May 2007 17:44:20 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 19017 invoked from network); 6 May 2007 17:44:20 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+Subject: [perl #42690] [PATCH] optionally run configure/build tests during config process 
+From: "James Keenan via RT" <parrotbug-followup@parrotcode.org>
+Reply-To: parrotbug-followup@parrotcode.org
+In-Reply-To: <1d9a3f400704230951k63169f0ai90450bbe0af0ef9c@mail.gmail.com>
+References: <RT-Ticket-42690@perl.org> <1d9a3f400704230951k63169f0ai90450bbe0af0ef9c@mail.gmail.com>
+Message-ID: <rt-3.6.HEAD-12281-1178469524-704.42690-15-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #42690
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: jkeen@verizon.net
+Cc: perl6-internals@perl.org
+To: "OtherRecipients of perl Ticket #42690": ;
+MIME-Version: 1.0
+X-RT-Original-Encoding: utf-8
+Content-type: multipart/mixed; boundary="----------=_1178469526-12281-11"
+Date: Sun, 06 May 2007 09:38:47 -0700
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+
+------------=_1178469526-12281-11
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+Please review patch.
+
+------------=_1178469526-12281-11
+Content-Type: text/plain; charset="ascii"; name="configure.test.patch.txt"
+Content-Disposition: inline; filename="configure.test.patch.txt"
+Content-Transfer-Encoding: 7bit
+RT-Attachment: 42690/258793/112801
+
+Index: Configure.pl
+===================================================================
+--- Configure.pl	(revision 18438)
++++ Configure.pl	(working copy)
+@@ -60,8 +60,35 @@
+ 
+ This turns on the user prompts.
+ 
++=item C<--test>
++
++Run certain tests along with F<Configure.pl>:
++
++=over 4
++
++=item C<--test=configure>
++
++Run tests found in F<t/configure/> I<before> beginning configuration.  These
++tests demonstrate that Parrot's configuration tools will work properly once
++configuration has begun.
++
++=item C<--test=build>
++
++Run tests found in F<t/postconfigure/>, F<t/tools/pmc2cutils/>,
++F<t/tools/ops2cutils/> and F<t/tools/ops2pmutils/> I<after> configuration has
++completed.  These tests demonstrate (a) that certain of Parrot's configuration
++tools are working properly post-configuration; and (b) that certain of
++Parrot's build tools will work properly once you call F<make>.
++
++=item C<--test>
++
++Run the tests described in C<--test=configure>, conduct configuration, then
++run the tests described in C<--test=build>.
++
+ =back
+ 
++=back
++
+ Compile Options
+ 
+ =over
+@@ -264,6 +291,7 @@
+ use Parrot::BuildUtil;
+ use Parrot::Configure;
+ use Parrot::Configure::Options qw( process_options );
++use Parrot::Configure::Options::Test;
+ use Parrot::Configure::Messages qw(
+     print_introduction
+     print_conclusion
+@@ -292,7 +320,10 @@
+ } );
+ exit unless defined $args;
+ 
+-my %args = %$args;
++my $opttest = Parrot::Configure::Options::Test->new($args);
++# configuration tests will only be run if you requested them 
++# as command-line option
++$opttest->run_configure_tests();
+ 
+ # from Parrot::Configure::Messages
+ print_introduction($parrot_version);
+@@ -302,6 +333,7 @@
+ # from Parrot::Configure::Step::List
+ $conf->add_steps(get_steps_list());
+ 
++my %args = %$args;
+ # from Parrot::Configure::Data
+ $conf->options->set(%args);
+ 
+@@ -319,6 +351,18 @@
+ }
+ 
+ # tell users what to do next
++#if ($run_build_tests) {
++#    print "\n\n";
++#    print "As you requested, I will now run some tests of the build tools.\n\n";
++#    system(qq{prove t/postconfigure/*.t t/tools/pmc2cutils/*.t t/tools/ops2cutils/*.t t/tools/ops2pmutils/*.t})
++#        and die "Unable to execute post-configuration and build tools tests";
++#}
++
++
++# build tests will only be run if you requested them 
++# as command-line option
++$opttest->run_build_tests();
++
+ # from Parrot::Configure::Messages
+ print_conclusion($conf->data->get('make'));
+ 
+Index: lib/Parrot/Configure/Options.pm
+===================================================================
+--- lib/Parrot/Configure/Options.pm	(revision 18438)
++++ lib/Parrot/Configure/Options.pm	(working copy)
+@@ -16,8 +16,8 @@
+         jitcapable ld ldflags lex libdir libexecdir libs link linkflags
+         localstatedir m maintainer mandir miniparrot nomanicheck oldincludedir
+         opcode ops optimize parrot_is_shared pmc prefix profile sbindir
+-        sharedstatedir step sysconfdir verbose verbose-step version without-gdbm
+-        without-gmp without-icu yacc);
++        sharedstatedir step sysconfdir test verbose verbose-step version 
++        without-gdbm without-gmp without-icu yacc);
+ }
+ 
+ sub process_options {
+@@ -88,6 +88,11 @@
+                         Execute a single configure step
+ 
+    --ask                Have Configure ask for commonly-changed info
++   --test=configure     Run tests of configuration tools before configuring
++   --test=build         Run tests of build tools after configuring but before
++                        calling 'make'
++   --test               Run configuration tools tests, configure, then run
++                        build tools tests
+ 
+ Compile Options:
+ 
+Index: lib/Parrot/Configure/Options/Test.pm
+===================================================================
+--- lib/Parrot/Configure/Options/Test.pm	(revision 0)
++++ lib/Parrot/Configure/Options/Test.pm	(revision 0)
+@@ -0,0 +1,214 @@
++# Copyright (C) 2001-2006, The Perl Foundation.
++# $Id: Test.pm 18438 2007-05-06 15:52:28Z jkeenan $
++package Parrot::Configure::Options::Test;
++use strict;
++
++our @preconfiguration_tests = qw(
++    t/configure/*.t
++);
++
++our @postconfiguration_tests = qw(
++    t/postconfigure/*.t
++    t/tools/pmc2cutils/*.t
++    t/tools/ops2cutils/*.t
++    t/tools/ops2pmutils/*.t
++);
++
++sub new {
++    my ($class, $argsref) = @_;
++    my $self = {};
++    my ($run_configure_tests, $run_build_tests);
++    if (defined $argsref->{test}) {
++        if ($argsref->{test} eq '1') {
++            $self->{run_configure_tests} = 1;
++            $self->{run_build_tests} = 1;
++        } elsif ($argsref->{test} eq 'configure') {
++            $self->{run_configure_tests} = 1;
++        } elsif ($argsref->{test} eq 'build') {
++            $self->{run_build_tests} = 1;
++        } else {
++            die "'$argsref->{test}' is a bad value for command-line option 'test'";
++        }
++    }
++    return bless $self, $class;
++}
++
++sub run_configure_tests {
++    my $self = shift;
++    if ($self->{run_configure_tests}) {
++        print "As you requested, we'll start with some tests of the configuration tools.\n\n";
++        system(qq{prove @preconfiguration_tests})
++            and die "Unable to execute configuration tests";
++        print <<"TEST";
++    
++I just ran some tests to demonstrate that
++Parrot's configuration tools will work as intended.
++    
++TEST
++    }
++    return 1;
++}
++
++sub run_build_tests {
++    my $self = shift;
++    if ($self->{run_build_tests}) {
++        print "\n\n";
++        print "As you requested, I will now run some tests of the build tools.\n\n";
++        system(qq{prove @postconfiguration_tests})
++            and die "Unable to execute post-configuration and build tools tests";
++    }
++    return 1;
++}
++
++1;
++
++#################### DOCUMENTATION ####################
++
++=head1 NAME
++
++Parrot::Configure::Options::Test - Run configuration and build tests along with F<Configure.pl>
++
++=head1 SYNOPSIS
++
++In F<Configure.pl>:
++
++    use Parrot::Configure::Options;
++    use Parrot::Configure::Options::Test;
++
++    $args = process_options( {
++        argv            => [ @ARGV ],
++        script          => $0,
++        parrot_version  => $parrot_version,
++        svnid           => '$Id: Test.pm 18438 2007-05-06 15:52:28Z jkeenan $',
++    } );
++
++    $opttest = Parrot::Configure::Options::Test->new($args);
++
++    $opttest->run_configure_tests();
++
++    $opttest->run_build_tests();
++
++On command line:
++
++    # run tests of configuration tools, then configure
++    perl Configure.pl  --test=configure
++
++    # configure, then run tests of build tools
++    perl Configure.pl  --test=build
++
++    # run tests of configuration tools, then configure,
++    # then run tests of build tools
++    perl Configure.pl  --test
++    
++=head1 DESCRIPTION
++
++Test suites have been constructed which test those of Parrot's configuration
++and build tools that are written in Perl 5.  These tests are not necessarily
++run when you invoke F<make test>.  In any event, running these tests as part
++of F<make test> is, in a certain sense, running them too late.  If you have
++successfully called F<Configure.pl> and F<make>, you have implicitly
++demonstrated that the configuration and build tools work (for the most part),
++so running tests of those tools post-F<make> is somewhat redundant.
++
++On the other hand, tests of the configuration tools I<are> meaningful if run
++I<before> F<Configure.pl> is invoked and, similarly, tests of the build tools
++I<are> meaningful if run I<before> F<make> is invoked.
++Parrot::Configure::Options::Test provides functionality for running such
++tests.
++
++=head1 SUBROUTINES
++
++=head2 C<new()>
++
++=over 4
++
++=item * Purpose
++
++Parrot::Configure::Options::Test constructor.
++
++=item * Arguments
++
++One argument:  The hash reference which is the return value of
++C<Parrot::Configure::Options::process_options()>.
++
++=item * Return Value
++
++Parrot::Configure::Options::Test object.
++
++=item * Comment
++
++=back
++
++=head2 C<run_configure_tests()>
++
++=over 4
++
++=item * Purpose
++
++Run tests of Parrot's configuration tools.
++
++=item * Arguments
++
++None.
++
++=item * Return Value
++
++None.
++
++=item * Comments
++
++The tests to be executed are listed in
++C<@Parrot::Configure::Options::Test::preconfiguration_tests>.  Edit that list
++to run different tests.  Currently, that array runs all tests in
++F<t/configure/*.t>.
++
++=back
++
++=head2 C<run_build_tests()>
++
++=over 4
++
++=item * Purpose
++
++Run tests of Parrot's build tools.  Also, run tests of certain aspects of the
++configuration process which, for legacy reasons, must run after
++F<Configure.pl> has completed execution.
++
++=item * Arguments
++
++None.
++
++=item * Return Value
++
++None.
++
++=item * Comments
++
++The tests to be executed are listed in
++C<@Parrot::Configure::Options::Test::postconfiguration_tests>.  Edit that list
++to run different tests.  Currently, that array runs all tests in:
++
++    t/postconfigure/*.t
++    t/tools/pmc2cutils/*.t
++    t/tools/ops2cutils/*.t
++    t/tools/ops2pmutils/*.t
++
++=back
++
++=head1 AUTHOR
++
++James E Keenan, in response to request by Jerry Gay
++in http://rt.perl.org/rt3/Ticket/Display.html?id=42690.
++
++=head1 SEE ALSO
++
++F<Configure.pl>.  F<lib/Parrot/Configure/Options.pm>.
++
++=cut
++
++# Local Variables:
++#   mode: cperl
++#   cperl-indent-level: 4
++#   fill-column: 100
++# End:
++# vim: expandtab shiftwidth=4:
+
+Property changes on: lib/Parrot/Configure/Options/Test.pm
+___________________________________________________________________
+Name: svn:keywords
+   + Author Date Id Revision
+Name: svn:eol-style
+   + native
+
+Index: t/configure/25-options_test.t
+===================================================================
+--- t/configure/25-options_test.t	(revision 0)
++++ t/configure/25-options_test.t	(revision 0)
+@@ -0,0 +1,118 @@
++#! perl
++# Copyright (C) 2007, The Perl Foundation.
++# $Id: 25-options_test.t 18310 2007-04-24 01:27:22Z jkeenan $
++# 25-options_test.t
++
++use strict;
++use warnings;
++use Carp;
++use Cwd;
++use Data::Dumper;
++use File::Temp qw( tempdir );
++use Test::More tests => 10;
++use lib qw( . lib ../lib ../../lib );
++use_ok('Parrot::IO::Capture::Mini');
++use_ok(
++    'Parrot::Configure::Options', qw|
++        process_options
++    |
++);
++use_ok("Parrot::Configure::Options::Test");
++
++my ($args, $opttest);
++
++my $parrot_version = '0.4.10';
++my $svnid          = '$Id: 25-options_test.t 18310 2007-04-24 01:27:22Z jkeenan $';
++$args = process_options(
++    {
++        argv            => [ q{--test} ],
++        script           => $0,
++        parrot_version  => $parrot_version,
++        svnid           => $svnid,
++    }
++);
++ok( defined $args, "process_options() returned successfully when options were specified" );
++
++$opttest = Parrot::Configure::Options::Test->new($args);
++ok(defined $opttest, "Constructor returned successfully");
++
++# Running the actual pre- and post-configuration tests would be too
++# time-consuming.  So instead, we want to redefine the lists of tests to be
++# run to include only dummy test files found in temporary directories.
++
++my $cwd = cwd();
++
++my $teststring = <<"TEST";
++use Test::More tests => 1;
++{
++    pass("Dummy test passed");
++}
++TEST
++
++{
++    my $tdir = tempdir;
++    ok( (chdir $tdir), "Changed to temporary directory for testing");
++    my $test = q{testfile};
++    open my $T, ">", $test
++        or die "Unable to open dummy test file for writing";
++    print $T $teststring;
++    close $T or die "Unable to close dummy test file after writing";
++
++    my ($tie, $errtie, @lines);
++    no warnings 'once';
++
++    @Parrot::Configure::Options::Test::preconfiguration_tests = 
++        ( $test );
++    {
++        $tie = tie *STDOUT, "Parrot::IO::Capture::Mini"
++            or croak "Unable to tie";
++        ok($opttest->run_configure_tests(),
++            "Configuration tests are runnable");
++    }
++
++    @Parrot::Configure::Options::Test::postconfiguration_tests = 
++        ( $test );
++    {
++        $tie = tie *STDOUT, "Parrot::IO::Capture::Mini"
++            or croak "Unable to tie";
++        ok($opttest->run_build_tests(),
++            "Build tests are runnable");
++    }
++
++    ok( (chdir $cwd), "Changed back to starting directory after testing");
++}
++
++pass("Completed all tests in $0");
++
++################### DOCUMENTATION ###################
++
++=head1 NAME
++
++25-options_test.t - test Parrot::Configure::Options::Test
++
++=head1 SYNOPSIS
++
++    % prove t/configure/25-options_test.t
++
++=head1 DESCRIPTION
++
++The files in this directory test functionality used by F<Configure.pl>.
++
++The tests in this file test Parrot::Configure::Options::Test methods.
++
++=head1 AUTHOR
++
++James E Keenan
++
++=head1 SEE ALSO
++
++Parrot::Configure::Options, F<Configure.pl>.
++
++=cut
++
++# Local Variables:
++#   mode: cperl
++#   cperl-indent-level: 4
++#   fill-column: 100
++# End:
++# vim: expandtab shiftwidth=4:
+
+Property changes on: t/configure/25-options_test.t
+___________________________________________________________________
+Name: svn:mime-type
+   + text/plain
+Name: svn:keywords
+   + Author Date Id Revision
+Name: svn:eol-style
+   + native
+
+Index: MANIFEST
+===================================================================
+--- MANIFEST	(revision 18438)
++++ MANIFEST	(working copy)
+@@ -1,7 +1,7 @@
+ # ex: set ro:
+ # $Id$
+ #
+-# generated by tools/dev/mk_manifest_and_skip.pl Sat May  5 17:13:00 2007 UT
++# generated by tools/dev/mk_manifest_and_skip.pl Sun May  6 16:30:15 2007 UT
+ #
+ # See tools/dev/install_files.pl for documentation on the
+ # format of this file.
+@@ -2240,6 +2240,7 @@
+ lib/Parrot/Configure/Data.pm                                [devel]
+ lib/Parrot/Configure/Messages.pm                            [devel]
+ lib/Parrot/Configure/Options.pm                             [devel]
++lib/Parrot/Configure/Options/Test.pm                        [devel]
+ lib/Parrot/Configure/Step.pm                                [devel]
+ lib/Parrot/Configure/Step/Base.pm                           [devel]
+ lib/Parrot/Configure/Step/List.pm                           [devel]
+@@ -2813,6 +2814,7 @@
+ t/configure/22-version.t                                    []
+ t/configure/23-version.t                                    []
+ t/configure/24-version.t                                    []
++t/configure/25-options_test.t                               []
+ t/configure/base.t                                          []
+ t/configure/config_steps.t                                  []
+ t/configure/data.t                                          []
+
+------------=_1178469526-12281-11--
+

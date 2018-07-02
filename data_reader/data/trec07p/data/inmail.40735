@@ -1,0 +1,415 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon May 21 08:47:51 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4LClpqD031449
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 21 May 2007 08:47:51 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id E401C1639F5
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 21 May 2007 12:47:47 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 492CD16384C; Mon, 21 May 2007 12:47:20 +0000 (GMT)
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070521124720.492CD16384C@lists.samba.org>
+Date: Mon, 21 May 2007 12:47:20 +0000 (GMT)
+Subject: svn commit: samba r23036 - in branches/SAMBA_4_0/source:
+	auth/gensec auth/kerberos ldap_server libcli/cldap
+	libcli/ldap libcli/util
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: tridge
+Date: 2007-05-21 12:47:18 +0000 (Mon, 21 May 2007)
+New Revision: 23036
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23036
+
+Log:
+
+error checking on asn1_init() failure
+
+Modified:
+   branches/SAMBA_4_0/source/auth/gensec/spnego_parse.c
+   branches/SAMBA_4_0/source/auth/kerberos/gssapi_parse.c
+   branches/SAMBA_4_0/source/ldap_server/ldap_server.c
+   branches/SAMBA_4_0/source/libcli/cldap/cldap.c
+   branches/SAMBA_4_0/source/libcli/ldap/ldap.c
+   branches/SAMBA_4_0/source/libcli/ldap/ldap_client.c
+   branches/SAMBA_4_0/source/libcli/ldap/ldap_controls.c
+   branches/SAMBA_4_0/source/libcli/util/asn1.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/auth/gensec/spnego_parse.c
+===================================================================
+--- branches/SAMBA_4_0/source/auth/gensec/spnego_parse.c	2007-05-21 12:03:15 UTC (rev 23035)
++++ branches/SAMBA_4_0/source/auth/gensec/spnego_parse.c	2007-05-21 12:47:18 UTC (rev 23036)
+@@ -265,7 +265,7 @@
+ 
+ ssize_t spnego_read_data(TALLOC_CTX *mem_ctx, DATA_BLOB data, struct spnego_data *token)
+ {
+-	struct asn1_data *asn1 = asn1_init(mem_ctx);
++	struct asn1_data *asn1;
+ 	ssize_t ret = -1;
+ 	uint8_t context;
+ 
+@@ -275,6 +275,11 @@
+ 		return ret;
+ 	}
+ 
++	asn1 = asn1_init(mem_ctx);
++	if (asn1 == NULL) {
++		return -1;
++	}
++
+ 	asn1_load(asn1, data);
+ 
+ 	if (!asn1_peek_uint8(asn1, &context)) {
+@@ -311,6 +316,10 @@
+ 	struct asn1_data *asn1 = asn1_init(mem_ctx);
+ 	ssize_t ret = -1;
+ 
++	if (asn1 == NULL) {
++		return -1;
++	}
++
+ 	switch (spnego->type) {
+ 	case SPNEGO_NEG_TOKEN_INIT:
+ 		asn1_push_tag(asn1, ASN1_APPLICATION(0));
+
+Modified: branches/SAMBA_4_0/source/auth/kerberos/gssapi_parse.c
+===================================================================
+--- branches/SAMBA_4_0/source/auth/kerberos/gssapi_parse.c	2007-05-21 12:03:15 UTC (rev 23035)
++++ branches/SAMBA_4_0/source/auth/kerberos/gssapi_parse.c	2007-05-21 12:47:18 UTC (rev 23036)
+@@ -31,13 +31,18 @@
+ */
+ DATA_BLOB gensec_gssapi_gen_krb5_wrap(TALLOC_CTX *mem_ctx, const DATA_BLOB *ticket, const uint8_t tok_id[2])
+ {
+-	struct asn1_data *data = asn1_init(mem_ctx);
++	struct asn1_data *data;
+ 	DATA_BLOB ret;
+ 
+ 	if (!data || !ticket->data) {
+ 		return data_blob(NULL,0);
+ 	}
+ 
++	data = asn1_init(mem_ctx);
++	if (data == NULL) {
++		return data_blob(NULL,0);
++	}
++
+ 	asn1_push_tag(data, ASN1_APPLICATION(0));
+ 	asn1_write_OID(data, GENSEC_OID_KERBEROS5);
+ 
+@@ -66,6 +71,10 @@
+ 	struct asn1_data *data = asn1_init(mem_ctx);
+ 	int data_remaining;
+ 
++	if (!data) {
++		return False;
++	}
++
+ 	asn1_load(data, *blob);
+ 	asn1_start_tag(data, ASN1_APPLICATION(0));
+ 	asn1_check_OID(data, GENSEC_OID_KERBEROS5);
+@@ -99,6 +108,8 @@
+ 	BOOL ret;
+ 	struct asn1_data *data = asn1_init(NULL);
+ 
++	if (!data) return False;
++
+ 	asn1_load(data, *blob);
+ 	asn1_start_tag(data, ASN1_APPLICATION(0));
+ 	asn1_check_OID(data, oid);
+
+Modified: branches/SAMBA_4_0/source/ldap_server/ldap_server.c
+===================================================================
+--- branches/SAMBA_4_0/source/ldap_server/ldap_server.c	2007-05-21 12:03:15 UTC (rev 23035)
++++ branches/SAMBA_4_0/source/ldap_server/ldap_server.c	2007-05-21 12:47:18 UTC (rev 23036)
+@@ -137,11 +137,13 @@
+ 	struct asn1_data *asn1 = asn1_init(conn);
+ 	struct ldap_message *msg = talloc(conn, struct ldap_message);
+ 
+-	if (msg == NULL) {
++	if (asn1 == NULL || msg == NULL) {
+ 		return NT_STATUS_NO_MEMORY;
+ 	}
+ 
+ 	if (!asn1_load(asn1, blob)) {
++		talloc_free(msg);
++		talloc_free(asn1);
+ 		return NT_STATUS_NO_MEMORY;
+ 	}
+ 
+
+Modified: branches/SAMBA_4_0/source/libcli/cldap/cldap.c
+===================================================================
+--- branches/SAMBA_4_0/source/libcli/cldap/cldap.c	2007-05-21 12:03:15 UTC (rev 23035)
++++ branches/SAMBA_4_0/source/libcli/cldap/cldap.c	2007-05-21 12:47:18 UTC (rev 23036)
+@@ -70,6 +70,8 @@
+ 	struct ldap_message *ldap_msg;
+ 	struct cldap_request *req;
+ 
++	if (!asn1) return;
++
+ 	status = socket_pending(cldap->sock, &dsize);
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		talloc_free(tmp_ctx);
+
+Modified: branches/SAMBA_4_0/source/libcli/ldap/ldap.c
+===================================================================
+--- branches/SAMBA_4_0/source/libcli/ldap/ldap.c	2007-05-21 12:03:15 UTC (rev 23035)
++++ branches/SAMBA_4_0/source/libcli/ldap/ldap.c	2007-05-21 12:47:18 UTC (rev 23036)
+@@ -193,6 +193,8 @@
+ 	struct asn1_data *data = asn1_init(mem_ctx);
+ 	int i, j;
+ 
++	if (!data) return False;
++
+ 	asn1_push_tag(data, ASN1_SEQUENCE(0));
+ 	asn1_write_Integer(data, msg->messageid);
+ 
+
+Modified: branches/SAMBA_4_0/source/libcli/ldap/ldap_client.c
+===================================================================
+--- branches/SAMBA_4_0/source/libcli/ldap/ldap_client.c	2007-05-21 12:03:15 UTC (rev 23035)
++++ branches/SAMBA_4_0/source/libcli/ldap/ldap_client.c	2007-05-21 12:47:18 UTC (rev 23036)
+@@ -175,11 +175,13 @@
+ 	struct ldap_message *msg = talloc(conn, struct ldap_message);
+ 	struct asn1_data *asn1 = asn1_init(conn);
+ 
+-	if (msg == NULL) {
++	if (asn1 == NULL || msg == NULL) {
+ 		return NT_STATUS_LDAP(LDAP_PROTOCOL_ERROR);
+ 	}
+ 
+ 	if (!asn1_load(asn1, blob)) {
++		talloc_free(msg);
++		talloc_free(asn1);
+ 		return NT_STATUS_LDAP(LDAP_PROTOCOL_ERROR);
+ 	}
+ 	
+
+Modified: branches/SAMBA_4_0/source/libcli/ldap/ldap_controls.c
+===================================================================
+--- branches/SAMBA_4_0/source/libcli/ldap/ldap_controls.c	2007-05-21 12:03:15 UTC (rev 23035)
++++ branches/SAMBA_4_0/source/libcli/ldap/ldap_controls.c	2007-05-21 12:47:18 UTC (rev 23036)
+@@ -37,6 +37,8 @@
+ 	struct asn1_data *data = asn1_init(mem_ctx);
+ 	struct ldb_sort_resp_control *lsrc;
+ 
++	if (!data) return False;
++
+ 	if (!asn1_load(data, in)) {
+ 		return False;
+ 	}
+@@ -82,6 +84,8 @@
+ 	struct ldb_server_sort_control **lssc;
+ 	int num;
+ 
++	if (!data) return False;
++
+ 	if (!asn1_load(data, in)) {
+ 		return False;
+ 	}
+@@ -156,6 +160,8 @@
+ 	struct asn1_data *data = asn1_init(mem_ctx);
+ 	struct ldb_extended_dn_control *ledc;
+ 
++	if (!data) return False;
++
+ 	if (!asn1_load(data, in)) {
+ 		return False;
+ 	}
+@@ -187,6 +193,8 @@
+ 	struct asn1_data *data = asn1_init(mem_ctx);
+ 	struct ldb_sd_flags_control *lsdfc;
+ 
++	if (!data) return False;
++
+ 	if (!asn1_load(data, in)) {
+ 		return False;
+ 	}
+@@ -218,6 +226,8 @@
+ 	struct asn1_data *data = asn1_init(mem_ctx);
+ 	struct ldb_search_options_control *lsoc;
+ 
++	if (!data) return False;
++
+ 	if (!asn1_load(data, in)) {
+ 		return False;
+ 	}
+@@ -250,6 +260,8 @@
+ 	struct asn1_data *data = asn1_init(mem_ctx);
+ 	struct ldb_paged_control *lprc;
+ 
++	if (!data) return False;
++
+ 	if (!asn1_load(data, in)) {
+ 		return False;
+ 	}
+@@ -296,6 +308,8 @@
+ 	struct asn1_data *data = asn1_init(mem_ctx);
+ 	struct ldb_dirsync_control *ldc;
+ 
++	if (!data) return False;
++
+ 	if (!asn1_load(data, in)) {
+ 		return False;
+ 	}
+@@ -349,6 +363,8 @@
+ 	struct asn1_data *data = asn1_init(mem_ctx);
+ 	struct ldb_asq_control *lac;
+ 
++	if (!data) return False;
++
+ 	if (!asn1_load(data, in)) {
+ 		return False;
+ 	}
+@@ -452,6 +468,8 @@
+ 	struct asn1_data *data = asn1_init(mem_ctx);
+ 	struct ldb_vlv_req_control *lvrc;
+ 
++	if (!data) return False;
++
+ 	if (!asn1_load(data, in)) {
+ 		return False;
+ 	}
+@@ -562,6 +580,8 @@
+ 	struct asn1_data *data = asn1_init(mem_ctx);
+ 	struct ldb_vlv_resp_control *lvrc;
+ 
++	if (!data) return False;
++
+ 	if (!asn1_load(data, in)) {
+ 		return False;
+ 	}
+@@ -615,6 +635,8 @@
+ 	struct ldb_sort_resp_control *lsrc = talloc_get_type(in, struct ldb_sort_resp_control);
+ 	struct asn1_data *data = asn1_init(mem_ctx);
+ 
++	if (!data) return False;
++
+ 	if (!asn1_push_tag(data, ASN1_SEQUENCE(0))) {
+ 		return False;
+ 	}
+@@ -648,6 +670,8 @@
+ 	struct asn1_data *data = asn1_init(mem_ctx);
+ 	int num;
+ 
++	if (!data) return False;
++
+ 	if (!asn1_push_tag(data, ASN1_SEQUENCE(0))) {
+ 		return False;
+ 	}
+@@ -696,6 +720,8 @@
+ 	struct ldb_extended_dn_control *ledc = talloc_get_type(in, struct ldb_extended_dn_control);
+ 	struct asn1_data *data = asn1_init(mem_ctx);
+ 
++	if (!data) return False;
++
+ 	if (!asn1_push_tag(data, ASN1_SEQUENCE(0))) {
+ 		return False;
+ 	}
+@@ -722,6 +748,8 @@
+ 	struct ldb_sd_flags_control *lsdfc = talloc_get_type(in, struct ldb_sd_flags_control);
+ 	struct asn1_data *data = asn1_init(mem_ctx);
+ 
++	if (!data) return False;
++
+ 	if (!asn1_push_tag(data, ASN1_SEQUENCE(0))) {
+ 		return False;
+ 	}
+@@ -748,6 +776,8 @@
+ 	struct ldb_search_options_control *lsoc = talloc_get_type(in, struct ldb_search_options_control);
+ 	struct asn1_data *data = asn1_init(mem_ctx);
+ 
++	if (!data) return False;
++
+ 	if (!asn1_push_tag(data, ASN1_SEQUENCE(0))) {
+ 		return False;
+ 	}
+@@ -774,6 +804,8 @@
+ 	struct ldb_paged_control *lprc = talloc_get_type(in, struct ldb_paged_control);
+ 	struct asn1_data *data = asn1_init(mem_ctx);
+ 
++	if (!data) return False;
++
+ 	if (!asn1_push_tag(data, ASN1_SEQUENCE(0))) {
+ 		return False;
+ 	}
+@@ -807,6 +839,8 @@
+ 	struct ldb_asq_control *lac = talloc_get_type(in, struct ldb_asq_control);
+ 	struct asn1_data *data = asn1_init(mem_ctx);
+ 
++	if (!data) return False;
++
+ 	if (!asn1_push_tag(data, ASN1_SEQUENCE(0))) {
+ 		return False;
+ 	}
+@@ -840,6 +874,8 @@
+ 	struct ldb_dirsync_control *ldc = talloc_get_type(in, struct ldb_dirsync_control);
+ 	struct asn1_data *data = asn1_init(mem_ctx);
+ 
++	if (!data) return False;
++
+ 	if (!asn1_push_tag(data, ASN1_SEQUENCE(0))) {
+ 		return False;
+ 	}
+@@ -924,6 +960,8 @@
+ 	struct ldb_vlv_req_control *lvrc = talloc_get_type(in, struct ldb_vlv_req_control);
+ 	struct asn1_data *data = asn1_init(mem_ctx);
+ 
++	if (!data) return False;
++
+ 	if (!asn1_push_tag(data, ASN1_SEQUENCE(0))) {
+ 		return False;
+ 	}
+@@ -998,6 +1036,8 @@
+ 	struct ldb_vlv_resp_control *lvrc = talloc_get_type(in, struct ldb_vlv_resp_control);
+ 	struct asn1_data *data = asn1_init(mem_ctx);
+ 
++	if (!data) return False;
++
+ 	if (!asn1_push_tag(data, ASN1_SEQUENCE(0))) {
+ 		return False;
+ 	}
+
+Modified: branches/SAMBA_4_0/source/libcli/util/asn1.c
+===================================================================
+--- branches/SAMBA_4_0/source/libcli/util/asn1.c	2007-05-21 12:03:15 UTC (rev 23035)
++++ branches/SAMBA_4_0/source/libcli/util/asn1.c	2007-05-21 12:47:18 UTC (rev 23036)
+@@ -24,7 +24,11 @@
+ /* allocate an asn1 structure */
+ struct asn1_data *asn1_init(TALLOC_CTX *mem_ctx)
+ {
+-	return talloc_zero(NULL, struct asn1_data);
++	struct asn1_data *ret = talloc_zero(NULL, struct asn1_data);
++	if (ret == NULL) {
++		DEBUG(0,("asn1_init failed! out of memory\n"));
++	}
++	return ret;
+ }
+ 
+ /* free an asn1 structure */
+

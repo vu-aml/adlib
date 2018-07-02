@@ -1,0 +1,383 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon May 14 12:04:56 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4EG4tqD024271
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 14 May 2007 12:04:56 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 8BDAA163988
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 14 May 2007 16:04:53 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1004)
+	id DDC5F162AFD; Mon, 14 May 2007 16:04:24 +0000 (GMT)
+To: samba-cvs@samba.org
+From: gd@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070514160424.DDC5F162AFD@lists.samba.org>
+Date: Mon, 14 May 2007 16:04:24 +0000 (GMT)
+Subject: svn commit: samba r22857 - in branches/SAMBA_3_0_26/source: .
+	include libads libsmb utils
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: gd
+Date: 2007-05-14 16:04:24 +0000 (Mon, 14 May 2007)
+New Revision: 22857
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22857
+
+Log:
+merge "net ads keytab list" from 3_0.
+
+Guenther
+
+Modified:
+   branches/SAMBA_3_0_26/source/configure.in
+   branches/SAMBA_3_0_26/source/include/includes.h
+   branches/SAMBA_3_0_26/source/libads/kerberos_keytab.c
+   branches/SAMBA_3_0_26/source/libsmb/clikrb5.c
+   branches/SAMBA_3_0_26/source/utils/net_ads.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0_26/source/configure.in
+===================================================================
+--- branches/SAMBA_3_0_26/source/configure.in	2007-05-14 15:12:14 UTC (rev 22856)
++++ branches/SAMBA_3_0_26/source/configure.in	2007-05-14 16:04:24 UTC (rev 22857)
+@@ -3539,6 +3539,7 @@
+   AC_CHECK_FUNC_EXT(krb5_get_init_creds_opt_alloc, $KRB5_LIBS)
+   AC_CHECK_FUNC_EXT(krb5_get_init_creds_opt_free, $KRB5_LIBS)
+   AC_CHECK_FUNC_EXT(krb5_get_init_creds_opt_get_error, $KRB5_LIBS)
++  AC_CHECK_FUNC_EXT(krb5_enctype_to_string, $KRB5_LIBS)
+ 
+   LIBS="$KRB5_LIBS $LIBS"
+ 
+@@ -3915,7 +3916,46 @@
+               [whether krb5_mk_error takes 3 arguments MIT or 9 Heimdal])
+   fi
+ 
++  if test x"$ac_cv_func_ext_krb5_enctype_to_string" = x"yes"; then
++    AC_CACHE_CHECK([for krb5_error_code krb5_enctype_to_string(krb5_context context, krb5_enctype enctype, char **str)],
++        smb_krb5_enctype_to_string_takes_krb5_context_arg,[
++	AC_TRY_RUN_STRICT([
++		#include <krb5.h>
++		int main(void) {
++			krb5_context context;
++			char *str = NULL;
++			krb5_enctype_to_string(context, 1, &str);
++			if (str) free (str); 
++			return 0;
++		}
++		],[$Werror_FLAGS],[$CPPFLAGS],[$LDFLAGS],
++		smb_krb5_enctype_to_string_takes_krb5_context_arg=yes,
++		smb_krb5_enctype_to_string_takes_krb5_context_arg=no)])
+ 
++    if test x"$smb_krb5_enctype_to_string_takes_krb5_context_arg" = x"yes"; then
++      AC_DEFINE(HAVE_KRB5_ENCTYPE_TO_STRING_WITH_KRB5_CONTEXT_ARG,1,
++                [whether krb5_enctype_to_string takes krb5_context argument])
++    fi
++
++    AC_CACHE_CHECK([for krb5_error_code krb5_enctype_to_string(krb5_enctype enctype, char *str, size_t len)],
++        smb_krb5_enctype_to_string_takes_size_t_arg,[
++	AC_TRY_RUN_STRICT([
++		#include <krb5.h>
++		int main(void) {
++			char buf[256];
++			krb5_enctype_to_string(1, buf, 256);
++			return 0;
++		}
++		],[$Werror_FLAGS],[$CPPFLAGS],[$LDFLAGS],
++		smb_krb5_enctype_to_string_takes_size_t_arg=yes,
++		smb_krb5_enctype_to_string_takes_size_t_arg=no)])
++
++    if test x"$smb_krb5_enctype_to_string_takes_size_t_arg" = x"yes"; then
++      AC_DEFINE(HAVE_KRB5_ENCTYPE_TO_STRING_WITH_SIZE_T_ARG,1,
++                [whether krb5_enctype_to_string takes size_t argument])
++    fi
++  fi
++
+   #
+   #
+   # Now the decisions whether we can support krb5
+
+Modified: branches/SAMBA_3_0_26/source/include/includes.h
+===================================================================
+--- branches/SAMBA_3_0_26/source/include/includes.h	2007-05-14 15:12:14 UTC (rev 22856)
++++ branches/SAMBA_3_0_26/source/include/includes.h	2007-05-14 16:04:24 UTC (rev 22857)
+@@ -1201,6 +1201,11 @@
+ 					krb5_error_code error_code,
+ 					const krb5_principal server,
+ 					krb5_data *reply);
++krb5_enctype smb_get_enctype_from_kt_entry(const krb5_keytab_entry *kt_entry);
++krb5_error_code smb_krb5_enctype_to_string(krb5_context context, 
++ 					    krb5_enctype enctype, 
++					    char **etype_s);
++
+ #endif /* HAVE_KRB5 */
+ 
+ 
+
+Modified: branches/SAMBA_3_0_26/source/libads/kerberos_keytab.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/libads/kerberos_keytab.c	2007-05-14 15:12:14 UTC (rev 22856)
++++ branches/SAMBA_3_0_26/source/libads/kerberos_keytab.c	2007-05-14 16:04:24 UTC (rev 22857)
+@@ -691,4 +691,116 @@
+ 	}
+ 	return ret;
+ }
++
++/**********************************************************************
++ List system keytab.
++***********************************************************************/
++
++int ads_keytab_list(void)
++{
++	krb5_error_code ret = 0;
++	krb5_context context = NULL;
++	krb5_keytab keytab = NULL;
++	krb5_kt_cursor cursor;
++	krb5_keytab_entry kt_entry;
++	char keytab_name[MAX_KEYTAB_NAME_LEN];
++
++	ZERO_STRUCT(kt_entry);
++	ZERO_STRUCT(cursor);
++
++	initialize_krb5_error_table();
++	ret = krb5_init_context(&context);
++	if (ret) {
++		DEBUG(1,("ads_keytab_list: could not krb5_init_context: %s\n",error_message(ret)));
++		return ret;
++	}
++#if 0 /* HAVE_WRFILE_KEYTAB */
++	keytab_name[0] = 'W';
++	keytab_name[1] = 'R';
++	ret = krb5_kt_default_name(context, (char *) &keytab_name[2], MAX_KEYTAB_NAME_LEN - 4);
++#else
++	ret = krb5_kt_default_name(context, (char *) &keytab_name[0], MAX_KEYTAB_NAME_LEN - 2);
++#endif
++	if (ret) {
++		DEBUG(1,("ads_keytab_list: krb5_kt_default failed (%s)\n", error_message(ret)));
++		goto out;
++	}
++	DEBUG(3,("ads_keytab_list: Using default keytab: %s\n", (char *) &keytab_name));
++	ret = krb5_kt_resolve(context, (char *) &keytab_name, &keytab);
++	if (ret) {
++		DEBUG(1,("ads_keytab_list: krb5_kt_resolve failed (%s)\n", error_message(ret)));
++		goto out;
++	}
++
++	ret = krb5_kt_start_seq_get(context, keytab, &cursor);
++	if (ret) {
++		goto out;
++	}
++
++	printf("Vno  Type        Principal\n");
++
++	while (krb5_kt_next_entry(context, keytab, &kt_entry, &cursor) == 0) {
++	
++		char *princ_s = NULL;
++		char *etype_s = NULL;
++		krb5_enctype enctype = 0;
++
++		ret = smb_krb5_unparse_name(context, kt_entry.principal, &princ_s);
++		if (ret) {
++			goto out;
++		}
++
++		enctype = smb_get_enctype_from_kt_entry(&kt_entry);
++
++		ret = smb_krb5_enctype_to_string(context, enctype, &etype_s);
++		if (ret) {
++			SAFE_FREE(princ_s);
++			goto out;
++		}
++
++		printf("%3d  %s\t\t %s\n", kt_entry.vno, etype_s, princ_s);
++
++		SAFE_FREE(princ_s);
++		SAFE_FREE(etype_s);
++
++		ret = smb_krb5_kt_free_entry(context, &kt_entry);
++		if (ret) {
++			goto out;
++		}
++	}
++
++	ret = krb5_kt_end_seq_get(context, keytab, &cursor);
++	if (ret) {
++		goto out;
++	}
++
++	/* Ensure we don't double free. */
++	ZERO_STRUCT(kt_entry);
++	ZERO_STRUCT(cursor);
++out:
++
++	{
++		krb5_keytab_entry zero_kt_entry;
++		ZERO_STRUCT(zero_kt_entry);
++		if (memcmp(&zero_kt_entry, &kt_entry, sizeof(krb5_keytab_entry))) {
++			smb_krb5_kt_free_entry(context, &kt_entry);
++		}
++	}
++	{
++		krb5_kt_cursor zero_csr;
++		ZERO_STRUCT(zero_csr);
++		if ((memcmp(&cursor, &zero_csr, sizeof(krb5_kt_cursor)) != 0) && keytab) {
++			krb5_kt_end_seq_get(context, keytab, &cursor);	
++		}
++	}
++
++	if (keytab) {
++		krb5_kt_close(context, keytab);
++	}
++	if (context) {
++		krb5_free_context(context);
++	}
++	return ret;
++}
++
+ #endif /* HAVE_KRB5 */
+
+Modified: branches/SAMBA_3_0_26/source/libsmb/clikrb5.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/libsmb/clikrb5.c	2007-05-14 15:12:14 UTC (rev 22856)
++++ branches/SAMBA_3_0_26/source/libsmb/clikrb5.c	2007-05-14 16:04:24 UTC (rev 22857)
+@@ -28,11 +28,11 @@
+ 
+ #ifdef HAVE_KRB5
+ 
+-#ifdef HAVE_KRB5_KEYBLOCK_KEYVALUE
+-#define KRB5_KEY_TYPE(k)	((k)->keytype)
++#ifdef HAVE_KRB5_KEYBLOCK_KEYVALUE /* Heimdal */
++#define KRB5_KEY_TYPE(k)	((k)->keytype) 
+ #define KRB5_KEY_LENGTH(k)	((k)->keyvalue.length)
+ #define KRB5_KEY_DATA(k)	((k)->keyvalue.data)
+-#else
++#else /* MIT */
+ #define	KRB5_KEY_TYPE(k)	((k)->enctype)
+ #define KRB5_KEY_LENGTH(k)	((k)->length)
+ #define KRB5_KEY_DATA(k)	((k)->contents)
+@@ -1255,7 +1255,7 @@
+ 		krb5_free_creds(context, creds);
+ 	}
+ #else
+-#error No suitable krb5 ticket renew function available
++#error NO_SUITABKE_KRB5_TICKET_RENEW_FUNCTION_AVAILABLE
+ #endif
+ 
+ 
+@@ -1467,12 +1467,12 @@
+ #ifdef HAVE_KRB5_GET_INIT_CREDS_OPT_FREE
+ 
+ #ifdef KRB5_CREDS_OPT_FREE_REQUIRES_CONTEXT
+-	/* Modern MIT version */
++	/* Modern MIT or Heimdal version */
+ 	krb5_get_init_creds_opt_free(context, opt);
+ #else
+ 	/* Heimdal version */
+ 	krb5_get_init_creds_opt_free(opt);
+-#endif
++#endif /* KRB5_CREDS_OPT_FREE_REQUIRES_CONTEXT */
+ 
+ #else /* HAVE_KRB5_GET_INIT_CREDS_OPT_FREE */
+ 	/* Historical MIT version */
+@@ -1481,6 +1481,41 @@
+ #endif /* HAVE_KRB5_GET_INIT_CREDS_OPT_FREE */
+ }
+ 
++ krb5_enctype smb_get_enctype_from_kt_entry(const krb5_keytab_entry *kt_entry)
++{
++#ifdef HAVE_KRB5_KEYTAB_ENTRY_KEY		/* MIT */
++	return kt_entry->key.enctype;
++#elif defined(HAVE_KRB5_KEYTAB_ENTRY_KEYBLOCK)	/* Heimdal */
++	return kt_entry->keyblock.keytype;
++#else
++#error UNKNOWN_KRB5_KEYTAB_ENTRY_KEYBLOCK_FORMAT
++#endif
++}
++
++
++/* caller needs to free etype_s */
++ krb5_error_code smb_krb5_enctype_to_string(krb5_context context, 
++ 					    krb5_enctype enctype, 
++					    char **etype_s)
++{
++#ifdef HAVE_KRB5_ENCTYPE_TO_STRING_WITH_KRB5_CONTEXT_ARG
++	return krb5_enctype_to_string(context, enctype, etype_s); /* Heimdal */
++#elif defined(HAVE_KRB5_ENCTYPE_TO_STRING_WITH_SIZE_T_ARG)
++	char buf[256];
++	krb5_error_code ret = krb5_enctype_to_string(enctype, buf, 256); /* MIT */
++	if (ret) {
++		return ret;
++	}
++	*etype_s = SMB_STRDUP(buf);
++	if (!*etype_s) {
++		return ENOMEM;
++	}
++	return ret;
++#else
++#error UNKNOWN_KRB5_ENCTYPE_TO_STRING_FUNCTION
++#endif
++}
++
+  krb5_error_code smb_krb5_mk_error(krb5_context context,
+ 				krb5_error_code error_code,
+ 				const krb5_principal server,
+
+Modified: branches/SAMBA_3_0_26/source/utils/net_ads.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/utils/net_ads.c	2007-05-14 15:12:14 UTC (rev 22856)
++++ branches/SAMBA_3_0_26/source/utils/net_ads.c	2007-05-14 16:04:24 UTC (rev 22857)
+@@ -2424,10 +2424,11 @@
+ 	d_printf(
+ 		"net ads keytab <COMMAND>\n"\
+ "<COMMAND> can be either:\n"\
++"  ADD       Adds new service principal\n"\
+ "  CREATE    Creates a fresh keytab\n"\
+-"  ADD       Adds new service principal\n"\
+ "  FLUSH     Flushes out all keytab entries\n"\
+ "  HELP      Prints this help message\n"\
++"  LIST      List the keytab\n"\
+ "The ADD command will take arguments, the other commands\n"\
+ "will not take any arguments.   The arguments given to ADD\n"\
+ "should be a list of principals to add.  For example, \n"\
+@@ -2482,6 +2483,12 @@
+ 	return ret;
+ }
+ 
++static int net_ads_keytab_list(int argc, const char **argv)
++{
++	return ads_keytab_list();
++}
++
++
+ int net_ads_keytab(int argc, const char **argv)
+ {
+ 	struct functable func[] = {
+@@ -2489,6 +2496,7 @@
+ 		{"ADD", net_ads_keytab_add},
+ 		{"FLUSH", net_ads_keytab_flush},
+ 		{"HELP", net_ads_keytab_usage},
++		{"LIST", net_ads_keytab_list},
+ 		{NULL, NULL}
+ 	};
+ 
+

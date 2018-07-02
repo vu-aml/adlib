@@ -1,0 +1,81 @@
+From perl6-all-return-80948-ktwarwic=speedy.uwaterloo.ca@perl.org  Fri Apr 27 20:00:50 2007
+Return-Path: <perl6-all-return-80948-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3S00n6w032738
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 27 Apr 2007 20:00:49 -0400
+Received: (qmail 21480 invoked by uid 514); 28 Apr 2007 00:00:48 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 21475 invoked from network); 28 Apr 2007 00:00:48 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+Message-ID: <46328E75.1020006@perl.org>
+Date: Fri, 27 Apr 2007 16:59:49 -0700
+From: Allison Randal <allison@perl.org>
+User-Agent: Thunderbird 1.5.0.10 (Macintosh/20070221)
+MIME-Version: 1.0
+To: matt@diephouse.com
+Cc: perl6-internals@perl.org, bugs-bitbucket@netlabs.develooper.com
+Subject: Re: [perl #42776] [BUG] is isa ok?
+References: <RT-Ticket-42776@perl.org>	 <1d9a3f400704271221p3bfaf273t224fe5f040a97a13@mail.gmail.com>	 <rt-3.6.HEAD-6655-1177701697-287.42776-72-0@perl.org> <198c87380704271614y549d85dci2e2c0f856eff962f@mail.gmail.com>
+In-Reply-To: <198c87380704271614y549d85dci2e2c0f856eff962f@mail.gmail.com>
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+X-Virus-Scanned: by amavisd-new at wgz.org
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+Status: O
+Content-Length: 1450
+Lines: 34
+
+Matt Diephouse wrote:
+> 
+> It looks like the PMC variant is correct in this case, because Object
+> isn't actually a class. There's a class flag for PMCs that sets
+> whether or not they are a class and Object doesn't have this set.
+> 
+> When you call the PMC variant of isa, it calls Parrot_object_isa, and
+> that has this code:
+> 
+>    /* if this is not a class */
+>    if (!PObj_is_class_TEST(pmc)) {
+>        pmc = VTABLE_get_class(interp, pmc);
+>    }
+> 
+> So since Object isn't a class, it calls the get_class vtable and gets
+> the Class pmc. It then tests the object to see if it's a Class, which
+> it obviously isn't.
+
+You should always get the same answer from the 'isa' opcode, whether you 
+pass in a string or a PMC. In this case, object.pmc should override the 
+'isa' vtable method to delegate the lookup to the object's class. 
+(ParrotObject.pmc inherits an overridden 'isa' from ParrotClass.pmc.)
+
+Ultimately, both variants of the 'isa' opcode should call the vtable 
+'isa' (preserving encapsulation, allowing vtable overriding, etc.) This 
+means the vtable isa needs to be able to handle keyed lookup. (Unless we 
+reverse the decision of RT#39045.)
+
+An object should never report that it 'isa' Object, it should only 
+report an 'isa' relationship to the classes it inherited from. 
+(Different HLLs will have different notional hierarchies, and we don't 
+want Parrot's low-level implementation details to be visible in the mix.)
+
+Allison
+

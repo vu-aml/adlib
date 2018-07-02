@@ -1,0 +1,120 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu May 17 01:45:16 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4H5jFqD028181
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 17 May 2007 01:45:16 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id DCF7516383D
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 17 May 2007 05:45:12 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.5 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 501)
+	id 05E3B162AE8; Thu, 17 May 2007 05:44:53 +0000 (GMT)
+To: samba-cvs@samba.org
+From: abartlet@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070517054453.05E3B162AE8@lists.samba.org>
+Date: Thu, 17 May 2007 05:44:53 +0000 (GMT)
+Subject: svn commit: samba r22966 - in
+	branches/SAMBA_4_0/source/auth/gensec: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: abartlet
+Date: 2007-05-17 05:44:51 +0000 (Thu, 17 May 2007)
+New Revision: 22966
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22966
+
+Log:
+Make sure to return LOGON_FAILURE if the user's kerberos password is
+incorrect.
+
+Andrew Bartlett
+
+Modified:
+   branches/SAMBA_4_0/source/auth/gensec/gensec_gssapi.c
+   branches/SAMBA_4_0/source/auth/gensec/gensec_krb5.c
+   branches/SAMBA_4_0/source/auth/gensec/spnego.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/auth/gensec/gensec_gssapi.c
+===================================================================
+--- branches/SAMBA_4_0/source/auth/gensec/gensec_gssapi.c	2007-05-17 03:42:28 UTC (rev 22965)
++++ branches/SAMBA_4_0/source/auth/gensec/gensec_gssapi.c	2007-05-17 05:44:51 UTC (rev 22966)
+@@ -347,6 +347,8 @@
+ 	switch (ret) {
+ 	case 0:
+ 		break;
++	case KRB5KDC_ERR_PREAUTH_FAILED:
++		return NT_STATUS_LOGON_FAILURE;
+ 	case KRB5_KDC_UNREACH:
+ 		DEBUG(3, ("Cannot reach a KDC we require to contact %s\n", principal));
+ 		return NT_STATUS_INVALID_PARAMETER; /* Make SPNEGO ignore us, we can't go any further here */
+
+Modified: branches/SAMBA_4_0/source/auth/gensec/gensec_krb5.c
+===================================================================
+--- branches/SAMBA_4_0/source/auth/gensec/gensec_krb5.c	2007-05-17 03:42:28 UTC (rev 22965)
++++ branches/SAMBA_4_0/source/auth/gensec/gensec_krb5.c	2007-05-17 05:44:51 UTC (rev 22966)
+@@ -244,16 +244,23 @@
+ 	gensec_krb5_state = gensec_security->private_data;
+ 	gensec_krb5_state->state_position = GENSEC_KRB5_CLIENT_START;
+ 
++	principal = gensec_get_target_principal(gensec_security);
++
+ 	ret = cli_credentials_get_ccache(gensec_get_credentials(gensec_security), &ccache_container);
+-	if (ret) {
+-		DEBUG(1,("gensec_krb5_start: cli_credentials_get_ccache failed: %s\n", 
+-			 error_message(ret)));
++	switch (ret) {
++	case 0:
++		break;
++	case KRB5KDC_ERR_PREAUTH_FAILED:
++		return NT_STATUS_LOGON_FAILURE;
++	case KRB5_KDC_UNREACH:
++		DEBUG(3, ("Cannot reach a KDC we require to contact %s\n", principal));
++		return NT_STATUS_INVALID_PARAMETER; /* Make SPNEGO ignore us, we can't go any further here */
++	default:
++		DEBUG(1, ("gensec_krb5_start: Aquiring initiator credentails failed: %s\n", error_message(ret)));
+ 		return NT_STATUS_UNSUCCESSFUL;
+ 	}
+-
+ 	in_data.length = 0;
+ 	
+-	principal = gensec_get_target_principal(gensec_security);
+ 	if (principal && lp_client_use_spnego_principal()) {
+ 		krb5_principal target_principal;
+ 		ret = krb5_parse_name(gensec_krb5_state->smb_krb5_context->krb5_context, principal,
+
+Modified: branches/SAMBA_4_0/source/auth/gensec/spnego.c
+===================================================================
+--- branches/SAMBA_4_0/source/auth/gensec/spnego.c	2007-05-17 03:42:28 UTC (rev 22965)
++++ branches/SAMBA_4_0/source/auth/gensec/spnego.c	2007-05-17 05:44:51 UTC (rev 22966)
+@@ -528,7 +528,7 @@
+ 	 * support the first time.  Lets keep this code to
+ 	 * reality */
+ 
+-	return NT_STATUS_INVALID_PARAMETER;
++	return nt_status;
+ }
+ 
+ /** create a negTokenInit 
+

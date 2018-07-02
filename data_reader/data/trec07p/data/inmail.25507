@@ -1,0 +1,149 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Apr 30 13:13:52 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3UHDq6w015405
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 30 Apr 2007 13:13:52 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id CA7CB1638C2
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 30 Apr 2007 17:13:50 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.4 required=3.8 tests=AWL,BAYES_20,
+	DATE_IN_PAST_03_06,RCVD_IN_DSBL,SPF_PASS autolearn=no version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: from mail.gmx.net (mail.gmx.net [213.165.64.20])
+	by lists.samba.org (Postfix) with SMTP id 80C9F162ACE
+	for <samba-technical@samba.org>; Mon, 30 Apr 2007 17:13:35 +0000 (GMT)
+Received: (qmail invoked by alias); 30 Apr 2007 17:13:34 -0000
+Received: from ppp-88-217-15-238.dynamic.mnet-online.de (EHLO dh3mb)
+	[88.217.15.238]
+	by mail.gmx.net (mp010) with SMTP; 30 Apr 2007 19:13:34 +0200
+X-Authenticated: #13703797
+X-Provags-ID: V01U2FsdGVkX19QNV9uNfVQgQBfEtMMsU4vD4Qouqus6sBMA42SXJ
+	CO9cC8rKH4oegS
+From: Johann Hanne <jhml@gmx.net>
+To: Jelmer Vernooij <jelmer@samba.org>
+Date: Mon, 30 Apr 2007 16:12:52 +0200
+User-Agent: KMail/1.8.2
+References: <200704291324.58321.jhml@gmx.net> <200704301331.31322.jhml@gmx.net>
+	<1177950048.29485.10.camel@charis.lan.vernstok.nl>
+In-Reply-To: <1177950048.29485.10.camel@charis.lan.vernstok.nl>
+MIME-Version: 1.0
+Content-Type: text/plain;
+  charset="iso-8859-1"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+Message-Id: <200704301612.52778.jhml@gmx.net>
+X-Y-GMX-Trusted: 0
+Cc: samba-technical@samba.org
+Subject: Re: Bug #3024 still trivial, still applies, still not in svn :-(
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 3507
+Lines: 89
+
+On Monday 30 April 2007 18:20, Jelmer Vernooij wrote:
+> Hi Johann,
+>
+> On Mon, 2007-04-30 at 13:31 +0200, Johann Hanne wrote:
+> > On Monday 30 April 2007 09:18, Jelmer Vernooij wrote:
+> > > Hi Johann,
+> > >
+> > > Johann Hanne wrote:
+> > > > I just tested 3.0.25rc3 and found out, that bug #3024 is still in.
+> > > > Moreover, the proposed patch still applies and it still fixes the
+> > > > bug. I'm getting a little desperate on this. What's the problem? I'd
+> > > > do anything I can to get it applied?!
+> > >
+> > > That patch doesn't look right. If winbindd_fill_pwent returns non-zero,
+> > > then user_list_ndx won't be incremented and since it will always be
+> > > incremented by at most 1 every time the loop is run, it's basically the
+> > > same as writing:
+> > >
+> > > while(1) {
+> >
+> > I don't think so. Even if user_list_ndx gets never incremented due to
+> > winbindd_fill_pwent() errors,
+> > --
+> >                         /* No more domains */
+> >
+> >                         if (!ent)
+> >                                 break;
+> > --
+> > will jump out of the loop as soon as all users have been received.
+>
+> Sure, but that would also happen with while(1) {. My point is, I don't
+> think the condition in while() will ever be false so it has the same
+> effect as while(1).
+Ah, ok. But I don't think that's the case:
+--
+num_users = MIN(MAX_GETPWENT_USERS, state->request.data.num_entries);
+--
+This sets the maximum number of users to MAX_GETPWENT_USERS, even if there are 
+available more than that. And "user_list_ndx < num_users" limits the number 
+of users actually retrieved so that the malloc'ed array doesn't overflow.
+
+I've added the following debug output to make sure that this is actually true:
+--
+                        user_list_ndx++;
+
+DEBUG(1, ("***** user_list_ndx=%d, num_users=%d *****\n", user_list_ndx, 
+num_users));
+
+                        state->response.data.num_entries++;
+                        state->response.length +=
+                                sizeof(struct winbindd_pw);
+--
+This results in the following debug output (with
+#define MAX_GETPWENT_USERS 10):
+--
+  ***** user_list_ndx=1, num_users=10 *****
+  ***** user_list_ndx=2, num_users=10 *****
+  ***** user_list_ndx=3, num_users=10 *****
+  ***** user_list_ndx=4, num_users=10 *****
+  ***** user_list_ndx=5, num_users=10 *****
+  ***** user_list_ndx=6, num_users=10 *****
+  ***** user_list_ndx=7, num_users=10 *****
+  ***** user_list_ndx=8, num_users=10 *****
+  ***** user_list_ndx=9, num_users=10 *****
+  ***** user_list_ndx=10, num_users=10 *****
+  ***** user_list_ndx=1, num_users=10 *****
+  ***** user_list_ndx=2, num_users=10 *****
+  ***** user_list_ndx=3, num_users=10 *****
+  ***** user_list_ndx=4, num_users=10 *****
+  ***** user_list_ndx=5, num_users=10 *****
+  ***** user_list_ndx=6, num_users=10 *****
+  ***** user_list_ndx=7, num_users=10 *****
+  ***** user_list_ndx=8, num_users=10 *****
+  ***** user_list_ndx=9, num_users=10 *****
+  ***** user_list_ndx=10, num_users=10 *****
+  ***** user_list_ndx=1, num_users=10 *****
+  ***** user_list_ndx=2, num_users=10 *****
+  ***** user_list_ndx=3, num_users=10 *****
+  ***** user_list_ndx=4, num_users=10 *****
+  ***** user_list_ndx=5, num_users=10 *****
+  ***** user_list_ndx=6, num_users=10 *****
+--
+I.e. we have a total of 26 (mapped) users, and the first two times the while 
+loop gets stopped by "user_list_ndx < num_users" being false. The third time 
+it gets stopped by "if (!ent) break;".
+
+...or am I still missing the point...??
+
+Chers, Johann
+

@@ -1,0 +1,414 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat Jun  2 02:29:25 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l526TOhB019650
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 2 Jun 2007 02:29:24 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 3EC03162BCD
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat,  2 Jun 2007 06:29:17 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL,UPPERCASE_25_50 autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 614)
+	id EA1EA162ACD; Sat,  2 Jun 2007 06:28:38 +0000 (GMT)
+To: samba-cvs@samba.org
+From: ab@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070602062838.EA1EA162ACD@lists.samba.org>
+Date: Sat,  2 Jun 2007 06:28:38 +0000 (GMT)
+Subject: svn commit: samba r23302 - in branches/SAMBA_3_0/source/modules: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: ab
+Date: 2007-06-02 06:28:38 +0000 (Sat, 02 Jun 2007)
+New Revision: 23302
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23302
+
+Log:
+Refactor vfs_gpfs module, fix problems with chmod Tridge has found during ctdb tests
+Modified:
+   branches/SAMBA_3_0/source/modules/nfs4_acls.c
+   branches/SAMBA_3_0/source/modules/vfs_gpfs.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/modules/nfs4_acls.c
+===================================================================
+--- branches/SAMBA_3_0/source/modules/nfs4_acls.c	2007-06-02 00:32:49 UTC (rev 23301)
++++ branches/SAMBA_3_0/source/modules/nfs4_acls.c	2007-06-02 06:28:38 UTC (rev 23302)
+@@ -84,14 +84,13 @@
+ SMB4ACL_T *smb_create_smb4acl(void)
+ {
+ 	TALLOC_CTX *mem_ctx = main_loop_talloc_get();
+-	SMB_ACL4_INT_T	*acl = (SMB_ACL4_INT_T *)TALLOC_SIZE(mem_ctx, sizeof(SMB_ACL4_INT_T));
++	SMB_ACL4_INT_T	*acl = (SMB_ACL4_INT_T *)TALLOC_ZERO_SIZE(mem_ctx, sizeof(SMB_ACL4_INT_T));
+ 	if (acl==NULL)
+ 	{
+ 		DEBUG(0, ("TALLOC_SIZE failed\n"));
+ 		errno = ENOMEM;
+ 		return NULL;
+ 	}
+-	memset(acl, 0, sizeof(SMB_ACL4_INT_T));
+ 	acl->magic = SMB_ACL4_INT_MAGIC;
+ 	/* acl->first, last = NULL not needed */
+ 	return (SMB4ACL_T *)acl;
+@@ -103,14 +102,13 @@
+ 	TALLOC_CTX *mem_ctx = main_loop_talloc_get();
+ 	SMB_ACE4_INT_T *ace;
+ 
+-	ace = (SMB_ACE4_INT_T *)TALLOC_SIZE(mem_ctx, sizeof(SMB_ACE4_INT_T));
++	ace = (SMB_ACE4_INT_T *)TALLOC_ZERO_SIZE(mem_ctx, sizeof(SMB_ACE4_INT_T));
+ 	if (ace==NULL)
+ 	{
+ 		DEBUG(0, ("TALLOC_SIZE failed\n"));
+ 		errno = ENOMEM;
+ 		return NULL;
+ 	}
+-	memset(ace, 0, sizeof(SMB_ACE4_INT_T));
+ 	ace->magic = SMB_ACE4_INT_MAGIC;
+ 	/* ace->next = NULL not needed */
+ 	memcpy(&ace->prop, prop, sizeof(SMB_ACE4PROP_T));
+@@ -187,7 +185,7 @@
+ 	return 0;
+ }
+ 
+-static BOOL smbacl4_nfs42win(SMB4ACL_T *acl, /* in */
++static BOOL smbacl4_nfs42win(TALLOC_CTX *mem_ctx, SMB4ACL_T *acl, /* in */
+ 	DOM_SID *psid_owner, /* in */
+ 	DOM_SID *psid_group, /* in */
+ 	SEC_ACE **ppnt_ace_list, /* out */
+@@ -198,25 +196,18 @@
+ 	SMB_ACE4_INT_T *aceint;
+ 	SEC_ACE *nt_ace_list = NULL;
+ 	int good_aces = 0;
+-	TALLOC_CTX *mem_ctx = main_loop_talloc_get();
+ 
+ 	DEBUG(10, ("smbacl_nfs42win entered"));
+ 
+ 	aclint = get_validated_aclint(acl);
+-	if (aclint==NULL)
++	/* We do not check for naces being 0 or acl being NULL here because it is done upstream */
++	/* in smb_get_nt_acl_nfs4(). */
++	nt_ace_list = (SEC_ACE *)TALLOC_ZERO_SIZE(mem_ctx, aclint->naces * sizeof(SEC_ACE));
++	if (nt_ace_list==NULL)
++	{
++		DEBUG(10, ("talloc error"));
++		errno = ENOMEM;
+ 		return False;
+-
+-	if (aclint->naces) {
+-		nt_ace_list = (SEC_ACE *)TALLOC_SIZE(mem_ctx, aclint->naces * sizeof(SEC_ACE));
+-		if (nt_ace_list==NULL)
+-		{
+-			DEBUG(10, ("talloc error"));
+-			errno = ENOMEM;
+-			return False;
+-		}
+-		memset(nt_ace_list, 0, aclint->naces * sizeof(SEC_ACE));
+-	} else {
+-		nt_ace_list = NULL;
+ 	}
+ 
+ 	for (aceint=aclint->first; aceint!=NULL; aceint=(SMB_ACE4_INT_T *)aceint->next) {
+@@ -290,31 +281,22 @@
+ 	uid_to_sid(&sid_owner, sbuf.st_uid);
+ 	gid_to_sid(&sid_group, sbuf.st_gid);
+ 
+-	if (smbacl4_nfs42win(acl,
+-		&sid_owner,
+-		&sid_group,
+-		&nt_ace_list,
+-		&good_aces
+-		)==False) {
++	if (smbacl4_nfs42win(mem_ctx, acl, &sid_owner, &sid_group, &nt_ace_list, &good_aces)==False) {
+ 		DEBUG(8,("smbacl4_nfs42win failed\n"));
+ 		return 0;
+ 	}
+ 
+-	psa = make_sec_acl(mem_ctx, NT4_ACL_REVISION,
+-		good_aces, nt_ace_list);
++	psa = make_sec_acl(mem_ctx, NT4_ACL_REVISION, good_aces, nt_ace_list);
+ 	if (psa == NULL) {
+ 		DEBUG(2,("make_sec_acl failed\n"));
+ 		return 0;
+ 	}
+ 
+ 	DEBUG(10,("after make sec_acl\n"));
+-	*ppdesc = make_sec_desc(mem_ctx, SEC_DESC_REVISION,
+-		SEC_DESC_SELF_RELATIVE,
+-		(security_info & OWNER_SECURITY_INFORMATION)
+-		? &sid_owner : NULL,
+-		(security_info & GROUP_SECURITY_INFORMATION)
+-		? &sid_group : NULL,
+-		NULL, psa, &sd_size);
++	*ppdesc = make_sec_desc(mem_ctx, SEC_DESC_REVISION, SEC_DESC_SELF_RELATIVE,
++	                        (security_info & OWNER_SECURITY_INFORMATION) ? &sid_owner : NULL,
++	                        (security_info & GROUP_SECURITY_INFORMATION) ? &sid_group : NULL,
++	                        NULL, psa, &sd_size);
+ 	if (*ppdesc==NULL) {
+ 		DEBUG(2,("make_sec_desc failed\n"));
+ 		return 0;
+@@ -448,7 +430,7 @@
+ 		sid_string_static(&ace_nt->trustee)));
+ 
+ 	memset(ace_v4, 0, sizeof(SMB_ACE4PROP_T));
+-	ace_v4->aceType = ace_nt->type; /* only ACCES|DENY supported right now */
++	ace_v4->aceType = ace_nt->type; /* only ACCESS|DENY supported right now */
+ 	ace_v4->aceFlags = ace_nt->flags & SEC_ACE_FLAG_VALID_INHERIT;
+ 	ace_v4->aceMask = ace_nt->access_mask &
+ 		(STD_RIGHT_ALL_ACCESS | SA_RIGHT_FILE_ALL_ACCESS);
+
+Modified: branches/SAMBA_3_0/source/modules/vfs_gpfs.c
+===================================================================
+--- branches/SAMBA_3_0/source/modules/vfs_gpfs.c	2007-06-02 00:32:49 UTC (rev 23301)
++++ branches/SAMBA_3_0/source/modules/vfs_gpfs.c	2007-06-02 06:28:38 UTC (rev 23302)
+@@ -141,28 +141,30 @@
+ 	return acl;
+ }
+ 
+-static BOOL gpfs_get_nfs4_acl(struct files_struct *fsp, SMB4ACL_T **ppacl, BOOL *pretryPosix)
++/* Tries to get nfs4 acls and returns SMB ACL allocated.
++ * On failure returns 1 if it got non-NFSv4 ACL to prompt 
++ * retry with POSIX ACL checks.
++ * On failure returns -1 if there is system (GPFS) error, check errno.
++ * Returns 0 on success
++ */
++static int gpfs_get_nfs4_acl(const char *fname, SMB4ACL_T **ppacl)
+ {
+-	TALLOC_CTX *mem_ctx;
+ 	int i;
+ 	struct gpfs_acl *gacl = NULL;
++	DEBUG(10, ("gpfs_get_nfs4_acl invoked for %s\n", fname));
+ 
+-	mem_ctx = main_loop_talloc_get();
+-
+-	DEBUG(10, ("gpfs_get_nfs4_acl invoked for %s\n", fsp->fsp_name));
+-
+ 	/* First get the real acl length */
+-	gacl = gpfs_getacl_alloc(fsp->fsp_name, GPFS_ACL_TYPE_NFS4);
++	gacl = gpfs_getacl_alloc(fname, GPFS_ACL_TYPE_NFS4);
+ 	if (gacl == NULL) {
+ 		DEBUG(9, ("gpfs_getacl failed for %s with %s\n",
+-			   fsp->fsp_name, strerror(errno)));
+-		return False;
++			   fname, strerror(errno)));
++		return -1;
+ 	}
+ 
+ 	if (gacl->acl_type != GPFS_ACL_TYPE_NFS4) {
+ 		DEBUG(10, ("Got non-nfsv4 acl\n"));
+-		*pretryPosix = True;
+-		return False;
++		/* Retry with POSIX ACLs check */
++		return 1;
+ 	}
+ 
+ 	*ppacl = smb_create_smb4acl();
+@@ -174,12 +176,11 @@
+ 	for (i=0; i<gacl->acl_nace; i++) {
+ 		struct gpfs_ace_v4 *gace = &gacl->ace_v4[i];
+ 		SMB_ACE4PROP_T smbace;
+-		memset(&smbace, 0, sizeof(SMB4ACE_T));
+-
+ 		DEBUG(10, ("type: %d, iflags: %x, flags: %x, mask: %x, "
+ 			   "who: %d\n", gace->aceType, gace->aceIFlags,
+ 			   gace->aceFlags, gace->aceMask, gace->aceWho));
+ 
++		memset(&smbace, 0, sizeof(SMB4ACE_T));
+ 		if (gace->aceIFlags & ACE4_IFLAG_SPECIAL_ID) {
+ 			smbace.flags |= SMB_ACE4_ID_SPECIAL;
+ 			switch (gace->aceWho) {
+@@ -204,35 +205,47 @@
+ 				smbace.who.uid = gace->aceWho;
+ 		}
+ 
++		/* remove redundent deny entries */
++		if (i > 0 && gace->aceType == SMB_ACE4_ACCESS_DENIED_ACE_TYPE) {
++			struct gpfs_ace_v4 *prev = &gacl->ace_v4[i-1];
++			if (prev->aceType == SMB_ACE4_ACCESS_ALLOWED_ACE_TYPE &&
++					prev->aceFlags == gace->aceFlags &&
++					prev->aceIFlags == gace->aceIFlags &&
++					(gace->aceMask & prev->aceMask) == 0 &&
++					gace->aceWho == prev->aceWho) {
++				/* its redundent - skip it */
++				continue;
++			}                                                
++		}
++
+ 		smbace.aceType = gace->aceType;
+ 		smbace.aceFlags = gace->aceFlags;
+ 		smbace.aceMask = gace->aceMask;
+-		smbace.flags = (gace->aceIFlags&ACE4_IFLAG_SPECIAL_ID) ? SMB_ACE4_ID_SPECIAL : 0;
+-
+ 		smb_add_ace4(*ppacl, &smbace);
+ 	}
+ 
+-	return True;
++	return 0;
+ }
+ 
+ static size_t gpfsacl_get_nt_acl_common(files_struct *fsp,
+ 	uint32 security_info, SEC_DESC **ppdesc)
+ {
+ 	SMB4ACL_T *pacl = NULL;
+-	BOOL	result;
+-	BOOL	retryPosix = False;
++	int	result;
+ 
+ 	*ppdesc = NULL;
+-	result = gpfs_get_nfs4_acl(fsp, &pacl, &retryPosix);
+-	if (retryPosix)
+-	{
++	result = gpfs_get_nfs4_acl(fsp->fsp_name, &pacl);
++
++	if (result == 0)
++		return smb_get_nt_acl_nfs4(fsp, security_info, ppdesc, pacl);
++
++	if (result > 0) {
+ 		DEBUG(10, ("retrying with posix acl...\n"));
+ 		return get_nt_acl(fsp, security_info, ppdesc);
+ 	}
+-	if (result==False)
+-		return 0;
+-
+-	return smb_get_nt_acl_nfs4(fsp, security_info, ppdesc, pacl);
++	
++	/* GPFS ACL was not read, something wrong happened, error code is set in errno */
++	return 0;
+ }
+ 
+ size_t gpfsacl_fget_nt_acl(vfs_handle_struct *handle,
+@@ -608,58 +621,78 @@
+ 	return -1;
+ }
+ 
++static int vfs_gpfs_chmod(vfs_handle_struct *handle, const char *path, mode_t mode)
++{
++		 SMB_STRUCT_STAT st;
++		 if (SMB_VFS_NEXT_STAT(handle, path, &st) != 0) {
++		 		 return -1;
++		 }
++		 /* avoid chmod() if possible, to preserve acls */
++		 if ((st.st_mode & ~S_IFMT) == mode) {
++		 		 return 0;
++		 }
++		 return SMB_VFS_NEXT_CHMOD(handle, path, mode);
++}
++
++static int vfs_gpfs_fchmod(vfs_handle_struct *handle, files_struct *fsp, int fd, mode_t mode)
++{
++		 SMB_STRUCT_STAT st;
++		 if (SMB_VFS_NEXT_FSTAT(handle, fsp, fd, &st) != 0) {
++		 		 return -1;
++		 }
++		 /* avoid chmod() if possible, to preserve acls */
++		 if ((st.st_mode & ~S_IFMT) == mode) {
++		 		 return 0;
++		 }
++		 return SMB_VFS_NEXT_FCHMOD(handle, fsp, fd, mode);
++}
++
+ /* VFS operations structure */
+ 
+ static vfs_op_tuple gpfs_op_tuples[] = {
+ 
+-	{SMB_VFS_OP(vfs_gpfs_kernel_flock),
+-	 SMB_VFS_OP_KERNEL_FLOCK,
+-	 SMB_VFS_LAYER_OPAQUE},
++		{ SMB_VFS_OP(vfs_gpfs_kernel_flock), SMB_VFS_OP_KERNEL_FLOCK,
++				SMB_VFS_LAYER_OPAQUE },
+ 
+-	{SMB_VFS_OP(vfs_gpfs_setlease),
+-	 SMB_VFS_OP_LINUX_SETLEASE,
+-	 SMB_VFS_LAYER_OPAQUE},
++        { SMB_VFS_OP(vfs_gpfs_setlease), SMB_VFS_OP_LINUX_SETLEASE,
++        		SMB_VFS_LAYER_OPAQUE },
+ 
+-	{SMB_VFS_OP(gpfsacl_fget_nt_acl),
+-        SMB_VFS_OP_FGET_NT_ACL,
+-        SMB_VFS_LAYER_TRANSPARENT},
++        { SMB_VFS_OP(gpfsacl_fget_nt_acl), SMB_VFS_OP_FGET_NT_ACL,
++        		SMB_VFS_LAYER_TRANSPARENT },
+ 
+-        {SMB_VFS_OP(gpfsacl_get_nt_acl),
+-        SMB_VFS_OP_GET_NT_ACL,
+-        SMB_VFS_LAYER_TRANSPARENT},
++        { SMB_VFS_OP(gpfsacl_get_nt_acl), SMB_VFS_OP_GET_NT_ACL,
++        		SMB_VFS_LAYER_TRANSPARENT },
+ 
+-        {SMB_VFS_OP(gpfsacl_fset_nt_acl),
+-        SMB_VFS_OP_FSET_NT_ACL,
+-        SMB_VFS_LAYER_TRANSPARENT},
++        { SMB_VFS_OP(gpfsacl_fset_nt_acl), SMB_VFS_OP_FSET_NT_ACL,
++        		SMB_VFS_LAYER_TRANSPARENT },
+ 
+-        {SMB_VFS_OP(gpfsacl_set_nt_acl),
+-        SMB_VFS_OP_SET_NT_ACL,
+-        SMB_VFS_LAYER_TRANSPARENT},
++        { SMB_VFS_OP(gpfsacl_set_nt_acl), SMB_VFS_OP_SET_NT_ACL,
++        		SMB_VFS_LAYER_TRANSPARENT },
+ 
+-        {SMB_VFS_OP(gpfsacl_sys_acl_get_file),
+-         SMB_VFS_OP_SYS_ACL_GET_FILE,
+-         SMB_VFS_LAYER_TRANSPARENT},
++        { SMB_VFS_OP(gpfsacl_sys_acl_get_file), SMB_VFS_OP_SYS_ACL_GET_FILE,
++        		SMB_VFS_LAYER_TRANSPARENT },
+ 
+-        {SMB_VFS_OP(gpfsacl_sys_acl_get_fd),
+-         SMB_VFS_OP_SYS_ACL_GET_FD,
+-         SMB_VFS_LAYER_TRANSPARENT},
++        { SMB_VFS_OP(gpfsacl_sys_acl_get_fd), SMB_VFS_OP_SYS_ACL_GET_FD,
++        		SMB_VFS_LAYER_TRANSPARENT },
+ 
+-        {SMB_VFS_OP(gpfsacl_sys_acl_set_file),
+-         SMB_VFS_OP_SYS_ACL_SET_FILE,
+-         SMB_VFS_LAYER_TRANSPARENT},
++        { SMB_VFS_OP(gpfsacl_sys_acl_set_file), SMB_VFS_OP_SYS_ACL_SET_FILE,
++        		SMB_VFS_LAYER_TRANSPARENT },
+ 
+-        {SMB_VFS_OP(gpfsacl_sys_acl_set_fd),
+-         SMB_VFS_OP_SYS_ACL_SET_FD,
+-         SMB_VFS_LAYER_TRANSPARENT},
++        { SMB_VFS_OP(gpfsacl_sys_acl_set_fd), SMB_VFS_OP_SYS_ACL_SET_FD,
++        		SMB_VFS_LAYER_TRANSPARENT },
+ 
+-        {SMB_VFS_OP(gpfsacl_sys_acl_delete_def_file),
+-         SMB_VFS_OP_SYS_ACL_DELETE_DEF_FILE,
+-         SMB_VFS_LAYER_TRANSPARENT},
++        { SMB_VFS_OP(gpfsacl_sys_acl_delete_def_file),
++                SMB_VFS_OP_SYS_ACL_DELETE_DEF_FILE,
++                SMB_VFS_LAYER_TRANSPARENT },
+ 
+-	{SMB_VFS_OP(NULL),
+-	 SMB_VFS_OP_NOOP,
+-	 SMB_VFS_LAYER_NOOP}
++        { SMB_VFS_OP(vfs_gpfs_chmod), SMB_VFS_OP_CHMOD,
++                SMB_VFS_LAYER_TRANSPARENT },
+ 
++        { SMB_VFS_OP(vfs_gpfs_fchmod), SMB_VFS_OP_FCHMOD,
++                SMB_VFS_LAYER_TRANSPARENT },
++
++        { SMB_VFS_OP(NULL), SMB_VFS_OP_NOOP, SMB_VFS_LAYER_NOOP }
++
+ };
+ 
+ 
+

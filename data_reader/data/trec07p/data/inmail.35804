@@ -1,0 +1,108 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon May 14 07:51:18 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4EBpIqD020525
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 14 May 2007 07:51:18 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 5E54616394D
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 14 May 2007 11:51:16 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 620)
+	id 083A7163862; Mon, 14 May 2007 11:50:52 +0000 (GMT)
+To: samba-cvs@samba.org
+From: metze@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070514115052.083A7163862@lists.samba.org>
+Date: Mon, 14 May 2007 11:50:52 +0000 (GMT)
+Subject: svn commit: samba r22843 - in
+	branches/SAMBA_4_0/source/smb_server/smb2: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: metze
+Date: 2007-05-14 11:50:51 +0000 (Mon, 14 May 2007)
+New Revision: 22843
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22843
+
+Log:
+pass smb2 lock requests to the ntvfs layer
+
+metze
+Modified:
+   branches/SAMBA_4_0/source/smb_server/smb2/fileio.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/smb_server/smb2/fileio.c
+===================================================================
+--- branches/SAMBA_4_0/source/smb_server/smb2/fileio.c	2007-05-14 11:45:39 UTC (rev 22842)
++++ branches/SAMBA_4_0/source/smb_server/smb2/fileio.c	2007-05-14 11:50:51 UTC (rev 22843)
+@@ -156,6 +156,7 @@
+ 	SMB2SRV_CHECK_ASYNC_STATUS(io, union smb_read);
+ 	SMB2SRV_CHECK(smb2srv_setup_reply(req, 0x10, True, io->smb2.out.data.length));
+ 
++	/* TODO: avoid the memcpy */
+ 	SMB2SRV_CHECK(smb2_push_o16s32_blob(&req->out, 0x02, io->smb2.out.data));
+ 	SBVAL(req->out.body,	0x08,	io->smb2.out.unknown1);
+ 
+@@ -224,9 +225,39 @@
+ 	SMB2SRV_CALL_NTVFS_BACKEND(ntvfs_write(req->ntvfs, io));
+ }
+ 
++static void smb2srv_lock_send(struct ntvfs_request *ntvfs)
++{
++	struct smb2srv_request *req;
++	union smb_lock *io;
++
++	SMB2SRV_CHECK_ASYNC_STATUS_ERR(io, union smb_lock);
++	SMB2SRV_CHECK(smb2srv_setup_reply(req, 0x04, False, 0));
++
++	SSVAL(req->out.body,	0x02,	io->smb2.out.unknown1);
++
++	smb2srv_send_reply(req);
++}
++
+ void smb2srv_lock_recv(struct smb2srv_request *req)
+ {
+-	smb2srv_send_error(req, NT_STATUS_NOT_IMPLEMENTED);
++	union smb_lock *io;
++
++	SMB2SRV_CHECK_BODY_SIZE(req, 0x30, False);
++	SMB2SRV_TALLOC_IO_PTR(io, union smb_lock);
++	SMB2SRV_SETUP_NTVFS_REQUEST(smb2srv_lock_send, NTVFS_ASYNC_STATE_MAY_ASYNC);
++
++	io->smb2.level			= RAW_LOCK_SMB2;
++
++	io->smb2.in.unknown1		= SVAL(req->in.body, 0x02);
++	io->smb2.in.unknown2		= IVAL(req->in.body, 0x04);
++	io->smb2.in.file.ntvfs		= smb2srv_pull_handle(req, req->in.body, 0x08);
++	io->smb2.in.offset		= BVAL(req->in.body, 0x18);
++	io->smb2.in.count		= BVAL(req->in.body, 0x20);
++	io->smb2.in.unknown5		= IVAL(req->in.body, 0x24);
++	io->smb2.in.flags		= IVAL(req->in.body, 0x28);
++
++	SMB2SRV_CHECK_FILE_HANDLE(io->smb2.in.file.ntvfs);
++	SMB2SRV_CALL_NTVFS_BACKEND(ntvfs_lock(req->ntvfs, io));
+ }
+ 
+ static void smb2srv_ioctl_send(struct ntvfs_request *ntvfs)
+

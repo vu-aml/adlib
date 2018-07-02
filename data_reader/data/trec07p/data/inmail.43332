@@ -1,0 +1,196 @@
+From r-help-bounces@stat.math.ethz.ch  Thu May 24 23:42:23 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4P3gMqD014047
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 24 May 2007 23:42:23 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4P3feRH017088;
+	Fri, 25 May 2007 05:41:55 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.4 required=5.0 tests=AWL,
+	BAYES_40 autolearn=no version=3.1.8
+Received: from mica.fhcrc.org (MICA.FHCRC.ORG [140.107.152.12])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4P3fVKa017026
+	(version=TLSv1/SSLv3 cipher=DHE-RSA-AES256-SHA bits=256 verify=FAIL)
+	for <r-help@stat.math.ethz.ch>; Fri, 25 May 2007 05:41:32 +0200
+Received: from gopher4.fhcrc.org (GOPHER4.FHCRC.ORG [140.107.170.154])
+	by mica.fhcrc.org (8.12.11.20060308/8.12.11/SuSE Linux 0.7) with ESMTP
+	id l4P3fLO2012346; Thu, 24 May 2007 20:41:22 -0700
+Received: by gopher4.fhcrc.org (Postfix, from userid 37962)
+	id B6F8D26858B; Thu, 24 May 2007 20:41:21 -0700 (PDT)
+To: adschai@optonline.net
+References: <e4ffb64e23283.46564235@optonline.net>
+	<6ph1wh5bpfo.fsf@gopher4.fhcrc.org>
+	<e024e5182140b.46565556@optonline.net>
+From: Martin Morgan <mtmorgan@fhcrc.org>
+Date: Thu, 24 May 2007 20:41:21 -0700
+In-Reply-To: <e024e5182140b.46565556@optonline.net> (adschai@optonline.net's
+	message of "Fri, 25 May 2007 03:17:42 +0000 (GMT)")
+Message-ID: <6phwsyxa7tq.fsf@gopher4.fhcrc.org>
+User-Agent: Gnus/5.1006 (Gnus v5.10.6) Emacs/21.3 (gnu/linux)
+MIME-Version: 1.0
+X-PMX-Version: 5.3.1.294258, Antispam-Engine: 2.5.1.298604,
+	Antispam-Data: 2007.5.21.132233
+X-FHCRC-SCANNED: Thu May 24 20:41:27 2007
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+X-MIME-Autoconverted: from quoted-printable to 8bit by hypatia.math.ethz.ch id
+	l4P3fVKa017026
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] Question about setReplaceMethod
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="iso-8859-1"
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+Content-Transfer-Encoding: 8bit
+X-MIME-Autoconverted: from quoted-printable to 8bit by flax9.uwaterloo.ca id l4P3gMqD014047
+
+adschai@optonline.net writes:
+
+> Sorry Martin. I had that line in my actual code. It did not work. I
+> looked around all the google but it doesn't seem to have answer to
+> this. Any ideas? Thank you.
+
+A more complete solution -- remember to return 'this' throughout (R is
+'pass by value' rather than pass by reference, so changes inside
+functions are only changes to the _local_ definition). Some of this is
+only guessing at your intention...
+
+setClass("Foo", 
+         representation(x="data.frame", y="character"))
+setGeneric("setX<-",
+           function(this, value) standardGeneric("setX<-"))
+setReplaceMethod("setX",
+                 signature=signature("Foo", "data.frame"),
+                 function(this,value) {
+                     this@x <- value
+                     this
+                 })
+
+setGeneric("generateFrame",
+           function(this) standardGeneric("generateFrame"))
+           
+## generateFrame seems like it is not meant to be a replacement method
+setMethod("generateFrame",
+          signature=signature(this="Foo"),
+          function(this) {
+              frame <- data.frame(x=letters[1:5], y=letters[5:1])
+              setX(this) <- frame # modifies this@x
+              this             # return 'this', an object of class Foo
+          })
+
+foo <- function() {
+    objFoo <- new("Foo", x=data.frame(NULL), y="")
+    cat("objFoo (after new)\n")
+    print(objFoo)
+    ## now assign 'frame' the results of generateFrame, i.e., an
+    ## object of class 'Foo'. objFoo does not change
+    frame <- generateFrame(objFoo)
+    cat("frame:\n")
+    print(frame);
+    ## change the value of objFoo@x
+    setX(objFoo) <- data.frame(x=LETTERS[1:5], y=LETTERS[5:1])
+    cat("objFoo (after setX):\n")
+    print(objFoo)
+    ## what to return?? maybe just 'ok', and lose all our changes!
+    "ok"
+}
+
+
+>
+>  
+>
+> - adschai
+> ----- Original Message -----
+> From: Martin Morgan @FHCRC.ORG>
+> Date: Thursday, May 24, 2007 9:35 pm
+> Subject: Re: [R] Question about setReplaceMethod
+> To: adschai@optonline.net
+> Cc: r-help@stat.math.ethz.ch
+>> Hi Adschai --
+>>
+>> You'll want to return the value whose slot you have modified:
+>>
+>> setReplaceMethod("setX", "foo",
+>> function(this,value) {
+>> this@x <- value
+>> this # add this line
+>> })
+>>
+>> Martin
+>>
+>> adschai@optonline.net writes:
+>>
+>> > Hi
+>> >
+>> > I have the code like I show below. The problem here is that I
+>> have a
+>> > setReplacementMethod to set the value of my class slot. However,
+>> > this function doesn't work when I call it within another function
+>> > definition (declared by setMethod) of the same class. I do not
+>> > understand this behavior that much. I'm wondering how to make this
+>> > work? Any help would be really appreciated. Thank you.
+>> >
+>> > setClass("foo",
+>> > representation(x="data.frame", y="character"))
+>> > setGeneric("setX<-", function(this, value),
+>> standardGeneric("setX<-"))
+>> > setReplaceMethod("setX", "foo",
+>> > function(this,value) {
+>> > this@x <- value
+>> > })
+>> > setGeneric("generateFrame", function(this),
+>> standardGeneric("generateFrame"))>
+>> setReplaceMethod("generateFrame", "foo",
+>> > function(this) {
+>> > frame <- read.csv(file="myfile.csv", header=T) # read some
+>> input file
+>> > this@x <- frame # this doesn't replace the value for me
+>> > setX(this) <- frame # this doesn't replace the value for me
+>> > frame # instead I have to return the frame object
+>> > })
+>> > foo <- function(x,y) {
+>> > objFoo <- new("foo", x=data.frame(NULL), y="")
+>> > frame <- generateFrame(objFoo) # after this point, nothing got
+>> assigned to objFoo@x
+>> > setX(objFoo) <- frame # this will work (why do I have to
+>> duplicate this??)
+>> > }
+>> > - adschai
+>> >
+>> > [[alternative HTML version deleted]]
+>> >
+>> > ______________________________________________
+>> > R-help@stat.math.ethz.ch mailing list
+>> > https://stat.ethz.ch/mailman/listinfo/r-help
+>> > PLEASE do read the posting guide http://www.R-
+>> project.org/posting-guide.html
+>> > and provide commented, minimal, self-contained, reproducible code.
+>>
+>> --
+>> Martin Morgan
+>> Bioconductor / Computational Biology
+>> http://bioconductor.org
+>>
+
+-- 
+Martin Morgan
+Bioconductor / Computational Biology
+http://bioconductor.org
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

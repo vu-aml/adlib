@@ -1,0 +1,132 @@
+From r-help-bounces@stat.math.ethz.ch  Fri Apr 27 16:16:12 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3RKGB6w030581
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 27 Apr 2007 16:16:11 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3RKErNS006313;
+	Fri, 27 Apr 2007 22:15:13 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.5 required=5.0 tests=AWL,
+	BAYES_50 autolearn=no version=3.1.8
+Received: from nz-out-0506.google.com (nz-out-0506.google.com [64.233.162.239])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3RKEkhE006285
+	for <r-help@stat.math.ethz.ch>; Fri, 27 Apr 2007 22:14:47 +0200
+Received: by nz-out-0506.google.com with SMTP id s1so562931nze
+	for <r-help@stat.math.ethz.ch>; Fri, 27 Apr 2007 13:14:46 -0700 (PDT)
+Received: by 10.114.200.2 with SMTP id x2mr1106506waf.1177704885416;
+	Fri, 27 Apr 2007 13:14:45 -0700 (PDT)
+Received: by 10.114.169.18 with HTTP; Fri, 27 Apr 2007 13:14:40 -0700 (PDT)
+Message-ID: <eb555e660704271314n6d42fc6bo1d8423f18b8de881@mail.gmail.com>
+Date: Fri, 27 Apr 2007 13:14:40 -0700
+From: "Deepayan Sarkar" <deepayan.sarkar@gmail.com>
+To: "Michael Kubovy" <kubovy@virginia.edu>
+In-Reply-To: <58DBA46B-1D71-4038-A6F2-9AA86A4B7E86@virginia.edu>
+MIME-Version: 1.0
+Content-Disposition: inline
+References: <8315F38A-E543-4A16-AFBD-6080BF65A12E@virginia.edu>
+	<4630DBE7.20702@pdf.com>
+	<542DDEC0-F607-4095-8DD8-DB34A3D5141A@virginia.edu>
+	<eb555e660704261903m32f6021eq83f8f5a37cb3630b@mail.gmail.com>
+	<1FB4BA5C-527A-4C7E-9E4A-BD686187AED6@virginia.edu>
+	<eb555e660704271042s1816ee25l915f5858ec808076@mail.gmail.com>
+	<F1AB7B6B-A254-4986-8535-48C5BEAC1521@virginia.edu>
+	<eb555e660704271125m18e48a44xc0bf852230e054@mail.gmail.com>
+	<58DBA46B-1D71-4038-A6F2-9AA86A4B7E86@virginia.edu>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch, Sundar Dorai-Raj <sundar.dorai-raj@pdf.com>
+Subject: Re: [R] xyplot() and controlling panel.polygon()
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+Status: O
+Content-Length: 2904
+Lines: 73
+
+On 4/27/07, Michael Kubovy <kubovy@virginia.edu> wrote:
+> Hi Deepayan,
+>
+> Your solution works, anf the polygon are drawn where I wanted them to
+> go. I thought that I could figure out how to gain control over the
+> colors of the four ensuing polygons (I'm trying to get two lighter
+> shades of the lines).
+>
+> I've tried, for example, to see if I could control the color of the
+> polyon outline, by adding border = 'red' to panel.polygon. That
+> didn't work. Does it work only in lpolygon()?
+
+No. This is a bug, and the border color can currently only be black or
+transparent (but it's easy to find and fix the bug; lpolygon is very
+short, so just write a replacement).
+
+However, panel.superpose recognizes and splits certain graphical
+parameters; border is not among them, but fill is. So you could do:
+
+my.panel.bands <-
+    function(x, y, upper, lower,
+             fill, col,
+             subscripts, ..., font, fontface)
+{
+    upper <- upper[subscripts]
+    lower <- lower[subscripts]
+    panel.polygon(c(x, rev(x)), c(upper, rev(lower)),
+                  col = fill, border = FALSE,
+                  ...)
+}
+
+xyplot(est ~ x | cond, group = grp, data = data, type = 'b',
+       col = c("#0080ff", "#ff00ff"),
+       fill = c("#bbddff", "#ffbbff"),
+       upper = data$upper,
+       lower = data$lower,
+       panel = function(x, y, ...){
+           panel.superpose(x, y, panel.groups = 'my.panel.bands', ...)
+           panel.xyplot(x, y, ...)
+       })
+
+
+> I often can figure things out on my own, but obviously there's
+> something fundamental that I'm not getting about inheritance and
+> passing in these sorts of objects. I've been trying to get it from
+> the help pages and from Murrell's book, but neither offers enough of
+> a cookbook for me to figure these things out. Is there something I
+> should have read?
+
+The concepts are all there in the help page (but it's often difficult
+to put them together). The main points are:
+
+(1) unrecognized arguments get passed on to the panel function as is
+(2) subscripts give indices of x, y, etc in the original data frame
+
+(the implication being that if you have another column from the
+original data frame, such as upper and lower in your example, indexing
+by subscripts will give you the matching subset). Other than that, the
+panel functions have to do their own work (and what they do should
+ideally be documented); nothing is enforced, so nothing is guaranteed.
+
+This sort of thing doesn't get used often enough for examples to be
+easily found. The following demo in lattice might be helpful.
+
+file.show(system.file("demo/intervals.R", package = "lattice"))
+
+-Deepayan
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

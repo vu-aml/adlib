@@ -1,0 +1,147 @@
+From perl6-all-return-82153-ktwarwic=speedy.uwaterloo.ca@perl.org  Wed Jun 20 18:45:36 2007
+Return-Path: <perl6-all-return-82153-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l5KMjZL9015807
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 20 Jun 2007 18:45:35 -0400
+Received: (qmail 14133 invoked by uid 514); 20 Jun 2007 22:45:32 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 14128 invoked from network); 20 Jun 2007 22:45:32 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+Delivered-To: perlmail-parrot-porters@onion.perl.org
+Delivered-To: parrot-porters@perl.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on pluna
+X-Spam-Level: 
+Date: Thu, 21 Jun 2007 00:44:31 +0200
+From: pancake <pancake@youterm.com>
+To: parrot-porters@perl.org
+Subject: small fixup and question for pdb
+Message-Id: <20070621004431.7c973950.pancake@youterm.com>
+Organization: nopcode
+X-Mailer: Sylpheed 2.4.1 (GTK+ 2.10.12; i386-pc-linux-gnu)
+Mime-Version: 1.0
+Content-Type: multipart/mixed;
+ boundary="Multipart=_Thu__21_Jun_2007_00_44_31_+0200_k5+R52kihkviPgSs"
+X-Old-Spam-Status: No, score=0.0 required=3.0 tests=AWL autolearn=disabled
+	version=3.1.8
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-1.9 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_NEUTRAL
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-1.9 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_NEUTRAL
+
+--Multipart=_Thu__21_Jun_2007_00_44_31_+0200_k5+R52kihkviPgSs
+Content-Type: text/plain; charset=US-ASCII
+Content-Transfer-Encoding: 7bit
+
+I'm starting to work on pdb for fixing bugs, segfaults and so, and maybe
+implement new commands listed in TODO.
+
+I noticed that command arguments does not support spacing between command
+and argument. I have written a small patch that uses nextarg() for getting
+command arguments. This means that now works things like:
+
+ (pdb) next 3
+ (pdb) next   4
+
+but will not run the old-fashion commands:
+
+  (pdb) next3
+
+imho the 'old' syntax is ugly, and we should relay on the new one checking for
+spaces properly.
+
+feel free to submit this patch if looks ok for you.
+
+Thanks
+
+  --pancake
+
+--Multipart=_Thu__21_Jun_2007_00_44_31_+0200_k5+R52kihkviPgSs
+Content-Type: text/x-patch;
+ name="pdb.patch"
+Content-Disposition: attachment;
+ filename="pdb.patch"
+Content-Transfer-Encoding: 7bit
+
+Index: src/debug.c
+===================================================================
+--- src/debug.c	(revision 19192)
++++ src/debug.c	(working copy)
+@@ -460,6 +460,8 @@
+     if (!(pdb->state & PDB_RUNNING))
+         PDB_init(interp, command);
+ 
++    command = nextarg(command);
+     /* Get the number of operations to execute if any */
+     if (command && isdigit((int) *command))
+         n = atol(command);
+@@ -505,6 +507,7 @@
+     if (!(pdb->state & PDB_RUNNING))
+         PDB_init(interp, command);
+ 
++    command = nextarg(command);
+     /* if the number of ops to run is specified, convert to a long */
+     if (command && isdigit((int) *command))
+         n = atol(command);
+@@ -772,6 +775,7 @@
+     PDB_line_t       *line;
+     long              ln, i;
+ 
++    command = nextarg(command);
+     /* If no line number was specified, set it at the current line */
+     if (command && *command) {
+         ln = atol(command);
+@@ -909,6 +913,7 @@
+             return;
+         }
+ 
++    	command = nextarg(command);
+         ln = atol(command);
+         PDB_skip_breakpoint(interp, ln);
+     }
+@@ -936,6 +941,7 @@
+     PDB_breakpoint_t *breakpoint;
+     long              n;
+ 
++    command = nextarg(command);
+     if (isdigit((int) *command)) {
+         n          = atol(command);
+         breakpoint = interp->pdb->breakpoint;
+@@ -1971,6 +1977,7 @@
+         return;
+     }
+ 
++    command = nextarg(command);
+     /* set the list line if provided */
+     if (isdigit((int) *command)) {
+         line_number = atol(command) - 1;
+@@ -2157,6 +2164,7 @@
+     long           depth = 0;
+     Stack_Chunk_t *chunk = CONTEXT(interp->ctx)->user_stack;
+ 
++    command = nextarg(command);
+     if (*command)
+         depth = atol(command);
+ 
+
+--Multipart=_Thu__21_Jun_2007_00_44_31_+0200_k5+R52kihkviPgSs--
+

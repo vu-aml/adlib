@@ -1,0 +1,155 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Jul  2 04:43:30 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l628hTL9011467
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 2 Jul 2007 04:43:29 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id CA0061638DA
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon,  2 Jul 2007 08:43:25 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.5 required=3.8 tests=BAYES_50,RCVD_IN_DSBL 
+	autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from e6.ny.us.ibm.com (e6.ny.us.ibm.com [32.97.182.146])
+	by lists.samba.org (Postfix) with ESMTP id D14E9162AEE
+	for <samba-technical@lists.samba.org>;
+	Mon,  2 Jul 2007 08:42:57 +0000 (GMT)
+Received: from d01relay02.pok.ibm.com (d01relay02.pok.ibm.com [9.56.227.234])
+	by e6.ny.us.ibm.com (8.13.8/8.13.8) with ESMTP id l628i7VE011510
+	for <samba-technical@lists.samba.org>; Mon, 2 Jul 2007 04:44:07 -0400
+Received: from d01av03.pok.ibm.com (d01av03.pok.ibm.com [9.56.224.217])
+	by d01relay02.pok.ibm.com (8.13.8/8.13.8/NCO v8.3) with ESMTP id
+	l628gvAT477112
+	for <samba-technical@lists.samba.org>; Mon, 2 Jul 2007 04:42:57 -0400
+Received: from d01av03.pok.ibm.com (loopback [127.0.0.1])
+	by d01av03.pok.ibm.com (8.12.11.20060308/8.13.3) with ESMTP id
+	l628gvHD021714
+	for <samba-technical@lists.samba.org>; Mon, 2 Jul 2007 04:42:57 -0400
+Received: from [9.157.115.41] (dyn-9-157-115-41.moscow.ru.ibm.com
+	[9.157.115.41])
+	by d01av03.pok.ibm.com (8.12.11.20060308/8.12.11) with ESMTP id
+	l628gt0s021506
+	for <samba-technical@lists.samba.org>; Mon, 2 Jul 2007 04:42:55 -0400
+Message-ID: <4688BA96.9020804@linux.vnet.ibm.com>
+Date: Mon, 02 Jul 2007 12:43:02 +0400
+From: Dmitry Shatrov <dhsatrov@linux.vnet.ibm.com>
+User-Agent: Thunderbird 1.5.0.10 (X11/20070301)
+MIME-Version: 1.0
+To: samba-technical@lists.samba.org
+Content-Type: text/plain; charset=KOI8-R; format=flowed
+Content-Transfer-Encoding: 7bit
+Subject: Samba3 memory usage, iconv
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Profiling smbd memory usage with valgrind --tool=massif gives 
+interesting results.
+It turns out that quite a lot of memory (~300 Kbytes) is allocated right 
+at the start of each smbd process by init_iconv() (lib/charcnv.c).
+
+I think that this must be something like conversion tables, which could 
+be shared between smbds giving ~300KB per smbd.
+
+Here's the output from massif for current samba3 from svn (here, I ran 
+smbd and performed mount.cifs //localhost/... after a while):
+http://img30.picoodle.com/img/img30/8/7/2/f_massifm_95d3e94.png
+
+massif output for a clean smbd start:
+http://img37.picoodle.com/img/img37/8/7/2/f_smbdm_c99cc1c.png
+...and the most relevant backtraces:
+
+Context accounted for 43.2% of measured spacetime
+  0x81AD8B: __gconv_open (in /lib/tls/libc-2.3.4.so)
+  0x81A8C4: iconv_open (in /lib/tls/libc-2.3.4.so)
+  0x2A0C8E: smb_iconv_open (iconv.c:245)
+  0x2763D7: init_iconv (charcnv.c:156)
+  0x774C9: lp_load (loadparm.c:5410)
+  0x49723C: reload_services (server.c:644)
+  0x497ED0: main (server.c:964)
+  0x819DE2: (below main) (in /lib/tls/libc-2.3.4.so)
+
+Context accounted for 43.1% of measured spacetime
+  0x81AD8B: __gconv_open (in /lib/tls/libc-2.3.4.so)
+  0x81A8C4: iconv_open (in /lib/tls/libc-2.3.4.so)
+  0x2A0C31: smb_iconv_open (iconv.c:237)
+  0x2763D7: init_iconv (charcnv.c:156)
+  0x774C9: lp_load (loadparm.c:5410)
+  0x49723C: reload_services (server.c:644)
+  0x497ED0: main (server.c:964)
+  0x819DE2: (below main) (in /lib/tls/libc-2.3.4.so)
+
+For comparison, here are massif profiling results for a simple program 
+which calls iconv_open ("CP866", "UTF8"), sleeps for a second and then 
+exits:
+http://img29.picoodle.com/img/img29/8/7/2/f_hellom_46acf01.png
+according to massif, iconv_open() costs about 30 Kbytes of memory in 
+this case.
+
+Putting fprintf before smb_iconv_open() at charcnv.c:156 shows that 
+iconv gets initialized for the following conversion pairs (looks like 
+quite a lot):
+UTF-16LE, UTF-16LE
+UTF-8, UTF-16LE
+UTF-8, UTF-16LE
+CP850, UTF-16LE
+UTF8, UTF-16LE
+UTF-16BE, UTF-16LE
+UTF-16LE, UTF-8
+UTF-8, UTF-8
+UTF-8, UTF-8
+CP850, UTF-8
+UTF8, UTF-8
+UTF-16BE, UTF-8
+UTF-16LE, UTF-8
+UTF-8, UTF-8
+UTF-8, UTF-8
+CP850, UTF-8
+UTF8, UTF-8
+UTF-16BE, UTF-8
+UTF-16LE, CP850
+UTF-8, CP850
+UTF-8, CP850
+CP850, CP850
+UTF8, CP850
+UTF-16BE, CP850
+UTF-16LE, UTF8
+UTF-8, UTF8
+UTF-8, UTF8
+CP850, UTF8
+UTF8, UTF8
+UTF-16BE, UTF8
+UTF-16LE, UTF-16BE
+UTF-8, UTF-16BE
+UTF-8, UTF-16BE
+CP850, UTF-16BE
+UTF8, UTF-16BE
+UTF-16BE, UTF-16BE
+
+I would deal with this by trying to share as much of common data between 
+smbds as possible by shared memory or file mmap'ing.
+Your suggestions?
+
+Btw, some useful information on memory usage reduction can be found at 
+live.gnome.org:
+http://live.gnome.org/MemoryReduction
+There's a link to a compact overview of using massif, too:
+http://developer.gnome.org/doc/guides/optimisation/Massif.html
+
+Best regards,
+Dmitry Shatrov
+

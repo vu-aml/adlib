@@ -1,0 +1,122 @@
+From r-help-bounces@stat.math.ethz.ch  Fri Apr 20 15:59:44 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3KJxg0I010395
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 20 Apr 2007 15:59:43 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3KJwLtj017510;
+	Fri, 20 Apr 2007 21:58:32 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: *
+X-Spam-Status: No, score=1.7 required=5.0 tests=BAYES_50,
+	SARE_URI_EQUALS autolearn=no version=3.1.8
+Received: from grace.univie.ac.at (grace.univie.ac.at [131.130.3.115])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3KJw8nG017468
+	(version=TLSv1/SSLv3 cipher=DHE-RSA-AES256-SHA bits=256 verify=NO)
+	for <r-help@stat.math.ethz.ch>; Fri, 20 Apr 2007 21:58:08 +0200
+Received: from justin.univie.ac.at ([131.130.3.111] helo=justin.univie.ac.at)
+	by grace.univie.ac.at with esmtp (Exim 4.66)
+	(envelope-from <andreas.danis@univie.ac.at>) id 1HezFA-0002Q8-16
+	for r-help@stat.math.ethz.ch; Fri, 20 Apr 2007 21:58:08 +0200
+Received: from 212-88-191-58.adsl.ycn.com ([212.88.191.58]
+	helo=[192.168.0.148])
+	by justin.univie.ac.at with esmtpsa (TLSv1:AES128-SHA:128)
+	(Exim 4.66) (envelope-from <andreas.danis@univie.ac.at>)
+	id 1HezF9-00064x-TU
+	for r-help@stat.math.ethz.ch; Fri, 20 Apr 2007 21:58:08 +0200
+Mime-Version: 1.0 (Apple Message framework v752.3)
+Message-Id: <6CAFD964-8D84-444E-B527-F92483253D44@univie.ac.at>
+To: r-help@stat.math.ethz.ch
+From: =?ISO-8859-1?Q?Andr=E1s_Danis?= <andreas.danis@univie.ac.at>
+Date: Fri, 20 Apr 2007 21:57:39 +0200
+X-Mailer: Apple Mail (2.752.3)
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+X-MIME-Autoconverted: from quoted-printable to 8bit by hypatia.math.ethz.ch id
+	l3KJw8nG017468
+Subject: [R]  Estimating a Normal Mixture Distribution
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="iso-8859-1"
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+Content-Transfer-Encoding: 8bit
+X-MIME-Autoconverted: from quoted-printable to 8bit by speedy.uwaterloo.ca id l3KJxg0I010395
+Status: O
+Content-Length: 1992
+Lines: 65
+
+Hi everyone,
+
+I am using R 2.4.1 on a MacOS X ("Tiger") operating system. In the  
+last few day I was trying to estimate the parameters of a mixture of  
+two normal distributions using Maximum Likelihood.
+The code is from Modern Applied Statistics with S (4th edition),  
+chapter 16 ("Optimization"), the dataset is available under MASS in  
+R. Unfortunately, when I tried out the code from the book it didn´t  
+work out, although I tried to copy the code as accurately as possible:
+
+CODE START
+
+# loading dataset.
+attach(geyser)
+
+# defining start values for the five parameters.
+p0<-c(p=mean(waiting<70),u1=50,s1=5,u2=80,s2=5)
+
+# defining the objective function (=log-likelihood function).
+mix.obj<-function(p,x)
+{
+	e<-p[1]*dnorm((x-p[2])/p[3])/p[3] + (1-p[1])*dnorm((x-p[4])/p[5])/p[5]
+	if (any(e<=0)) Inf
+	else -sum(log(e))
+}
+
+# define two functions to calculate the first derivatives of the  
+objective function.
+lmix2a<-deriv(~ -log(p*dnorm((x-u1)/s1)/s1 + (1-p)*dnorm((x-u2)/s2)/ 
+s2), c("p","u1","s1","u2","s2"), function(x,p,u1,s1,u2,s2) NULL)
+
+mix.gr<-function(p,x){
+	p<-p[1]
+	u1<-p[2]
+	s1<-p[3]
+	u2<-p[4]
+	s2<-p[5]
+	colSums(attr(lmix2a(x,p,u1,s1,u2,s2),"gradient"))}
+
+# finally, the optimization using the Broyden-Fletcher-Goldfarb- 
+Shanno method.
+resultsBFGS_D=optim 
+(p0,mix.obj,mix.gr,x=waiting,method="BFGS",control=list(parscale=c 
+(0.1,rep(1,4))))
+resultsBFGS_D$par
+
+CODE END
+
+The output is given as:
+
+p                 u1                s1               
+u2                 s2
+0.361204 50.000000  5.000000 80.000000  5.000000
+
+Unfortunately, these are exactly the same parameter values which I  
+have specified as starting values under "p0".
+Thank you very much for your help, best regards,
+
+András
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

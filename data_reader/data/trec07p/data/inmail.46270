@@ -1,0 +1,202 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 29 14:42:07 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4TIg6hB002115
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 14:42:07 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 119FE16388E
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 18:42:02 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id BB787162BD0; Tue, 29 May 2007 18:41:17 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070529184117.BB787162BD0@lists.samba.org>
+Date: Tue, 29 May 2007 18:41:17 +0000 (GMT)
+Subject: svn commit: samba r23223 - in branches: SAMBA_3_0/source/utils
+	SAMBA_3_0_26/source/utils
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-05-29 18:41:16 +0000 (Tue, 29 May 2007)
+New Revision: 23223
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23223
+
+Log:
+Convert a leftover direct tdb access to sessionid.tdb
+
+Modified:
+   branches/SAMBA_3_0/source/utils/status.c
+   branches/SAMBA_3_0_26/source/utils/status.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/utils/status.c
+===================================================================
+--- branches/SAMBA_3_0/source/utils/status.c	2007-05-29 18:32:49 UTC (rev 23222)
++++ branches/SAMBA_3_0/source/utils/status.c	2007-05-29 18:41:16 UTC (rev 23223)
+@@ -219,22 +219,22 @@
+ 	}
+ 
+ 	d_printf("%-10s   %s   %-12s  %s",
+-	       crec->servicename,procid_str_static(&crec->pid),
+-	       crec->machine,
+-	       time_to_asc(crec->start));
++		 crec->servicename,procid_str_static(&crec->pid),
++		 crec->machine,
++		 time_to_asc(crec->start));
+ 
+ 	return 0;
+ }
+ 
+-static int traverse_sessionid(TDB_CONTEXT *tdb, TDB_DATA kbuf, TDB_DATA dbuf, void *state)
++static int traverse_sessionid(struct db_record *db, void *state)
+ {
+ 	struct sessionid sessionid;
+ 	fstring uid_str, gid_str;
+ 
+-	if (dbuf.dsize != sizeof(sessionid))
++	if (db->value.dsize != sizeof(sessionid))
+ 		return 0;
+ 
+-	memcpy(&sessionid, dbuf.dptr, sizeof(sessionid));
++	memcpy(&sessionid, db->value.dptr, sizeof(sessionid));
+ 
+ 	if (!process_exists(sessionid.pid) || !Ucrit_checkUid(sessionid.uid)) {
+ 		return 0;
+@@ -245,7 +245,7 @@
+ 	fstr_sprintf(uid_str, "%d", sessionid.uid);
+ 	fstr_sprintf(gid_str, "%d", sessionid.gid);
+ 
+-	d_printf("%s   %-12s  %-12s  %-12s (%s)\n",
++	d_printf("%-7s   %-12s  %-12s  %-12s (%s)\n",
+ 		 procid_str_static(&sessionid.pid),
+ 		 numeric_only ? uid_str : uidtoname(sessionid.uid),
+ 		 numeric_only ? gid_str : gidtoname(sessionid.gid), 
+@@ -261,7 +261,6 @@
+ {
+ 	int c;
+ 	int profile_only = 0;
+-	TDB_CONTEXT *tdb;
+ 	BOOL show_processes, show_locks, show_shares;
+ 	poptContext pc;
+ 	struct poptOption long_options[] = {
+@@ -336,16 +335,18 @@
+ 	}
+ 
+ 	if ( show_processes ) {
+-		tdb = tdb_open_log(lock_path("sessionid.tdb"), 0, TDB_DEFAULT, O_RDONLY, 0);
+-		if (!tdb) {
++		struct db_context *db;
++		db = db_open(NULL, lock_path("sessionid.tdb"), 0,
++			     TDB_DEFAULT, O_RDWR, 0644);
++		if (!db) {
+ 			d_printf("sessionid.tdb not initialised\n");
+ 		} else {
+ 			d_printf("\nSamba version %s\n",SAMBA_VERSION_STRING);
+ 			d_printf("PID     Username      Group         Machine                        \n");
+ 			d_printf("-------------------------------------------------------------------\n");
+ 
+-			tdb_traverse(tdb, traverse_sessionid, NULL);
+-			tdb_close(tdb);
++			db->traverse_read(db, traverse_sessionid, NULL);
++			talloc_free(db);
+ 		}
+ 
+ 		if (processes_only) 
+
+Modified: branches/SAMBA_3_0_26/source/utils/status.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/utils/status.c	2007-05-29 18:32:49 UTC (rev 23222)
++++ branches/SAMBA_3_0_26/source/utils/status.c	2007-05-29 18:41:16 UTC (rev 23223)
+@@ -219,22 +219,22 @@
+ 	}
+ 
+ 	d_printf("%-10s   %s   %-12s  %s",
+-	       crec->servicename,procid_str_static(&crec->pid),
+-	       crec->machine,
+-	       time_to_asc(crec->start));
++		 crec->servicename,procid_str_static(&crec->pid),
++		 crec->machine,
++		 time_to_asc(crec->start));
+ 
+ 	return 0;
+ }
+ 
+-static int traverse_sessionid(TDB_CONTEXT *tdb, TDB_DATA kbuf, TDB_DATA dbuf, void *state)
++static int traverse_sessionid(struct db_record *db, void *state)
+ {
+ 	struct sessionid sessionid;
+ 	fstring uid_str, gid_str;
+ 
+-	if (dbuf.dsize != sizeof(sessionid))
++	if (db->value.dsize != sizeof(sessionid))
+ 		return 0;
+ 
+-	memcpy(&sessionid, dbuf.dptr, sizeof(sessionid));
++	memcpy(&sessionid, db->value.dptr, sizeof(sessionid));
+ 
+ 	if (!process_exists(sessionid.pid) || !Ucrit_checkUid(sessionid.uid)) {
+ 		return 0;
+@@ -245,7 +245,7 @@
+ 	fstr_sprintf(uid_str, "%d", sessionid.uid);
+ 	fstr_sprintf(gid_str, "%d", sessionid.gid);
+ 
+-	d_printf("%s   %-12s  %-12s  %-12s (%s)\n",
++	d_printf("%-7s   %-12s  %-12s  %-12s (%s)\n",
+ 		 procid_str_static(&sessionid.pid),
+ 		 numeric_only ? uid_str : uidtoname(sessionid.uid),
+ 		 numeric_only ? gid_str : gidtoname(sessionid.gid), 
+@@ -261,7 +261,6 @@
+ {
+ 	int c;
+ 	int profile_only = 0;
+-	TDB_CONTEXT *tdb;
+ 	BOOL show_processes, show_locks, show_shares;
+ 	poptContext pc;
+ 	struct poptOption long_options[] = {
+@@ -336,16 +335,18 @@
+ 	}
+ 
+ 	if ( show_processes ) {
+-		tdb = tdb_open_log(lock_path("sessionid.tdb"), 0, TDB_DEFAULT, O_RDONLY, 0);
+-		if (!tdb) {
++		struct db_context *db;
++		db = db_open(NULL, lock_path("sessionid.tdb"), 0,
++			     TDB_DEFAULT, O_RDWR, 0644);
++		if (!db) {
+ 			d_printf("sessionid.tdb not initialised\n");
+ 		} else {
+ 			d_printf("\nSamba version %s\n",SAMBA_VERSION_STRING);
+ 			d_printf("PID     Username      Group         Machine                        \n");
+ 			d_printf("-------------------------------------------------------------------\n");
+ 
+-			tdb_traverse(tdb, traverse_sessionid, NULL);
+-			tdb_close(tdb);
++			db->traverse_read(db, traverse_sessionid, NULL);
++			talloc_free(db);
+ 		}
+ 
+ 		if (processes_only) 
+

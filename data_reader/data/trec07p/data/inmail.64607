@@ -1,0 +1,215 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun Jun 24 09:41:30 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5ODfTL9013047
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 24 Jun 2007 09:41:30 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 3D5BA162AD3
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 24 Jun 2007 13:41:27 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id 818E3162AC4; Sun, 24 Jun 2007 13:41:00 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070624134100.818E3162AC4@lists.samba.org>
+Date: Sun, 24 Jun 2007 13:41:00 +0000 (GMT)
+Subject: svn commit: samba r23595 - in branches: SAMBA_3_0/source/lib
+	SAMBA_3_0_26/source/lib
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-06-24 13:40:58 +0000 (Sun, 24 Jun 2007)
+New Revision: 23595
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23595
+
+Log:
+One pstring a day...
+Modified:
+   branches/SAMBA_3_0/source/lib/pidfile.c
+   branches/SAMBA_3_0_26/source/lib/pidfile.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/lib/pidfile.c
+===================================================================
+--- branches/SAMBA_3_0/source/lib/pidfile.c	2007-06-24 13:24:20 UTC (rev 23594)
++++ branches/SAMBA_3_0/source/lib/pidfile.c	2007-06-24 13:40:58 UTC (rev 23595)
+@@ -34,12 +34,15 @@
+ 	char pidstr[20];
+ 	pid_t pid;
+ 	unsigned int ret;
+-	pstring pidFile;
++	char * pidFile;
+ 
+-	slprintf(pidFile, sizeof(pidFile)-1, "%s/%s.pid", lp_piddir(), name);
++	if (asprintf(&pidFile, "%s/%s.pid", lp_piddir(), name) == -1) {
++		return 0;
++	}
+ 
+ 	fd = sys_open(pidFile, O_NONBLOCK | O_RDONLY, 0644);
+ 	if (fd == -1) {
++		SAFE_FREE(pidFile);
+ 		return 0;
+ 	}
+ 
+@@ -68,12 +71,14 @@
+ 		goto noproc;
+ 	}
+ 
++	SAFE_FREE(pidFile);
+ 	close(fd);
+ 	return (pid_t)ret;
+ 
+  noproc:
+ 	close(fd);
+ 	unlink(pidFile);
++	SAFE_FREE(pidFile);
+ 	return 0;
+ }
+ 
+@@ -83,14 +88,14 @@
+ 	int     fd;
+ 	char    buf[20];
+ 	char    *short_configfile;
+-	pstring name;
+-	pstring pidFile;
++	char *name;
++	char *pidFile;
+ 	pid_t pid;
+ 
+ 	/* Add a suffix to the program name if this is a process with a
+ 	 * none default configuration file name. */
+ 	if (strcmp( CONFIGFILE, dyn_CONFIGFILE) == 0) {
+-		strncpy( name, program_name, sizeof( name)-1);
++		name = SMB_STRDUP(program_name);
+ 	} else {
+ 		short_configfile = strrchr( dyn_CONFIGFILE, '/');
+ 		if (short_configfile == NULL) {
+@@ -100,10 +105,15 @@
+ 			/* full/relative path provided */
+ 			short_configfile++;
+ 		}
+-		slprintf( name, sizeof( name)-1, "%s-%s", program_name, short_configfile+1);
++		if (asprintf(&name, "%s-%s", program_name,
++			     short_configfile+1) == -1) {
++			smb_panic("asprintf failed");
++		}
+ 	}
+ 
+-	slprintf(pidFile, sizeof(pidFile)-1, "%s/%s.pid", lp_piddir(), name);
++	if (asprintf(&pidFile, "%s/%s.pid", lp_piddir(), name) == -1) {
++		smb_panic("asprintf failed");
++	}
+ 
+ 	pid = pidfile_pid(name);
+ 	if (pid != 0) {
+@@ -133,4 +143,6 @@
+ 		exit(1);
+ 	}
+ 	/* Leave pid file open & locked for the duration... */
++	SAFE_FREE(name);
++	SAFE_FREE(pidFile);
+ }
+
+Modified: branches/SAMBA_3_0_26/source/lib/pidfile.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/lib/pidfile.c	2007-06-24 13:24:20 UTC (rev 23594)
++++ branches/SAMBA_3_0_26/source/lib/pidfile.c	2007-06-24 13:40:58 UTC (rev 23595)
+@@ -34,12 +34,15 @@
+ 	char pidstr[20];
+ 	pid_t pid;
+ 	unsigned int ret;
+-	pstring pidFile;
++	char * pidFile;
+ 
+-	slprintf(pidFile, sizeof(pidFile)-1, "%s/%s.pid", lp_piddir(), name);
++	if (asprintf(&pidFile, "%s/%s.pid", lp_piddir(), name) == -1) {
++		return 0;
++	}
+ 
+ 	fd = sys_open(pidFile, O_NONBLOCK | O_RDONLY, 0644);
+ 	if (fd == -1) {
++		SAFE_FREE(pidFile);
+ 		return 0;
+ 	}
+ 
+@@ -68,12 +71,14 @@
+ 		goto noproc;
+ 	}
+ 
++	SAFE_FREE(pidFile);
+ 	close(fd);
+ 	return (pid_t)ret;
+ 
+  noproc:
+ 	close(fd);
+ 	unlink(pidFile);
++	SAFE_FREE(pidFile);
+ 	return 0;
+ }
+ 
+@@ -83,14 +88,14 @@
+ 	int     fd;
+ 	char    buf[20];
+ 	char    *short_configfile;
+-	pstring name;
+-	pstring pidFile;
++	char *name;
++	char *pidFile;
+ 	pid_t pid;
+ 
+ 	/* Add a suffix to the program name if this is a process with a
+ 	 * none default configuration file name. */
+ 	if (strcmp( CONFIGFILE, dyn_CONFIGFILE) == 0) {
+-		strncpy( name, program_name, sizeof( name)-1);
++		name = SMB_STRDUP(program_name);
+ 	} else {
+ 		short_configfile = strrchr( dyn_CONFIGFILE, '/');
+ 		if (short_configfile == NULL) {
+@@ -100,10 +105,15 @@
+ 			/* full/relative path provided */
+ 			short_configfile++;
+ 		}
+-		slprintf( name, sizeof( name)-1, "%s-%s", program_name, short_configfile+1);
++		if (asprintf(&name, "%s-%s", program_name,
++			     short_configfile+1) == -1) {
++			smb_panic("asprintf failed");
++		}
+ 	}
+ 
+-	slprintf(pidFile, sizeof(pidFile)-1, "%s/%s.pid", lp_piddir(), name);
++	if (asprintf(&pidFile, "%s/%s.pid", lp_piddir(), name) == -1) {
++		smb_panic("asprintf failed");
++	}
+ 
+ 	pid = pidfile_pid(name);
+ 	if (pid != 0) {
+@@ -133,4 +143,6 @@
+ 		exit(1);
+ 	}
+ 	/* Leave pid file open & locked for the duration... */
++	SAFE_FREE(name);
++	SAFE_FREE(pidFile);
+ }
+

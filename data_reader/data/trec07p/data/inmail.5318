@@ -1,0 +1,124 @@
+From perl6-all-return-80554-ktwarwic=speedy.uwaterloo.ca@perl.org  Fri Apr 13 14:03:01 2007
+Return-Path: <perl6-all-return-80554-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3DI300I014989
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 13 Apr 2007 14:03:00 -0400
+Received: (qmail 11534 invoked by uid 514); 13 Apr 2007 18:02:36 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 11529 invoked from network); 13 Apr 2007 18:02:35 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-language-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-language
+List-Id: <perl6-language.perl.org>
+Delivered-To: mailing list perl6-language@perl.org
+Delivered-To: perl6-language@perl.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+X-ORBL: [71.139.5.161]
+Date: Fri, 13 Apr 2007 09:42:07 -0700
+From: Larry Wall <larry@wall.org>
+To: perl6-language@perl.org
+Subject: Re: What should file test operators return?
+Message-ID: <20070413164207.GA21915@wall.org>
+Mail-Followup-To: perl6-language@perl.org
+References: <120420071352506328%brian.d.foy@gmail.com>
+Mime-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+In-Reply-To: <120420071352506328%brian.d.foy@gmail.com>
+User-Agent: Mutt/1.4.2.2i
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+Status: O
+Content-Length: 2709
+Lines: 77
+
+On Thu, Apr 12, 2007 at 01:52:50PM -0500, brian d foy wrote:
+: At the moment the file test operators that I expect to return true or
+: false do, but the true is the filename.
+
+You've just dug up a pugsian fossil.
+
+: I expected a boolean, for no
+: other reason than Perl 6 has them so it might as well use them. The
+: section on Smart Matching in S03 says that the ~~ doesn't have to
+: return a boolean,  but aside from things liek :s, :M, and :A, what good
+: would it be not to? I'm happy to update S16 with whatever the answer
+: is. :)
+
+The intent of moving from the
+
+    -r -w -x $file
+    
+form to the
+
+    $file ~~ :r & :w & :x
+
+form was to get rid of the klunky, inflexible statbuffer propagation
+mechanism, which (without an temp var) could only do "and" and not
+"or", and didn't work well syntactically in "when" statements.  Plus
+it forced the user to worry about statbuf caching, which probably just
+ought to timeout automatically since it assumes we're the only person
+accessing the filesystem, a bogus assumption in the face of any kind
+of multiprocessing.
+
+So the new filetests just return a simple value, generally Bool or Num.
+To get a statbuf object you now use an explicit stat or lstat.  Such an
+object should probably stringify to "Stat('filename')" or some such, so
+that the filename "0" comes out "Stat('0')".
+
+I will attempt to clarify S03, though my brain is still a little
+fuzzy this week for a variety of unrelated reasons.
+
+: Here's my code example that motivates this question. For a Llama6
+: exercise with file test operators, I wanted to create a little table:
+: 
+:    for @files -> $file {
+:       printf "%-70s  %s  %s  %s\n",
+:          $file,
+:          $file ~~ :r,
+:          $file ~~ :w,
+:          $file ~~ :x;      
+:       }
+
+I think I would now write that more like:
+
+    for @files -> $file {
+	given stat $file {
+	  printf "%-70s  %s  %s  %s\n", $file, .:r, .:w, .:x;      
+	}
+    }
+
+: Which I wanted to work like this perl5 (not that I care if it's
+: different, I just have to explain it to reader)
+: 
+:    #!/usr/bin/perl5
+:    foreach ( glob( "*" ) )
+:       {
+:       printf "%30s %s %s %s\n", $_, -r, -w, -x
+:       }
+: 
+: 
+: With the Pugs 6.2.13 (r15868), only the ~~ form seems to work, but is
+: that going to be any different than the other two forms?
+
+The current pugs implementation is just translating to the old form
+underneath, so it's not surprising it's a bit off.  That's the sort
+of thing that happens when the language designer gives the language
+implementor whiplash.  However, I rather suspect the interpersonal
+metaphorical meaning was lost on the physicist/comic who decided that
+the 3rd derivative of position should be called "jerk".  :)
+
+Larry
+

@@ -1,0 +1,169 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun May  6 11:31:36 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l46FVaqD020236
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 6 May 2007 11:31:36 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 3D6B11638E6
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun,  6 May 2007 15:31:35 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL,UPPERCASE_25_50 autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 539)
+	id 51F83162AE3; Sun,  6 May 2007 15:31:04 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jelmer@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070506153104.51F83162AE3@lists.samba.org>
+Date: Sun,  6 May 2007 15:31:04 +0000 (GMT)
+Subject: svn commit: samba r22697 - in branches/SAMBA_4_0/source: . build/m4
+	lib
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: jelmer
+Date: 2007-05-06 15:31:03 +0000 (Sun, 06 May 2007)
+New Revision: 22697
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22697
+
+Log:
+Support building with external talloc.
+Modified:
+   branches/SAMBA_4_0/source/build/m4/public.m4
+   branches/SAMBA_4_0/source/configure.ac
+   branches/SAMBA_4_0/source/lib/basic.mk
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/build/m4/public.m4
+===================================================================
+--- branches/SAMBA_4_0/source/build/m4/public.m4	2007-05-06 15:17:14 UTC (rev 22696)
++++ branches/SAMBA_4_0/source/build/m4/public.m4	2007-05-06 15:31:03 UTC (rev 22697)
+@@ -6,12 +6,14 @@
+ dnl
+ dnl SMB_SUBSYSTEM(name,obj_files,required_subsystems)
+ dnl
+-dnl SMB_EXT_LIB_FROM_PKGCONFIG(name,pkg-config name)
++dnl SMB_EXT_LIB_FROM_PKGCONFIG(name,pkg-config name,[ACTION-IF-FOUND],[ACTION-IF-NOT-FOUND])
+ dnl
+ dnl SMB_EXT_LIB(name,libs,cflags,cppflags,ldflags)
+ dnl
+ dnl SMB_ENABLE(name,default_build)
+ dnl
++dnl SMB_INCLUDE_MK(file)
++dnl
+ dnl #######################################################
+ dnl ### And now the implementation			###
+ dnl #######################################################
+@@ -32,7 +34,7 @@
+ "
+ ])
+ 
+-dnl SMB_EXT_LIB_FROM_PKGCONFIG(name,pkg-config name)
++dnl SMB_EXT_LIB_FROM_PKGCONFIG(name,pkg-config name,[ACTION-IF-FOUND],[ACTION-IF-NOT-FOUND])
+ AC_DEFUN([SMB_EXT_LIB_FROM_PKGCONFIG], 
+ [
+ 	dnl Figure out the correct variables and call SMB_EXT_LIB()
+@@ -46,8 +48,10 @@
+     		echo "*** in your path, or set the PKG_CONFIG environment variable"
+     		echo "*** to the full path to pkg-config."
+     		echo "*** Or see http://www.freedesktop.org/software/pkgconfig to get pkg-config."
+-			SMB_EXT_LIB($1)
+-			SMB_ENABLE($1, NO)
++		SMB_EXT_LIB($1)
++		SMB_ENABLE($1, NO)
++		$4
++
+ 	else
+ 		if $PKG_CONFIG --atleast-pkgconfig-version 0.9.0; then
+         		AC_MSG_CHECKING(for $2)
+@@ -55,6 +59,7 @@
+           		if test "$SMB_$1"x = "NO"x ; then
+ 				SMB_ENABLE($1, NO)
+ 				AC_MSG_RESULT(disabled)		
++				$4
+           		elif $PKG_CONFIG --exists '$2' ; then
+             			AC_MSG_RESULT(yes)
+ 
+@@ -76,22 +81,33 @@
+ 					[`$PKG_CONFIG --cflags-only-other '$2'`],
+ 					[`$PKG_CONFIG --cflags-only-I '$2'`],
+ 					[`$PKG_CONFIG --libs-only-other '$2'` `$PKG_CONFIG --libs-only-L '$2'`])
++				$3
+ 
+         		else
+ 				SMB_EXT_LIB($1)
+ 				SMB_ENABLE($1, NO)
+ 				AC_MSG_RESULT(no)
+             			$PKG_CONFIG --errors-to-stdout --print-errors '$2'
++				$4
+         		fi
+      		else
+         		echo "*** Your version of pkg-config is too old. You need version $PKG_CONFIG_MIN_VERSION or newer."
+         			echo "*** See http://www.freedesktop.org/software/pkgconfig"
+ 				SMB_EXT_LIB($1)
+ 				SMB_ENABLE($1, NO)
++				$4
+      		fi
+   	fi
+ ])
+ 
++dnl SMB_INCLUDE_MK(file)
++AC_DEFUN([SMB_INCLUDE_MK],
++[
++SMB_INFO_EXT_LIBS="$SMB_INFO_EXT_LIBS
++include $1
++"
++])
++
+ dnl SMB_EXT_LIB(name,libs,cflags,cppflags,ldflags)
+ AC_DEFUN([SMB_EXT_LIB],
+ [
+
+Modified: branches/SAMBA_4_0/source/configure.ac
+===================================================================
+--- branches/SAMBA_4_0/source/configure.ac	2007-05-06 15:17:14 UTC (rev 22696)
++++ branches/SAMBA_4_0/source/configure.ac	2007-05-06 15:31:03 UTC (rev 22697)
+@@ -25,7 +25,10 @@
+ m4_include(lib/popt/samba.m4)
+ m4_include(lib/charset/config.m4)
+ m4_include(lib/socket/config.m4)
+-m4_include(lib/talloc/libtalloc.m4)
++SMB_EXT_LIB_FROM_PKGCONFIG(LIBTALLOC, talloc >= 1.0, [], [
++	m4_include(lib/talloc/libtalloc.m4)
++	SMB_INCLUDE_MK(lib/talloc/config.mk)
++])
+ m4_include(lib/tdb/libtdb.m4)
+ m4_include(lib/ldb/sqlite3.m4)
+ m4_include(lib/ldb/libldb.m4)
+
+Modified: branches/SAMBA_4_0/source/lib/basic.mk
+===================================================================
+--- branches/SAMBA_4_0/source/lib/basic.mk	2007-05-06 15:17:14 UTC (rev 22696)
++++ branches/SAMBA_4_0/source/lib/basic.mk	2007-05-06 15:31:03 UTC (rev 22697)
+@@ -3,7 +3,6 @@
+ include socket/config.mk
+ include charset/config.mk
+ include ldb/config.mk
+-include talloc/config.mk
+ include tdb/config.mk
+ include tls/config.mk
+ include registry/config.mk
+

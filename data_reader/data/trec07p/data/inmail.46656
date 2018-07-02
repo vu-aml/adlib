@@ -1,0 +1,194 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May 30 02:12:56 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4U6CthB009954
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 30 May 2007 02:12:55 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id BCDF6162BE0
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 30 May 2007 06:12:50 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 93AF8162AEC; Wed, 30 May 2007 06:12:05 +0000 (GMT)
+Date: Wed, 30 May 2007 15:43:25 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070530061205.93AF8162AEC@lists.samba.org>
+Subject: Rev 402: close sockets when we exec scripts in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 402
+revision-id: tridge@samba.org-20070530054325-s8i707ydww0omcor
+parent: tridge@samba.org-20070530044614-e6rt2yb1v1345p34
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Wed 2007-05-30 15:43:25 +1000
+message:
+  close sockets when we exec scripts
+modified:
+  common/ctdb_client.c           ctdb_client.c-20070411010216-3kd8v37k61steeya-1
+  common/ctdb_daemon.c           ctdb_daemon.c-20070409200331-3el1kqgdb9m4ib0g-1
+  common/ctdb_util.c             ctdb_util.c-20061128065342-to93h6eejj5kon81-3
+  include/ctdb_private.h         ctdb_private.h-20061117234101-o3qt14umlg9en8z0-13
+  tcp/tcp_connect.c              tcp_connect.c-20061128004937-x70q1cu5xzg5g2tm-1
+=== modified file 'common/ctdb_client.c'
+--- a/common/ctdb_client.c	2007-05-29 03:58:41 +0000
++++ b/common/ctdb_client.c	2007-05-30 05:43:25 +0000
+@@ -174,6 +174,9 @@
+ 	if (ctdb->daemon.sd == -1) {
+ 		return -1;
+ 	}
++
++	set_nonblocking(ctdb->daemon.sd);
++	set_close_on_exec(ctdb->daemon.sd);
+ 	
+ 	if (connect(ctdb->daemon.sd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
+ 		close(ctdb->daemon.sd);
+
+=== modified file 'common/ctdb_daemon.c'
+--- a/common/ctdb_daemon.c	2007-05-30 04:35:22 +0000
++++ b/common/ctdb_daemon.c	2007-05-30 05:43:25 +0000
+@@ -101,13 +101,6 @@
+ }
+ 
+ 
+-static void set_non_blocking(int fd)
+-{
+-	unsigned v;
+-	v = fcntl(fd, F_GETFL, 0);
+-        fcntl(fd, F_SETFL, v | O_NONBLOCK);
+-}
+-
+ static void block_signal(int signum)
+ {
+ 	struct sigaction act;
+@@ -585,7 +578,9 @@
+ 	if (fd == -1) {
+ 		return;
+ 	}
+-	set_non_blocking(fd);
++
++	set_nonblocking(fd);
++	set_close_on_exec(fd);
+ 
+ 	client = talloc_zero(ctdb, struct ctdb_client);
+ 	client->ctdb = ctdb;
+@@ -634,6 +629,9 @@
+ 		return -1;
+ 	}
+ 
++	set_nonblocking(ctdb->daemon.sd);
++	set_close_on_exec(ctdb->daemon.sd);
++
+ #if 0
+ 	/* AIX doesn't like this :( */
+ 	if (fchown(ctdb->daemon.sd, geteuid(), getegid()) != 0 ||
+@@ -643,7 +641,7 @@
+ 	}
+ #endif
+ 
+-	set_non_blocking(ctdb->daemon.sd);
++	set_nonblocking(ctdb->daemon.sd);
+ 
+ 	memset(&addr, 0, sizeof(addr));
+ 	addr.sun_family = AF_UNIX;
+
+=== modified file 'common/ctdb_util.c'
+--- a/common/ctdb_util.c	2007-05-29 05:15:00 +0000
++++ b/common/ctdb_util.c	2007-05-30 05:43:25 +0000
+@@ -217,3 +217,18 @@
+ 	}
+ #endif
+ }
++
++void set_nonblocking(int fd)
++{
++	unsigned v;
++	v = fcntl(fd, F_GETFL, 0);
++        fcntl(fd, F_SETFL, v | O_NONBLOCK);
++}
++
++void set_close_on_exec(int fd)
++{
++	unsigned v;
++	v = fcntl(fd, F_GETFD, 0);
++        fcntl(fd, F_SETFD, v | FD_CLOEXEC);
++}
++
+
+=== modified file 'include/ctdb_private.h'
+--- a/include/ctdb_private.h	2007-05-30 03:26:50 +0000
++++ b/include/ctdb_private.h	2007-05-30 05:43:25 +0000
+@@ -955,6 +955,8 @@
+ 			       const char *fmt, ...) PRINTF_ATTRIBUTE(3,4);
+ void ctdb_release_all_ips(struct ctdb_context *ctdb);
+ 
++void set_nonblocking(int fd);
++void set_close_on_exec(int fd);
+ 
+ 
+ #endif
+
+=== modified file 'tcp/tcp_connect.c'
+--- a/tcp/tcp_connect.c	2007-05-25 12:07:45 +0000
++++ b/tcp/tcp_connect.c	2007-05-30 05:43:25 +0000
+@@ -26,14 +26,6 @@
+ #include "../include/ctdb_private.h"
+ #include "ctdb_tcp.h"
+ 
+-static void set_nonblocking(int fd)
+-{
+-	unsigned v;
+-	v = fcntl(fd, F_GETFL, 0);
+-        fcntl(fd, F_SETFL, v | O_NONBLOCK);
+-}
+-
+-
+ /*
+   called when a complete packet has come in - should not happen on this socket
+  */
+@@ -134,6 +126,7 @@
+ 	tnode->fd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+ 
+ 	set_nonblocking(tnode->fd);
++	set_close_on_exec(tnode->fd);
+ 
+ 	ZERO_STRUCT(sock_out);
+ #ifdef HAVE_SOCK_SIN_LEN
+@@ -213,6 +206,7 @@
+ 	in->ctdb = ctdb;
+ 
+ 	set_nonblocking(in->fd);
++	set_close_on_exec(in->fd);
+ 
+         setsockopt(in->fd,SOL_SOCKET,SO_KEEPALIVE,(char *)&one,sizeof(one));
+ 
+@@ -322,6 +316,8 @@
+ 		return -1;
+ 	}
+ 
++	set_close_on_exec(ctcp->listen_fd);
++
+         setsockopt(ctcp->listen_fd,SOL_SOCKET,SO_REUSEADDR,(char *)&one,sizeof(one));
+ 
+ 	/* we can either auto-bind to the first available address, or we can
+

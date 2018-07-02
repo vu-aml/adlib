@@ -1,0 +1,170 @@
+From r-help-bounces@stat.math.ethz.ch  Thu Jun 28 17:33:33 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5SLXWL9015911
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 28 Jun 2007 17:33:33 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5SLWcf0032343;
+	Thu, 28 Jun 2007 23:32:54 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: ***
+X-Spam-Status: No, score=3.0 required=5.0 tests=BAYES_50, DKIM_POLICY_SIGNSOME,
+	FORGED_HOTMAIL_RCVD2, SPF_HELO_PASS,
+	WHOIS_MYPRIVREG autolearn=no version=3.2.0
+Received: from kuber.nabble.com (kuber.nabble.com [216.139.236.158])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5SKl1LA013472
+	(version=TLSv1/SSLv3 cipher=AES256-SHA bits=256 verify=NO)
+	for <r-help@stat.math.ethz.ch>; Thu, 28 Jun 2007 22:47:04 +0200
+Received: from isper.nabble.com ([192.168.236.156])
+	by kuber.nabble.com with esmtp (Exim 4.63)
+	(envelope-from <bounces@nabble.com>) id 1I40tI-0005Ih-3Y
+	for r-help@stat.math.ethz.ch; Thu, 28 Jun 2007 13:47:00 -0700
+Message-ID: <11350733.post@talk.nabble.com>
+Date: Thu, 28 Jun 2007 13:47:00 -0700 (PDT)
+From: Jim Price <price_ja@hotmail.com>
+To: r-help@stat.math.ethz.ch
+MIME-Version: 1.0
+X-Nabble-From: price_ja@hotmail.com
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+X-Mailman-Approved-At: Thu, 28 Jun 2007 23:17:56 +0200
+Subject: [R] Changing graphics height when using grid and lattice
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+
+Hi,
+
+I have recently been playing with the grid package in an attempt to create
+some pages containing multiple lattice plots on the same page. However, when
+I specify a grid layout with different widths, such as:
+
+pushViewport(viewport(layout = grid.layout(1, 2, unit(c(2, 1), "null"))))
+
+the individual graphs do not end up as the same height - which is a feature
+I would prefer to have. 
+
+A complete example is as follows:
+
+### Start of example
+
+library(lattice)
+library(Hmisc)
+library(grid)
+
+
+# Incidence data
+testData <- data.frame(
+	strata = rep(c("CHF : Yes", "CHF : No"), each = 20),
+	ae = rep(paste("Adverse Event", 1:10), each = 2),
+	trt = rep(c("Active", "Placebo"), 20),
+	pct = runif(40, 1, 30)
+)
+
+# RR data
+testData2 <- data.frame(
+	strata = rep(c("CHF : Yes", "CHF : No"), each = 10),
+	ae = paste("Adverse Event", 1:10),
+	rr = runif(20, 0.5, 5)
+)
+testData2$lower = testData2$rr / 2
+testData2$upper = testData2$rr * 2
+	
+
+# Combined plot
+testPlots <- function(relativeWidth)
+{
+
+plot1<- dotplot(
+	ae ~ pct | strata, 
+	groups = trt, 
+	data = testData,  
+	layout = c(1, 2),
+	xlab = "Percent",
+	auto.key = list(space = "top", columns = 2)
+)
+
+
+plot2 <- Dotplot(
+	ae ~ Cbind(rr, log10(lower), log10(upper)) | strata,
+	data = testData2,
+	panel = function(...)
+	{
+		panel.Dotplot(...)
+		panel.abline(v = 0, col = 'red', lty = 2)
+	},
+	layout = c(1, 2), 
+	scales = list(
+		x = list(log = T, at = c(0.125, 0.25, 0.5, 1, 2, 4, 8, 16, 32)),
+		y = list(draw = F)
+	),
+	xlab = "Relative Risk with 95% CI",
+	ylab = "",
+	key = list(text = list(""))
+)
+
+
+grid.newpage()
+
+pushViewport(viewport(layout = grid.layout(2, 1, heights = unit(c(1, 6),
+"null"))))
+
+pushViewport(viewport(layout.pos.col = 1, layout.pos.row = 1))
+grid.text("Analysis of Relative Risks of various Adverse Events")
+upViewport()
+
+pushViewport(viewport(layout.pos.col = 1, layout.pos.row = 2))
+
+
+### Change the relative width of the 2 presented graphics
+pushViewport(viewport(layout = grid.layout(1, 2, unit(c(relativeWidth, 1),
+"null"))))
+
+pushViewport(viewport(layout.pos.col = 1, layout.pos.row = 1))
+print(plot1, newpage = F)
+upViewport()
+
+pushViewport(viewport(layout.pos.col = 2, layout.pos.row = 1))
+print(plot2, newpage = F)
+upViewport()
+
+}
+
+
+# Everything is fine, both graphs maintain the same y-axis
+testPlots(1)
+
+# The second graph is now "taller" than the first one
+win.graph()
+testPlots(3)
+
+##### End of example
+
+I've been through the documentation of both lattice and grid, and I have not
+been able to find the answer. I would appreciate any solution!
+
+Regards,
+
+James Price.
+-- 
+View this message in context: http://www.nabble.com/Changing-graphics-height-when-using-grid-and-lattice-tf3996724.html#a11350733
+Sent from the R help mailing list archive at Nabble.com.
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

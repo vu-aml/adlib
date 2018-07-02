@@ -1,0 +1,88 @@
+From perl6-all-return-81397-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue May 15 16:52:57 2007
+Return-Path: <perl6-all-return-81397-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4FKquqD010067
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 15 May 2007 16:52:57 -0400
+Received: (qmail 1576 invoked by uid 514); 15 May 2007 20:52:53 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 1571 invoked from network); 15 May 2007 20:52:53 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DKIM_SIGNED,DK_POLICY_SIGNSOME,DK_SIGNED,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: domain of alek.storm@gmail.com designates 66.249.92.174 as permitted sender)
+DKIM-Signature: a=rsa-sha1; c=relaxed/relaxed;
+        d=gmail.com; s=beta;
+        h=domainkey-signature:received:received:message-id:date:from:to:subject:cc:in-reply-to:mime-version:content-type:references;
+        b=Gc3wSxRcRSZkc/7Dy1meKRT5sjRN9Y5zCeWfUQ4mukUfZmhoqIZtd4tKOiFf0oqHBE8fxtVgNzfIxqb/LgXm7OVkND+mwm8M2AtsEEXgmRnvCi5Ei3Z/0YikmWc5NiyF9sY3UE3NxAGcpPAWqpQWnzVGCEigVsmkzaOPlYs646Q=
+DomainKey-Signature: a=rsa-sha1; c=nofws;
+        d=gmail.com; s=beta;
+        h=received:message-id:date:from:to:subject:cc:in-reply-to:mime-version:content-type:references;
+        b=qBcCMZ69sK6ph0ct5aMhljrF2C0DpeVxiCVQbr27Lo4QBmXKmkLH32K5guRO26JNNzhvDwCYJmkO2HLQf/rb2B/FxiLxYFeaOzrze45AdsoqOTc40w6tQIk5qQc9ikdzQVcPWIfHm1wfPIeppoNXKJXVr37GCDqn7OGLoDLC3Aw=
+Message-ID: <189adbd0705151352lda0685cn1c7a9413fcfe9305@mail.gmail.com>
+Date: Tue, 15 May 2007 20:52:18 +0000
+From: "Alek Storm" <alek.storm@gmail.com>
+To: "Mehmet Yavuz Selim Soyturk" <mehmet.yavuz.selim@gmail.com>
+Subject: Re: [perl #42919] [BUG] and [PATCH] overriding 'invoke' requires current object to be explicitly passed
+Cc: perl6-internals@perl.org
+In-Reply-To: <1abd9eb20705141114g5c652bf9w54cda2ac2934fac6@mail.gmail.com>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; 
+	boundary="----=_Part_6301_1530169.1179262338094"
+References: <RT-Ticket-42919@perl.org>
+	 <189adbd0705101439q956a1beve7039f1e04c9d115@mail.gmail.com>
+	 <rt-3.6.HEAD-12281-1178833308-463.42919-72-0@perl.org>
+	 <1abd9eb20705141114g5c652bf9w54cda2ac2934fac6@mail.gmail.com>
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED,HTML_MESSAGE,SPF_PASS
+
+------=_Part_6301_1530169.1179262338094
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+
+On 5/14/07, Mehmet Yavuz Selim Soyturk <mehmet.yavuz.selim@gmail.com >
+wrote:
+>
+> Should we not be able to use an object that implements 'invoke' as a
+> method of another object? There is some strange behaviour when I try
+> to.
+
+
+I see what you're saying, and it looks like you want a functor.  We can't do
+exactly what you want in that syntax, because methods are loosely tied to
+objects in Parrot.  Parrot sees 'Func' as a sub, so it wouldn't make any
+sense to tell the sub it's called by itself.  Regardless of what
+'find_method' returns, the invocant is $P2 when you use PIR syntax.  Here's
+how to get the effect you want:
+
+.sub main :main
+  $P0 = newclass 'Func'
+  $P1 = newclass 'Obj'
+  $P2 = new 'Obj'
+  $P3 = find_method $P2, 'some_method'
+  $P3.$P3()
+.end
+
+The patch has been reverted, though, so that won't work until it's fixed and
+reapplied.
+
+-- 
+Alek Storm
+
+------=_Part_6301_1530169.1179262338094--
+

@@ -1,0 +1,146 @@
+From perl6-all-return-80551-ktwarwic=speedy.uwaterloo.ca@perl.org  Fri Apr 13 13:02:48 2007
+Return-Path: <perl6-all-return-80551-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3DH2l0I014261
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 13 Apr 2007 13:02:47 -0400
+Received: (qmail 26970 invoked by uid 514); 13 Apr 2007 17:02:23 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 26965 invoked from network); 13 Apr 2007 17:02:22 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-1.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO,NO_REAL_NAME
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-language-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-language
+List-Id: <perl6-language.perl.org>
+Delivered-To: mailing list perl6-language@perl.org
+Delivered-To: perl6-language@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: larry@cvs.develooper.com
+To: perl6-language@perl.org
+Subject: [svn:perl6-synopsis] r14372 - doc/trunk/design/syn
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Message-Id: <20070413170203.996ABCB9B8@x12.develooper.com>
+Date: Fri, 13 Apr 2007 10:02:03 -0700 (PDT)
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-3.4 required=8.0
+	tests=ALL_TRUSTED,BAYES_00,DK_POLICY_SIGNSOME,NO_REAL_NAME
+Status: O
+Content-Length: 3781
+Lines: 105
+
+Author: larry
+Date: Fri Apr 13 10:02:01 2007
+New Revision: 14372
+
+Modified:
+   doc/trunk/design/syn/S03.pod
+
+Log:
+Clarification of simplified return values of filetests for brian.d.foy++.
+
+
+Modified: doc/trunk/design/syn/S03.pod
+==============================================================================
+--- doc/trunk/design/syn/S03.pod	(original)
++++ doc/trunk/design/syn/S03.pod	Fri Apr 13 10:02:01 2007
+@@ -12,9 +12,9 @@
+ 
+   Maintainer: Larry Wall <larry@wall.org>
+   Date: 8 Mar 2004
+-  Last Modified: 16 Mar 2007
++  Last Modified: 13 Apr 2007
+   Number: 3
+-  Version: 110
++  Version: 111
+ 
+ =head1 Overview
+ 
+@@ -1477,30 +1477,36 @@
+ 
+ =item *
+ 
+-The filetest operators are gone.  We now use a Pair as either a
++The filetest operators are gone.  We now use a C<Pair> as either a
+ pattern or a method name to get the same effect:
+ 
+     if $filename ~~ :e { say "exists" }
+     if $filename.:e { say "exists" }
+ 
+-Both of these forms actually translate to
+-
+-    if $filename.STATUS(:e) { say "exists" }
+-
+-which is a generic mechanism that dispatches to the object's
+-class to find the definition of C<STATUS>.  (It just happens that C<Str>
+-(filenames) and C<IO> (filehandles) default to the expected filetest
+-semantics, but C<$regex.:i> might tell you whether the regex is case
+-insensitive, for instance.)
++The 1st form actually translates to the latter form, so the object's
++class decides how to dispatch pair methods.  It just happens that
++C<Str> (filenames), C<IO> (filehandles), and C<Statbuf> (stat buffers)
++default to the expected filetest semantics, but C<$regex.:i> might
++tell you whether the regex is case insensitive, for instance.
+ 
+ Using the pattern form, multiple tests may be combined via junctions:
+ 
+     given $handle {
+-        when all :r :w :x {...}
++        when :r & :w & :x {...}
+         when :!w | :!x    {...}
+         when *            {...}
+     }
+ 
++When adverbial pairs are stacked into one term, it is assumed they are
++ANDed together, so
++
++    when :r :w :x
++
++is equivalent to either of:
++
++    when :r & :w & :x
++    when all(:r,:w,:x)
++
+ The advantage of the method form is that it can be used in places that
+ require tighter precedence than C<~~> provides:
+ 
+@@ -1510,13 +1516,23 @@
+ 
+     sort { .:M }, @files
+ 
+-But that demonstrates the other advantage of the method form.
++But that demonstrates the other advantage of the method form, which is
++that it allows the "unary dot" syntax to test the current topic.
++
++Unlike in earlier versions of Perl 6, these filetests do not return
++stat buffers, but simple scalars of type C<Bool>, C<Int>, or C<Num>.
+ 
+-In general, the user need not worry about caching the stat buffer.
+-The stat buffer will automatically be reused if the same object has
+-recently been queried, where "recently" is defined as less than a
+-second or so.  If this is a concern, an explicit stat() or lstat()
+-on that file will automatically reset the stat buffer for that file.
++In general, the user need not worry about caching the stat buffer
++when a filename is queried.  The stat buffer will automatically be
++reused if the same object has recently been queried, where "recently"
++is defined as less than a second or so.  If this is a concern, an
++explicit stat() or lstat() may be used to return an explicit stat
++buffer object that will not be subject to timeout, and may be tested
++repeatedly just as a filename or handle can.  A C<Statbuf> object has
++a C<.file> method that can be queried for its filename (if known);
++the C<.io> method returns the handle (if known).  If the C<Statbuf>
++object doesn't know its filename but does know its IO handle, then
++C<.file> attempts to return C<.io.file>.
+ 
+ Note that C<:s> still returns the filesize, but C<:!s> is true
+ only if the file is of size 0.
+

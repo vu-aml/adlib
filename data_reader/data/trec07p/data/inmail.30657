@@ -1,0 +1,512 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon May  7 11:34:22 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l47FYMqD000414
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 7 May 2007 11:34:22 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 661ED163ACA
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon,  7 May 2007 15:34:21 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.3 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id 8B8A51638C7; Mon,  7 May 2007 15:31:13 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070507153113.8B8A51638C7@lists.samba.org>
+Date: Mon,  7 May 2007 15:31:13 +0000 (GMT)
+Subject: svn commit: samba r22751 - in branches: SAMBA_3_0/source/include
+	SAMBA_3_0/source/rpc_server SAMBA_3_0/source/smbd
+	SAMBA_3_0/source/utils SAMBA_3_0_26/source/include
+	SAMBA_3_0_26/source/rpc_server SAMBA_3_0_26/source/smbd
+	SAMBA_3_0_26/source/utils
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-05-07 15:31:12 +0000 (Mon, 07 May 2007)
+New Revision: 22751
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22751
+
+Log:
+Next step for the cluster merge: sessionid.tdb should contain a 'struct
+server_id' instead of a 'uint32 pid'
+
+Modified:
+   branches/SAMBA_3_0/source/include/session.h
+   branches/SAMBA_3_0/source/rpc_server/srv_srvsvc_nt.c
+   branches/SAMBA_3_0/source/smbd/session.c
+   branches/SAMBA_3_0/source/smbd/sesssetup.c
+   branches/SAMBA_3_0/source/utils/net_status.c
+   branches/SAMBA_3_0/source/utils/status.c
+   branches/SAMBA_3_0_26/source/include/session.h
+   branches/SAMBA_3_0_26/source/rpc_server/srv_srvsvc_nt.c
+   branches/SAMBA_3_0_26/source/smbd/session.c
+   branches/SAMBA_3_0_26/source/smbd/sesssetup.c
+   branches/SAMBA_3_0_26/source/utils/net_status.c
+   branches/SAMBA_3_0_26/source/utils/status.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/include/session.h
+===================================================================
+--- branches/SAMBA_3_0/source/include/session.h	2007-05-07 15:29:25 UTC (rev 22750)
++++ branches/SAMBA_3_0/source/include/session.h	2007-05-07 15:31:12 UTC (rev 22751)
+@@ -36,7 +36,7 @@
+ 	fstring remote_machine;
+ 	fstring id_str;
+ 	uint32  id_num;
+-	uint32  pid;
++	struct server_id pid;
+ 	fstring ip_addr;
+ 	time_t connect_start;
+ };
+
+Modified: branches/SAMBA_3_0/source/rpc_server/srv_srvsvc_nt.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpc_server/srv_srvsvc_nt.c	2007-05-07 15:29:25 UTC (rev 22750)
++++ branches/SAMBA_3_0/source/rpc_server/srv_srvsvc_nt.c	2007-05-07 15:31:12 UTC (rev 22751)
+@@ -43,7 +43,7 @@
+ };
+ 
+ struct sess_file_count {
+-	pid_t pid;
++	struct server_id pid;
+ 	uid_t uid;
+ 	int count;
+ };
+@@ -809,7 +809,7 @@
+ {
+ 	struct sess_file_count *sess = (struct sess_file_count *)private_data;
+  
+-	if ( (procid_to_pid(&e->pid) == sess->pid) && (sess->uid == e->uid) ) {
++	if ( procid_equal(&e->pid, &sess->pid) && (sess->uid == e->uid) ) {
+ 		sess->count++;
+ 	}
+ 	
+@@ -819,7 +819,7 @@
+ /*******************************************************************
+ ********************************************************************/
+ 
+-static int net_count_files( uid_t uid, pid_t pid )
++static int net_count_files( uid_t uid, struct server_id pid )
+ {
+ 	struct sess_file_count s_file_cnt;
+ 
+@@ -1237,7 +1237,7 @@
+ 		if ((strequal(session_list[snum].username, r->in.user) || r->in.user[0] == '\0' ) &&
+ 		     strequal(session_list[snum].remote_machine, machine)) {
+ 		
+-			if (NT_STATUS_IS_OK(message_send_pid(pid_to_procid(session_list[snum].pid), MSG_SHUTDOWN, NULL, 0, False)))
++			if (NT_STATUS_IS_OK(message_send_pid(session_list[snum].pid, MSG_SHUTDOWN, NULL, 0, False)))
+ 				status = WERR_OK;
+ 		}
+ 	}
+
+Modified: branches/SAMBA_3_0/source/smbd/session.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/session.c	2007-05-07 15:29:25 UTC (rev 22750)
++++ branches/SAMBA_3_0/source/smbd/session.c	2007-05-07 15:31:12 UTC (rev 22751)
+@@ -60,7 +60,7 @@
+ 	struct sockaddr sa;
+ 	struct in_addr *client_ip;
+ 	struct sessionid sessionid;
+-	uint32 pid = (uint32)sys_getpid();
++	struct server_id pid = procid_self();
+ 	fstring keystr;
+ 	char * hostname;
+ 	int tdb_store_flag;  /* If using utmp, we do an inital 'lock hold' store,
+
+Modified: branches/SAMBA_3_0/source/smbd/sesssetup.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/sesssetup.c	2007-05-07 15:29:25 UTC (rev 22750)
++++ branches/SAMBA_3_0/source/smbd/sesssetup.c	2007-05-07 15:31:12 UTC (rev 22751)
+@@ -1180,11 +1180,11 @@
+ 	struct sessionid *sessionid = (struct sessionid *)dbuf.dptr;
+ 	const char *ip = (const char *)p;
+ 
+-	if (!process_exists(pid_to_procid(sessionid->pid))) {
++	if (!process_exists(sessionid->pid)) {
+ 		return 0;
+ 	}
+ 
+-	if (sessionid->pid == sys_getpid()) {
++	if (procid_is_me(&sessionid->pid)) {
+ 		return 0;
+ 	}
+ 
+@@ -1192,7 +1192,7 @@
+ 		return 0;
+ 	}
+ 
+-	message_send_pid(pid_to_procid(sessionid->pid), MSG_SHUTDOWN,
++	message_send_pid(sessionid->pid, MSG_SHUTDOWN,
+ 			 NULL, 0, True);
+ 	return 0;
+ }
+
+Modified: branches/SAMBA_3_0/source/utils/net_status.c
+===================================================================
+--- branches/SAMBA_3_0/source/utils/net_status.c	2007-05-07 15:29:25 UTC (rev 22750)
++++ branches/SAMBA_3_0/source/utils/net_status.c	2007-05-07 15:31:12 UTC (rev 22751)
+@@ -31,18 +31,18 @@
+ 
+ 	memcpy(&sessionid, dbuf.dptr, sizeof(sessionid));
+ 
+-	if (!process_exists_by_pid(sessionid.pid)) {
++	if (!process_exists(sessionid.pid)) {
+ 		return 0;
+ 	}
+ 
+ 	if (*parseable) {
+-		d_printf("%d\\%s\\%s\\%s\\%s\n",
+-			 (int)sessionid.pid, uidtoname(sessionid.uid),
++		d_printf("%s\\%s\\%s\\%s\\%s\n",
++			 procid_str_static(&sessionid.pid), uidtoname(sessionid.uid),
+ 			 gidtoname(sessionid.gid), 
+ 			 sessionid.remote_machine, sessionid.hostname);
+ 	} else {
+-		d_printf("%5d   %-12s  %-12s  %-12s (%s)\n",
+-			 (int)sessionid.pid, uidtoname(sessionid.uid),
++		d_printf("%7s   %-12s  %-12s  %-12s (%s)\n",
++			 procid_str_static(&sessionid.pid), uidtoname(sessionid.uid),
+ 			 gidtoname(sessionid.gid), 
+ 			 sessionid.remote_machine, sessionid.hostname);
+ 	}
+@@ -102,7 +102,7 @@
+ 	}
+ 
+ 	d_printf("%-10.10s   %s   %-12s  %s",
+-	       crec.servicename,procid_str_static(&crec.pid),
++	       crec.servicename, procid_str_static(&crec.pid),
+ 	       crec.machine,
+ 	       time_to_asc(crec.start));
+ 
+@@ -125,7 +125,7 @@
+ 
+ 	memcpy(&sessionid, dbuf.dptr, sizeof(sessionid));
+ 
+-	if (!process_exists_by_pid(sessionid.pid)) 
++	if (!process_exists(sessionid.pid)) 
+ 		return 0;
+ 
+ 	ids->num_entries += 1;
+@@ -160,7 +160,7 @@
+ 	}
+ 
+ 	for (i=0; i<ids->num_entries; i++) {
+-		struct server_id id = pid_to_procid(ids->entries[i].pid);
++		struct server_id id = ids->entries[i].pid;
+ 		if (procid_equal(&id, &crec.pid)) {
+ 			guest = False;
+ 			break;
+
+Modified: branches/SAMBA_3_0/source/utils/status.c
+===================================================================
+--- branches/SAMBA_3_0/source/utils/status.c	2007-05-07 15:29:25 UTC (rev 22750)
++++ branches/SAMBA_3_0/source/utils/status.c	2007-05-07 15:31:12 UTC (rev 22751)
+@@ -35,7 +35,7 @@
+ 
+ #define SMB_MAXPIDS		2048
+ static uid_t 		Ucrit_uid = 0;               /* added by OH */
+-static pid_t		Ucrit_pid[SMB_MAXPIDS];  /* Ugly !!! */   /* added by OH */
++static struct server_id	Ucrit_pid[SMB_MAXPIDS];  /* Ugly !!! */   /* added by OH */
+ static int		Ucrit_MaxPid=0;                    /* added by OH */
+ static unsigned int	Ucrit_IsActive = 0;                /* added by OH */
+ 
+@@ -69,7 +69,7 @@
+ 	return 0;
+ }
+ 
+-static unsigned int Ucrit_checkPid(pid_t pid)
++static unsigned int Ucrit_checkPid(struct server_id pid)
+ {
+ 	int i;
+ 	
+@@ -77,14 +77,14 @@
+ 		return 1;
+ 	
+ 	for (i=0;i<Ucrit_MaxPid;i++) {
+-		if( pid == Ucrit_pid[i] ) 
++		if (cluster_id_equal(&pid, &Ucrit_pid[i])) 
+ 			return 1;
+ 	}
+ 	
+ 	return 0;
+ }
+ 
+-static BOOL Ucrit_addPid( pid_t pid )
++static BOOL Ucrit_addPid( struct server_id pid )
+ {
+ 	if ( !Ucrit_IsActive )
+ 		return True;
+@@ -119,7 +119,7 @@
+ 	}
+ 	count++;
+ 
+-	if (Ucrit_checkPid(procid_to_pid(&e->pid))) {
++	if (Ucrit_checkPid(e->pid)) {
+ 		d_printf("%-11s  ",procid_str_static(&e->pid));
+ 		d_printf("%-9u  ", (unsigned int)e->uid);
+ 		switch (map_share_mode_to_deny_mode(e->share_access,
+@@ -222,7 +222,7 @@
+ 
+ 	memcpy(&sessionid, dbuf.dptr, sizeof(sessionid));
+ 
+-	if (!process_exists_by_pid(sessionid.pid) || !Ucrit_checkUid(sessionid.uid)) {
++	if (!process_exists(sessionid.pid) || !Ucrit_checkUid(sessionid.uid)) {
+ 		return 0;
+ 	}
+ 
+@@ -231,8 +231,8 @@
+ 	fstr_sprintf(uid_str, "%d", sessionid.uid);
+ 	fstr_sprintf(gid_str, "%d", sessionid.gid);
+ 
+-	d_printf("%5d   %-12s  %-12s  %-12s (%s)\n",
+-		 (int)sessionid.pid,
++	d_printf("%s   %-12s  %-12s  %-12s (%s)\n",
++		 procid_str_static(&sessionid.pid),
+ 		 numeric_only ? uid_str : uidtoname(sessionid.uid),
+ 		 numeric_only ? gid_str : gidtoname(sessionid.gid), 
+ 		 sessionid.remote_machine, sessionid.hostname);
+
+Modified: branches/SAMBA_3_0_26/source/include/session.h
+===================================================================
+--- branches/SAMBA_3_0_26/source/include/session.h	2007-05-07 15:29:25 UTC (rev 22750)
++++ branches/SAMBA_3_0_26/source/include/session.h	2007-05-07 15:31:12 UTC (rev 22751)
+@@ -36,7 +36,7 @@
+ 	fstring remote_machine;
+ 	fstring id_str;
+ 	uint32  id_num;
+-	uint32  pid;
++	struct server_id pid;
+ 	fstring ip_addr;
+ 	time_t connect_start;
+ };
+
+Modified: branches/SAMBA_3_0_26/source/rpc_server/srv_srvsvc_nt.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/rpc_server/srv_srvsvc_nt.c	2007-05-07 15:29:25 UTC (rev 22750)
++++ branches/SAMBA_3_0_26/source/rpc_server/srv_srvsvc_nt.c	2007-05-07 15:31:12 UTC (rev 22751)
+@@ -39,7 +39,7 @@
+ };
+ 
+ struct sess_file_count {
+-	pid_t pid;
++	struct server_id pid;
+ 	uid_t uid;
+ 	int count;
+ };
+@@ -821,7 +821,7 @@
+ {
+ 	struct sess_file_count *sess = &s_file_cnt;
+  
+-	if ( (procid_to_pid(&e->pid) == sess->pid) && (sess->uid == e->uid) ) {
++	if ( procid_equal(&e->pid, &sess->pid) && (sess->uid == e->uid) ) {
+ 		sess->count++;
+ 	}
+ 	
+@@ -831,7 +831,7 @@
+ /*******************************************************************
+ ********************************************************************/
+ 
+-static int net_count_files( uid_t uid, pid_t pid )
++static int net_count_files( uid_t uid, struct server_id pid )
+ {
+ 	s_file_cnt.count = 0;
+ 	s_file_cnt.uid = uid;
+@@ -1350,7 +1350,7 @@
+ 				become_root();
+ 			}
+ 
+-			if (NT_STATUS_IS_OK(message_send_pid(pid_to_procid(session_list[snum].pid), MSG_SHUTDOWN, NULL, 0, False)))
++			if (NT_STATUS_IS_OK(message_send_pid(session_list[snum].pid, MSG_SHUTDOWN, NULL, 0, False)))
+ 				r_u->status = WERR_OK;
+ 
+ 			if (not_root) 
+
+Modified: branches/SAMBA_3_0_26/source/smbd/session.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/smbd/session.c	2007-05-07 15:29:25 UTC (rev 22750)
++++ branches/SAMBA_3_0_26/source/smbd/session.c	2007-05-07 15:31:12 UTC (rev 22751)
+@@ -60,7 +60,7 @@
+ 	struct sockaddr sa;
+ 	struct in_addr *client_ip;
+ 	struct sessionid sessionid;
+-	uint32 pid = (uint32)sys_getpid();
++	struct server_id pid = procid_self();
+ 	TDB_DATA key;		
+ 	fstring keystr;
+ 	char * hostname;
+
+Modified: branches/SAMBA_3_0_26/source/smbd/sesssetup.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/smbd/sesssetup.c	2007-05-07 15:29:25 UTC (rev 22750)
++++ branches/SAMBA_3_0_26/source/smbd/sesssetup.c	2007-05-07 15:31:12 UTC (rev 22751)
+@@ -1178,11 +1178,11 @@
+ 	struct sessionid *sessionid = (struct sessionid *)dbuf.dptr;
+ 	const char *ip = (const char *)p;
+ 
+-	if (!process_exists(pid_to_procid(sessionid->pid))) {
++	if (!process_exists(sessionid->pid)) {
+ 		return 0;
+ 	}
+ 
+-	if (sessionid->pid == sys_getpid()) {
++	if (procid_is_me(&sessionid->pid)) {
+ 		return 0;
+ 	}
+ 
+@@ -1190,7 +1190,7 @@
+ 		return 0;
+ 	}
+ 
+-	message_send_pid(pid_to_procid(sessionid->pid), MSG_SHUTDOWN,
++	message_send_pid(sessionid->pid, MSG_SHUTDOWN,
+ 			 NULL, 0, True);
+ 	return 0;
+ }
+
+Modified: branches/SAMBA_3_0_26/source/utils/net_status.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/utils/net_status.c	2007-05-07 15:29:25 UTC (rev 22750)
++++ branches/SAMBA_3_0_26/source/utils/net_status.c	2007-05-07 15:31:12 UTC (rev 22751)
+@@ -31,18 +31,18 @@
+ 
+ 	memcpy(&sessionid, dbuf.dptr, sizeof(sessionid));
+ 
+-	if (!process_exists_by_pid(sessionid.pid)) {
++	if (!process_exists(sessionid.pid)) {
+ 		return 0;
+ 	}
+ 
+ 	if (*parseable) {
+-		d_printf("%d\\%s\\%s\\%s\\%s\n",
+-			 (int)sessionid.pid, uidtoname(sessionid.uid),
++		d_printf("%s\\%s\\%s\\%s\\%s\n",
++			 procid_str_static(&sessionid.pid), uidtoname(sessionid.uid),
+ 			 gidtoname(sessionid.gid), 
+ 			 sessionid.remote_machine, sessionid.hostname);
+ 	} else {
+-		d_printf("%5d   %-12s  %-12s  %-12s (%s)\n",
+-			 (int)sessionid.pid, uidtoname(sessionid.uid),
++		d_printf("%7s   %-12s  %-12s  %-12s (%s)\n",
++			 procid_str_static(&sessionid.pid), uidtoname(sessionid.uid),
+ 			 gidtoname(sessionid.gid), 
+ 			 sessionid.remote_machine, sessionid.hostname);
+ 	}
+@@ -102,7 +102,7 @@
+ 	}
+ 
+ 	d_printf("%-10.10s   %s   %-12s  %s",
+-	       crec.servicename,procid_str_static(&crec.pid),
++	       crec.servicename, procid_str_static(&crec.pid),
+ 	       crec.machine,
+ 	       time_to_asc(crec.start));
+ 
+@@ -125,7 +125,7 @@
+ 
+ 	memcpy(&sessionid, dbuf.dptr, sizeof(sessionid));
+ 
+-	if (!process_exists_by_pid(sessionid.pid)) 
++	if (!process_exists(sessionid.pid)) 
+ 		return 0;
+ 
+ 	ids->num_entries += 1;
+@@ -160,7 +160,7 @@
+ 	}
+ 
+ 	for (i=0; i<ids->num_entries; i++) {
+-		struct server_id id = pid_to_procid(ids->entries[i].pid);
++		struct server_id id = ids->entries[i].pid;
+ 		if (procid_equal(&id, &crec.pid)) {
+ 			guest = False;
+ 			break;
+
+Modified: branches/SAMBA_3_0_26/source/utils/status.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/utils/status.c	2007-05-07 15:29:25 UTC (rev 22750)
++++ branches/SAMBA_3_0_26/source/utils/status.c	2007-05-07 15:31:12 UTC (rev 22751)
+@@ -35,7 +35,7 @@
+ 
+ #define SMB_MAXPIDS		2048
+ static uid_t 		Ucrit_uid = 0;               /* added by OH */
+-static pid_t		Ucrit_pid[SMB_MAXPIDS];  /* Ugly !!! */   /* added by OH */
++static struct server_id	Ucrit_pid[SMB_MAXPIDS];  /* Ugly !!! */   /* added by OH */
+ static int		Ucrit_MaxPid=0;                    /* added by OH */
+ static unsigned int	Ucrit_IsActive = 0;                /* added by OH */
+ 
+@@ -69,7 +69,7 @@
+ 	return 0;
+ }
+ 
+-static unsigned int Ucrit_checkPid(pid_t pid)
++static unsigned int Ucrit_checkPid(struct server_id pid)
+ {
+ 	int i;
+ 	
+@@ -77,14 +77,14 @@
+ 		return 1;
+ 	
+ 	for (i=0;i<Ucrit_MaxPid;i++) {
+-		if( pid == Ucrit_pid[i] ) 
++		if (cluster_id_equal(&pid, &Ucrit_pid[i])) 
+ 			return 1;
+ 	}
+ 	
+ 	return 0;
+ }
+ 
+-static BOOL Ucrit_addPid( pid_t pid )
++static BOOL Ucrit_addPid( struct server_id pid )
+ {
+ 	if ( !Ucrit_IsActive )
+ 		return True;
+@@ -119,7 +119,7 @@
+ 	}
+ 	count++;
+ 
+-	if (Ucrit_checkPid(procid_to_pid(&e->pid))) {
++	if (Ucrit_checkPid(e->pid)) {
+ 		d_printf("%-11s  ",procid_str_static(&e->pid));
+ 		d_printf("%-9u  ", (unsigned int)e->uid);
+ 		switch (map_share_mode_to_deny_mode(e->share_access,
+@@ -222,7 +222,7 @@
+ 
+ 	memcpy(&sessionid, dbuf.dptr, sizeof(sessionid));
+ 
+-	if (!process_exists_by_pid(sessionid.pid) || !Ucrit_checkUid(sessionid.uid)) {
++	if (!process_exists(sessionid.pid) || !Ucrit_checkUid(sessionid.uid)) {
+ 		return 0;
+ 	}
+ 
+@@ -231,8 +231,8 @@
+ 	fstr_sprintf(uid_str, "%d", sessionid.uid);
+ 	fstr_sprintf(gid_str, "%d", sessionid.gid);
+ 
+-	d_printf("%5d   %-12s  %-12s  %-12s (%s)\n",
+-		 (int)sessionid.pid,
++	d_printf("%s   %-12s  %-12s  %-12s (%s)\n",
++		 procid_str_static(&sessionid.pid),
+ 		 numeric_only ? uid_str : uidtoname(sessionid.uid),
+ 		 numeric_only ? gid_str : gidtoname(sessionid.gid), 
+ 		 sessionid.remote_machine, sessionid.hostname);
+

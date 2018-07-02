@@ -1,0 +1,131 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 15 15:15:06 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4FJF6qD009111
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 15:15:06 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id E6968163872
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 19:15:03 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.8 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1005)
+	id 7F6DF162AC5; Tue, 15 May 2007 19:14:34 +0000 (GMT)
+To: samba-cvs@samba.org
+From: derrell@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070515191434.7F6DF162AC5@lists.samba.org>
+Date: Tue, 15 May 2007 19:14:34 +0000 (GMT)
+Subject: svn commit: samba r22915 - in branches/SAMBA_3_0_25:
+	examples/libsmbclient source/libsmb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: derrell
+Date: 2007-05-15 19:14:34 +0000 (Tue, 15 May 2007)
+New Revision: 22915
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22915
+
+Log:
+
+- Fixes bug 4599.  A missing <code>if</code> statement forced subseqeuent
+  attempts to set attributes to fail.
+
+- I also noticed that missing attributes were setting an invalid return string
+  by getxattr(), e.g. if there was not group, the return string had "GROUP:;"
+  instead of excluding the GROUP attribute entirely as it should.  The big
+  problem with the way it was, is that the string could not then be passed to
+  setxattr() and parsed.
+
+Modified:
+   branches/SAMBA_3_0_25/examples/libsmbclient/Makefile
+   branches/SAMBA_3_0_25/source/libsmb/libsmbclient.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0_25/examples/libsmbclient/Makefile
+===================================================================
+--- branches/SAMBA_3_0_25/examples/libsmbclient/Makefile	2007-05-15 19:10:29 UTC (rev 22914)
++++ branches/SAMBA_3_0_25/examples/libsmbclient/Makefile	2007-05-15 19:14:34 UTC (rev 22915)
+@@ -17,6 +17,7 @@
+ TESTS=	testsmbc \
+ 	tree \
+ 	testacl \
++	testacl2 \
+ 	testbrowse \
+ 	testbrowse2 \
+ 	teststat \
+@@ -39,6 +40,10 @@
+ 	@echo Linking testacl
+ 	$(CC) `gtk-config --cflags` $(CFLAGS) $(LDFLAGS) -o $@ $< `gtk-config --libs` $(LIBSMBCLIENT) -lpopt
+ 
++testacl2: testacl2.o
++	@echo Linking testacl2
++	$(CC) `gtk-config --cflags` $(CFLAGS) $(LDFLAGS) -o $@ $< `gtk-config --libs` $(LIBSMBCLIENT) -lpopt
++
+ testbrowse: testbrowse.o
+ 	@echo Linking testbrowse
+ 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $< $(LIBSMBCLIENT) -lpopt
+
+Modified: branches/SAMBA_3_0_25/source/libsmb/libsmbclient.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/libsmb/libsmbclient.c	2007-05-15 19:10:29 UTC (rev 22914)
++++ branches/SAMBA_3_0_25/source/libsmb/libsmbclient.c	2007-05-15 19:14:34 UTC (rev 22915)
+@@ -4556,7 +4556,7 @@
+                                                 return -1;
+                                         }
+                                         n = strlen(p);
+-                                } else {
++                                } else if (sidstr[0] != '\0') {
+                                         n = snprintf(buf, bufsize,
+                                                      ",OWNER:%s", sidstr);
+                                 }
+@@ -4601,7 +4601,7 @@
+                                                 return -1;
+                                         }
+                                         n = strlen(p);
+-                                } else {
++                                } else if (sidstr[0] != '\0') {
+                                         n = snprintf(buf, bufsize,
+                                                      ",GROUP:%s", sidstr);
+                                 }
+@@ -5327,7 +5327,9 @@
+                 ipc_srv = smbc_attr_server(context, server, share,
+                                            workgroup, user, password,
+                                            &pol);
+-                srv->no_nt_session = True;
++                if (! ipc_srv) {
++                        srv->no_nt_session = True;
++                }
+         } else {
+                 ipc_srv = NULL;
+         }
+@@ -5752,7 +5754,9 @@
+                 ipc_srv = smbc_attr_server(context, server, share,
+                                            workgroup, user, password,
+                                            &pol);
+-                srv->no_nt_session = True;
++                if (! ipc_srv) {
++                        srv->no_nt_session = True;
++                }
+         } else {
+                 ipc_srv = NULL;
+         }
+

@@ -1,0 +1,110 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May  1 21:15:59 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l421Fwb9015546
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 1 May 2007 21:15:58 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 66192163928
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue,  1 May 2007 01:09:44 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.7 required=3.8 tests=AWL,BAYES_50,
+	DNS_FROM_RFC_ABUSE,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: from relay.sgi.com (netops-testserver-4-out.sgi.com [192.48.171.29])
+	by lists.samba.org (Postfix) with ESMTP id 6F609162C24;
+	Tue,  1 May 2007 01:09:05 +0000 (GMT)
+Received: from larry.melbourne.sgi.com (larry.melbourne.sgi.com
+	[134.14.52.130])
+	by netops-testserver-4.corp.sgi.com (Postfix) with SMTP id 2D76B61BAF; 
+	Mon, 30 Apr 2007 18:09:02 -0700 (PDT)
+Received: from [134.14.55.78] (redback.melbourne.sgi.com [134.14.55.78]) by
+	larry.melbourne.sgi.com (950413.SGI.8.6.12/950213.SGI.AUTOCF)
+	via ESMTP id LAA16158; Tue, 1 May 2007 11:09:00 +1000
+Message-ID: <46369330.10607@sgi.com>
+Date: Tue, 01 May 2007 11:09:04 +1000
+From: Alison Winters <alisonw@sgi.com>
+User-Agent: Thunderbird 1.5.0.10 (Windows/20070221)
+MIME-Version: 1.0
+To: Johann Hanne <jhml@gmx.net>
+References: <200704291301.58025.jhml@gmx.net>	<1177864568.1975.84.camel@localhost.localdomain>
+	<200704301136.03195.jhml@gmx.net>
+In-Reply-To: <200704301136.03195.jhml@gmx.net>
+Content-Type: text/plain; charset=ISO-8859-1
+Content-Transfer-Encoding: 7bit
+Cc: simo <idra@samba.org>, samba-technical@samba.org
+Subject: Re: Setting "winbind separator" to '\' in smb.conf
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Johann Hanne wrote:
+> On Sunday 29 April 2007 18:36, simo wrote:
+>> On Sun, 2007-04-29 at 13:01 +0200, Johann Hanne wrote:
+>>> there is currently no obvious way to explicitly set the winbind separator
+>>> to '\' in smb.conf. Even worse, the default given in the man page of
+>>> smb.conf is wrong:
+>> Have you tried: winbind separator = "\\" ?
+> Just tried it with 3.0.25rc3. It results in the actual seperator being a 
+> double quote ("), and '\\' results in a single quote ('). As it seems that 
+> even a Samba insider falls about the smb.conf parsing, I feel assured that 
+> there should be an extra paragraph in the smb.conf man page explaining that a 
+> backslash is *NEVER* treated in a special way except for line continuation 
+> (that's why \\SERVER\SHARE is a valid notation) and that single/double quotes 
+> only have a special meaning with certain keywords (e.g. passdb backend).
+> 
+I think this whole problem is symptomatic of the somewhat chaotic
+handling of the smb.conf options.  For instance, when Ed Plese and i
+were discussing the shadow copy improvements, we needed to be able to
+have literal percents (%) in the smb.conf file, but there is no standard
+way to do this.  %% does not work as expected.  %[char] is treated as a
+variable substitution, but only for certain options (i.e. those grabbed
+with alloc_sub_basic and friends), and there's no obvious indication in
+the manpages about which options do and don't get substitutions.
+
+It would be nice if there was a clearly defined standard for what
+certain characters meant in the config file - something that worked for
+every option, not just on an undocumented case-by-case basis.  An
+example might be:
+
+1. Options must fall into one of the following types:
+   BOOL
+      valid values: true/false/1/0/yes/no
+   INTEGER
+      valid values: [::digit::]+
+   STRING
+      valid values: any utf-8 chars, backslash is not significant
+   LIST
+      valid values: space-delimited STRINGs, backslash is only
+                    significant to indicate non-breaking space or
+                    to escape itself
+
+   The type for each option should be listed in the man page.
+
+2. For STRING and LIST types, there is an additional type modifier of
+   variable substitution or not.  For substitution-enabled types,
+   %% is interpreted as a literal percent.  %[unknown-char] is an
+   error that will cause testparm to choke.
+
+   This also should be listed in the man page.
+
+The above is just an example - i'm sure there are corner cases missing -
+but i think the point stands.  smb.conf options should be standardized
+and all the documentation and code updated so it works predictably in
+all cases.
+
+Alison
+

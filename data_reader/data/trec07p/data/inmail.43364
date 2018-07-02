@@ -1,0 +1,300 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri May 25 01:19:36 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4P5JaqD014820
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 25 May 2007 01:19:36 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 15C6B163A24
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 25 May 2007 05:19:32 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.8 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 501)
+	id 7E0E2162AD4; Fri, 25 May 2007 05:19:03 +0000 (GMT)
+To: samba-cvs@samba.org
+From: abartlet@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070525051903.7E0E2162AD4@lists.samba.org>
+Date: Fri, 25 May 2007 05:19:03 +0000 (GMT)
+Subject: svn commit: samba r23132 - in branches/SAMBA_4_0/source/auth: .
+	credentials
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: abartlet
+Date: 2007-05-25 05:19:02 +0000 (Fri, 25 May 2007)
+New Revision: 23132
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23132
+
+Log:
+Resolve an issue where we would use the ccache after we free()ed it.
+
+The problem was, we would set the ccache, then invalidate it as we set
+details from it (like the principal name from the ccache).
+
+Instead, set the ccache onto the credentials structure after we are
+done processing it.
+
+Andrew Bartlett
+
+Modified:
+   branches/SAMBA_4_0/source/auth/auth_util.c
+   branches/SAMBA_4_0/source/auth/credentials/credentials_krb5.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/auth/auth_util.c
+===================================================================
+--- branches/SAMBA_4_0/source/auth/auth_util.c	2007-05-25 04:10:51 UTC (rev 23131)
++++ branches/SAMBA_4_0/source/auth/auth_util.c	2007-05-25 05:19:02 UTC (rev 23132)
+@@ -581,8 +581,9 @@
+ 	return session_info;
+ }
+ 
+-NTSTATUS auth_system_session_info(TALLOC_CTX *parent_ctx, 
+-				  struct auth_session_info **_session_info) 
++static NTSTATUS _auth_system_session_info(TALLOC_CTX *parent_ctx, 
++					  BOOL anonymous_credentials, 
++					  struct auth_session_info **_session_info) 
+ {
+ 	NTSTATUS nt_status;
+ 	struct auth_serversupplied_info *server_info = NULL;
+@@ -609,7 +610,7 @@
+ 
+ 	cli_credentials_set_conf(session_info->credentials);
+ 
+-	if (lp_parm_bool(-1,"system","anonymous", False)) {
++	if (anonymous_credentials) {
+ 		cli_credentials_set_anonymous(session_info->credentials);
+ 	} else {
+ 		cli_credentials_set_machine_account_pending(session_info->credentials);
+@@ -619,17 +620,42 @@
+ 	return NT_STATUS_OK;
+ }
+ 
++_PUBLIC_ NTSTATUS auth_system_session_info(TALLOC_CTX *parent_ctx, 
++					   struct auth_session_info **_session_info) 
++{
++	return _auth_system_session_info(parent_ctx, lp_parm_bool(-1,"system","anonymous", False), 
++					 _session_info);
++}
++
++/*
++  Create a system session, with machine account credentials
++*/
+ _PUBLIC_ struct auth_session_info *system_session(TALLOC_CTX *mem_ctx) 
+ {
+ 	NTSTATUS nt_status;
+ 	struct auth_session_info *session_info = NULL;
+-	nt_status = auth_system_session_info(mem_ctx, &session_info);
++	nt_status = auth_system_session_info(mem_ctx,
++					     &session_info);
+ 	if (!NT_STATUS_IS_OK(nt_status)) {
+ 		return NULL;
+ 	}
+ 	return session_info;
+ }
+ 
++/*
++  Create a system session, but with anonymous credentials (so we do not need to open secrets.ldb)
++*/
++_PUBLIC_ struct auth_session_info *system_session_anon(TALLOC_CTX *mem_ctx) 
++{
++	NTSTATUS nt_status;
++	struct auth_session_info *session_info = NULL;
++	nt_status = _auth_system_session_info(mem_ctx, False, &session_info);
++	if (!NT_STATUS_IS_OK(nt_status)) {
++		return NULL;
++	}
++	return session_info;
++}
++
+ /****************************************************************************
+  prints a struct auth_session_info security token to debug output.
+ ****************************************************************************/
+
+Modified: branches/SAMBA_4_0/source/auth/credentials/credentials_krb5.c
+===================================================================
+--- branches/SAMBA_4_0/source/auth/credentials/credentials_krb5.c	2007-05-25 04:10:51 UTC (rev 23131)
++++ branches/SAMBA_4_0/source/auth/credentials/credentials_krb5.c	2007-05-25 05:19:02 UTC (rev 23132)
+@@ -60,7 +60,8 @@
+ 	return NT_STATUS_OK;
+ }
+ 
+-int cli_credentials_set_from_ccache(struct cli_credentials *cred, 
++static int cli_credentials_set_from_ccache(struct cli_credentials *cred, 
++				    struct ccache_container *ccache,
+ 				    enum credentials_obtained obtained)
+ {
+ 	
+@@ -73,37 +74,37 @@
+ 		return 0;
+ 	}
+ 
+-	ret = krb5_cc_get_principal(cred->ccache->smb_krb5_context->krb5_context, 
+-				    cred->ccache->ccache, &princ);
++	ret = krb5_cc_get_principal(ccache->smb_krb5_context->krb5_context, 
++				    ccache->ccache, &princ);
+ 
+ 	if (ret) {
+-		char *err_mess = smb_get_krb5_error_message(cred->ccache->smb_krb5_context->krb5_context, ret, cred);
++		char *err_mess = smb_get_krb5_error_message(ccache->smb_krb5_context->krb5_context, 
++							    ret, cred);
+ 		DEBUG(1,("failed to get principal from ccache: %s\n", 
+ 			 err_mess));
+ 		talloc_free(err_mess);
+ 		return ret;
+ 	}
+ 	
+-	ret = krb5_unparse_name(cred->ccache->smb_krb5_context->krb5_context, princ, &name);
++	ret = krb5_unparse_name(ccache->smb_krb5_context->krb5_context, princ, &name);
+ 	if (ret) {
+-		char *err_mess = smb_get_krb5_error_message(cred->ccache->smb_krb5_context->krb5_context, ret, cred);
++		char *err_mess = smb_get_krb5_error_message(ccache->smb_krb5_context->krb5_context, ret, cred);
+ 		DEBUG(1,("failed to unparse principal from ccache: %s\n", 
+ 			 err_mess));
+ 		talloc_free(err_mess);
+ 		return ret;
+ 	}
+ 
+-	realm = krb5_princ_realm(cred->ccache->smb_krb5_context->krb5_context, princ);
++	realm = krb5_princ_realm(ccache->smb_krb5_context->krb5_context, princ);
+ 
+ 	cli_credentials_set_principal(cred, name, obtained);
+ 
+ 	free(name);
+ 
+-	krb5_free_principal(cred->ccache->smb_krb5_context->krb5_context, princ);
++	krb5_free_principal(ccache->smb_krb5_context->krb5_context, princ);
+ 
+ 	/* set the ccache_obtained here, as it just got set to UNINITIALISED by the calls above */
+ 	cred->ccache_obtained = obtained;
+-	cli_credentials_invalidate_client_gss_creds(cred, cred->ccache_obtained);
+ 
+ 	return 0;
+ }
+@@ -181,20 +182,22 @@
+ 
+ 	krb5_free_principal(ccc->smb_krb5_context->krb5_context, princ);
+ 
+-	cred->ccache = ccc;
+-	talloc_steal(cred, ccc);
++	ret = cli_credentials_set_from_ccache(cred, ccc, obtained);
+ 
+-	ret = cli_credentials_set_from_ccache(cred, obtained);
+-
+ 	if (ret) {
+ 		return ret;
+ 	}
+ 
++	cred->ccache = ccc;
++	cred->ccache_obtained = obtained;
++	talloc_steal(cred, ccc);
++
++	cli_credentials_invalidate_client_gss_creds(cred, cred->ccache_obtained);
+ 	return 0;
+ }
+ 
+ 
+-int cli_credentials_new_ccache(struct cli_credentials *cred, struct ccache_container **_ccc)
++static int cli_credentials_new_ccache(struct cli_credentials *cred, struct ccache_container **_ccc)
+ {
+ 	krb5_error_code ret;
+ 	char *rand_string;
+@@ -241,17 +244,10 @@
+ 
+ 	talloc_set_destructor(ccc, free_mccache);
+ 
+-	cred->ccache = ccc;
+-	talloc_steal(cred, ccc);
+ 	talloc_free(ccache_name);
+ 
+-	if (_ccc) {
+-		*_ccc = ccc;
+-	}
++	*_ccc = ccc;
+ 
+-	cred->ccache_obtained = (MAX(MAX(cred->principal_obtained, 
+-					 cred->username_obtained), 
+-				     cred->password_obtained));
+ 	return ret;
+ }
+ 
+@@ -272,20 +268,27 @@
+ 		return EINVAL;
+ 	}
+ 
+-	ret = cli_credentials_new_ccache(cred, NULL);
++	ret = cli_credentials_new_ccache(cred, ccc);
+ 	if (ret) {
+ 		return ret;
+ 	}
+-	ret = kinit_to_ccache(cred, cred, cred->ccache->smb_krb5_context, cred->ccache->ccache);
++
++	ret = kinit_to_ccache(cred, cred, (*ccc)->smb_krb5_context, (*ccc)->ccache);
+ 	if (ret) {
+ 		return ret;
+ 	}
+-	ret = cli_credentials_set_from_ccache(cred, cred->principal_obtained);
+ 
++	ret = cli_credentials_set_from_ccache(cred, *ccc, 
++					      (MAX(MAX(cred->principal_obtained, 
++						       cred->username_obtained), 
++						   cred->password_obtained)));
++	
++	cred->ccache = *ccc;
++	cred->ccache_obtained = cred->principal_obtained;
+ 	if (ret) {
+ 		return ret;
+ 	}
+-	*ccc = cred->ccache;
++	cli_credentials_invalidate_client_gss_creds(cred, cred->ccache_obtained);
+ 	return ret;
+ }
+ 
+@@ -297,6 +300,7 @@
+ 	if (obtained >= cred->client_gss_creds_obtained) {
+ 		if (cred->client_gss_creds_obtained > CRED_UNINITIALISED) {
+ 			talloc_free(cred->client_gss_creds);
++			cred->client_gss_creds = NULL;
+ 		}
+ 		cred->client_gss_creds_obtained = CRED_UNINITIALISED;
+ 	}
+@@ -317,6 +321,7 @@
+ 	if (obtained >= cred->ccache_obtained) {
+ 		if (cred->ccache_obtained > CRED_UNINITIALISED) {
+ 			talloc_free(cred->ccache);
++			cred->ccache = NULL;
+ 		}
+ 		cred->ccache_obtained = CRED_UNINITIALISED;
+ 	}
+@@ -424,8 +429,10 @@
+ 	}
+ 
+ 	if (ret == 0) {
+-		ret = cli_credentials_set_from_ccache(cred, obtained);
++		ret = cli_credentials_set_from_ccache(cred, ccc, obtained);
+ 	}
++	cred->ccache = ccc;
++	cred->ccache_obtained = obtained;
+ 	if (ret == 0) {
+ 		gcc->creds = gssapi_cred;
+ 		talloc_set_destructor(gcc, free_gssapi_creds);
+

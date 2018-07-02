@@ -1,0 +1,116 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu May 24 04:35:23 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4O8ZMqD003426
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 24 May 2007 04:35:22 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 131F016386F
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 24 May 2007 08:35:18 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.1 required=3.8 tests=AWL, BAYES_00, FORGED_RCVD_HELO,
+	NO_MORE_FUNN, RCVD_IN_BLARS_RBL, RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from p15135482.pureserver.info (seh-technology.de [217.160.212.8])
+	by lists.samba.org (Postfix) with ESMTP id 179AB162AD0
+	for <samba-technical@lists.samba.org>;
+	Thu, 24 May 2007 08:34:41 +0000 (GMT)
+Received: from localhost (localhost.localdomain [127.0.0.1])
+	by p15135482.pureserver.info (Postfix) with ESMTP
+	id 055C234C05D; Thu, 24 May 2007 10:34:41 +0200 (CEST)
+Received: from p15135482.pureserver.info ([127.0.0.1])
+	by localhost (p15135482 [127.0.0.1]) (amavisd-new,
+	port 10024) with ESMTP
+	id 15634-01; Thu, 24 May 2007 10:34:37 +0200 (CEST)
+Received: from [192.168.3.74] (p54870d24.dip0.t-ipconnect.de [84.135.13.36])
+	(using TLSv1 with cipher RC4-MD5 (128/128 bits))
+	(No client certificate requested)
+	by p15135482.pureserver.info (Postfix) with ESMTP
+	id 9C51534C046; Thu, 24 May 2007 10:34:36 +0200 (CEST)
+Message-ID: <46554E16.2090109@seh.de>
+Date: Thu, 24 May 2007 10:34:30 +0200
+From: Martin Zielinski <mz@seh.de>
+User-Agent: Thunderbird 1.5.0.10 (X11/20070306)
+MIME-Version: 1.0
+To: "Gerald (Jerry) Carter" <jerry@samba.org>
+References: <46499B59.9080901@seh.de> <4651CB89.2000503@samba.org>
+In-Reply-To: <4651CB89.2000503@samba.org>
+Content-Type: text/plain; charset=ISO-8859-15; format=flowed
+Content-Transfer-Encoding: 7bit
+X-Virus-Scanned: by amavisd-new at seh.de
+Cc: samba-technical@lists.samba.org
+Subject: Re: 3.0.25 publish printer problem
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+
+
+Gerald (Jerry) Carter schrieb:
+> -----BEGIN PGP SIGNED MESSAGE-----
+> Hash: SHA1
+> 
+> Martin Zielinski wrote:
+> 
+>> I encounter problems (un)publishing printers to ADS.
+>> The samba log shows up the following message:
+>>
+>> kerberos_kinit_password SERVER$@MY.DOMAIN failed: Cannot 
+>> contact any KDC for requested realm
+>>
+>> The error occurs, when the smbd runs through the 
+>> ads_kinit_password() routine the second time.
+>> I've follow the "data-flow" until krb5_cc_get_principal() in clikrb5.c.
+>>
+>> Removing the    
+>>
+>> ads_kdestroy("MEMORY:prtpub_cache");
+>>
+>> in line 3294 of nt_printing.c fixes this for me.
+> 
+> Martin,
+> 
+> I don't understand why this would be necessary.  In
+> nt_printer_publish() we set the memory ccache again.
+> 
+> I also don't understand why the kinit() in ads_sasl_spnego_bind()
+> is failing.  It seems to me that the existing ds_kdestroy()
+> in check_printers-Published() is correct and that we should add
+> one to nt_printer_publish().
+> 
+> What am I missing?
+> 
+Sorry, apparently nothing.
+The problem was related to a broken DNS configuration.
+
+I still don't know, why the first run through ads_kinit_password
+succeeds (as I'm not familiar with the kerberos internals), but the
+later calls depend on successfull responses to
+"SRV _kerberos._udp.MY.DOMAIN.COM" and related DNS-requests. This has no
+effect, if the ccache is not deleted - which caused the difference in
+the behaviour of 3.0.25rc3 and 3.0.25.
+
+Bye,
+Martin
+
+
+
+-- 
+Martin Zielinski             mz@seh.de
+Software Development
+SEH Computertechnik GmbH     www.seh.de
+
+

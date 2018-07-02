@@ -1,0 +1,145 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat Apr 28 09:58:54 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3SDwr6w008089
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 28 Apr 2007 09:58:53 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id C5273163877
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 28 Apr 2007 13:58:52 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id A4935162AF4; Sat, 28 Apr 2007 13:58:14 +0000 (GMT)
+Date: Sat, 28 Apr 2007 15:15:21 +0200
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070428135814.A4935162AF4@lists.samba.org>
+Subject: Rev 213: report number of clients in ping in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 3120
+Lines: 104
+
+------------------------------------------------------------
+revno: 213
+revision-id: tridge@samba.org-20070428131521-53ws6e7u06s1llsm
+parent: tridge@samba.org-20070428110259-azfdeu63sz5zb2xw
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Sat 2007-04-28 15:15:21 +0200
+message:
+  report number of clients in ping
+modified:
+  common/ctdb_client.c           ctdb_client.c-20070411010216-3kd8v37k61steeya-1
+  common/ctdb_control.c          ctdb_control.c-20070426122724-j6gkpiofhbwdin63-1
+  common/ctdb_daemon.c           ctdb_daemon.c-20070409200331-3el1kqgdb9m4ib0g-1
+  include/ctdb_private.h         ctdb_private.h-20061117234101-o3qt14umlg9en8z0-13
+  tools/ctdb_control.c           ctdb_control.c-20070426122705-9ehj1l5lu2gn9kuj-1
+=== modified file 'common/ctdb_client.c'
+--- a/common/ctdb_client.c	2007-04-28 11:02:59 +0000
++++ b/common/ctdb_client.c	2007-04-28 13:15:21 +0000
+@@ -897,7 +897,7 @@
+ }
+ 
+ /*
+-  ping a node
++  ping a node, return number of clients connected
+  */
+ int ctdb_ping(struct ctdb_context *ctdb, uint32_t destnode)
+ {
+@@ -907,10 +907,10 @@
+ 
+ 	ZERO_STRUCT(data);
+ 	ret = ctdb_control(ctdb, destnode, 0, CTDB_CONTROL_PING, data, NULL, NULL, &res);
+-	if (ret != 0 || res != 0) {
++	if (ret != 0) {
+ 		return -1;
+ 	}
+-	return 0;
++	return res;
+ }
+ 
+ /*
+
+=== modified file 'common/ctdb_control.c'
+--- a/common/ctdb_control.c	2007-04-28 10:40:26 +0000
++++ b/common/ctdb_control.c	2007-04-28 13:15:21 +0000
+@@ -176,7 +176,7 @@
+ 
+ 	case CTDB_CONTROL_PING:
+ 		CHECK_CONTROL_DATA_SIZE(0);
+-		return 0;
++		return ctdb->num_clients;
+ 
+ 	case CTDB_CONTROL_GETDBPATH: {
+ 		uint32_t db_id;
+
+=== modified file 'common/ctdb_daemon.c'
+--- a/common/ctdb_daemon.c	2007-04-28 11:02:59 +0000
++++ b/common/ctdb_daemon.c	2007-04-28 13:15:21 +0000
+@@ -232,6 +232,7 @@
+ */
+ static int ctdb_client_destructor(struct ctdb_client *client)
+ {
++	client->ctdb->num_clients--;
+ 	close(client->fd);
+ 	client->fd = -1;
+ 	return 0;
+@@ -547,6 +548,7 @@
+ 	client = talloc_zero(ctdb, struct ctdb_client);
+ 	client->ctdb = ctdb;
+ 	client->fd = fd;
++	ctdb->num_clients++;
+ 
+ 	client->queue = ctdb_queue_setup(ctdb, client, fd, CTDB_DS_ALIGNMENT, 
+ 					 ctdb_daemon_read_cb, client);
+
+=== modified file 'include/ctdb_private.h'
+--- a/include/ctdb_private.h	2007-04-28 10:40:26 +0000
++++ b/include/ctdb_private.h	2007-04-28 13:15:21 +0000
+@@ -195,6 +195,7 @@
+ 	struct ctdb_daemon_data daemon;
+ 	struct ctdb_status status;
+ 	struct ctdb_vnn_map *vnn_map;
++	uint32_t num_clients;
+ };
+ 
+ struct ctdb_db_context {
+
+=== modified file 'tools/ctdb_control.c'
+--- a/tools/ctdb_control.c	2007-04-28 10:42:42 +0000
++++ b/tools/ctdb_control.c	2007-04-28 13:15:21 +0000
+@@ -261,11 +261,11 @@
+ 	for (i=0;i<ctdb->num_nodes;i++) {
+ 		struct timeval tv = timeval_current();
+ 		ret = ctdb_ping(ctdb, i);
+-		if (ret != 0) {
++		if (ret == -1) {
+ 			printf("Unable to get ping response from node %u\n", i);
+ 		} else {
+-			printf("response from %u time=%.6f sec\n", 
+-			       i, timeval_elapsed(&tv));
++			printf("response from %u time=%.6f sec  (%d clients)\n", 
++			       i, timeval_elapsed(&tv), ret);
+ 		}
+ 	}
+ 	return 0;
+

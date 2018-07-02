@@ -1,0 +1,142 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Apr 16 03:21:27 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3G7LQ0I002645
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 16 Apr 2007 03:21:26 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 44BEC1638AC
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 16 Apr 2007 07:21:02 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.7 required=3.8 tests=AWL,BAYES_50,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 346D1162C2D; Mon, 16 Apr 2007 07:20:19 +0000 (GMT)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Transfer-Encoding: 7bit
+Message-ID: <17955.9163.210179.280807@samba.org>
+Date: Mon, 16 Apr 2007 17:20:43 +1000
+To: Volker.Lendecke@SerNet.DE, ronniesahlberg@gmail.com,
+   samba-technical@samba.org
+In-Reply-To: <17955.4880.90755.415666@samba.org>
+References: <17955.4880.90755.415666@samba.org>
+X-Mailer: VM 7.19 under Emacs 22.0.95.1
+From: tridge@samba.org
+Subject: Re: ctdb shortcut locking
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: tridge@samba.org
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2907
+Lines: 93
+
+Volker,
+
+Ronnie and I have now fleshed out a more complete picture of how we
+will do scalable ctdb_fetch_lock(). I'll try and explain it below, and
+we'd appreciate your comments.
+
+The nomenclature will be:
+
+  - 'client' is a ctdb client, which will be an instance of a smbd
+    daemon for Samba
+
+  - 'ctdbd' is the ctdb daemon
+
+pseudo-code for ctdb_fetch_lock in the client:
+
+ ctdb_fetch_lock() {
+	/* do a blocking chainlock on the record */
+	tdb_chainlock(); 
+        
+	/* fetch the header and data for the record */
+	ctdb_ltdb_fetch();
+
+	/* if we are not the dmaster, then ask ctdbd to make us the
+	   dmaster */
+	if (header.dmaster != ctdb->vnn) {
+		ask_ctdb_daemon_to_make_us_master();
+		wait_for_reply_from_daemon();
+
+		/* the dmaster reply has come in, but the daemon has
+		   _not_ updated the record header to mark us as the
+		   dmaster - do that now in the client */
+		locally_update_record_header();
+        }
+
+	/* we are now the dmaster, and we have the record locked */
+	return record;
+ }
+
+
+here is the pseudo-code in the daemon:
+
+ ctdbd_make_us_dmaster() {
+	/* use a CTDB_CALL to force migration of the record */
+	call->call_id = CTDB_FETCH_FUNC;
+	call->flags = CTDB_IMMEDIATE_MIGRATION;
+        ctdb_call_send();
+
+	/* when we get the reply, then don't update the header
+	in the daemon, instead send the reply up to the client and get it to
+	do the work. This makes it race free, as the client held the
+	chainlock the whole time */
+	onreply:
+		send_record_to_client();
+ }
+
+notice that the above code in the daemon involves no IO on the
+database, and no locking. The client is doing all the db IO and
+locking.
+
+Additionally, in the ctdb daemon, when it receives a ctdb request from
+a remote node that requires it to read/write the ltdb, it uses the
+event driven tdb code I showed in the last message to do the IOs. 
+
+ ctdbd_process_remote_request() {
+	/* try to get the lock in a non-blocking fashion */
+	tdb_chainlock_nonblock();
+
+	/* if we can't get the lock immediately, then use the event
+	driven tdb locking to defer the request until we get the lock
+	*/
+	if (!got_lock) {
+		/* pass in the request as the private data in the callback,
+		   so we can retry the request when the event driven
+		   locking triggers */
+		tdb_chainlockwait(....., ctdbd_process_remote_request, request);
+		return;
+	}
+
+	/* we have the lock, process the request normally */
+	....
+ }
+
+The risk with all this is that the client will die before it updates
+the header on the record, thus leaving the database with an inconsistent
+dmaster. We can handle that in the destructor for the client, by
+checking that the record header wasupdated for the last record it
+operated on. We only have to check at most 1 record per client
+(assuming clients are single threaded).
+
+Make sense? We should be able to make this race free, and it should
+run as fast as normal Samba on local tdb for the uncontended case. 
+
+Cheers, Tridge
+

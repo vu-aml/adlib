@@ -1,0 +1,128 @@
+From perl6-all-return-82553-ktwarwic=speedy.uwaterloo.ca@perl.org  Thu Jul  5 13:06:24 2007
+Return-Path: <perl6-all-return-82553-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l65H6LL9028943
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 5 Jul 2007 13:06:22 -0400
+Received: (qmail 12869 invoked by uid 514); 5 Jul 2007 17:06:16 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 12860 invoked from network); 5 Jul 2007 17:06:16 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: moderator for perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: Ron Blaschke (via RT) <parrotbug-followup@parrotcode.org>
+X-RT-NewTicket: yes
+To: bugs-bitbucket@netlabs.develooper.com
+Resent-To: perl6-internals@perl.org
+Mail-Followup-To: perl6-internals@perl.org
+Reply-To: perl6-internals@perl.org
+Date: Thu, 05 Jul 2007 09:22:35 -0700
+Subject: [perl #43569] [PATCH] Declare PIO_win32_isatty and make it static 
+In-Reply-To: <468D1A77.9060301@rblasch.org>
+References: <RT-Ticket-43569@perl.org> <468D1A77.9060301@rblasch.org>
+Message-ID: <rt-3.6.HEAD-25329-1183652555-370.43569-72-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #43569
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: ron@rblasch.org
+MIME-Version: 1.0
+X-RT-Original-Encoding: utf-8
+Content-type: multipart/mixed; boundary="----------=_1183652556-25329-32"
+Resent-Message-Id: <20070705162236.B71512AFDA@x3.develooper.com>
+Resent-Date: Thu,  5 Jul 2007 09:22:36 -0700 (PDT)
+Resent-From: rt-ron=rblasch.org@netlabs.develooper.com
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+
+------------=_1183652556-25329-32
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+# New Ticket Created by  Ron Blaschke 
+# Please include the string:  [perl #43569]
+# in the subject line of all future correspondence about this issue. 
+# <URL: http://rt.perl.org/rt3/Ticket/Display.html?id=43569 >
+
+
+Problem:
+    Building Parrot on Win32 currently emits a warning for VC and an
+error for MinGW because C<PIO_win32_isatty> is declared before it is used.
+
+VC8
+
+src\io\io_win32.c(341) : warning C4013: 'PIO_win32_isatty' undefined;
+assuming extern returning int
+src\io\io_win32.c(389) : warning C4142: benign redefinition of type
+
+MinGW gcc
+
+src\io\io_win32.c: In function `PIO_win32_fdopen':
+src\io\io_win32.c:341: warning: implicit declaration of function
+`PIO_win32_isatty'
+src\io\io_win32.c: At top level:
+src\io\io_win32.c:389: warning: no previous prototype for 'PIO_win32_isatty'
+src\io\io_win32.c:389: error: conflicting types for 'PIO_win32_isatty'
+src\io\io_win32.c:341: error: previous implicit declaration of
+'PIO_win32_isatty' was here
+mingw32-make: *** [src\io\io_win32.o] Error 1
+
+
+Solution:
+    C<PIO_win32_isatty> can be static, I think, because
+C<PIO_stdio_isatty> and C<PIO_unix_isatty> are too.  I also headerized
+the file again, which brings in the required function declaration.
+
+    This should solve issue [perl #43515].
+
+
+Changed Files:
+    src/io/io_win32.c
+
+Ron
+
+------------=_1183652556-25329-32
+Content-Type: text/plain; charset="ascii"; name="io_win32_isatty_static.patch"
+Content-Disposition: inline; filename="io_win32_isatty_static.patch"
+Content-Transfer-Encoding: 7bit
+RT-Attachment: 43569/268101/117339
+
+Index: src/io/io_win32.c
+===================================================================
+--- src/io/io_win32.c	(revision 19618)
++++ src/io/io_win32.c	(working copy)
+@@ -68,6 +68,7 @@
+     ParrotIO *io );
+ 
+ static INTVAL PIO_win32_init( Interp *interp, ParrotIOLayer *layer );
++static INTVAL PIO_win32_isatty( PIOHANDLE fd );
+ static INTVAL PIO_win32_listen( Interp *interp,
+     ParrotIOLayer *layer,
+     ParrotIO *io,
+@@ -384,7 +385,7 @@
+ 
+ */
+ 
+-INTVAL
++static INTVAL
+ PIO_win32_isatty(PIOHANDLE fd)
+ {
+     DWORD ftype = GetFileType(fd);
+
+------------=_1183652556-25329-32--
+

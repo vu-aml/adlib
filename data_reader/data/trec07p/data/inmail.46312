@@ -1,0 +1,288 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 29 15:55:03 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4TJt1hB002880
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 15:55:01 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 9C426162C4C
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 19:54:56 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id C727616382C; Tue, 29 May 2007 19:54:28 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070529195428.C727616382C@lists.samba.org>
+Date: Tue, 29 May 2007 19:54:28 +0000 (GMT)
+Subject: svn commit: samba r23228 - in branches: SAMBA_3_0/source/modules
+	SAMBA_3_0_26/source/modules
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-05-29 19:54:26 +0000 (Tue, 29 May 2007)
+New Revision: 23228
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23228
+
+Log:
+Merge cleanup to the gpfs module from Tridge. Also potentially disable
+gpfs share modes in special situations. This might be split up in
+several modules later.
+
+Modified:
+   branches/SAMBA_3_0/source/modules/gpfs.c
+   branches/SAMBA_3_0_26/source/modules/gpfs.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/modules/gpfs.c
+===================================================================
+--- branches/SAMBA_3_0/source/modules/gpfs.c	2007-05-29 19:48:34 UTC (rev 23227)
++++ branches/SAMBA_3_0/source/modules/gpfs.c	2007-05-29 19:54:26 UTC (rev 23228)
+@@ -25,6 +25,7 @@
+ #include "gpfs_gpl.h"
+ 
+ static void *libgpfs_handle = NULL;
++static BOOL gpfs_share_modes;
+ 
+ static int (*gpfs_set_share_fn)(int fd, unsigned int allow, unsigned int deny);
+ static int (*gpfs_set_lease_fn)(int fd, unsigned int leaseType);
+@@ -39,6 +40,10 @@
+ 	unsigned int deny = GPFS_DENY_NONE;
+ 	int result;
+ 
++	if (!gpfs_share_modes) {
++		return True;
++	}
++
+ 	if (gpfs_set_share_fn == NULL) {
+ 		return False;
+ 	}
+@@ -84,6 +89,10 @@
+ {
+ 	int gpfs_type = GPFS_LEASE_NONE;
+ 
++	if (!gpfs_share_modes) {
++		return True;
++	}
++
+ 	if (gpfs_set_lease_fn == NULL) {
+ 		errno = EINVAL;
+ 		return -1;
+@@ -138,15 +147,7 @@
+ 	if (gpfs_set_share_fn == NULL) {
+ 		DEBUG(3, ("libgpfs_gpl.so does not contain the symbol "
+ 			  "'gpfs_set_share'\n"));
+-		sys_dlclose(libgpfs_handle);
+-
+-		/* leave libgpfs_handle != NULL around, no point
+-		   in trying twice */
+-		gpfs_set_share_fn = NULL;
+-		gpfs_set_lease_fn = NULL;
+-		gpfs_getacl_fn = NULL;
+-		gpfs_putacl_fn = NULL;
+-		return;
++		goto failed;
+ 	}
+ 
+ 	gpfs_set_lease_fn = sys_dlsym(libgpfs_handle, "gpfs_set_lease");
+@@ -155,45 +156,39 @@
+ 			  "'gpfs_set_lease'\n"));
+ 		sys_dlclose(libgpfs_handle);
+ 
+-		/* leave libgpfs_handle != NULL around, no point
+-		   in trying twice */
+-		gpfs_set_share_fn = NULL;
+-		gpfs_set_lease_fn = NULL;
+-		gpfs_getacl_fn = NULL;
+-		gpfs_putacl_fn = NULL;
+-		return;
++		goto failed;
+ 	}
+ 
+ 	gpfs_getacl_fn = sys_dlsym(libgpfs_handle, "gpfs_getacl");
+ 	if (gpfs_getacl_fn == NULL) {
+ 		DEBUG(3, ("libgpfs_gpl.so does not contain the symbol "
+ 			  "'gpfs_getacl'\n"));
+-		sys_dlclose(libgpfs_handle);
+-
+-		/* leave libgpfs_handle != NULL around, no point
+-		   in trying twice */
+-		gpfs_set_share_fn = NULL;
+-		gpfs_set_lease_fn = NULL;
+-		gpfs_getacl_fn = NULL;
+-		gpfs_putacl_fn = NULL;
+-		return;
++		goto failed;
+ 	}
+ 
+ 	gpfs_putacl_fn = sys_dlsym(libgpfs_handle, "gpfs_putacl");
+ 	if (gpfs_putacl_fn == NULL) {
+ 		DEBUG(3, ("libgpfs_gpl.so does not contain the symbol "
+ 			  "'gpfs_putacl'\n"));
+-		sys_dlclose(libgpfs_handle);
++		goto failed;
++	}
+ 
+-		/* leave libgpfs_handle != NULL around, no point
+-		   in trying twice */
+-		gpfs_set_share_fn = NULL;
+-		gpfs_set_lease_fn = NULL;
+-		gpfs_getacl_fn = NULL;
+-		gpfs_putacl_fn = NULL;
+-		return;
++	if (lp_parm_bool(-1, "gpfs", "sharemodes", True)) {
++		gpfs_share_modes = True;
++	} else {
++		gpfs_share_modes = False;
+ 	}
+ 
++	return;
++
++failed:
++	sys_dlclose(libgpfs_handle);
++	/* leave libgpfs_handle != NULL around, no point
++	   in trying twice */
++	gpfs_set_share_fn = NULL;
++	gpfs_set_lease_fn = NULL;
++	gpfs_getacl_fn = NULL;
++	gpfs_putacl_fn = NULL;
+ }
+ 
+ #else
+
+Modified: branches/SAMBA_3_0_26/source/modules/gpfs.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/modules/gpfs.c	2007-05-29 19:48:34 UTC (rev 23227)
++++ branches/SAMBA_3_0_26/source/modules/gpfs.c	2007-05-29 19:54:26 UTC (rev 23228)
+@@ -25,6 +25,7 @@
+ #include "gpfs_gpl.h"
+ 
+ static void *libgpfs_handle = NULL;
++static BOOL gpfs_share_modes;
+ 
+ static int (*gpfs_set_share_fn)(int fd, unsigned int allow, unsigned int deny);
+ static int (*gpfs_set_lease_fn)(int fd, unsigned int leaseType);
+@@ -39,6 +40,10 @@
+ 	unsigned int deny = GPFS_DENY_NONE;
+ 	int result;
+ 
++	if (!gpfs_share_modes) {
++		return True;
++	}
++
+ 	if (gpfs_set_share_fn == NULL) {
+ 		return False;
+ 	}
+@@ -84,6 +89,10 @@
+ {
+ 	int gpfs_type = GPFS_LEASE_NONE;
+ 
++	if (!gpfs_share_modes) {
++		return True;
++	}
++
+ 	if (gpfs_set_lease_fn == NULL) {
+ 		errno = EINVAL;
+ 		return -1;
+@@ -138,15 +147,7 @@
+ 	if (gpfs_set_share_fn == NULL) {
+ 		DEBUG(3, ("libgpfs_gpl.so does not contain the symbol "
+ 			  "'gpfs_set_share'\n"));
+-		sys_dlclose(libgpfs_handle);
+-
+-		/* leave libgpfs_handle != NULL around, no point
+-		   in trying twice */
+-		gpfs_set_share_fn = NULL;
+-		gpfs_set_lease_fn = NULL;
+-		gpfs_getacl_fn = NULL;
+-		gpfs_putacl_fn = NULL;
+-		return;
++		goto failed;
+ 	}
+ 
+ 	gpfs_set_lease_fn = sys_dlsym(libgpfs_handle, "gpfs_set_lease");
+@@ -155,45 +156,39 @@
+ 			  "'gpfs_set_lease'\n"));
+ 		sys_dlclose(libgpfs_handle);
+ 
+-		/* leave libgpfs_handle != NULL around, no point
+-		   in trying twice */
+-		gpfs_set_share_fn = NULL;
+-		gpfs_set_lease_fn = NULL;
+-		gpfs_getacl_fn = NULL;
+-		gpfs_putacl_fn = NULL;
+-		return;
++		goto failed;
+ 	}
+ 
+ 	gpfs_getacl_fn = sys_dlsym(libgpfs_handle, "gpfs_getacl");
+ 	if (gpfs_getacl_fn == NULL) {
+ 		DEBUG(3, ("libgpfs_gpl.so does not contain the symbol "
+ 			  "'gpfs_getacl'\n"));
+-		sys_dlclose(libgpfs_handle);
+-
+-		/* leave libgpfs_handle != NULL around, no point
+-		   in trying twice */
+-		gpfs_set_share_fn = NULL;
+-		gpfs_set_lease_fn = NULL;
+-		gpfs_getacl_fn = NULL;
+-		gpfs_putacl_fn = NULL;
+-		return;
++		goto failed;
+ 	}
+ 
+ 	gpfs_putacl_fn = sys_dlsym(libgpfs_handle, "gpfs_putacl");
+ 	if (gpfs_putacl_fn == NULL) {
+ 		DEBUG(3, ("libgpfs_gpl.so does not contain the symbol "
+ 			  "'gpfs_putacl'\n"));
+-		sys_dlclose(libgpfs_handle);
++		goto failed;
++	}
+ 
+-		/* leave libgpfs_handle != NULL around, no point
+-		   in trying twice */
+-		gpfs_set_share_fn = NULL;
+-		gpfs_set_lease_fn = NULL;
+-		gpfs_getacl_fn = NULL;
+-		gpfs_putacl_fn = NULL;
+-		return;
++	if (lp_parm_bool(-1, "gpfs", "sharemodes", True)) {
++		gpfs_share_modes = True;
++	} else {
++		gpfs_share_modes = False;
+ 	}
+ 
++	return;
++
++failed:
++	sys_dlclose(libgpfs_handle);
++	/* leave libgpfs_handle != NULL around, no point
++	   in trying twice */
++	gpfs_set_share_fn = NULL;
++	gpfs_set_lease_fn = NULL;
++	gpfs_getacl_fn = NULL;
++	gpfs_putacl_fn = NULL;
+ }
+ 
+ #else
+

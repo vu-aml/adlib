@@ -1,0 +1,116 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May 16 05:54:12 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4G9sCqD017042
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 16 May 2007 05:54:12 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id A718F16381E
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 16 May 2007 09:54:09 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id BA7A2162ACC; Wed, 16 May 2007 09:53:41 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070516095341.BA7A2162ACC@lists.samba.org>
+Date: Wed, 16 May 2007 09:53:41 +0000 (GMT)
+Subject: svn commit: samba r22929 - in branches/SAMBA_3_0/source/libsmb: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-05-16 09:53:41 +0000 (Wed, 16 May 2007)
+New Revision: 22929
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22929
+
+Log:
+Attempt to fix some build farm failures: On port 139 the first
+successful packet gives len==0 from the server, so the = in 
+
+        if (len <= 0) {
+
+in line 136 of clientgen.c throws a failure.
+
+Jeremy, please fix this properly, I'm not merging this to 3_0_26 so that
+you can filter it when you merge.
+
+Volker
+
+
+Modified:
+   branches/SAMBA_3_0/source/libsmb/cliconnect.c
+   branches/SAMBA_3_0/source/libsmb/clientgen.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/libsmb/cliconnect.c
+===================================================================
+--- branches/SAMBA_3_0/source/libsmb/cliconnect.c	2007-05-16 09:42:29 UTC (rev 22928)
++++ branches/SAMBA_3_0/source/libsmb/cliconnect.c	2007-05-16 09:53:41 UTC (rev 22929)
+@@ -1347,7 +1347,7 @@
+ 	cli_send_smb(cli);
+ 	DEBUG(5,("Sent session request\n"));
+ 
+-	if (!cli_receive_smb(cli))
++	if (!cli_receive_sessionreply(cli))
+ 		return False;
+ 
+ 	if (CVAL(cli->inbuf,0) == 0x84) {
+
+Modified: branches/SAMBA_3_0/source/libsmb/clientgen.c
+===================================================================
+--- branches/SAMBA_3_0/source/libsmb/clientgen.c	2007-05-16 09:42:29 UTC (rev 22928)
++++ branches/SAMBA_3_0/source/libsmb/clientgen.c	2007-05-16 09:53:41 UTC (rev 22929)
+@@ -191,6 +191,32 @@
+ }
+ 
+ /****************************************************************************
++ Recv an smb session reply
++****************************************************************************/
++
++BOOL cli_receive_sessionreply(struct cli_state *cli)
++{
++	ssize_t len;
++
++	/* fd == -1 causes segfaults -- Tom (tom@ninja.nl) */
++	if (cli->fd == -1)
++		return False; 
++
++	len = client_receive_smb(cli, False, 0);
++
++	/* If the server is not responding, note that now */
++	if (len < 0) {
++                DEBUG(0, ("Receiving SMB: Server stopped responding\n"));
++		cli->smb_rw_error = smb_read_error;
++		close(cli->fd);
++		cli->fd = -1;
++		return False;
++	}
++
++	return True;
++}
++
++/****************************************************************************
+  Read the data portion of a readX smb.
+  The timeout is in milliseconds
+ ****************************************************************************/
+

@@ -37,10 +37,10 @@ def single_run_list(y_pred, y_true):
 
 
 def run(par_map):
-    _dataset = EmailDataset(path='../data_reader/data/uci/uci_modified.csv', binary=False, raw=False)
-    train_, test_ = _dataset.split(0.8)
-    training_data = load_dataset(train_)
-    testing_data = load_dataset(test_)
+    dataset = EmailDataset(path='../data_reader/data/trec07p/full', binary=False, raw=True, norm='l2', max_features_=200)
+    training, testing = dataset.split(0.5)
+    training_data = load_dataset(training)
+    testing_data = load_dataset(testing)
     test_true_label = [x.label for x in testing_data]
 
     # running feature deletion learner

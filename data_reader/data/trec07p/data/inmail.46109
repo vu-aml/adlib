@@ -1,0 +1,506 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 29 10:49:50 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4TEnohB032182
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 10:49:50 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 01316163831
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 14:49:45 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.7 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id C3C31162BDA; Tue, 29 May 2007 14:49:20 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070529144920.C3C31162BDA@lists.samba.org>
+Date: Tue, 29 May 2007 14:49:20 +0000 (GMT)
+Subject: svn commit: samba r23204 - in branches: SAMBA_3_0/source/include
+	SAMBA_3_0/source/lib SAMBA_3_0/source/locking
+	SAMBA_3_0/source/smbd SAMBA_3_0/source/utils
+	SAMBA_3_0_26/source/include SAMBA_3_0_26/source/lib
+	SAMBA_3_0_26/source/locking SAMBA_3_0_26/source/smbd
+	SAMBA_3_0_26/source/utils
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-05-29 14:49:19 +0000 (Tue, 29 May 2007)
+New Revision: 23204
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23204
+
+Log:
+Add MSG_SMB_BRL_VALIDATE. Tridge, this is a bit different from your bzr
+branch, please check if it fulfils your needs.
+
+Two changes: The validation is not done inside the brlock.c traverse_fn,
+it's done as a separate routine. 
+
+Secondly, this patch does not call the checker routines in smbcontrol
+directly but depends on a running smbd.
+
+
+Modified:
+   branches/SAMBA_3_0/source/include/messages.h
+   branches/SAMBA_3_0/source/lib/messages.c
+   branches/SAMBA_3_0/source/locking/brlock.c
+   branches/SAMBA_3_0/source/smbd/server.c
+   branches/SAMBA_3_0/source/utils/smbcontrol.c
+   branches/SAMBA_3_0_26/source/include/messages.h
+   branches/SAMBA_3_0_26/source/lib/messages.c
+   branches/SAMBA_3_0_26/source/locking/brlock.c
+   branches/SAMBA_3_0_26/source/smbd/server.c
+   branches/SAMBA_3_0_26/source/utils/smbcontrol.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/include/messages.h
+===================================================================
+--- branches/SAMBA_3_0/source/include/messages.h	2007-05-29 14:48:37 UTC (rev 23203)
++++ branches/SAMBA_3_0/source/include/messages.h	2007-05-29 14:49:19 UTC (rev 23204)
+@@ -83,6 +83,11 @@
+  * Samba4 compatibility
+  */
+ #define MSG_PVFS_NOTIFY			0x0310
++/*
++ * cluster reconfigure events
++ */
++#define MSG_SMB_BRL_VALIDATE		0x0311
++#define MSG_SMB_RELEASE_IP		0x0312
+ 
+ /* winbind messages */
+ #define MSG_WINBIND_FINISHED		0x0401
+
+Modified: branches/SAMBA_3_0/source/lib/messages.c
+===================================================================
+--- branches/SAMBA_3_0/source/lib/messages.c	2007-05-29 14:48:37 UTC (rev 23203)
++++ branches/SAMBA_3_0/source/lib/messages.c	2007-05-29 14:49:19 UTC (rev 23204)
+@@ -199,7 +199,7 @@
+ 	status = messaging_tdb_init(ctx, ctx, &ctx->local);
+ 
+ 	if (!NT_STATUS_IS_OK(status)) {
+-		DEBUG(0, ("message_init failed: %s\n", nt_errstr(status)));
++		DEBUG(0, ("messaging_tdb_init failed: %s\n", nt_errstr(status)));
+ 		TALLOC_FREE(ctx);
+ 	}
+ 
+
+Modified: branches/SAMBA_3_0/source/locking/brlock.c
+===================================================================
+--- branches/SAMBA_3_0/source/locking/brlock.c	2007-05-29 14:48:37 UTC (rev 23203)
++++ branches/SAMBA_3_0/source/locking/brlock.c	2007-05-29 14:49:19 UTC (rev 23204)
+@@ -1686,3 +1686,109 @@
+ {
+ 	return brl_get_locks_internal(mem_ctx, fsp, True);
+ }
++
++struct brl_revalidate_state {
++	ssize_t array_size;
++	uint32 num_pids;
++	struct server_id *pids;
++};
++
++/*
++ * Collect PIDs of all processes with pending entries
++ */
++
++static void brl_revalidate_collect(struct file_id id, struct server_id pid,
++				   enum brl_type lock_type,
++				   enum brl_flavour lock_flav,
++				   br_off start, br_off size,
++				   void *private_data)
++{
++	struct brl_revalidate_state *state =
++		(struct brl_revalidate_state *)private_data;
++
++	if (!IS_PENDING_LOCK(lock_type)) {
++		return;
++	}
++
++	add_to_large_array(state, sizeof(pid), (void *)&pid,
++			   &state->pids, &state->num_pids,
++			   &state->array_size);
++}
++
++/*
++ * qsort callback to sort the processes
++ */
++
++static int compare_procids(const void *p1, const void *p2)
++{
++	const struct server_id *i1 = (struct server_id *)i1;
++	const struct server_id *i2 = (struct server_id *)i2;
++
++	if (i1->pid < i2->pid) return -1;
++	if (i2->pid > i2->pid) return 1;
++	return 0;
++}
++
++/*
++ * Send a MSG_SMB_UNLOCK message to all processes with pending byte range
++ * locks so that they retry. Mainly used in the cluster code after a node has
++ * died.
++ *
++ * Done in two steps to avoid double-sends: First we collect all entries in an
++ * array, then qsort that array and only send to non-dupes.
++ */
++
++static void brl_revalidate(struct messaging_context *msg_ctx,
++			   void *private_data,
++			   uint32_t msg_type,
++			   struct server_id server_id,
++			   DATA_BLOB *data)
++{
++	struct brl_revalidate_state *state;
++	uint32 i;
++	struct server_id last_pid;
++
++	if (!(state = TALLOC_ZERO_P(NULL, struct brl_revalidate_state))) {
++		DEBUG(0, ("talloc failed\n"));
++		return;
++	}
++
++	brl_forall(brl_revalidate_collect, state);
++
++	if (state->array_size == -1) {
++		DEBUG(0, ("talloc failed\n"));
++		goto done;
++	}
++
++	if (state->num_pids == 0) {
++		goto done;
++	}
++
++	qsort(state->pids, state->num_pids, sizeof(state->pids[0]),
++	      compare_procids);
++
++	ZERO_STRUCT(last_pid);
++
++	for (i=0; i<state->num_pids; i++) {
++		if (procid_equal(&last_pid, &state->pids[i])) {
++			/*
++			 * We've seen that one already
++			 */
++			continue;
++		}
++
++		messaging_send(msg_ctx, state->pids[i], MSG_SMB_UNLOCK,
++			       &data_blob_null);
++		last_pid = state->pids[i];
++	}
++
++ done:
++	TALLOC_FREE(state);
++	return;
++}
++
++void brl_register_msgs(struct messaging_context *msg_ctx)
++{
++	messaging_register(msg_ctx, NULL, MSG_SMB_BRL_VALIDATE,
++			   brl_revalidate);
++}
+
+Modified: branches/SAMBA_3_0/source/smbd/server.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/server.c	2007-05-29 14:48:37 UTC (rev 23203)
++++ branches/SAMBA_3_0/source/smbd/server.c	2007-05-29 14:49:19 UTC (rev 23204)
+@@ -375,6 +375,7 @@
+ 			   MSG_SMB_CONF_UPDATED, smb_conf_updated); 
+ 	messaging_register(smbd_messaging_context(), NULL,
+ 			   MSG_SMB_STAT_CACHE_DELETE, smb_stat_cache_delete);
++	brl_register_msgs(smbd_messaging_context());
+ 
+ #ifdef DEVELOPER
+ 	messaging_register(smbd_messaging_context(), NULL,
+@@ -991,6 +992,7 @@
+ 	}
+ 
+ 	/* Setup all the TDB's - including CLEAR_IF_FIRST tdb's. */
++
+ 	if (smbd_messaging_context() == NULL)
+ 		exit(1);
+ 
+
+Modified: branches/SAMBA_3_0/source/utils/smbcontrol.c
+===================================================================
+--- branches/SAMBA_3_0/source/utils/smbcontrol.c	2007-05-29 14:48:37 UTC (rev 23203)
++++ branches/SAMBA_3_0/source/utils/smbcontrol.c	2007-05-29 14:49:19 UTC (rev 23204)
+@@ -698,6 +698,34 @@
+ 			    strlen(argv[1]) + 1);
+ }
+ 
++/* force a blocking lock retry */
++
++static BOOL do_lockretry(struct messaging_context *msg_ctx,
++			 const struct server_id pid,
++			 const int argc, const char **argv)
++{
++	if (argc != 1) {
++		fprintf(stderr, "Usage: smbcontrol <dest> lockretry\n");
++		return False;
++	}
++
++	return send_message(msg_ctx, pid, MSG_SMB_UNLOCK, NULL, 0);
++}
++
++/* force a validation of all brl entries, including re-sends. */
++
++static BOOL do_brl_revalidate(struct messaging_context *msg_ctx,
++			      const struct server_id pid,
++			      const int argc, const char **argv)
++{
++	if (argc != 1) {
++		fprintf(stderr, "Usage: smbcontrol <dest> brl-revalidate\n");
++		return False;
++	}
++
++	return send_message(msg_ctx, pid, MSG_SMB_BRL_VALIDATE, NULL, 0);
++}
++
+ /* Force a SAM synchronisation */
+ 
+ static BOOL do_samsync(struct messaging_context *msg_ctx,
+@@ -1037,6 +1065,8 @@
+ 	{ "debuglevel", do_debuglevel, "Display current debuglevels" },
+ 	{ "printnotify", do_printnotify, "Send a print notify message" },
+ 	{ "close-share", do_closeshare, "Forcibly disconnect a share" },
++	{ "lockretry", do_lockretry, "Force a blocking lock retry" },
++	{ "brl-revalidate", do_brl_revalidate, "Revalidate all brl entries" },
+         { "samsync", do_samsync, "Initiate SAM synchronisation" },
+         { "samrepl", do_samrepl, "Initiate SAM replication" },
+ 	{ "pool-usage", do_poolusage, "Display talloc memory usage" },
+
+Modified: branches/SAMBA_3_0_26/source/include/messages.h
+===================================================================
+--- branches/SAMBA_3_0_26/source/include/messages.h	2007-05-29 14:48:37 UTC (rev 23203)
++++ branches/SAMBA_3_0_26/source/include/messages.h	2007-05-29 14:49:19 UTC (rev 23204)
+@@ -83,6 +83,11 @@
+  * Samba4 compatibility
+  */
+ #define MSG_PVFS_NOTIFY			0x0310
++/*
++ * cluster reconfigure events
++ */
++#define MSG_SMB_BRL_VALIDATE		0x0311
++#define MSG_SMB_RELEASE_IP		0x0312
+ 
+ /* winbind messages */
+ #define MSG_WINBIND_FINISHED		0x0401
+
+Modified: branches/SAMBA_3_0_26/source/lib/messages.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/lib/messages.c	2007-05-29 14:48:37 UTC (rev 23203)
++++ branches/SAMBA_3_0_26/source/lib/messages.c	2007-05-29 14:49:19 UTC (rev 23204)
+@@ -199,7 +199,7 @@
+ 	status = messaging_tdb_init(ctx, ctx, &ctx->local);
+ 
+ 	if (!NT_STATUS_IS_OK(status)) {
+-		DEBUG(0, ("message_init failed: %s\n", nt_errstr(status)));
++		DEBUG(0, ("messaging_tdb_init failed: %s\n", nt_errstr(status)));
+ 		TALLOC_FREE(ctx);
+ 	}
+ 
+
+Modified: branches/SAMBA_3_0_26/source/locking/brlock.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/locking/brlock.c	2007-05-29 14:48:37 UTC (rev 23203)
++++ branches/SAMBA_3_0_26/source/locking/brlock.c	2007-05-29 14:49:19 UTC (rev 23204)
+@@ -1686,3 +1686,109 @@
+ {
+ 	return brl_get_locks_internal(mem_ctx, fsp, True);
+ }
++
++struct brl_revalidate_state {
++	ssize_t array_size;
++	uint32 num_pids;
++	struct server_id *pids;
++};
++
++/*
++ * Collect PIDs of all processes with pending entries
++ */
++
++static void brl_revalidate_collect(struct file_id id, struct server_id pid,
++				   enum brl_type lock_type,
++				   enum brl_flavour lock_flav,
++				   br_off start, br_off size,
++				   void *private_data)
++{
++	struct brl_revalidate_state *state =
++		(struct brl_revalidate_state *)private_data;
++
++	if (!IS_PENDING_LOCK(lock_type)) {
++		return;
++	}
++
++	add_to_large_array(state, sizeof(pid), (void *)&pid,
++			   &state->pids, &state->num_pids,
++			   &state->array_size);
++}
++
++/*
++ * qsort callback to sort the processes
++ */
++
++static int compare_procids(const void *p1, const void *p2)
++{
++	const struct server_id *i1 = (struct server_id *)i1;
++	const struct server_id *i2 = (struct server_id *)i2;
++
++	if (i1->pid < i2->pid) return -1;
++	if (i2->pid > i2->pid) return 1;
++	return 0;
++}
++
++/*
++ * Send a MSG_SMB_UNLOCK message to all processes with pending byte range
++ * locks so that they retry. Mainly used in the cluster code after a node has
++ * died.
++ *
++ * Done in two steps to avoid double-sends: First we collect all entries in an
++ * array, then qsort that array and only send to non-dupes.
++ */
++
++static void brl_revalidate(struct messaging_context *msg_ctx,
++			   void *private_data,
++			   uint32_t msg_type,
++			   struct server_id server_id,
++			   DATA_BLOB *data)
++{
++	struct brl_revalidate_state *state;
++	uint32 i;
++	struct server_id last_pid;
++
++	if (!(state = TALLOC_ZERO_P(NULL, struct brl_revalidate_state))) {
++		DEBUG(0, ("talloc failed\n"));
++		return;
++	}
++
++	brl_forall(brl_revalidate_collect, state);
++
++	if (state->array_size == -1) {
++		DEBUG(0, ("talloc failed\n"));
++		goto done;
++	}
++
++	if (state->num_pids == 0) {
++		goto done;
++	}
++
++	qsort(state->pids, state->num_pids, sizeof(state->pids[0]),
++	      compare_procids);
++
++	ZERO_STRUCT(last_pid);
++
++	for (i=0; i<state->num_pids; i++) {
++		if (procid_equal(&last_pid, &state->pids[i])) {
++			/*
++			 * We've seen that one already
++			 */
++			continue;
++		}
++
++		messaging_send(msg_ctx, state->pids[i], MSG_SMB_UNLOCK,
++			       &data_blob_null);
++		last_pid = state->pids[i];
++	}
++
++ done:
++	TALLOC_FREE(state);
++	return;
++}
++
++void brl_register_msgs(struct messaging_context *msg_ctx)
++{
++	messaging_register(msg_ctx, NULL, MSG_SMB_BRL_VALIDATE,
++			   brl_revalidate);
++}
+
+Modified: branches/SAMBA_3_0_26/source/smbd/server.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/smbd/server.c	2007-05-29 14:48:37 UTC (rev 23203)
++++ branches/SAMBA_3_0_26/source/smbd/server.c	2007-05-29 14:49:19 UTC (rev 23204)
+@@ -471,6 +471,7 @@
+ 			   MSG_SMB_CONF_UPDATED, smb_conf_updated); 
+ 	messaging_register(smbd_messaging_context(), NULL,
+ 			   MSG_SMB_STAT_CACHE_DELETE, smb_stat_cache_delete);
++	brl_register_msgs(smbd_messaging_context());
+ 
+ #ifdef DEVELOPER
+ 	messaging_register(smbd_messaging_context(), NULL,
+@@ -1039,6 +1040,7 @@
+ 		pidfile_create("smbd");
+ 
+ 	/* Setup all the TDB's - including CLEAR_IF_FIRST tdb's. */
++
+ 	if (smbd_messaging_context() == NULL)
+ 		exit(1);
+ 
+
+Modified: branches/SAMBA_3_0_26/source/utils/smbcontrol.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/utils/smbcontrol.c	2007-05-29 14:48:37 UTC (rev 23203)
++++ branches/SAMBA_3_0_26/source/utils/smbcontrol.c	2007-05-29 14:49:19 UTC (rev 23204)
+@@ -698,6 +698,34 @@
+ 			    strlen(argv[1]) + 1);
+ }
+ 
++/* force a blocking lock retry */
++
++static BOOL do_lockretry(struct messaging_context *msg_ctx,
++			 const struct server_id pid,
++			 const int argc, const char **argv)
++{
++	if (argc != 1) {
++		fprintf(stderr, "Usage: smbcontrol <dest> lockretry\n");
++		return False;
++	}
++
++	return send_message(msg_ctx, pid, MSG_SMB_UNLOCK, NULL, 0);
++}
++
++/* force a validation of all brl entries, including re-sends. */
++
++static BOOL do_brl_revalidate(struct messaging_context *msg_ctx,
++			      const struct server_id pid,
++			      const int argc, const char **argv)
++{
++	if (argc != 1) {
++		fprintf(stderr, "Usage: smbcontrol <dest> brl-revalidate\n");
++		return False;
++	}
++
++	return send_message(msg_ctx, pid, MSG_SMB_BRL_VALIDATE, NULL, 0);
++}
++
+ /* Force a SAM synchronisation */
+ 
+ static BOOL do_samsync(struct messaging_context *msg_ctx,
+@@ -1037,6 +1065,8 @@
+ 	{ "debuglevel", do_debuglevel, "Display current debuglevels" },
+ 	{ "printnotify", do_printnotify, "Send a print notify message" },
+ 	{ "close-share", do_closeshare, "Forcibly disconnect a share" },
++	{ "lockretry", do_lockretry, "Force a blocking lock retry" },
++	{ "brl-revalidate", do_brl_revalidate, "Revalidate all brl entries" },
+         { "samsync", do_samsync, "Initiate SAM synchronisation" },
+         { "samrepl", do_samrepl, "Initiate SAM replication" },
+ 	{ "pool-usage", do_poolusage, "Display talloc memory usage" },
+

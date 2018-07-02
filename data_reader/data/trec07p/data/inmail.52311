@@ -1,0 +1,148 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Jun  6 08:53:31 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l56CrVhB021628
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 6 Jun 2007 08:53:31 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 0E7D4163961
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed,  6 Jun 2007 12:53:25 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.8 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 501)
+	id CE16A163881; Wed,  6 Jun 2007 12:52:48 +0000 (GMT)
+To: samba-cvs@samba.org
+From: abartlet@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070606125248.CE16A163881@lists.samba.org>
+Date: Wed,  6 Jun 2007 12:52:48 +0000 (GMT)
+Subject: svn commit: samba r23366 - in branches/SAMBA_4_0_RELEASE/source:
+	rpc_server/samr torture/rpc
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: abartlet
+Date: 2007-06-06 12:52:48 +0000 (Wed, 06 Jun 2007)
+New Revision: 23366
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23366
+
+Log:
+Merge from SAMBA_4_0:
+
+Try to make Windows Vista join again.  On my new test environment, it
+wants to check for an existing domain join account, and fails.  This
+test shows that we need to return NT_STATUS_NONE_MAPPED when nothing
+matches.  (not yet tested if this helps vista).
+
+
+Modified:
+   branches/SAMBA_4_0_RELEASE/source/rpc_server/samr/dcesrv_samr.c
+   branches/SAMBA_4_0_RELEASE/source/torture/rpc/samr.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0_RELEASE/source/rpc_server/samr/dcesrv_samr.c
+===================================================================
+--- branches/SAMBA_4_0_RELEASE/source/rpc_server/samr/dcesrv_samr.c	2007-06-06 12:51:45 UTC (rev 23365)
++++ branches/SAMBA_4_0_RELEASE/source/rpc_server/samr/dcesrv_samr.c	2007-06-06 12:52:48 UTC (rev 23366)
+@@ -1783,7 +1783,7 @@
+ {
+ 	struct dcesrv_handle *h;
+ 	struct samr_domain_state *d_state;
+-	int i;
++	int i, num_mapped;
+ 	NTSTATUS status = NT_STATUS_OK;
+ 	const char * const attrs[] = { "sAMAccountType", "objectSid", NULL };
+ 	int count;
+@@ -1807,6 +1807,8 @@
+ 	r->out.rids.count = r->in.num_names;
+ 	r->out.types.count = r->in.num_names;
+ 
++	num_mapped = 0;
++
+ 	for (i=0;i<r->in.num_names;i++) {
+ 		struct ldb_message **res;
+ 		struct dom_sid *sid;
+@@ -1844,9 +1846,12 @@
+ 
+ 		r->out.rids.ids[i] = sid->sub_auths[sid->num_auths-1];
+ 		r->out.types.ids[i] = rtype;
++		num_mapped++;
+ 	}
+ 	
+-
++	if (num_mapped == 0) {
++		return NT_STATUS_NONE_MAPPED;
++	}
+ 	return status;
+ }
+ 
+
+Modified: branches/SAMBA_4_0_RELEASE/source/torture/rpc/samr.c
+===================================================================
+--- branches/SAMBA_4_0_RELEASE/source/torture/rpc/samr.c	2007-06-06 12:51:45 UTC (rev 23365)
++++ branches/SAMBA_4_0_RELEASE/source/torture/rpc/samr.c	2007-06-06 12:52:48 UTC (rev 23366)
+@@ -922,17 +922,43 @@
+ 	status = dcerpc_samr_LookupNames(p, mem_ctx, &n);
+ 	if (!NT_STATUS_EQUAL(status, STATUS_SOME_UNMAPPED)) {
+ 		printf("LookupNames[2] failed - %s\n", nt_errstr(status));		
++		if (NT_STATUS_IS_OK(status)) {
++			return NT_STATUS_UNSUCCESSFUL;
++		}
+ 		return status;
+ 	}
+ 
+-	init_lsa_String(&sname[1], "xxNONAMExx");
+ 	n.in.num_names = 0;
+ 	status = dcerpc_samr_LookupNames(p, mem_ctx, &n);
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		printf("LookupNames[0] failed - %s\n", nt_errstr(status));		
++		return status;
+ 	}
+ 
+-	return status;
++	init_lsa_String(&sname[0], "xxNONAMExx");
++	n.in.num_names = 1;
++	status = dcerpc_samr_LookupNames(p, mem_ctx, &n);
++	if (!NT_STATUS_EQUAL(status, NT_STATUS_NONE_MAPPED)) {
++		printf("LookupNames[1 bad name] failed - %s\n", nt_errstr(status));		
++		if (NT_STATUS_IS_OK(status)) {
++			return NT_STATUS_UNSUCCESSFUL;
++		}
++		return status;
++	}
++
++	init_lsa_String(&sname[0], "xxNONAMExx");
++	init_lsa_String(&sname[1], "xxNONAME2xx");
++	n.in.num_names = 2;
++	status = dcerpc_samr_LookupNames(p, mem_ctx, &n);
++	if (!NT_STATUS_EQUAL(status, NT_STATUS_NONE_MAPPED)) {
++		printf("LookupNames[2 bad names] failed - %s\n", nt_errstr(status));		
++		if (NT_STATUS_IS_OK(status)) {
++			return NT_STATUS_UNSUCCESSFUL;
++		}
++		return status;
++	}
++
++	return NT_STATUS_OK;
+ }
+ 
+ static NTSTATUS test_OpenUser_byname(struct dcerpc_pipe *p, TALLOC_CTX *mem_ctx, 
+

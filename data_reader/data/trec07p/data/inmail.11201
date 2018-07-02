@@ -1,0 +1,516 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Apr 17 08:12:16 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3HCCG0I027123
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 08:12:16 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 2F96216394C
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 12:11:52 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.0 required=3.8 tests=AWL, BAYES_00, FORGED_RCVD_HELO,
+	RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: from pollux.warande.net (pollux.sshunet.nl [145.97.192.42])
+	by lists.samba.org (Postfix) with ESMTP id EAD1A162AC8
+	for <samba-cvs@samba.org>; Tue, 17 Apr 2007 12:11:20 +0000 (GMT)
+Received: from localhost (localhost.localdomain [127.0.0.1])
+	by pollux.warande.net (Postfix) with ESMTP id 3EF4058002C
+	for <samba-cvs@samba.org>; Tue, 17 Apr 2007 14:11:18 +0200 (CEST)
+Received: from pollux.warande.net ([127.0.0.1])
+	by localhost (pollux [127.0.0.1]) (amavisd-new, port 10024)
+	with ESMTP id 23436-08 for <samba-cvs@samba.org>;
+	Tue, 17 Apr 2007 14:11:18 +0200 (CEST)
+Received: from ganieda.vernstok.nl (37pc196.sshunet.nl [145.97.196.37])
+	by pollux.warande.net (Postfix) with ESMTP
+	for <samba-cvs@samba.org>; Tue, 17 Apr 2007 14:11:18 +0200 (CEST)
+Received: by ganieda.vernstok.nl (Postfix, from userid 1000)
+	id 98B405C4908; Tue, 17 Apr 2007 14:11:15 +0200 (CEST)
+To: samba-cvs@samba.org
+From: Jelmer Vernooij <jelmer@samba.org>
+Message-Id: <20070417121115.98B405C4908@ganieda.vernstok.nl>
+Date: Tue, 17 Apr 2007 14:11:15 +0200 (CEST)
+X-Virus-Scanned: by amavisd-new-20030616-p10 (Debian) at sshunet.nl
+Subject: Rev 11894: Support building Samba 3 test environments. in
+	file:///home/jelmer/bzr.samba/SAMBA_4_0/
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 12490
+Lines: 461
+
+At file:///home/jelmer/bzr.samba/SAMBA_4_0/
+
+------------------------------------------------------------
+revno: 11894
+revision-id: jelmer@samba.org-20070417121100-58zt3zyuny95tia2
+parent: svn-v2:22300@0c0555d6-39d7-0310-84fc-f1cc0bd64818-branches%2fSAMBA_4_0
+committer: Jelmer Vernooij <jelmer@samba.org>
+branch nick: SAMBA_4_0
+timestamp: Tue 2007-04-17 14:11:00 +0200
+message:
+  Support building Samba 3 test environments.
+modified:
+  source/script/tests/Samba3.pm  svn-v2:21909@0c0555d6-39d7-0310-84fc-f1cc0bd64818-branches%2fSAMBA_4_0-source%2fscript%2ftests%2fSamba3.pm
+  source/script/tests/selftest.pl svn-v2:20693@0c0555d6-39d7-0310-84fc-f1cc0bd64818-branches%2fSAMBA_4_0-source%2fscript%2ftests%2fselftest.pl
+=== modified file 'source/script/tests/Samba3.pm'
+--- a/source/script/tests/Samba3.pm	2007-04-11 03:45:39 +0000
++++ b/source/script/tests/Samba3.pm	2007-04-17 12:11:00 +0000
+@@ -6,120 +6,288 @@
+ package Samba3;
+ 
+ use strict;
++use Cwd qw(abs_path);
+ use FindBin qw($RealBin);
+-use POSIX;
+-
+-sub new($$$) {
+-	my ($classname, $bindir, $setupdir) = @_;
+-	my $self = { bindir => $bindir, setupdir => $setupdir };
++
++sub binpath($$)
++{
++	my ($self, $binary) = @_;
++
++	if (defined($self->{bindir})) {
++		return "$self->{bindir}/$binary";
++	}
++
++	return $binary;
++}
++
++sub new($$) {
++	my ($classname, $bindir) = @_;
++	my $self = { bindir => $bindir };
+ 	bless $self;
+ 	return $self;
+ }
+ 
+-sub check_or_start($$$) 
+-{
+-	my ($self, $env_vars, $max_time) = @_;
+-	return 0 if ( -p $env_vars->{SMBD_TEST_FIFO});
+-
+-	unlink($env_vars->{SMBD_TEST_FIFO});
+-	POSIX::mkfifo($env_vars->{SMBD_TEST_FIFO}, 0700);
++sub teardown_env($$)
++{
++	my ($self, $envvars) = @_;
++
++	$self->samba3_stop_sig_term($envvars->{PIDDIR});
++	$self->samba3_stop_sig_kill($envvars->{PIDDIR});
++
++	return 0;
++}
++
++sub setup_env($$$)
++{
++	my ($self, $envname, $path) = @_;
++	
++	if ($envname eq "dc") {
++		return $self->setup_dc("$path/dc");
++	} else {
++		die("Samba4 can't provide environment '$envname'");
++	}
++}
++
++sub setup_dc($$)
++{
++	my ($self, $path) = @_;
++
++	my $vars = $self->provision($path);
++
++	$self->check_or_start($vars, $ENV{NMBD_MAXTIME} or 2700, $ENV{SMBD_MAXTIME} or 2700);
++
++	$self->wait_for_start($vars);
++
++	return $vars;
++}
++
++sub stop($)
++{
++	my ($self) = @_;
++}
++
++sub samba3_stop_sig_term($$) {
++	my ($self, $piddir) = @_;
++	my $ret = 0;
++	kill("USR1", `cat $piddir/timelimit.nmbd.pid`) or \
++		kill("ALRM", `cat $piddir/timelimit.nmbd.pid`) or $ret++;
++
++	kill("USR1", `cat $piddir/timelimit.smbd.pid`) or \
++		kill("ALRM", `cat $piddir/timelimit.smbd.pid`) or $ret++;
++
++	return $ret;
++}
++
++sub samba3_stop_sig_kill($$) {
++	my ($self, $piddir) = @_;
++	kill("ALRM", `cat $piddir/timelimit.nmbd.pid`); 
++	kill("ALRM", `cat $piddir/timelimit.smbd.pid`);
++	return 0;
++}
++
++sub check_or_start($$$$) {
++	my ($self, $env_vars, $nmbd_maxtime, $smbd_maxtime) = @_;
++
++	unlink($env_vars->{NMBD_TEST_LOG});
++	print "STARTING NMBD...";
++	my $pid = fork();
++	if ($pid == 0) {
++		open STDOUT, ">$env_vars->{NMBD_TEST_LOG}";
++		open STDERR, '>&STDOUT';
++	
++		$ENV{MAKE_TEST_BINARY} = $self->binpath("nmbd");
++		exec("timelimit", $nmbd_maxtime, $self->binpath("nmbd"), "-F", "-S", "--no-process-group", "-d0" ,"-s", $env_vars->{SERVERCONFFILE}) or die("Unable to start nmbd");
++	}
++	open(PID, ">$env_vars->{PIDDIR}/timelimit.nmbd.pid");
++	print PID $pid;
++	close(PID);
++	print "DONE\n";
++
+ 	unlink($env_vars->{SMBD_TEST_LOG});
+-	
+-	my $valgrind = "";
+-	if (defined($ENV{SMBD_VALGRIND})) {
+-		$valgrind = $ENV{SMBD_VALGRIND};
+-	} 
+-
+-	print "STARTING SMBD... ";
++	print "STARTING SMBD...";
+ 	my $pid = fork();
+ 	if ($pid == 0) {
+-		open STDIN, $env_vars->{SMBD_TEST_FIFO};
+ 		open STDOUT, ">$env_vars->{SMBD_TEST_LOG}";
+ 		open STDERR, '>&STDOUT';
+-		my $optarg = "";
+-		if (defined($max_time)) {
+-			$optarg = "--maximum-runtime=$max_time ";
+-		}
+-		my $ret = system("$valgrind $self->{bindir}/smbd $optarg -s $env_vars->{CONFFILE} -M single -i --leak-report-full");
+-		if ($? == -1) {
+-			print "Unable to start smbd: $ret: $!\n";
+-			exit 1;
+-		}
+-		unlink($env_vars->{SMBD_TEST_FIFO});
+-		my $exit = $? >> 8;
+-		if ( $ret == 0 ) {
+-			print "smbd exits with status $exit\n";
+-		} elsif ( $ret & 127 ) {
+-			print "smbd got signal ".($ret & 127)." and exits with $exit!\n";
+-		} else {
+-			$ret = $? >> 8;
+-			print "smbd failed with status $exit!\n";
+-		}
+-		exit $exit;
++	
++		$ENV{MAKE_TEST_BINARY} = $self->binpath("smbd");
++		exec("timelimit", $nmbd_maxtime, $self->binpath("smbd"), "-F", "-S", "--no-process-group", "-d0" ,"-s", $env_vars->{SERVERCONFFILE}) or die("Unable to start nmbd");
+ 	}
++	open(PID, ">$env_vars->{PIDDIR}/timelimit.smbd.pid");
++	print PID $pid;
++	close(PID);
+ 	print "DONE\n";
+ 
+-	open(DATA, ">$env_vars->{SMBD_TEST_FIFO}");
+-
+-	return $pid;
+-}
+-
+-sub wait_for_start($)
+-{
+-	# give time for nbt server to register its names
+-	print "delaying for nbt name registration\n";
+-
+-	# This will return quickly when things are up, but be slow if we 
+-	# need to wait for (eg) SSL init 
+-	system("bin/nmblookup $ENV{CONFIGURATION} $ENV{SERVER}");
+-	system("bin/nmblookup $ENV{CONFIGURATION} -U $ENV{SERVER} $ENV{SERVER}");
+-	system("bin/nmblookup $ENV{CONFIGURATION} $ENV{SERVER}");
+-	system("bin/nmblookup $ENV{CONFIGURATION} -U $ENV{SERVER} $ENV{NETBIOSNAME}");
+-	system("bin/nmblookup $ENV{CONFIGURATION} $ENV{NETBIOSNAME}");
+-	system("bin/nmblookup $ENV{CONFIGURATION} -U $ENV{SERVER} $ENV{NETBIOSNAME}");
+-	system("bin/nmblookup $ENV{CONFIGURATION} $ENV{NETBIOSNAME}");
+-	system("bin/nmblookup $ENV{CONFIGURATION} -U $ENV{SERVER} $ENV{NETBIOSNAME}");
+-}
+-
+-sub provision($$$)
+-{
+-	my ($self, $environment, $prefix) = @_;
++	return 0;
++}
++
++sub create_clientconf($$$)
++{
++	my ($self, $prefix, $domain) = @_;
++
++	my $lockdir = "$prefix/locks";
++	my $logdir = "$prefix/logs";
++	my $piddir = "$prefix/pid";
++	my $privatedir = "$prefix/private";
++	my $scriptdir = "$RealBin/..";
++	my $conffile = "$prefix/smb.conf";
++
++	my $torture_interfaces='127.0.0.6/8,127.0.0.7/8,127.0.0.8/8,127.0.0.9/8,127.0.0.10/8,127.0.0.11/8';
++	open(CONF, ">$conffile");
++	print CONF "
++[global]
++	workgroup = $domain
++
++	private dir = $privatedir
++	pid directory = $piddir
++	lock directory = $lockdir
++	log file = $logdir/log.\%m
++	log level = 0
++
++	name resolve order = bcast
++
++	netbios name = TORTURE_6
++	interfaces = $torture_interfaces
++	panic action = $scriptdir/gdb_backtrace \%d %\$(MAKE_TEST_BINARY)
++
++	passdb backend = tdbsam
++	";
++	close(CONF);
++}
++
++sub provision($$)
++{
++	my ($self, $prefix) = @_;
++
++	##
++	## setup the various environment variables we need
++	##
++
+ 	my %ret = ();
+-	print "PROVISIONING...";
+-	open(IN, "$RealBin/mktestdc.sh $prefix|") or die("Unable to setup");
+-	while (<IN>) {
+-		die ("Error parsing `$_'") unless (/^([A-Z0-9a-z_]+)=(.*)$/);
+-		$ret{$1} = $2;
+-	}
+-	close(IN);
+-
+-	$ret{SMBD_TEST_FIFO} = "$prefix/smbd_test.fifo";
++	my $server = "localhost2";
++	my $server_ip = "127.0.0.2";
++	my $username = `PATH=/usr/ucb:$ENV{PATH} whoami`;
++	my $password = "test";
++
++	my $srcdir="$RealBin/../..";
++	my $scriptdir="$srcdir/script/tests";
++	my $prefix_abs = abs_path($prefix);
++	my $shrdir="$prefix_abs/tmp";
++	my $libdir="$prefix_abs/lib";
++	my $piddir="$prefix_abs/pid";
++	my $conffile="$libdir/client.conf";
++	my $serverconffile="$libdir/server.conf";
++	my $privatedir="$prefix_abs/private";
++	my $lockdir="$prefix_abs/lockdir";
++	my $logdir="$prefix_abs/logs";
++	my $domain = "SAMBA-TEST";
++
++	## 
++	## create the test directory layout
++	##
++	print "CREATE TEST ENVIRONMENT IN '$prefix'...";
++	system("/bin/rm -rf $prefix/*");
++	mkdir($_) foreach($privatedir,$libdir,$piddir,$lockdir,$logdir);
++	my $tmpdir = "$prefix_abs/tmp";
++	mkdir($tmpdir);
++	chmod 0777, $tmpdir;
++
++	open(CONF, ">$serverconffile");
++	print CONF "
++[global]
++	workgroup = $domain
++
++	private dir = $privatedir
++	pid directory = $piddir
++	lock directory = $lockdir
++	log file = $logdir/log.\%m
++	log level = 0
++
++	name resolve order = bcast
++
++	netbios name = $server
++	interfaces = $server_ip/8
++	bind interfaces only = yes
++	panic action = $scriptdir/gdb_backtrace %d %\$(MAKE_TEST_BINARY)
++
++	passdb backend = tdbsam
++
++	; Necessary to add the build farm hacks
++	add user script = /bin/false
++	add machine script = /bin/false
++
++	kernel oplocks = no
++	kernel change notify = no
++
++	syslog = no
++	printing = bsd
++	printcap name = /dev/null
++
++[tmp]
++	path = $tmpdir
++	read only = no
++	smbd:sharedelay = 100000
++	map hidden = yes
++	map system = yes
++	create mask = 755
++[hideunread]
++	copy = tmp
++	hide unreadable = yes
++[hideunwrite]
++	copy = tmp
++	hide unwriteable files = yes
++[print1]
++	copy = tmp
++	printable = yes
++	printing = test
++[print2]
++	copy = print1
++[print3]
++	copy = print1
++[print4]
++	copy = print1
++	";
++	close(CONF);
++
++	##
++	## create a test account
++	##
++
++	open(PWD, "|".$self->binpath("smbpasswd")." -c $conffile -L -s -a $username");
++	print PWD "$password\n$password\n";
++	close(PWD) or die("Unable to set password for test account");
++
++	print "DONE\n";
++
++	$ret{NMBD_TEST_LOG} = "$prefix/nmbd_test.log";
+ 	$ret{SMBD_TEST_LOG} = "$prefix/smbd_test.log";
++	$ret{CONFIGURATION} ="-s $conffile";
++	$ret{SERVER} = $server;
++	$ret{USERNAME} = $username;
++	$ret{DOMAIN} = $domain;
++	$ret{NETBIOSNAME} = $server;
++	$ret{PASSWORD} = $password;
++	$ret{PIDDIR} = $piddir;
+ 	return \%ret;
+ }
+ 
+-sub stop($)
+-{
+-	my ($self) = @_;
+-
+-	close(DATA);
+-
+-	sleep(2);
+-
+-	my $failed = $? >> 8;
+-
+-	if (-f "$ENV{PIDDIR}/smbd.pid" ) {
+-		open(IN, "<$ENV{PIDDIR}/smbd.pid") or die("unable to open smbd pid file");
+-		kill 9, <IN>;
+-		close(IN);
+-	}
+-
+-	return $failed;
+-}
+-
+-sub setup_env($$)
+-{
+-	my ($self, $name) = @_;
++sub wait_for_start($$)
++{
++	my ($self, $envvars) = @_;
++
++	# give time for nbt server to register its names
++	print "delaying for nbt name registration\n";
++	sleep(10);
++	# This will return quickly when things are up, but be slow if we need to wait for (eg) SSL init 
++	system("bin/nmblookup $envvars->{CONFIGURATION} -U $envvars->{SERVER_IP} __SAMBA__");
++	system("bin/nmblookup $envvars->{CONFIGURATION} __SAMBA__");
++	system("bin/nmblookup $envvars->{CONFIGURATION} -U 127.255.255.255 __SAMBA__");
++	system("bin/nmblookup $envvars->{CONFIGURATION} -U $envvars->{SERVER_IP} $envvars->{SERVER}");
++	system("bin/nmblookup $envvars->{CONFIGURATION} $envvars->{SERVER}");
++	# make sure smbd is also up set
++	print "wait for smbd\n";
++	system("bin/smbclient $envvars->{CONFIGURATION} -L $envvars->{SERVER_IP} -U% -p 139 | head -2");
++	system("bin/smbclient $envvars->{CONFIGURATION} -L $envvars->{SERVER_IP} -U% -p 139 | head -2");
+ }
+ 
+ 1;
+
+=== modified file 'source/script/tests/selftest.pl'
+--- a/source/script/tests/selftest.pl	2007-04-17 00:30:01 +0000
++++ b/source/script/tests/selftest.pl	2007-04-17 12:11:00 +0000
+@@ -133,6 +133,7 @@
+ my $ldap = undef;
+ my $opt_analyse_cmd = undef;
+ my $opt_resetup_env = undef;
++my $opt_bindir = undef;
+ 
+ my $srcdir = ".";
+ my $builddir = ".";
+@@ -297,6 +298,7 @@
+ 
+ Generic options:
+  --help                     this help page
++ --target=samba4|samba3|win Samba version to target
+ 
+ Paths:
+  --prefix=DIR               prefix to run tests in [st]
+@@ -304,12 +306,16 @@
+  --builddir=DIR             output directory [.]
+ 
+ Target Specific:
+- --target=samba4|samba3|win Samba version to target
+  --socket-wrapper-pcap=FILE save traffic to pcap file
+  --socket-wrapper           enable socket wrapper
+  --expected-failures=FILE   specify list of tests that is guaranteed to fail
++
++Samba4 Specific:
+  --ldap=openldap|fedora     back smbd onto specified ldap server
+ 
++Samba3 Specific:
++ --bindir=PATH              path to binaries
++
+ Behaviour:
+  --quick                    run quick overall test
+  --one                      abort when the first test fails
+@@ -338,6 +344,7 @@
+ 		'ldap:s' => \$ldap,
+ 		'analyse-cmd=s' => \$opt_analyse_cmd,
+ 		'resetup-environment' => \$opt_resetup_env,
++		'bindir:s' => \$opt_bindir,
+ 	    );
+ 
+ exit(1) if (not $result);
+@@ -410,7 +417,11 @@
+ if ($opt_target eq "samba4") {
+ 	$target = new Samba4("$srcdir/bin", $ldap, "$srcdir/setup");
+ } elsif ($opt_target eq "samba3") {
+-	$target = new Samba3("$srcdir/bin", "$srcdir/setup");
++	if ($opt_socket_wrapper and `smbd -b | grep SOCKET_WRAPPER` eq "") {
++		die("You must include --enable-socket-wrapper when compiling Samba in order to execute 'make test'.  Exiting....");
++	}
++
++	$target = new Samba3($opt_bindir);
+ } elsif ($opt_target eq "win") {
+ 	die("Windows tests will not run with socket wrapper enabled.") 
+ 		if ($opt_socket_wrapper);
+

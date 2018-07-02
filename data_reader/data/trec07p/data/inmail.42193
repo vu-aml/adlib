@@ -1,0 +1,57 @@
+From r-help-bounces@stat.math.ethz.ch  Wed May 23 09:01:02 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4ND11qD025441
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 23 May 2007 09:01:01 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4ND0NhD007929;
+	Wed, 23 May 2007 15:00:33 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=5.0 tests=AWL,
+	BAYES_50 autolearn=no version=3.1.8
+Received: from slim.kubism.ku.dk (slim.kubism.ku.dk [192.38.18.21])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4ND0Dd3007899
+	for <R-help@stat.math.ethz.ch>; Wed, 23 May 2007 15:00:13 +0200
+Received: from [192.38.18.17] (viggo.kubism.ku.dk [192.38.18.17])
+	by slim.kubism.ku.dk (Postfix) with ESMTP id A33193F0C8;
+	Wed, 23 May 2007 15:00:12 +0200 (CEST)
+Message-ID: <46543ADC.1090606@biostat.ku.dk>
+Date: Wed, 23 May 2007 15:00:12 +0200
+From: Peter Dalgaard <P.Dalgaard@biostat.ku.dk>
+User-Agent: Thunderbird 1.5.0.10 (X11/20060911)
+MIME-Version: 1.0
+To: Mike White <mikewhite.diu@btconnect.com>
+References: <000b01c79d2f$36a97f10$5901a8c0@FSSFQCV7BGDVED>
+In-Reply-To: <000b01c79d2f$36a97f10$5901a8c0@FSSFQCV7BGDVED>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: R-help@stat.math.ethz.ch
+Subject: Re: [R] Fisher's r to z' transformation - help needed
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="utf-8"
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+Content-Transfer-Encoding: 8bit
+X-MIME-Autoconverted: from base64 to 8bit by flax9.uwaterloo.ca id l4ND11qD025441
+
+Mike White wrote:> I am trying to use Fisher's z' transformation of the Pearson's r but the> standard error does not appear to be correct.  I have simulated an example> using the R code below.  The z' data appears to have a reasonably normal> distribution but the standard error given by the formula 1/sqrt(N-3) (from> http://davidmlane.com/hyperstat/A98696.html) gives a different results than> sd(z).  Can anyone tell me where I am going wrong?>>   You're not calculating 3000 independent sample correlations. You arecalculating the correlation of each  row of "dat" with the column meansin one case, and a bunch of pairwise corrrelations in the other. Inaddition, and this may be the important part, you are generating"correlation" not by using a sample from a two-dimensional normal but byadding in specific means.
+Conrast
+> r <-  replicate(30000, {Z<-rnorm(10,55,30);cor(rnorm(10)+Z,rnorm(10)+Z)})> z <- 0.5*log((1+r)/(1-r))> sd(z)[1] 0.3648677> 1/sqrt(7)[1] 0.3779645
+with
+> r <- replicate(30000, cor(rnorm(10)+10*(1:10), rnorm(10)+10*(1:10)))> z <- 0.5*log((1+r)/(1-r))> sd(z)[1] 0.2662451
+
+> library(amap)>> ## SIMULATED DATA #########################################################> p<-10> n<-3000> means<-1000*c(1:p)> SDs<-rep(100,p)> set.seed(1)> dat<-mapply(rnorm, mean=means, sd=SDs, n=n)> colnames(dat)<-paste("V",1:p, sep="")> rownames(dat)<-1:n> # calculate centroid of simulated data> dat.mean<-apply(dat,2,mean)> # calculated Pearson's r to centroid> r<-apply(dat,1,cor, y=dat.mean)> plot(density(r))> # Fisher's z' transformation> z<-0.5*log((1+r)/(1-r))> plot(density(z))> sd(z)> # [1] 0.2661779>> 1/sqrt(p-3)> # [1] 0.3779645>> ## alternatively use comparisons for all possible pairs> ## Centred Pearson's r on raw data> r<-1-Dist(dat,"corr")> plot(density(r))> z<-0.5*log((1+r)/(1-r))> plot(density(z))> sd(z)> # [1] 0.2669787> 1/sqrt(p-3)> # [1] 0.3779645>> Many thanks> Mike White>> ______________________________________________> R-help@stat.math.ethz.ch mailing list> https://stat.ethz.ch/mailman/listinfo/r-help> PLEASE do read the posting guide http://www.R-project.org/posting-guide.html> and provide commented, minimal, self-contained, reproducible code.>   
+
+--    O__  ---- Peter Dalgaard             Øster Farimagsgade 5, Entr.B  c/ /'_ --- Dept. of Biostatistics     PO Box 2099, 1014 Cph. K (*) \(*) -- University of Copenhagen   Denmark          Ph:  (+45) 35327918~~~~~~~~~~ - (p.dalgaard@biostat.ku.dk)                  FAX: (+45) 35327907
+______________________________________________R-help@stat.math.ethz.ch mailing listhttps://stat.ethz.ch/mailman/listinfo/r-helpPLEASE do read the posting guide http://www.R-project.org/posting-guide.htmland provide commented, minimal, self-contained, reproducible code.
+

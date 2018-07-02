@@ -1,0 +1,99 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May  2 23:44:02 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l433i1b9030469
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 2 May 2007 23:44:02 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id E4607162C38
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu,  3 May 2007 03:44:00 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id B2BD5162ADE; Thu,  3 May 2007 03:43:55 +0000 (GMT)
+Date: Thu, 03 May 2007 13:44:28 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070503034355.B2BD5162ADE@lists.samba.org>
+Subject: Rev 241: don't zero beyond packet header unnecessarily in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 241
+revision-id: tridge@samba.org-20070503034427-cafju1wds7214w62
+parent: tridge@samba.org-20070503021603-p9q4auw135pzf905
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Thu 2007-05-03 13:44:27 +1000
+message:
+  don't zero beyond packet header unnecessarily
+modified:
+  common/ctdb_daemon.c           ctdb_daemon.c-20070409200331-3el1kqgdb9m4ib0g-1
+=== modified file 'common/ctdb_daemon.c'
+--- a/common/ctdb_daemon.c	2007-05-02 19:51:46 +0000
++++ b/common/ctdb_daemon.c	2007-05-03 03:44:27 +0000
+@@ -727,7 +727,9 @@
+ {
+ 	int size;
+ 	struct ctdb_req_header *hdr;
+-	size = ((length+1)+(CTDB_DS_ALIGNMENT-1)) & ~(CTDB_DS_ALIGNMENT-1);
++
++	length = MAX(length, slength);
++	size = (length+(CTDB_DS_ALIGNMENT-1)) & ~(CTDB_DS_ALIGNMENT-1);
+ 
+ 	hdr = (struct ctdb_req_header *)talloc_size(mem_ctx, size);
+ 	if (hdr == NULL) {
+@@ -736,9 +738,9 @@
+ 		return NULL;
+ 	}
+ 	talloc_set_name_const(hdr, type);
+-	memset(hdr, 0, size);
++	memset(hdr, 0, slength);
++	hdr->length       = length;
+ 	hdr->operation    = operation;
+-	hdr->length       = size;
+ 	hdr->ctdb_magic   = CTDB_MAGIC;
+ 	hdr->ctdb_version = CTDB_VERSION;
+ 	hdr->srcnode      = ctdb->vnn;
+@@ -761,7 +763,10 @@
+ {
+ 	int size;
+ 	struct ctdb_req_header *hdr;
+-	size = ((length+1)+(CTDB_DS_ALIGNMENT-1)) & ~(CTDB_DS_ALIGNMENT-1);
++
++	length = MAX(length, slength);
++	size = (length+(CTDB_DS_ALIGNMENT-1)) & ~(CTDB_DS_ALIGNMENT-1);
++
+ 	hdr = (struct ctdb_req_header *)ctdb->methods->allocate_pkt(mem_ctx, size);
+ 	if (hdr == NULL) {
+ 		DEBUG(0,("Unable to allocate transport packet for operation %u of length %u\n",
+@@ -769,9 +774,9 @@
+ 		return NULL;
+ 	}
+ 	talloc_set_name_const(hdr, type);
+-	memset(hdr, 0, size);
++	memset(hdr, 0, slength);
++	hdr->length       = length;
+ 	hdr->operation    = operation;
+-	hdr->length       = size;
+ 	hdr->ctdb_magic   = CTDB_MAGIC;
+ 	hdr->ctdb_version = CTDB_VERSION;
+ 	hdr->generation   = ctdb->vnn_map->generation;
+

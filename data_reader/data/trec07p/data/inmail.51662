@@ -1,0 +1,140 @@
+From r-help-bounces@stat.math.ethz.ch  Tue Jun  5 13:06:29 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l55H6ShB011554
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 5 Jun 2007 13:06:29 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l55H5p1F027058;
+	Tue, 5 Jun 2007 19:06:02 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=5.0 tests=AWL, BAYES_50,
+	DKIM_POLICY_SIGNSOME autolearn=no version=3.2.0
+Received: from jarlite.fhcrc.org (JARLITE.FHCRC.ORG [140.107.42.11])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l55H4F40026668
+	(version=TLSv1/SSLv3 cipher=DHE-RSA-AES256-SHA bits=256 verify=FAIL)
+	for <r-help@stat.math.ethz.ch>; Tue, 5 Jun 2007 19:04:17 +0200
+Received: from jade.fhcrc.org (JADE.FHCRC.ORG [140.107.42.223])
+	by jarlite.fhcrc.org (8.12.11.20060308/8.12.11/SuSE Linux 0.7) with
+	ESMTP id l55H46G2009650
+	(version=TLSv1/SSLv3 cipher=DHE-RSA-AES256-SHA bits=256 verify=NO);
+	Tue, 5 Jun 2007 10:04:06 -0700
+Received: from ziti.local (DORMOUSE.FHCRC.ORG [140.107.170.158])
+	(using TLSv1 with cipher DHE-RSA-AES256-SHA (256/256 bits))
+	(No client certificate requested)
+	by jade.fhcrc.org (Postfix) with ESMTP id 77C8DE767;
+	Tue,  5 Jun 2007 10:04:06 -0700 (PDT)
+To: johan Faux <johanfaux@yahoo.com>
+References: <523083.8004.qm@web56212.mail.re3.yahoo.com>
+From: Seth Falcon <sfalcon@fhcrc.org>
+Date: Tue, 05 Jun 2007 10:04:05 -0700
+In-Reply-To: <523083.8004.qm@web56212.mail.re3.yahoo.com> (johan Faux's
+	message of "Mon, 4 Jun 2007 14:13:40 -0700 (PDT)")
+Message-ID: <m24plmtjsq.fsf@ziti.local>
+User-Agent: Gnus/5.11 (Gnus v5.11) Emacs/22.0.50 (darwin)
+MIME-Version: 1.0
+X-PMX-Version: 5.3.1.294258, Antispam-Engine: 2.5.1.298604,
+	Antispam-Data: 2007.6.5.95034
+X-FHCRC-SCANNED: Tue Jun  5 10:04:11 2007
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: Seth Falcon <sfalcon@fhcrc.org>, r-help@stat.math.ethz.ch
+Subject: Re: [R] locked environment and inheritance
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+johan Faux <johanfaux@yahoo.com> writes:
+
+> Thanks for your reply.
+>
+> Experimenting a little further, I was able to learn a bit more and
+> find what is the real problem of mine what the real question is.
+
+>
+> I could create my S4 extended class by adding these two lines in my namespace file
+> importClassesFrom(Matrix,Matrix)
+> importClassesFrom(Matrix,dMatrix)
+
+You can also do:
+
+  importClassesFrom(Matrix, Matrix, dMatrix)
+
+> and then creating my new class in another R file
+>
+> library(Matrix)
+  ^^^^^^^
+
+I would not call library for such a case.  If you are importing
+library in your package's namespace, then you probably want the
+following in your DESCRIPTION file:
+
+   Depends: Matrix, methods
+   Imports: Matrix
+
+[yes, there is a lot of duplication in how things are specified]
+
+> setClass("myMatClass", representation("dMatrix",myslot="numeric"))
+>
+>
+> which creates the new S4 class when my package is loaded. 
+>
+> The problem is that I would like to create the class inside a function of mine:
+>
+> createMyS4Class() {
+>     library(Matrix)
+>
+>     setClass("myMatClass", representation("dMatrix",myslot="numeric"))
+> }
+
+Again, the call to library should not be needed.
+
+> so that, at some point (after my package is loaded ), I can do something like:
+>
+> if (cond)
+>     createMyS4Class()
+
+How do you intend to use such a class?  Is the real issue that you
+don't want to depend on Matrix and only use it if it is available?
+
+> Now, I understand that at this point, my package environment is
+> locked.  So the question become: Is there any way that I can unlock
+> my package environment, create my new S4 class and lock it back or
+> something?
+
+I think that might be possible, but that doesn't make it a good idea :-)
+
+> Please let me know if that makes sense ? 
+> I appreciate your comments.
+
+It might help to understand what your are trying to achieve overall.
+Perhaps there are other approaches...
+
+Also, at this point, the discussion is more appropriate for R-devel.
+Perhaps you can move the conversation there?
+
+Best,
+
++ seth
+
+-- 
+Seth Falcon | Computational Biology | Fred Hutchinson Cancer Research Center
+http://bioconductor.org
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

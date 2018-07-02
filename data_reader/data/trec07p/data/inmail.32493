@@ -1,0 +1,96 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May  9 14:23:50 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l49INoqD032199
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 9 May 2007 14:23:50 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id A3BCB163904
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed,  9 May 2007 18:23:48 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: ***
+X-Spam-Status: No, score=3.4 required=3.8 tests=AWL,BAYES_50,HTML_10_20,
+	HTML_MESSAGE,RCVD_IN_BLARS_RBL,RCVD_IN_DSBL,SPF_PASS autolearn=no 
+	version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from ug-out-1314.google.com (ug-out-1314.google.com [66.249.92.171])
+	by lists.samba.org (Postfix) with ESMTP id AA4C4162AE1
+	for <samba-technical@lists.samba.org>;
+	Wed,  9 May 2007 18:23:32 +0000 (GMT)
+Received: by ug-out-1314.google.com with SMTP id m2so341961ugc
+	for <samba-technical@lists.samba.org>;
+	Wed, 09 May 2007 11:23:30 -0700 (PDT)
+DKIM-Signature: a=rsa-sha1; c=relaxed/relaxed; d=gmail.com; s=beta;
+	h=domainkey-signature:received:received:message-id:date:from:to:subject:mime-version:content-type;
+	b=cAoDXMkIl2X32n/T1Ovv8AwAyifIeTJG4qzgS+Q/TrDVKvyijaV1yT8Aj4WNoiuh6L9zLUHZiczJGJn4/fHuIOVbPq5tQGjVbJbqAG+0jYJvMr3UPUdDEl53G1GdmnDaUPYrwwNslXW5GjtIS5kEtSfUi8PhlW3jF5Bjmwxh4rY=
+DomainKey-Signature: a=rsa-sha1; c=nofws; d=gmail.com; s=beta;
+	h=received:message-id:date:from:to:subject:mime-version:content-type;
+	b=LcDEwX072mFkIMb326+tvkg5yD12ULzFPoZJhk96rpbqifiZeQf2tXzs8vudMAxqHYlRl1V/JjeORJa053C2MFdzWmBbHTmzhrUi+3Q7pE47NHd8z/Ibuhcnd7cEHlt8+LCdRsQhD6n4FjbIZ0I1akiVy1lceor62KLs1d09z0w=
+Received: by 10.82.147.6 with SMTP id u6mr1573468bud.1178735009799;
+	Wed, 09 May 2007 11:23:29 -0700 (PDT)
+Received: by 10.82.158.10 with HTTP; Wed, 9 May 2007 11:23:29 -0700 (PDT)
+Message-ID: <a2d612f10705091123w10b915f5i5114bf07c0e330c@mail.gmail.com>
+Date: Wed, 9 May 2007 23:53:29 +0530
+From: "Aravinda Guzzar" <aguzzar@gmail.com>
+To: samba-technical@lists.samba.org
+MIME-Version: 1.0
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+X-Content-Filtered-By: Mailman/MimeDel 2.1.5
+Subject: Registry.tdb and tdb functionality document
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Hi,
+
+I see a difference in the way the registry.tdb is handled in the samba code.
+
+
+While all the permanent TDBs viz. gencache.tdb, group_mapping.tdb,
+account_policy.tdb, share_info.tdb, secrets.tdb.
+schannel_store.tdb etc. are opend with O_RDWR|O_CREAT flags, registry.tdb is
+uniquely been tried to open first with O_RDWR flag and if fails then tried
+with O_RDWR|O_CREAT flag.
+
+--------------------------
+ if ( !(tdb_reg = tdb_open_log(lock_path("registry.tdb"), 0, TDB_DEFAULT,
+O_RDWR, 0600)) )
+ {
+  tdb_reg = tdb_open_log(lock_path("registry.tdb"), 0, TDB_DEFAULT,
+O_RDWR|O_CREAT, 0600);
+  if ( !tdb_reg ) {
+   DEBUG(0,("regdb_init: Failed to open registry %s (%s)\n",
+    lock_path("registry.tdb"), strerror(errno) ));
+   return False;
+  }
+
+  DEBUG(10,("regdb_init: Successfully created registry tdb\n"));
+ }
+
+--------------------------
+
+Is there any special reason/history behind this way of handling this TDB
+file.
+
+I bumped on this while understanding the way TDBs are designed in samba. Is
+there any special document to understand the internals of its operations
+apart fromt the code study.
+
+Thanks in advance for any information regarding this.
+regards
+Aravind
+

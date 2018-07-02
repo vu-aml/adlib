@@ -1,0 +1,233 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Jul  4 12:18:15 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l64GIFL9012804
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 4 Jul 2007 12:18:15 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id AE249163857
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed,  4 Jul 2007 16:18:10 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.8 required=3.8 tests=AWL,BAYES_40,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1017)
+	id C0939162AEF; Wed,  4 Jul 2007 16:17:48 +0000 (GMT)
+To: samba-cvs@samba.org
+From: obnox@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070704161748.C0939162AEF@lists.samba.org>
+Date: Wed,  4 Jul 2007 16:17:48 +0000 (GMT)
+Subject: svn commit: samba r23706 - in branches/SAMBA_3_0/examples/scripts:
+	. users_and_groups
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: obnox
+Date: 2007-07-04 16:17:48 +0000 (Wed, 04 Jul 2007)
+New Revision: 23706
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23706
+
+Log:
+Add a script to create domainusers,-groups and -aliases.
+This is done via rpc client. The main purpose is to
+be able to fill a domain controller with a large number
+of users / groups easily. A the object names are
+built as <prefix><num> where number ranges from a given
+start number counting up until a given number of objects
+has been created.
+
+In a next step, I will submit scripts to add (many) users to
+a group and to add a user to (many) groups.
+
+Michael
+
+
+Added:
+   branches/SAMBA_3_0/examples/scripts/users_and_groups/
+   branches/SAMBA_3_0/examples/scripts/users_and_groups/createdomobj.pl
+
+
+Changeset:
+Added: branches/SAMBA_3_0/examples/scripts/users_and_groups/createdomobj.pl
+===================================================================
+--- branches/SAMBA_3_0/examples/scripts/users_and_groups/createdomobj.pl	2007-07-04 14:15:26 UTC (rev 23705)
++++ branches/SAMBA_3_0/examples/scripts/users_and_groups/createdomobj.pl	2007-07-04 16:17:48 UTC (rev 23706)
+@@ -0,0 +1,155 @@
++#!/usr/bin/perl
++
++#
++# createdomobj.pl
++#
++#    create single or continuously numbered domain 
++#    users/groups/aliases via rpc
++#
++# Copyright (C) Michael Adam <obnox@samba.org> 2007
++#
++# This program is free software; you can redistribute it and/or modify it
++# under the terms of the GNU General Public License as published by the Free
++# Software Foundation; either version 2 of the License, or (at your option)
++# any later version.
++#
++# This program is distributed in the hope that it will be useful, but WITHOUT
++# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
++# more details.
++#
++# You should have received a copy of the GNU General Public License along with
++# this program; if not, write to the Free Software Foundation, Inc., 675
++# Mass Ave, Cambridge, MA 02139, USA.
++#
++
++#
++# WARNING: This script is still rather crude.
++#
++
++use strict;
++use Getopt::Std;
++
++
++my $target_type	= "group";		# what type of object to create
++my $rpc_cmd	= "createdom".$target_type;
++my $rpccli_cmd	= "rpcclient";
++
++# defaults:
++
++my $server;
++my $num_targets	= 1;
++my $startnum;				# if empty, don't add numbers to prefix
++my $prefix	= $target_type;		# name-prefix
++my $path;				# path to rpcclient command
++my $rpccli_path	= $rpccli_cmd;
++my $creds;
++
++sub usage {
++	print "USAGE: $0 [-h] -S server -U user\%pass [-p prefix] \\\n"
++		. "\t[-t {alias|group|user}] [-s startnum] [-n numobjs] [-P path] \n";
++}
++
++# parse commandline:
++
++my %options = ();
++getopts("U:t:S:s:n:p:P:h", \%options);
++
++if (exists($options{h})) {
++	usage();
++	exit 0;
++}
++
++if (exists($options{t})) {
++	$target_type = $options{t};
++	if ($target_type !~ /^(alias|user|group)$/) {
++		print "ERROR: invalid target type given\n";
++		usage();
++		exit 1;
++	}
++	$rpc_cmd = "createdom".$target_type;
++}
++
++if (exists($options{U})) {
++	$creds = "-U $options{U}";
++	if ($creds !~ '%') {
++		print "ERROR: you need to specify credentials in the form -U user\%pass\n";
++		usage();
++		exit 1;
++	}
++}
++else {
++	print "ERROR: mandatory argument '-U' missing\n";
++	usage();
++	exit 1;
++}
++
++if (exists($options{S})) {
++	$server = $options{S};
++}
++else {
++	print "ERROR: madatory argument '-S' missing\n";
++	usage();
++	exit 1;
++}
++
++if (exists($options{s})) {
++	$startnum = $options{s};
++}
++
++if (exists($options{n})) {
++	$num_targets = $options{n};
++}
++
++if (exists($options{p})) {
++	$prefix = $options{p};
++}
++
++if (exists($options{P})) {
++	$path = $options{p};
++	$rpccli_path = "$path/$rpccli_cmd";
++}
++
++if (@ARGV) {
++	print "ERROR: junk on the command line ('" . join(" ", @ARGV) . "')...\n";
++	usage();
++	exit 1;
++}
++
++# rpc open/close functions:
++
++sub open_rpc_pipe {
++	print "opening rpc pipe\n";
++	open(IPC, "| $rpccli_cmd $server $creds -d0") or
++		die "error opening rpc pipe.";
++}
++
++sub close_rpc_pipe {
++	print "closing rpc pipe\n";
++	close(IPC);
++}
++
++# main:
++
++open_rpc_pipe();
++
++if ("x$startnum" eq "x") {
++	my $target_name = $prefix;
++	print "creating $target_type $target_name\n";
++	print IPC "$rpc_cmd $target_name\n";
++}
++else {
++	for (my $num = 1; $num <= $num_targets; ++$num) {
++		my $target_name = sprintf "%s%.05d", $prefix, $startnum + $num - 1;
++		print "creating $target_type $target_name\n";
++		print IPC "$rpc_cmd $target_name\n";
++		if (($num) % 500 == 0) {
++			printf("500 ".$target_type."s created\n");
++			close_rpc_pipe();
++			sleep 2;
++			open_rpc_pipe();
++		}
++	}
++}
++close_rpc_pipe();
++
+
+
+Property changes on: branches/SAMBA_3_0/examples/scripts/users_and_groups/createdomobj.pl
+___________________________________________________________________
+Name: svn:executable
+   + *
+

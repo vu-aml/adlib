@@ -1,0 +1,221 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat May  5 03:21:20 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l457LKqD024765
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 5 May 2007 03:21:20 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 4205A16383A
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat,  5 May 2007 07:21:19 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 38971162AD0; Sat,  5 May 2007 07:20:39 +0000 (GMT)
+Date: Sat, 05 May 2007 17:20:00 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070505072039.38971162AD0@lists.samba.org>
+Subject: Rev 260: - take advantage of the new EVENT_FD_AUTOCLOSE flag in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 260
+revision-id: tridge@samba.org-20070505071959-wvf5a3e37mch3vy3
+parent: tridge@samba.org-20070505071843-gdt3kgn66sa3xds0
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Sat 2007-05-05 17:19:59 +1000
+message:
+  - take advantage of the new EVENT_FD_AUTOCLOSE flag
+  - use the tdb_chainlock_mark() call to allow us to guarantee forward progress in the ctdb_lockwait code
+modified:
+  common/ctdb_daemon.c           ctdb_daemon.c-20070409200331-3el1kqgdb9m4ib0g-1
+  common/ctdb_io.c               ctdb_io.c-20070409200335-dzfc7f3rra5rcf60-1
+  common/ctdb_lockwait.c         ctdb_lockwait.c-20070416214118-n1aeonljj3vpdd9q-1
+  common/ctdb_ltdb.c             ctdb_ltdb.c-20061128065342-to93h6eejj5kon81-2
+  common/ctdb_traverse.c         ctdb_traverse.c-20070503021550-ztfs5rwx8jfm8qqx-1
+=== modified file 'common/ctdb_daemon.c'
+--- a/common/ctdb_daemon.c	2007-05-05 04:09:46 +0000
++++ b/common/ctdb_daemon.c	2007-05-05 07:19:59 +0000
+@@ -249,8 +249,6 @@
+ {
+ 	ctdb_reqid_remove(client->ctdb, client->client_id);
+ 	client->ctdb->status.num_clients--;
+-	close(client->fd);
+-	client->fd = -1;
+ 	return 0;
+ }
+ 
+@@ -678,8 +676,8 @@
+ 
+ 
+ 	ctdb->ev = event_context_init(NULL);
+-	fde = event_add_fd(ctdb->ev, ctdb, fd[0], EVENT_FD_READ, ctdb_read_from_parent, &fd[0]);
+-	fde = event_add_fd(ctdb->ev, ctdb, ctdb->daemon.sd, EVENT_FD_READ, ctdb_accept_client, ctdb);
++	fde = event_add_fd(ctdb->ev, ctdb, fd[0], EVENT_FD_READ|EVENT_FD_AUTOCLOSE, ctdb_read_from_parent, &fd[0]);
++	fde = event_add_fd(ctdb->ev, ctdb, ctdb->daemon.sd, EVENT_FD_READ|EVENT_FD_AUTOCLOSE, ctdb_accept_client, ctdb);
+ 	ctdb_main_loop(ctdb);
+ 
+ 	return 0;
+@@ -720,7 +718,7 @@
+ 	talloc_set_destructor(domain_socket_name, unlink_destructor);	
+ 
+ 	ctdb->ev = event_context_init(NULL);
+-	fde = event_add_fd(ctdb->ev, ctdb, ctdb->daemon.sd, EVENT_FD_READ, 
++	fde = event_add_fd(ctdb->ev, ctdb, ctdb->daemon.sd, EVENT_FD_READ|EVENT_FD_AUTOCLOSE, 
+ 			   ctdb_accept_client, ctdb);
+ 	ctdb_main_loop(ctdb);
+ 
+
+=== modified file 'common/ctdb_io.c'
+--- a/common/ctdb_io.c	2007-05-03 02:16:03 +0000
++++ b/common/ctdb_io.c	2007-05-05 07:19:59 +0000
+@@ -273,7 +273,7 @@
+ 	queue->fde = NULL;
+ 
+ 	if (fd != -1) {
+-		queue->fde = event_add_fd(queue->ctdb->ev, queue, fd, EVENT_FD_READ, 
++		queue->fde = event_add_fd(queue->ctdb->ev, queue, fd, EVENT_FD_READ|EVENT_FD_AUTOCLOSE, 
+ 					  queue_io_handler, queue);
+ 		if (queue->fde == NULL) {
+ 			return -1;
+
+=== modified file 'common/ctdb_lockwait.c'
+--- a/common/ctdb_lockwait.c	2007-04-23 21:33:37 +0000
++++ b/common/ctdb_lockwait.c	2007-05-05 07:19:59 +0000
+@@ -29,11 +29,13 @@
+ 
+ struct lockwait_handle {
+ 	struct ctdb_context *ctdb;
++	struct ctdb_db_context *ctdb_db;
+ 	struct fd_event *fde;
+ 	int fd[2];
+ 	pid_t child;
+ 	void *private_data;
+ 	void (*callback)(void *);
++	TDB_DATA key;
+ 	struct timeval start_time;
+ };
+ 
+@@ -45,19 +47,30 @@
+ 	void (*callback)(void *) = h->callback;
+ 	void *p = h->private_data;
+ 	pid_t child = h->child;
++	TDB_DATA key = h->key;
++	struct tdb_context *tdb = h->ctdb_db->ltdb->tdb;
++	TALLOC_CTX *tmp_ctx = talloc_new(ev);
++
++	talloc_free(fde);
++
++	key.dptr = talloc_memdup(tmp_ctx, key.dptr, key.dsize);
++
+ 	talloc_set_destructor(h, NULL);
+-	close(h->fd[0]);
+ 	ctdb_latency(&h->ctdb->status.max_lockwait_latency, h->start_time);
+ 	h->ctdb->status.pending_lockwait_calls--;
+-	talloc_free(h);	
++
++	tdb_chainlock_mark(tdb, key);
+ 	callback(p);
++	tdb_chainlock_unmark(tdb, key);
++
++	kill(child, SIGKILL);
+ 	waitpid(child, NULL, 0);
++	talloc_free(tmp_ctx);
+ }
+ 
+ static int lockwait_destructor(struct lockwait_handle *h)
+ {
+ 	h->ctdb->status.pending_lockwait_calls--;
+-	close(h->fd[0]);
+ 	kill(h->child, SIGKILL);
+ 	waitpid(h->child, NULL, 0);
+ 	return 0;
+@@ -84,7 +97,7 @@
+ 	ctdb_db->ctdb->status.lockwait_calls++;
+ 	ctdb_db->ctdb->status.pending_lockwait_calls++;
+ 
+-	if (!(result = talloc_zero(ctdb_db, struct lockwait_handle))) {
++	if (!(result = talloc_zero(private_data, struct lockwait_handle))) {
+ 		ctdb_db->ctdb->status.pending_lockwait_calls--;
+ 		return NULL;
+ 	}
+@@ -110,13 +123,15 @@
+ 	result->callback = callback;
+ 	result->private_data = private_data;
+ 	result->ctdb = ctdb_db->ctdb;
++	result->ctdb_db = ctdb_db;
++	result->key = key;
+ 
+ 	if (result->child == 0) {
++		char c = 0;
+ 		close(result->fd[0]);
+-		/*
+-		 * Do we need a tdb_reopen here?
+-		 */
+ 		tdb_chainlock(ctdb_db->ltdb->tdb, key);
++		write(result->fd[1], &c, 1);
++		pause();
+ 		_exit(0);
+ 	}
+ 
+@@ -124,7 +139,7 @@
+ 	talloc_set_destructor(result, lockwait_destructor);
+ 
+ 	result->fde = event_add_fd(ctdb_db->ctdb->ev, result, result->fd[0],
+-				   EVENT_FD_READ, lockwait_handler,
++				   EVENT_FD_READ|EVENT_FD_AUTOCLOSE, lockwait_handler,
+ 				   (void *)result);
+ 	if (result->fde == NULL) {
+ 		talloc_free(result);
+
+=== modified file 'common/ctdb_ltdb.c'
+--- a/common/ctdb_ltdb.c	2007-05-04 12:18:00 +0000
++++ b/common/ctdb_ltdb.c	2007-05-05 07:19:59 +0000
+@@ -193,7 +193,6 @@
+ {
+ 	struct lock_fetch_state *state = talloc_get_type(p, struct lock_fetch_state);
+ 	state->recv_pkt(state->recv_context, (uint8_t *)state->hdr, state->hdr->length);
+-	talloc_free(state);
+ 	DEBUG(2,(__location__ " PACKET REQUEUED\n"));
+ }
+ 
+@@ -252,7 +251,7 @@
+ 		return 0;
+ 	}
+ 
+-	state = talloc(ctdb_db, struct lock_fetch_state);
++	state = talloc(hdr, struct lock_fetch_state);
+ 	state->ctdb = ctdb_db->ctdb;
+ 	state->hdr = hdr;
+ 	state->recv_pkt = recv_pkt;
+
+=== modified file 'common/ctdb_traverse.c'
+--- a/common/ctdb_traverse.c	2007-05-04 01:41:29 +0000
++++ b/common/ctdb_traverse.c	2007-05-05 07:19:59 +0000
+@@ -74,7 +74,6 @@
+  */
+ static int traverse_local_destructor(struct ctdb_traverse_local_handle *h)
+ {
+-	close(h->fd[0]);
+ 	kill(h->child, SIGKILL);
+ 	waitpid(h->child, NULL, 0);
+ 	return 0;
+

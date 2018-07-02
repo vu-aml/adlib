@@ -1,0 +1,139 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun May 20 04:01:37 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4K81bqD003358
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 20 May 2007 04:01:37 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id D5747163866
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 20 May 2007 08:01:32 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id B5937162ACD; Sun, 20 May 2007 08:01:04 +0000 (GMT)
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070520080104.B5937162ACD@lists.samba.org>
+Date: Sun, 20 May 2007 08:01:04 +0000 (GMT)
+Subject: svn commit: samba r23017 - in
+	branches/SAMBA_4_0/source/ntvfs/posix: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: tridge
+Date: 2007-05-20 08:01:02 +0000 (Sun, 20 May 2007)
+New Revision: 23017
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23017
+
+Log:
+
+fixed the warning we have been getting for a long time:
+   pvfs_close: failed to delete XXX
+during the BASE-DELETE test. It was a real bug, and could result in a 
+delete on close triggering for a handle that had never fully opened.
+
+Modified:
+   branches/SAMBA_4_0/source/ntvfs/posix/pvfs_open.c
+   branches/SAMBA_4_0/source/ntvfs/posix/vfs_posix.h
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/ntvfs/posix/pvfs_open.c
+===================================================================
+--- branches/SAMBA_4_0/source/ntvfs/posix/pvfs_open.c	2007-05-19 22:29:59 UTC (rev 23016)
++++ branches/SAMBA_4_0/source/ntvfs/posix/pvfs_open.c	2007-05-20 08:01:02 UTC (rev 23017)
+@@ -270,6 +270,7 @@
+ 	f->handle->position          = 0;
+ 	f->handle->mode              = 0;
+ 	f->handle->sticky_write_time = False;
++	f->handle->open_completed    = False;
+ 
+ 	if ((create_options & NTCREATEX_OPTIONS_DELETE_ON_CLOSE) &&
+ 	    pvfs_directory_empty(pvfs, f->handle->name)) {
+@@ -379,6 +380,8 @@
+ 		goto cleanup_delete;
+ 	}
+ 
++	f->handle->open_completed = True;
++
+ 	io->generic.out.oplock_level  = OPLOCK_NONE;
+ 	io->generic.out.file.ntvfs    = h;
+ 	io->generic.out.create_action = create_action;
+@@ -437,6 +440,7 @@
+ 	}
+ 
+ 	if (h->name->stream_name == NULL && 
++	    h->open_completed &&
+ 	    pvfs_delete_on_close_set(h->pvfs, h, &open_count, &path) &&
+ 	    open_count == 1) {
+ 		NTSTATUS status;
+@@ -701,6 +705,7 @@
+ 	f->handle->mode              = 0;
+ 	f->handle->have_opendb_entry = True;
+ 	f->handle->sticky_write_time = False;
++	f->handle->open_completed    = False;
+ 
+ 	DLIST_ADD(pvfs->files.list, f);
+ 
+@@ -729,6 +734,8 @@
+ 		goto cleanup_delete;
+ 	}
+ 
++	f->handle->open_completed = True;
++
+ 	notify_trigger(pvfs->notify_context, 
+ 		       NOTIFY_ACTION_ADDED, 
+ 		       FILE_NOTIFY_CHANGE_FILE_NAME,
+@@ -1129,6 +1136,7 @@
+ 	f->handle->mode              = 0;
+ 	f->handle->have_opendb_entry = False;
+ 	f->handle->sticky_write_time = False;
++	f->handle->open_completed    = False;
+ 
+ 	/* form the lock context used for byte range locking and
+ 	   opendb locking */
+@@ -1264,6 +1272,10 @@
+ 	status = ntvfs_handle_set_backend_data(h, ntvfs, f);
+ 	NT_STATUS_NOT_OK_RETURN(status);
+ 
++	/* mark the open as having completed fully, so delete on close
++	   can now be used */
++	f->handle->open_completed     = True;
++
+ 	io->generic.out.oplock_level  = oplock_granted;
+ 	io->generic.out.file.ntvfs    = h;
+ 	io->generic.out.create_action = stream_existed?
+
+Modified: branches/SAMBA_4_0/source/ntvfs/posix/vfs_posix.h
+===================================================================
+--- branches/SAMBA_4_0/source/ntvfs/posix/vfs_posix.h	2007-05-19 22:29:59 UTC (rev 23016)
++++ branches/SAMBA_4_0/source/ntvfs/posix/vfs_posix.h	2007-05-20 08:01:02 UTC (rev 23017)
+@@ -150,6 +150,9 @@
+ 
+ 	/* have we set a sticky write time that we should remove on close */
+ 	BOOL sticky_write_time;
++
++	/* the open went through to completion */
++	BOOL open_completed;
+ };
+ 
+ /* open file state */
+

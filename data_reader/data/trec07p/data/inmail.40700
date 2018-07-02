@@ -1,0 +1,187 @@
+From perl6-all-return-81496-ktwarwic=speedy.uwaterloo.ca@perl.org  Mon May 21 07:39:53 2007
+Return-Path: <perl6-all-return-81496-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4LBdqqD030836
+	for <ktwarwic@flax9.uwaterloo.ca>; Mon, 21 May 2007 07:39:52 -0400
+Received: (qmail 20665 invoked by uid 514); 21 May 2007 11:39:47 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 20654 invoked from network); 21 May 2007 11:39:46 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: moderator for perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: "B.Geron (via RT)" <parrotbug-followup@parrotcode.org>
+X-RT-NewTicket: yes
+To: bugs-bitbucket@netlabs.develooper.com
+Resent-To: perl6-internals@perl.org
+Mail-Followup-To: perl6-internals@perl.org
+Reply-To: perl6-internals@perl.org
+Date: Sun, 20 May 2007 09:10:10 -0700
+Subject: [perl #43006] [NEW] Tail call force-frees current context 
+In-Reply-To: <46507292.4040608@gmail.com>
+References: <RT-Ticket-43006@perl.org> <46507292.4040608@gmail.com>
+Message-ID: <rt-3.6.HEAD-4015-1179677411-1224.43006-72-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #43006
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: bgeron@gmail.com
+MIME-Version: 1.0
+X-RT-Original-Encoding: utf-8
+Content-type: multipart/mixed; boundary="----------=_1179677411-4015-34"
+Resent-Message-Id: <20070520161014.30E482AFE2@x3.develooper.com>
+Resent-Date: Sun, 20 May 2007 09:10:14 -0700 (PDT)
+Resent-From: rt-bgeron=gmail.com@netlabs.develooper.com
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+
+------------=_1179677411-4015-34
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+# New Ticket Created by  B. Geron 
+# Please include the string:  [perl #43006]
+# in the subject line of all future correspondence about this issue. 
+# <URL: http://rt.perl.org/rt3/Ticket/Display.html?id=43006 >
+
+
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA1
+
+When there is a tail call without parameters, the tail call frees the
+caller's context without checking if it is referenced, e.g. by a
+closure. The test in <parrot.tailcalltest.patch> fails in svn HEAD
+because of this, but checking relies on the 'coincidence' that some new
+allocated context is of the same size as the (incorrectly) freed
+context. If some version of Parrot optimizes by default, the test might
+succeed with the problem still there.
+
+The patch in <parrot.solution1.patch> fixes the problem for me.
+
+Why is the surrounding if statement (see below) there? If it was there
+to detect that a closure was made and is now passed on to the callee, we
+can remove it as it should not be necessary any more. That might fix
+[perl #42790]: Tailcall with slurpy argument passing causes a memory leak.
+
+315:            if (!(*pc == PARROT_OP_get_params_pc ||
+316:                        (*pc == PARROT_OP_push_eh_ic &&
+317:                         pc[2] == PARROT_OP_get_params_pc))) {
+
+Thanks,
+- --
+Bram Geron | GPG 0xE7B9E65E
+
+
+
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.6 (GNU/Linux)
+Comment: Using GnuPG with Mozilla - http://enigmail.mozdev.org
+
+iD8DBQFGUHKSvquQbee55l4RAgk5AJ4lvXfbT4bNQbTPxlZmyIn4YHsWaACfcia4
+IaQqZGPjMNPNNL11sjDSgUU=
+=3+fM
+-----END PGP SIGNATURE-----
+
+------------=_1179677411-4015-34
+Content-Type: text/x-patch; charset="ascii"; name="parrot.tailcalltest.patch"
+Content-Disposition: inline; filename="parrot.tailcalltest.patch"
+Content-Transfer-Encoding: 7bit
+RT-Attachment: 43006/260218/113642
+
+Index: t/op/calling.t
+===================================================================
+--- t/op/calling.t	(revision 18597)
++++ t/op/calling.t	(working copy)
+@@ -7,7 +7,7 @@
+ use lib qw( . lib ../lib ../../lib );
+ 
+ use Test::More;
+-use Parrot::Test tests => 94;
++use Parrot::Test tests => 95;
+ 
+ =head1 NAME
+ 
+@@ -2408,6 +2408,45 @@
+ Have bar: 2
+ OUTPUT
+ 
++pir_output_is( <<'CODE', <<'OUTPUT', "Tail call without arguments should not free the context when a closure depends on it" );
++.sub main :main
++    $P0 = create_closure_and_run_it()
++.end
++
++.sub create_closure_and_run_it
++    P0 = new "Integer"
++    P0 = 3
++    .lex "val", P0
++    P2 = get_global "myclosure"
++    P1 = newclosure P2
++    # There is a closure depending on our current context, so this shouldn't
++    # free it.
++    .return P1()
++.end
++
++.sub myclosure :outer(create_closure_and_run_it)
++    P1 = find_lex "val"
++    say P1 # Should output 3
++    donothing()
++    P1 = find_lex "val"
++    say P1 # Should output 3 as well
++    .return ()
++.end
++
++.sub donothing
++    P0 = new "Integer"
++    P0 = 5
++    # This creates a new binding that is not accessible by the
++    # caller (myclosure)
++    .lex "val", P0
++    P2 = null
++    P1 = null
++.end
++CODE
++3
++3
++OUTPUT
++
+ # Local Variables:
+ #   mode: cperl
+ #   cperl-indent-level: 4
+
+------------=_1179677411-4015-34
+Content-Type: text/x-patch; charset="ascii"; name="parrot.solution1.patch"
+Content-Disposition: inline; filename="parrot.solution1.patch"
+Content-Transfer-Encoding: 7bit
+RT-Attachment: 43006/260218/113643
+
+Index: src/pmc/sub.pmc
+===================================================================
+--- src/pmc/sub.pmc	(revision 18597)
++++ src/pmc/sub.pmc	(working copy)
+@@ -322,7 +322,7 @@
+                 PObj_get_FLAGS(ccont) &= ~SUB_FLAG_TAILCALL;
+                 context->caller_ctx    = caller_ctx->caller_ctx;
+ 
+-                Parrot_free_context(INTERP, caller_ctx, 1);
++                Parrot_free_context(INTERP, caller_ctx, 0);
+             }
+         }
+ 
+
+------------=_1179677411-4015-34--
+

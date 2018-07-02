@@ -1,0 +1,100 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Jul  2 16:44:09 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l62Ki8L9018790
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 2 Jul 2007 16:44:08 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id AF535163888
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon,  2 Jul 2007 20:44:04 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.2 required=3.8 tests=AWL, BAYES_00, FORGED_RCVD_HELO,
+	RCVD_IN_DSBL,RCVD_IN_SORBS_DUL,SPF_NEUTRAL,UPPERCASE_25_50 
+	autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from mail.plainjoe.org (68-117-186-136.dhcp.mtgm.al.charter.com
+	[68.117.186.136])
+	by lists.samba.org (Postfix) with ESMTP id AB82D162ADC;
+	Mon,  2 Jul 2007 20:43:34 +0000 (GMT)
+Received: from [192.168.1.47] (oak.plainjoe.org [192.168.1.47])
+	by mail.plainjoe.org (Postfix) with ESMTP id 40EE62F1FD;
+	Mon,  2 Jul 2007 15:43:34 -0500 (CDT)
+Message-ID: <46896375.3030402@samba.org>
+Date: Mon, 02 Jul 2007 15:43:33 -0500
+From: "Gerald (Jerry) Carter" <jerry@samba.org>
+User-Agent: Thunderbird 1.5.0.12 (X11/20070604)
+MIME-Version: 1.0
+To: James Peach <jpeach@samba.org>
+References: <20070618105242.GA18651@patate.is-a-geek.org>
+	<04652DEF-11A0-4587-8324-6179ACDBBDD0@samba.org>
+In-Reply-To: <04652DEF-11A0-4587-8324-6179ACDBBDD0@samba.org>
+X-Enigmail-Version: 0.94.2.0
+Content-Type: text/plain; charset=US-ASCII
+Content-Transfer-Encoding: 7bit
+Cc: samba-technical@lists.samba.org, Julien Cristau <jcristau@debian.org>
+Subject: Re: [patch] hide libsmbclient's private symbols
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA1
+
+James,
+
+> The rules might look like this for a gcc-based toolchain. The only
+> problem remaining is how to express the DSO version number in a generic
+> way.
+> 
+> DSO_EXPORTS = -Wl,--version-script,exports/`basename $@ |\
+>	sed -e/@SHLIBEXT@/syms/`
+> SHLD_DSO = $(SHLD) $(LDSHFLAGS) $(DSO_EXPORTS) \
+>	@SONAMEFLAG@`basename $@`.$(XXXXXX_MAJOR)
+>
+> bin/libsmbclient.@SHLIBEXT@: $(BINARY_PREREQS) $(LIBSMBCLIENT_OBJ)
+>    @echo Linking libsmbclient shared library $@
+>    @$(SHLD_DSO) $(LIBSMBCLIENT_OBJ) $(LIBS) $(KRB5LIBS) \
+>     $(LDAP_LIBS) $(NSCD_LIBS)
+
+I poked around and the only thing I could think of was
+was to store the library versions outside of the Makefile
+and read them from the file. For example,
+
+  DSO_EXPORTS = -Wl,--version-script,exports/`basename $@ |\
+	sed -e/@SHLIBEXT@/syms/`
+  SONAME_VER = `grep $@ $(srcdir)/library-versions | cut -d: -t2`
+  SHLD_DSO = $(SHLD) $(LDSHFLAGS) $(DSO_EXPORTS) \
+	@SONAMEFLAG@`basename $@`.$(SONAME_VER)
+
+and library-versions.in looks like
+
+  # Makefile_target:major:minor
+  bin/libsmbclient.@SHLIBEXT@:0:1
+
+How about that?
+
+
+
+cheers, jerry
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.6 (GNU/Linux)
+Comment: Using GnuPG with Mozilla - http://enigmail.mozdev.org
+
+iD8DBQFGiWN1IR7qMdg1EfYRAqOPAJ9BE/KUbfIyOGIaev4QTjfeE3XFyQCfYRXj
+9cpEHlWdrz8HoJL4I1Sp4pc=
+=Znez
+-----END PGP SIGNATURE-----
+

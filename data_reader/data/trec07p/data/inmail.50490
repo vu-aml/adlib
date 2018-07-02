@@ -1,0 +1,88 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Jun  4 06:06:20 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l54A6KhB026557
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 4 Jun 2007 06:06:20 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 181AA162BDE
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon,  4 Jun 2007 10:06:14 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 1066B162AF3; Mon,  4 Jun 2007 10:05:20 +0000 (GMT)
+Date: Mon, 04 Jun 2007 20:05:31 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070604100520.1066B162AF3@lists.samba.org>
+Subject: Rev 458: allow setting of variables at startup in config file in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 458
+revision-id: tridge@samba.org-20070604100531-doyjw8gu3hnyvvug
+parent: tridge@samba.org-20070604095319-jm896xka6pchh1tf
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Mon 2007-06-04 20:05:31 +1000
+message:
+  allow setting of variables at startup in config file
+modified:
+  config/ctdb.sysconfig          ctdb.sysconfig-20070527204758-biuh7znabuwan3zn-7
+  config/events                  events-20070529030121-04fjh63cxfh8v1pj-1
+=== modified file 'config/ctdb.sysconfig'
+--- a/config/ctdb.sysconfig	2007-06-04 05:44:52 +0000
++++ b/config/ctdb.sysconfig	2007-06-04 10:05:31 +0000
+@@ -51,6 +51,14 @@
+ # the default is 0
+ # CTDB_DEBUGLEVEL=0
+ 
++# set any default tuning options for ctdb
++# use CTDB_SET_XXXX=value where XXXX is the name of the tuning
++# variable
++# for example
++#    CTDB_SET_TRAVERSETIMEOUT=60
++# you can get a list of variables using "ctdb listvars"
++
++
+ # any other options you might want. Run ctdbd --help for a list
+ # CTDB_OPTIONS=
+ 
+
+=== modified file 'config/events'
+--- a/config/events	2007-06-04 05:09:03 +0000
++++ b/config/events	2007-06-04 10:05:31 +0000
+@@ -21,6 +21,15 @@
+         # make sure we have a blank state directory for the scripts to work with
+ 	/bin/rm -rf /etc/ctdb/state
+ 	/bin/mkdir -p /etc/ctdb/state
++
++	# set any tunables from the config file
++	set | grep ^CTDB_SET_ | cut -d_ -f3- | 
++	while read v; do
++	    varname=`echo $v | cut -d= -f1`
++	    value=`echo $v | cut -d= -f2`
++	    ctdb setvar $varname $value || exit 1
++	    echo "`date` Set $varname to $value"
++	done
+ 	;;
+ esac
+ 
+

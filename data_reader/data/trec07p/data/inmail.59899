@@ -1,0 +1,113 @@
+From beginners-return-92519-ktwarwic=speedy.uwaterloo.ca@perl.org  Mon Jun 18 10:56:48 2007
+Return-Path: <beginners-return-92519-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l5IEulL9018704
+	for <ktwarwic@flax9.uwaterloo.ca>; Mon, 18 Jun 2007 10:56:47 -0400
+Received: (qmail 15451 invoked by uid 514); 18 Jun 2007 14:56:38 -0000
+Mailing-List: contact beginners-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:beginners@perl.org>
+List-Help: <mailto:beginners-help@perl.org>
+List-Unsubscribe: <mailto:beginners-unsubscribe@perl.org>
+List-Subscribe: <mailto:beginners-subscribe@perl.org>
+List-Id: <beginners.perl.org>
+Delivered-To: mailing list beginners@perl.org
+Received: (qmail 15440 invoked from network); 18 Jun 2007 14:56:37 -0000
+Received: from x1a.develooper.com (HELO x1.develooper.com) (216.52.237.111)
+  by lists.develooper.com with SMTP; 18 Jun 2007 14:56:37 -0000
+Received: (qmail 28721 invoked by uid 225); 18 Jun 2007 14:56:37 -0000
+Delivered-To: beginners@perl.org
+Received: (qmail 28706 invoked by alias); 18 Jun 2007 14:56:36 -0000
+X-Spam-Status: No, hits=-1.2 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,PLING_QUERY,SPF_HELO_PASS,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: domain of gclpb-beginners@m.gmane.org designates 80.91.229.2 as permitted sender)
+Received: from main.gmane.org (HELO ciao.gmane.org) (80.91.229.2)
+    by la.mx.develooper.com (qpsmtpd/0.28) with ESMTP; Mon, 18 Jun 2007 07:56:31 -0700
+Received: from list by ciao.gmane.org with local (Exim 4.43)
+	id 1I0IC5-00065b-1a
+	for beginners@perl.org; Mon, 18 Jun 2007 16:27:03 +0200
+Received: from prouders.omsk.ru ([217.151.18.98])
+        by main.gmane.org with esmtp (Gmexim 0.1 (Debian))
+        id 1AlnuQ-0007hv-00
+        for <beginners@perl.org>; Mon, 18 Jun 2007 16:27:01 +0200
+Received: from maxi4 by prouders.omsk.ru with local (Gmexim 0.1 (Debian))
+        id 1AlnuQ-0007hv-00
+        for <beginners@perl.org>; Mon, 18 Jun 2007 16:27:01 +0200
+X-Injected-Via-Gmane: http://gmane.org/
+To: beginners@perl.org
+From: "Max Rodkin" <maxi4@mail.ru>
+Subject:  Re: simple tcp socket server:Is it possible, server wait for '!' sign, not '\n'?
+Date:  Mon, 18 Jun 2007 21:00:52 +0700
+Lines: 53
+Message-ID: <f5635d$rg7$1@sea.gmane.org>
+References:  <f4e7tq$h5m$1@sea.gmane.org> <ca5781c80706091944pa2a58c1w7209d94df17b7c9e@mail.gmail.com>
+X-Complaints-To: usenet@sea.gmane.org
+X-Gmane-NNTP-Posting-Host: prouders.omsk.ru
+X-MSMail-Priority: Normal
+X-Newsreader: Microsoft Outlook Express 6.00.2900.2180
+X-RFC2646: Format=Flowed; Response
+X-MimeOLE: Produced By Microsoft MimeOLE V6.00.2900.2180
+Sender: news <news@sea.gmane.org>
+
+Thanks to all!
+Scrip did work fine. Here is:
+root@maxi4:/home# cat gsserver.pl
+#!/usr/bin/perl -w
+use IO::Socket;
+use DBI;
+$dbname="xxx";
+$user="xxx";
+$pass="xxx";
+$dbh = 
+DBI->connect("DBI:mysql:database=$dbname;host=localhost;user=$user;password=$pass",{'RaiseError' 
+=> 1});
+my $PORT = 5001;                  # pick something not in use
+my $server = IO::Socket::INET->new( Proto     => 'tcp',
+                                  LocalPort => $PORT,
+                                  Listen    => SOMAXCONN,
+                                  Reuse     => 1);
+die "can't setup server" unless $server;
+local $/ = "!";
+my $file="./1.txt";
+open FILE, ">>$file" or die "unable to open $file $!";
+print FILE "[Server $0 accepting clients]\n";
+close (FILE);
+while (my $client = $server->accept()) {
+ $client->autoflush(1);
+ while ( <$client>) {
+  my $answer = $_;
+  open FILE, ">>$file" or die "unable to open $file $!";
+  print FILE "$answer\n";
+  close (FILE);
+$_ = "insert into tracker values (NOW(), '$answer');";
+$sth = $dbh -> prepare($_);
+$sth -> execute();
+  print $client "\$Ok!";
+}
+close $client;
+}
+
+I did write watchdog script to keep running  gsserver.pl
+#!/usr/bin/perl -w
+my $str=`ps -ax|grep gsserver.pl|grep -v grep`;
+if ($str gt '') {
+print $str;
+}
+else{exec("/home/gsserver.pl&");}
+
+and setup it in crontab. The gsserver.pl in RAM permanently. But it not work 
+, i did left system on several days, and script did not answer for requests. 
+But it`s running.
+What may be wrong?
+Respect, Max Rodkin
+
+
+
+
+-- 
+To unsubscribe, e-mail: beginners-unsubscribe@perl.org
+For additional commands, e-mail: beginners-help@perl.org
+http://learn.perl.org/
+
+

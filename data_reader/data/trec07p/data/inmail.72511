@@ -1,0 +1,450 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Jul  3 02:43:17 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l636hGL9024774
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 3 Jul 2007 02:43:16 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id AE199162AF8
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue,  3 Jul 2007 06:43:12 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.4 required=3.8 tests=AWL,BAYES_50,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 501)
+	id 44382162AC8; Tue,  3 Jul 2007 06:42:33 +0000 (GMT)
+To: samba-cvs@samba.org
+From: abartlet@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070703064233.44382162AC8@lists.samba.org>
+Date: Tue,  3 Jul 2007 06:42:33 +0000 (GMT)
+Subject: svn commit: lorikeet r767 - in trunk/heimdal: . kdc
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: abartlet
+Date: 2007-07-03 06:42:31 +0000 (Tue, 03 Jul 2007)
+New Revision: 767
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=lorikeet&rev=767
+
+Log:
+Putting this function into a seperate file makes life easier for the Samba4 import.
+
+Andrew Bartlett
+
+Added:
+   trunk/heimdal/kdc/set_dbinfo.c
+Modified:
+   trunk/heimdal/heimdal-lorikeet.diff
+   trunk/heimdal/kdc/Makefile.am
+   trunk/heimdal/kdc/default_config.c
+
+
+Changeset:
+Modified: trunk/heimdal/heimdal-lorikeet.diff
+===================================================================
+--- trunk/heimdal/heimdal-lorikeet.diff	2007-06-27 10:02:47 UTC (rev 766)
++++ trunk/heimdal/heimdal-lorikeet.diff	2007-07-03 06:42:31 UTC (rev 767)
+@@ -96,3 +96,193 @@
+  esym="__i686.get_pc_thunk fc_softc"
+  symbols=
+  
++Index: kdc/default_config.c
++===================================================================
++--- kdc/default_config.c	(revision 766)
+++++ kdc/default_config.c	(working copy)
++@@ -39,68 +39,6 @@
++ RCSID("$Id: default_config.c 21296 2007-06-25 14:49:11Z lha $");
++ 
++ krb5_error_code
++-krb5_kdc_set_dbinfo(krb5_context context, struct krb5_kdc_configuration *c)
++-{
++-    struct hdb_dbinfo *info, *d;
++-    krb5_error_code ret;
++-    int i;
++-
++-    /* fetch the databases */
++-    ret = hdb_get_dbinfo(context, &info);
++-    if (ret)
++-	return ret;
++-    
++-    d = NULL;
++-    while ((d = hdb_dbinfo_get_next(info, d)) != NULL) {
++-	void *ptr;
++-	
++-	ptr = realloc(c->db, (c->num_db + 1) * sizeof(*c->db));
++-	if (ptr == NULL) {
++-	    ret = ENOMEM;
++-	    krb5_set_error_string(context, "out of memory");
++-	    goto out;
++-	}
++-	c->db = ptr;
++-	
++-	ret = hdb_create(context, &c->db[c->num_db], 
++-			 hdb_dbinfo_get_dbname(context, d));
++-	if(ret)
++-	    goto out;
++-	
++-	ret = hdb_set_master_keyfile(context, c->db[c->num_db], 
++-				     hdb_dbinfo_get_mkey_file(context, d));
++-	if (ret)
++-	    goto out;
++-	
++-	c->num_db++;
++-
++-	kdc_log(context, c, 0, "label: %s",
++-		hdb_dbinfo_get_label(context, d));
++-	kdc_log(context, c, 0, "\trealm: %s",
++-		hdb_dbinfo_get_realm(context, d));
++-	kdc_log(context, c, 0, "\tdbname: %s",
++-		hdb_dbinfo_get_dbname(context, d));
++-	kdc_log(context, c, 0, "\tmkey_file: %s",
++-		hdb_dbinfo_get_mkey_file(context, d));
++-    }
++-    hdb_free_dbinfo(context, &info);
++-
++-    return 0;
++-out:
++-    for (i = 0; i < c->num_db; i++)
++-	if (c->db[i] && c->db[i]->hdb_destroy)
++-	    (*c->db[i]->hdb_destroy)(context, c->db[i]);
++-    c->num_db = 0;
++-    free(c->db);
++-    c->db = NULL;
++- 
++-    hdb_free_dbinfo(context, &info);
++-
++-    return ret;
++-}
++-
++-
++-krb5_error_code
++ krb5_kdc_get_config(krb5_context context, krb5_kdc_configuration **config)
++ {
++     krb5_kdc_configuration *c;
++Index: kdc/set_dbinfo.c
++===================================================================
++--- kdc/set_dbinfo.c	(revision 0)
+++++ kdc/set_dbinfo.c	(revision 0)
++@@ -0,0 +1,100 @@
+++/*
+++ * Copyright (c) 1997-2007 Kungliga Tekniska Högskolan
+++ * (Royal Institute of Technology, Stockholm, Sweden). 
+++ *
+++ * All rights reserved. 
+++ *
+++ * Redistribution and use in source and binary forms, with or without 
+++ * modification, are permitted provided that the following conditions 
+++ * are met: 
+++ *
+++ * 1. Redistributions of source code must retain the above copyright 
+++ *    notice, this list of conditions and the following disclaimer. 
+++ *
+++ * 2. Redistributions in binary form must reproduce the above copyright 
+++ *    notice, this list of conditions and the following disclaimer in the 
+++ *    documentation and/or other materials provided with the distribution. 
+++ *
+++ * 3. Neither the name of the Institute nor the names of its contributors 
+++ *    may be used to endorse or promote products derived from this software 
+++ *    without specific prior written permission. 
+++ *
+++ * THIS SOFTWARE IS PROVIDED BY THE INSTITUTE AND CONTRIBUTORS ``AS IS'' AND 
+++ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+++ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+++ * ARE DISCLAIMED.  IN NO EVENT SHALL THE INSTITUTE OR CONTRIBUTORS BE LIABLE 
+++ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
+++ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS 
+++ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) 
+++ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT 
+++ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY 
+++ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF 
+++ * SUCH DAMAGE. 
+++ */
+++
+++#include "kdc_locl.h"
+++
+++RCSID("$Id: default_config.c 21296 2007-06-25 14:49:11Z lha $");
+++
+++krb5_error_code
+++krb5_kdc_set_dbinfo(krb5_context context, struct krb5_kdc_configuration *c)
+++{
+++    struct hdb_dbinfo *info, *d;
+++    krb5_error_code ret;
+++    int i;
+++
+++    /* fetch the databases */
+++    ret = hdb_get_dbinfo(context, &info);
+++    if (ret)
+++	return ret;
+++    
+++    d = NULL;
+++    while ((d = hdb_dbinfo_get_next(info, d)) != NULL) {
+++	void *ptr;
+++	
+++	ptr = realloc(c->db, (c->num_db + 1) * sizeof(*c->db));
+++	if (ptr == NULL) {
+++	    ret = ENOMEM;
+++	    krb5_set_error_string(context, "out of memory");
+++	    goto out;
+++	}
+++	c->db = ptr;
+++	
+++	ret = hdb_create(context, &c->db[c->num_db], 
+++			 hdb_dbinfo_get_dbname(context, d));
+++	if(ret)
+++	    goto out;
+++	
+++	ret = hdb_set_master_keyfile(context, c->db[c->num_db], 
+++				     hdb_dbinfo_get_mkey_file(context, d));
+++	if (ret)
+++	    goto out;
+++	
+++	c->num_db++;
+++
+++	kdc_log(context, c, 0, "label: %s",
+++		hdb_dbinfo_get_label(context, d));
+++	kdc_log(context, c, 0, "\trealm: %s",
+++		hdb_dbinfo_get_realm(context, d));
+++	kdc_log(context, c, 0, "\tdbname: %s",
+++		hdb_dbinfo_get_dbname(context, d));
+++	kdc_log(context, c, 0, "\tmkey_file: %s",
+++		hdb_dbinfo_get_mkey_file(context, d));
+++    }
+++    hdb_free_dbinfo(context, &info);
+++
+++    return 0;
+++out:
+++    for (i = 0; i < c->num_db; i++)
+++	if (c->db[i] && c->db[i]->hdb_destroy)
+++	    (*c->db[i]->hdb_destroy)(context, c->db[i]);
+++    c->num_db = 0;
+++    free(c->db);
+++    c->db = NULL;
+++ 
+++    hdb_free_dbinfo(context, &info);
+++
+++    return ret;
+++}
+++
+++
++Index: kdc/Makefile.am
++===================================================================
++--- kdc/Makefile.am	(revision 766)
+++++ kdc/Makefile.am	(working copy)
++@@ -31,6 +31,7 @@
++ 	kdc-private.h	 	\
++ 	kdc-protos.h	 	\
++ 	default_config.c 	\
+++	set_dbinfo.c	 	\
++ 	digest.c		\
++ 	kdc_locl.h		\
++ 	kerberos5.c		\
+
+Modified: trunk/heimdal/kdc/Makefile.am
+===================================================================
+--- trunk/heimdal/kdc/Makefile.am	2007-06-27 10:02:47 UTC (rev 766)
++++ trunk/heimdal/kdc/Makefile.am	2007-07-03 06:42:31 UTC (rev 767)
+@@ -31,6 +31,7 @@
+ 	kdc-private.h	 	\
+ 	kdc-protos.h	 	\
+ 	default_config.c 	\
++	set_dbinfo.c	 	\
+ 	digest.c		\
+ 	kdc_locl.h		\
+ 	kerberos5.c		\
+
+Modified: trunk/heimdal/kdc/default_config.c
+===================================================================
+--- trunk/heimdal/kdc/default_config.c	2007-06-27 10:02:47 UTC (rev 766)
++++ trunk/heimdal/kdc/default_config.c	2007-07-03 06:42:31 UTC (rev 767)
+@@ -39,68 +39,6 @@
+ RCSID("$Id: default_config.c 21296 2007-06-25 14:49:11Z lha $");
+ 
+ krb5_error_code
+-krb5_kdc_set_dbinfo(krb5_context context, struct krb5_kdc_configuration *c)
+-{
+-    struct hdb_dbinfo *info, *d;
+-    krb5_error_code ret;
+-    int i;
+-
+-    /* fetch the databases */
+-    ret = hdb_get_dbinfo(context, &info);
+-    if (ret)
+-	return ret;
+-    
+-    d = NULL;
+-    while ((d = hdb_dbinfo_get_next(info, d)) != NULL) {
+-	void *ptr;
+-	
+-	ptr = realloc(c->db, (c->num_db + 1) * sizeof(*c->db));
+-	if (ptr == NULL) {
+-	    ret = ENOMEM;
+-	    krb5_set_error_string(context, "out of memory");
+-	    goto out;
+-	}
+-	c->db = ptr;
+-	
+-	ret = hdb_create(context, &c->db[c->num_db], 
+-			 hdb_dbinfo_get_dbname(context, d));
+-	if(ret)
+-	    goto out;
+-	
+-	ret = hdb_set_master_keyfile(context, c->db[c->num_db], 
+-				     hdb_dbinfo_get_mkey_file(context, d));
+-	if (ret)
+-	    goto out;
+-	
+-	c->num_db++;
+-
+-	kdc_log(context, c, 0, "label: %s",
+-		hdb_dbinfo_get_label(context, d));
+-	kdc_log(context, c, 0, "\trealm: %s",
+-		hdb_dbinfo_get_realm(context, d));
+-	kdc_log(context, c, 0, "\tdbname: %s",
+-		hdb_dbinfo_get_dbname(context, d));
+-	kdc_log(context, c, 0, "\tmkey_file: %s",
+-		hdb_dbinfo_get_mkey_file(context, d));
+-    }
+-    hdb_free_dbinfo(context, &info);
+-
+-    return 0;
+-out:
+-    for (i = 0; i < c->num_db; i++)
+-	if (c->db[i] && c->db[i]->hdb_destroy)
+-	    (*c->db[i]->hdb_destroy)(context, c->db[i]);
+-    c->num_db = 0;
+-    free(c->db);
+-    c->db = NULL;
+- 
+-    hdb_free_dbinfo(context, &info);
+-
+-    return ret;
+-}
+-
+-
+-krb5_error_code
+ krb5_kdc_get_config(krb5_context context, krb5_kdc_configuration **config)
+ {
+     krb5_kdc_configuration *c;
+
+Added: trunk/heimdal/kdc/set_dbinfo.c
+===================================================================
+--- trunk/heimdal/kdc/set_dbinfo.c	2007-06-27 10:02:47 UTC (rev 766)
++++ trunk/heimdal/kdc/set_dbinfo.c	2007-07-03 06:42:31 UTC (rev 767)
+@@ -0,0 +1,100 @@
++/*
++ * Copyright (c) 1997-2007 Kungliga Tekniska Högskolan
++ * (Royal Institute of Technology, Stockholm, Sweden). 
++ *
++ * All rights reserved. 
++ *
++ * Redistribution and use in source and binary forms, with or without 
++ * modification, are permitted provided that the following conditions 
++ * are met: 
++ *
++ * 1. Redistributions of source code must retain the above copyright 
++ *    notice, this list of conditions and the following disclaimer. 
++ *
++ * 2. Redistributions in binary form must reproduce the above copyright 
++ *    notice, this list of conditions and the following disclaimer in the 
++ *    documentation and/or other materials provided with the distribution. 
++ *
++ * 3. Neither the name of the Institute nor the names of its contributors 
++ *    may be used to endorse or promote products derived from this software 
++ *    without specific prior written permission. 
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE INSTITUTE AND CONTRIBUTORS ``AS IS'' AND 
++ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
++ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
++ * ARE DISCLAIMED.  IN NO EVENT SHALL THE INSTITUTE OR CONTRIBUTORS BE LIABLE 
++ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
++ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS 
++ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) 
++ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT 
++ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY 
++ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF 
++ * SUCH DAMAGE. 
++ */
++
++#include "kdc_locl.h"
++
++RCSID("$Id: default_config.c 21296 2007-06-25 14:49:11Z lha $");
++
++krb5_error_code
++krb5_kdc_set_dbinfo(krb5_context context, struct krb5_kdc_configuration *c)
++{
++    struct hdb_dbinfo *info, *d;
++    krb5_error_code ret;
++    int i;
++
++    /* fetch the databases */
++    ret = hdb_get_dbinfo(context, &info);
++    if (ret)
++	return ret;
++    
++    d = NULL;
++    while ((d = hdb_dbinfo_get_next(info, d)) != NULL) {
++	void *ptr;
++	
++	ptr = realloc(c->db, (c->num_db + 1) * sizeof(*c->db));
++	if (ptr == NULL) {
++	    ret = ENOMEM;
++	    krb5_set_error_string(context, "out of memory");
++	    goto out;
++	}
++	c->db = ptr;
++	
++	ret = hdb_create(context, &c->db[c->num_db], 
++			 hdb_dbinfo_get_dbname(context, d));
++	if(ret)
++	    goto out;
++	
++	ret = hdb_set_master_keyfile(context, c->db[c->num_db], 
++				     hdb_dbinfo_get_mkey_file(context, d));
++	if (ret)
++	    goto out;
++	
++	c->num_db++;
++
++	kdc_log(context, c, 0, "label: %s",
++		hdb_dbinfo_get_label(context, d));
++	kdc_log(context, c, 0, "\trealm: %s",
++		hdb_dbinfo_get_realm(context, d));
++	kdc_log(context, c, 0, "\tdbname: %s",
++		hdb_dbinfo_get_dbname(context, d));
++	kdc_log(context, c, 0, "\tmkey_file: %s",
++		hdb_dbinfo_get_mkey_file(context, d));
++    }
++    hdb_free_dbinfo(context, &info);
++
++    return 0;
++out:
++    for (i = 0; i < c->num_db; i++)
++	if (c->db[i] && c->db[i]->hdb_destroy)
++	    (*c->db[i]->hdb_destroy)(context, c->db[i]);
++    c->num_db = 0;
++    free(c->db);
++    c->db = NULL;
++ 
++    hdb_free_dbinfo(context, &info);
++
++    return ret;
++}
++
++
+

@@ -1,0 +1,272 @@
+From sugar-bounces@laptop.org  Tue May 29 12:18:29 2007
+Return-Path: <sugar-bounces@laptop.org>
+Received: from pedal.laptop.org (pedal.laptop.org [18.85.2.148])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4TGIThB000642
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 12:18:29 -0400
+Received: from pedal.laptop.org (localhost [127.0.0.1])
+	by pedal.laptop.org (Postfix) with ESMTP id 1B1C84F694;
+	Tue, 29 May 2007 12:17:33 -0400 (EDT)
+X-Original-To: sugar@laptop.org
+Delivered-To: sugar@laptop.org
+Received: from spam.laptop.org (spam.laptop.org [18.85.46.23])
+	by pedal.laptop.org (Postfix) with ESMTP id D9B8D4F694
+	for <sugar@laptop.org>; Tue, 29 May 2007 12:17:31 -0400 (EDT)
+X-ASG-Debug-ID: 1180455501-63d900140000-3Xmyjt
+X-Barracuda-URL: http://18.85.46.23:8000/cgi-bin/mark.cgi
+X-Barracuda-Connect: mail.gmx.net[213.165.64.20]
+X-Barracuda-Start-Time: 1180455501
+Received: from mail.gmx.net (mail.gmx.net [213.165.64.20])
+	by spam.laptop.org (Spam Firewall) with SMTP id A7708FE13
+	for <sugar@laptop.org>; Tue, 29 May 2007 12:18:21 -0400 (EDT)
+Received: (qmail invoked by alias); 29 May 2007 16:18:20 -0000
+Received: from p5B01FE2E.dip.t-dialin.net (EHLO [192.168.2.20]) [91.1.254.46]
+	by mail.gmx.net (mp054) with SMTP; 29 May 2007 18:18:20 +0200
+X-Authenticated: #37528645
+X-Provags-ID: V01U2FsdGVkX1/WTaUSmyfWYYXRaMIshJnKCmw762Gu+N9L/cs5pI
+	KM88TAyYSPBlJd
+Message-ID: <465C524B.2030503@gmx.de>
+Date: Tue, 29 May 2007 18:18:19 +0200
+From: Konrad Kleine <konrad.kleine@gmx.de>
+User-Agent: Thunderbird 1.5.0.10 (X11/20070403)
+MIME-Version: 1.0
+To: sugar@laptop.org
+X-ASG-Orig-Subj: Bug #590 fixed
+Content-Type: multipart/mixed; boundary="------------010207090609040507000206"
+X-Y-GMX-Trusted: 0
+X-Barracuda-Bayes: INNOCENT GLOBAL 0.1301 1.0000 -1.2153
+X-Barracuda-Virus-Scanned: by Barracuda Spam Firewall at laptop.org
+X-Barracuda-Spam-Score: -1.22
+X-Barracuda-Spam-Status: No, SCORE=-1.22 using global scores of TAG_LEVEL=3.5
+	QUARANTINE_LEVEL=1000.0 KILL_LEVEL=5.5 tests=
+X-Barracuda-Spam-Report: Code version 3.1, rules version 3.1.18332
+	Rule breakdown below
+	pts rule name              description
+	---- ----------------------
+	--------------------------------------------------
+Subject: [sugar] Bug #590 fixed
+X-BeenThere: sugar@laptop.org
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Discussion of OLPC design,
+	desktop platform and user experience" <sugar.laptop.org>
+List-Unsubscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=unsubscribe>
+List-Archive: <http://mailman.laptop.org/pipermail/sugar>
+List-Post: <mailto:sugar@laptop.org>
+List-Help: <mailto:sugar-request@laptop.org?subject=help>
+List-Subscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=subscribe>
+Sender: sugar-bounces@laptop.org
+Errors-To: sugar-bounces@laptop.org
+
+This is a multi-part message in MIME format.
+--------------010207090609040507000206
+Content-Type: text/plain; charset=ISO-8859-15; format=flowed
+Content-Transfer-Encoding: 7bit
+
+All logfiles will be backed up to ~./sugar/default/logs/old .
+You can adjust the backup directory, the number of backup versions to 
+keep and the suffix the backed up files will get.
+
+Konrad Kleine
+
+---
+  sugar/logger.py |   61 
+++++++++++++++++++++++++++++++++++++++++++++++++++++--
+  1 files changed, 58 insertions(+), 3 deletions(-)
+
+diff --git a/sugar/logger.py b/sugar/logger.py
+index fa2e28f..6bec4c6 100644
+--- a/sugar/logger.py
++++ b/sugar/logger.py
+@@ -21,6 +21,7 @@ import os
+  import logging
+  import traceback
+  from cStringIO import StringIO
++import time
+
+  from sugar import env
+
+@@ -113,6 +114,60 @@ def start(module_id):
+      sys.excepthook = __exception_handler
+
+  def cleanup():
+-    logs_dir = _get_logs_dir()
+-    for f in os.listdir(logs_dir):
+-        os.remove(os.path.join(logs_dir, f))
++    logs_dir = _get_logs_dir()
++
++    #---------------------------------------------------------
++    # Configure logfile backups
++    #---------------------------------------------------------
++    # File extension for backed up logfiles.
++    file_suffix = int( time.time() )
++    # Absolute directory path where to store old logfiles.
++    # It will be created recursivly if it's not present.
++    backup_dirpath = os.path.join(logs_dir, 'old')
++    # How many versions shall be backed up of every logfile?
++    num_backup_versions = 4
++    #---------------------------------------------------------
++
++    # Make sure the backup location for old log files exists
++    if not os.path.exists(backup_dirpath):
++        os.makedirs(backup_dirpath)
++
++    # Iterate over every item in 'logs' directory
++    for filename in os.listdir(logs_dir):
++
++        old_filepath = os.path.join(logs_dir, filename)
++
++        if os.path.isfile(old_filepath):
++            # Backup every file
++            new_filename = filename + '.' + str(file_suffix)
++            new_filepath = os.path.join(backup_dirpath, new_filename)
++            os.rename(old_filepath, new_filepath)
++
++    backup_map = {}
++
++    # Tempoarily map all backup logfiles
++    for filename in os.listdir(backup_dirpath):
++        # Remove the 'file_suffix' from the filename.
++        end = filename.rfind(".")
++        key = filename[0:end].lower()
++        key = key.replace(".", "_")
++
++        if key not in backup_map:
++            backup_map[key] = []
++
++        backup_list = backup_map[key]
++
++        backup_list.append( os.path.join(backup_dirpath, filename) )
++
++    # print backup_map
++
++    # Only keep 'num_backup_versions' versions of every logfile.
++    # Remove the others.
++    for key in backup_map:
++        backup_list = backup_map[key]
++        backup_list.sort()
++        backup_list.reverse()
++
++        for i in range(num_backup_versions, len(backup_list)):
++            os.remove(backup_list[i])
++
+\ No newline at end of file
+-- 
+1.4.4.2
+
+--------------010207090609040507000206
+Content-Type: text/plain;
+ name="0001-Bug-590-fixed.txt"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline;
+ filename="0001-Bug-590-fixed.txt"
+
+>From baf131e2ede15a00b6a1eed70241bf605cabb92b Mon Sep 17 00:00:00 2001
+From: Konrad Kleine <konrad.kleine@gmx.de>
+Date: Tue, 29 May 2007 18:11:57 +0200
+Subject: [PATCH] Bug #590 fixed.
+
+All logfiles will be backed up to ~./sugar/default/logs/old .
+You can adjust the backup directory, the number of backup versions to keep
+and the suffix the backed up files will get.
+
+Konrad Kleine
+---
+ sugar/logger.py |   61 ++++++++++++++++++++++++++++++++++++++++++++++++++++--
+ 1 files changed, 58 insertions(+), 3 deletions(-)
+
+diff --git a/sugar/logger.py b/sugar/logger.py
+index fa2e28f..6bec4c6 100644
+--- a/sugar/logger.py
++++ b/sugar/logger.py
+@@ -21,6 +21,7 @@ import os
+ import logging
+ import traceback
+ from cStringIO import StringIO
++import time
+ 
+ from sugar import env
+ 
+@@ -113,6 +114,60 @@ def start(module_id):
+     sys.excepthook = __exception_handler
+ 
+ def cleanup():
+-    logs_dir = _get_logs_dir()
+-    for f in os.listdir(logs_dir):
+-        os.remove(os.path.join(logs_dir, f))
++    logs_dir = _get_logs_dir()   
++        
++    #---------------------------------------------------------
++    # Configure logfile backups
++    #---------------------------------------------------------
++    # File extension for backed up logfiles.
++    file_suffix = int( time.time() )
++    # Absolute directory path where to store old logfiles.
++    # It will be created recursivly if it's not present.
++    backup_dirpath = os.path.join(logs_dir, 'old')
++    # How many versions shall be backed up of every logfile?
++    num_backup_versions = 4
++    #---------------------------------------------------------
++    
++    # Make sure the backup location for old log files exists
++    if not os.path.exists(backup_dirpath):
++        os.makedirs(backup_dirpath)
++    
++    # Iterate over every item in 'logs' directory
++    for filename in os.listdir(logs_dir):
++
++        old_filepath = os.path.join(logs_dir, filename)
++        
++        if os.path.isfile(old_filepath):
++            # Backup every file 
++            new_filename = filename + '.' + str(file_suffix)
++            new_filepath = os.path.join(backup_dirpath, new_filename)  
++            os.rename(old_filepath, new_filepath)
++    
++    backup_map = {}
++    
++    # Tempoarily map all backup logfiles
++    for filename in os.listdir(backup_dirpath):
++        # Remove the 'file_suffix' from the filename.
++        end = filename.rfind(".")
++        key = filename[0:end].lower()        
++        key = key.replace(".", "_")
++        
++        if key not in backup_map:
++            backup_map[key] = []
++                        
++        backup_list = backup_map[key]
++        
++        backup_list.append( os.path.join(backup_dirpath, filename) )
++    
++    # print backup_map
++    
++    # Only keep 'num_backup_versions' versions of every logfile.
++    # Remove the others.
++    for key in backup_map:
++        backup_list = backup_map[key]           
++        backup_list.sort()
++        backup_list.reverse()
++            
++        for i in range(num_backup_versions, len(backup_list)):
++            os.remove(backup_list[i])
++            
+\ No newline at end of file
+-- 
+1.4.4.2
+
+
+--------------010207090609040507000206
+Content-Type: text/plain; charset="us-ascii"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+
+_______________________________________________
+Sugar mailing list
+Sugar@laptop.org
+http://mailman.laptop.org/mailman/listinfo/sugar
+
+--------------010207090609040507000206--
+

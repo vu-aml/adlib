@@ -1,0 +1,256 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Apr 18 09:28:57 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3IDSv0I010994
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 18 Apr 2007 09:28:57 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 33655163B06
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 18 Apr 2007 13:28:33 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 539)
+	id 8D939163881; Wed, 18 Apr 2007 13:28:05 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jelmer@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070418132805.8D939163881@lists.samba.org>
+Date: Wed, 18 Apr 2007 13:28:05 +0000 (GMT)
+Subject: svn commit: samba r22336 - in branches/SAMBA_4_0: . source/param
+	source/torture/local
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 6642
+Lines: 213
+
+Author: jelmer
+Date: 2007-04-18 13:28:04 +0000 (Wed, 18 Apr 2007)
+New Revision: 22336
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22336
+
+Log:
+Add some more share tests.
+Modified:
+   branches/SAMBA_4_0/
+   branches/SAMBA_4_0/source/param/share_ldb.c
+   branches/SAMBA_4_0/source/torture/local/share.c
+
+
+Changeset:
+
+Property changes on: branches/SAMBA_4_0
+___________________________________________________________________
+Name: bzr:merge
+...skipped...
+
+Modified: branches/SAMBA_4_0/source/param/share_ldb.c
+===================================================================
+--- branches/SAMBA_4_0/source/param/share_ldb.c	2007-04-18 12:50:55 UTC (rev 22335)
++++ branches/SAMBA_4_0/source/param/share_ldb.c	2007-04-18 13:28:04 UTC (rev 22336)
+@@ -289,7 +289,7 @@
+ 	NTSTATUS ret;
+ 	int err, i, j;
+ 
+-	for (i = 0, j = 0; i < count || j != 0x03; i++) {
++	for (i = 0, j = 0; i < count && j != 0x03; i++) {
+ 		if (strcasecmp(info[i].name, SHARE_TYPE) == 0) j |= 0x02;
+ 		if (strcasecmp(info[i].name, SHARE_PATH) == 0) j |= 0x01;
+ 		if (strcasecmp(info[i].name, SHARE_NAME) == 0) {
+
+Modified: branches/SAMBA_4_0/source/torture/local/share.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/local/share.c	2007-04-18 12:50:55 UTC (rev 22335)
++++ branches/SAMBA_4_0/source/torture/local/share.c	2007-04-18 13:28:04 UTC (rev 22336)
+@@ -25,10 +25,10 @@
+ #include "torture/torture.h"
+ 
+ static bool test_list_empty(struct torture_context *tctx, 
+-							void *tcase_data, 
+-							void *test_data)
++							const void *tcase_data, 
++							const void *test_data)
+ {
+-	struct share_context *ctx = tcase_data;
++	struct share_context *ctx = discard_const(tcase_data);
+ 	int count;
+ 	const char **names;
+ 
+@@ -38,19 +38,157 @@
+ 	return true;
+ }
+ 
++static bool test_create(struct torture_context *tctx, 
++							const void *tcase_data, 
++							const void *test_data)
++{
++	struct share_context *ctx = discard_const(tcase_data);
++	int count;
++	const char **names;
++	int i;
++	bool found = false;
++	struct share_info inf[] = { 
++		{ SHARE_INFO_STRING, SHARE_TYPE, discard_const_p(void *, "IPC$") },
++		{ SHARE_INFO_STRING, SHARE_PATH, discard_const_p(void *, "/tmp/bla") }
++	};
++	NTSTATUS status;
++
++	status = share_create(ctx, "bloe", inf, 2);
++
++	if (NT_STATUS_EQUAL(status, NT_STATUS_NOT_IMPLEMENTED))
++		torture_skip(tctx, "Not supported by backend");
++
++	torture_assert_ntstatus_ok(tctx, status, "create_share failed");
++
++	torture_assert_ntstatus_ok(tctx, share_list_all(tctx, ctx, &count, &names),
++							   "share_list_all failed");
++
++	torture_assert(tctx, count >= 1, "creating share failed");
++
++
++	for (i = 0; i < count; i++) {
++		found |= strcmp(names[i], "bloe") == 0;
++	}
++
++	torture_assert(tctx, found, "created share found");
++
++	return true;
++}
++
++
++static bool test_create_invalid(struct torture_context *tctx, 
++							const void *tcase_data, 
++							const void *test_data)
++{
++	struct share_context *ctx = discard_const(tcase_data);
++	NTSTATUS status;
++
++	status = share_create(ctx, "bla", NULL, 0);
++
++	if (NT_STATUS_EQUAL(status, NT_STATUS_NOT_IMPLEMENTED))
++		torture_skip(tctx, "Not supported by backend");
++
++	torture_assert_ntstatus_equal(tctx, NT_STATUS_INVALID_PARAMETER, 
++								  status,
++							   "create_share failed");
++
++	torture_assert_ntstatus_equal(tctx, NT_STATUS_INVALID_PARAMETER, 
++								  share_create(ctx, NULL, NULL, 0),
++							   "create_share failed");
++
++	return true;
++}
++
++static bool test_share_remove_invalid(struct torture_context *tctx, 
++							const void *tcase_data, 
++							const void *test_data)
++{
++	struct share_context *ctx = discard_const(tcase_data);
++	NTSTATUS status;
++
++	status = share_remove(ctx, "nonexistant");
++
++	if (NT_STATUS_EQUAL(status, NT_STATUS_NOT_IMPLEMENTED))
++		torture_skip(tctx, "Not supported by backend");
++
++	torture_assert_ntstatus_equal(ctx, status, NT_STATUS_UNSUCCESSFUL, 
++								  "remove fails");
++
++	return true;
++}
++
++
++
++static bool test_share_remove(struct torture_context *tctx, 
++							const void *tcase_data, 
++							const void *test_data)
++{
++	struct share_context *ctx = discard_const(tcase_data);
++	struct share_info inf[] = { 
++		{ SHARE_INFO_STRING, SHARE_TYPE, discard_const_p(void *, "IPC$") },
++		{ SHARE_INFO_STRING, SHARE_PATH, discard_const_p(void *, "/tmp/bla") }
++	};
++	NTSTATUS status;
++
++	status = share_create(ctx, "blie", inf, 2);
++
++	if (NT_STATUS_EQUAL(status, NT_STATUS_NOT_IMPLEMENTED))
++		torture_skip(tctx, "Not supported by backend");
++
++	torture_assert_ntstatus_ok(tctx, status,
++							   "create_share failed");
++
++	torture_assert_ntstatus_ok(tctx, share_remove(ctx, "blie"), 
++							   "remove failed");
++
++	return true;
++}
++
++static bool test_double_create(struct torture_context *tctx, 
++							const void *tcase_data, 
++							const void *test_data)
++{
++	struct share_context *ctx = discard_const(tcase_data);
++	struct share_info inf[] = { 
++		{ SHARE_INFO_STRING, SHARE_TYPE, discard_const_p(void *, "IPC$") },
++		{ SHARE_INFO_STRING, SHARE_PATH, discard_const_p(void *, "/tmp/bla") }
++	};
++	NTSTATUS status;
++
++	status = share_create(ctx, "bla", inf, 2);
++
++	if (NT_STATUS_EQUAL(status, NT_STATUS_NOT_IMPLEMENTED))
++		torture_skip(tctx, "Not supported by backend");
++
++	torture_assert_ntstatus_ok(tctx, status,
++							   "create_share failed");
++
++	torture_assert_ntstatus_equal(tctx, NT_STATUS_UNSUCCESSFUL, 
++								  share_create(ctx, "bla", inf, 2),
++							   "create_share failed");
++
++	return true;
++}
++
+ static void tcase_add_share_tests(struct torture_tcase *tcase)
+ {
+ 	torture_tcase_add_test(tcase, "list_empty", test_list_empty, NULL);
++	torture_tcase_add_test(tcase, "share_create", test_create, NULL);
++	torture_tcase_add_test(tcase, "share_remove", test_share_remove, NULL);
++	torture_tcase_add_test(tcase, "share_remove_invalid", test_share_remove_invalid, NULL);
++	torture_tcase_add_test(tcase, "share_create_invalid", test_create_invalid, 
++						   NULL);
++	torture_tcase_add_test(tcase, "share_double_create", test_double_create, NULL);
+ }
+ 
+ static BOOL setup_ldb(struct torture_context *tctx, void **data)
+ {
+-	return NT_STATUS_IS_OK(share_get_context_by_name(tctx, "ldb", data));
++	return NT_STATUS_IS_OK(share_get_context_by_name(tctx, "ldb", (struct share_context **)data));
+ }
+ 
+ static BOOL setup_classic(struct torture_context *tctx, void **data)
+ {
+-	return NT_STATUS_IS_OK(share_get_context_by_name(tctx, "classic", data));
++	return NT_STATUS_IS_OK(share_get_context_by_name(tctx, "classic", (struct share_context **)data));
+ }
+ 
+ static BOOL teardown(struct torture_context *tctx, void *data)
+

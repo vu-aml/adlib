@@ -1,0 +1,295 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu May 17 18:29:02 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4HMT1qD005390
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 17 May 2007 18:29:02 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 0B1F7162BD9
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 17 May 2007 22:28:59 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 595)
+	id 6F917162BD9; Thu, 17 May 2007 22:28:31 +0000 (GMT)
+To: samba-cvs@samba.org
+From: sfrench@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070517222831.6F917162BD9@lists.samba.org>
+Date: Thu, 17 May 2007 22:28:31 +0000 (GMT)
+Subject: svn commit: samba r22979 - in branches/SAMBA_3_0/source/client: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: sfrench
+Date: 2007-05-17 22:28:28 +0000 (Thu, 17 May 2007)
+New Revision: 22979
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22979
+
+Log:
+Revert previous checkin (which had some debug junk) and fix misc frees that
+valgrind noticed
+
+Modified:
+   branches/SAMBA_3_0/source/client/mount.cifs.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/client/mount.cifs.c
+===================================================================
+--- branches/SAMBA_3_0/source/client/mount.cifs.c	2007-05-17 22:27:42 UTC (rev 22978)
++++ branches/SAMBA_3_0/source/client/mount.cifs.c	2007-05-17 22:28:28 UTC (rev 22979)
+@@ -79,8 +79,8 @@
+ static char * mountpassword = NULL;
+ char * domain_name = NULL;
+ char * prefixpath = NULL;
+-char * servern = NULL;
+ 
++
+ /* BB finish BB
+ 
+         cifs_umount
+@@ -128,8 +128,7 @@
+ 	struct passwd *password = getpwuid(getuid());
+ 
+ 	if (password) {
+-		if(password->pw_name);
+-			username = strdup(password->pw_name);
++		username = password->pw_name;
+ 	}
+ 	return username;
+ }
+@@ -420,11 +419,6 @@
+ 				printf("password too long\n");
+ 				return 1;
+ 			}
+-		} else if (strncmp(data, "sec", 3) == 0) {
+-			if (value) {
+-				if (!strcmp(value, "none"))
+-					got_password = 1;
+-			}
+ 		} else if (strncmp(data, "ip", 2) == 0) {
+ 			if (!value || !*value) {
+ 				printf("target ip address argument missing");
+@@ -573,6 +567,8 @@
+ 			*filesys_flags &= ~MS_NOEXEC;
+ 		} else if (strncmp(data, "guest", 5) == 0) {
+ 			got_password=1;
++                        /* remove the parm since it would otherwise be logged by kern */
++			goto nocopy;
+ 		} else if (strncmp(data, "ro", 2) == 0) {
+ 			*filesys_flags |= MS_RDONLY;
+ 		} else if (strncmp(data, "rw", 2) == 0) {
+@@ -809,9 +805,6 @@
+ 				if(got_ip == 0) {
+ 					host_entry = gethostbyname(unc_name);
+ 				}
+-				if(strnlen(unc_name, 16) < 16) {
+-					servern = strdup(unc_name);
+-				}
+ 				*(share - 1) = '/'; /* put the slash back */
+ 				if ((prefixpath = strchr(share, '/'))) {
+ 					*prefixpath = 0;  /* permanently terminate the string */
+@@ -888,7 +881,7 @@
+ 	char * uuid = NULL;
+ 	char * mountpoint = NULL;
+ 	char * options = NULL;
+-	char * resolved_path;
++	char * resolved_path = NULL;
+ 	char * temp;
+ 	int rc;
+ 	int rsize = 0;
+@@ -899,7 +892,6 @@
+ 	int optlen = 0;
+ 	int orgoptlen = 0;
+ 	int retry = 0; /* set when we have to retry mount with uppercase */
+-	int retry_with_rfc1001name = 0; /* set when we have to retry with netbios name */
+ 	struct stat statbuf;
+ 	struct utsname sysinfo;
+ 	struct mntent mountent;
+@@ -1085,12 +1077,15 @@
+ 		get_password_from_file(0, getenv("PASSWD_FILE"));
+ 	}
+ 
+-        if (orgoptions && parse_options(&orgoptions, &flags))
+-                return -1;
++        if (orgoptions && parse_options(&orgoptions, &flags)) {
++                rc = -1;
++		goto mount_exit;
++	}
+ 	ipaddr = parse_server(&share_name);
+ 	if((ipaddr == NULL) && (got_ip == 0)) {
+ 		printf("No ip address specified and hostname not found\n");
+-		return -1;
++		rc = -1;
++		goto mount_exit;
+ 	}
+ 	
+ 	/* BB save off path and pop after mount returns? */
+@@ -1104,17 +1099,20 @@
+ 	}
+ 	if(chdir(mountpoint)) {
+ 		printf("mount error: can not change directory into mount target %s\n",mountpoint);
+-		return -1;
++		rc = -1;
++		goto mount_exit;
+ 	}
+ 
+ 	if(stat (".", &statbuf)) {
+ 		printf("mount error: mount point %s does not exist\n",mountpoint);
+-		return -1;
++		rc = -1;
++		goto mount_exit;
+ 	}
+ 
+ 	if (S_ISDIR(statbuf.st_mode) == 0) {
+ 		printf("mount error: mount point %s is not a directory\n",mountpoint);
+-		return -1;
++		rc = -1;
++		goto mount_exit;
+ 	}
+ 
+ 	if((getuid() != 0) && (geteuid() == 0)) {
+@@ -1160,40 +1158,28 @@
+ 		optlen += strlen(ipaddr) + 4;
+ 	if(mountpassword)
+ 		optlen += strlen(mountpassword) + 6;
+-	if(options) {
+-	        printf("\norg options %s at %p\n", options, options); /* BB removeme BB */
+-
++	if(options)
+ 		free(options);
+-	}
+-	options = malloc(optlen + 10 + 64 /* space for commas in password */ + 8 /* space for domain=  , domain name itself was counted as part of the length username string above */) + 9 /* servern=" */ + 16 /* space for maximum RFC1001 name */;
++	options = (char *)malloc(optlen + 10 + 64 /* space for commas in password */ + 8 /* space for domain=  , domain name itself was counted as part of the length username string above */);
++
+ 	if(options == NULL) {
+ 		printf("Could not allocate memory for mount options\n");
+ 		return -1;
+ 	}
++		
+ 
+-	printf("\noptions %s at %p\n", options, options); /* BB removeme BB */		
+-	options = realloc(options, 3350); /* BB removeme BB */
+-	printf("\nrealloc seems ok\n"); /* BB removeme BB */
+ 	options[0] = 0;
+ 	strncat(options,"unc=",4);
+ 	strcat(options,share_name);
+ 	/* scan backwards and reverse direction of slash */
+ 	temp = strrchr(options, '/');
+-	options = realloc(options, 980); /* BB removeme BB */
+-	printf("\nrealloc seemms very ok\n"); /* BB removeme BB */
+ 	if(temp > options + 6)
+ 		*temp = '\\';
+ 	if(ipaddr) {
+ 		strncat(options,",ip=",4);
+ 		strcat(options,ipaddr);
+ 	}
+-	if((servern) && retry_with_rfc1001name) {
+-		strcat(options, ",servern=");
+-		strcat(options, servern);
+-	}	
+-        printf("\noptions1 %s at %p\n", options, options); /* BB removeme BB */
+-        options = realloc(options, 1000); /* BB removeme BB */
+-	printf("realloc1 ok\n"); /* BB removeme BB */
++
+ 	if(user_name) {
+ 		/* check for syntax like user=domain\user */
+ 		if(got_domain == 0)
+@@ -1217,7 +1203,6 @@
+ 		strncat(options,",pass=",6);
+ 		strcat(options,mountpassword);
+ 	}
+-        printf("\noptions2 %s at %p\n", options, options); /* BB removeme BB */
+ 
+ 	strncat(options,",ver=",5);
+ 	strcat(options,MOUNT_CIFS_VERSION_MAJOR);
+@@ -1226,9 +1211,6 @@
+ 		strcat(options,",");
+ 		strcat(options,orgoptions);
+ 	}
+-
+-        printf("\noptions2 at %p\n", options); /* BB removeme BB */
+-
+ 	if(prefixpath) {
+ 		strncat(options,",prefixpath=",12);
+ 		strcat(options,prefixpath); /* no need to cat the / */
+@@ -1246,22 +1228,6 @@
+ 		case ENODEV:
+ 			printf("mount error: cifs filesystem not supported by the system\n");
+ 			break;
+-		case ENOENT:
+-		case EHOSTDOWN:
+-			/* If this is so old as to not support *SMBSERVER called
+-			   name for RFC1001, we can get this error . We also
+-			   need to uppercase the sharename for these old servers
+-			   so fall through to retry code below. On retry the
+-			   code will add "servern=" */
+-			tmp = servern;
+-			if((retry == 0) && tmp) {
+-				retry_with_rfc1001name = 1;
+-				while (*tmp && !(((unsigned char)tmp[0]) & 0x80)) {
+-					*tmp = toupper((unsigned char)*tmp);
+-					tmp++;
+-				}
+-				printf("Adding Netbios name of server to mount based on server part of UNC name\n");
+-			}
+ 		case ENXIO:
+ 			if(retry == 0) {
+ 				retry = 1;
+@@ -1310,7 +1276,7 @@
+ 						strcat(mountent.mnt_opts,",user=");
+ 						strcat(mountent.mnt_opts,mount_user);
+ 					}
+-					free(mount_user);
++					/* free(mount_user); do not free static mem */
+ 				}
+ 			}
+ 			mountent.mnt_freq = 0;
+@@ -1332,9 +1298,7 @@
+ 	}
+ 
+ 	if(options) {
+-		options = realloc(options, 1000); /* BB removeme BB */
+-		printf("\noptions freed %p\n", options); /* BB removeme BB */
+-/* memset(options,0,optlen); */
++		memset(options,0,optlen);
+ 		free(options);
+ 	}
+ 
+@@ -1345,17 +1309,10 @@
+ 	if(resolved_path) {
+ 		free(resolved_path);
+ 	}
+-	
+-	if(servern) {
+-		free(servern);
+-	}
+ 
+ 	if(free_share_name) {
+ 		free(share_name);
+-	}
+-	if(user_name)
+-		free(user_name);
+-
++		}
+ 	return rc;
+ }
+ 
+

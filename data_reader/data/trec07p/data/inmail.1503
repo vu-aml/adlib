@@ -1,0 +1,177 @@
+From perl6-all-return-80453-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue Apr 10 03:08:50 2007
+Return-Path: <perl6-all-return-80453-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3A78n0I025685
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 10 Apr 2007 03:08:49 -0400
+Received: (qmail 12353 invoked by uid 514); 10 Apr 2007 07:08:26 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 12348 invoked from network); 10 Apr 2007 07:08:25 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+Delivered-To: perlmail-parrot-porters@onion.perl.org
+Delivered-To: parrot-porters@perl.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+X-Virus-Scanned: by both ClamAV and Kaspersky at http://aliencamel.com/
+Message-ID: <461B37EC.6010802@perl.org>
+Date: Tue, 10 Apr 2007 00:08:28 -0700
+From: Allison Randal <allison@perl.org>
+User-Agent: Thunderbird 1.5.0.10 (Macintosh/20070221)
+MIME-Version: 1.0
+To: Jonathan Worthington <jonathan@jnthn.net>
+CC: parrot-porters@perl.org
+Subject: Re: Class/Role namespace links
+References: <461ACD19.10700@jnthn.net>
+In-Reply-To: <461ACD19.10700@jnthn.net>
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME
+Status: O
+Content-Length: 5664
+Lines: 121
+
+Jonathan Worthington wrote:
+> Hi,
+> 
+> Tonight I started working on the association between classes and 
+> namespaces as specified in PDD15. Have some questions.
+> 
+> 1) I added a "slot" to the NameSpace PMC to hold a Class or Role PMC a 
+> while back. However, there is no interface specified for storing/getting 
+> at this slot. For now I've added "set_class" and "get_class" METHODs to 
+> the NameSpace PMC. What should these actually be called (if something 
+> else)? Whatever is decided on should be added to a PDD somewhere - I 
+> guess the NameSpce PDD.
+
+Thumbs up: 'set_class' and 'get_class' are consistent with the other 
+methods in the namespace PDD.
+
+> 2) I see that we now just have a .name method and no .namespace method. 
+> For Class, the description of the name method says:
+> 
+> "The accessor for the name attribute. With no argument, it simply 
+> returns the current value for name. When passed an argument, it sets the 
+> name of the class, and also sets the association with a namespace. With 
+> no argument it only returns the current value of the name attribute."
+> 
+> That is a little unclear to me. What should the name slot be set to - 
+> the name of the most nested bit of the namespace (e.g. for [ "Animal" ; 
+> "Monkey" ], name is "Monkey")?
+> 
+> Also, what should it return? Just the name attribute? What if you really 
+> want to get at the namespace?
+
+The class name isn't necessary for instantiating an object from the 
+class, so it's really just a bit of bookkeeping. I expect the name will 
+correspond to: the HLL name for the class, the type a class represents, 
+or an answer for "does" that isn't tied to the namespace, inheritance 
+hierarchy, or role composition for a class. The most nested namespace is 
+a reasonable default.
+
+The accessor part has largely been replaced by:
+
+   inspect classobject, 'name'
+   inspect classobject, 'namespace'
+
+So, it's really a huffman question: is retrieving the namespace for a 
+class common enough to need a shortcut? Hmmm... common enough to provide 
+syntactic sugar in the optionally added methods for the Class PMC and 
+Role PMC.
+
+The setting of name and namespace primarily happens during a 'new' 
+operation (i.e. newclass). You should be able to pass in both 'name' and 
+'namespace' to 'new'. Without 'namespace' it should assume that the 
+namespace for the class has the same name as 'name' and is nested within 
+the namespace that has been selected in the context where 'new' is called.
+
+Dynamically renaming classes and reassociating them with a new namespace 
+is trickier. I'd say that's magic that should be possible, but perhaps 
+not extremely simple. So, in the optional add-on methods, make the 
+'name' method set the name and namespace (following the same rules as 
+'new'), and make the 'namespace' method set just the namespace.
+
+For low-level changes of name and namespace, you're essentially 
+reinitializing a class when you change its name or namespace, so I'm 
+inclined to actually make this an initialization operation. If we gave 
+the 'clone' opcode an (optional) third PMC parameter of arguments like 
+'new', it could fit the bill.
+
+   .local pmc initargs, renamed_class
+   initargs = new Hash
+   initargs['name'] = 'Foo'
+   initargs['namespace'] = namespace_object
+
+   renamedclass = clone oldclass, initargs
+
+What that doesn't give us is the illusion of "renaming in place" that 
+other class modifications like 'add_method' have. I'm okay with that 
+(for now), because renaming an existing class seems much rarer than 
+adding a method or attribute to an existing class.
+
+> 3) For Role (but not Class - mistake?), it says:
+> 
+> "When you associate a class with a namespace, it pulls in all of the 
+> methods and vtable methods held within that namespace."
+
+We're gradually working toward the opposite: methods and vtable methods 
+aren't stored in the namespace at all, but only in the class. I'll 
+delete it from the PDD (already deleted it from the Class section, which 
+explains the inconsistency).
+
+> At the moment, we do not carry the ":method" adverb on subs through to 
+> the PBC. Thus while I guess you can iterate a namespace (not tried it 
+> yet, just assuming you can since it's derived from Hash) and test for 
+> PMCs to make sure they are Subs. However, beyond that you have no way of 
+> knowing if it's a method or not (so far as I can see, I'd love to be 
+> corrected on this if anyone knows otherwise). Should :method be carried 
+> through to a PBC level?
+
+Not for this, but all adverbs should make their way down to the PBC 
+level in some form. Adverbs may not be a flag, but simply affect how the 
+sub was constructed, or what kind of sub was constructed.
+
+> 4) After this it says:
+> 
+> "And when replacing one class with another in the association, it 
+> removes any methods and vtable methods from the previous class."
+> 
+> Remove methods from what? The class or the namespace? If the class, does 
+> it remove all methods from the class then pull in ones from the new 
+> namespace? Or do we look at the old namespace and see what methods it 
+> has, then remove just ones that appear there?
+
+This was to handle cases where the the methods and vtable entries were 
+stored both in the namespace and in the class. As long as that's true, 
+any time we replace the class a particular namespace references 
+(possibly just by updating a class that's already been instantiated) 
+we'll need to make sure that the information the namespace had stored is 
+replaced with the information for the new class.
+
+If they're only stored in the class (which will ultimately be true), 
+then all it needs to do is replace the namespace's pointer to the class.
+
+Allison
+

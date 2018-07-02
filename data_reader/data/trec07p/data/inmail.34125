@@ -1,0 +1,358 @@
+From perl6-all-return-81257-ktwarwic=speedy.uwaterloo.ca@perl.org  Fri May 11 16:46:29 2007
+Return-Path: <perl6-all-return-81257-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4BKkSqD001726
+	for <ktwarwic@flax9.uwaterloo.ca>; Fri, 11 May 2007 16:46:28 -0400
+Received: (qmail 8837 invoked by uid 514); 11 May 2007 20:46:25 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 8832 invoked from network); 11 May 2007 20:46:25 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-0.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,KARMA_CONNECT_NEGATIVE,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Delivered-To: parrotbug-followup@parrotcode.org
+Received-SPF: pass (x1.develooper.com: domain of spiehera@lafayette.edu designates 139.147.8.40 as permitted sender)
+Date: Fri, 11 May 2007 16:40:56 -0400 (EDT)
+From: Andy Spieherty <spiehera@lafayette.edu>
+X-X-Sender: spiehera@fractal.phys.lafayette.edu
+To: Allison Randal via RT <parrotbug-followup@parrotcode.org>
+Subject: [PATCH] Re: [perl #42774] [PATCH] Configure.pl --gc=libc doesn't
+ compile
+In-Reply-To: <rt-3.6.HEAD-12281-1178747799-1979.42774-74-0@perl.org>
+Message-ID: <Pine.LNX.4.62.0705111622430.19648@fractal.phys.lafayette.edu>
+References: <RT-Ticket-42774@perl.org> <Pine.LNX.4.62.0704271411010.17934@fractal.phys.lafayette.edu>
+ <rt-3.6.HEAD-30557-1177698000-905.42774-72-0@perl.org> <20070501061021.6488ca6f@chirp>
+ <463B02A3.8010402@perl.org> <4640DC50.2070803@perl.org>
+ <rt-3.6.HEAD-12281-1178658913-360.42774-74-0@perl.org>
+ <Pine.LNX.4.62.0705091412170.7222@fractal.phys.lafayette.edu>
+ <464242FB.3060204@perl.org> <rt-3.6.HEAD-12281-1178747799-1979.42774-74-0@perl.org>
+MIME-Version: 1.0
+Content-Type: TEXT/PLAIN; charset=US-ASCII
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_HELO_PASS,SPF_PASS
+
+On Wed, 9 May 2007, Allison Randal via RT wrote:
+
+> Andy Spieherty wrote:
+> > 
+> > I was about to post a patch adding those functions in, but I see that 
+> > you're in the middle of a much more thorough review than I had attempted, 
+> > so my patch isn't going to apply anymore, and would probably be 
+> > misleading, to boot.
+> 
+> Just adding Parrot_allocate_aligned and Parrot_merge_memory_pools 
+> shouldn't conflict. I'm pretty confident they will need to be 
+> implemented custom for res_lea.c. (I haven't made any changes to the 
+> file since my last commit.)
+> 
+> > Going down that route anyway, I haven't solved any GC problems, so it may 
+> > not end up being a useful diversion.  Still, I have been looking at the 
+> > hand-rolling of structures, such as this one at the top of resources.c, to 
+> > see if they could be simplified in the simplified --gc=libc case (where 
+> > we're not worrying about compaction and moving aligned pools to unaligned 
+> > places.)
+> > 
+> > 
+> >                     +-----------------+
+> >                     |  ref_count   |f |    # GC header
+> >   obj->bufstart  -> +-----------------+
+> >                     |  data           |
+> >                     v                 v 
+
+Here is a patch to get Configure.pl --gc=libc to at least compile again.
+Alas, it still doesn't seem to work.  I'm getting various panics and
+crashes that usually (but not always) appear to be related to string
+stuff.  I suspect I might not have Parrot_allocate_string() quite right,
+or there may be other spots elsewhere that assume something about the 
+overall memory layout that I'm violating here.
+
+In any case, this doesn't hurt the default Configuration and at least
+allows --gc=libc to compile, so I think it's a step forward, and a good 
+point to sync up.  I'm not sure when I'll next have a chance to look at
+this.
+
+diff -r -u parrot-current/config/gen/makefiles/root.in parrot-andy/config/gen/makefiles/root.in
+--- parrot-current/config/gen/makefiles/root.in	2007-04-20 19:15:12.000000000 -0400
++++ parrot-andy/config/gen/makefiles/root.in	2007-05-11 15:47:34.000000000 -0400
+@@ -1014,6 +1014,8 @@
+ 
+ $(SRC_DIR)/gc/resources$(O) : $(GENERAL_H_FILES)
+ 
++$(SRC_DIR)/gc/res_lea$(O) : $(GENERAL_H_FILES)
++
+ $(SRC_DIR)/headers$(O) : $(GENERAL_H_FILES)
+ 
+ $(SRC_DIR)/hll$(O) : $(GENERAL_H_FILES)
+diff -r -u parrot-current/include/parrot/pobj.h parrot-andy/include/parrot/pobj.h
+--- parrot-current/include/parrot/pobj.h	2007-05-08 19:15:14.000000000 -0400
++++ parrot-andy/include/parrot/pobj.h	2007-05-11 15:47:34.000000000 -0400
+@@ -61,6 +61,54 @@
+ #define PMC_num_val(pmc)      (pmc)->obj.u._num_val
+ #define PMC_str_val(pmc)      (pmc)->obj.u._string_val
+ 
++/* See src/gc/resources.c. the basic idea is that buffer memory is
++   set up as follows:
++                    +-----------------+
++                    |  ref_count   |f |    # GC header
++  obj->bufstart  -> +-----------------+
++                    |  data           |
++                    v                 v
++
++The actual set-up is more involved because of padding.  obj->bufstart must
++be suitably aligned for any UnionVal.  (Perhaps it should be a Buffer
++there instead.)  The start of the memory region (as returned by malloc()
++is also suitably aligned for any use.  If, for example, malloc() returns
++objects aligned on 8-byte boundaries, and obj->bufstart is also aligned
++on 8-byte boundaries, then there should be 4 bytes of padding.  It is
++handled differently in the two files resources.c and res_lea.c.  (I have
++not yet figured out how the 'possible padding' is handled in resources.c.
++--A.D.  2007-05-11.)
++
++                     src/gc/resources.c:       src/gc/res_lea.c:
++
++ptr from malloc ->  +------------------+      +------------------+
++                    | possible padding |      | INTVAL ref_count |
++                    | INTVAL ref_count |      | possible padding |
++obj->bufstart   ->  +------------------+      +------------------+
++                    |     data         |      |      data        |
++                    v                  v      v                  v
++
++*/
++typedef struct Buffer_alloc_unit {
++    INTVAL ref_count;
++    UnionVal buffer[1]; /* Guarantee it's suitably aligned */
++} Buffer_alloc_unit;
++
++/* Given a pointer to the buffer, find the ref_count and the actual start of
++   the allocated space. Setting ref_count is clunky because we avoid lvalue
++   casts. */
++#ifdef GC_IS_MALLOC       /* see src/gc/res_lea.c */
++#  define Buffer_alloc_offset    (offsetof(Buffer_alloc_unit, buffer))
++#  define PObj_bufallocstart(b)  ((char *)PObj_bufstart(b) - Buffer_alloc_offset)
++#  define PObj_bufrefcount(b)    (((Buffer_alloc_unit *)PObj_bufallocstart(b))->ref_count)
++#  define PObj_bufrefcountptr(b) (&PObj_bufrefcount(b))
++#else                     /* see src/gc/resources.c */
++#  define Buffer_alloc_offset sizeof(INTVAL)
++#  define PObj_bufallocstart(b)  ((char *)PObj_bufstart(b) - Buffer_alloc_offset)
++#  define PObj_bufrefcount(b)    (*(INTVAL *)PObj_bufallocstart(b))
++#  define PObj_bufrefcountptr(b) ((INTVAL *)PObj_bufallocstart(b))
++#endif
++
+ /* BEGIN DEPRECATED BUFFER ACCESSORS */
+ /* macros for accessing old buffer members
+  * #define bufstart obj.u._b._bufstart
+diff -r -u parrot-current/src/gc/dod.c parrot-andy/src/gc/dod.c
+--- parrot-current/src/gc/dod.c	2007-05-08 19:15:13.000000000 -0400
++++ parrot-andy/src/gc/dod.c	2007-05-11 15:47:34.000000000 -0400
+@@ -465,7 +465,7 @@
+ 
+                 if (PObj_COW_TEST(b) && PObj_bufstart(b) &&
+                         !PObj_external_TEST(b)) {
+-                    INTVAL * const refcount = (INTVAL *) PObj_bufstart(b) - 1;
++                    INTVAL * const refcount = PObj_bufrefcountptr(b);
+                     *refcount               = 0;
+                 }
+             }
+@@ -503,7 +503,7 @@
+                     PObj_bufstart(b) &&
+                    !PObj_external_TEST(b)) {
+ 
+-                INTVAL * const refcount = (INTVAL *) PObj_bufstart(b) - 1;
++                INTVAL * const refcount = PObj_bufrefcountptr(b);
+ 
+                 /* mark users of this bufstart by incrementing refcount */
+                 if (PObj_live_TEST(b))
+diff -r -u parrot-current/src/gc/res_lea.c parrot-andy/src/gc/res_lea.c
+--- parrot-current/src/gc/res_lea.c	2007-05-08 19:15:13.000000000 -0400
++++ parrot-andy/src/gc/res_lea.c	2007-05-11 16:11:46.000000000 -0400
+@@ -115,57 +115,70 @@
+ =item C<void
+ Parrot_reallocate(Interp *interp, Buffer *from, size_t tosize)>
+ 
+-COWable objects (strings or Buffers) use an INTVAL at C<bufstart> for
+-refcounting in DOD. C<bufstart> is incremented by that C<INTVAL>.
++COWable objects (strings or Buffers) use an INTVAL before C<bufstart> for
++refcounting in DOD.
+ 
+ =cut
+ 
+ */
+ 
+ void
+-Parrot_reallocate(Interp *interp, Buffer *from, size_t tosize)
++Parrot_reallocate(Interp *interp, Buffer *buffer, size_t tosize)
+ {
+-    Buffer * const buffer = from;
+     const size_t oldlen = PObj_buflen(buffer);
+-    void *p;
++    Buffer_alloc_unit *p;
+ 
+     if (!PObj_bufstart(buffer)) {
+-        p = 1 + (INTVAL *)xcalloc(1, sizeof (INTVAL) + tosize);
++        Parrot_allocate_aligned(interp, buffer, tosize);
++        /* The previous version zeroed the memory here, but I'm not
++           sure why. */
++        memset(PObj_bufstart(buffer), 0, tosize);
+     }
+     else {
+         if (!tosize) {    /* realloc(3) does free, if tosize == 0 here */
+             return;    /* do nothing */
+         }
+-        p = 1 + (INTVAL *)xrealloc((INTVAL *)PObj_bufstart(buffer) - 1,
+-                                   sizeof (INTVAL) + tosize);
++        p = (Buffer_alloc_unit *) xrealloc(PObj_bufallocstart(buffer),
++                                           Buffer_alloc_offset + tosize);
+         if (tosize > oldlen)
+-            memset(p + oldlen, 0, tosize - oldlen);
++            memset((char *)p->buffer + oldlen, 0, tosize - oldlen);
++        PObj_bufstart(buffer) = p->buffer;
++        PObj_buflen(buffer) = tosize;
+     }
+-    PObj_bufstart(buffer) = p;
+-    PObj_buflen(buffer) = tosize;
+ }
+ 
++
+ /*
+ 
+ =item C<void
+ Parrot_allocate(Interp *interp, Buffer *buffer, size_t size)>
+ 
+-Allocates and returns the required memory. C<size> is the number of
+-bytes of memory required.
++Allocate buffer memory for the given Buffer pointer. The C<size>
++has to be a multiple of the word size.
++C<PObj_buflen> will be set to exactly the given C<size>.
++See the comments and diagram in resources.c.
++
++This was never called anyway, so it isn't implemented here.
++
++=item C<void
++Parrot_allocate_aligned(Interp *interp, Buffer *buffer, size_t size)>
++
++Like above, except the address of the buffer is guaranteed to be
++suitably aligned for holding anything contained in UnionVal
++(such as FLOATVAL).
+ 
+ =cut
+ 
+ */
+ 
+ void
+-Parrot_allocate(Interp *interp, Buffer *buffer, size_t size)
++Parrot_allocate_aligned(Interp *interp, Buffer *buffer, size_t size)
+ {
+-    Buffer * const b = buffer;
+-    void * const p = xmalloc(sizeof (INTVAL) + size);
+-
+-    *(INTVAL *)p = 0;
+-    PObj_bufstart(b) = 1 + (INTVAL *)p;
+-    PObj_buflen(b) = size;
++    Buffer_alloc_unit *p;
++    p = (Buffer_alloc_unit *) xmalloc(Buffer_alloc_offset + size);
++    p->ref_count = 0;
++    PObj_bufstart(buffer) = p->buffer;
++    PObj_buflen(buffer) = size;
+ }
+ 
+ /*
+@@ -183,16 +196,17 @@
+ void
+ Parrot_reallocate_string(Interp *interp, STRING *str, size_t tosize)
+ {
+-    if (!PObj_bufstart(str))
++    const size_t oldlen = PObj_buflen(str);
++    Buffer_alloc_unit *p;
++
++    if (!PObj_bufstart(str)) {
+         Parrot_allocate_string(interp, str, tosize);
++    }
+     else if (tosize) {
+-        const size_t pad = BUFFER_ALIGNMENT - 1;
+-        void *p;
+-        tosize = ((tosize + pad + sizeof (INTVAL)) & ~pad);
+-        p = xrealloc((char *)((INTVAL*)PObj_bufstart(str) - 1), tosize);
+-        PObj_bufstart(str) = str->strstart = (char *)p + sizeof (INTVAL);
+-        /* usable size at bufstart */
+-        PObj_buflen(str) = tosize - sizeof (INTVAL);
++        p = (Buffer_alloc_unit *) xrealloc(PObj_bufallocstart(str),
++                                           Buffer_alloc_offset + tosize);
++        PObj_bufstart(str) = str->strstart = (char *) p->buffer;
++        PObj_buflen(str) = tosize;
+     }
+ }
+ 
+@@ -211,14 +225,11 @@
+ void
+ Parrot_allocate_string(Interp *interp, STRING *str, size_t size)
+ {
+-    void *p;
+-    const size_t pad = BUFFER_ALIGNMENT - 1;
+-
+-    size = ((size + pad + sizeof (INTVAL)) & ~pad);
+-    p = xcalloc(1, size);
+-    *(INTVAL*)p = 0;
+-    PObj_bufstart(str) = str->strstart = (char *)p + sizeof (INTVAL);
+-    PObj_buflen(str) = size - sizeof (INTVAL);
++    Buffer_alloc_unit *p;
++    p = (Buffer_alloc_unit *) xcalloc(Buffer_alloc_offset + size, 1);
++    p->ref_count = 0;
++    PObj_bufstart(str) = str->strstart = (char *) p->buffer;
++    PObj_buflen(str) = size;
+ }
+ 
+ /*
+@@ -240,6 +251,21 @@
+ /*
+ 
+ =item C<void
++Parrot_merge_memory_pools(Interp *dest, Interp *source)>
++
++Does nothing.
++
++=cut
++
++*/
++void
++Parrot_merge_memory_pools(Interp *dest, Interp *source)
++{
++}
++
++/*
++
++=item C<void
+ Parrot_destroy_memory_pools(Interp *interp)>
+ 
+ Does nothing.
+diff -r -u parrot-current/src/string.c parrot-andy/src/string.c
+--- parrot-current/src/string.c	2007-05-01 19:15:22.000000000 -0400
++++ parrot-andy/src/string.c	2007-05-11 15:47:34.000000000 -0400
+@@ -206,7 +206,7 @@
+     /* TODO create string_free API for reusing string headers */
+ #ifdef GC_IS_MALLOC
+         if (!PObj_is_cowed_TESTALL(dest) && PObj_bufstart(dest)) {
+-            mem_sys_free((INTVAL*)PObj_bufstart(dest) - 1);
++            mem_sys_free(PObj_bufallocstart(dest));
+         }
+ #endif
+         dest = Parrot_reuse_COW_reference(interp, src, dest);
+-- 
+
+    Andy Spieherty		spiehera@lafayette.edu
+

@@ -1,0 +1,130 @@
+From beginners-return-91590-ktwarwic=speedy.uwaterloo.ca@perl.org  Sat May 12 10:51:54 2007
+Return-Path: <beginners-return-91590-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4CEpqqD011788
+	for <ktwarwic@flax9.uwaterloo.ca>; Sat, 12 May 2007 10:51:53 -0400
+Received: (qmail 21942 invoked by uid 514); 12 May 2007 14:51:46 -0000
+Mailing-List: contact beginners-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:beginners@perl.org>
+List-Help: <mailto:beginners-help@perl.org>
+List-Unsubscribe: <mailto:beginners-unsubscribe@perl.org>
+List-Subscribe: <mailto:beginners-subscribe@perl.org>
+List-Id: <beginners.perl.org>
+Delivered-To: mailing list beginners@perl.org
+Received: (qmail 21933 invoked from network); 12 May 2007 14:51:46 -0000
+Received: from x1a.develooper.com (HELO x1.develooper.com) (216.52.237.111)
+  by lists.develooper.com with SMTP; 12 May 2007 14:51:46 -0000
+Received: (qmail 3528 invoked by uid 225); 12 May 2007 14:51:46 -0000
+Delivered-To: beginners@perl.org
+Received: (qmail 3523 invoked by alias); 12 May 2007 14:51:45 -0000
+X-Spam-Status: No, hits=-0.1 required=8.0
+	tests=BAYES_20,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_NEUTRAL
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: neutral (x1.develooper.com: local policy)
+Received: from smtp.njpservices.co.uk (HELO smtp.njpservices.co.uk) (84.45.106.4)
+    by la.mx.develooper.com (qpsmtpd/0.28) with ESMTP; Sat, 12 May 2007 07:47:45 -0700
+Received: from [85.92.161.207] (85-92-161-207.eurisp.net [85.92.161.207] (may be forged))
+	by smtp.njpservices.co.uk (8.10.2/8.10.2) with ESMTP id l4CElXa08528;
+	Sat, 12 May 2007 15:47:33 +0100
+Message-ID: <4645D38B.9010802@350.com>
+Date: Sat, 12 May 2007 15:47:39 +0100
+From: Rob Dixon <rob.dixon@350.com>
+User-Agent: Thunderbird 1.5.0.10 (Windows/20070221)
+MIME-Version: 1.0
+To: beginners@perl.org
+CC: Steve Bertrand <iaccounts@ibctech.ca>
+Subject: Re: $1 $2 var confusion
+References: <4645CD59.3020508@ibctech.ca>
+In-Reply-To: <4645CD59.3020508@ibctech.ca>
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+
+Steve Bertrand wrote:
+> I have two scenarios here, and in the first one, I am not seeing the
+> logic I would normally expect. I'll compact the code as to save everyone
+> from scrolling. I have strict and warnings enabled (as I always do). Can
+> someone tell me why in the first case $1 isn't initialized and in the
+> second case it is?
+> 
+> 
+> # First run(catch $1 and $2, check $2 for correctness (it is), print $1)
+> 
+> my $email = 'steveb@domain.com';
+> $email =~ /(.*)@(.*)/;
+> if ($2 !~ /domain\.com/) {
+>         print "var 2 is bad\n";
+> }
+> print "$1\n";
+> 
+> /** prints 'uninitialized' for line 'print "$1\n";**/
+> 
+> 
+> # Second run(same as above, but the if will fail:
+> 
+> my $email = 'steveb@wrong.com';
+> $email =~ /(.*)@(.*)/;
+> if ($2 !~ /domain\.com/) {
+>         print "var 2 is bad\n";
+> }
+> print "$1\n";
+> 
+> /** prints
+> var 2 is bad
+> steveb
+> */
+> 
+> Why does the $1 initialize and print only if the 'if' fails?
+
+>From perldoc perlre:
+
+    The numbered match variables ($1, $2, $3, etc.) and the related
+    punctuation set ($+, $&, $`, $', and $^N) are all dynamically scoped
+    until the end of the enclosing block or until the next successful match,
+    whichever comes first.
+
+In your first example, $1 is valid until the successful match /domain\.com/, when
+it becomes undefined as there are no capturing parentheses. In the second example
+$1 retains its value since the match fails.
+
+It's always safer to save captured strings before you use them, and I would never
+make a capture variable the target of a regex match as in your $2 !~ /domain\.com/.
+Much better to write something like
+
+  use strict;
+  use warnings;
+
+  my $email = 'steveb@wrong.com';
+  my ($name, $host) = $email =~ /(.*)@(.*)/;
+
+  if ($host !~ /domain\.com/) {
+    print "Host name is bad\n";
+  }
+
+  print "$name\n";
+
+and also, in this case, the test would be better as
+
+  unless ($host eq 'domain.com') {
+    print "Host name is bad\n";
+  }
+
+unless you really want to test whether the host name /contains/ that string?
+
+Oh, and I think I also prefer
+
+  my ($name, $host) = split /@/, $email;
+
+instead of the first regex.
+
+HTH,
+
+Rob
+
+
+-- 
+To unsubscribe, e-mail: beginners-unsubscribe@perl.org
+For additional commands, e-mail: beginners-help@perl.org
+http://learn.perl.org/
+
+

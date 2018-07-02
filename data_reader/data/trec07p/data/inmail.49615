@@ -1,0 +1,261 @@
+From perl6-all-return-81757-ktwarwic=speedy.uwaterloo.ca@perl.org  Sat Jun  2 19:51:46 2007
+Return-Path: <perl6-all-return-81757-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l52NpjhB029277
+	for <ktwarwic@flax9.uwaterloo.ca>; Sat, 2 Jun 2007 19:51:45 -0400
+Received: (qmail 4063 invoked by uid 514); 2 Jun 2007 23:51:38 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 4058 invoked from network); 2 Jun 2007 23:51:38 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=0.0 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+Delivered-To: perlmail-parrot-porters@onion.perl.org
+Delivered-To: parrot-porters@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="mzqF7ptWhn"
+Content-Transfer-Encoding: 7bit
+Message-ID: <18017.65085.599366.581710@rgrjr.dyndns.org>
+Date: Sat, 2 Jun 2007 19:33:17 -0400
+From: Bob Rogers <rogers-perl6@rgrjr.dyndns.org>
+To: parrot-porters@perl.org
+Subject: Making I-reg shifts consistent with PMC shifts
+X-Mailer: VM 7.19 under Emacs 22.1.50.1
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=3.1 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,FH_HOST_EQ_D_D_D_D,RCVD_IN_PBL,RCVD_IN_SORBS_DUL,RDNS_DYNAMIC,SPF_PASS
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=0.7 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_NEUTRAL
+
+--mzqF7ptWhn
+Content-Type: text/plain; charset=us-ascii
+Content-Description: message body text
+Content-Disposition: inline
+Content-Transfer-Encoding: 7bit
+
+   The attached patch amends the I-reg shift operators so that they
+produce results that are consistent with PMC shifts, which produce the
+exact value [1].  Shifting left or right by at least the word size
+always produces zero, and negative shift values are taken to mean "shift
+in the other direction", both of which I think are improvements over the
+C shift operators, which seem to take the shift value modulo word size,
+
+   But I don't know how to describe the general case succinctly, which
+could be a sign that it's the wrong thing.  It's not "the same result
+modulo word size" because the I-reg result could change sign, and "mod"
+never returns a negative number.  I think the result $r would be
+
+	$r = $x % 2**$w;
+        $r -= 2**$w
+	    if $r >= 2**($w-1);
+
+if expressed in Perl, given the exact result in $x and the word size in
+$w.  Is there a better way to describe this "sign-bashing modulus"
+operator?  Or is this not the right implementation?
+
+   TIA,
+
+					-- Bob Rogers
+					   http://rgrjr.dyndns.org/
+
+[1]  At least for left shifts, and if BigInt promotion is not disabled.
+
+
+--mzqF7ptWhn
+Content-Type: text/plain
+Content-Disposition: inline;
+	filename="shl-shr-int-consistency-1.patch"
+Content-Transfer-Encoding: 7bit
+
+* src/ops/bit.ops:
+   + (shl, shr):  Make these produce results that are consistent with
+     the PMC versions.
+* t/op/bitwise.t:
+   + Test integer shift consistency.
+
+Diffs between last version checked in and current workfile(s):
+
+Index: src/ops/bit.ops
+===================================================================
+--- src/ops/bit.ops	(revision 18767)
++++ src/ops/bit.ops	(working copy)
+@@ -2,6 +2,21 @@
+ ** bit.ops
+ */
+ 
++ /* Signed shift operator that is compatible with PMC shifts.  This is
++  * guaranteed to produce the same result as bitwise_left_shift_internal modulo
++  * word size, ignoring the fact that Parrot integers are always signed.  This
++  * usually gives the same answer regardless whether you shift PMC operands and
++  * then assign to an I-reg, or move the operands to I-regs and do the shift
++  * there -- except when the true result is between 2^{w-1} and 2^w (where w is
++  * the word size), in which case the high order bit is taken as the sign,
++  * giving a truncated result that is 2^w lower.
++  */
++#define bit_shift_left(number, bits) \
++    ((bits) >= 8*INTVAL_SIZE     ? 0                    \
++     : (bits) >= 0               ? (number) << (bits)   \
++     : (bits) > -8*INTVAL_SIZE   ? (number) >> -(bits)   \
++     : 0)
++
+ VERSION = PARROT_VERSION;
+ 
+ =head1 NAME
+@@ -209,12 +224,12 @@
+ =cut
+ 
+ inline op shl(inout INT, in INT) :base_core {
+-  $1 <<= $2;
++  $1 = bit_shift_left($1, $2);
+   goto NEXT();
+ }
+ 
+ inline op shl(out INT, in INT, in INT) :base_core {
+-  $1 = $2 << $3;
++  $1 = bit_shift_left($2, $3);
+   goto NEXT();
+ }
+ 
+@@ -231,12 +246,14 @@
+ =cut
+ 
+ inline op shr(inout INT, in INT) :base_core {
+-  $1 >>= $2;
++  INTVAL signed_shift = -$2;
++  $1 = bit_shift_left($1, signed_shift);
+   goto NEXT();
+ }
+ 
+ inline op shr(out INT, in INT, in INT) :base_core {
+-  $1 = $2 >> $3;
++  INTVAL signed_shift = -$3;
++  $1 = bit_shift_left($2, signed_shift);
+   goto NEXT();
+ }
+ 
+Index: t/op/bitwise.t
+===================================================================
+--- t/op/bitwise.t	(revision 18767)
++++ t/op/bitwise.t	(working copy)
+@@ -6,7 +6,7 @@
+ use warnings;
+ use lib qw( . lib ../lib ../../lib );
+ use Test::More;
+-use Parrot::Test tests => 26;
++use Parrot::Test tests => 27;
+ use Parrot::Config;
+ 
+ =head1 NAME
+@@ -502,6 +502,88 @@
+ 6
+ OUTPUT
+ 
++pir_output_is( <<'CODE', <<'OUT', "I-reg shl and PMC shl are consistent");
++## The PMC shl op will promote Integer to Bigint when needed.  We can't stuff a
++## BigInt in an I register, but we can produce the same result modulo wordsize.
++## [Only we cheat by using the word size minus one, so that we don't have to
++## deal with negative numbers.  -- rgr, 2-Jun-07.]
++.sub main :main
++    ## Figure out the wordsize.  We need integer_modulus because assigning a
++    ## too-big BigInt throws an error otherwise.
++    .include 'sysinfo.pasm'
++    .local int i_bytes_per_word, i_bits_per_word_minus_one
++    .local pmc bits_per_word_minus_one, integer_modulus
++    i_bytes_per_word = sysinfo .SYSINFO_PARROT_INTSIZE
++    i_bits_per_word_minus_one = 8 * i_bytes_per_word
++    dec i_bits_per_word_minus_one
++    bits_per_word_minus_one = new .Integer
++    bits_per_word_minus_one = i_bits_per_word_minus_one
++    integer_modulus = new .BigInt
++    integer_modulus = 1
++    integer_modulus <<= bits_per_word_minus_one
++
++    ## Test shifting a positive number.
++    new $P0, .Integer
++    set $P0, 1000001
++    test_shift($P0, integer_modulus)
++
++    ## Test shifting a negative number.
++    set $P0, -1000001
++    test_shift($P0, integer_modulus)
++.end
++
++.sub test_shift
++    .param pmc number
++    .param pmc integer_modulus
++    new $P1, .Integer
++    set $P1, 1
++    .local int i_number
++    i_number = number
++
++    ## Start the loop.
++loop:
++    if $P1 > 100 goto done
++    ## shift number and i_number into $P2 and $I2.
++    n_shl $P2, number, $P1
++    $I1 = $P1
++    shl $I2, i_number, $I1
++    ## compare in I registers.
++    $P3 = n_mod $P2, integer_modulus
++    $I3 = $P3
++    if $I2 >= 0 goto pos_check
++    ## The register op gave a negative result, but the modulus will always be
++    ## positive.  If the truncated result is correct, then the difference will
++    ## be the most negative INTVAL, which is the only number for which -x==x.
++    $I4 = $I3 - $I2
++    $I5 = - $I4
++    if $I4 == $I5 goto ok
++    goto bad
++pos_check:
++    if $I2 == $I3 goto ok
++bad:
++    print "oops; not ok: "
++    print i_number
++    print ' << '
++    print $I1
++    print ' gives I '
++    print $I2
++    print ' vs. P '
++    print $P3
++    print ".\n"
++    print $I5
++    print "\n"
++ok:
++    ## set up for the next one
++    inc $P1
++    goto loop
++done:
++    print "done.\n"
++.end
++CODE
++done.
++done.
++OUT
++
+ # Local Variables:
+ #   mode: cperl
+ #   cperl-indent-level: 4
+
+End of diffs.
+
+--mzqF7ptWhn--
+

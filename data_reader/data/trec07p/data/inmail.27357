@@ -1,0 +1,101 @@
+From perl6-all-return-81067-ktwarwic=speedy.uwaterloo.ca@perl.org  Wed May  2 20:43:47 2007
+Return-Path: <perl6-all-return-81067-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l430hkb9029217
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 2 May 2007 20:43:47 -0400
+Received: (qmail 22498 invoked by uid 514); 3 May 2007 00:43:45 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 22492 invoked from network); 3 May 2007 00:43:44 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: moderator for perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: "Yehoshua Sapir" (via RT) <parrotbug-followup@parrotcode.org>
+X-RT-NewTicket: yes
+To: bugs-bitbucket@netlabs.develooper.com
+Resent-To: perl6-internals@perl.org
+Mail-Followup-To: perl6-internals@perl.org
+Reply-To: perl6-internals@perl.org
+Date: Wed, 02 May 2007 12:51:17 -0700
+Subject: [perl #42861] [BUG] config.pir broken in installed parrot 
+In-Reply-To: <136714b40705021250i28a4697ened45e220dc2dda5d@mail.gmail.com>
+References: <RT-Ticket-42861@perl.org> <136714b40705021250o58601596g4aec02d89906335c@mail.gmail.com> <136714b40705021250i28a4697ened45e220dc2dda5d@mail.gmail.com>
+Message-ID: <rt-3.6.HEAD-15879-1178135478-136.42861-72-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #42861
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: yasapir@gmail.com
+MIME-Version: 1.0
+X-RT-Original-Encoding: utf-8
+Content-type: multipart/mixed; boundary="----------=_1178135478-15879-4"
+Resent-Message-Id: <20070502195118.6575A2AFD4@x3.develooper.com>
+Resent-Date: Wed,  2 May 2007 12:51:18 -0700 (PDT)
+Resent-From: rt-yasapir=gmail.com@netlabs.develooper.com
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-4.4 required=8.0
+	tests=ALL_TRUSTED,BAYES_00,DK_POLICY_SIGNSOME,HTML_MESSAGE
+
+------------=_1178135478-15879-4
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+# New Ticket Created by  "Yehoshua Sapir" 
+# Please include the string:  [perl #42861]
+# in the subject line of all future correspondence about this issue. 
+# <URL: http://rt.perl.org/rt3/Ticket/Display.html?id=42861 >
+
+
+This has a lot to do with tickets #42558 and #34994:
+(there's quite a bit to read in both)
+
+http://rt.perl.org/rt3/Public/Bug/Display.html?id=42558
+http://rt.perl.org/rt3/Public/Bug/Display.html?id=34994
+
+To get to config.fpmc (which is in runtime/parrot/include/), config.pir gets
+Parrot's runtime prefix via interpinfo .INTERPINFO_RUNTIME_PREFIX (this is
+part of patch #42558) and then adds "/runtime/parrot/include/config.fpmc"
+onto it.
+
+This works for an uninstalled Parrot, as the runtime prefix returned is the
+Parrot root directory, where runtime/ lives.
+
+On my machine, an installed Parrot returns "/usr/local" for the runtime
+prefix, while the installed config.fpmc lives in
+/usr/local/lib/parrot/include/ . So config.pir tries to look at
+/usr/local/runtime/parrot/include and fails.
+
+
+That was the bug report, my conclusions from here onwards :)
+
+If the "runtime" directory gets installed to "/usr/local/lib", (or whatever)
+then I think that for an installed Parrot that should be the runtime prefix.
+I'm guessing there's some reason that /usr/local is returned here instead.
+
+As far as I can tell, the only place that the runtime prefix is used in the
+Parrot code is Parrot_locate_runtime_file_str (in library.c) where it's used
+to prefix the library paths from parrot_init_library_paths (same file). That
+function returns both options - both runtime/ and lib/, so it works in both
+situations, but it seems to me it would be better to figure it out according
+to the real location of the runtime.
+
+Also, the runtime prefix is stored in the interpreter's IGLOBALS_CONFIG_HASH
+under the key "prefix". I think it would probably be better to rename that
+to "runtime_prefix".
+
+------------=_1178135478-15879-4--
+

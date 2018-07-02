@@ -1,0 +1,145 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Apr 17 08:39:58 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3HCdw0I027450
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 08:39:58 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 157B61639E9
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 12:39:34 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id A5FA2162ABE; Tue, 17 Apr 2007 12:39:13 +0000 (GMT)
+Date: Tue, 17 Apr 2007 22:39:23 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070417123913.A5FA2162ABE@lists.samba.org>
+Subject: Rev 143: add debug tracing to fetch_lock in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 3120
+Lines: 104
+
+------------------------------------------------------------
+revno: 143
+revision-id: tridge@samba.org-20070417123923-99d9e4b5174f992d
+parent: tridge@samba.org-20070417122717-55b27f525e956688
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Tue 2007-04-17 22:39:23 +1000
+message:
+  add debug tracing to fetch_lock
+modified:
+  common/ctdb.c                  ctdb.c-20061127094323-t50f58d65iaao5of-2
+  common/ctdb_client.c           ctdb_client.c-20070411010216-3kd8v37k61steeya-1
+=== modified file 'common/ctdb.c'
+--- a/common/ctdb.c	2007-04-17 12:13:06 +0000
++++ b/common/ctdb.c	2007-04-17 12:39:23 +0000
+@@ -285,8 +285,11 @@
+ 		expected++;
+ 	}
+ 	while (ctdb->num_connected != expected) {
++		DEBUG(3,("ctdb_connect_wait: waiting for %d nodes (have %d)\n", 
++			 expected, ctdb->num_connected));
+ 		event_loop_once(ctdb->ev);
+ 	}
++	DEBUG(3,("ctdb_connect_wait: got all %d nodes\n", expected));
+ }
+ 
+ /*
+
+=== modified file 'common/ctdb_client.c'
+--- a/common/ctdb_client.c	2007-04-17 12:13:06 +0000
++++ b/common/ctdb_client.c	2007-04-17 12:39:23 +0000
+@@ -414,6 +414,8 @@
+ 	r.hdr.ctdb_magic = CTDB_MAGIC;
+ 	r.hdr.ctdb_version = CTDB_VERSION;
+ 	r.hdr.operation = CTDB_REQ_CONNECT_WAIT;
++
++	DEBUG(3,("ctdb_connect_wait: sending to ctdbd\n"));
+ 	
+ 	res = ctdb_queue_send(ctdb->daemon.queue, (uint8_t *)&r.hdr, r.hdr.length);
+ 	if (res != 0) {
+@@ -421,6 +423,8 @@
+ 		return;
+ 	}
+ 
++	DEBUG(3,("ctdb_connect_wait: waiting\n"));
++
+ 	/* now we can go into the normal wait routine, as the reply packet
+ 	   will update the ctdb->num_connected variable */
+ 	ctdb_daemon_connect_wait(ctdb);
+@@ -556,6 +560,9 @@
+ 	}
+ 	h->data    = data;
+ 
++	DEBUG(3,("ctdb_fetch_lock: key=%*.*s\n", key.dsize, key.dsize, 
++		 (const char *)key.dptr));
++
+ 	/* step 1 - get the chain lock */
+ 	ret = ctdb_ltdb_lock(ctdb_db, key);
+ 	if (ret != 0) {
+@@ -564,6 +571,8 @@
+ 		return NULL;
+ 	}
+ 
++	DEBUG(4,("ctdb_fetch_lock: got chain lock\n"));
++
+ 	talloc_set_destructor(h, fetch_lock_destructor);
+ 
+ 	ret = ctdb_ltdb_fetch(ctdb_db, key, &h->header, ctdb_db, data);
+@@ -572,19 +581,26 @@
+ 		return NULL;
+ 	}
+ 
++	DEBUG(4,("ctdb_fetch_lock: done local fetch\n"));
++
+ 	/* step 2 - check if we are the dmaster */
+ 	if (h->header.dmaster == ctdb_db->ctdb->vnn) {
++		DEBUG(4,("ctdb_fetch_lock: we are dmaster - done\n"));
+ 		return h;
+ 	}
+ 
+ 	/* we're not the dmaster - ask the ctdb daemon to make us dmaster */
+ 	state = ctdb_client_fetch_lock_send(ctdb_db, mem_ctx, key, &h->header);
++	DEBUG(4,("ctdb_fetch_lock: done fetch_lock_send\n"));
+ 	ret = ctdb_client_fetch_lock_recv(state, mem_ctx, key, &h->header, data);
+ 	if (ret != 0) {
++		DEBUG(4,("ctdb_fetch_lock: fetch_lock_recv failed\n"));
+ 		talloc_free(h);
+ 		return NULL;
+ 	}
+ 
++	DEBUG(4,("ctdb_fetch_lock: record is now local\n"));
++
+ 	/* the record is now local, and locked. update the record on disk
+ 	   to mark us as the dmaster*/
+ 	h->header.dmaster = ctdb_db->ctdb->vnn;
+@@ -595,6 +611,8 @@
+ 		return NULL;
+ 	}
+ 
++	DEBUG(4,("ctdb_fetch_lock: done\n"));
++
+ 	/* give the caller a handle to be used for ctdb_record_store() or a cancel via
+ 	   a talloc_free() */
+ 	return h;
+

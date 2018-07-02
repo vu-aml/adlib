@@ -1,0 +1,264 @@
+From r-help-bounces@stat.math.ethz.ch  Thu May 24 10:46:34 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4OEkUqD006933
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 24 May 2007 10:46:31 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4OEiuLA024862;
+	Thu, 24 May 2007 16:45:09 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=5.0 tests=AWL,
+	BAYES_50 autolearn=no version=3.1.8
+Received: from smtp1.kfki.hu (smtp1.kfki.hu [148.6.0.26])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4OEiiuL024837
+	for <r-help@stat.math.ethz.ch>; Thu, 24 May 2007 16:44:45 +0200
+Received: from localhost (localhost [127.0.0.1])
+	by smtp1.kfki.hu (Postfix) with ESMTP id 667125CCC6;
+	Thu, 24 May 2007 16:44:45 +0200 (CEST)
+Received: from smtp1.kfki.hu ([127.0.0.1])
+	by localhost (smtp1.kfki.hu [127.0.0.1]) (amavisd-new,
+	port 10024) with ESMTP
+	id 20882-06; Thu, 24 May 2007 16:44:45 +0200 (CEST)
+Received: from localhost (bifur.rmki.kfki.hu [148.6.176.200])
+	by smtp1.kfki.hu (Postfix) with ESMTP id 49CC55C170;
+	Thu, 24 May 2007 16:44:44 +0200 (CEST)
+Date: Thu, 24 May 2007 16:43:40 +0200
+From: Gabor Csardi <csardi@rmki.kfki.hu>
+To: Tom Backer Johnsen <backer@psych.uib.no>
+Message-ID: <20070524144340.GA8278@guzu>
+References: <46463535.1070500@psych.uib.no> <20070514133416.GI5344@guzu>
+	<4648D0E7.80800@psych.uib.no>
+MIME-Version: 1.0
+Content-Disposition: inline
+In-Reply-To: <4648D0E7.80800@psych.uib.no>
+X-PGP-Key: http://www.rmki.kfki.hu/~csardi/pubkey.asc
+User-Agent: Mutt/1.5.12-2006-07-14
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] Social Network Analysis
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+Tom, thank you for the detailed answer and sorry for the long delay,
+i'm at a conference right now. This sadly means that i have no access to
+the papers, it will take more time. 
+
+But in the meanwhile, here's a little program which might be useful,
+
+structural.balance <- function(g) {
+
+  triples <- combn(1:vcount(g)-1, 3)
+  good <- bad <- 0
+  for (t in 1:ncol(triples)) {
+    
+    tri <- triples[,t]
+    edges <- E(g) [ tri %--% tri ]
+    if (length(unique(get.edges(g, edges))) < 3) { next }
+    if (prod(E(g)[edges]$sign) > 0) {
+      good <- good +1
+    } else {
+      bad <- bad +1
+    }
+  }
+  c(good, bad)
+}
+
+It uses the igraph package, version 0.4 or higher. Basically it
+extracts all possible triples from the network and first checks
+whether it is connected or not. If it is a connected triple then 
+it simply multiples the values of the edges to see whether it is
+positive or negative.
+
+Here is a little test with a directed random graph with random
+edge values:
+
+g <- erdos.renyi.game(20, p=5/20, directed=TRUE)
+E(g)$sign <- sample( c(-1,1), ecount(g), repl=TRUE, prob=c(0.5,0.5))
+
+structural.balance(g)
+
+The code is of course suboptimal, it is brute-force, but if your
+networks are small it might be good enough.
+
+Best Regards,
+Gabor
+
+On Mon, May 14, 2007 at 11:13:11PM +0200, Tom Backer Johnsen wrote:
+> Gabor Csardi wrote:
+> > Tom,
+> > 
+> > check the igraph package. Although structural balance is not implemented,
+> > for three or four nodes it might be straightforward to do a quick 
+> > implemntation which works for small graphs. 
+> 
+> I will do so.  My graphs are small, but not very small, having from 8 
+> to 11 members (actually military units tested four points in time from 
+> their formation as strangers and with the last data collection two 
+> months later.
+> > 
+> > Btw. what is exactly you want to do? List the number of balanced and
+> > unbalanced triangles? Ot the triangles themselves? What is a semi-cycle?
+> 
+> Consider a directed and signed graph having three points (also called 
+> vertices) with all possible relations (called lines or arcs) present 
+> (which does not have to be the case in empirical situations).  In that 
+> case there are six possible semicycles, unique sequences of single 
+> lines or arcs between the three points.  The sign of a semicycle is 
+> the product of the signs of the arcs, a positive semicycle has none or 
+> an even number of negative arcs. (e.g. John dislikes James as well as 
+> Peter, but Peter likes James, a balanced triad).
+> 
+> A structural balance index is the number of positive semicycles over 
+> the total number of semicycles.  This concept was introduced by:
+> 
+> @ARTICLE{Cartwright56,
+>    author = {Cartwright, Dorwin and Harary, Frank},
+>    title = {Structural Balance: A Generalization of {H}eider's Theory},
+>    journal = {Psychological Review},
+>    year = {1956},
+>    volume = {63},
+>    pages = {277-293}
+> }
+> 
+> and:
+> 
+> @BOOK{Harary65,
+>    title = {Structural {M}odels: {A}n {I}ntroduction to the {T}heory 
+> of {D}irected {G}raphs},
+>    publisher = {John Wiley \& Sons Inc},
+>    year = {1965},
+>    author = {Harary, Frank and Norman, Robert Z. and Cartwright, Dorwin},
+>    keywords = {Graph theory, balance},
+>    address={New York}
+> }
+> 
+> to use the BibTex format.  This was a generalization in graph 
+> theoretical terms to larger structures involving more than three 
+> persons (points, vertices) based on the writings of a social 
+> psychologist by the name of Fritz Heider. References:
+> 
+> @ARTICLE{Heider46,
+>    author = {Heider, Fritz},
+>    title = {Attitudes and {C}ognitive {O}rganization},
+>    journal = {J. of Psychology},
+>    year = {1946},
+>    volume = {21},
+>    pages = {107-112}
+> }
+> 
+> @BOOK{Heider58,
+>    title = {The Psychology of Interpersonal Relations},
+>    publisher = {Wiley},
+>    year = {1958},
+>    author = {Heider, Fritz},
+>    address = {New York}
+> }
+> 
+> > Could you point me to a good online reference about structureal balance?
+> 
+> As to more recent and online references I am on quite thin ice.  I 
+> know of a a few really trustworthy ones, the problem is simply that 
+> parts of the field has been occupied by fringe elements within what is 
+> called "sociometry".  One evidently good and recent reference to be 
+> used as a point of departure is the following:
+> 
+> @ARTICLE{Hummon03,
+>    author = {Hummon, Norman P. and Doreian, Patrick},
+>    title = {Some dynamics of social balance processes: {B}ringing 
+> {H}eider back into balance theory},
+>    journal = {Social Networks},
+>    year = {2003},
+>    volume = {25},
+>    pages = {17-48}
+> }
+> 
+> I have been in contact with the second author of that article, but he 
+> did not have time to respond in full, he was on his way to a social 
+> networks conference on Corfu (which I would have attended were it not 
+> for family matters which had priority).
+> 
+> I have a *very* preliminary draft of a paper which you may have if you 
+> are interested.
+> 
+> Tom
+> 
+> > 
+> > Thanks,
+> > Gabor
+> > 
+> > On Sat, May 12, 2007 at 11:44:21PM +0200, Tom Backer Johnsen wrote:
+> >> R-Netters:
+> >>
+> >> for (partial sentimental reasons) I am at the the moment working on 
+> >> some old data of mine (actually collected 40 years ago this year for 
+> >> my thesis) covering development of of social networks in small groups 
+> >> over time.  These data consists of signed and directed graphs.
+> >>
+> >> Apart from the programs I write myself, I am looking for R functions 
+> >> for computing what at that time was called "Structural Balance", 
+> >> mainly to check on my own programs, where the results are almost to 
+> >> good to be true.  I want to limit myself to cycles (semicycles?) of 
+> >> length two and three.
+> >>
+> >> I am aware of the "network" package as well as the "sna" which do not 
+> >> seem to quite cover what I need.  On the other hand, the terminology 
+> >> may have changed since I looked into the field 40 years ago.  I am 
+> >> also aware of the Pajek program and the corresponding book by Nooy, 
+> >> Mrvrar, and Batagelj.
+> >>
+> >> Any other suggestions or pointers?
+> >>
+> >> Tom
+> >> -- 
+> >> +----------------------------------------------------------------+
+> >> | Tom Backer Johnsen, Psychometrics Unit,  Faculty of Psychology |
+> >> | University of Bergen, Christies gt. 12, N-5015 Bergen,  NORWAY |
+> >> | Tel : +47-5558-9185                        Fax : +47-5558-9879 |
+> >> | Email : backer@psych.uib.no    URL : http://www.galton.uib.no/ |
+> >> +----------------------------------------------------------------+
+> >>
+> >> ______________________________________________
+> >> R-help@stat.math.ethz.ch mailing list
+> >> https://stat.ethz.ch/mailman/listinfo/r-help
+> >> PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+> >> and provide commented, minimal, self-contained, reproducible code.
+> > 
+> 
+> 
+> -- 
+> +----------------------------------------------------------------+
+> | Tom Backer Johnsen, Psychometrics Unit,  Faculty of Psychology |
+> | University of Bergen, Christies gt. 12, N-5015 Bergen,  NORWAY |
+> | Tel : +47-5558-9185                        Fax : +47-5558-9879 |
+> | Email : backer@psych.uib.no    URL : http://www.galton.uib.no/ |
+> +----------------------------------------------------------------+
+> 
+> ______________________________________________
+> R-help@stat.math.ethz.ch mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-help
+> PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+> and provide commented, minimal, self-contained, reproducible code.
+
+-- 
+Csardi Gabor <csardi@rmki.kfki.hu>    MTA RMKI, ELTE TTK
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

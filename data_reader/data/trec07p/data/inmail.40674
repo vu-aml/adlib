@@ -1,0 +1,281 @@
+From r-help-bounces@stat.math.ethz.ch  Mon May 21 07:09:33 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4LB9VqD030516
+	for <ktwarwic@flax9.uwaterloo.ca>; Mon, 21 May 2007 07:09:32 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4LB7uBW008324;
+	Mon, 21 May 2007 13:08:11 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=5.0 tests=AWL,
+	BAYES_50 autolearn=no version=3.1.8
+Received: from mmp3.nems.noaa.gov (mmp3.nems.noaa.gov [140.90.121.158])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4LB7mYx008262
+	for <r-help@stat.math.ethz.ch>; Mon, 21 May 2007 13:07:48 +0200
+Received: from [198.206.42.39] by mmp3.nems.noaa.gov
+	(Sun Java System Messaging Server 6.2-2.05 (built Apr 28 2005))
+	with ESMTPSA id <0JIE00EUX1KX6R10@mmp3.nems.noaa.gov> for
+	r-help@stat.math.ethz.ch; Mon, 21 May 2007 07:07:46 -0400 (EDT)
+Date: Mon, 21 May 2007 07:07:45 -0400
+From: Thomas Adams <Thomas.Adams@noaa.gov>
+In-reply-to: <200705202115.17459.albmont@centroin.com.br>
+To: Alberto Vieira Ferreira Monteiro <albmont@centroin.com.br>
+Message-id: <46517D81.50806@noaa.gov>
+MIME-version: 1.0
+References: <200705202115.17459.albmont@centroin.com.br>
+User-Agent: Thunderbird 1.5.0.10 (Macintosh/20070221)
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] Running an R script without running R
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="windows-1252"
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+Content-Transfer-Encoding: 8bit
+X-MIME-Autoconverted: from quoted-printable to 8bit by flax9.uwaterloo.ca id l4LB9VqD030516
+
+Alberto,
+
+Below I have two scripts:
+
+(1) cpc2fgroup
+(2) R.cpc.6_10day.outlook.batch
+
+Bash shell script (1) calls the R script (2). (1) also sets some 
+environment variables for (2). I make no claims that this is good coding 
+and I might write things a little differently now (rather than a few 
+years ago), but it works… Also, there are some things going on with 
+GRASS GIS that probably has no relevance to your needs, but I also read 
+data from GRASS GIS and have to set some environment variables for it too,
+
+I hope this helps and is not confusing.
+
+Regards,
+Tom
+
+
+============ (1) cpc2fgroup ================
+
+#!/usr/bin/ksh
+
+###############################################################
+# ************* cpc2fgroup *************
+
+
+###############################################################
+# Set GRASS Environment Variables
+###############################################################
+echo "LOCATION_NAME: cpc" > $HOME/.grassrc6
+echo "MAPSET: oper" >> $HOME/.grassrc6
+echo "DIGITIZER: none" >> $HOME/.grassrc6
+echo "GISDBASE: /grass/data" >> $HOME/.grassrc6
+echo "GRASS_GUI: text" >> $HOME/.grassrc6
+
+export GISBASE=/awips/grass
+export GISDBASE=/grass/data
+export GISRC=$HOME/.grassrc6
+export PATH=$PATH:$GISBASE/bin:$PATH:$GISBASE/scripts
+
+
+###############################################################
+# Script to calculate CPC Prognostic 6-10 Day Precipitation & Temperature
+# outlooks on a Forecast Group basis for the ESPADP CPC PreAdjustment file
+###############################################################
+#
+# REMINDER: With subsequent Forecast Groups add to the Loop
+#
+###############################################################
+
+today=$(date +%Y%m%d)
+
+echo
+echo "========= Begin FTP of CPC grids ==========="
+echo
+
+cd $GISDBASE
+# Initialize the summary statistics files
+cp /dev/null cpc.6_10.PAN.summary
+cp /dev/null cpc.6_10.PBN.summary
+cp /dev/null cpc.6_10.TAN.summary
+cp /dev/null cpc.6_10.TBN.summary
+
+###############################################################
+# Get the CPC grids via ftp
+ftp_cpc_data.bash
+
+#if [ $? -eq 0 ]; then
+# echo
+# echo "EXIT 0 received from program ftp_cpc_data.bash"
+# echo
+# echo "========= CPC grids are not current ========="
+# echo
+# exit 0
+#fi
+
+
+# Convert CPC data to GRASS ascii grid import format
+cpc2grass.pl grid_5km.ppan.08.Mon.asc
+cpc2grass.pl grid_5km.ppbn.08.Mon.asc
+cpc2grass.pl grid_5km.ptan.08.Mon.asc
+cpc2grass.pl grid_5km.ptbn.08.Mon.asc
+
+# Remove any mask that may be set
+g.remove rast=MASK
+
+# Import the CPC data into GRASS
+r.in.ascii -f input=grid_5km.ppan.08.Mon.asc.grass 
+output=grid.5km.ppan.$today
+r.in.ascii -f input=grid_5km.ppbn.08.Mon.asc.grass output=grid.5km.ppbn
+r.mapcalc grid.5km.ppbn.$today=-1*grid.5km.ppbn
+
+r.in.ascii -f input=grid_5km.ptan.08.Mon.asc.grass 
+output=grid.5km.ptan.$today
+r.in.ascii -f input=grid_5km.ptbn.08.Mon.asc.grass output=grid.5km.ptbn
+r.mapcalc grid.5km.ptbn.$today=-1*grid.5km.ptbn
+
+echo
+echo "========= Begin processing for each Forecast Group ==========="
+echo
+
+
+for basin_U in $(</home/oper/files/ens/fg.list); do
+typeset -l basin=$basin_U
+
+echo "========== Set mask for Forecast Group $basin =========="
+g.remove rast=MASK
+g.copy rast=$basin.mask,MASK
+
+
+export R_BASIN_NAME=$basin
+export R_YEAR=$today
+export R_INMAP_PAN=grid.5km.ppan.$today
+export R_INMAP_PBN=grid.5km.ppbn.$today
+export R_INMAP_TAN=grid.5km.ptan.$today
+export R_INMAP_TBN=grid.5km.ptbn.$today
+R CMD BATCH /grass/data/R.cpc.6_10day.outlook.batch
+
+
+echo
+echo "========= Completed for basin $basin ========="
+echo
+
+# Cleanup -- Remove temporary GRASS files
+$GISBASE/etc/clean_temp
+
+done
+
+echo
+echo "========== All basins completed =========="
+echo
+#exit 1
+
+================ (2) R.cpc.6_10day.outlook.batch ========================
+
+#---------------------------------------------------------
+# R.cpc.6_10day.outlook.batch
+#---------------------------------------------------------
+#usage:
+#export R_BASIN_NAME=$basin
+#export R_YEAR=$today
+#export R_INMAP_PAN=grid.5km.ppan.$today
+#export R_INMAP_PBN=grid.5km.ppbn.$today
+#export R_INMAP_TAN=grid.5km.ptan.$today
+#export R_INMAP_TBN=grid.5km.ptbn.$today
+#R BATCH R.cpc.6_10day.outlook.batch
+#---------------------------------------------------------
+# Read GRASS CPC 6_10day.outlook Temperature & Precipitation
+# raster maps and calculate Summary statistics
+#---------------------------------------------------------
+
+library(GRASS)
+G<-gmeta()
+library(MASS)
+
+#read input map from environment variable $R_BASIN_NAME
+basinname<-Sys.getenv("R_BASIN_NAME")
+year<-Sys.getenv("R_YEAR")
+year
+
+# Read the CPC raster maps
+cpc<-rast.get(G,rlist=c(Sys.getenv("R_INMAP_PAN"),Sys.getenv("R_INMAP_PBN"),Sys.getenv("R_INMAP_TAN"),Sys.getenv("R_INMAP_TBN")))
+
+#---------------------------------------------------------
+#(1) read input map from environment variable $R_INMAP_PAN
+#---------------------------------------------------------
+mapname<-Sys.getenv("R_INMAP_PAN")
+pan<-summary(cpc[[eval(mapname)]])
+write(pan,file="cpc.6_10.PAN.summary",ncolumns=7,append=T)
+
+#---------------------------------------------------------
+#(2) read input map from environment variable $R_INMAP_PBN
+#---------------------------------------------------------
+mapname<-Sys.getenv("R_INMAP_PBN")
+pbn<-summary(cpc[[eval(mapname)]])
+write(pbn,file="cpc.6_10.PBN.summary",ncolumns=7,append=T)
+
+#---------------------------------------------------------
+#(3) read input map from environment variable $R_INMAP_TAN
+#---------------------------------------------------------
+mapname<-Sys.getenv("R_INMAP_TAN")
+tan<-summary(cpc[[eval(mapname)]])
+write(tan,file="cpc.6_10.TAN.summary",ncolumns=7,append=T)
+
+#---------------------------------------------------------
+#(4) read input map from environment variable $R_INMAP_TBN
+#---------------------------------------------------------
+mapname<-Sys.getenv("R_INMAP_TBN")
+tbn<-summary(cpc[[eval(mapname)]])
+write(tbn,file="cpc.6_10.TBN.summary",ncolumns=7,append=T)
+
+#cleanup workspace
+rm(list = ls(all=TRUE))
+
+
+Alberto Vieira Ferreira Monteiro wrote:
+> Is there any way to run an R script without running R?
+>
+> As an example, suppose I have a tcl/tk interface that asks
+> for a number (in a GUI) and displays its factorial. Is there a
+> way to invoke this script without invoking R?
+>
+> I'm using R 2.4.1 in GNU/Linux Fedora Core 4.
+>
+> Alberto Monteiro
+>
+> ______________________________________________
+> R-help@stat.math.ethz.ch mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-help
+> PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+> and provide commented, minimal, self-contained, reproducible code.
+>   
+
+
+-- 
+Thomas E Adams
+National Weather Service
+Ohio River Forecast Center
+1901 South State Route 134
+Wilmington, OH 45177
+
+EMAIL:	thomas.adams@noaa.gov
+
+VOICE:	937-383-0528
+FAX:	937-383-0033
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

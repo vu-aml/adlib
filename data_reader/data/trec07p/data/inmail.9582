@@ -1,0 +1,159 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun Apr 15 17:14:16 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3FLEG0I029848
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 15 Apr 2007 17:14:16 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id C2C10162C1A
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 15 Apr 2007 21:13:52 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.9 required=3.8 tests=AWL,BAYES_20,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 620)
+	id 3C205162AD7; Sun, 15 Apr 2007 21:13:14 +0000 (GMT)
+To: samba-cvs@samba.org
+From: metze@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070415211314.3C205162AD7@lists.samba.org>
+Date: Sun, 15 Apr 2007 21:13:14 +0000 (GMT)
+Subject: svn commit: samba r22226 - in branches/SAMBA_4_0/source/lib:
+	ldb/include replace util
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 4135
+Lines: 116
+
+Author: metze
+Date: 2007-04-15 21:13:13 +0000 (Sun, 15 Apr 2007)
+New Revision: 22226
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22226
+
+Log:
+move discard_const macros to librelace
+
+metze
+Modified:
+   branches/SAMBA_4_0/source/lib/ldb/include/includes.h
+   branches/SAMBA_4_0/source/lib/replace/replace.h
+   branches/SAMBA_4_0/source/lib/replace/strptime.c
+   branches/SAMBA_4_0/source/lib/util/util.h
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/lib/ldb/include/includes.h
+===================================================================
+--- branches/SAMBA_4_0/source/lib/ldb/include/includes.h	2007-04-15 20:58:00 UTC (rev 22225)
++++ branches/SAMBA_4_0/source/lib/ldb/include/includes.h	2007-04-15 21:13:13 UTC (rev 22226)
+@@ -16,11 +16,6 @@
+ #define dyn_MODULESDIR dyn_LIBDIR
+ #endif
+ 
+-
+-
+-#define discard_const(ptr) ((void *)((intptr_t)(ptr)))
+-#define discard_const_p(type, ptr) ((type *)discard_const(ptr))
+-
+ #include "replace.h"
+ #include "system/filesys.h"
+ #include "system/network.h"
+
+Modified: branches/SAMBA_4_0/source/lib/replace/replace.h
+===================================================================
+--- branches/SAMBA_4_0/source/lib/replace/replace.h	2007-04-15 20:58:00 UTC (rev 22225)
++++ branches/SAMBA_4_0/source/lib/replace/replace.h	2007-04-15 21:13:13 UTC (rev 22226)
+@@ -79,6 +79,29 @@
+ #include <stddef.h>
+ #endif
+ 
++/**
++  this is a warning hack. The idea is to use this everywhere that we
++  get the "discarding const" warning from gcc. That doesn't actually
++  fix the problem of course, but it means that when we do get to
++  cleaning them up we can do it by searching the code for
++  discard_const.
++
++  It also means that other error types aren't as swamped by the noise
++  of hundreds of const warnings, so we are more likely to notice when
++  we get new errors.
++
++  Please only add more uses of this macro when you find it
++  _really_ hard to fix const warnings. Our aim is to eventually use
++  this function in only a very few places.
++
++  Also, please call this via the discard_const_p() macro interface, as that
++  makes the return type safe.
++*/
++#define discard_const(ptr) ((void *)((intptr_t)(ptr)))
++
++/** Type-safe version of discard_const */
++#define discard_const_p(type, ptr) ((type *)discard_const(ptr))
++
+ #ifndef HAVE_STRERROR
+ extern char *sys_errlist[];
+ #define strerror(i) sys_errlist[i]
+
+Modified: branches/SAMBA_4_0/source/lib/replace/strptime.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/replace/strptime.c	2007-04-15 20:58:00 UTC (rev 22225)
++++ branches/SAMBA_4_0/source/lib/replace/strptime.c	2007-04-15 21:13:13 UTC (rev 22226)
+@@ -974,7 +974,7 @@
+   if (want_xday && !have_yday)
+     day_of_the_year (tm);
+ 
+-  return (char *) rp;
++  return discard_const_p(char, rp);
+ }
+ 
+ 
+
+Modified: branches/SAMBA_4_0/source/lib/util/util.h
+===================================================================
+--- branches/SAMBA_4_0/source/lib/util/util.h	2007-04-15 20:58:00 UTC (rev 22225)
++++ branches/SAMBA_4_0/source/lib/util/util.h	2007-04-15 21:13:13 UTC (rev 22226)
+@@ -107,27 +107,4 @@
+ #define strlen(x) valgrind_strlen(x)
+ #endif
+ 
+-/**
+-  this is a warning hack. The idea is to use this everywhere that we
+-  get the "discarding const" warning from gcc. That doesn't actually
+-  fix the problem of course, but it means that when we do get to
+-  cleaning them up we can do it by searching the code for
+-  discard_const.
+-
+-  It also means that other error types aren't as swamped by the noise
+-  of hundreds of const warnings, so we are more likely to notice when
+-  we get new errors.
+-
+-  Please only add more uses of this macro when you find it
+-  _really_ hard to fix const warnings. Our aim is to eventually use
+-  this function in only a very few places.
+-
+-  Also, please call this via the discard_const_p() macro interface, as that
+-  makes the return type safe.
+-*/
+-#define discard_const(ptr) ((void *)((intptr_t)(ptr)))
+-
+-/** Type-safe version of discard_const */
+-#define discard_const_p(type, ptr) ((type *)discard_const(ptr))
+-
+ #endif /* _SAMBA_UTIL_H_ */
+

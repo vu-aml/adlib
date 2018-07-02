@@ -1,0 +1,366 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon May 14 14:03:25 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4EI3PqD025485
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 14 May 2007 14:03:25 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id CFB4E162C4F
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 14 May 2007 18:03:22 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL,UPPERCASE_25_50 autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 620)
+	id C13B6162BC9; Mon, 14 May 2007 18:02:49 +0000 (GMT)
+To: samba-cvs@samba.org
+From: metze@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070514180249.C13B6162BC9@lists.samba.org>
+Date: Mon, 14 May 2007 18:02:49 +0000 (GMT)
+Subject: svn commit: samba r22866 - in branches/SAMBA_4_0/source:
+	libcli/smb2 smb_server/smb2
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: metze
+Date: 2007-05-14 18:02:49 +0000 (Mon, 14 May 2007)
+New Revision: 22866
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22866
+
+Log:
+handle incoming chained smb2 requests in our server code to let
+the windows explorer in longhorn beta3 work.
+
+metze
+Modified:
+   branches/SAMBA_4_0/source/libcli/smb2/request.c
+   branches/SAMBA_4_0/source/libcli/smb2/smb2.h
+   branches/SAMBA_4_0/source/smb_server/smb2/fileio.c
+   branches/SAMBA_4_0/source/smb_server/smb2/negprot.c
+   branches/SAMBA_4_0/source/smb_server/smb2/receive.c
+   branches/SAMBA_4_0/source/smb_server/smb2/smb2_server.h
+   branches/SAMBA_4_0/source/smb_server/smb2/tcon.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/libcli/smb2/request.c
+===================================================================
+--- branches/SAMBA_4_0/source/libcli/smb2/request.c	2007-05-14 17:58:28 UTC (rev 22865)
++++ branches/SAMBA_4_0/source/libcli/smb2/request.c	2007-05-14 18:02:49 UTC (rev 22866)
+@@ -80,18 +80,18 @@
+ 	req->out.body_size = body_fixed_size;
+ 	req->out.dynamic   = (body_dynamic_size ? req->out.body + body_fixed_size : NULL);
+ 
+-	SIVAL(req->out.hdr, 0,                SMB2_MAGIC);
+-	SSVAL(req->out.hdr, SMB2_HDR_LENGTH,  SMB2_HDR_BODY);
+-	SSVAL(req->out.hdr, SMB2_HDR_PAD1,    0);
+-	SIVAL(req->out.hdr, SMB2_HDR_STATUS,  0);
+-	SSVAL(req->out.hdr, SMB2_HDR_OPCODE,  opcode);
+-	SSVAL(req->out.hdr, SMB2_HDR_UNKNOWN1,0);
+-	SIVAL(req->out.hdr, SMB2_HDR_FLAGS,   0);
+-	SIVAL(req->out.hdr, SMB2_HDR_UNKNOWN2,0);
+-	SBVAL(req->out.hdr, SMB2_HDR_SEQNUM,  req->seqnum);
+-	SIVAL(req->out.hdr, SMB2_HDR_PID,     0);
+-	SIVAL(req->out.hdr, SMB2_HDR_TID,     0);
+-	SBVAL(req->out.hdr, SMB2_HDR_UID,     0);
++	SIVAL(req->out.hdr, 0,				SMB2_MAGIC);
++	SSVAL(req->out.hdr, SMB2_HDR_LENGTH,		SMB2_HDR_BODY);
++	SSVAL(req->out.hdr, SMB2_HDR_PAD1,		0);
++	SIVAL(req->out.hdr, SMB2_HDR_STATUS,		0);
++	SSVAL(req->out.hdr, SMB2_HDR_OPCODE,		opcode);
++	SSVAL(req->out.hdr, SMB2_HDR_UNKNOWN1,		0);
++	SIVAL(req->out.hdr, SMB2_HDR_FLAGS,		0);
++	SIVAL(req->out.hdr, SMB2_HDR_CHAIN_OFFSET,	0);
++	SBVAL(req->out.hdr, SMB2_HDR_SEQNUM,		req->seqnum);
++	SIVAL(req->out.hdr, SMB2_HDR_PID,		0);
++	SIVAL(req->out.hdr, SMB2_HDR_TID,		0);
++	SBVAL(req->out.hdr, SMB2_HDR_UID,		0);
+ 	memset(req->out.hdr+SMB2_HDR_SIG, 0, 16);
+ 
+ 	/* set the length of the fixed body part and +1 if there's a dynamic part also */
+
+Modified: branches/SAMBA_4_0/source/libcli/smb2/smb2.h
+===================================================================
+--- branches/SAMBA_4_0/source/libcli/smb2/smb2.h	2007-05-14 17:58:28 UTC (rev 22865)
++++ branches/SAMBA_4_0/source/libcli/smb2/smb2.h	2007-05-14 18:02:49 UTC (rev 22866)
+@@ -164,7 +164,7 @@
+ #define SMB2_HDR_OPCODE		0x0c
+ #define SMB2_HDR_UNKNOWN1	0x0e
+ #define SMB2_HDR_FLAGS		0x10
+-#define SMB2_HDR_UNKNOWN2	0x14
++#define SMB2_HDR_CHAIN_OFFSET	0x14
+ #define SMB2_HDR_SEQNUM		0x18
+ #define SMB2_HDR_PID		0x20
+ #define SMB2_HDR_TID		0x24
+
+Modified: branches/SAMBA_4_0/source/smb_server/smb2/fileio.c
+===================================================================
+--- branches/SAMBA_4_0/source/smb_server/smb2/fileio.c	2007-05-14 17:58:28 UTC (rev 22865)
++++ branches/SAMBA_4_0/source/smb_server/smb2/fileio.c	2007-05-14 18:02:49 UTC (rev 22866)
+@@ -44,9 +44,13 @@
+ 	SBVAL(req->out.body,	0x30,	io->smb2.out.size);
+ 	SIVAL(req->out.body,	0x38,	io->smb2.out.file_attr);
+ 	SIVAL(req->out.body,	0x3C,	io->smb2.out._pad);
+-	smb2srv_push_handle(req->out.body, 0x40,io->smb2.out.file.ntvfs);
++	smb2srv_push_handle(req->out.body, 0x40, io->smb2.out.file.ntvfs);
+ 	SMB2SRV_CHECK(smb2_push_o32s32_blob(&req->out, 0x50, io->smb2.out.blob));
+ 
++	/* also setup the chained file handle */
++	req->chained_file_handle = req->_chained_file_handle;
++	smb2srv_push_handle(req->chained_file_handle, 0, io->smb2.out.file.ntvfs);
++
+ 	smb2srv_send_reply(req);
+ }
+ 
+
+Modified: branches/SAMBA_4_0/source/smb_server/smb2/negprot.c
+===================================================================
+--- branches/SAMBA_4_0/source/smb_server/smb2/negprot.c	2007-05-14 17:58:28 UTC (rev 22865)
++++ branches/SAMBA_4_0/source/smb_server/smb2/negprot.c	2007-05-14 18:02:49 UTC (rev 22866)
+@@ -204,18 +204,18 @@
+ 	req->in.body_size = body_fixed_size;
+ 	req->in.dynamic   = NULL;
+ 
+-	SIVAL(req->in.hdr, 0,                SMB2_MAGIC);
+-	SSVAL(req->in.hdr, SMB2_HDR_LENGTH,  SMB2_HDR_BODY);
+-	SSVAL(req->in.hdr, SMB2_HDR_PAD1,    0);
+-	SIVAL(req->in.hdr, SMB2_HDR_STATUS,  0);
+-	SSVAL(req->in.hdr, SMB2_HDR_OPCODE,  SMB2_OP_NEGPROT);
+-	SSVAL(req->in.hdr, SMB2_HDR_UNKNOWN1,0);
+-	SIVAL(req->in.hdr, SMB2_HDR_FLAGS,   0);
+-	SIVAL(req->in.hdr, SMB2_HDR_UNKNOWN2,0);
+-	SBVAL(req->in.hdr, SMB2_HDR_SEQNUM,  0);
+-	SIVAL(req->in.hdr, SMB2_HDR_PID,     0);
+-	SIVAL(req->in.hdr, SMB2_HDR_TID,     0);
+-	SBVAL(req->in.hdr, SMB2_HDR_UID,     0);
++	SIVAL(req->in.hdr, 0,				SMB2_MAGIC);
++	SSVAL(req->in.hdr, SMB2_HDR_LENGTH,		SMB2_HDR_BODY);
++	SSVAL(req->in.hdr, SMB2_HDR_PAD1,		0);
++	SIVAL(req->in.hdr, SMB2_HDR_STATUS,		0);
++	SSVAL(req->in.hdr, SMB2_HDR_OPCODE,		SMB2_OP_NEGPROT);
++	SSVAL(req->in.hdr, SMB2_HDR_UNKNOWN1,		0);
++	SIVAL(req->in.hdr, SMB2_HDR_FLAGS,		0);
++	SIVAL(req->in.hdr, SMB2_HDR_CHAIN_OFFSET,	0);
++	SBVAL(req->in.hdr, SMB2_HDR_SEQNUM,		0);
++	SIVAL(req->in.hdr, SMB2_HDR_PID,		0);
++	SIVAL(req->in.hdr, SMB2_HDR_TID,		0);
++	SBVAL(req->in.hdr, SMB2_HDR_UID,		0);
+ 	memset(req->in.hdr+SMB2_HDR_SIG, 0, 16);
+ 
+ 	/* this seems to be a bug, they use 0x24 but the length is 0x26 */
+
+Modified: branches/SAMBA_4_0/source/smb_server/smb2/receive.c
+===================================================================
+--- branches/SAMBA_4_0/source/smb_server/smb2/receive.c	2007-05-14 17:58:28 UTC (rev 22865)
++++ branches/SAMBA_4_0/source/smb_server/smb2/receive.c	2007-05-14 18:02:49 UTC (rev 22866)
+@@ -91,18 +91,18 @@
+ 	req->out.body_size	= body_fixed_size;
+ 	req->out.dynamic	= (body_dynamic_size ? req->out.body + body_fixed_size : NULL);
+ 
+-	SIVAL(req->out.hdr, 0,                SMB2_MAGIC);
+-	SSVAL(req->out.hdr, SMB2_HDR_LENGTH,  SMB2_HDR_BODY);
+-	SSVAL(req->out.hdr, SMB2_HDR_PAD1,    0);
+-	SIVAL(req->out.hdr, SMB2_HDR_STATUS,  NT_STATUS_V(req->status));
+-	SSVAL(req->out.hdr, SMB2_HDR_OPCODE,  SVAL(req->in.hdr, SMB2_HDR_OPCODE));
+-	SSVAL(req->out.hdr, SMB2_HDR_UNKNOWN1,0x0001);
+-	SIVAL(req->out.hdr, SMB2_HDR_FLAGS,   flags);
+-	SIVAL(req->out.hdr, SMB2_HDR_UNKNOWN2,0);
+-	SBVAL(req->out.hdr, SMB2_HDR_SEQNUM,  req->seqnum);
+-	SIVAL(req->out.hdr, SMB2_HDR_PID,     pid);
+-	SIVAL(req->out.hdr, SMB2_HDR_TID,     tid);
+-	SBVAL(req->out.hdr, SMB2_HDR_UID,     BVAL(req->in.hdr, SMB2_HDR_UID));
++	SIVAL(req->out.hdr, 0,				SMB2_MAGIC);
++	SSVAL(req->out.hdr, SMB2_HDR_LENGTH,		SMB2_HDR_BODY);
++	SSVAL(req->out.hdr, SMB2_HDR_PAD1,		0);
++	SIVAL(req->out.hdr, SMB2_HDR_STATUS,		NT_STATUS_V(req->status));
++	SSVAL(req->out.hdr, SMB2_HDR_OPCODE,		SVAL(req->in.hdr, SMB2_HDR_OPCODE));
++	SSVAL(req->out.hdr, SMB2_HDR_UNKNOWN1,		0x0001);
++	SIVAL(req->out.hdr, SMB2_HDR_FLAGS,		flags);
++	SIVAL(req->out.hdr, SMB2_HDR_CHAIN_OFFSET,	0);
++	SBVAL(req->out.hdr, SMB2_HDR_SEQNUM,		req->seqnum);
++	SIVAL(req->out.hdr, SMB2_HDR_PID,		pid);
++	SIVAL(req->out.hdr, SMB2_HDR_TID,		tid);
++	SBVAL(req->out.hdr, SMB2_HDR_UID,		BVAL(req->in.hdr, SMB2_HDR_UID));
+ 	memset(req->out.hdr+SMB2_HDR_SIG, 0, 16);
+ 
+ 	/* set the length of the fixed body part and +1 if there's a dynamic part also */
+@@ -120,6 +120,85 @@
+ 	return NT_STATUS_OK;
+ }
+ 
++static NTSTATUS smb2srv_reply(struct smb2srv_request *req);
++
++static void smb2srv_chain_reply(struct smb2srv_request *p_req)
++{
++	NTSTATUS status;
++	struct smb2srv_request *req;
++	uint32_t chain_offset;
++	uint32_t protocol_version;
++	uint16_t buffer_code;
++	uint32_t dynamic_size;
++
++	chain_offset = p_req->chain_offset;
++	p_req->chain_offset = 0;
++
++	if (p_req->in.size < (NBT_HDR_SIZE + chain_offset + SMB2_MIN_SIZE)) {
++		DEBUG(2,("Invalid SMB2 chained packet at offset 0x%X\n",
++			chain_offset));
++		smbsrv_terminate_connection(p_req->smb_conn, "Invalid SMB2 chained packet");
++		return;
++	}
++
++	protocol_version = IVAL(p_req->in.buffer, NBT_HDR_SIZE + chain_offset);
++	if (protocol_version != SMB2_MAGIC) {
++		DEBUG(2,("Invalid SMB chained packet: protocol prefix: 0x%08X\n",
++			 protocol_version));
++		smbsrv_terminate_connection(p_req->smb_conn, "NON-SMB2 chained packet");
++		return;
++	}
++
++	req = smb2srv_init_request(p_req->smb_conn);
++	if (!req) {
++		smbsrv_terminate_connection(p_req->smb_conn, "SMB2 chained packet - no memory");
++		return;
++	}
++
++	req->in.buffer		= talloc_steal(req, p_req->in.buffer);
++	req->in.size		= p_req->in.size;
++	req->request_time	= p_req->request_time;
++	req->in.allocated	= req->in.size;
++
++	req->in.hdr		= req->in.buffer+ NBT_HDR_SIZE + chain_offset;
++	req->in.body		= req->in.hdr	+ SMB2_HDR_BODY;
++	req->in.body_size	= req->in.size	- (NBT_HDR_SIZE+ chain_offset + SMB2_HDR_BODY);
++	req->in.dynamic 	= NULL;
++
++	buffer_code		= SVAL(req->in.body, 0);
++	req->in.body_fixed	= (buffer_code & ~1);
++	dynamic_size		= req->in.body_size - req->in.body_fixed;
++
++	if (dynamic_size != 0 && (buffer_code & 1)) {
++		req->in.dynamic = req->in.body + req->in.body_fixed;
++		if (smb2_oob(&req->in, req->in.dynamic, dynamic_size)) {
++			DEBUG(1,("SMB2 chained request invalid dynamic size 0x%x\n", 
++				 dynamic_size));
++			smb2srv_send_error(req, NT_STATUS_INVALID_PARAMETER);
++			return;
++		}
++	}
++
++	if (p_req->chained_file_handle) {
++		memcpy(req->_chained_file_handle,
++		       p_req->_chained_file_handle,
++		       sizeof(req->_chained_file_handle));
++		req->chained_file_handle = req->_chained_file_handle;
++	}
++
++	/* 
++	 * TODO: - make sure the length field is 64
++	 *       - make sure it's a request
++	 */
++
++	status = smb2srv_reply(req);
++	if (!NT_STATUS_IS_OK(status)) {
++		smbsrv_terminate_connection(req->smb_conn, nt_errstr(status));
++		talloc_free(req);
++		return;
++	}
++}
++
+ void smb2srv_send_reply(struct smb2srv_request *req)
+ {
+ 	DATA_BLOB blob;
+@@ -140,6 +219,10 @@
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		smbsrv_terminate_connection(req->smb_conn, nt_errstr(status));
+ 	}
++	if (req->chain_offset) {
++		smb2srv_chain_reply(req);
++		return;
++	}
+ 	talloc_free(req);
+ }
+ 
+@@ -174,10 +257,11 @@
+ 	uint32_t tid;
+ 	uint64_t uid;
+ 
+-	opcode		= SVAL(req->in.hdr, SMB2_HDR_OPCODE);
+-	req->seqnum	= BVAL(req->in.hdr, SMB2_HDR_SEQNUM);
+-	tid		= IVAL(req->in.hdr, SMB2_HDR_TID);
+-	uid		= BVAL(req->in.hdr, SMB2_HDR_UID);
++	opcode			= SVAL(req->in.hdr, SMB2_HDR_OPCODE);
++	req->chain_offset	= IVAL(req->in.hdr, SMB2_HDR_CHAIN_OFFSET);
++	req->seqnum		= BVAL(req->in.hdr, SMB2_HDR_SEQNUM);
++	tid			= IVAL(req->in.hdr, SMB2_HDR_TID);
++	uid			= BVAL(req->in.hdr, SMB2_HDR_UID);
+ 
+ 	req->session	= smbsrv_session_find(req->smb_conn, uid, req->request_time);
+ 	req->tcon	= smbsrv_smb2_tcon_find(req->session, tid, req->request_time);
+@@ -311,7 +395,6 @@
+ 	}
+ 
+ 	protocol_version = IVAL(blob.data, NBT_HDR_SIZE);
+-
+ 	if (protocol_version != SMB2_MAGIC) {
+ 		DEBUG(2,("Invalid SMB packet: protocol prefix: 0x%08X\n",
+ 			 protocol_version));
+
+Modified: branches/SAMBA_4_0/source/smb_server/smb2/smb2_server.h
+===================================================================
+--- branches/SAMBA_4_0/source/smb_server/smb2/smb2_server.h	2007-05-14 17:58:28 UTC (rev 22865)
++++ branches/SAMBA_4_0/source/smb_server/smb2/smb2_server.h	2007-05-14 18:02:49 UTC (rev 22866)
+@@ -56,6 +56,13 @@
+ 	/* the id that can be used to cancel the request */
+ 	uint32_t pending_id;
+ 
++	/* the offset to the next SMB2 Header for chained requests */
++	uint32_t chain_offset;
++
++	/* chained file handle */
++	uint8_t _chained_file_handle[16];
++	uint8_t *chained_file_handle;
++
+ 	struct smb2_request_buffer in;
+ 	struct smb2_request_buffer out;
+ };
+
+Modified: branches/SAMBA_4_0/source/smb_server/smb2/tcon.c
+===================================================================
+--- branches/SAMBA_4_0/source/smb_server/smb2/tcon.c	2007-05-14 17:58:28 UTC (rev 22865)
++++ branches/SAMBA_4_0/source/smb_server/smb2/tcon.c	2007-05-14 18:02:49 UTC (rev 22866)
+@@ -45,6 +45,17 @@
+ 	uint32_t tid;
+ 	uint32_t pad;
+ 
++	/*
++	 * if there're chained requests used the cached handle
++	 *
++	 * TODO: check if this also correct when the given handle
++	 *       isn't all 0xFF.
++	 */
++	if (req->chained_file_handle) {
++		base = req->chained_file_handle;
++		offset = 0;
++	}
++
+ 	hid = BVAL(base, offset);
+ 	tid = IVAL(base, offset + 8);
+ 	pad = IVAL(base, offset + 12);
+

@@ -1,0 +1,110 @@
+From perl6-all-return-80789-ktwarwic=speedy.uwaterloo.ca@perl.org  Sun Apr 22 17:35:33 2007
+Return-Path: <perl6-all-return-80789-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3MLZV0I024329
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 22 Apr 2007 17:35:31 -0400
+Received: (qmail 3897 invoked by uid 514); 22 Apr 2007 21:35:06 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 3887 invoked from network); 22 Apr 2007 21:35:05 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: domain of rutski89@gmail.com designates 209.85.132.245 as permitted sender)
+DKIM-Signature: a=rsa-sha1; c=relaxed/relaxed;
+        d=gmail.com; s=beta;
+        h=domainkey-signature:received:received:in-reply-to:references:mime-version:content-type:message-id:cc:content-transfer-encoding:from:subject:date:to:x-mailer;
+        b=F/Wa8GribvmxQKPH2xgeok0C05F5U4nFA3zEGKIj7Uo2qlqk5kOYUFrMgrjKjjVRlo4QTmuYKLEqbE8gZOPidds2mpQ1umQoRtErPsSFW68NpZIVerNwwZlj2I7YsBfV2XYgpotHFb7rLkIzkYYYWDJcLpTBmsv874ypQFaKqq4=
+DomainKey-Signature: a=rsa-sha1; c=nofws;
+        d=gmail.com; s=beta;
+        h=received:in-reply-to:references:mime-version:content-type:message-id:cc:content-transfer-encoding:from:subject:date:to:x-mailer;
+        b=fuXzcOW1URMQ/WRLTd9w7dTmLwZozJ3c1i29x9kDYfmCsAwsdmRwjsJiT+stUX6UxiiSZyonk1HigF7loxKHq2WBd2MlyPi6nfXdvHw0dnVimt9ATUfEZv3Fp5EklPfNWi+6Tg3NdHNObN5q/Q9M5wGgYDoKbnkKn9sTxB49DaE=
+In-Reply-To: <200704221414.34761.chromatic@wgz.org>
+References: <200704211824.18554.chromatic@wgz.org> <87slat2bsl.fsf@psyche.kn-bremen.de> <x7wt04jewc.fsf@mail.sysarch.com> <200704221414.34761.chromatic@wgz.org>
+Mime-Version: 1.0 (Apple Message framework v752.2)
+Content-Type: text/plain; charset=US-ASCII; delsp=yes; format=flowed
+Message-Id: <4E0B904A-2184-46B5-8054-D34193F323FE@gmail.com>
+Cc: perl6-internals@perl.org
+Content-Transfer-Encoding: 7bit
+From: Patrick Rutkowski <rutski89@gmail.com>
+Subject: Re: I Don't Understand The Context Allocation/Destruction Code
+Date: Sun, 22 Apr 2007 17:34:40 -0400
+To: chromatic <chromatic@wgz.org>
+X-Mailer: Apple Mail (2.752.2)
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED,SPF_PASS
+Status: O
+Content-Length: 1890
+Lines: 56
+
+
+On Apr 22, 2007, at 5:14 PM, chromatic wrote:
+
+> On Sunday 22 April 2007 14:08, Uri Guttman wrote:
+>
+>>>>>>> "JP" == Joerg Plate <plate@patterner.de> writes:
+>>>>
+>>>> const int slot = (reg_alloc + 7) >> 3; reg_alloc = slot << 3;
+>>>>
+>>>> This is where I start not to understand.  Why reg_alloc + 7? Why
+>>>> shift left and right by 3?
+>>
+>>   JP> That's just a rounding up (if necessary) to a multiple of 8  
+>> (2<<3).
+>>
+>> and those sort of things should be macros as they are confusing
+>> otherwise and annoying to change. and named something like
+>> ROUND_UP_TO_BOUNDARY. as others have said it is a common idiom. and i
+>> agree that there should be comments on WHY the rounding is used/ 
+>> needed.
+>
+> I figured it was a rounding, but I saw two magic numbers and didn't  
+> want to
+> guess what it was.
+>
+> Any volunteers to macroize this?
+>
+> Also, is anyone *sure* that this boundary is effective on both 32-  
+> and 64-bit
+> platforms?  I hate to make assumptions about alignment.
+
+I would rather make the side effects more explicit and throw in a  
+good comment.
+How about something like this?
+
+Index: src/gc/register.c
+===================================================================
+--- src/gc/register.c	(revision 18296)
++++ src/gc/register.c	(working copy)
+@@ -338,9 +338,16 @@
+      size_t reg_alloc = size_nip +
+          sizeof (STRING*) *  n_regs_used[REGNO_STR];
+-    const int slot = (reg_alloc + 7) >> 3;
+-    reg_alloc = slot << 3;
++    const int slot;
++    /* round reg_alloc up to the nearest multiple of 8 */
++    reg_alloc = ((reg_alloc + 7) >> 3) << 3;
++
++    /* reg_alloc now divides evenly by 8 because of the previous
++       rounding. A granualrity of 8 is arbitratly, it could have been
++       some bigger power of 2 */
++    slot = reg_alloc / 8;
++
+      if (slot >= interp->ctx_mem.n_free_slots) {
+          const int n = slot + 1;
+          int i;
+

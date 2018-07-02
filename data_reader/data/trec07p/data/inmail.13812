@@ -1,0 +1,161 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Apr 19 10:15:56 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3JEFt0I025480
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 19 Apr 2007 10:15:56 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 64951163CBD
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 19 Apr 2007 14:15:31 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 620)
+	id 0C732163BD4; Thu, 19 Apr 2007 14:14:14 +0000 (GMT)
+To: samba-cvs@samba.org
+From: metze@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070419141414.0C732163BD4@lists.samba.org>
+Date: Thu, 19 Apr 2007 14:14:14 +0000 (GMT)
+Subject: svn commit: samba r22372 - in branches/SAMBA_4_0/source/lib/util: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2811
+Lines: 119
+
+Author: metze
+Date: 2007-04-19 14:14:11 +0000 (Thu, 19 Apr 2007)
+New Revision: 22372
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22372
+
+Log:
+split out become_daemon() into it's own function
+
+this remove the dependency of util.o to swrap_close
+which causes sometrouble with the pidl tests
+on some hosts
+
+metze
+Modified:
+   branches/SAMBA_4_0/source/lib/util/config.mk
+   branches/SAMBA_4_0/source/lib/util/util.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/lib/util/config.mk
+===================================================================
+--- branches/SAMBA_4_0/source/lib/util/config.mk	2007-04-19 13:30:07 UTC (rev 22371)
++++ branches/SAMBA_4_0/source/lib/util/config.mk	2007-04-19 14:14:11 UTC (rev 22372)
+@@ -26,7 +26,8 @@
+ 		ms_fnmatch.o \
+ 		mutex.o \
+ 		idtree.o \
+-		module.o
++		module.o \
++		become_daemon.o
+ PUBLIC_DEPENDENCIES = \
+ 		LIBTALLOC LIBCRYPTO \
+ 		SOCKET_WRAPPER EXT_NSL \
+
+Modified: branches/SAMBA_4_0/source/lib/util/util.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/util/util.c	2007-04-19 13:30:07 UTC (rev 22371)
++++ branches/SAMBA_4_0/source/lib/util/util.c	2007-04-19 14:14:11 UTC (rev 22372)
+@@ -141,42 +141,6 @@
+ }       
+ 
+ 
+-/*******************************************************************
+- Close the low 3 fd's and open dev/null in their place.
+-********************************************************************/
+-static void close_low_fds(BOOL stderr_too)
+-{
+-#ifndef VALGRIND
+-	int fd;
+-	int i;
+-
+-	close(0);
+-	close(1); 
+-
+-	if (stderr_too)
+-		close(2);
+-
+-	/* try and use up these file descriptors, so silly
+-		library routines writing to stdout etc won't cause havoc */
+-	for (i=0;i<3;i++) {
+-		if (i == 2 && !stderr_too)
+-			continue;
+-
+-		fd = open("/dev/null",O_RDWR,0);
+-		if (fd < 0)
+-			fd = open("/dev/null",O_WRONLY,0);
+-		if (fd < 0) {
+-			DEBUG(0,("Can't open /dev/null\n"));
+-			return;
+-		}
+-		if (fd != i) {
+-			DEBUG(0,("Didn't get file descriptor %d\n",i));
+-			return;
+-		}
+-	}
+-#endif
+-}
+-
+ /**
+  Set a fd into blocking/nonblocking mode. Uses POSIX O_NONBLOCK if available,
+  else
+@@ -224,36 +188,6 @@
+ }
+ 
+ /**
+- Become a daemon, discarding the controlling terminal.
+-**/
+-
+-_PUBLIC_ void become_daemon(BOOL Fork)
+-{
+-	if (Fork) {
+-		if (fork()) {
+-			_exit(0);
+-		}
+-	}
+-
+-  /* detach from the terminal */
+-#ifdef HAVE_SETSID
+-	setsid();
+-#elif defined(TIOCNOTTY)
+-	{
+-		int i = open("/dev/tty", O_RDWR, 0);
+-		if (i != -1) {
+-			ioctl(i, (int) TIOCNOTTY, (char *)0);      
+-			close(i);
+-		}
+-	}
+-#endif /* HAVE_SETSID */
+-
+-	/* Close fd's 0,1,2. Needed if started by rsh */
+-	close_low_fds(False);  /* Don't close stderr, let the debug system
+-				  attach it to the logfile */
+-}
+-
+-/**
+  Get my own name, return in malloc'ed storage.
+ **/
+ 
+

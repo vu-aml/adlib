@@ -1,0 +1,100 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Apr 10 12:19:14 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3AGJD0I031563
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 10 Apr 2007 12:19:13 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 606AC163832
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 10 Apr 2007 16:18:50 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.9 required=3.8 tests=ALL_TRUSTED,AWL,BAYES_00,
+	RCVD_IN_DSBL autolearn=ham version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: from [127.0.0.1] (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 8A27C162AF5;
+	Tue, 10 Apr 2007 16:17:59 +0000 (GMT)
+From: simo <idra@samba.org>
+To: Volker.Lendecke@SerNet.DE
+In-Reply-To: <E1HbIyE-0000D7-Td@intern.SerNet.DE>
+References: <1176219757.2426.3.camel@localhost.localdomain>
+	<E1HbIWB-0002L6-GL@intern.SerNet.DE>
+	<1176220587.2426.8.camel@localhost.localdomain>
+	<E1HbIkQ-0002wo-IP@intern.SerNet.DE>
+	<1176221011.2426.12.camel@localhost.localdomain>
+	<E1HbIyE-0000D7-Td@intern.SerNet.DE>
+Content-Type: text/plain
+Organization: Samba Team
+Date: Tue, 10 Apr 2007 12:17:58 -0400
+Message-Id: <1176221878.2426.17.camel@localhost.localdomain>
+Mime-Version: 1.0
+X-Mailer: Evolution 2.8.1 
+Content-Transfer-Encoding: 7bit
+Cc: Samba Technical <samba-technical@samba.org>
+Subject: Re: wrt inotify problem
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 1967
+Lines: 45
+
+On Tue, 2007-04-10 at 18:14 +0200, Volker Lendecke wrote:
+> On Tue, Apr 10, 2007 at 12:03:31PM -0400, simo wrote:
+> > > Is there a specific errno that this gives?
+> > 
+> > Yes sorry, as pasted on IRC:
+> > <idra> vl, ioctl(28, FIONREAD, [0])                = -1 EACCES
+> > (Permission denied)
+> 
+> Ok, this is really broken. SELinux allows us to set up
+> everything necessary for inotify but then when something
+> happens gives us an access denied? Very weird. Trying to
+> find a fix.
+
+Yes I think this is what happens, I will have a fixed policy tomorrow
+hopefully.
+
+> Can you get me a full strace leading up to this error?
+
+This is the loop from one ioctl to the next, I can reproduce a full
+session strace if you need it.
+
+stat64("/etc/localtime", {st_mode=S_IFREG|0644, st_size=3519, ...}) = 0
+time(NULL)                              = 1176220085
+stat64("/etc/localtime", {st_mode=S_IFREG|0644, st_size=3519, ...}) = 0
+stat64("/etc/localtime", {st_mode=S_IFREG|0644, st_size=3519, ...}) = 0
+stat64("/etc/localtime", {st_mode=S_IFREG|0644, st_size=3519, ...}) = 0
+send(29, "<27>Apr 10 11:48:05 smbd[4071]: "..., 100, MSG_NOSIGNAL) = 100
+geteuid32()                             = 16777221
+write(15, "[2007/04/10 11:48:05, 0] smbd/no"..., 68) = 68
+time(NULL)                              = 1176220085
+stat64("/etc/localtime", {st_mode=S_IFREG|0644, st_size=3519, ...}) = 0
+stat64("/etc/localtime", {st_mode=S_IFREG|0644, st_size=3519, ...}) = 0
+stat64("/etc/localtime", {st_mode=S_IFREG|0644, st_size=3519, ...}) = 0
+send(29, "<27>Apr 10 11:48:05 smbd[4071]: "..., 58, MSG_NOSIGNAL) = 58
+geteuid32()                             = 16777221
+write(15, "  No data on inotify fd?!\n", 26) = 26
+gettimeofday({1176220085, 153495}, NULL) = 0
+select(29, [5 23 28], [], NULL, {60, 0}) = 2 (in [23 28], left {60, 0})
+ioctl(28, FIONREAD, [0])                = -1 EACCES (Permission denied)
+
+-- 
+Simo Sorce
+Samba Team GPL Compliance Officer
+email: idra@samba.org
+http://samba.org
+

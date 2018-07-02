@@ -1,0 +1,287 @@
+From perl6-all-return-82220-ktwarwic=speedy.uwaterloo.ca@perl.org  Fri Jun 22 01:20:37 2007
+Return-Path: <perl6-all-return-82220-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l5M5KYL9001736
+	for <ktwarwic@flax9.uwaterloo.ca>; Fri, 22 Jun 2007 01:20:35 -0400
+Received: (qmail 11844 invoked by uid 514); 22 Jun 2007 05:20:31 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 11839 invoked from network); 22 Jun 2007 05:20:31 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: unknown (x1.develooper.com: error in processing during lookup of andy@petdance.com)
+Mime-Version: 1.0 (Apple Message framework v752.3)
+Content-Transfer-Encoding: 7bit
+Message-Id: <8E8FD99A-5EB4-40DD-8677-D7C340EB7C76@petdance.com>
+Content-Type: text/plain; charset=US-ASCII; delsp=yes; format=flowed
+To: perl6-internals List <perl6-internals@perl.org>
+From: Andy Lester <andy@petdance.com>
+Subject: Summary of today's digging into t/compiler/pge/06-grammar.t
+Date: Fri, 22 Jun 2007 00:19:42 -0500
+X-Mailer: Apple Mail (2.752.3)
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME
+
+pmichaud and I figured today that the segfaulting in 06-grammar.t is  
+caused by optimization, with the --optimize flag.
+
+However, it's not all the fault of --optimize.  I've been working on  
+valgrind, and there's some invalid memory accessing going on.   
+There's a dump following. The key is in the call to test.'plan'(1).   
+If that line is removed, valgrind runs clean.  If it's in there, then  
+you get the dump as shown.  Note that this parrot is built WITHOUT -- 
+optimize, and we still get the valgrind failures.
+
+I hope this provides some clues.
+
+xoxo,
+Andy
+
+
+andy@uniqua[~/parrot]$ cat foo.t
+#!./parrot
+.sub main :main
+     load_bytecode 'Test/Builder.pir'
+
+     .local pmc test
+
+     test = new 'Test::Builder'
+     test.'plan'(1)
+.end
+
+# vi: ft=pir
+andy@uniqua[~/parrot]$ valgrind ./parrot foo.t
+==1002== Memcheck, a memory error detector.
+==1002== Copyright (C) 2002-2006, and GNU GPL'd, by Julian Seward et al.
+==1002== Using LibVEX rev 1658, a library for dynamic binary  
+translation.
+==1002== Copyright (C) 2004-2006, and GNU GPL'd, by OpenWorks LLP.
+==1002== Using valgrind-3.2.1, a dynamic binary instrumentation  
+framework.
+==1002== Copyright (C) 2000-2006, and GNU GPL'd, by Julian Seward et al.
+==1002== For more details, rerun with: -v
+==1002==
+==1002== Conditional jump or move depends on uninitialised value(s)
+==1002==    at 0x4E722BF: trace_mem_block (dod.c:765)
+==1002==    by 0x4E901CE: trace_system_stack (cpu_dep.c:110)
+==1002==    by 0x4E9018F: trace_system_areas (cpu_dep.c:94)
+==1002==    by 0x4E71904: Parrot_dod_trace_root (dod.c:303)
+==1002==    by 0x4E7194A: trace_active_PMCs (dod.c:324)
+==1002==    by 0x4E72724: Parrot_dod_ms_run (dod.c:972)
+==1002==    by 0x4E72827: Parrot_do_dod_run (dod.c:1022)
+==1002==    by 0x4E708BB: more_traceable_objects (smallobject.c:101)
+==1002==    by 0x4E7095E: gc_ms_get_free_object (smallobject.c:146)
+==1002==    by 0x4E6E881: get_free_buffer (headers.c:48)
+==1002==    by 0x4E6EEBC: new_string_header (headers.c:320)
+==1002==    by 0x4E5505C: string_make_direct (string.c:587)
+==1002==
+==1002== Conditional jump or move depends on uninitialised value(s)
+==1002==    at 0x4E722D0: trace_mem_block (dod.c:770)
+==1002==    by 0x4E901CE: trace_system_stack (cpu_dep.c:110)
+==1002==    by 0x4E9018F: trace_system_areas (cpu_dep.c:94)
+==1002==    by 0x4E71904: Parrot_dod_trace_root (dod.c:303)
+==1002==    by 0x4E7194A: trace_active_PMCs (dod.c:324)
+==1002==    by 0x4E72724: Parrot_dod_ms_run (dod.c:972)
+==1002==    by 0x4E72827: Parrot_do_dod_run (dod.c:1022)
+==1002==    by 0x4E708BB: more_traceable_objects (smallobject.c:101)
+==1002==    by 0x4E7095E: gc_ms_get_free_object (smallobject.c:146)
+==1002==    by 0x4E6E881: get_free_buffer (headers.c:48)
+==1002==    by 0x4E6EEBC: new_string_header (headers.c:320)
+==1002==    by 0x4E5505C: string_make_direct (string.c:587)
+==1002==
+==1002== Conditional jump or move depends on uninitialised value(s)
+==1002==    at 0x4E72304: trace_mem_block (dod.c:777)
+==1002==    by 0x4E901CE: trace_system_stack (cpu_dep.c:110)
+==1002==    by 0x4E9018F: trace_system_areas (cpu_dep.c:94)
+==1002==    by 0x4E71904: Parrot_dod_trace_root (dod.c:303)
+==1002==    by 0x4E7194A: trace_active_PMCs (dod.c:324)
+==1002==    by 0x4E72724: Parrot_dod_ms_run (dod.c:972)
+==1002==    by 0x4E72827: Parrot_do_dod_run (dod.c:1022)
+==1002==    by 0x4E708BB: more_traceable_objects (smallobject.c:101)
+==1002==    by 0x4E7095E: gc_ms_get_free_object (smallobject.c:146)
+==1002==    by 0x4E6E881: get_free_buffer (headers.c:48)
+==1002==    by 0x4E6EEBC: new_string_header (headers.c:320)
+==1002==    by 0x4E5505C: string_make_direct (string.c:587)
+==1002==
+==1002== Conditional jump or move depends on uninitialised value(s)
+==1002==    at 0x4E722DA: trace_mem_block (dod.c:770)
+==1002==    by 0x4E901CE: trace_system_stack (cpu_dep.c:110)
+==1002==    by 0x4E9018F: trace_system_areas (cpu_dep.c:94)
+==1002==    by 0x4E71904: Parrot_dod_trace_root (dod.c:303)
+==1002==    by 0x4E7194A: trace_active_PMCs (dod.c:324)
+==1002==    by 0x4E72724: Parrot_dod_ms_run (dod.c:972)
+==1002==    by 0x4E72827: Parrot_do_dod_run (dod.c:1022)
+==1002==    by 0x4E708BB: more_traceable_objects (smallobject.c:101)
+==1002==    by 0x4E7095E: gc_ms_get_free_object (smallobject.c:146)
+==1002==    by 0x4E6E881: get_free_buffer (headers.c:48)
+==1002==    by 0x4E6EEBC: new_string_header (headers.c:320)
+==1002==    by 0x4E5505C: string_make_direct (string.c:587)
+==1002==
+==1002== Conditional jump or move depends on uninitialised value(s)
+==1002==    at 0x4E7230E: trace_mem_block (dod.c:777)
+==1002==    by 0x4E901CE: trace_system_stack (cpu_dep.c:110)
+==1002==    by 0x4E9018F: trace_system_areas (cpu_dep.c:94)
+==1002==    by 0x4E71904: Parrot_dod_trace_root (dod.c:303)
+==1002==    by 0x4E7194A: trace_active_PMCs (dod.c:324)
+==1002==    by 0x4E72724: Parrot_dod_ms_run (dod.c:972)
+==1002==    by 0x4E72827: Parrot_do_dod_run (dod.c:1022)
+==1002==    by 0x4E708BB: more_traceable_objects (smallobject.c:101)
+==1002==    by 0x4E7095E: gc_ms_get_free_object (smallobject.c:146)
+==1002==    by 0x4E6E881: get_free_buffer (headers.c:48)
+==1002==    by 0x4E6EEBC: new_string_header (headers.c:320)
+==1002==    by 0x4E5505C: string_make_direct (string.c:587)
+==1002==
+==1002== Conditional jump or move depends on uninitialised value(s)
+==1002==    at 0x4E70767: contained_in_pool (smallobject.c:54)
+==1002==    by 0x4E6F171: is_buffer_ptr (headers.c:462)
+==1002==    by 0x4E7231C: trace_mem_block (dod.c:777)
+==1002==    by 0x4E901CE: trace_system_stack (cpu_dep.c:110)
+==1002==    by 0x4E9018F: trace_system_areas (cpu_dep.c:94)
+==1002==    by 0x4E71904: Parrot_dod_trace_root (dod.c:303)
+==1002==    by 0x4E7194A: trace_active_PMCs (dod.c:324)
+==1002==    by 0x4E72724: Parrot_dod_ms_run (dod.c:972)
+==1002==    by 0x4E72827: Parrot_do_dod_run (dod.c:1022)
+==1002==    by 0x4E708BB: more_traceable_objects (smallobject.c:101)
+==1002==    by 0x4E7095E: gc_ms_get_free_object (smallobject.c:146)
+==1002==    by 0x4E6E881: get_free_buffer (headers.c:48)
+==1002==
+==1002== Conditional jump or move depends on uninitialised value(s)
+==1002==    at 0x4E70780: contained_in_pool (smallobject.c:54)
+==1002==    by 0x4E6F171: is_buffer_ptr (headers.c:462)
+==1002==    by 0x4E7231C: trace_mem_block (dod.c:777)
+==1002==    by 0x4E901CE: trace_system_stack (cpu_dep.c:110)
+==1002==    by 0x4E9018F: trace_system_areas (cpu_dep.c:94)
+==1002==    by 0x4E71904: Parrot_dod_trace_root (dod.c:303)
+==1002==    by 0x4E7194A: trace_active_PMCs (dod.c:324)
+==1002==    by 0x4E72724: Parrot_dod_ms_run (dod.c:972)
+==1002==    by 0x4E72827: Parrot_do_dod_run (dod.c:1022)
+==1002==    by 0x4E708BB: more_traceable_objects (smallobject.c:101)
+==1002==    by 0x4E7095E: gc_ms_get_free_object (smallobject.c:146)
+==1002==    by 0x4E6E881: get_free_buffer (headers.c:48)
+==1002==
+==1002== Conditional jump or move depends on uninitialised value(s)
+==1002==    at 0x4E707A4: contained_in_pool (smallobject.c:54)
+==1002==    by 0x4E6F171: is_buffer_ptr (headers.c:462)
+==1002==    by 0x4E7231C: trace_mem_block (dod.c:777)
+==1002==    by 0x4E901CE: trace_system_stack (cpu_dep.c:110)
+==1002==    by 0x4E9018F: trace_system_areas (cpu_dep.c:94)
+==1002==    by 0x4E71904: Parrot_dod_trace_root (dod.c:303)
+==1002==    by 0x4E7194A: trace_active_PMCs (dod.c:324)
+==1002==    by 0x4E72724: Parrot_dod_ms_run (dod.c:972)
+==1002==    by 0x4E72827: Parrot_do_dod_run (dod.c:1022)
+==1002==    by 0x4E708BB: more_traceable_objects (smallobject.c:101)
+==1002==    by 0x4E7095E: gc_ms_get_free_object (smallobject.c:146)
+==1002==    by 0x4E6E881: get_free_buffer (headers.c:48)
+==1002==
+==1002== Use of uninitialised value of size 8
+==1002==    at 0x4E715A4: pobject_lives (dod.c:145)
+==1002==    by 0x4E7232D: trace_mem_block (dod.c:781)
+==1002==    by 0x4E901CE: trace_system_stack (cpu_dep.c:110)
+==1002==    by 0x4E9018F: trace_system_areas (cpu_dep.c:94)
+==1002==    by 0x4E71904: Parrot_dod_trace_root (dod.c:303)
+==1002==    by 0x4E7194A: trace_active_PMCs (dod.c:324)
+==1002==    by 0x4E72724: Parrot_dod_ms_run (dod.c:972)
+==1002==    by 0x4E72827: Parrot_do_dod_run (dod.c:1022)
+==1002==    by 0x4E708BB: more_traceable_objects (smallobject.c:101)
+==1002==    by 0x4E7095E: gc_ms_get_free_object (smallobject.c:146)
+==1002==    by 0x4E6E881: get_free_buffer (headers.c:48)
+==1002==    by 0x4E6EEBC: new_string_header (headers.c:320)
+==1002==
+==1002== Conditional jump or move depends on uninitialised value(s)
+==1002==    at 0x4E70767: contained_in_pool (smallobject.c:54)
+==1002==    by 0x4E6F1C4: is_pmc_ptr (headers.c:482)
+==1002==    by 0x4E722E8: trace_mem_block (dod.c:770)
+==1002==    by 0x4E901CE: trace_system_stack (cpu_dep.c:110)
+==1002==    by 0x4E9018F: trace_system_areas (cpu_dep.c:94)
+==1002==    by 0x4E71904: Parrot_dod_trace_root (dod.c:303)
+==1002==    by 0x4E7194A: trace_active_PMCs (dod.c:324)
+==1002==    by 0x4E72724: Parrot_dod_ms_run (dod.c:972)
+==1002==    by 0x4E72827: Parrot_do_dod_run (dod.c:1022)
+==1002==    by 0x4E708BB: more_traceable_objects (smallobject.c:101)
+==1002==    by 0x4E7095E: gc_ms_get_free_object (smallobject.c:146)
+==1002==    by 0x4E6E881: get_free_buffer (headers.c:48)
+==1002==
+==1002== Conditional jump or move depends on uninitialised value(s)
+==1002==    at 0x4E70780: contained_in_pool (smallobject.c:54)
+==1002==    by 0x4E6F1C4: is_pmc_ptr (headers.c:482)
+==1002==    by 0x4E722E8: trace_mem_block (dod.c:770)
+==1002==    by 0x4E901CE: trace_system_stack (cpu_dep.c:110)
+==1002==    by 0x4E9018F: trace_system_areas (cpu_dep.c:94)
+==1002==    by 0x4E71904: Parrot_dod_trace_root (dod.c:303)
+==1002==    by 0x4E7194A: trace_active_PMCs (dod.c:324)
+==1002==    by 0x4E72724: Parrot_dod_ms_run (dod.c:972)
+==1002==    by 0x4E72827: Parrot_do_dod_run (dod.c:1022)
+==1002==    by 0x4E708BB: more_traceable_objects (smallobject.c:101)
+==1002==    by 0x4E7095E: gc_ms_get_free_object (smallobject.c:146)
+==1002==    by 0x4E6E881: get_free_buffer (headers.c:48)
+==1002==
+==1002== Conditional jump or move depends on uninitialised value(s)
+==1002==    at 0x4E707A4: contained_in_pool (smallobject.c:54)
+==1002==    by 0x4E6F1C4: is_pmc_ptr (headers.c:482)
+==1002==    by 0x4E722E8: trace_mem_block (dod.c:770)
+==1002==    by 0x4E901CE: trace_system_stack (cpu_dep.c:110)
+==1002==    by 0x4E9018F: trace_system_areas (cpu_dep.c:94)
+==1002==    by 0x4E71904: Parrot_dod_trace_root (dod.c:303)
+==1002==    by 0x4E7194A: trace_active_PMCs (dod.c:324)
+==1002==    by 0x4E72724: Parrot_dod_ms_run (dod.c:972)
+==1002==    by 0x4E72827: Parrot_do_dod_run (dod.c:1022)
+==1002==    by 0x4E708BB: more_traceable_objects (smallobject.c:101)
+==1002==    by 0x4E7095E: gc_ms_get_free_object (smallobject.c:146)
+==1002==    by 0x4E6E881: get_free_buffer (headers.c:48)
+==1002==
+==1002== Use of uninitialised value of size 8
+==1002==    at 0x4E715A4: pobject_lives (dod.c:145)
+==1002==    by 0x4E722F9: trace_mem_block (dod.c:775)
+==1002==    by 0x4E901CE: trace_system_stack (cpu_dep.c:110)
+==1002==    by 0x4E9018F: trace_system_areas (cpu_dep.c:94)
+==1002==    by 0x4E71904: Parrot_dod_trace_root (dod.c:303)
+==1002==    by 0x4E7194A: trace_active_PMCs (dod.c:324)
+==1002==    by 0x4E72724: Parrot_dod_ms_run (dod.c:972)
+==1002==    by 0x4E72827: Parrot_do_dod_run (dod.c:1022)
+==1002==    by 0x4E708BB: more_traceable_objects (smallobject.c:101)
+==1002==    by 0x4E7095E: gc_ms_get_free_object (smallobject.c:146)
+==1002==    by 0x4E6E881: get_free_buffer (headers.c:48)
+==1002==    by 0x4E6EEBC: new_string_header (headers.c:320)
+1..1
+==1002==
+==1002== ERROR SUMMARY: 105 errors from 13 contexts (suppressed: 5  
+from 1)
+==1002== malloc/free: in use at exit: 4,281,119 bytes in 3,132 blocks.
+==1002== malloc/free: 15,102 allocs, 11,970 frees, 5,611,953 bytes  
+allocated.
+==1002== For counts of detected errors, rerun with: -v
+==1002== searching for pointers to 3,132 not-freed blocks.
+==1002== checked 26,105,784 bytes.
+==1002==
+==1002== LEAK SUMMARY:
+==1002==    definitely lost: 10,981 bytes in 641 blocks.
+==1002==      possibly lost: 576 bytes in 2 blocks.
+==1002==    still reachable: 4,269,562 bytes in 2,489 blocks.
+==1002==         suppressed: 0 bytes in 0 blocks.
+==1002== Use --leak-check=full to see details of leaked memory.
+
+
+
+--
+Andy Lester => andy@petdance.com => www.petdance.com => AIM:petdance
+
+
+
+

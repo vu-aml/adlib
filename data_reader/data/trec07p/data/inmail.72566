@@ -1,0 +1,261 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Jul  3 04:06:31 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l6386TL9025901
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 3 Jul 2007 04:06:29 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 657C3162AFD
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue,  3 Jul 2007 08:06:25 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.6 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,SUBJECT_FUZZY_TION autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 501)
+	id 73F64162ACA; Tue,  3 Jul 2007 08:06:00 +0000 (GMT)
+To: samba-cvs@samba.org
+From: abartlet@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070703080600.73F64162ACA@lists.samba.org>
+Date: Tue,  3 Jul 2007 08:06:00 +0000 (GMT)
+Subject: svn commit: samba r23680 - in branches/SAMBA_4_0/source: auth
+	auth/ntlmssp param rpc_server/netlogon scripting/ejs selftest
+	smb_server/smb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: abartlet
+Date: 2007-07-03 08:05:55 +0000 (Tue, 03 Jul 2007)
+New Revision: 23680
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23680
+
+Log:
+Make it easier to setup a domain member server - the 'server role'
+will now control the auth methods, but an override is still available,
+ex:
+
+auth methods:domain controller = <methods>
+
+Andrew Bartlett
+
+Modified:
+   branches/SAMBA_4_0/source/auth/auth.c
+   branches/SAMBA_4_0/source/auth/auth_simple.c
+   branches/SAMBA_4_0/source/auth/ntlmssp/ntlmssp_server.c
+   branches/SAMBA_4_0/source/param/loadparm.c
+   branches/SAMBA_4_0/source/rpc_server/netlogon/dcerpc_netlogon.c
+   branches/SAMBA_4_0/source/scripting/ejs/smbcalls_auth.c
+   branches/SAMBA_4_0/source/selftest/Samba4.pm
+   branches/SAMBA_4_0/source/smb_server/smb/negprot.c
+   branches/SAMBA_4_0/source/smb_server/smb/sesssetup.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/auth/auth.c
+===================================================================
+--- branches/SAMBA_4_0/source/auth/auth.c	2007-07-03 08:01:34 UTC (rev 23679)
++++ branches/SAMBA_4_0/source/auth/auth.c	2007-07-03 08:05:55 UTC (rev 23680)
+@@ -348,11 +348,12 @@
+ 
+ /***************************************************************************
+  Make a auth_info struct for the auth subsystem
++ - Allow the caller to specify the methods to use
+ ***************************************************************************/
+-NTSTATUS auth_context_create(TALLOC_CTX *mem_ctx, const char **methods, 
+-			     struct event_context *ev,
+-			     struct messaging_context *msg,
+-			     struct auth_context **auth_ctx)
++NTSTATUS auth_context_create_methods(TALLOC_CTX *mem_ctx, const char **methods, 
++				     struct event_context *ev,
++				     struct messaging_context *msg,
++				     struct auth_context **auth_ctx)
+ {
+ 	int i;
+ 	struct auth_context *ctx;
+@@ -406,7 +407,31 @@
+ 
+ 	return NT_STATUS_OK;
+ }
++/***************************************************************************
++ Make a auth_info struct for the auth subsystem
++ - Uses default auth_methods, depending on server role and smb.conf settings
++***************************************************************************/
++NTSTATUS auth_context_create(TALLOC_CTX *mem_ctx, 
++			     struct event_context *ev,
++			     struct messaging_context *msg,
++			     struct auth_context **auth_ctx)
++{
++	const char **auth_methods = NULL;
++	switch (lp_server_role()) {
++	case ROLE_STANDALONE:
++		auth_methods = lp_parm_string_list(-1, "auth methods", "standalone", NULL);
++		break;
++	case ROLE_DOMAIN_MEMBER:
++		auth_methods = lp_parm_string_list(-1, "auth methods", "member server", NULL);
++		break;
++	case ROLE_DOMAIN_CONTROLLER:
++		auth_methods = lp_parm_string_list(-1, "auth methods", "domain controller", NULL);
++		break;
++	}
++	return auth_context_create_methods(mem_ctx, auth_methods, ev, msg, auth_ctx);
++}
+ 
++
+ /* the list of currently registered AUTH backends */
+ static struct auth_backend {
+ 	const struct auth_operations *ops;
+
+Modified: branches/SAMBA_4_0/source/auth/auth_simple.c
+===================================================================
+--- branches/SAMBA_4_0/source/auth/auth_simple.c	2007-07-03 08:01:34 UTC (rev 23679)
++++ branches/SAMBA_4_0/source/auth/auth_simple.c	2007-07-03 08:05:55 UTC (rev 23680)
+@@ -48,7 +48,7 @@
+ 		return NT_STATUS_NO_MEMORY;
+ 	}
+ 
+-	nt_status = auth_context_create(tmp_ctx, lp_auth_methods(),
++	nt_status = auth_context_create(tmp_ctx, 
+ 					ev, msg,
+ 					&auth_context);
+ 	if (!NT_STATUS_IS_OK(nt_status)) {
+
+Modified: branches/SAMBA_4_0/source/auth/ntlmssp/ntlmssp_server.c
+===================================================================
+--- branches/SAMBA_4_0/source/auth/ntlmssp/ntlmssp_server.c	2007-07-03 08:01:34 UTC (rev 23679)
++++ branches/SAMBA_4_0/source/auth/ntlmssp/ntlmssp_server.c	2007-07-03 08:05:55 UTC (rev 23680)
+@@ -835,7 +835,7 @@
+ 		gensec_ntlmssp_state->neg_flags |= NTLMSSP_NEGOTIATE_SEAL;
+ 	}
+ 
+-	nt_status = auth_context_create(gensec_ntlmssp_state, lp_auth_methods(), 
++	nt_status = auth_context_create(gensec_ntlmssp_state, 
+ 					gensec_security->event_ctx,
+ 					gensec_security->msg_ctx,
+ 					&gensec_ntlmssp_state->auth_context);
+
+Modified: branches/SAMBA_4_0/source/param/loadparm.c
+===================================================================
+--- branches/SAMBA_4_0/source/param/loadparm.c	2007-07-03 08:01:34 UTC (rev 23679)
++++ branches/SAMBA_4_0/source/param/loadparm.c	2007-07-03 08:05:55 UTC (rev 23680)
+@@ -398,7 +398,6 @@
+ 	{"Security Options", P_SEP, P_SEPARATOR},
+ 	
+ 	{"security", P_ENUM, P_GLOBAL, &Globals.security, NULL, enum_security, FLAG_BASIC | FLAG_ADVANCED | FLAG_WIZARD | FLAG_DEVELOPER},
+-	{"auth methods", P_LIST, P_GLOBAL, &Globals.AuthMethods, NULL, NULL, FLAG_BASIC | FLAG_ADVANCED | FLAG_WIZARD | FLAG_DEVELOPER},
+ 	{"encrypt passwords", P_BOOL, P_GLOBAL, &Globals.bEncryptPasswords, NULL, NULL, FLAG_BASIC | FLAG_ADVANCED | FLAG_WIZARD | FLAG_DEVELOPER},
+ 	{"null passwords", P_BOOL, P_GLOBAL, &Globals.bNullPasswords, NULL, NULL, FLAG_ADVANCED | FLAG_DEVELOPER},
+ 	{"obey pam restrictions", P_BOOL, P_GLOBAL, &Globals.bObeyPamRestrictions, NULL, NULL, FLAG_ADVANCED | FLAG_DEVELOPER},
+@@ -609,7 +608,9 @@
+ 	do_parameter("dcerpc endpoint servers", "epmapper srvsvc wkssvc rpcecho samr netlogon lsarpc spoolss drsuapi winreg dssetup unixinfo", NULL);
+ 	do_parameter("server services", "smb rpc nbt wrepl ldap cldap web kdc drepl winbind", NULL);
+ 	do_parameter("ntptr providor", "simple_ldb", NULL);
+-	do_parameter("auth methods", "anonymous sam_ignoredomain", NULL);
++	do_parameter("auth methods:domain controller", "anonymous sam_ignoredomain", NULL);
++	do_parameter("auth methods:member server", "anonymous sam winbind", NULL);
++	do_parameter("auth methods:standalone", "anonymous sam_ignoredomain", NULL);
+ 	do_parameter("private dir", dyn_PRIVATE_DIR, NULL);
+ 	do_parameter("sam database", "sam.ldb", NULL);
+ 	do_parameter("secrets database", "secrets.ldb", NULL);
+
+Modified: branches/SAMBA_4_0/source/rpc_server/netlogon/dcerpc_netlogon.c
+===================================================================
+--- branches/SAMBA_4_0/source/rpc_server/netlogon/dcerpc_netlogon.c	2007-07-03 08:01:34 UTC (rev 23679)
++++ branches/SAMBA_4_0/source/rpc_server/netlogon/dcerpc_netlogon.c	2007-07-03 08:05:55 UTC (rev 23680)
+@@ -431,7 +431,7 @@
+ 		}
+ 
+ 		/* TODO: we need to deny anonymous access here */
+-		nt_status = auth_context_create(mem_ctx, lp_auth_methods(),
++		nt_status = auth_context_create(mem_ctx, 
+ 						dce_call->event_ctx, dce_call->msg_ctx,
+ 						&auth_context);
+ 		NT_STATUS_NOT_OK_RETURN(nt_status);
+@@ -457,7 +457,7 @@
+ 	case 6:
+ 
+ 		/* TODO: we need to deny anonymous access here */
+-		nt_status = auth_context_create(mem_ctx, lp_auth_methods(),
++		nt_status = auth_context_create(mem_ctx, 
+ 						dce_call->event_ctx, dce_call->msg_ctx,
+ 						&auth_context);
+ 		NT_STATUS_NOT_OK_RETURN(nt_status);
+
+Modified: branches/SAMBA_4_0/source/scripting/ejs/smbcalls_auth.c
+===================================================================
+--- branches/SAMBA_4_0/source/scripting/ejs/smbcalls_auth.c	2007-07-03 08:01:34 UTC (rev 23679)
++++ branches/SAMBA_4_0/source/scripting/ejs/smbcalls_auth.c	2007-07-03 08:05:55 UTC (rev 23680)
+@@ -56,7 +56,7 @@
+ 		msg = messaging_client_init(tmp_ctx, ev);
+ 	}
+ 
+-	nt_status = auth_context_create(tmp_ctx, auth_types, ev, msg, &auth_context);
++	nt_status = auth_context_create_methods(tmp_ctx, auth_types, ev, msg, &auth_context);
+ 	if (!NT_STATUS_IS_OK(nt_status)) {
+ 		mprSetPropertyValue(auth, "result", mprCreateBoolVar(False));
+ 		mprSetPropertyValue(auth, "report", mprString("Auth System Failure"));
+
+Modified: branches/SAMBA_4_0/source/selftest/Samba4.pm
+===================================================================
+--- branches/SAMBA_4_0/source/selftest/Samba4.pm	2007-07-03 08:01:34 UTC (rev 23679)
++++ branches/SAMBA_4_0/source/selftest/Samba4.pm	2007-07-03 08:05:55 UTC (rev 23680)
+@@ -276,8 +276,6 @@
+ 	mkdir($_, 0777) foreach ($privatedir, $etcdir, $piddir, $ncalrpcdir, $lockdir, 
+ 		$tmpdir);
+ 
+-	my $auth_methods = "anonymous sam_ignoredomain";
+-	$auth_methods = "anonymous sam winbind" if $server_role eq "member server";
+ 
+ 	my $localdomain = $domain;
+ 	$localdomain = $netbiosname if $server_role eq "member server";
+@@ -304,7 +302,6 @@
+ 	panic action = $srcdir/script/gdb_backtrace \%PID% \%PROG%
+ 	wins support = yes
+ 	server role = $server_role
+-	auth methods = $auth_methods
+ 	max xmit = 32K
+ 	server max protocol = SMB2
+ 	notify:inotify = false
+
+Modified: branches/SAMBA_4_0/source/smb_server/smb/negprot.c
+===================================================================
+--- branches/SAMBA_4_0/source/smb_server/smb/negprot.c	2007-07-03 08:01:34 UTC (rev 23679)
++++ branches/SAMBA_4_0/source/smb_server/smb/negprot.c	2007-07-03 08:05:55 UTC (rev 23680)
+@@ -44,7 +44,7 @@
+ 
+ 	DEBUG(10, ("get challenge: creating negprot_global_auth_context\n"));
+ 
+-	nt_status = auth_context_create(smb_conn, lp_auth_methods(), 
++	nt_status = auth_context_create(smb_conn, 
+ 					smb_conn->connection->event.ctx,
+ 					smb_conn->connection->msg_ctx,
+ 					&smb_conn->negotiate.auth_context);
+
+Modified: branches/SAMBA_4_0/source/smb_server/smb/sesssetup.c
+===================================================================
+--- branches/SAMBA_4_0/source/smb_server/smb/sesssetup.c	2007-07-03 08:01:34 UTC (rev 23679)
++++ branches/SAMBA_4_0/source/smb_server/smb/sesssetup.c	2007-07-03 08:05:55 UTC (rev 23680)
+@@ -243,7 +243,7 @@
+ 		}
+ 
+ 		/* TODO: should we use just "anonymous" here? */
+-		status = auth_context_create(req, lp_auth_methods(), 
++		status = auth_context_create(req, 
+ 					     req->smb_conn->connection->event.ctx,
+ 					     req->smb_conn->connection->msg_ctx,
+ 					     &auth_context);
+

@@ -1,0 +1,200 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat Jun 16 13:14:06 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5GHE5L9017710
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 16 Jun 2007 13:14:05 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 7E48E163867
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 16 Jun 2007 17:14:04 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.4 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 82181162AD0; Sat, 16 Jun 2007 17:13:43 +0000 (GMT)
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070616171343.82181162AD0@lists.samba.org>
+Date: Sat, 16 Jun 2007 17:13:43 +0000 (GMT)
+Subject: svn commit: samba r23519 - in branches/SAMBA_4_0/source/libcli: .
+	raw
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: tridge
+Date: 2007-06-16 17:13:42 +0000 (Sat, 16 Jun 2007)
+New Revision: 23519
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23519
+
+Log:
+
+added libcli code for fetching shadow copy information
+
+Added:
+   branches/SAMBA_4_0/source/libcli/raw/rawshadow.c
+Modified:
+   branches/SAMBA_4_0/source/libcli/config.mk
+   branches/SAMBA_4_0/source/libcli/raw/interfaces.h
+   branches/SAMBA_4_0/source/libcli/raw/rawrequest.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/libcli/config.mk
+===================================================================
+--- branches/SAMBA_4_0/source/libcli/config.mk	2007-06-16 11:48:11 UTC (rev 23518)
++++ branches/SAMBA_4_0/source/libcli/config.mk	2007-06-16 17:13:42 UTC (rev 23519)
+@@ -147,6 +147,7 @@
+ 		raw/rawioctl.o \
+ 		raw/rawacl.o \
+ 		raw/rawdate.o \
+-		raw/rawlpq.o
++		raw/rawlpq.o \
++		raw/rawshadow.o
+ 
+ include smb2/config.mk
+
+Modified: branches/SAMBA_4_0/source/libcli/raw/interfaces.h
+===================================================================
+--- branches/SAMBA_4_0/source/libcli/raw/interfaces.h	2007-06-16 11:48:11 UTC (rev 23518)
++++ branches/SAMBA_4_0/source/libcli/raw/interfaces.h	2007-06-16 17:13:42 UTC (rev 23519)
+@@ -2632,4 +2632,19 @@
+ 	} out;
+ };
+ 
++/*
++  struct for shadow copy volumes
++ */
++struct smb_shadow_copy {
++	struct {
++		union smb_handle file;
++		uint32_t max_data;
++	} in;
++	struct {
++		uint32_t num_volumes;
++		uint32_t num_names;
++		const char **names;
++	} out;
++};
++
+ #endif /* __LIBCLI_RAW_INTERFACES_H__ */
+
+Modified: branches/SAMBA_4_0/source/libcli/raw/rawrequest.c
+===================================================================
+--- branches/SAMBA_4_0/source/libcli/raw/rawrequest.c	2007-06-16 11:48:11 UTC (rev 23518)
++++ branches/SAMBA_4_0/source/libcli/raw/rawrequest.c	2007-06-16 17:13:42 UTC (rev 23519)
+@@ -737,9 +737,9 @@
+   on failure zero is returned and *dest is set to NULL, otherwise the number
+   of bytes consumed in the blob is returned
+ */
+-static size_t smbcli_blob_pull_ucs2(TALLOC_CTX* mem_ctx,
+-				    const DATA_BLOB *blob, const char **dest, 
+-				    const uint8_t *src, int byte_len, uint_t flags)
++size_t smbcli_blob_pull_ucs2(TALLOC_CTX* mem_ctx,
++			     const DATA_BLOB *blob, const char **dest, 
++			     const uint8_t *src, int byte_len, uint_t flags)
+ {
+ 	int src_len, src_len2, alignment=0;
+ 	ssize_t ret;
+
+Added: branches/SAMBA_4_0/source/libcli/raw/rawshadow.c
+===================================================================
+--- branches/SAMBA_4_0/source/libcli/raw/rawshadow.c	2007-06-16 11:48:11 UTC (rev 23518)
++++ branches/SAMBA_4_0/source/libcli/raw/rawshadow.c	2007-06-16 17:13:42 UTC (rev 23519)
+@@ -0,0 +1,79 @@
++/* 
++   Unix SMB/CIFS implementation.
++
++   shadow copy file operations
++
++   Copyright (C) Andrew Tridgell 2007
++   
++   This program is free software; you can redistribute it and/or modify
++   it under the terms of the GNU General Public License as published by
++   the Free Software Foundation; either version 2 of the License, or
++   (at your option) any later version.
++   
++   This program is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++   GNU General Public License for more details.
++   
++   You should have received a copy of the GNU General Public License
++   along with this program; if not, write to the Free Software
++   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
++*/
++
++#include "includes.h"
++#include "libcli/raw/libcliraw.h"
++#include "libcli/raw/ioctl.h"
++
++/* 
++   get shadow volume data
++*/
++_PUBLIC_ NTSTATUS smb_raw_shadow_data(struct smbcli_tree *tree, 
++				      TALLOC_CTX *mem_ctx, struct smb_shadow_copy *info)
++{
++	union smb_ioctl nt;
++	NTSTATUS status;
++	DATA_BLOB blob;
++	uint32_t dlength;
++	int i;
++	uint32_t ofs;
++
++	nt.ntioctl.level        = RAW_IOCTL_NTIOCTL;
++	nt.ntioctl.in.function  = FSCTL_GET_SHADOW_COPY_DATA;
++	nt.ntioctl.in.file.fnum = info->in.file.fnum;
++	nt.ntioctl.in.fsctl     = True;
++	nt.ntioctl.in.filter    = 0;
++	nt.ntioctl.in.max_data  = info->in.max_data;
++	nt.ntioctl.in.blob      = data_blob(NULL, 0);
++
++	status = smb_raw_ioctl(tree, mem_ctx, &nt);
++	
++	blob = nt.ntioctl.out.blob;
++
++	if (blob.length < 12) {
++		return NT_STATUS_INVALID_NETWORK_RESPONSE;
++	}
++	
++	info->out.num_volumes = IVAL(blob.data, 0);
++	info->out.num_names   = IVAL(blob.data, 4);
++	dlength               = IVAL(blob.data, 8);
++	if (dlength > blob.length - 12) {
++		return NT_STATUS_INVALID_NETWORK_RESPONSE;
++	}
++
++	info->out.names = talloc_array(mem_ctx, const char *, info->out.num_names);
++	NT_STATUS_HAVE_NO_MEMORY(info->out.names);
++
++	ofs = 12;
++	for (i=0;i<info->out.num_names;i++) {
++		size_t len;
++		len = smbcli_blob_pull_ucs2(info->out.names, 
++				      &blob, &info->out.names[i],
++				      blob.data+ofs, -1, STR_TERMINATE);
++		if (len == 0) {
++			return NT_STATUS_INVALID_NETWORK_RESPONSE;
++		}
++		ofs += len;
++	}
++	
++	return status;
++}
+

@@ -1,0 +1,83 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Jun  7 16:13:42 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l57KDfhB006506
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 7 Jun 2007 16:13:41 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 6163D162C26
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu,  7 Jun 2007 20:13:35 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1017)
+	id A653D162AEC; Thu,  7 Jun 2007 20:13:03 +0000 (GMT)
+To: samba-cvs@samba.org
+From: obnox@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070607201303.A653D162AEC@lists.samba.org>
+Date: Thu,  7 Jun 2007 20:13:03 +0000 (GMT)
+Subject: svn commit: samba r23378 - in
+	branches/SAMBA_3_0_26/source/rpc_server: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: obnox
+Date: 2007-06-07 20:13:02 +0000 (Thu, 07 Jun 2007)
+New Revision: 23378
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23378
+
+Log:
+
+Fix the RPC_ANONYMOUS_AUTH_TYPE in rpc_server/srv_pipe.c:api_pipe_bind_req.
+This had the effect of not being able to set privileges via (e.g.) net rpc
+rights.
+
+Michael
+
+
+Modified:
+   branches/SAMBA_3_0_26/source/rpc_server/srv_pipe.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0_26/source/rpc_server/srv_pipe.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/rpc_server/srv_pipe.c	2007-06-07 13:35:39 UTC (rev 23377)
++++ branches/SAMBA_3_0_26/source/rpc_server/srv_pipe.c	2007-06-07 20:13:02 UTC (rev 23378)
+@@ -1632,11 +1632,18 @@
+ 
+ 		case RPC_ANONYMOUS_AUTH_TYPE:
+ 			/* Unauthenticated bind request. */
++			/* Get the authenticated pipe user from current_user */
++			if (!copy_current_user(&p->pipe_user, &current_user)) {
++				DEBUG(10, ("Could not copy current user\n"));
++				goto err_exit;
++			}
+ 			/* We're finished - no more packets. */
+ 			p->auth.auth_type = PIPE_AUTH_TYPE_NONE;
+ 			/* We must set the pipe auth_level here also. */
+ 			p->auth.auth_level = PIPE_AUTH_LEVEL_NONE;
+ 			p->pipe_bound = True;
++			/* The session key was initialized from the SMB
++			 * session in make_internal_rpc_pipe_p */
+ 			break;
+ 
+ 		default:
+

@@ -1,0 +1,384 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun Apr 15 12:13:58 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3FGDw0I027036
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 15 Apr 2007 12:13:58 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 69E2B162BCF
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 15 Apr 2007 16:13:34 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 620)
+	id 4AB9B162AD7; Sun, 15 Apr 2007 16:13:07 +0000 (GMT)
+To: samba-cvs@samba.org
+From: metze@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070415161307.4AB9B162AD7@lists.samba.org>
+Date: Sun, 15 Apr 2007 16:13:07 +0000 (GMT)
+Subject: svn commit: samba r22216 - in branches/SAMBA_4_0/source:
+	lib/replace lib/replace/test torture/local
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 8329
+Lines: 341
+
+Author: metze
+Date: 2007-04-15 16:13:06 +0000 (Sun, 15 Apr 2007)
+New Revision: 22216
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22216
+
+Log:
+move strptime testsuite into it's own file
+so we can include it for the configure test
+
+as it seems that strptime() is really broken on some hosts
+in the build farm, re should use the replacement code
+when we detect this in the configure test
+
+metze
+Added:
+   branches/SAMBA_4_0/source/lib/replace/test/strptime.c
+Modified:
+   branches/SAMBA_4_0/source/lib/replace/strptime.m4
+   branches/SAMBA_4_0/source/lib/replace/test/testsuite.c
+   branches/SAMBA_4_0/source/torture/local/config.mk
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/lib/replace/strptime.m4
+===================================================================
+--- branches/SAMBA_4_0/source/lib/replace/strptime.m4	2007-04-14 09:14:40 UTC (rev 22215)
++++ branches/SAMBA_4_0/source/lib/replace/strptime.m4	2007-04-15 16:13:06 UTC (rev 22216)
+@@ -1,16 +1,8 @@
+ AC_CACHE_CHECK([whether strptime is available and works],libreplace_cv_STRPTIME_OK,[
+ 	AC_TRY_RUN([
+-		#include <stdio.h>
+-		#include <stdlib.h>
+-		#include <time.h>
+-		int main (void) {
+-		const char *s = "20061004023546Z";
+-		char *ret;
+-		struct tm t;
+-		ret = strptime(s, "%Y%m%d%H%M%S", &t);
+-		if ( ret == NULL ) return 1;
+-		return 0;
+-		}],
++		#define LIBREPLACE_CONFIGURE_TEST_STRPTIME
++		#include "$libreplacedir/test/strptime.c"
++		],
+ 		[libreplace_cv_STRPTIME_OK=yes],
+ 		[libreplace_cv_STRPTIME_OK=no],
+ 		[libreplace_cv_STRPTIME_OK="assuming not"])
+
+Added: branches/SAMBA_4_0/source/lib/replace/test/strptime.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/replace/test/strptime.c	2007-04-14 09:14:40 UTC (rev 22215)
++++ branches/SAMBA_4_0/source/lib/replace/test/strptime.c	2007-04-15 16:13:06 UTC (rev 22216)
+@@ -0,0 +1,152 @@
++
++#ifdef LIBREPLACE_CONFIGURE_TEST_STRPTIME
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <time.h>
++
++#define true 1
++#define false 0
++
++/* make printf a no-op */
++#define printf if(0) printf
++
++#else /* LIBREPLACE_CONFIGURE_TEST_STRPTIME */
++
++#include "replace.h"
++#include "system/time.h"
++
++#endif /* LIBREPLACE_CONFIGURE_TEST_STRPTIME */
++
++int libreplace_test_strptime(void)
++{
++	const char *s = "20070414101546Z";
++	char *ret;
++	struct tm t, t2;
++
++	printf("test: strptime\n");
++
++	ret = strptime(s, "%Y%m%d%H%M%S", &t);
++	if ( ret == NULL ) {
++		printf("failure: strptime [\n"
++		       "returned NULL\n"
++		       "]\n");
++		return false;
++	}
++
++	if ( *ret != 'Z' ) {
++		printf("failure: strptime [\n"
++		       "ret doesn't point to 'Z'\n"
++		       "]\n");
++		return false;
++	}
++
++	ret = strptime(s, "%Y%m%d%H%M%SZ", &t2);
++	if ( ret == NULL ) {
++		printf("failure: strptime [\n"
++		       "returned NULL with Z\n"
++		       "]\n");
++		return false;
++	}
++
++	if ( *ret != '\0' ) {
++		printf("failure: strptime [\n"
++		       "ret doesn't point to '\\0'\n"
++		       "]\n");
++		return false;
++	}
++
++	if (memcmp(&t, &t2, sizeof(t)) == 0) {
++		printf("failure: strptime [\n"
++		       "result differs if the format string has a 'Z' at the end\n"
++		       "]\n");
++		return false;
++	}
++
++	if (t.tm_sec != 46) {
++		printf("failure: strptime [\n"
++		       "tm_sec: expected: 46, got: %d\n"
++		       "]\n",
++		       t.tm_sec);
++		return false;
++	}
++
++	if (t.tm_min != 15) {
++		printf("failure: strptime [\n"
++		       "tm_min: expected: 15, got: %d\n"
++		       "]\n",
++		       t.tm_min);
++		return false;
++	}
++
++	if (t.tm_hour != 10) {
++		printf("failure: strptime [\n"
++		       "tm_hour: expected: 10, got: %d\n"
++		       "]\n",
++		       t.tm_hour);
++		return false;
++	}
++
++	if (t.tm_mday != 14) {
++		printf("failure: strptime [\n"
++		       "tm_mday: expected: 14, got: %d\n"
++		       "]\n",
++		       t.tm_mday);
++		return false;
++	}
++
++	if (t.tm_mon != 3) {
++		printf("failure: strptime [\n"
++		       "tm_mon: expected: 3, got: %d\n"
++		       "]\n",
++		       t.tm_mon);
++		return false;
++	}
++
++	if (t.tm_year != 107) {
++		printf("failure: strptime [\n"
++		       "tm_year: expected: 107, got: %d\n"
++		       "]\n",
++		       t.tm_year);
++		return false;
++	}
++
++	if (t.tm_wday != 6) { /* saturday */
++		printf("failure: strptime [\n"
++		       "tm_wday: expected: 6, got: %d\n"
++		       "]\n",
++		       t.tm_wday);
++		return false;
++	}
++
++	if (t.tm_yday != 103) {
++		printf("failure: strptime [\n"
++		       "tm_yday: expected: 103, got: %d\n"
++		       "]\n",
++		       t.tm_yday);
++		return false;
++	}
++
++	/* we don't test this as it depends on the host configuration
++	if (t.tm_isdst != 0) {
++		printf("failure: strptime [\n"
++		       "tm_isdst: expected: 0, got: %d\n"
++		       "]\n",
++		       t.tm_isdst);
++		return false;
++	}*/
++
++	printf("success: strptime\n");
++
++	return true;
++}
++
++#ifdef LIBREPLACE_CONFIGURE_TEST_STRPTIME
++int main (void)
++{
++	int ret;
++	ret = libreplace_test_strptime();
++	if (ret == false) return 1;
++	return 0;
++}
++#endif
+
+Modified: branches/SAMBA_4_0/source/lib/replace/test/testsuite.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/replace/test/testsuite.c	2007-04-14 09:14:40 UTC (rev 22215)
++++ branches/SAMBA_4_0/source/lib/replace/test/testsuite.c	2007-04-15 16:13:06 UTC (rev 22216)
+@@ -606,113 +606,11 @@
+ 	return true;
+ }
+ 
++extern int libreplace_test_strptime(void);
++
+ static int test_strptime(void)
+ {
+-	const char *s = "20070414101546Z";
+-	char *ret;
+-	struct tm t, t2;
+-
+-	printf("test: strptime\n");
+-
+-	ret = strptime(s, "%Y%m%d%H%M%S", &t);
+-	if ( ret == NULL ) {
+-		printf("failure: strptime [\n"
+-		       "returned NULL\n"
+-		       "]\n");
+-		return false;
+-	}
+-
+-	ret = strptime(s, "%Y%m%d%H%M%SZ", &t2);
+-	if ( ret == NULL ) {
+-		printf("failure: strptime [\n"
+-		       "returned NULL with Z\n"
+-		       "]\n");
+-		return false;
+-	}
+-
+-	if (memcmp(&t, &t2, sizeof(t)) == 0) {
+-		printf("failure: strptime [\n"
+-		       "result differs if the format string has a 'Z' at the end\n"
+-		       "]\n");
+-		return false;
+-	}
+-
+-	if (t.tm_sec != 46) {
+-		printf("failure: strptime [\n"
+-		       "tm_sec: expected: 46, got: %d\n"
+-		       "]\n",
+-		       t.tm_sec);
+-		return false;
+-	}
+-
+-	if (t.tm_min != 15) {
+-		printf("failure: strptime [\n"
+-		       "tm_min: expected: 15, got: %d\n"
+-		       "]\n",
+-		       t.tm_min);
+-		return false;
+-	}
+-
+-	if (t.tm_hour != 10) {
+-		printf("failure: strptime [\n"
+-		       "tm_hour: expected: 10, got: %d\n"
+-		       "]\n",
+-		       t.tm_hour);
+-		return false;
+-	}
+-
+-	if (t.tm_mday != 14) {
+-		printf("failure: strptime [\n"
+-		       "tm_mday: expected: 14, got: %d\n"
+-		       "]\n",
+-		       t.tm_mday);
+-		return false;
+-	}
+-
+-	if (t.tm_mon != 3) {
+-		printf("failure: strptime [\n"
+-		       "tm_mon: expected: 3, got: %d\n"
+-		       "]\n",
+-		       t.tm_mon);
+-		return false;
+-	}
+-
+-	if (t.tm_year != 107) {
+-		printf("failure: strptime [\n"
+-		       "tm_year: expected: 107, got: %d\n"
+-		       "]\n",
+-		       t.tm_year);
+-		return false;
+-	}
+-
+-	if (t.tm_wday != 6) { /* saturday */
+-		printf("failure: strptime [\n"
+-		       "tm_wday: expected: 6, got: %d\n"
+-		       "]\n",
+-		       t.tm_wday);
+-		return false;
+-	}
+-
+-	if (t.tm_yday != 103) {
+-		printf("failure: strptime [\n"
+-		       "tm_yday: expected: 103, got: %d\n"
+-		       "]\n",
+-		       t.tm_yday);
+-		return false;
+-	}
+-
+-	/* we don't test this as it depends on the host configuration
+-	if (t.tm_isdst != 0) {
+-		printf("failure: strptime [\n"
+-		       "tm_isdst: expected: 0, got: %d\n"
+-		       "]\n",
+-		       t.tm_isdst);
+-		return false;
+-	}*/
+-
+-	printf("success: strptime\n");
+-
+-	return true;
++	return libreplace_test_strptime();
+ }
+ 
+ struct torture_context;
+
+Modified: branches/SAMBA_4_0/source/torture/local/config.mk
+===================================================================
+--- branches/SAMBA_4_0/source/torture/local/config.mk	2007-04-14 09:14:40 UTC (rev 22215)
++++ branches/SAMBA_4_0/source/torture/local/config.mk	2007-04-15 16:13:06 UTC (rev 22216)
+@@ -14,6 +14,7 @@
+ 		../../lib/crypto/hmacsha1test.o \
+ 		../../lib/talloc/testsuite.o \
+ 		../../lib/replace/test/os2_delete.o \
++		../../lib/replace/test/strptime.o \
+ 		../../lib/replace/test/testsuite.o \
+ 		messaging.o \
+ 		../../librpc/tests/binding_string.o \
+

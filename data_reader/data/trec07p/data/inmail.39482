@@ -1,0 +1,129 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat May 19 00:07:57 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4J47vqD021812
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 19 May 2007 00:07:57 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id BB7C716382A
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 19 May 2007 04:07:53 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id EE7A7162AF8; Sat, 19 May 2007 04:07:00 +0000 (GMT)
+Date: Sat, 19 May 2007 13:18:57 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070519040700.EE7A7162AF8@lists.samba.org>
+Subject: Rev 322: merge tx_cnt code from ronnie in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 322
+revision-id: tridge@samba.org-20070519031856-9snwstii1s8dzz4u
+parent: tridge@samba.org-20070518145649-ftagi1x44wuzm36n
+parent: sahlberg@ronnie-20070519002717-icrcqusasl3psffk
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Sat 2007-05-19 13:18:56 +1000
+message:
+  merge tx_cnt code from ronnie
+modified:
+  common/ctdb.c                  ctdb.c-20061127094323-t50f58d65iaao5of-2
+  common/ctdb_monitor.c          ctdb_monitor.c-20070518100625-8jf4ft1mjzmb22ck-1
+  include/ctdb_private.h         ctdb_private.h-20061117234101-o3qt14umlg9en8z0-13
+    ------------------------------------------------------------
+    revno: 197.1.122
+    merged: sahlberg@ronnie-20070519002717-icrcqusasl3psffk
+    parent: sahlberg@ronnie-20070519002019-otjtblbn6da2lmui
+    committer: Ronnie Sahlberg <sahlberg@ronnie>
+    branch nick: ctdb
+    timestamp: Sat 2007-05-19 10:27:17 +1000
+    message:
+      increase the tx_cnt everytime we send a packet to a node
+    ------------------------------------------------------------
+    revno: 197.1.121
+    merged: sahlberg@ronnie-20070519002019-otjtblbn6da2lmui
+    parent: sahlberg@ronnie-20070519001237-l1dov8lpchtdip96
+    committer: Ronnie Sahlberg <sahlberg@ronnie>
+    branch nick: ctdb
+    timestamp: Sat 2007-05-19 10:20:19 +1000
+    message:
+      add a node->tx_cnt counter
+      
+      only send keepalive packets if the count is zero
+    ------------------------------------------------------------
+    revno: 197.1.120
+    merged: sahlberg@ronnie-20070519001237-l1dov8lpchtdip96
+    parent: sahlberg@ronnie-20070518100629-h54kmcodi83l5oqc
+    parent: tridge@samba.org-20070518145649-ftagi1x44wuzm36n
+    committer: Ronnie Sahlberg <sahlberg@ronnie>
+    branch nick: ctdb
+    timestamp: Sat 2007-05-19 10:12:37 +1000
+    message:
+      merge from tridge
+=== modified file 'common/ctdb.c'
+--- a/common/ctdb.c	2007-05-18 13:48:29 +0000
++++ b/common/ctdb.c	2007-05-19 00:27:17 +0000
+@@ -507,8 +507,11 @@
+ 
+ 	if (hdr->destnode == ctdb->vnn && !(ctdb->flags & CTDB_FLAG_SELF_CONNECT)) {
+ 		ctdb_defer_packet(ctdb, hdr);
+-	} else if (ctdb->methods->queue_pkt(node, (uint8_t *)hdr, hdr->length) != 0) {
+-		ctdb_fatal(ctdb, "Unable to queue packet\n");
++	} else {
++		node->tx_cnt++;
++		if (ctdb->methods->queue_pkt(node, (uint8_t *)hdr, hdr->length) != 0) {
++			ctdb_fatal(ctdb, "Unable to queue packet\n");
++		}
+ 	}
+ }
+ 
+
+=== modified file 'common/ctdb_monitor.c'
+--- a/common/ctdb_monitor.c	2007-05-18 13:48:29 +0000
++++ b/common/ctdb_monitor.c	2007-05-19 00:20:19 +0000
+@@ -64,8 +64,12 @@
+ 			*/
+ 			continue;
+ 		}
++		
++		if (node->tx_cnt == 0) {
++			ctdb_send_keepalive(ctdb, node->vnn);
++		}
+ 
+-		ctdb_send_keepalive(ctdb, node->vnn);
++		node->tx_cnt = 0;
+ 	}
+ 	
+ 	event_add_timed(ctdb->ev, ctdb, 
+
+=== modified file 'include/ctdb_private.h'
+--- a/include/ctdb_private.h	2007-05-18 14:56:49 +0000
++++ b/include/ctdb_private.h	2007-05-19 00:20:19 +0000
+@@ -93,6 +93,7 @@
+ 	/* used by the dead node monitoring */
+ 	uint32_t dead_count;
+ 	uint32_t rx_cnt;
++	uint32_t tx_cnt;
+ 
+ 	/* a list of controls pending to this node, so we can time them out quickly
+ 	   if the node becomes disconnected */
+

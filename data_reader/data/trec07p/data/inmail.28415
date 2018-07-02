@@ -1,0 +1,168 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri May  4 06:22:17 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l44AMHqD014219
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 4 May 2007 06:22:17 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id E89F116389F
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri,  4 May 2007 10:22:16 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1004)
+	id 5E769162AE8; Fri,  4 May 2007 10:21:40 +0000 (GMT)
+To: samba-cvs@samba.org
+From: gd@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070504102140.5E769162AE8@lists.samba.org>
+Date: Fri,  4 May 2007 10:21:40 +0000 (GMT)
+Subject: svn commit: samba r22666 - in branches/SAMBA_3_0/source: libads
+	nsswitch
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: gd
+Date: 2007-05-04 10:21:39 +0000 (Fri, 04 May 2007)
+New Revision: 22666
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22666
+
+Log:
+Expand kerberos_kinit_password_ext() to return NTSTATUS codes and make
+winbindd's kerberized pam_auth use that.
+
+Guenther
+
+Modified:
+   branches/SAMBA_3_0/source/libads/kerberos.c
+   branches/SAMBA_3_0/source/nsswitch/winbindd_cred_cache.c
+   branches/SAMBA_3_0/source/nsswitch/winbindd_pam.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/libads/kerberos.c
+===================================================================
+--- branches/SAMBA_3_0/source/libads/kerberos.c	2007-05-04 10:02:47 UTC (rev 22665)
++++ branches/SAMBA_3_0/source/libads/kerberos.c	2007-05-04 10:21:39 UTC (rev 22666)
+@@ -189,7 +189,8 @@
+ 				const char *cache_name,
+ 				BOOL request_pac,
+ 				BOOL add_netbios_addr,
+-				time_t renewable_time)
++				time_t renewable_time,
++				NTSTATUS *ntstatus)
+ {
+ 	krb5_context ctx = NULL;
+ 	krb5_error_code code = 0;
+@@ -267,6 +268,29 @@
+ 		*renew_till_time = (time_t) my_creds.times.renew_till;
+ 	}
+  out:
++	if (ntstatus) {
++
++		NTSTATUS status;
++
++		/* fast path */
++		if (code == 0) {
++			*ntstatus = NT_STATUS_OK;
++			goto cleanup;
++		}
++
++		/* try to get ntstatus code out of krb5_error when we have it
++		 * inside the krb5_get_init_creds_opt - gd */
++
++		if (opt && smb_krb5_get_ntstatus_from_krb5_error_init_creds_opt(ctx, opt, &status)) {
++			*ntstatus = status;
++			goto cleanup;
++		}
++
++		/* fall back to self-made-mapping */
++		*ntstatus = krb5_to_nt_status(code);
++	}
++
++ cleanup:
+ 	krb5_free_cred_contents(ctx, &my_creds);
+ 	if (me) {
+ 		krb5_free_principal(ctx, me);
+@@ -321,7 +345,8 @@
+ 	}
+ 	
+ 	ret = kerberos_kinit_password_ext(s, ads->auth.password, ads->auth.time_offset,
+-			&ads->auth.tgt_expire, NULL, NULL, False, False, ads->auth.renewable);
++			&ads->auth.tgt_expire, NULL, NULL, False, False, ads->auth.renewable, 
++			NULL);
+ 
+ 	if (ret) {
+ 		DEBUG(0,("kerberos_kinit_password %s failed: %s\n", 
+@@ -580,7 +605,8 @@
+ 					   cache_name,
+ 					   False,
+ 					   False,
+-					   0);
++					   0,
++					   NULL);
+ }
+ 
+ /************************************************************************
+
+Modified: branches/SAMBA_3_0/source/nsswitch/winbindd_cred_cache.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/winbindd_cred_cache.c	2007-05-04 10:02:47 UTC (rev 22665)
++++ branches/SAMBA_3_0/source/nsswitch/winbindd_cred_cache.c	2007-05-04 10:21:39 UTC (rev 22666)
+@@ -111,7 +111,8 @@
+ 						  entry->ccname,
+ 						  False, /* no PAC required anymore */
+ 						  True,
+-						  WINBINDD_PAM_AUTH_KRB5_RENEW_TIME);
++						  WINBINDD_PAM_AUTH_KRB5_RENEW_TIME,
++						  NULL);
+ 		gain_root_privilege();
+ 
+ 		if (ret) {
+@@ -224,7 +225,8 @@
+ 						entry->ccname,
+ 						False, /* no PAC required anymore */
+ 						True,
+-						WINBINDD_PAM_AUTH_KRB5_RENEW_TIME);
++						WINBINDD_PAM_AUTH_KRB5_RENEW_TIME,
++						NULL);
+ 		gain_root_privilege();
+ 
+ 		if (ret) {
+
+Modified: branches/SAMBA_3_0/source/nsswitch/winbindd_pam.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/winbindd_pam.c	2007-05-04 10:02:47 UTC (rev 22665)
++++ branches/SAMBA_3_0/source/nsswitch/winbindd_pam.c	2007-05-04 10:21:39 UTC (rev 22666)
+@@ -564,12 +564,12 @@
+ 					       cc, 
+ 					       True,
+ 					       True,
+-					       WINBINDD_PAM_AUTH_KRB5_RENEW_TIME);
++					       WINBINDD_PAM_AUTH_KRB5_RENEW_TIME,
++					       &result);
+ 
+ 	if (krb5_ret) {
+ 		DEBUG(1,("winbindd_raw_kerberos_login: kinit failed for '%s' with: %s (%d)\n", 
+ 			principal_s, error_message(krb5_ret), krb5_ret));
+-		result = krb5_to_nt_status(krb5_ret);
+ 		goto failed;
+ 	}
+ 
+

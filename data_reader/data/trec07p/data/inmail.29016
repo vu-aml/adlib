@@ -1,0 +1,120 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri May  4 21:04:08 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l45148qD022146
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 4 May 2007 21:04:08 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 275A7162AC7
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat,  5 May 2007 01:04:07 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 93CAC162AC7; Sat,  5 May 2007 01:03:33 +0000 (GMT)
+Date: Sat, 05 May 2007 11:03:11 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070505010333.93CAC162AC7@lists.samba.org>
+Subject: Rev 254: added a dumpmemory control,
+	used to find memory leaks in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 254
+revision-id: tridge@samba.org-20070505010310-wlknjyla4cqkbdld
+parent: tridge@samba.org-20070504223335-oai3wi0jsmp8ywwp
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Sat 2007-05-05 11:03:10 +1000
+message:
+  added a dumpmemory control, used to find memory leaks
+modified:
+  common/ctdb_control.c          ctdb_control.c-20070426122724-j6gkpiofhbwdin63-1
+  include/ctdb_private.h         ctdb_private.h-20061117234101-o3qt14umlg9en8z0-13
+  tools/ctdb_control.c           ctdb_control.c-20070426122705-9ehj1l5lu2gn9kuj-1
+=== modified file 'common/ctdb_control.c'
+--- a/common/ctdb_control.c	2007-05-04 22:33:35 +0000
++++ b/common/ctdb_control.c	2007-05-05 01:03:10 +0000
+@@ -164,6 +164,12 @@
+ 		return 0;
+ 	}
+ 
++	case CTDB_CONTROL_DUMP_MEMORY: {
++		CHECK_CONTROL_DATA_SIZE(0);
++		talloc_report_full(ctdb, stdout);
++		return 0;
++	}
++
+ 	case CTDB_CONTROL_STATUS_RESET: {
+ 		CHECK_CONTROL_DATA_SIZE(0);
+ 		ZERO_STRUCT(ctdb->status);
+
+=== modified file 'include/ctdb_private.h'
+--- a/include/ctdb_private.h	2007-05-04 22:33:35 +0000
++++ b/include/ctdb_private.h	2007-05-05 01:03:10 +0000
+@@ -306,6 +306,7 @@
+ 		    CTDB_CONTROL_ENABLE_SEQNUM,
+ 		    CTDB_CONTROL_UPDATE_SEQNUM,
+ 		    CTDB_CONTROL_SET_SEQNUM_FREQUENCY,
++		    CTDB_CONTROL_DUMP_MEMORY,
+ };
+ 
+ 
+
+=== modified file 'tools/ctdb_control.c'
+--- a/tools/ctdb_control.c	2007-05-04 22:33:35 +0000
++++ b/tools/ctdb_control.c	2007-05-05 01:03:10 +0000
+@@ -935,6 +935,28 @@
+ }
+ 
+ /*
++  dump memory usage
++ */
++static int control_dumpmemory(struct ctdb_context *ctdb, int argc, const char **argv)
++{
++
++	uint32_t vnn;
++	if (argc < 1) {
++		usage();
++	}
++	if (strcmp(argv[0], "all") == 0) {
++		vnn = CTDB_BROADCAST_VNN;
++	} else {
++		vnn = strtoul(argv[0], NULL, 0);
++	}
++
++	ctdb_control(ctdb, vnn, 0, CTDB_CONTROL_DUMP_MEMORY,
++		     CTDB_CTRL_FLAG_NOREPLY, tdb_null, NULL, NULL, NULL, NULL);
++
++	return 0;
++}
++
++/*
+   main program
+ */
+ int main(int argc, const char *argv[])
+@@ -976,6 +998,7 @@
+ 		{ "recover", control_recover },
+ 		{ "writerecord", control_writerecord },
+ 		{ "attach", control_attach },
++		{ "dumpmemory", control_dumpmemory },
+ 	};
+ 
+ 	pc = poptGetContext(argv[0], argc, argv, popt_options, POPT_CONTEXT_KEEP_FIRST);
+

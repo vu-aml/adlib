@@ -1,0 +1,272 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Apr 12 21:47:46 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3D1lk0I004763
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 12 Apr 2007 21:47:46 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 6521B162AE1
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 13 Apr 2007 01:47:22 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 549)
+	id 9815F162ABF; Fri, 13 Apr 2007 01:46:49 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jra@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070413014649.9815F162ABF@lists.samba.org>
+Date: Fri, 13 Apr 2007 01:46:49 +0000 (GMT)
+Subject: svn commit: samba r22207 - in branches/SAMBA_3_0/source/nsswitch: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 5547
+Lines: 230
+
+Author: jra
+Date: 2007-04-13 01:46:47 +0000 (Fri, 13 Apr 2007)
+New Revision: 22207
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22207
+
+Log:
+Fill in the validation functions. Now to test...
+Jeremy.
+
+Modified:
+   branches/SAMBA_3_0/source/nsswitch/winbindd_cache.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/nsswitch/winbindd_cache.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/winbindd_cache.c	2007-04-13 01:00:44 UTC (rev 22206)
++++ branches/SAMBA_3_0/source/nsswitch/winbindd_cache.c	2007-04-13 01:46:47 UTC (rev 22207)
+@@ -2757,7 +2757,11 @@
+ 		return 1;
+ 	}
+ 
+-	/* FIXME - fill in details here... */
++	(void)centry_uint16(centry);
++	(void)centry_uint16(centry);
++	(void)centry_uint32(centry);
++	(void)centry_nttime(centry);
++	(void)centry_nttime(centry);
+ 
+ 	centry_free(centry);
+ 
+@@ -2776,8 +2780,14 @@
+ 		return 1;
+ 	}
+ 
+-	/* FIXME - fill in details here... */
++	(void)centry_time(centry);
++	(void)centry_hash16(centry, mem_ctx);
+ 
++	/* We only have 17 bytes more data in the salted cred case. */
++	if (centry->len - centry->ofs == 17) {
++		(void)centry_hash16(centry, mem_ctx);
++	}
++
+ 	centry_free(centry);
+ 
+ 	if (bad_cache_entry) {
+@@ -2790,13 +2800,24 @@
+ static int validate_ul(TALLOC_CTX *mem_ctx, const char *keystr, TDB_DATA dbuf)
+ {
+ 	struct cache_entry *centry = create_centry_validate(keystr, dbuf);
++	int32 num_entries, i;
+ 
+ 	if (!centry) {
+ 		return 1;
+ 	}
+ 
+-	/* FIXME - fill in details here... */
++	num_entries = (int32)centry_uint32(centry);
+ 
++	for (i=0; i< num_entries; i++) {
++		DOM_SID sid;
++		(void)centry_string(centry, mem_ctx);
++		(void)centry_string(centry, mem_ctx);
++		(void)centry_string(centry, mem_ctx);
++		(void)centry_string(centry, mem_ctx);
++		(void)centry_sid(centry, mem_ctx, &sid);
++		(void)centry_sid(centry, mem_ctx, &sid);
++	}
++
+ 	centry_free(centry);
+ 
+ 	if (bad_cache_entry) {
+@@ -2809,12 +2830,19 @@
+ static int validate_gl(TALLOC_CTX *mem_ctx, const char *keystr, TDB_DATA dbuf)
+ {
+ 	struct cache_entry *centry = create_centry_validate(keystr, dbuf);
++	int32 num_entries, i;
+ 
+ 	if (!centry) {
+ 		return 1;
+ 	}
+ 
+-	/* FIXME - fill in details here... */
++	num_entries = centry_uint32(centry);
++	
++	for (i=0; i< num_entries; i++) {
++		(void)centry_string(centry, mem_ctx);
++		(void)centry_string(centry, mem_ctx);
++		(void)centry_uint32(centry);
++	}
+ 
+ 	centry_free(centry);
+ 
+@@ -2828,13 +2856,19 @@
+ static int validate_ug(TALLOC_CTX *mem_ctx, const char *keystr, TDB_DATA dbuf)
+ {
+ 	struct cache_entry *centry = create_centry_validate(keystr, dbuf);
++	int32 num_groups, i;
+ 
+ 	if (!centry) {
+ 		return 1;
+ 	}
+ 
+-	/* FIXME - fill in details here... */
++	num_groups = centry_uint32(centry);
+ 
++	for (i=0; i< num_groups; i++) {
++		DOM_SID sid;
++		centry_sid(centry, mem_ctx, &sid);
++	}
++
+ 	centry_free(centry);
+ 
+ 	if (bad_cache_entry) {
+@@ -2847,13 +2881,18 @@
+ static int validate_ua(TALLOC_CTX *mem_ctx, const char *keystr, TDB_DATA dbuf)
+ {
+ 	struct cache_entry *centry = create_centry_validate(keystr, dbuf);
++	int32 num_aliases, i;
+ 
+ 	if (!centry) {
+ 		return 1;
+ 	}
+ 
+-	/* FIXME - fill in details here... */
++	num_aliases = centry_uint32(centry);
+ 
++	for (i=0; i < num_aliases; i++) {
++		(void)centry_uint32(centry);
++	}
++
+ 	centry_free(centry);
+ 
+ 	if (bad_cache_entry) {
+@@ -2866,13 +2905,21 @@
+ static int validate_gm(TALLOC_CTX *mem_ctx, const char *keystr, TDB_DATA dbuf)
+ {
+ 	struct cache_entry *centry = create_centry_validate(keystr, dbuf);
++	int32 num_names, i;
+ 
+ 	if (!centry) {
+ 		return 1;
+ 	}
+ 
+-	/* FIXME - fill in details here... */
++	num_names = centry_uint32(centry);
+ 
++	for (i=0; i< num_names; i++) {
++		DOM_SID sid;
++		centry_sid(centry, mem_ctx, &sid);
++		(void)centry_string(centry, mem_ctx);
++		(void)centry_uint32(centry);
++	}
++
+ 	centry_free(centry);
+ 
+ 	if (bad_cache_entry) {
+@@ -2884,38 +2931,28 @@
+ 
+ static int validate_dr(TALLOC_CTX *mem_ctx, const char *keystr, TDB_DATA dbuf)
+ {
+-	struct cache_entry *centry = create_centry_validate(keystr, dbuf);
+-
+-	if (!centry) {
++	/* Can't say anything about this other than must be nonzero. */
++	if (dbuf.dsize == 0) {
++		DEBUG(0,("validate_dr: Corrupt cache for key %s (len == 0) ?\n",
++				keystr));
++		bad_cache_entry = True;
+ 		return 1;
+ 	}
+ 
+-	/* FIXME - fill in details here... */
+-
+-	centry_free(centry);
+-
+-	if (bad_cache_entry) {
+-		return 1;
+-	}
+ 	DEBUG(10,("validate_dr: %s ok\n", keystr));
+ 	return 0;
+ }
+ 
+ static int validate_de(TALLOC_CTX *mem_ctx, const char *keystr, TDB_DATA dbuf)
+ {
+-	struct cache_entry *centry = create_centry_validate(keystr, dbuf);
+-
+-	if (!centry) {
++	/* Can't say anything about this other than must be nonzero. */
++	if (dbuf.dsize == 0) {
++		DEBUG(0,("validate_de: Corrupt cache for key %s (len == 0) ?\n",
++				keystr));
++		bad_cache_entry = True;
+ 		return 1;
+ 	}
+ 
+-	/* FIXME - fill in details here... */
+-
+-	centry_free(centry);
+-
+-	if (bad_cache_entry) {
+-		return 1;
+-	}
+ 	DEBUG(10,("validate_de: %s ok\n", keystr));
+ 	return 0;
+ }
+@@ -2923,12 +2960,20 @@
+ static int validate_trustdoms(TALLOC_CTX *mem_ctx, const char *keystr, TDB_DATA dbuf)
+ {
+ 	struct cache_entry *centry = create_centry_validate(keystr, dbuf);
++	int32 num_domains, i;
+ 
+ 	if (!centry) {
+ 		return 1;
+ 	}
+ 
+-	/* FIXME - fill in details here... */
++	num_domains = centry_uint32(centry);
++	
++	for (i=0; i< num_domains; i++) {
++		DOM_SID sid;
++		(void)centry_string(centry, mem_ctx);
++		(void)centry_string(centry, mem_ctx);
++		(void)centry_sid(centry, mem_ctx, &sid);
++	}
+ 
+ 	centry_free(centry);
+ 
+

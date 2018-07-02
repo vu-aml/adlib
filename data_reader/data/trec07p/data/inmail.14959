@@ -1,0 +1,139 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Apr 20 10:21:35 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3KELY0I007167
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 20 Apr 2007 10:21:34 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 023AD162AF4
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 20 Apr 2007 14:21:10 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.1 required=3.8 tests=AWL, BAYES_40, FORGED_RCVD_HELO,
+	RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+X-Greylist: delayed 3599 seconds by postgrey-1.24 at dp.samba.org;
+	Fri, 20 Apr 2007 14:20:26 GMT
+Received: from mac.se (slimjim.mantaray.se [195.43.255.244])
+	by lists.samba.org (Postfix) with ESMTP id 3A4B4162AC5
+	for <samba-technical@lists.samba.org>;
+	Fri, 20 Apr 2007 14:20:25 +0000 (GMT)
+Received: from [193.15.99.76] (account henke HELO [10.168.1.130])
+	by mac.se (CommuniGate Pro SMTP 4.2.10)
+	with ESMTP-TLS id 3339827 for samba-technical@lists.samba.org;
+	Fri, 20 Apr 2007 15:20:24 +0200
+Mime-Version: 1.0 (Apple Message framework v752.2)
+To: samba <samba-technical@lists.samba.org>
+Message-Id: <D2C76EDC-DAA2-48A9-A9E7-30571F2A973D@mac.se>
+Content-Type: multipart/mixed; boundary=Apple-Mail-9--947956520
+References: <op.tq224juv2axrvr@restart>
+From: Henrik Zagerholm <henke@mac.se>
+Date: Fri, 20 Apr 2007 15:20:22 +0200
+X-Mailer: Apple Mail (2.752.2)
+Subject: Samba 3.0.25rc2 error in libsmbclient.so
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2185
+Lines: 86
+
+
+--Apple-Mail-9--947956520
+Content-Transfer-Encoding: 7bit
+Content-Type: text/plain;
+	charset=US-ASCII;
+	delsp=yes;
+	format=flowed
+
+Hello,
+
+We are trying to compile samba_3.0.25. ./configure, make, make  
+install all seems to work and runs without any errors.
+The problems starts when we try to use libsmbclient.so.
+We have a program that links with libsmbclient.so and after upgrading  
+from SAMBA_3_0 revision 18029 to "Version 3.0.25rc2-SVN-build-22402"  
+I get lots of different error messages similar to "undefined  
+reference to `smbc_open'" when I compile our program.
+
+We did a test program and compared our old libsmbcilent.so with the  
+new one. It basically opens it (using dlopen) and searches for a  
+symbol (using dlsym) for example "smbc_open". The test program  
+succeeds in opening both files, but it will only find the symbols in  
+the old one.
+
+I've included our test program called sotest.
+
+
+--Apple-Mail-9--947956520
+Content-Transfer-Encoding: 7bit
+Content-Type: application/octet-stream;
+	x-unix-mode=0644;
+	name=sotest.cpp
+Content-Disposition: attachment;
+	filename=sotest.cpp
+
+// Compile: g++ -rdynamic -o sotest sotest.cpp -ldl
+#include <dlfcn.h>
+#include <iostream>
+
+using namespace std;
+
+// example use: ./sotest /root/downloads/samba_3.0.25/source/bin/libsmbclient.so smbc_open
+// example use: ./sotest /root/downloads/SAMBA_3_0/source/bin/libsmbclient.so smbc_open
+// example use: ./sotest /usr/lib/libcrypto.so MD5
+int main(int argc, char** argv)
+{
+	if( argc != 3 )
+	{
+		cout << "wrong number of arguments\n"
+			<< "Usage: " << argv[0] << " <path to .so file> <symbol to find>" << endl;
+		return -1;
+	}
+
+	void *pHandle = dlopen( argv[1], RTLD_NOW );
+	cout << pHandle << endl;
+	if( NULL == pHandle )
+		return -2;
+	
+	dlerror();
+	char *pszError;
+	void* pFunction = dlsym( pHandle, argv[2] );
+	if( NULL != (pszError = dlerror()) )
+	{
+		cout << pszError << endl;
+	}
+	else
+	{
+		cout << "function \"" << argv[2] << "\" found (" << pFunction << ")" << endl;
+	}
+	dlclose( pHandle );
+
+	return 0;
+}
+
+
+--Apple-Mail-9--947956520
+Content-Transfer-Encoding: 7bit
+Content-Type: text/plain;
+	charset=US-ASCII;
+	format=flowed
+
+
+
+Regards,
+Henrik
+--Apple-Mail-9--947956520--
+

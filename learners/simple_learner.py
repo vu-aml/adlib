@@ -1,6 +1,7 @@
 from learners.learner import learner
 from learners.models import sklearner
 from typing import Dict
+from sklearn import svm
 from data_reader.dataset import EmailDataset
 
 class SimpleLearner(learner):
@@ -19,6 +20,11 @@ class SimpleLearner(learner):
 
     def set_model(self, model):
         self.model = sklearner.Model(model)
+
+    def set_params(self, params: Dict):
+        if 'model'  in params:
+            self.model = self.set_model(params['model'])
+        self.model.set_params(params)
 
     def train(self):
         if not self.model:
@@ -41,9 +47,7 @@ class SimpleLearner(learner):
     def predict_log_proba(self,testing_instances):
         return self.model.predict_log_proba(testing_instances)
 
-    def set_params(self, params: Dict):
-        if params['model'] is not None:
-            self.model = self.set_model(params['model'])
+
 
     def get_weight(self):
         weight= self.model.learner.coef_[0]

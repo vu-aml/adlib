@@ -1,0 +1,127 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun Jun 17 14:46:04 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5HIk4L9009517
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 17 Jun 2007 14:46:04 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id DC2D4163862
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 17 Jun 2007 18:46:02 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.4 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 69395162AEB; Sun, 17 Jun 2007 18:45:34 +0000 (GMT)
+Date: Mon, 18 Jun 2007 02:15:51 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070617184534.69395162AEB@lists.samba.org>
+Subject: Rev 598: make sure smbstatus cleans up stale records in connections
+	and sessionid database. Otherwise they grow without bounds in
+	http://samba.org/~tridge/3_0-ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 598
+revision-id: tridge@samba.org-20070617161549-tkgvbm3beypwj030
+parent: tridge@samba.org-20070617012205-k626bylogn6ky4tr
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: s3-ctdb-tridge
+timestamp: Mon 2007-06-18 02:15:49 +1000
+message:
+  make sure smbstatus cleans up stale records in connections and sessionid database. Otherwise they grow without bounds
+modified:
+  source/lib/conn_tdb.c          conn_tdb.c-20070428165234-v42k4o13p6tqo5cr-1
+  source/lib/messages.c          messages.c-20070210173807-1wjifrbwaz6xnmgl-491
+  source/utils/status.c          status.c-20070210173807-1wjifrbwaz6xnmgl-1163
+=== modified file 'source/lib/conn_tdb.c'
+--- a/source/lib/conn_tdb.c	2007-05-17 12:44:40 +0000
++++ b/source/lib/conn_tdb.c	2007-06-17 16:15:49 +0000
+@@ -104,7 +104,7 @@
+ 		return -1;
+ 	}
+ 
+-	return ctx->traverse_read(ctx, fn, private_data);
++	return ctx->traverse(ctx, fn, private_data);
+ }
+ 
+ int connections_forall(int (*fn)(struct db_record *rec,
+
+=== modified file 'source/lib/messages.c'
+--- a/source/lib/messages.c	2007-06-02 05:17:47 +0000
++++ b/source/lib/messages.c	2007-06-17 16:15:49 +0000
+@@ -1701,7 +1701,8 @@
+ 		data.dsize -= sizeof(struct ctdb_ltdb_header);
+ 		data.dptr += sizeof(struct ctdb_ltdb_header);
+ 
+-		if (fn) {
++		/* empty records are deleted records in ctdb */
++		if (data.dsize != 0 && fn) {
+ 			fn(key, data, private_data);
+ 		}
+ 
+
+=== modified file 'source/utils/status.c'
+--- a/source/utils/status.c	2007-05-21 10:59:16 +0000
++++ b/source/utils/status.c	2007-06-17 16:15:49 +0000
+@@ -210,13 +210,14 @@
+ 			const struct connections_data *crec,
+ 			void *state)
+ {
++	if (!process_exists(crec->pid) || !Ucrit_checkUid(crec->uid)) {
++		crec->delete_rec(crec);
++		return 0;
++	}
++
+ 	if (crec->cnum == -1)
+ 		return 0;
+ 
+-	if (!process_exists(crec->pid) || !Ucrit_checkUid(crec->uid)) {
+-		return 0;
+-	}
+-
+ 	d_printf("%-10s   %s   %-12s  %s",
+ 		 crec->servicename,procid_str_static(&crec->pid),
+ 		 crec->machine,
+@@ -230,12 +231,15 @@
+ 	struct sessionid sessionid;
+ 	fstring uid_str, gid_str;
+ 
+-	if (db->value.dsize != sizeof(sessionid))
++	if (db->value.dsize != sizeof(sessionid)) {
++		db->delete_rec(db);
+ 		return 0;
++	}
+ 
+ 	memcpy(&sessionid, db->value.dptr, sizeof(sessionid));
+ 
+ 	if (!process_exists(sessionid.pid) || !Ucrit_checkUid(sessionid.uid)) {
++		db->delete_rec(db);
+ 		return 0;
+ 	}
+ 
+@@ -346,7 +350,7 @@
+ 			d_printf("PID     Username      Group         Machine                        \n");
+ 			d_printf("-------------------------------------------------------------------\n");
+ 
+-			db->traverse_read(db, traverse_sessionid, NULL);
++			db->traverse(db, traverse_sessionid, NULL);
+ 			talloc_free(db);
+ 		}
+ 
+

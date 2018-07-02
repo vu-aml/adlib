@@ -1,0 +1,269 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon May  7 09:57:22 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l47DvLqD031900
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 7 May 2007 09:57:22 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id CC1C1162C3C
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon,  7 May 2007 13:57:20 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.4 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id 6B4D3162AF1; Mon,  7 May 2007 13:56:57 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070507135657.6B4D3162AF1@lists.samba.org>
+Date: Mon,  7 May 2007 13:56:57 +0000 (GMT)
+Subject: svn commit: samba r22745 - in branches/SAMBA_3_0/source: . nsswitch
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-05-07 13:56:57 +0000 (Mon, 07 May 2007)
+New Revision: 22745
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22745
+
+Log:
+Add local groups to the --required-membership-sid test. This needs
+merging to 3_0_26 once Michael's net conf changes have been merged. It
+depends on token_utils.c.
+
+Modified:
+   branches/SAMBA_3_0/source/Makefile.in
+   branches/SAMBA_3_0/source/nsswitch/winbindd_pam.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/Makefile.in
+===================================================================
+--- branches/SAMBA_3_0/source/Makefile.in	2007-05-07 13:39:25 UTC (rev 22744)
++++ branches/SAMBA_3_0/source/Makefile.in	2007-05-07 13:56:57 UTC (rev 22745)
+@@ -829,7 +829,8 @@
+ 		nsswitch/winbindd_async.o \
+ 		nsswitch/winbindd_creds.o \
+ 		nsswitch/winbindd_cred_cache.o \
+-		nsswitch/winbindd_ccache_access.o
++		nsswitch/winbindd_ccache_access.o \
++		auth/token_util.o
+ 
+ WINBINDD_OBJ = \
+ 		$(WINBINDD_OBJ1) $(PASSDB_OBJ) $(GROUPDB_OBJ) \
+
+Modified: branches/SAMBA_3_0/source/nsswitch/winbindd_pam.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/winbindd_pam.c	2007-05-07 13:39:25 UTC (rev 22744)
++++ branches/SAMBA_3_0/source/nsswitch/winbindd_pam.c	2007-05-07 13:56:57 UTC (rev 22745)
+@@ -127,17 +127,12 @@
+ {
+ 	DOM_SID *require_membership_of_sid;
+ 	size_t num_require_membership_of_sid;
+-	DOM_SID *all_sids;
+-	/* UserSID, GroupSID, Grooup2SIDs, OtherSIDs, WellKnownSIDs */
+-	size_t num_all_sids = (2 + 
+-			       info3->num_groups2 + 
+-			       info3->num_other_sids + 
+-			       2 );
+-	size_t i, j = 0, k;
+-	size_t group_sid_length;
+-	const char *search_location;
+-	char *single_group_sid;
+-	const char *comma;
++	fstring req_sid;
++	const char *p;
++	DOM_SID sid;
++	size_t i;
++	struct nt_user_token *token;
++	NTSTATUS status;
+ 
+ 	/* Parse the 'required group' SID */
+ 	
+@@ -146,93 +141,59 @@
+ 		return NT_STATUS_OK;
+ 	}
+ 
+-	num_require_membership_of_sid = 1;
+-	group_sid_length = strlen(group_sid);
+-	for (i = 0; i < group_sid_length; i++) {
+-		if (',' == group_sid[i]) {
+-			num_require_membership_of_sid++;
+-		}
++	if (!(token = TALLOC_ZERO_P(mem_ctx, struct nt_user_token))) {
++		DEBUG(0, ("talloc failed\n"));
++		return NT_STATUS_NO_MEMORY;
+ 	}
+ 
+-	require_membership_of_sid = TALLOC_ARRAY(mem_ctx, DOM_SID, num_require_membership_of_sid);
+-	if (!require_membership_of_sid)
+-		return NT_STATUS_NO_MEMORY;
++	num_require_membership_of_sid = 0;
++	require_membership_of_sid = NULL;
+ 
+-	i = 0;
+-	search_location = group_sid;
++	p = group_sid;
+ 
+-	if (num_require_membership_of_sid > 1) {
++	while (next_token(&p, req_sid, ",", sizeof(req_sid))) {
++		if (!string_to_sid(&sid, req_sid)) {
++			DEBUG(0, ("check_info3_in_group: could not parse %s "
++				  "as a SID!", req_sid));
++			return NT_STATUS_INVALID_PARAMETER;
++		}
+ 
+-		/* Allocate the maximum possible size */
+-		single_group_sid = TALLOC(mem_ctx, group_sid_length);
+-		if (!single_group_sid)
++		if (!add_sid_to_array(mem_ctx, &sid,
++				      &require_membership_of_sid,
++				      &num_require_membership_of_sid)) {
++			DEBUG(0, ("add_sid_to_array failed\n"));
+ 			return NT_STATUS_NO_MEMORY;
+-
+-		while ( (comma = strstr(search_location, ",")) != NULL ) {
+-
+-			strncpy(single_group_sid, search_location, comma - search_location);
+-			single_group_sid[comma - search_location] = 0;
+-
+-			if (!string_to_sid(&require_membership_of_sid[i++], single_group_sid)) {
+-				DEBUG(0, ("check_info3_in_group: could not parse %s as a SID!", 
+-					  single_group_sid));
+-			
+-				return NT_STATUS_INVALID_PARAMETER;
+-			}
+-
+-			search_location = comma + 1;
+ 		}
+ 	}
+ 
+-	if (!string_to_sid(&require_membership_of_sid[i++], search_location)) {
+-		DEBUG(0, ("check_info3_in_group: could not parse %s as a SID!", 
+-			  search_location));
+-
+-		return NT_STATUS_INVALID_PARAMETER;
+-	}
+-
+-	all_sids = TALLOC_ARRAY(mem_ctx, DOM_SID, num_all_sids);
+-	if (!all_sids)
+-		return NT_STATUS_NO_MEMORY;
+-
+-	/* and create (by appending rids) the 'domain' sids */
+-	
+-	sid_copy(&all_sids[0], &(info3->dom_sid.sid));
+-	
+-	if (!sid_append_rid(&all_sids[0], info3->user_rid)) {
+-		DEBUG(3,("could not append user's primary RID 0x%x\n",
++	if (!sid_compose(&sid, &(info3->dom_sid.sid),
++			 info3->user_rid)
++	    || !add_sid_to_array(mem_ctx, &sid,
++				 &token->user_sids, &token->num_sids)) {
++		DEBUG(3,("could not add user SID from rid 0x%x\n",
+ 			 info3->user_rid));			
+-		
+ 		return NT_STATUS_INVALID_PARAMETER;
+ 	}
+-	j++;
+ 
+-	sid_copy(&all_sids[1], &(info3->dom_sid.sid));
+-		
+-	if (!sid_append_rid(&all_sids[1], info3->group_rid)) {
++	if (!sid_compose(&sid, &(info3->dom_sid.sid),
++			 info3->group_rid)
++	    || !add_sid_to_array(mem_ctx, &sid, 
++				 &token->user_sids, &token->num_sids)) {
+ 		DEBUG(3,("could not append additional group rid 0x%x\n",
+ 			 info3->group_rid));			
+ 		
+ 		return NT_STATUS_INVALID_PARAMETER;
+ 	}
+-	j++;	
+ 
+-	/* Well-Known SIDs */
+-
+-	sid_copy( &all_sids[j++], &global_sid_World );
+-	sid_copy( &all_sids[j++], &global_sid_Authenticated_Users );
+-	
+ 	for (i = 0; i < info3->num_groups2; i++) {
+-	
+-		sid_copy(&all_sids[j], &(info3->dom_sid.sid));
+-		
+-		if (!sid_append_rid(&all_sids[j], info3->gids[i].g_rid)) {
++		if (!sid_compose(&sid, &(info3->dom_sid.sid),
++				 info3->gids[i].g_rid)
++		    || !add_sid_to_array(mem_ctx, &sid,
++					 &token->user_sids, &token->num_sids)) {
+ 			DEBUG(3,("could not append additional group rid 0x%x\n",
+-				info3->gids[i].g_rid));			
+-				
++				 info3->gids[i].g_rid));	
+ 			return NT_STATUS_INVALID_PARAMETER;
+ 		}
+-		j++;
+ 	}
+ 
+ 	/* Copy 'other' sids.  We need to do sid filtering here to
+@@ -242,21 +203,32 @@
+          */
+ 
+ 	for (i = 0; i < info3->num_other_sids; i++) {
+-		sid_copy(&all_sids[info3->num_groups2 + i + 2],
+-			 &info3->other_sids[i].sid);
+-		j++;
++		if (!add_sid_to_array(mem_ctx, &info3->other_sids[i].sid,
++				      &token->user_sids, &token->num_sids)) {
++			DEBUG(3, ("could not add SID to array: %s\n",
++				  sid_string_static(&info3->other_sids[i].sid)));
++			return NT_STATUS_NO_MEMORY;
++		}
+ 	}
+ 
+-	for (i = 0; i < j; i++) {
+-		fstring sid1, sid2;
+-		DEBUG(10, ("User has SID: %s\n", 
+-			   sid_to_string(sid1, &all_sids[i])));
+-		for (k = 0; k < num_require_membership_of_sid; k++) {
+-			if (sid_equal(&require_membership_of_sid[k], &all_sids[i])) {
+-				DEBUG(10, ("SID %s matches %s - user permitted to authenticate!\n", 
+-					   sid_to_string(sid1, &require_membership_of_sid[k]), sid_to_string(sid2, &all_sids[i])));
+-				return NT_STATUS_OK;
+-			}
++	if (!NT_STATUS_IS_OK(status = add_aliases(get_global_sam_sid(),
++						  token))
++	    || !NT_STATUS_IS_OK(status = add_aliases(&global_sid_Builtin,
++						     token))) {
++		DEBUG(3, ("could not add aliases: %s\n",
++			  nt_errstr(status)));
++		return status;
++	}
++
++	debug_nt_user_token(DBGC_CLASS, 10, token);
++
++	for (i=0; i<num_require_membership_of_sid; i++) {
++		DEBUG(10, ("Checking SID %s\n", sid_string_static(
++				   &require_membership_of_sid[i])));
++		if (nt_token_check_sid(&require_membership_of_sid[i],
++				       token)) {
++			DEBUG(10, ("Access ok\n"));
++			return NT_STATUS_OK;
+ 		}
+ 	}
+ 	
+

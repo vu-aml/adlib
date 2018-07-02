@@ -1,0 +1,180 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Apr 25 12:11:06 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3PGB66w032725
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 25 Apr 2007 12:11:06 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id D917B163933
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 25 Apr 2007 16:11:05 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 539)
+	id 11A22162B74; Wed, 25 Apr 2007 16:10:57 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jelmer@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070425161057.11A22162B74@lists.samba.org>
+Date: Wed, 25 Apr 2007 16:10:57 +0000 (GMT)
+Subject: svn commit: samba r22520 - in branches/SAMBA_4_0: .
+	source/pidl/lib/Parse/Pidl/Wireshark source/pidl/tests
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 4836
+Lines: 137
+
+Author: jelmer
+Date: 2007-04-25 16:10:54 +0000 (Wed, 25 Apr 2007)
+New Revision: 22520
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22520
+
+Log:
+Fix the TYPE command.
+Modified:
+   branches/SAMBA_4_0/
+   branches/SAMBA_4_0/source/pidl/lib/Parse/Pidl/Wireshark/Conformance.pm
+   branches/SAMBA_4_0/source/pidl/lib/Parse/Pidl/Wireshark/NDR.pm
+   branches/SAMBA_4_0/source/pidl/tests/wireshark-conf.pl
+
+
+Changeset:
+
+Property changes on: branches/SAMBA_4_0
+___________________________________________________________________
+Name: bzr:merge
+...skipped...
+
+Modified: branches/SAMBA_4_0/source/pidl/lib/Parse/Pidl/Wireshark/Conformance.pm
+===================================================================
+--- branches/SAMBA_4_0/source/pidl/lib/Parse/Pidl/Wireshark/Conformance.pm	2007-04-25 15:24:01 UTC (rev 22519)
++++ branches/SAMBA_4_0/source/pidl/lib/Parse/Pidl/Wireshark/Conformance.pm	2007-04-25 16:10:54 UTC (rev 22520)
+@@ -124,6 +124,12 @@
+ 		warning($pos, "invalid BASE_TYPE `$base_type'");
+ 	}
+ 
++	$dissectorname =~ s/^\"(.*)\"$/$1/g;
++
++	if (not ($dissectorname =~ /;$/)) {
++		warning($pos, "missing semicolon");
++	}
++
+ 	$data->{types}->{$name} = {
+ 		NAME => $name,
+ 		POS => $pos,
+
+Modified: branches/SAMBA_4_0/source/pidl/lib/Parse/Pidl/Wireshark/NDR.pm
+===================================================================
+--- branches/SAMBA_4_0/source/pidl/lib/Parse/Pidl/Wireshark/NDR.pm	2007-04-25 15:24:01 UTC (rev 22519)
++++ branches/SAMBA_4_0/source/pidl/lib/Parse/Pidl/Wireshark/NDR.pm	2007-04-25 16:10:54 UTC (rev 22520)
+@@ -834,6 +834,8 @@
+ {
+ 	my ($self, $type,$call,$ft,$base,$mask,$vals,$length) = @_;
+ 
++	return if (defined($self->{conformance}->{types}->{$type}));
++
+ 	$self->{conformance}->{types}->{$type} = {
+ 		NAME => $type,
+ 		DISSECTOR_NAME => $call,
+
+Modified: branches/SAMBA_4_0/source/pidl/tests/wireshark-conf.pl
+===================================================================
+--- branches/SAMBA_4_0/source/pidl/tests/wireshark-conf.pl	2007-04-25 15:24:01 UTC (rev 22519)
++++ branches/SAMBA_4_0/source/pidl/tests/wireshark-conf.pl	2007-04-25 16:10:54 UTC (rev 22520)
+@@ -5,7 +5,7 @@
+ use strict;
+ use warnings;
+ 
+-use Test::More tests => 45;
++use Test::More tests => 47;
+ use FindBin qw($RealBin);
+ use lib "$RealBin";
+ use Util;
+@@ -61,11 +61,11 @@
+ test_warnings("nofile:1: Unknown command `CODE'\n",
+ 	sub { parse_conf("CODE END\n"); } );
+ 
+-is_deeply(parse_conf("TYPE winreg_String dissect_myminregstring FT_STRING BASE_DEC 0 0 2\n"), { types => { winreg_String => { 
++is_deeply(parse_conf("TYPE winreg_String dissect_myminregstring(); FT_STRING BASE_DEC 0 0 2\n"), { types => { winreg_String => { 
+ 				NAME => "winreg_String",
+ 				POS => { FILE => "nofile", LINE => 1 },
+ 				USED => 0,
+-				DISSECTOR_NAME => "dissect_myminregstring",
++				DISSECTOR_NAME => "dissect_myminregstring();",
+ 				FT_TYPE => "FT_STRING",
+ 				BASE_TYPE => "BASE_DEC",
+ 				MASK => 0,
+@@ -87,13 +87,13 @@
+ 	sub { parse_conf("TYPE mytype dissector\n"); });
+ 
+ test_warnings("nofile:1: dissector name does not contain `dissect'\n",
+-	sub { parse_conf("TYPE winreg_String myminregstring FT_STRING BASE_DEC 0 0 2\n"); });
++	sub { parse_conf("TYPE winreg_String myminregstring; FT_STRING BASE_DEC 0 0 2\n"); });
+ 
+ test_warnings("nofile:1: invalid FT_TYPE `BLA'\n",
+-	sub { parse_conf("TYPE winreg_String dissect_myminregstring BLA BASE_DEC 0 0 2\n"); });
++	sub { parse_conf("TYPE winreg_String dissect_myminregstring; BLA BASE_DEC 0 0 2\n"); });
+ 
+ test_warnings("nofile:1: invalid BASE_TYPE `BLOE'\n",
+-	sub { parse_conf("TYPE winreg_String dissect_myminregstring FT_UINT32 BLOE 0 0 2\n"); });
++	sub { parse_conf("TYPE winreg_String dissect_myminregstring; FT_UINT32 BLOE 0 0 2\n"); });
+ 
+ is_deeply(parse_conf("TFS hf_bla \"True string\" \"False String\"\n"),
+ 		{ tfs => { hf_bla => {
+@@ -163,3 +163,38 @@
+ 
+ test_errors("nofile:1: incomplete HF_FIELD command\n",
+ 	sub { parse_conf("HF_FIELD hf_idx\n"); });
++
++is_deeply(parse_conf("TYPE winreg_String dissect_myminregstring(); FT_STRING BASE_DEC 0 0 0 2\n"), {
++		types => {
++			winreg_String => {
++				NAME => "winreg_String",
++				POS => { FILE => "nofile", LINE => 1 },
++				USED => 0,
++				DISSECTOR_NAME => "dissect_myminregstring();",
++				FT_TYPE => "FT_STRING",
++				BASE_TYPE => "BASE_DEC",
++				MASK => 0,
++				VALSSTRING => 0,
++				ALIGNMENT => 0
++			}
++		}
++	}
++);
++
++
++is_deeply(parse_conf("TYPE winreg_String \"offset = dissect_myminregstring(\@HF\@);\" FT_STRING BASE_DEC 0 0 0 2\n"), {
++		types => {
++			winreg_String => {
++				NAME => "winreg_String",
++				POS => { FILE => "nofile", LINE => 1 },
++				USED => 0,
++				DISSECTOR_NAME => "offset = dissect_myminregstring(\@HF\@);",
++				FT_TYPE => "FT_STRING",
++				BASE_TYPE => "BASE_DEC",
++				MASK => 0,
++				VALSSTRING => 0,
++				ALIGNMENT => 0
++			}
++		}
++	}
++);
+

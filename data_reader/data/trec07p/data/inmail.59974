@@ -1,0 +1,111 @@
+From beginners-return-92527-ktwarwic=speedy.uwaterloo.ca@perl.org  Mon Jun 18 12:59:17 2007
+Return-Path: <beginners-return-92527-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l5IGxGL9019789
+	for <ktwarwic@flax9.uwaterloo.ca>; Mon, 18 Jun 2007 12:59:16 -0400
+Received: (qmail 1764 invoked by uid 514); 18 Jun 2007 16:59:09 -0000
+Mailing-List: contact beginners-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:beginners@perl.org>
+List-Help: <mailto:beginners-help@perl.org>
+List-Unsubscribe: <mailto:beginners-unsubscribe@perl.org>
+List-Subscribe: <mailto:beginners-subscribe@perl.org>
+List-Id: <beginners.perl.org>
+Delivered-To: mailing list beginners@perl.org
+Received: (qmail 1755 invoked from network); 18 Jun 2007 16:59:09 -0000
+Received: from x1a.develooper.com (HELO x1.develooper.com) (216.52.237.111)
+  by lists.develooper.com with SMTP; 18 Jun 2007 16:59:09 -0000
+Received: (qmail 4452 invoked by uid 225); 18 Jun 2007 16:59:08 -0000
+Delivered-To: beginners@perl.org
+Received: (qmail 4429 invoked by alias); 18 Jun 2007 16:59:07 -0000
+X-Spam-Status: No, hits=0.0 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: domain of rvm@cbord.com designates 24.39.174.11 as permitted sender)
+Received: from mx1.cbord.com (HELO Email.cbord.com) (24.39.174.11)
+    by la.mx.develooper.com (qpsmtpd/0.28) with ESMTP; Mon, 18 Jun 2007 09:59:05 -0700
+X-MIMEOLE: Produced By Microsoft Exchange V6.5
+Content-class: urn:content-classes:message
+MIME-Version: 1.0
+Content-Type: text/plain;
+	charset="us-ascii"
+Subject: Inter-thread communications
+Date: Mon, 18 Jun 2007 12:58:31 -0400
+Message-ID: <FF8482A96323694490C194BABEAC24A0010EC84E@Email.cbord.com>
+X-MS-Has-Attach: 
+X-MS-TNEF-Correlator: 
+Thread-Topic: Inter-thread communications
+Thread-Index: AcexyeYzw9ZjXZefT4KCNcWC/Aoi0w==
+From: "Bob McConnell" <rvm@CBORD.com>
+To: <beginners@perl.org>
+Content-Transfer-Encoding: 8bit
+X-MIME-Autoconverted: from quoted-printable to 8bit by flax9.uwaterloo.ca id l5IGxGL9019789
+
+This is an offshoot of the thread "Having trouble porting an application
+to MS-Windows". This time I am looking at using fork() to separate input
+and output handling. But I am not sure how some of the IPC handling
+works in the Win32 environment.
+
+I am trying to emulate the behavior of an existing POS system currently
+installed at a client location without having to install and set up a
+copy of that system. I want to create two threads, one to read data from
+a serial port and one to write data to that same serial port. The data
+in both cases is a framed packet with checksum and ACK/NAK responses.
+This will have the affect of enabling full-duplex operations on the
+serial port, where my previous version was, in effect, two-way
+alternating half duplex. The framing is done with ASCII characters, like
+so:
+
+  <SOH>header<STX>content<ETX>checksum<EOT>
+
+1. The read thread must input the packet, validate the checksum and send
+ACK/NAK out the port, via the write thread. The content is then stored
+or sent on. It must also forward any ACK or NAK received to the transmit
+thread. There is no chance of an ACK or NAK embedded in the packet, so
+escapes are not necessary.
+
+2. The write thread must frame the packet, insert the checksum, and
+transmit it. Then it must wait up to three seconds for an ACK or NAK. If
+it receives the ACK, it waits for another message. If it gets a NAK, or
+times out, it transmits the packet again, up to three times. After three
+tries, an error is recorded and it looks for another message. It also
+must insert the ACK/NAK from the receive thread into the transmit data
+stream, although that can be held until after the current packet has
+been sent.
+
+I have two questions about this. First, is there a standard Perl IPC
+interface between threads? I am not familiar with pipes in this context,
+although I have used mailboxes and single word messages in various
+multi-processing environments, including POSIX threads.
+
+Second, is there a way to set this up so the transmit thread timeout can
+be easily implemented as a side effect of waiting for the ACK/NAK to
+arrive on that interface? I was thinking of using a semaphore, but they
+don't appear to be implemented on Win32.
+
+For this emulation, the outgoing messages are read from a text file and
+the incoming messages are stored in another text file. Timing of
+outgoing messages is controlled when that file is read. I am hoping this
+can provide a workaround for the alarm failure I ran into on the single
+threaded version as well as being a better emulation of the actual
+system.
+
+Thank you,
+
+Bob McConnell
+Principal Communications Programmer
+The CBORD Group, Inc.
+61 Brown Road
+Ithaca NY, 14850
+Phone 607 257-2410
+FAX 607 257-1902
+Email rvm@cbord.com
+Web www.cbord.com
+
+-- 
+To unsubscribe, e-mail: beginners-unsubscribe@perl.org
+For additional commands, e-mail: beginners-help@perl.org
+http://learn.perl.org/
+
+
+

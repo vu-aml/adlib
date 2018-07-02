@@ -1,0 +1,195 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Jun 29 05:01:56 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5T91uL9023329
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 29 Jun 2007 05:01:56 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 082E5162C4D
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 29 Jun 2007 09:01:53 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1004)
+	id 28C62162AC5; Fri, 29 Jun 2007 09:01:30 +0000 (GMT)
+To: samba-cvs@samba.org
+From: gd@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070629090130.28C62162AC5@lists.samba.org>
+Date: Fri, 29 Jun 2007 09:01:30 +0000 (GMT)
+Subject: svn commit: samba r23648 - in branches: SAMBA_3_0/source/libads
+	SAMBA_3_0/source/utils SAMBA_3_0_26/source/libads
+	SAMBA_3_0_26/source/utils
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: gd
+Date: 2007-06-29 09:01:29 +0000 (Fri, 29 Jun 2007)
+New Revision: 23648
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23648
+
+Log:
+Allow to list a custom krb5 keytab file with:
+
+	net ads keytab list /path/to/krb5.keytab
+
+Guenther
+
+Modified:
+   branches/SAMBA_3_0/source/libads/kerberos_keytab.c
+   branches/SAMBA_3_0/source/utils/net_ads.c
+   branches/SAMBA_3_0_26/source/libads/kerberos_keytab.c
+   branches/SAMBA_3_0_26/source/utils/net_ads.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/libads/kerberos_keytab.c
+===================================================================
+--- branches/SAMBA_3_0/source/libads/kerberos_keytab.c	2007-06-29 08:58:03 UTC (rev 23647)
++++ branches/SAMBA_3_0/source/libads/kerberos_keytab.c	2007-06-29 09:01:29 UTC (rev 23648)
+@@ -801,7 +801,7 @@
+  List system keytab.
+ ***********************************************************************/
+ 
+-int ads_keytab_list(void)
++int ads_keytab_list(const char *keytab_name)
+ {
+ 	krb5_error_code ret = 0;
+ 	krb5_context context = NULL;
+@@ -819,7 +819,7 @@
+ 		return ret;
+ 	}
+ 
+-	ret = smb_krb5_open_keytab(context, NULL, False, &keytab);
++	ret = smb_krb5_open_keytab(context, keytab_name, False, &keytab);
+ 	if (ret) {
+ 		DEBUG(1,("ads_keytab_list: smb_krb5_open_keytab failed (%s)\n", error_message(ret)));
+ 		goto out;
+
+Modified: branches/SAMBA_3_0/source/utils/net_ads.c
+===================================================================
+--- branches/SAMBA_3_0/source/utils/net_ads.c	2007-06-29 08:58:03 UTC (rev 23647)
++++ branches/SAMBA_3_0/source/utils/net_ads.c	2007-06-29 09:01:29 UTC (rev 23648)
+@@ -2423,12 +2423,13 @@
+ "  FLUSH     Flushes out all keytab entries\n"\
+ "  HELP      Prints this help message\n"\
+ "  LIST      List the keytab\n"\
+-"The ADD command will take arguments, the other commands\n"\
++"The ADD and LIST command will take arguments, the other commands\n"\
+ "will not take any arguments.   The arguments given to ADD\n"\
+ "should be a list of principals to add.  For example, \n"\
+ "   net ads keytab add srv1 srv2\n"\
+ "will add principals for the services srv1 and srv2 to the\n"\
+ "system's keytab.\n"\
++"The LIST command takes a keytabname.\n"\
+ "\n"
+ 		);
+ 	return -1;
+@@ -2479,15 +2480,21 @@
+ 
+ static int net_ads_keytab_list(int argc, const char **argv)
+ {
+-	return ads_keytab_list();
++	const char *keytab = NULL;
++
++	if (argc >= 1) {
++		keytab = argv[0];
++	}
++
++	return ads_keytab_list(keytab);
+ }
+ 
+ 
+ int net_ads_keytab(int argc, const char **argv)
+ {
+ 	struct functable func[] = {
++		{"ADD", net_ads_keytab_add},
+ 		{"CREATE", net_ads_keytab_create},
+-		{"ADD", net_ads_keytab_add},
+ 		{"FLUSH", net_ads_keytab_flush},
+ 		{"HELP", net_ads_keytab_usage},
+ 		{"LIST", net_ads_keytab_list},
+
+Modified: branches/SAMBA_3_0_26/source/libads/kerberos_keytab.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/libads/kerberos_keytab.c	2007-06-29 08:58:03 UTC (rev 23647)
++++ branches/SAMBA_3_0_26/source/libads/kerberos_keytab.c	2007-06-29 09:01:29 UTC (rev 23648)
+@@ -801,7 +801,7 @@
+  List system keytab.
+ ***********************************************************************/
+ 
+-int ads_keytab_list(void)
++int ads_keytab_list(const char *keytab_name)
+ {
+ 	krb5_error_code ret = 0;
+ 	krb5_context context = NULL;
+@@ -819,7 +819,7 @@
+ 		return ret;
+ 	}
+ 
+-	ret = smb_krb5_open_keytab(context, NULL, False, &keytab);
++	ret = smb_krb5_open_keytab(context, keytab_name, False, &keytab);
+ 	if (ret) {
+ 		DEBUG(1,("ads_keytab_list: smb_krb5_open_keytab failed (%s)\n", error_message(ret)));
+ 		goto out;
+
+Modified: branches/SAMBA_3_0_26/source/utils/net_ads.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/utils/net_ads.c	2007-06-29 08:58:03 UTC (rev 23647)
++++ branches/SAMBA_3_0_26/source/utils/net_ads.c	2007-06-29 09:01:29 UTC (rev 23648)
+@@ -2423,12 +2423,13 @@
+ "  FLUSH     Flushes out all keytab entries\n"\
+ "  HELP      Prints this help message\n"\
+ "  LIST      List the keytab\n"\
+-"The ADD command will take arguments, the other commands\n"\
++"The ADD and LIST command will take arguments, the other commands\n"\
+ "will not take any arguments.   The arguments given to ADD\n"\
+ "should be a list of principals to add.  For example, \n"\
+ "   net ads keytab add srv1 srv2\n"\
+ "will add principals for the services srv1 and srv2 to the\n"\
+ "system's keytab.\n"\
++"The LIST command takes a keytabname.\n"\
+ "\n"
+ 		);
+ 	return -1;
+@@ -2479,15 +2480,21 @@
+ 
+ static int net_ads_keytab_list(int argc, const char **argv)
+ {
+-	return ads_keytab_list();
++	const char *keytab = NULL;
++
++	if (argc >= 1) {
++		keytab = argv[0];
++	}
++
++	return ads_keytab_list(keytab);
+ }
+ 
+ 
+ int net_ads_keytab(int argc, const char **argv)
+ {
+ 	struct functable func[] = {
++		{"ADD", net_ads_keytab_add},
+ 		{"CREATE", net_ads_keytab_create},
+-		{"ADD", net_ads_keytab_add},
+ 		{"FLUSH", net_ads_keytab_flush},
+ 		{"HELP", net_ads_keytab_usage},
+ 		{"LIST", net_ads_keytab_list},
+

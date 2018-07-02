@@ -1,0 +1,151 @@
+From r-help-bounces@stat.math.ethz.ch  Thu May 31 19:20:27 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4VNKPhB001990
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 31 May 2007 19:20:26 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4VNJg7C001234;
+	Fri, 1 Jun 2007 01:19:59 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.2 required=5.0 tests=AWL, BAYES_50,
+	DKIM_POLICY_SIGNSOME autolearn=no version=3.2.0
+Received: from mail4.mayo.edu (mail4.mayo.edu [129.176.212.105])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4VM4PGM000985
+	for <r-help@stat.math.ethz.ch>; Fri, 1 Jun 2007 00:04:26 +0200
+Received: from mhro1a.mayo.edu ([129.176.212.53])
+	by ironport4.mayo.edu with ESMTP; 31 May 2007 17:04:25 -0500
+Received: from msgebh10.mfad.mfroot.org (msgebh10.mfad.mfroot.org
+	[129.176.251.36]) by mhro1a.mayo.edu with ESMTP for
+	r-help@stat.math.ethz.ch; Thu, 31 May 2007 17:04:25 -0500
+Received: from msgebe23.mfad.mfroot.org ([129.176.250.190]) by
+	msgebh10.mfad.mfroot.org with Microsoft SMTPSVC(6.0.3790.3959); 
+	Thu, 31 May 2007 17:04:25 -0500
+X-MimeOLE: Produced By Microsoft Exchange V6.5
+Content-class: urn:content-classes:message
+MIME-Version: 1.0
+Date: Thu, 31 May 2007 17:04:24 -0500
+Message-Id: <6021CA6EF4C8374084D4F5A141F1CBBBC14CC3@msgebe23.mfad.mfroot.org>
+X-MS-Has-Attach: 
+X-MS-TNEF-Correlator: 
+Thread-Topic: Using MIcombine for coxph fits
+Thread-Index: Acejz6Y+KU+FQmUmSPqw2dL2Gm4I7A==
+From: "Inman, Brant A.   M.D." <Inman.Brant@mayo.edu>
+To: <r-help@stat.math.ethz.ch>
+X-OriginalArrivalTime: 31 May 2007 22:04:25.0323 (UTC)
+	FILETIME=[A6AC83B0:01C7A3CF]
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+X-MIME-Autoconverted: from quoted-printable to 8bit by hypatia.math.ethz.ch id
+	l4VM4PGM000985
+Subject: [R] Using MIcombine for coxph fits
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+
+R-helpers:
+
+I am using R 2.5 on Windows XP, packages all up to date.  I have run
+into an issue with the MIcombine function of the mitools package that I
+hoped some of you might be able to help with.  I will work through a
+reproducible example to demonstrate the issue.
+
+First, make a dataset from the pbc dataset in the survival package
+
+---------------
+# Make a dataset
+library(survival)
+d <- pbc[,c('time','status','age','sex','hepmeg','platelet', 
+	'trt', 'trig')]
+d[d==-9] <- NA 
+d[,c(4,5,7)] <- lapply(d[,c(4,5,7)], FUN=as.factor)
+str(d)
+summary(d)
+---------------
+
+Second, since there is missing data for several (but not all) of the
+variables, investigate the patterns.
+
+---------------
+library(Hmisc)
+na.pattern(d)					
+clus <- naclus(d, method='complete')
+par(mfrow=c(2,2))
+naplot(clus, which='all')
+print(clus)
+detach(package: Hmisc)
+---------------
+
+After examining the missing data patterns, impute 10 datasets using the
+amelia function from the Amelia package. Check the densities of the
+continuous variables to make sure they make sense. 
+
+---------------
+library(Amelia)
+am.imp <- amelia(d, m=10, p2s=1, startvals=1, write.out=F,
+	noms=c('status','sex','hepmeg','trt'))
+compare.density(data=d, output=am.imp, var='trig')
+compare.density(data=d, output=am.imp, var='platelet')
+---------------
+
+Since everything looks ok, fit Cox models to each of the 10 imputed
+datasets using the functions of the mitools package.
+
+---------------
+library(mitools)
+miset  <- imputationList(list(am.imp[[1]],am.imp[[2]],am.imp[[3]],
+	am.imp[[4]],am.imp[[5]],am.imp[[6]],am.imp[[7]],am.imp[[8]],
+	am.imp[[9]],am.imp[[10]]))
+mifit  <- with(miset, coxph(Surv(time, status) ~ age + sex + 
+	hepmeg + platelet + trt + trig))
+mifit
+---------------
+
+The "mifit" object shows the individual coxph fits for each imputed
+dataset.  Now we have to pool these fitted models  to obtain an overall
+model. The code and result are shown below.
+
+---------------
+fit.am <- MIcombine(mifit)
+summary(fit.am) 
+
+Multiple imputation results:
+      with.imputationList(miset, coxph(Surv(time, status) ~ age + sex + 
+    hepmeg + platelet + trt + trig))
+      MIcombine.default(mifit)
+              results           se       (lower       upper) missInfo
+age       0.035548792 0.0082506946  0.019373545 0.0517240397      4 %
+sex1     -0.070760613 0.2563372831 -0.580309741 0.4387885156     34 %
+hepmeg1   0.932378808 0.2026274576  0.532555416 1.3322021993     23 %
+platelet -0.001757899 0.0009480636 -0.003620446 0.0001046469     14 %
+trt2      0.137413162 0.1924230007 -0.243815288 0.5186416117     29 %
+trig      0.003979287 0.0012010053  0.001607266 0.0063513078     25 %
+---------------
+
+The question I have concerns the meaning of this result.  The missInfo
+column of the summary function suggests that age was missing data, when
+in fact it was not. Is there a different interpretation for the missInfo
+column?
+
+Thanks in advance for any help.
+
+Brant Inman
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

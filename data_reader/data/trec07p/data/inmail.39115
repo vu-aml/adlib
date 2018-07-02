@@ -1,0 +1,237 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri May 18 09:49:18 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4IDnHqD014485
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 18 May 2007 09:49:18 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id E60771638F0
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 18 May 2007 13:49:14 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 360A7162C42; Fri, 18 May 2007 13:48:34 +0000 (GMT)
+Date: Fri, 18 May 2007 23:23:36 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070518134834.360A7162C42@lists.samba.org>
+Subject: Rev 319: - up rx_cnt on all packet types in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 319
+revision-id: tridge@samba.org-20070518132336-gjpdua5y9j3ydutx
+parent: tridge@samba.org-20070518121158-hay706mpx4tvajh2
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Fri 2007-05-18 23:23:36 +1000
+message:
+  - up rx_cnt on all packet types
+  - notice when a node becomes available again
+modified:
+  common/ctdb.c                  ctdb.c-20061127094323-t50f58d65iaao5of-2
+  common/ctdb_call.c             ctdb_call.c-20061128065342-to93h6eejj5kon81-1
+  common/ctdb_monitor.c          ctdb_monitor.c-20070518100625-8jf4ft1mjzmb22ck-1
+  include/ctdb_private.h         ctdb_private.h-20061117234101-o3qt14umlg9en8z0-13
+=== modified file 'common/ctdb.c'
+--- a/common/ctdb.c	2007-05-18 09:19:35 +0000
++++ b/common/ctdb.c	2007-05-18 13:23:36 +0000
+@@ -116,8 +116,7 @@
+ 	node->name = talloc_asprintf(node, "%s:%u", 
+ 				     node->address.address, 
+ 				     node->address.port);
+-	/* for now we just set the vnn to the line in the file - this
+-	   will change! */
++	/* this assumes that the nodes are kept in sorted order, and no gaps */
+ 	node->vnn = ctdb->num_nodes;
+ 
+ 	if (ctdb->address.address &&
+@@ -275,6 +274,11 @@
+ 		 "node %d to %d\n", hdr->reqid, hdr->operation, hdr->length,
+ 		 hdr->srcnode, hdr->destnode));
+ 
++	/* up the counter for this source node, so we know its alive */
++	if (ctdb_validate_vnn(ctdb, hdr->srcnode)) {
++		ctdb->nodes[hdr->srcnode]->rx_cnt++;
++	}
++
+ 	switch (hdr->operation) {
+ 	case CTDB_REQ_CALL:
+ 	case CTDB_REPLY_CALL:
+@@ -345,7 +349,6 @@
+ 
+ 	case CTDB_REQ_KEEPALIVE:
+ 		ctdb->status.keepalive_packets_recv++;
+-		ctdb_request_keepalive(ctdb, hdr);
+ 		break;
+ 
+ 	default:
+
+=== modified file 'common/ctdb_call.c'
+--- a/common/ctdb_call.c	2007-05-18 09:19:35 +0000
++++ b/common/ctdb_call.c	2007-05-18 13:23:36 +0000
+@@ -785,13 +785,11 @@
+ /* 
+    send a keepalive packet to the other node
+ */
+-void ctdb_send_keepalive(struct ctdb_context *ctdb,
+-				TALLOC_CTX *mem_ctx,
+-				uint32_t destnode)
++void ctdb_send_keepalive(struct ctdb_context *ctdb, uint32_t destnode)
+ {
+ 	struct ctdb_req_keepalive *r;
+ 	
+-	r = ctdb_transport_allocate(ctdb, mem_ctx, CTDB_REQ_KEEPALIVE,
++	r = ctdb_transport_allocate(ctdb, ctdb, CTDB_REQ_KEEPALIVE,
+ 				    sizeof(struct ctdb_req_keepalive), 
+ 				    struct ctdb_req_keepalive);
+ 	CTDB_NO_MEMORY_FATAL(ctdb, r);
+
+=== modified file 'common/ctdb_monitor.c'
+--- a/common/ctdb_monitor.c	2007-05-18 10:06:29 +0000
++++ b/common/ctdb_monitor.c	2007-05-18 13:23:36 +0000
+@@ -26,73 +26,55 @@
+ #include "../include/ctdb_private.h"
+ 
+ /*
+-  called when a CTDB_REQ_KEEPALIVE packet comes in
+-*/
+-void ctdb_request_keepalive(struct ctdb_context *ctdb, struct ctdb_req_header *hdr)
+-{
+-	struct ctdb_req_keepalive *r = (struct ctdb_req_keepalive *)hdr;
+-	struct ctdb_node *node = NULL;
+-	int i;
+-
+-	for (i=0;i<ctdb->num_nodes;i++) {
+-		if (ctdb->nodes[i]->vnn == r->hdr.srcnode) {
+-			node = ctdb->nodes[i];
+-			break;
+-		}
+-	}
+-	if (!node) {
+-		DEBUG(0,(__location__ " Keepalive received from node not in ctdb->nodes : %u\n", r->hdr.srcnode));
+-		return;
+-	}
+-
+-	node->rx_cnt++;
+-}
+-
+-
++  see if any nodes are dead
++ */
+ static void ctdb_check_for_dead_nodes(struct event_context *ev, struct timed_event *te, 
+ 			   struct timeval t, void *private_data)
+ {
+ 	struct ctdb_context *ctdb = talloc_get_type(private_data, struct ctdb_context);
+ 	int i;
+-	TALLOC_CTX *mem_ctx = talloc_new(ctdb);
+ 
+ 	/* send a keepalive to all other nodes, unless */
+ 	for (i=0;i<ctdb->num_nodes;i++) {
+-		if (!(ctdb->nodes[i]->flags & NODE_FLAGS_CONNECTED)) {
++		struct ctdb_node *node = ctdb->nodes[i];
++		if (node->vnn == ctdb->vnn) {
+ 			continue;
+ 		}
+-		if (ctdb->nodes[i]->vnn == ctdb_get_vnn(ctdb)) {
+-			continue;
++		
++		/* it might have come alive again */
++		if (!(node->flags & NODE_FLAGS_CONNECTED) && node->rx_cnt != 0) {
++			DEBUG(0,("Node %u is alive again - marking as connected\n", node->vnn));
++			node->flags |= NODE_FLAGS_CONNECTED;
+ 		}
+ 
+-		if (ctdb->nodes[i]->rx_cnt == 0) {
+-			ctdb->nodes[i]->dead_count++;
++		if (node->rx_cnt == 0) {
++			node->dead_count++;
+ 		} else {
+-			ctdb->nodes[i]->dead_count = 0;
++			node->dead_count = 0;
+ 		}
+ 
+-		if (ctdb->nodes[i]->dead_count>=3) {
+-			ctdb->nodes[i]->flags &= ~NODE_FLAGS_CONNECTED;
+-			/* should probably tell the transport layer
+-			   to kill the sockets as well 
++		node->rx_cnt = 0;
++
++		if (node->dead_count >= CTDB_MONITORING_DEAD_COUNT) {
++			DEBUG(0,("Node %u is dead - marking as not connected\n", node->vnn));
++			node->flags &= ~NODE_FLAGS_CONNECTED;
++			/* maybe tell the transport layer to kill the
++			   sockets as well?
+ 			*/
+ 			continue;
+ 		}
+ 
+-		ctdb_send_keepalive(ctdb, mem_ctx, i);
+-		ctdb->nodes[i]->rx_cnt = 0;
++		ctdb_send_keepalive(ctdb, node->vnn);
+ 	}
+-
+-
+-
+ 	
+-	talloc_free(mem_ctx);
+-
+ 	event_add_timed(ctdb->ev, ctdb, 
+ 			timeval_current_ofs(CTDB_MONITORING_TIMEOUT, 0), 
+ 			ctdb_check_for_dead_nodes, ctdb);
+ }
+ 
++/*
++  start watching for nodes that might be dead
++ */
+ int ctdb_start_monitoring(struct ctdb_context *ctdb)
+ {
+ 	event_add_timed(ctdb->ev, ctdb, 
+
+=== modified file 'include/ctdb_private.h'
+--- a/include/ctdb_private.h	2007-05-18 09:19:35 +0000
++++ b/include/ctdb_private.h	2007-05-18 13:23:36 +0000
+@@ -311,6 +311,9 @@
+ /* timeout between dead-node monitoring events */
+ #define CTDB_MONITORING_TIMEOUT 5
+ 
++/* number of monitoring timeouts before a node is considered dead */
++#define CTDB_MONITORING_DEAD_COUNT 3
++
+ 
+ /* number of consecutive calls from the same node before we give them
+    the record */
+@@ -710,7 +713,6 @@
+ void ctdb_reqid_remove(struct ctdb_context *ctdb, uint32_t reqid);
+ 
+ void ctdb_request_control(struct ctdb_context *ctdb, struct ctdb_req_header *hdr);
+-void ctdb_request_keepalive(struct ctdb_context *ctdb, struct ctdb_req_header *hdr);
+ void ctdb_reply_control(struct ctdb_context *ctdb, struct ctdb_req_header *hdr);
+ 
+ int ctdb_daemon_send_control(struct ctdb_context *ctdb, uint32_t destnode,
+@@ -819,6 +821,6 @@
+ uint32_t ctdb_get_num_connected_nodes(struct ctdb_context *ctdb);
+ 
+ int ctdb_start_monitoring(struct ctdb_context *ctdb);
+-void ctdb_send_keepalive(struct ctdb_context *ctdb, TALLOC_CTX *mem_ctx, uint32_t destnode);
++void ctdb_send_keepalive(struct ctdb_context *ctdb, uint32_t destnode);
+ 
+ #endif
+

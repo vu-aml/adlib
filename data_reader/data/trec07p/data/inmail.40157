@@ -1,0 +1,155 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun May 20 05:44:36 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4K9iaqD017605
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 20 May 2007 05:44:36 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 68864163868
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 20 May 2007 09:44:31 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 65DD2162ACE; Sun, 20 May 2007 09:44:04 +0000 (GMT)
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070520094404.65DD2162ACE@lists.samba.org>
+Date: Sun, 20 May 2007 09:44:04 +0000 (GMT)
+Subject: svn commit: samba r23020 - in branches/SAMBA_4_0/source/smb_server:
+	. smb smb2
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: tridge
+Date: 2007-05-20 09:44:03 +0000 (Sun, 20 May 2007)
+New Revision: 23020
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23020
+
+Log:
+
+a better fix for the memory leak - this one doesn't stuff up spnego :)
+
+Modified:
+   branches/SAMBA_4_0/source/smb_server/session.c
+   branches/SAMBA_4_0/source/smb_server/smb/sesssetup.c
+   branches/SAMBA_4_0/source/smb_server/smb2/sesssetup.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/smb_server/session.c
+===================================================================
+--- branches/SAMBA_4_0/source/smb_server/session.c	2007-05-20 08:57:01 UTC (rev 23019)
++++ branches/SAMBA_4_0/source/smb_server/session.c	2007-05-20 09:44:03 UTC (rev 23020)
+@@ -136,6 +136,7 @@
+  * gensec_ctx is optional, but talloc_steal'ed when present
+  */
+ struct smbsrv_session *smbsrv_session_new(struct smbsrv_connection *smb_conn,
++					  TALLOC_CTX *mem_ctx,
+ 					  struct gensec_security *gensec_ctx)
+ {
+ 	struct smbsrv_session *sess = NULL;
+@@ -144,7 +145,7 @@
+ 	/* Ensure no vuid gets registered in share level security. */
+ 	if (smb_conn->config.security == SEC_SHARE) return NULL;
+ 
+-	sess = talloc_zero(smb_conn, struct smbsrv_session);
++	sess = talloc_zero(mem_ctx, struct smbsrv_session);
+ 	if (!sess) return NULL;
+ 	sess->smb_conn = smb_conn;
+ 
+
+Modified: branches/SAMBA_4_0/source/smb_server/smb/sesssetup.c
+===================================================================
+--- branches/SAMBA_4_0/source/smb_server/smb/sesssetup.c	2007-05-20 08:57:01 UTC (rev 23019)
++++ branches/SAMBA_4_0/source/smb_server/smb/sesssetup.c	2007-05-20 09:44:03 UTC (rev 23020)
+@@ -49,6 +49,8 @@
+ {
+ 	if (NT_STATUS_IS_OK(status)) {
+ 		req->smb_conn->negotiate.done_sesssetup = True;
++		/* we need to keep the session long term */
++		req->session = talloc_steal(req->smb_conn, req->session);
+ 	}
+ 	smbsrv_reply_sesssetup_send(req, sess, status);
+ }
+@@ -71,7 +73,7 @@
+ 	if (!NT_STATUS_IS_OK(status)) goto failed;
+ 
+ 	/* allocate a new session */
+-	smb_sess = smbsrv_session_new(req->smb_conn, NULL);
++	smb_sess = smbsrv_session_new(req->smb_conn, req, NULL);
+ 	if (!smb_sess) {
+ 		status = NT_STATUS_INSUFFICIENT_RESOURCES;
+ 		goto failed;
+@@ -166,7 +168,7 @@
+ 	if (!NT_STATUS_IS_OK(status)) goto failed;
+ 
+ 	/* allocate a new session */
+-	smb_sess = smbsrv_session_new(req->smb_conn, NULL);
++	smb_sess = smbsrv_session_new(req->smb_conn, req, NULL);
+ 	if (!smb_sess) {
+ 		status = NT_STATUS_INSUFFICIENT_RESOURCES;
+ 		goto failed;
+@@ -339,6 +341,10 @@
+ failed:
+ 	status = auth_nt_status_squash(status);
+ 	smbsrv_sesssetup_backend_send(req, sess, status);
++	if (!NT_STATUS_IS_OK(status) && 
++	    !NT_STATUS_EQUAL(status, NT_STATUS_MORE_PROCESSING_REQUIRED)) {
++		talloc_free(smb_sess);
++	}
+ }
+ 
+ /*
+@@ -394,7 +400,7 @@
+ 		}
+ 
+ 		/* allocate a new session */
+-		smb_sess = smbsrv_session_new(req->smb_conn, gensec_ctx);
++		smb_sess = smbsrv_session_new(req->smb_conn, req->smb_conn, gensec_ctx);
+ 		if (!smb_sess) {
+ 			status = NT_STATUS_INSUFFICIENT_RESOURCES;
+ 			goto failed;
+
+Modified: branches/SAMBA_4_0/source/smb_server/smb2/sesssetup.c
+===================================================================
+--- branches/SAMBA_4_0/source/smb_server/smb2/sesssetup.c	2007-05-20 08:57:01 UTC (rev 23019)
++++ branches/SAMBA_4_0/source/smb_server/smb2/sesssetup.c	2007-05-20 09:44:03 UTC (rev 23020)
+@@ -95,6 +95,10 @@
+ failed:
+ 	req->status = auth_nt_status_squash(status);
+ 	smb2srv_sesssetup_send(req, io);
++	if (!NT_STATUS_IS_OK(status) && !
++	    NT_STATUS_EQUAL(status, NT_STATUS_MORE_PROCESSING_REQUIRED)) {
++		talloc_free(smb_sess);
++	}
+ }
+ 
+ static void smb2srv_sesssetup_backend(struct smb2srv_request *req, union smb_sesssetup *io)
+@@ -138,7 +142,7 @@
+ 		}
+ 
+ 		/* allocate a new session */
+-		smb_sess = smbsrv_session_new(req->smb_conn, gensec_ctx);
++		smb_sess = smbsrv_session_new(req->smb_conn, req->smb_conn, gensec_ctx);
+ 		if (!smb_sess) {
+ 			status = NT_STATUS_INSUFFICIENT_RESOURCES;
+ 			goto failed;
+

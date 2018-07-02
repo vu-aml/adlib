@@ -1,0 +1,139 @@
+From r-help-bounces@stat.math.ethz.ch  Thu May 31 10:24:58 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4VEOvhB028914
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 31 May 2007 10:24:57 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4VENuBa020385;
+	Thu, 31 May 2007 16:24:23 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.3 required=5.0 tests=AWL, BAYES_50, DKIM_SIGNED,
+	DKIM_VERIFIED autolearn=no version=3.2.0
+Received: from wa-out-1112.google.com (wa-out-1112.google.com [209.85.146.180])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4VEErHC016805
+	for <r-help@stat.math.ethz.ch>; Thu, 31 May 2007 16:14:54 +0200
+Received: by wa-out-1112.google.com with SMTP id j37so261077waf
+	for <r-help@stat.math.ethz.ch>; Thu, 31 May 2007 07:14:53 -0700 (PDT)
+Received: by 10.115.79.1 with SMTP id g1mr695857wal.1180620892814;
+	Thu, 31 May 2007 07:14:52 -0700 (PDT)
+Received: by 10.67.29.11 with HTTP; Thu, 31 May 2007 07:14:52 -0700 (PDT)
+Message-ID: <971536df0705310714s4da63dacyb8c512f61dbed862@mail.gmail.com>
+Date: Thu, 31 May 2007 10:14:52 -0400
+From: "Gabor Grothendieck" <ggrothendieck@gmail.com>
+To: "Roberto Brunelli" <brunelli@itc.it>
+In-Reply-To: <465ECB8B.9030305@itc.it>
+MIME-Version: 1.0
+Content-Disposition: inline
+References: <465ECB8B.9030305@itc.it>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] Selective 'expansion' of arguments in a match.call() result
+	...
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+Try this:
+
+
+# ith arg is expanded if expand[[i]] is TRUE where expand is
+# extended to vector of same length as ... .
+# default is to expand all args if 1st arg is "character"
+example2 <- function(..., expand = is.character(..1)) {
+	L <- list(...)
+	expand <- rep(expand, length = length(L))
+	mc <- match.call()
+	mc$expand <- NULL
+	for(i in which(expand)) mc[[i+1]] <- L[[i]]
+	mc
+}
+
+# test
+a <- b <- 1
+example2(a, b)
+d <- "a"
+example2(d, b)
+example2(a, b, expand = TRUE)
+example2(a, b, expand = c(TRUE, FALSE))
+
+
+On 5/31/07, Roberto Brunelli <brunelli@itc.it> wrote:
+> Is it  possible to  write a support  function to  automatize selective
+> argument expansion (based on argument  value type) as in the following
+> example, in  order  to write  terse  code  even  when there  are  many
+> arguments?  Forcing evaluation of all arguments is not a problem ...
+>
+> ______________________________________________Thanks a lot!__________R_
+>
+> # When called with document = 1, we have the simple match.call() result,
+> # when document =  2 and name is a string, it  is expanded, otherwise it
+> # is not
+>
+> example <- function (name, document = FALSE) {
+>
+>   print(name)
+>
+>   if(document == 1) {
+>     resh          <- match.call()
+>   } else if (document == 2) {
+>     resh          <- match.call()
+>
+>     if(is.character(name)) {
+>       resh$name     <- name
+>     }
+>     resh$document <- document
+>   } else {
+>     resh <- call("<undef>")
+>   }
+>
+>   resh
+> }
+>
+>  > a <- "Roberto"
+>  > b <- 1
+>  > example(a, document = 1)
+> [1] "Roberto"
+> example(name = a, document = 1)
+>  > example(a, document = 2)
+> [1] "Roberto"
+> example(name = "Roberto", document = 2)
+>  > example(b, document = 2)
+> [1] 1
+> example(name = b, document = 2)
+>  >
+>
+> --
+>        <r/>
+> | Roberto Brunelli - [scientist at  Fondazione Bruno Kessler-irst]
+> |           'Home can be anywhere, for it is a part of one's self'
+>
+> ------------------
+> ITC -> dall'1 marzo 2007 Fondazione Bruno Kessler
+> ITC -> since 1 March 2007 Fondazione Bruno Kessler
+>
+> ______________________________________________
+> R-help@stat.math.ethz.ch mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-help
+> PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+> and provide commented, minimal, self-contained, reproducible code.
+>
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

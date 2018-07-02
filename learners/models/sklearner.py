@@ -131,7 +131,7 @@ class Model(BaseModel):
             params (Dict): set of available params with updated values
 
         """
-        self.learner.set_params(params)
+        self.learner.set_params(**params)
 
     def get_available_params(self) -> Dict:
         """Get the set of params defined in the model usage.

@@ -1,0 +1,115 @@
+From r-help-bounces@stat.math.ethz.ch  Wed Apr 18 13:09:37 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3IH9Y0I013397
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 18 Apr 2007 13:09:35 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3IH7vbL030058;
+	Wed, 18 Apr 2007 19:08:08 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.3 required=5.0 tests=AWL,
+	BAYES_50 autolearn=no version=3.1.8
+Received: from mdhost1.centroin.com.br (smtp.centroin.com.br [200.225.63.205])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3IH7iAT030025
+	(version=TLSv1/SSLv3 cipher=DHE-RSA-AES256-SHA bits=256 verify=NO)
+	for <r-help@stat.math.ethz.ch>; Wed, 18 Apr 2007 19:07:46 +0200
+Received: from centroin.com.br (trex.centroin.com.br [200.225.63.134])
+	by mdhost1.centroin.com.br (8.14.0/8.14.0/CIP SMTP HOST) with ESMTP id
+	l3IH7Tej047039; Wed, 18 Apr 2007 14:07:51 -0300 (BRT)
+	(envelope-from albmont@centroin.com.br)
+From: "Alberto Monteiro" <albmont@centroin.com.br>
+To: "Schmitt, Corinna" <Corinna.Schmitt@igb.fraunhofer.de>,
+   <r-help@stat.math.ethz.ch>
+Date: Wed, 18 Apr 2007 15:07:51 -0200
+Message-Id: <20070418165505.M37208@centroin.com.br>
+In-Reply-To: <8B7B0FD99E8AF541A21609104D1961589128BD@izs-xchg01.izs.fraunhofer.de>
+References: <8B7B0FD99E8AF541A21609104D1961589128BD@izs-xchg01.izs.fraunhofer.de>
+X-Mailer: CIP WebMail 2.51 20050627
+X-OriginatingIP: 200.179.65.110 (albmont)
+MIME-Version: 1.0
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Subject: Re: [R] importing excel-file
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+Status: O
+Content-Length: 2147
+Lines: 63
+
+Corinna Schmitt wrote:
+> 
+> It is a quite stupid question but please help me. I am very 
+> confuced. I am able to import normal txt ant mat-files to R but 
+> unable to import .xls-file
+> 
+I've tried two ways to import excel files, but none of them
+seems perfect.
+
+Method 1:
+This method uses library RODBC. The way to import excel files is this:
+
+  channel <- odbcConnectExcel("myfile.xls")
+  tables <- sqlTables(channel)  # list the names of the spreadsheets
+  name1 <- tables[1, "TABLE_NAME"]  # get the name of the 1st spreadsheet
+
+  plan1 <- sqlFetch(channel, name1)  # this _should_ work, but it doesn't
+# The reason is that somehow the names of the sheets are altered
+
+  plan1 <- sqlFetch(channel, "sheet name") # this works 
+# but you must type the exact name of the sheet
+
+# the next line works, no matter what is name1 (taken from tables)
+  plan1 <- sqlQuery(channel, sprintf("select * from [%s]", name1))
+
+  odbcClose(channel)  # close it
+
+This is not perfect. Some (most?) of the numerical fields in the 
+spreadsheet are translated to NA and become meaningless.
+
+Method 2:
+This method uses library xlsReadWrite. You must know the index
+of the spreadsheet that you want to load:
+
+plan6 <- read.xls(filename, sheet = 6, colClasses="double")
+
+This works in most cases.
+
+> I do not understand the online help. Can please anyone send me the
+> corresponding command lines?
+>
+help(help) # :-)
+
+> The .xls-file is attached.
+>
+No, it's not.
+
+> In my file we use commas for the decimal format (example: 0,712),
+> changes might be needed.
+> 
+I *think* this is an internal flag. If the numbers are numbers, then
+this should be no problem. An excel spreadsheet in any language is
+portable to other languages, even when the evil geniuses of M$ 
+decided to localize function names so that, in Portuguese, we have
+SENO instead of SIN and RAIZ instead of SQRT.
+
+Alberto Monteiro
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

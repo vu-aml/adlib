@@ -1,0 +1,259 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu May 31 17:16:35 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4VLGYhB000687
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 31 May 2007 17:16:34 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 7EADB162C4C
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 31 May 2007 21:16:29 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.6 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 540)
+	id 794CD162AE4; Thu, 31 May 2007 21:15:54 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jerry@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070531211554.794CD162AE4@lists.samba.org>
+Date: Thu, 31 May 2007 21:15:54 +0000 (GMT)
+Subject: svn commit: samba r23278 - in branches/SAMBA_3_0_26/source: include
+	libmsrpc rpc_client rpc_parse utils
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: jerry
+Date: 2007-05-31 21:15:53 +0000 (Thu, 31 May 2007)
+New Revision: 23278
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23278
+
+Log:
+remove vestiges of rpccli_reg_close()
+Modified:
+   branches/SAMBA_3_0_26/source/include/rpc_reg.h
+   branches/SAMBA_3_0_26/source/libmsrpc/cac_winreg.c
+   branches/SAMBA_3_0_26/source/rpc_client/cli_reg.c
+   branches/SAMBA_3_0_26/source/rpc_parse/parse_reg.c
+   branches/SAMBA_3_0_26/source/utils/net_rpc_registry.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0_26/source/include/rpc_reg.h
+===================================================================
+--- branches/SAMBA_3_0_26/source/include/rpc_reg.h	2007-05-31 21:09:57 UTC (rev 23277)
++++ branches/SAMBA_3_0_26/source/include/rpc_reg.h	2007-05-31 21:15:53 UTC (rev 23278)
+@@ -348,19 +348,7 @@
+ /***********************************************/
+ 
+ typedef struct {
+-	POLICY_HND pol; /* policy handle */
+-} REG_Q_CLOSE;
+-
+-typedef struct {
+ 	POLICY_HND pol; 
+-	WERROR status; 
+-} REG_R_CLOSE;
+-
+-
+-/***********************************************/
+-
+-typedef struct {
+-	POLICY_HND pol; 
+ 	uint32 key_index;       
+ 	uint16 key_name_len;   
+ 	uint16 unknown_1;       /* 0x0414 */
+
+Modified: branches/SAMBA_3_0_26/source/libmsrpc/cac_winreg.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/libmsrpc/cac_winreg.c	2007-05-31 21:09:57 UTC (rev 23277)
++++ branches/SAMBA_3_0_26/source/libmsrpc/cac_winreg.c	2007-05-31 21:15:53 UTC (rev 23278)
+@@ -93,7 +93,6 @@
+ 		  POLICY_HND * key )
+ {
+ 	struct rpc_pipe_client *pipe_hnd = NULL;
+-	WERROR err;
+ 
+ 	if ( !hnd )
+ 		return CAC_FAILURE;
+@@ -114,8 +113,7 @@
+ 		return CAC_FAILURE;
+ 	}
+ 
+-	err = rpccli_reg_close( pipe_hnd, mem_ctx, key );
+-	hnd->status = werror_to_ntstatus( err );
++	hnd->status = rpccli_winreg_CloseKey( pipe_hnd, mem_ctx, key );
+ 
+ 	if ( !NT_STATUS_IS_OK( hnd->status ) ) {
+ 		return CAC_FAILURE;
+@@ -203,8 +201,7 @@
+ 
+ 	if ( !op->in.parent_key ) {
+ 		/*then close the one that we opened above */
+-		err = rpccli_reg_close( pipe_hnd, mem_ctx, parent_key );
+-		hnd->status = werror_to_ntstatus( err );
++		hnd->status = rpccli_winreg_CloseKey( pipe_hnd, mem_ctx, parent_key );
+ 
+ 		if ( !NT_STATUS_IS_OK( hnd->status ) ) {
+ 			return CAC_FAILURE;
+@@ -436,7 +433,7 @@
+ 		rpccli_reg_flush_key( pipe_hnd, mem_ctx, key );
+ 
+ 		/*close the key that we opened */
+-		rpccli_reg_close( pipe_hnd, mem_ctx, &subkey );
++		rpccli_winreg_CloseKey( pipe_hnd, mem_ctx, &subkey );
+ 
+ 		/*now we delete the subkey */
+ 		err = rpccli_reg_delete_key( pipe_hnd, mem_ctx, key,
+
+Modified: branches/SAMBA_3_0_26/source/rpc_client/cli_reg.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/rpc_client/cli_reg.c	2007-05-31 21:09:57 UTC (rev 23277)
++++ branches/SAMBA_3_0_26/source/rpc_client/cli_reg.c	2007-05-31 21:15:53 UTC (rev 23278)
+@@ -635,31 +635,6 @@
+ }
+ 
+ /****************************************************************************
+-****************************************************************************/
+-
+-WERROR rpccli_reg_close(struct rpc_pipe_client *cli, TALLOC_CTX *mem_ctx,
+-                       POLICY_HND *hnd)
+-{
+-	REG_Q_CLOSE in;
+-	REG_R_CLOSE out;
+-	prs_struct qbuf, rbuf;
+-
+-	ZERO_STRUCT (in);
+-	ZERO_STRUCT (out);
+-	
+-	init_reg_q_close(&in, hnd);
+-
+-	CLI_DO_RPC_WERR( cli, mem_ctx, PI_WINREG, REG_CLOSE, 
+-	            in, out, 
+-	            qbuf, rbuf,
+-	            reg_io_q_close,
+-	            reg_io_r_close, 
+-	            WERR_GENERAL_FAILURE );
+-	
+-	return out.status;
+-}
+-
+-/****************************************************************************
+ do a REG Query Info
+ ****************************************************************************/
+ 
+
+Modified: branches/SAMBA_3_0_26/source/rpc_parse/parse_reg.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/rpc_parse/parse_reg.c	2007-05-31 21:09:57 UTC (rev 23277)
++++ branches/SAMBA_3_0_26/source/rpc_parse/parse_reg.c	2007-05-31 21:15:53 UTC (rev 23278)
+@@ -685,66 +685,6 @@
+ }
+ 
+ /*******************************************************************
+- Inits an REG_Q_CLOSE structure.
+-********************************************************************/
+-
+-void init_reg_q_close(REG_Q_CLOSE *q_c, POLICY_HND *hnd)
+-{
+-	DEBUG(5,("init_reg_q_close\n"));
+-
+-	memcpy(&q_c->pol, hnd, sizeof(q_c->pol));
+-}
+-
+-/*******************************************************************
+-reads or writes a structure.
+-********************************************************************/
+-
+-BOOL reg_io_q_close(const char *desc,  REG_Q_CLOSE *q_u, prs_struct *ps, int depth)
+-{
+-	if (q_u == NULL)
+-		return False;
+-
+-	prs_debug(ps, depth, desc, "reg_io_q_close");
+-	depth++;
+-
+-	if(!prs_align(ps))
+-		return False;
+-
+-	if(!smb_io_pol_hnd("", &q_u->pol, ps, depth))
+-		return False;
+-	if(!prs_align(ps))
+-		return False;
+-
+-	return True;
+-}
+-
+-/*******************************************************************
+-reads or writes a structure.
+-********************************************************************/
+-
+-BOOL reg_io_r_close(const char *desc,  REG_R_CLOSE *r_u, prs_struct *ps, int depth)
+-{
+-	if ( !r_u )
+-		return False;
+-
+-	prs_debug(ps, depth, desc, "reg_io_r_close");
+-	depth++;
+-
+-	if(!prs_align(ps))
+-		return False;
+-
+-	if(!smb_io_pol_hnd("", &r_u->pol, ps, depth))
+-		return False;
+-	if(!prs_align(ps))
+-		return False;
+-
+-	if(!prs_werror("status", ps, depth, &r_u->status))
+-		return False;
+-
+-	return True;
+-}
+-
+-/*******************************************************************
+ makes a structure.
+ ********************************************************************/
+ 
+
+Modified: branches/SAMBA_3_0_26/source/utils/net_rpc_registry.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/utils/net_rpc_registry.c	2007-05-31 21:09:57 UTC (rev 23277)
++++ branches/SAMBA_3_0_26/source/utils/net_rpc_registry.c	2007-05-31 21:15:53 UTC (rev 23278)
+@@ -186,8 +186,8 @@
+ 	/* cleanup */
+ 	
+ 	if ( strlen( subpath ) != 0 )
+-		rpccli_reg_close(pipe_hnd, mem_ctx, &pol_key );
+-	rpccli_reg_close(pipe_hnd, mem_ctx, &pol_hive );
++		rpccli_winreg_CloseKey(pipe_hnd, mem_ctx, &pol_key );
++	rpccli_winreg_CloseKey(pipe_hnd, mem_ctx, &pol_hive );
+ 
+ 	return werror_to_ntstatus(result);
+ }
+@@ -249,8 +249,8 @@
+ 	
+ 	/* cleanup */
+ 	
+-	rpccli_reg_close(pipe_hnd, mem_ctx, &pol_key );
+-	rpccli_reg_close(pipe_hnd, mem_ctx, &pol_hive );
++	rpccli_winreg_CloseKey(pipe_hnd, mem_ctx, &pol_key );
++	rpccli_winreg_CloseKey(pipe_hnd, mem_ctx, &pol_hive );
+ 
+ 	return werror_to_ntstatus(result);
+ }
+

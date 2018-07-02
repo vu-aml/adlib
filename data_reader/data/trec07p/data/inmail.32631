@@ -1,0 +1,93 @@
+From beginners-return-91479-ktwarwic=speedy.uwaterloo.ca@perl.org  Wed May  9 17:53:02 2007
+Return-Path: <beginners-return-91479-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l49Lr0qD001806
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 9 May 2007 17:53:01 -0400
+Received: (qmail 11070 invoked by uid 514); 9 May 2007 21:52:54 -0000
+Mailing-List: contact beginners-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:beginners@perl.org>
+List-Help: <mailto:beginners-help@perl.org>
+List-Unsubscribe: <mailto:beginners-unsubscribe@perl.org>
+List-Subscribe: <mailto:beginners-subscribe@perl.org>
+List-Id: <beginners.perl.org>
+Delivered-To: mailing list beginners@perl.org
+Received: (qmail 11061 invoked from network); 9 May 2007 21:52:54 -0000
+Received: from x1a.develooper.com (HELO x1.develooper.com) (216.52.237.111)
+  by lists.develooper.com with SMTP; 9 May 2007 21:52:54 -0000
+Received: (qmail 7929 invoked by uid 225); 9 May 2007 21:52:53 -0000
+Delivered-To: beginners@perl.org
+Received: (qmail 7924 invoked by alias); 9 May 2007 21:52:53 -0000
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: domain of chas.owens@gmail.com designates 64.233.162.236 as permitted sender)
+Received: from nz-out-0506.google.com (HELO nz-out-0506.google.com) (64.233.162.236)
+    by la.mx.develooper.com (qpsmtpd/0.28) with ESMTP; Wed, 09 May 2007 14:51:47 -0700
+Received: by nz-out-0506.google.com with SMTP id 12so349304nzp
+        for <beginners@perl.org>; Wed, 09 May 2007 14:51:42 -0700 (PDT)
+DKIM-Signature: a=rsa-sha1; c=relaxed/relaxed;
+        d=gmail.com; s=beta;
+        h=domainkey-signature:received:received:message-id:date:from:to:subject:cc:in-reply-to:mime-version:content-type:content-transfer-encoding:content-disposition:references;
+        b=egweTsD78Ertn6V4ZaJ64gGM2PaIWTVgC5r4dhWVivAkc94HGe4bj8lI0imEcKrxoOE12lDh5kDu++eO/OY2Mfj3NQ0bJzmn0GAqdygy1kxO0o60XUJroBZfq56SkbfXPDVApUh20DJMqpru98c+EaVTq95nIspjxkddb9QvxIo=
+DomainKey-Signature: a=rsa-sha1; c=nofws;
+        d=gmail.com; s=beta;
+        h=received:message-id:date:from:to:subject:cc:in-reply-to:mime-version:content-type:content-transfer-encoding:content-disposition:references;
+        b=h/0CcHNDI5PEABnTXHIuq8pxU9aFEjtbfRsv340Tf0q/qSXAmJPLq9ZLSyuZ+BUDueu1nC8V+I/ADu0GtAJ1/uCXaOz2Aat0xhw6c4wYAFxR+u6b3ktE/K6TZK5Av7xbWNkJYzda3edZo0xANrtcXB+5AQ7/ez+78vGVTaMUOmI=
+Received: by 10.114.103.1 with SMTP id a1mr297938wac.1178747501756;
+        Wed, 09 May 2007 14:51:41 -0700 (PDT)
+Received: by 10.114.92.6 with HTTP; Wed, 9 May 2007 14:51:40 -0700 (PDT)
+Message-ID: <58ce48dc0705091451n6a1e5fbdt99b1f0d933637779@mail.gmail.com>
+Date: Wed, 9 May 2007 17:51:40 -0400
+From: "Chas Owens" <chas.owens@gmail.com>
+To: "Jeff Pang" <pangj@earthlink.net>
+Subject: Re: forking problem with dbd::mysql
+Cc: beginners-list <beginners@perl.org>
+In-Reply-To: <13942374.1178746861196.JavaMail.root@elwamui-ovcar.atl.sa.earthlink.net>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+References: <13942374.1178746861196.JavaMail.root@elwamui-ovcar.atl.sa.earthlink.net>
+
+On 5/9/07, Jeff Pang <pangj@earthlink.net> wrote:
+snip
+> Using InactiveDestroy flag seems a standard way since this module's author provide this flag.
+> But it's maybe bring some problems when the applications are large enough,and it's not
+> the fact that every programmer would disconnect their dbh connections in time.For
+> example,consider the case programs were run under modperl and without Apache::DBI,
+> using this flag would possibly make lots of db connections to database and consume db's
+> socket source quickly.
+>
+> Then for me I would maybe consider another way of creating its own dbh in child after fork.
+> Hope I'm right,:)
+
+The only place InactiveDestroy is appropriate is just after a fork in
+either the parent or the child (depending on which one is keeping the
+handle).  You should immediately disconnect the database handle after
+setting the flag (either explicitly with disconnect or implicitly by
+opening another and assigning it to the same scalar).  In the case of
+the code in question it looks like this
+
+                my $pid = fork();
+                if ($pid == 0 && defined($pid)){
+                        # child connection
+                        # do lots of stuff in here, including make our
+own db connection
+                        $dbh->{InactiveDestroy} = 1;
+                        $dbh = DBI->connect($dsn, $dbun, $dbpw,
+{RaiseError => 1});
+                        # do stuff
+                        exit;
+                } elsif ($pid) {
+                        # this is the parent - do nothing
+                } else {
+                        warn "unable to fork: resources unavailable.\n";
+                }
+
+-- 
+To unsubscribe, e-mail: beginners-unsubscribe@perl.org
+For additional commands, e-mail: beginners-help@perl.org
+http://learn.perl.org/
+
+

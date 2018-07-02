@@ -1,0 +1,215 @@
+From sugar-bounces@laptop.org  Tue May 15 22:59:57 2007
+Return-Path: <sugar-bounces@laptop.org>
+Received: from pedal.laptop.org (pedal.laptop.org [18.85.2.148])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4G2xvqD013320
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 22:59:57 -0400
+Received: from pedal.laptop.org (localhost [127.0.0.1])
+	by pedal.laptop.org (Postfix) with ESMTP id 628654F6A4;
+	Tue, 15 May 2007 22:59:29 -0400 (EDT)
+X-Original-To: sugar@laptop.org
+Delivered-To: sugar@laptop.org
+Received: from spam.laptop.org (spam.laptop.org [18.85.46.23])
+	by pedal.laptop.org (Postfix) with ESMTP id 0D3034F6A4
+	for <sugar@laptop.org>; Tue, 15 May 2007 22:59:28 -0400 (EDT)
+X-ASG-Debug-ID: 1179284391-6ca500000000-3Xmyjt
+X-Barracuda-URL: http://18.85.46.23:8000/cgi-bin/mark.cgi
+X-Barracuda-Connect: void.printf.net[217.147.94.159]
+X-Barracuda-Start-Time: 1179284391
+X-Barracuda-Encrypted: AES256-SHA
+X-ASG-Whitelist: Sender
+Received: from void.printf.net (void.printf.net [217.147.94.159])
+	(using TLSv1 with cipher AES256-SHA (256/256 bits))
+	(No client certificate requested)
+	by spam.laptop.org (Spam Firewall) with ESMTP
+	id 8F620B9D2; Tue, 15 May 2007 22:59:52 -0400 (EDT)
+Received: from pullcord.laptop.org ([18.85.46.20])
+	by void.printf.net with esmtp (Exim 4.50)
+	id 1Ho9jz-0003zs-78; Wed, 16 May 2007 03:59:51 +0100
+To: sugar@laptop.org
+X-ASG-Orig-Subj: [PATCH evince-olpc] Suspend/resume support.
+From: Chris Ball <cjb@laptop.org>
+Date: Tue, 15 May 2007 23:06:25 -0400
+Message-ID: <86646th3gu.fsf@pullcord.laptop.org>
+User-Agent: Gnus/5.11 (Gnus v5.11) Emacs/23.0.51 (gnu/linux)
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="=-=-="
+X-Barracuda-Virus-Scanned: by Barracuda Spam Firewall at laptop.org
+Subject: [sugar] [PATCH evince-olpc] Suspend/resume support.
+X-BeenThere: sugar@laptop.org
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Discussion of OLPC design,
+	desktop platform and user experience" <sugar.laptop.org>
+List-Unsubscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=unsubscribe>
+List-Archive: <http://mailman.laptop.org/pipermail/sugar>
+List-Post: <mailto:sugar@laptop.org>
+List-Help: <mailto:sugar-request@laptop.org?subject=help>
+List-Subscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=subscribe>
+Sender: sugar-bounces@laptop.org
+Errors-To: sugar-bounces@laptop.org
+
+--=-=-=
+
+Hi,
+
+This patch contains a power-saving mode for Read.activity (implemented 
+in the evince-olpc widget) whereby the system goes to sleep five seconds 
+after the last scroll event, via a dbus call to olpc-power-manager.
+
+This doesn't happen by default; running "touch /enable-ebook-sleep" 
+enables the code in the patch.  It's a temporary solution -- eventually
+we will be automatically suspending any time the CPU and display aren't 
+doing anything.  The patch requires a recent kernel from the "master" 
+tree of olpc-2.6, such as commit a0b2de995..
+
+The B2 machines in the field don't have a hardware modification needed
+to keep the screen image steady while the CPU is sleeping, so this is 
+mostly useful for machines that OLPC has modded.  
+
+Comments welcome.  Thanks!
+
+- Chris.
+
+
+--=-=-=
+Content-Type: text/x-diff
+Content-Disposition: inline; filename=evince-olpc-suspend.patch
+
+diff --git a/shell/ev-view-private.h b/shell/ev-view-private.h
+index a53fe54..9f903ae 100644
+--- a/shell/ev-view-private.h
++++ b/shell/ev-view-private.h
+@@ -99,6 +99,9 @@ struct _EvView {
+ 	gboolean presentation;
+ 	EvSizingMode sizing_mode;
+ 
++	/* Suspend timer active? */
++	guint suspend_tag;
++
+ 	/* Common for button press handling */
+ 	int pressed_button;
+ 
+diff --git a/shell/ev-view.c b/shell/ev-view.c
+index fdea8bb..2c3ef79 100644
+--- a/shell/ev-view.c
++++ b/shell/ev-view.c
+@@ -41,6 +41,11 @@
+ #include "ev-pixbuf-cache.h"
+ #include "ev-tooltip.h"
+ 
++#ifdef ENABLE_DBUS
++#include <dbus/dbus-glib-bindings.h>
++#include <sys/stat.h>
++#endif
++
+ #define EV_VIEW_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST ((klass), EV_TYPE_VIEW, EvViewClass))
+ #define EV_IS_VIEW_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass), EV_TYPE_VIEW))
+ #define EV_VIEW_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), EV_TYPE_VIEW, EvViewClass))
+@@ -97,6 +102,7 @@ typedef enum {
+ #define MAX_SCALE 4.0
+ 
+ #define SCROLL_TIME 150
++#define SUSPEND_TIME 5000
+ 
+ /*** Scrolling ***/
+ static void       scroll_to_current_page 		     (EvView *view,
+@@ -222,6 +228,7 @@ static void       page_changed_cb                            (EvPageCache
+ 							      EvView             *view);
+ static void       on_adjustment_value_changed                (GtkAdjustment      *adjustment,
+ 							      EvView             *view);
++static gboolean   suspend_cb                                 (EvView             *view);
+ 
+ /*** GObject ***/
+ static void       ev_view_finalize                           (GObject            *object);
+@@ -571,6 +578,34 @@ add_scroll_binding_keypad (GtkBindingSet  *binding_set,
+ 				G_TYPE_BOOLEAN, horizontal);
+ }
+ 
++static gboolean
++suspend_cb (EvView *view)
++{
++	DBusGConnection *connection;
++	GError *error;
++	DBusGProxy *proxy;
++
++	error = NULL;
++	connection = dbus_g_bus_get (DBUS_BUS_SYSTEM, &error);
++	if (connection == NULL)	{
++		g_printerr ("Failed to open connection to bus: %s\n", error->message);
++		g_error_free (error);
++	}
++
++	error = NULL;
++	proxy = dbus_g_proxy_new_for_name (connection,
++					   "org.laptop.HardwareManager",
++					   "/org/laptop/HardwareManager",
++					   "org.laptop.HardwareManager");
++	if (!dbus_g_proxy_call (proxy, "set_kernel_suspend", &error, 
++				G_TYPE_INVALID, G_TYPE_INVALID)) {
++		g_printerr ("Proxy call failed: %s\n", error->message);
++		g_error_free (error);
++	}
++
++	return FALSE;
++}
++
+ void
+ ev_view_scroll (EvView        *view,
+ 	        EvScrollType   scroll,
+@@ -580,6 +615,9 @@ ev_view_scroll (EvView        *view,
+ 	double value, increment;
+ 	gboolean first_page = FALSE;
+ 	gboolean last_page = FALSE;
++#ifdef ENABLE_DBUS
++	struct stat stat_buf;
++#endif
+ 
+ 	view->jump_to_find_result = FALSE;
+ 
+@@ -657,8 +695,25 @@ ev_view_scroll (EvView        *view,
+ 		       adjustment->upper - adjustment->page_size);	
+ 
+ 	gtk_adjustment_set_value (adjustment, value);
++
++#ifdef ENABLE_DBUS
++#define SUSPEND_TAG_FILE "/enable-ebook-sleep"
++
++	/* First demo of OLPC power management.  We should only
++	   try sleeping if the user created a file for us.
++	 */
++	if (stat(SUSPEND_TAG_FILE, &stat_buf) >= 0) {	
++		/* Set a timer for five seconds, we'll go to sleep when
++		 * it hits.  If one already exists, destroy it. 
++		 */
++		if (view->suspend_tag)
++			g_source_remove(view->suspend_tag);
++		
++		view->suspend_tag = g_timeout_add(SUSPEND_TIME, (GSourceFunc)suspend_cb, view);
++	}
+ }
+ 
++#endif
+ #define MARGIN 5
+ 
+ static void
+
+--=-=-=
+
+-- 
+Chris Ball   <cjb@laptop.org>
+
+--=-=-=
+Content-Type: text/plain; charset="us-ascii"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+
+_______________________________________________
+Sugar mailing list
+Sugar@laptop.org
+http://mailman.laptop.org/mailman/listinfo/sugar
+
+--=-=-=--
+

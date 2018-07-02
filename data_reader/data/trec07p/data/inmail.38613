@@ -1,0 +1,144 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu May 17 15:16:49 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4HJGmqD003584
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 17 May 2007 15:16:48 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id C85C41638E5
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 17 May 2007 19:16:45 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 540)
+	id 27B74162C3A; Thu, 17 May 2007 19:16:28 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jerry@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070517191628.27B74162C3A@lists.samba.org>
+Date: Thu, 17 May 2007 19:16:28 +0000 (GMT)
+Subject: svn commit: samba r22975 - in branches: SAMBA_3_0/source/rpc_server
+	SAMBA_3_0_25/source/rpc_server SAMBA_3_0_26/source/rpc_server
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: jerry
+Date: 2007-05-17 19:16:27 +0000 (Thu, 17 May 2007)
+New Revision: 22975
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22975
+
+Log:
+BUG 4616: Don't return a dns or forest name when replying to the 
+DsDGetPrimaryRoleInfo() and configured for security = domain.
+
+
+Modified:
+   branches/SAMBA_3_0/source/rpc_server/srv_lsa_ds_nt.c
+   branches/SAMBA_3_0_25/source/rpc_server/srv_lsa_ds_nt.c
+   branches/SAMBA_3_0_26/source/rpc_server/srv_lsa_ds_nt.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/rpc_server/srv_lsa_ds_nt.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpc_server/srv_lsa_ds_nt.c	2007-05-17 18:20:16 UTC (rev 22974)
++++ branches/SAMBA_3_0/source/rpc_server/srv_lsa_ds_nt.c	2007-05-17 19:16:27 UTC (rev 22975)
+@@ -84,16 +84,16 @@
+ 		
+ 		basic->dnsname_ptr = 1;
+ 		init_unistr2( &basic->dns_domain, dnsdomain, UNI_STR_TERMINATE);
++
++		/* FIXME!! We really should fill in the correct forest
++		   name.  Should get this information from winbindd.  */
+ 		basic->forestname_ptr = 1;
+ 		init_unistr2( &basic->forest_domain, dnsdomain, UNI_STR_TERMINATE);
+ 	} else {
+-		get_mydnsdomname(dnsdomain);
+-		strlower_m(dnsdomain);
+-
+-		basic->dnsname_ptr = 1;
+-		init_unistr2( &basic->dns_domain, dnsdomain, UNI_FLAGS_NONE);
+-		basic->forestname_ptr = 1;
+-		init_unistr2( &basic->forest_domain, dnsdomain, UNI_FLAGS_NONE);
++		/* security = domain should not fill in the dns or
++		   forest name */
++		basic->dnsname_ptr = 0;
++		basic->forestname_ptr = 0;
+ 	}
+ 
+ 	*info = basic;
+
+Modified: branches/SAMBA_3_0_25/source/rpc_server/srv_lsa_ds_nt.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/rpc_server/srv_lsa_ds_nt.c	2007-05-17 18:20:16 UTC (rev 22974)
++++ branches/SAMBA_3_0_25/source/rpc_server/srv_lsa_ds_nt.c	2007-05-17 19:16:27 UTC (rev 22975)
+@@ -84,16 +84,16 @@
+ 		
+ 		basic->dnsname_ptr = 1;
+ 		init_unistr2( &basic->dns_domain, dnsdomain, UNI_STR_TERMINATE);
++
++		/* FIXME!! We really should fill in the correct forest
++		   name.  Should get this information from winbindd.  */
+ 		basic->forestname_ptr = 1;
+ 		init_unistr2( &basic->forest_domain, dnsdomain, UNI_STR_TERMINATE);
+ 	} else {
+-		get_mydnsdomname(dnsdomain);
+-		strlower_m(dnsdomain);
+-
+-		basic->dnsname_ptr = 1;
+-		init_unistr2( &basic->dns_domain, dnsdomain, UNI_FLAGS_NONE);
+-		basic->forestname_ptr = 1;
+-		init_unistr2( &basic->forest_domain, dnsdomain, UNI_FLAGS_NONE);
++		/* security = domain should not fill in the dns or
++		   forest name */
++		basic->dnsname_ptr = 0;
++		basic->forestname_ptr = 0;
+ 	}
+ 
+ 	*info = basic;
+
+Modified: branches/SAMBA_3_0_26/source/rpc_server/srv_lsa_ds_nt.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/rpc_server/srv_lsa_ds_nt.c	2007-05-17 18:20:16 UTC (rev 22974)
++++ branches/SAMBA_3_0_26/source/rpc_server/srv_lsa_ds_nt.c	2007-05-17 19:16:27 UTC (rev 22975)
+@@ -84,16 +84,16 @@
+ 		
+ 		basic->dnsname_ptr = 1;
+ 		init_unistr2( &basic->dns_domain, dnsdomain, UNI_STR_TERMINATE);
++
++		/* FIXME!! We really should fill in the correct forest
++		   name.  Should get this information from winbindd.  */
+ 		basic->forestname_ptr = 1;
+ 		init_unistr2( &basic->forest_domain, dnsdomain, UNI_STR_TERMINATE);
+ 	} else {
+-		get_mydnsdomname(dnsdomain);
+-		strlower_m(dnsdomain);
+-
+-		basic->dnsname_ptr = 1;
+-		init_unistr2( &basic->dns_domain, dnsdomain, UNI_FLAGS_NONE);
+-		basic->forestname_ptr = 1;
+-		init_unistr2( &basic->forest_domain, dnsdomain, UNI_FLAGS_NONE);
++		/* security = domain should not fill in the dns or
++		   forest name */
++		basic->dnsname_ptr = 0;
++		basic->forestname_ptr = 0;
+ 	}
+ 
+ 	*info = basic;
+

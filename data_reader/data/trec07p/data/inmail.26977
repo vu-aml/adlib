@@ -1,0 +1,158 @@
+From perl6-all-return-81062-ktwarwic=speedy.uwaterloo.ca@perl.org  Wed May  2 11:10:04 2007
+Return-Path: <perl6-all-return-81062-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l42FA3b9023497
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 2 May 2007 11:10:03 -0400
+Received: (qmail 3727 invoked by uid 514); 2 May 2007 15:10:02 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 3701 invoked from network); 2 May 2007 15:10:02 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Delivered-To: parrotbug-followup@parrotcode.org
+Received-SPF: pass (x1.develooper.com: domain of spiehera@lafayette.edu designates 139.147.8.40 as permitted sender)
+Date: Wed, 2 May 2007 11:08:45 -0400 (EDT)
+From: Andy Spieherty <spiehera@lafayette.edu>
+X-X-Sender: spiehera@fractal.phys.lafayette.edu
+To: James Keenan via RT <parrotbug-followup@parrotcode.org>
+Subject: Re: [perl #42412] Configure.pl things =no is true 
+In-Reply-To: <rt-3.6.HEAD-1687-1178072394-459.42412-15-0@perl.org>
+Message-ID: <Pine.LNX.4.62.0705020935560.10270@fractal.phys.lafayette.edu>
+References: <RT-Ticket-42412@perl.org> <cbcbecbf3fd62ff3f85ce570a34209b5@gmail.com>
+ <rt-3.6.HEAD-1687-1178072394-459.42412-15-0@perl.org>
+MIME-Version: 1.0
+Content-Type: TEXT/PLAIN; charset=US-ASCII
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,SPF_HELO_PASS,SPF_PASS
+
+On Tue, 1 May 2007, James Keenan via RT wrote:
+
+> On Tue Apr 10 01:45:31 2007, jrisom@gmail.com wrote:
+> > Configure should act as though writing --foo=no is false instead of 
+> > true.  Tonight I tried using --execcapable=no to get around a compile 
+> > failure, but then realized that it would probably treat "no" as a true 
+> > value.
+> > 
+> 
+> I discussed this ticket with other participants in the recent hackathon 
+> in Toronto.  I am inclined to recommend that we not make any changes in 
+> Configure.pl's behavior as implied by the ticket, for a number of 
+> reasons:
+
+> 1.  Configure.pl is a Perl script.  The truth value of the string 'no' 
+> in Perl is true.  Cet. par., in Perl if you want to negate something you 
+> 'undef' it or you assign it a value of 0 (or the string '0').  So the 
+> current behavior of the 'execcapable' option is consistent with Perl's 
+> customary behavior.
+
+The language in which Configure.pl is written is an implementation detail.
+Though using 1 and 0 for true and false is a perfectly reasonable interface
+model to present to the outside world, it's also sensible to be tolerant
+of users.
+
+One thing that is really needed is a consistent vision for what the
+different options expect.  Currently, there are at least four different
+ways in the help menu to turn stuff off:
+
+	--nomanicheck
+	--cgoto=0
+	--without-gdbm
+	--icu-config=none
+
+This means that for undocumented things, like -execcapable, the user has
+to guess.
+
+> 2.  In config/auto/jit.pm, $execcapable is set to 1 for Unix-ish 
+> operating systems and Windows and set to 0 for other OSes.  But if you 
+> want to set a different behavior, it appears to me that you can simply 
+> pass a value of 1 or 0 to the execcapable option.
+
+Except that the --execcapable option isn't documented as taking a value.
+How is the user to know?
+
+> 3.  If we really thought we'd make extensive use of something equivalent 
+> to '-- execcapable=no', we could create a '--noexeccapable' option 
+> analogous to '-- nomanicheck' (see lib/Parrot/Configure/Options.pm).
+
+> 4.  AFAICT from looking at Perl 5's Configure.sh, Perl 5 survives 
+> without a 'no' value for any of its configuration options.
+
+I don't know exactly what you mean.  As a general rule, Configure uses
+-D to define something, and -U to undefine it.  However, since we often
+need more than a simple boolean, the -D and -U syntax is richer and
+allows setting nearly arbitrary things.  That richer syntax feeds back
+into user expectations, and that feedback has led us to accept a variety
+of equivalent ways of saying the same thing.
+
+For example, to turn off optimization, either of the following are
+equivalent:
+
+	Configure -Doptimize=none
+	Configure -Uoptimize
+
+The second actually sets $optimize=undef, but I assume that the
+user probably didn't literally mean to pass the flag 'undef' to the 
+C compiler in the hopes that the compiler would then optimize the program.
+Rather the user's intention was clearly to disable optimization.
+Configure thus considers both cases equivalent.
+
+This can get out of hand, of course:  For example, if you want
+to not use threads, any of the following are equivalent:
+
+	Configure -Dusethreads=no
+	Configure -Dusethreads=false
+	Configure -Dusethreads=undef
+	Configure -Uusethreads
+
+The last two are identical in setting $usethreads=undef.  The others
+work because Configure tests with
+
+    case "$usethreads" in
+	$define|true|[yY]*)  
+
+The 'define/undef' interface is generally the "official" way to set
+booleans, but supporting the true/false and yes/no variants is a courtesy
+to the user that costs nearly nothing to implement.
+
+In short, it seems to me that the user's intent was obvious in writing
+--foo=no, and if foo is a boolean, you ought to honor the user's intent,
+even if the user didn't use the official 1/0 notation.
+
+> In short, YAGNI.  What do others think?
+
+I'm afraid I don't have any idea what YAGNI means.
+But I'll continue anyway.  Here's what I think:
+
+Configure.pl will eventually end up setting many, many variables.  It is
+impossible to predict ahead of time which ones users will want or need
+to override.  Providing separate --foo options for every single one of
+them doesn't scale well at all.  Configure.pl's help screen is already
+114 lines long.
+
+Instead, what I think is needed is a meta-syntax -- a way of setting
+(nearly) arbitrary Configure.pl variables to (nearly) arbitrary values.
+Though that syntax can and should declare an 'official' way to set
+booleans (and 1/0 is one such perfectly reasonably way), I think it
+should also be a forgiving interface, and should accept reasonable
+unambiguous alternatives, such as --foo=no instead of --foo=0.
+
+For what it's worth, those are my rambling thoughts this morning.
+
+-- 
+    Andy Spieherty		spiehera@lafayette.edu
+

@@ -1,0 +1,209 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat Jun  9 18:45:51 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l59MjoL9015181
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 9 Jun 2007 18:45:50 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id ACA3B162C25
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat,  9 Jun 2007 22:45:49 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 535)
+	id E0E0A162AE7; Sat,  9 Jun 2007 22:45:22 +0000 (GMT)
+To: samba-cvs@samba.org
+From: idra@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070609224522.E0E0A162AE7@lists.samba.org>
+Date: Sat,  9 Jun 2007 22:45:22 +0000 (GMT)
+Subject: svn commit: samba r23407 - in branches: SAMBA_3_0/source/utils
+	SAMBA_3_0_25/source/utils SAMBA_3_0_26/source/utils
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: idra
+Date: 2007-06-09 22:45:21 +0000 (Sat, 09 Jun 2007)
+New Revision: 23407
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23407
+
+Log:
+
+While verifying a bug I found out that for some reason
+the code to add a machine was different then the one used
+to add a user, the old code led to the machine SID not being
+built out correctly allocationg a new RID out of the passdb
+but instead by using the old algorithmic method.
+This may easily end up in creating duplicated SID when the
+RID counter get close to the values built by the algorithmic method.
+
+Simo.
+
+
+Modified:
+   branches/SAMBA_3_0/source/utils/pdbedit.c
+   branches/SAMBA_3_0_25/source/utils/pdbedit.c
+   branches/SAMBA_3_0_26/source/utils/pdbedit.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/utils/pdbedit.c
+===================================================================
+--- branches/SAMBA_3_0/source/utils/pdbedit.c	2007-06-09 19:29:35 UTC (rev 23406)
++++ branches/SAMBA_3_0/source/utils/pdbedit.c	2007-06-09 22:45:21 UTC (rev 23407)
+@@ -624,28 +624,25 @@
+ 	fstrcpy(machineaccount, machinename);
+ 	fstrcat(machineaccount, "$");
+ 
+-	if ((pwd = getpwnam_alloc(NULL, machineaccount))) {
++	if ( !(pwd = getpwnam_alloc( NULL, machineaccount )) ) {
++		DEBUG(0,("Cannot locate Unix account for %s\n", machineaccount));
++		return -1;
++	}
+ 
+-		if ( (sam_pwent = samu_new( NULL )) == NULL ) {
+-			fprintf(stderr, "Memory allocation error!\n");
+-			TALLOC_FREE(pwd);
+-			return -1;
+-		}
++	if ( (sam_pwent = samu_new( NULL )) == NULL ) {
++		fprintf(stderr, "Memory allocation error!\n");
++		TALLOC_FREE(pwd);
++		return -1;
++	}
+ 
+-		if ( !NT_STATUS_IS_OK(samu_set_unix(sam_pwent, pwd )) ) {
+-			fprintf(stderr, "Could not init sam from pw\n");
+-			TALLOC_FREE(pwd);
+-			return -1;
+-		}
+-
++	if ( !NT_STATUS_IS_OK(samu_alloc_rid_unix(sam_pwent, pwd )) ) {
++		fprintf(stderr, "Could not init sam from pw\n");
+ 		TALLOC_FREE(pwd);
+-	} else {
+-		if ( (sam_pwent = samu_new( NULL )) == NULL ) {
+-			fprintf(stderr, "Could not init sam from pw\n");
+-			return -1;
+-		}
++		return -1;
+ 	}
+ 
++	TALLOC_FREE(pwd);
++
+ 	pdb_set_plaintext_passwd (sam_pwent, machinename);
+ 	pdb_set_username (sam_pwent, machineaccount, PDB_CHANGED);	
+ 	pdb_set_acct_ctrl (sam_pwent, ACB_WSTRUST, PDB_CHANGED);
+
+Modified: branches/SAMBA_3_0_25/source/utils/pdbedit.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/utils/pdbedit.c	2007-06-09 19:29:35 UTC (rev 23406)
++++ branches/SAMBA_3_0_25/source/utils/pdbedit.c	2007-06-09 22:45:21 UTC (rev 23407)
+@@ -624,28 +624,25 @@
+ 	fstrcpy(machineaccount, machinename);
+ 	fstrcat(machineaccount, "$");
+ 
+-	if ((pwd = getpwnam_alloc(NULL, machineaccount))) {
++	if ( !(pwd = getpwnam_alloc( NULL, machineaccount )) ) {
++		DEBUG(0,("Cannot locate Unix account for %s\n", machineaccount));
++		return -1;
++	}
+ 
+-		if ( (sam_pwent = samu_new( NULL )) == NULL ) {
+-			fprintf(stderr, "Memory allocation error!\n");
+-			TALLOC_FREE(pwd);
+-			return -1;
+-		}
++	if ( (sam_pwent = samu_new( NULL )) == NULL ) {
++		fprintf(stderr, "Memory allocation error!\n");
++		TALLOC_FREE(pwd);
++		return -1;
++	}
+ 
+-		if ( !NT_STATUS_IS_OK(samu_set_unix(sam_pwent, pwd )) ) {
+-			fprintf(stderr, "Could not init sam from pw\n");
+-			TALLOC_FREE(pwd);
+-			return -1;
+-		}
+-
++	if ( !NT_STATUS_IS_OK(samu_alloc_rid_unix(sam_pwent, pwd )) ) {
++		fprintf(stderr, "Could not init sam from pw\n");
+ 		TALLOC_FREE(pwd);
+-	} else {
+-		if ( (sam_pwent = samu_new( NULL )) == NULL ) {
+-			fprintf(stderr, "Could not init sam from pw\n");
+-			return -1;
+-		}
++		return -1;
+ 	}
+ 
++	TALLOC_FREE(pwd);
++
+ 	pdb_set_plaintext_passwd (sam_pwent, machinename);
+ 	pdb_set_username (sam_pwent, machineaccount, PDB_CHANGED);	
+ 	pdb_set_acct_ctrl (sam_pwent, ACB_WSTRUST, PDB_CHANGED);
+
+Modified: branches/SAMBA_3_0_26/source/utils/pdbedit.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/utils/pdbedit.c	2007-06-09 19:29:35 UTC (rev 23406)
++++ branches/SAMBA_3_0_26/source/utils/pdbedit.c	2007-06-09 22:45:21 UTC (rev 23407)
+@@ -624,28 +624,25 @@
+ 	fstrcpy(machineaccount, machinename);
+ 	fstrcat(machineaccount, "$");
+ 
+-	if ((pwd = getpwnam_alloc(NULL, machineaccount))) {
++	if ( !(pwd = getpwnam_alloc( NULL, machineaccount )) ) {
++		DEBUG(0,("Cannot locate Unix account for %s\n", machineaccount));
++		return -1;
++	}
+ 
+-		if ( (sam_pwent = samu_new( NULL )) == NULL ) {
+-			fprintf(stderr, "Memory allocation error!\n");
+-			TALLOC_FREE(pwd);
+-			return -1;
+-		}
++	if ( (sam_pwent = samu_new( NULL )) == NULL ) {
++		fprintf(stderr, "Memory allocation error!\n");
++		TALLOC_FREE(pwd);
++		return -1;
++	}
+ 
+-		if ( !NT_STATUS_IS_OK(samu_set_unix(sam_pwent, pwd )) ) {
+-			fprintf(stderr, "Could not init sam from pw\n");
+-			TALLOC_FREE(pwd);
+-			return -1;
+-		}
+-
++	if ( !NT_STATUS_IS_OK(samu_alloc_rid_unix(sam_pwent, pwd )) ) {
++		fprintf(stderr, "Could not init sam from pw\n");
+ 		TALLOC_FREE(pwd);
+-	} else {
+-		if ( (sam_pwent = samu_new( NULL )) == NULL ) {
+-			fprintf(stderr, "Could not init sam from pw\n");
+-			return -1;
+-		}
++		return -1;
+ 	}
+ 
++	TALLOC_FREE(pwd);
++
+ 	pdb_set_plaintext_passwd (sam_pwent, machinename);
+ 	pdb_set_username (sam_pwent, machineaccount, PDB_CHANGED);	
+ 	pdb_set_acct_ctrl (sam_pwent, ACB_WSTRUST, PDB_CHANGED);
+

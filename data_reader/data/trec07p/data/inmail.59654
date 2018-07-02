@@ -1,0 +1,329 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Jun 18 01:28:12 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5I5SCL9014044
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 18 Jun 2007 01:28:12 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id BC3EA162C1D
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 18 Jun 2007 05:28:10 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 501)
+	id B3A74162AD2; Mon, 18 Jun 2007 05:27:40 +0000 (GMT)
+To: samba-cvs@samba.org
+From: abartlet@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070618052740.B3A74162AD2@lists.samba.org>
+Date: Mon, 18 Jun 2007 05:27:40 +0000 (GMT)
+Subject: svn commit: lorikeet r745 - in trunk/heimdal: . kdc
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: abartlet
+Date: 2007-06-18 05:27:40 +0000 (Mon, 18 Jun 2007)
+New Revision: 745
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=lorikeet&rev=745
+
+Log:
+I forgot to include this change (to ensure that default_config.c doesn't contain references to hdb) in the diff, so lha's merge wiped it out.
+
+Andrew Bartlett
+
+Modified:
+   trunk/heimdal/heimdal-lorikeet.diff
+   trunk/heimdal/kdc/config.c
+   trunk/heimdal/kdc/default_config.c
+
+
+Changeset:
+Modified: trunk/heimdal/heimdal-lorikeet.diff
+===================================================================
+--- trunk/heimdal/heimdal-lorikeet.diff	2007-06-18 05:27:03 UTC (rev 744)
++++ trunk/heimdal/heimdal-lorikeet.diff	2007-06-18 05:27:40 UTC (rev 745)
+@@ -96,3 +96,131 @@
+  esym="__i686.get_pc_thunk fc_softc"
+  symbols=
+  
++--- /data/heimdal-svn/kdc/default_config.c	2007-06-08 12:22:34.000000000 +1000
+++++ kdc/default_config.c	2007-06-11 19:03:21.000000000 +1000
++@@ -38,51 +38,6 @@
++ 
++ RCSID("$Id: default_config.c 20532 2007-04-23 07:46:57Z lha $");
++ 
++-static void
++-get_dbinfo(krb5_context context, struct krb5_kdc_configuration *c)
++-{
++-    struct hdb_dbinfo *info, *d;
++-    krb5_error_code ret;
++-
++-    /* fetch the databases */
++-    ret = hdb_get_dbinfo(context, &info);
++-    if (ret)
++-	krb5_err(context, 1, ret, "hdb_get_dbinfo");
++-    
++-    d = NULL;
++-    while ((d = hdb_dbinfo_get_next(info, d)) != NULL) {
++-	void *ptr;
++-	
++-	ptr = realloc(c->db, (c->num_db + 1) * sizeof(*c->db));
++-	if (ptr == NULL)
++-	    krb5_err(context, 1, ret, "out of memory");
++-	c->db = ptr;
++-	
++-	ret = hdb_create(context, &c->db[c->num_db], 
++-			 hdb_dbinfo_get_dbname(context, d));
++-	if(ret)
++-	    krb5_err(context, 1, ret, "hdb_create %s", 
++-		     hdb_dbinfo_get_dbname(context, d));
++-	
++-	ret = hdb_set_master_keyfile(context, c->db[c->num_db], 
++-				     hdb_dbinfo_get_mkey_file(context, d));
++-	if (ret)
++-	    krb5_err(context, 1, ret, "hdb_set_master_keyfile");
++-	
++-	c->num_db++;
++-
++-	kdc_log(context, c, 0, "label: %s\n",
++-		hdb_dbinfo_get_label(context, d));
++-	kdc_log(context, c, 0, "\trealm: %s\n",
++-		hdb_dbinfo_get_realm(context, d));
++-	kdc_log(context, c, 0, "\tdbname: %s\n",
++-		hdb_dbinfo_get_dbname(context, d));
++-	kdc_log(context, c, 0, "\tmkey_file: %s\n",
++-		hdb_dbinfo_get_mkey_file(context, d));
++-    }
++-    hdb_free_dbinfo(context, &info);
++-}
++-
++ 
++ int
++ krb5_kdc_get_config(krb5_context context, krb5_kdc_configuration **config)
++@@ -112,8 +67,6 @@
++     c->num_db = 0;
++     c->logf = NULL;
++ 
++-    get_dbinfo(context, c);
++-
++     c->require_preauth =
++ 	krb5_config_get_bool_default(context, NULL, 
++ 				     c->require_preauth,
++--- /data/heimdal-svn/kdc/config.c	2007-06-08 12:22:33.000000000 +1000
+++++ kdc/config.c	2007-06-13 15:25:07.000000000 +1000
++@@ -145,6 +145,51 @@
++     krb5_free_addresses (context, &tmp);
++ }
++ 
+++static void
+++get_dbinfo(krb5_context context, struct krb5_kdc_configuration *c)
+++{
+++    struct hdb_dbinfo *info, *d;
+++    krb5_error_code ret;
+++
+++    /* fetch the databases */
+++    ret = hdb_get_dbinfo(context, &info);
+++    if (ret)
+++	krb5_err(context, 1, ret, "hdb_get_dbinfo");
+++    
+++    d = NULL;
+++    while ((d = hdb_dbinfo_get_next(info, d)) != NULL) {
+++	void *ptr;
+++	
+++	ptr = realloc(c->db, (c->num_db + 1) * sizeof(*c->db));
+++	if (ptr == NULL)
+++	    krb5_err(context, 1, ret, "out of memory");
+++	c->db = ptr;
+++	
+++	ret = hdb_create(context, &c->db[c->num_db], 
+++			 hdb_dbinfo_get_dbname(context, d));
+++	if(ret)
+++	    krb5_err(context, 1, ret, "hdb_create %s", 
+++		     hdb_dbinfo_get_dbname(context, d));
+++	
+++	ret = hdb_set_master_keyfile(context, c->db[c->num_db], 
+++				     hdb_dbinfo_get_mkey_file(context, d));
+++	if (ret)
+++	    krb5_err(context, 1, ret, "hdb_set_master_keyfile");
+++	
+++	c->num_db++;
+++
+++	kdc_log(context, c, 0, "label: %s\n",
+++		hdb_dbinfo_get_label(context, d));
+++	kdc_log(context, c, 0, "\trealm: %s\n",
+++		hdb_dbinfo_get_realm(context, d));
+++	kdc_log(context, c, 0, "\tdbname: %s\n",
+++		hdb_dbinfo_get_dbname(context, d));
+++	kdc_log(context, c, 0, "\tmkey_file: %s\n",
+++		hdb_dbinfo_get_mkey_file(context, d));
+++    }
+++    hdb_free_dbinfo(context, &info);
+++}
+++
++ krb5_kdc_configuration *
++ configure(krb5_context context, int argc, char **argv)
++ {
++@@ -200,7 +245,9 @@
++     if (ret)
++ 	krb5_err(context, 1, ret, "krb5_kdc_default_config");
++ 
++-    kdc_openlog(context, config);
+++    get_dbinfo(context, config);
+++
+++   kdc_openlog(context, config);
++ 
++     if(max_request_str)
++ 	max_request = parse_bytes(max_request_str, NULL);
+
+Modified: trunk/heimdal/kdc/config.c
+===================================================================
+--- trunk/heimdal/kdc/config.c	2007-06-18 05:27:03 UTC (rev 744)
++++ trunk/heimdal/kdc/config.c	2007-06-18 05:27:40 UTC (rev 745)
+@@ -145,6 +145,51 @@
+     krb5_free_addresses (context, &tmp);
+ }
+ 
++static void
++get_dbinfo(krb5_context context, struct krb5_kdc_configuration *c)
++{
++    struct hdb_dbinfo *info, *d;
++    krb5_error_code ret;
++
++    /* fetch the databases */
++    ret = hdb_get_dbinfo(context, &info);
++    if (ret)
++	krb5_err(context, 1, ret, "hdb_get_dbinfo");
++    
++    d = NULL;
++    while ((d = hdb_dbinfo_get_next(info, d)) != NULL) {
++	void *ptr;
++	
++	ptr = realloc(c->db, (c->num_db + 1) * sizeof(*c->db));
++	if (ptr == NULL)
++	    krb5_err(context, 1, ret, "out of memory");
++	c->db = ptr;
++	
++	ret = hdb_create(context, &c->db[c->num_db], 
++			 hdb_dbinfo_get_dbname(context, d));
++	if(ret)
++	    krb5_err(context, 1, ret, "hdb_create %s", 
++		     hdb_dbinfo_get_dbname(context, d));
++	
++	ret = hdb_set_master_keyfile(context, c->db[c->num_db], 
++				     hdb_dbinfo_get_mkey_file(context, d));
++	if (ret)
++	    krb5_err(context, 1, ret, "hdb_set_master_keyfile");
++	
++	c->num_db++;
++
++	kdc_log(context, c, 0, "label: %s\n",
++		hdb_dbinfo_get_label(context, d));
++	kdc_log(context, c, 0, "\trealm: %s\n",
++		hdb_dbinfo_get_realm(context, d));
++	kdc_log(context, c, 0, "\tdbname: %s\n",
++		hdb_dbinfo_get_dbname(context, d));
++	kdc_log(context, c, 0, "\tmkey_file: %s\n",
++		hdb_dbinfo_get_mkey_file(context, d));
++    }
++    hdb_free_dbinfo(context, &info);
++}
++
+ krb5_kdc_configuration *
+ configure(krb5_context context, int argc, char **argv)
+ {
+@@ -200,8 +245,10 @@
+     if (ret)
+ 	krb5_err(context, 1, ret, "krb5_kdc_default_config");
+ 
+-    kdc_openlog(context, config);
++    get_dbinfo(context, config);
+ 
++   kdc_openlog(context, config);
++
+     if(max_request_str)
+ 	max_request = parse_bytes(max_request_str, NULL);
+ 
+
+Modified: trunk/heimdal/kdc/default_config.c
+===================================================================
+--- trunk/heimdal/kdc/default_config.c	2007-06-18 05:27:03 UTC (rev 744)
++++ trunk/heimdal/kdc/default_config.c	2007-06-18 05:27:40 UTC (rev 745)
+@@ -38,52 +38,7 @@
+ 
+ RCSID("$Id: default_config.c 20532 2007-04-23 07:46:57Z lha $");
+ 
+-static void
+-get_dbinfo(krb5_context context, struct krb5_kdc_configuration *c)
+-{
+-    struct hdb_dbinfo *info, *d;
+-    krb5_error_code ret;
+ 
+-    /* fetch the databases */
+-    ret = hdb_get_dbinfo(context, &info);
+-    if (ret)
+-	krb5_err(context, 1, ret, "hdb_get_dbinfo");
+-    
+-    d = NULL;
+-    while ((d = hdb_dbinfo_get_next(info, d)) != NULL) {
+-	void *ptr;
+-	
+-	ptr = realloc(c->db, (c->num_db + 1) * sizeof(*c->db));
+-	if (ptr == NULL)
+-	    krb5_err(context, 1, ret, "out of memory");
+-	c->db = ptr;
+-	
+-	ret = hdb_create(context, &c->db[c->num_db], 
+-			 hdb_dbinfo_get_dbname(context, d));
+-	if(ret)
+-	    krb5_err(context, 1, ret, "hdb_create %s", 
+-		     hdb_dbinfo_get_dbname(context, d));
+-	
+-	ret = hdb_set_master_keyfile(context, c->db[c->num_db], 
+-				     hdb_dbinfo_get_mkey_file(context, d));
+-	if (ret)
+-	    krb5_err(context, 1, ret, "hdb_set_master_keyfile");
+-	
+-	c->num_db++;
+-
+-	kdc_log(context, c, 0, "label: %s\n",
+-		hdb_dbinfo_get_label(context, d));
+-	kdc_log(context, c, 0, "\trealm: %s\n",
+-		hdb_dbinfo_get_realm(context, d));
+-	kdc_log(context, c, 0, "\tdbname: %s\n",
+-		hdb_dbinfo_get_dbname(context, d));
+-	kdc_log(context, c, 0, "\tmkey_file: %s\n",
+-		hdb_dbinfo_get_mkey_file(context, d));
+-    }
+-    hdb_free_dbinfo(context, &info);
+-}
+-
+-
+ int
+ krb5_kdc_get_config(krb5_context context, krb5_kdc_configuration **config)
+ {
+@@ -112,8 +67,6 @@
+     c->num_db = 0;
+     c->logf = NULL;
+ 
+-    get_dbinfo(context, c);
+-
+     c->require_preauth =
+ 	krb5_config_get_bool_default(context, NULL, 
+ 				     c->require_preauth,
+

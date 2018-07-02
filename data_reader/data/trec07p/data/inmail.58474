@@ -1,0 +1,240 @@
+From r-help-bounces@stat.math.ethz.ch  Fri Jun 15 18:12:07 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5FMC5L9007234
+	for <ktwarwic@flax9.uwaterloo.ca>; Fri, 15 Jun 2007 18:12:06 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5FMBMxA021647;
+	Sat, 16 Jun 2007 00:11:35 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.1 required=5.0 tests=AWL, BAYES_50,
+	DKIM_POLICY_SIGNSOME autolearn=no version=3.2.0
+Received: from alnrmhc11.comcast.net (alnrmhc11.comcast.net [206.18.177.51])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5FKZ1ws011765
+	for <r-help@stat.math.ethz.ch>; Fri, 15 Jun 2007 22:35:02 +0200
+Received: from basebud.nulle.part
+	(c-67-174-13-164.hsd1.il.comcast.net[67.174.13.164])
+	by comcast.net (alnrmhc11) with ESMTP
+	id <20070615203449b1100i2q9ne>; Fri, 15 Jun 2007 20:35:00 +0000
+Received: from edd by basebud.nulle.part with local (Exim 4.63)
+	(envelope-from <edd@debian.org>)
+	id 1HzIVM-0008Lr-TW; Fri, 15 Jun 2007 15:34:48 -0500
+MIME-Version: 1.0
+Message-ID: <18034.63464.877565.242357@basebud.nulle.part>
+Date: Fri, 15 Jun 2007 15:34:48 -0500
+To: marc_schwartz@comcast.net
+In-Reply-To: <1181936004.3697.6.camel@Bellerophon.localdomain>
+References: <18034.46215.223478.311352@basebud.nulle.part>
+	<1181936004.3697.6.camel@Bellerophon.localdomain>
+X-Mailer: VM 7.19 under Emacs 21.4.1
+From: Dirk Eddelbuettel <edd@debian.org>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch, Philipp Benner <mail@philipp-benner.de>,
+   Dirk Eddelbuettel <edd@debian.org>
+Subject: Re: [R] model.frame: how does one use it?
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+
+Hi Mark,
+
+Thanks for the reply.
+
+On 15 June 2007 at 14:33, Marc Schwartz wrote:
+| On Fri, 2007-06-15 at 10:47 -0500, Dirk Eddelbuettel wrote: 
+| > Philipp Benner reported a Debian bug report against r-cran-rpart aka rpart.
+| > In short, the issue has to do with how rpart evaluates a formula and
+| > supporting arguments, in particular 'weights'.  
+| > 
+| > A simple contrived example is
+| > 
+| > -----------------------------------------------------------------------------
+| > library(rpart)
+| > 
+| > ## using data from help(rpart), set up simple example
+| > myformula <- formula(Kyphosis ~ Age + Number + Start)
+| > mydata <- kyphosis
+| > myweight <- abs(rnorm(nrow(mydata)))
+| > 
+| > goodFunction <- function(mydata, myformula, myweight) {
+| >   hyp <- rpart(myformula, data=mydata, weights=myweight, method="class")
+| >   prev <- hyp
+| > }
+| > goodFunction(mydata, myformula, myweight)
+| > cat("Ok\n")
+| > 
+| > ## now remove myweight and try to compute it inside a function
+| > rm(myweight)
+| > 
+| > badFunction <- function(mydata, myformula) {
+| >   myweight <- abs(rnorm(nrow(mydata)))
+| >   mf <- model.frame(myformula, mydata, myweight)
+| >   print(head(df))
+| >   hyp <- rpart(myformula,
+| >                data=mf,
+| >                weights=myweight,
+| >                method="class")
+| >   prev <- hyp
+| > }
+| > badFunction(mydata, myformula)
+| > cat("Done\n")
+| > -----------------------------------------------------------------------------
+| > 
+| > Here goodFunction works, but only because myweight (with useless random
+| > weights, but that is not the point here) is found from the calling
+| > environment. 
+| > 
+| > badFunction fails after we remove myweight from there:
+| > 
+| > :~> cat /tmp/philipp.R | R --slave
+| > Ok
+| > Error in eval(expr, envir, enclos) : object "myweight" not found
+| > Execution halted
+| > :~>    
+| > 
+| > As I was able to replicate it, I reported this to the package maintainer.  It
+| > turns out that seemingly all is well as this is supposed to work this way,
+| > and I got a friendly pointer to study model.frame and its help page.  
+| > 
+| > Now I am stuck as I can't make sense of model.frame -- see badFunction
+| > above. I would greatly appreciate any help in making rpart work with a local
+| > argument weights so that I can tell Philipp that there is no bug.  :)
+| > 
+| > Regards, Dirk
+| 
+| 
+| Dirk,
+| 
+| As you note, the issue is the non-standard evaluation of the arguments
+| in model.frame()  The key section of the Details in ?model.frame is:
+| 
+| 
+| All the variables in formula, subset and in ... are looked for first in
+| data and then in the environment of formula (see the help for formula()
+| for further details) and collected into a data frame. Then the subset
+| expression is evaluated, and it is is used as a row index to the data
+| frame. Then the na.action function is applied to the data frame (and may
+| well add attributes). The levels of any factors in the data frame are
+| adjusted according to the drop.unused.levels and xlev arguments.
+| 
+| 
+| Note that even with your goodFunction(), if 'myweight' is created within
+| the environment of the function and not in the global environment, it
+| still fails:
+| 
+| library(rpart)
+| myformula <- formula(Kyphosis ~ Age + Number + Start)
+| mydata <- kyphosis
+| 
+| goodFunction <- function(mydata, myformula) {
+|                          myweight <- abs(rnorm(nrow(mydata)))
+|                          hyp <- rpart(myformula, data=mydata,
+|                                       weights=myweight, method="class")
+|                          prev <- hyp
+|                         }
+| 
+| 
+| > goodFunction(mydata, myformula)
+| Error in eval(expr, envir, enclos) : object "myweight" not found
+| 
+| 
+| However, now let's do this:
+| 
+| 
+| library(rpart)
+| myformula <- formula(Kyphosis ~ Age + Number + Start)
+| mydata <- kyphosis
+| myweight <- abs(rnorm(nrow(mydata)))
+| 
+| goodFunction <- function(mydata, myformula) {
+|                          hyp <- rpart(myformula, data=mydata,
+|                                       weights=myweight, method="class")
+|                          prev <- hyp
+|                         }
+| 
+| > goodFunction(mydata, myformula)
+| > 
+| 
+| It works, because 'myweight' is found in the global environment, which
+| is where the formula is created.
+
+Well,yes, but doesn't this just recreate the working example I showed above?
+It works 'because we get lucky' with the data in the outer global env.
+
+| Now, final example, try this:
+| 
+| 
+| library(rpart)
+| goodFunction <- function() {
+|                          myformula <- formula(Kyphosis ~ Age + Number +
+|                                               Start)
+|                          mydata <- kyphosis
+|                          myweight <- abs(rnorm(nrow(mydata)))
+| 
+|                          hyp <- rpart(myformula, data=mydata,
+|                                       weights=myweight, method="class")
+|                          prev <- hyp
+|                         }
+| 
+| > goodFunction()
+| > 
+| 
+| It works because the formula is created within the environment of the
+| function and hence, 'myweight', which is created there as well, is
+| found.
+
+That works because we force it to be local. BDR claims that my 'badFunction'
+(derived from Philipp's original bug report) above can be made to work
+provide you use model.frame.  I asked about model.frame -- and you were kind
+enough do answer, but you dodged the question.
+
+So let me try again:  How can rpart be called inside a function using a
+local weight variable as I do above ?   Either it can, and the BDR is right
+and there is no bug, or one cannot, and then mere mortals like myself must
+consider rpart to be buggy as it does not support all its argument in at
+least some conceivable calling situations. 
+
+Is that a fair question?
+
+Regards,  Dirk
+
+
+| There was a (non) bug filed on a related matter dealing with the
+| evaluation of 'subset':
+| 
+| http://bugs.r-project.org/cgi-bin/R/feature%26FAQ?id=3671
+| 
+| and you might find this document on Non-Standard Evaluation helpful:
+| 
+| http://developer.r-project.org/nonstandard-eval.pdf
+| 
+| HTH,
+| 
+| Marc
+| 
+| 
+
+-- 
+Hell, there are no rules here - we're trying to accomplish something. 
+                                                  -- Thomas A. Edison
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

@@ -1,0 +1,527 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Apr 17 13:28:02 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3HHS10I030911
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 13:28:01 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id C8C29163C34
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 17:27:37 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.6 required=3.8 tests=AWL,BAYES_05,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 620)
+	id A45E6163B18; Tue, 17 Apr 2007 17:24:03 +0000 (GMT)
+To: samba-cvs@samba.org
+From: metze@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070417172403.A45E6163B18@lists.samba.org>
+Date: Tue, 17 Apr 2007 17:24:03 +0000 (GMT)
+Subject: svn commit: samba r22319 - in branches/SAMBA_4_0/source/lib/tdb: .
+	common tools
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 12902
+Lines: 484
+
+Author: metze
+Date: 2007-04-17 17:24:02 +0000 (Tue, 17 Apr 2007)
+New Revision: 22319
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22319
+
+Log:
+sync lib/tdb/ with samba3
+
+metze
+Modified:
+   branches/SAMBA_4_0/source/lib/tdb/common/dump.c
+   branches/SAMBA_4_0/source/lib/tdb/common/freelist.c
+   branches/SAMBA_4_0/source/lib/tdb/common/freelistcheck.c
+   branches/SAMBA_4_0/source/lib/tdb/common/tdb_private.h
+   branches/SAMBA_4_0/source/lib/tdb/config.mk
+   branches/SAMBA_4_0/source/lib/tdb/tools/tdbbackup.c
+   branches/SAMBA_4_0/source/lib/tdb/tools/tdbdump.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/lib/tdb/common/dump.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/tdb/common/dump.c	2007-04-17 17:17:19 UTC (rev 22318)
++++ branches/SAMBA_4_0/source/lib/tdb/common/dump.c	2007-04-17 17:24:02 UTC (rev 22319)
+@@ -28,7 +28,8 @@
+ 
+ #include "tdb_private.h"
+ 
+-static tdb_off_t tdb_dump_record(struct tdb_context *tdb, tdb_off_t offset)
++static tdb_off_t tdb_dump_record(struct tdb_context *tdb, int hash,
++				 tdb_off_t offset)
+ {
+ 	struct list_struct rec;
+ 	tdb_off_t tailer_ofs, tailer;
+@@ -39,8 +40,10 @@
+ 		return 0;
+ 	}
+ 
+-	printf(" rec: offset=0x%08x next=0x%08x rec_len=%d key_len=%d data_len=%d full_hash=0x%x magic=0x%x\n",
+-	       offset, rec.next, rec.rec_len, rec.key_len, rec.data_len, rec.full_hash, rec.magic);
++	printf(" rec: hash=%d offset=0x%08x next=0x%08x rec_len=%d "
++	       "key_len=%d data_len=%d full_hash=0x%x magic=0x%x\n",
++	       hash, offset, rec.next, rec.rec_len, rec.key_len, rec.data_len,
++	       rec.full_hash, rec.magic);
+ 
+ 	tailer_ofs = offset + sizeof(rec) + rec.rec_len - sizeof(tdb_off_t);
+ 
+@@ -72,7 +75,7 @@
+ 		printf("hash=%d\n", i);
+ 
+ 	while (rec_ptr) {
+-		rec_ptr = tdb_dump_record(tdb, rec_ptr);
++		rec_ptr = tdb_dump_record(tdb, i, rec_ptr);
+ 	}
+ 
+ 	return tdb_unlock(tdb, i, F_WRLCK);
+
+Modified: branches/SAMBA_4_0/source/lib/tdb/common/freelist.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/tdb/common/freelist.c	2007-04-17 17:17:19 UTC (rev 22318)
++++ branches/SAMBA_4_0/source/lib/tdb/common/freelist.c	2007-04-17 17:24:02 UTC (rev 22319)
+@@ -29,7 +29,7 @@
+ #include "tdb_private.h"
+ 
+ /* read a freelist record and check for simple errors */
+-int rec_free_read(struct tdb_context *tdb, tdb_off_t off, struct list_struct *rec)
++int tdb_rec_free_read(struct tdb_context *tdb, tdb_off_t off, struct list_struct *rec)
+ {
+ 	if (tdb->methods->tdb_read(tdb, off, rec, sizeof(*rec),DOCONV()) == -1)
+ 		return -1;
+@@ -37,7 +37,7 @@
+ 	if (rec->magic == TDB_MAGIC) {
+ 		/* this happens when a app is showdown while deleting a record - we should
+ 		   not completely fail when this happens */
+-		TDB_LOG((tdb, TDB_DEBUG_WARNING, "rec_free_read non-free magic 0x%x at offset=%d - fixing\n", 
++		TDB_LOG((tdb, TDB_DEBUG_WARNING, "tdb_rec_free_read non-free magic 0x%x at offset=%d - fixing\n", 
+ 			 rec->magic, off));
+ 		rec->magic = TDB_FREE_MAGIC;
+ 		if (tdb->methods->tdb_write(tdb, off, rec, sizeof(*rec)) == -1)
+@@ -47,7 +47,7 @@
+ 	if (rec->magic != TDB_FREE_MAGIC) {
+ 		/* Ensure ecode is set for log fn. */
+ 		tdb->ecode = TDB_ERR_CORRUPT;
+-		TDB_LOG((tdb, TDB_DEBUG_WARNING, "rec_free_read bad magic 0x%x at offset=%d\n", 
++		TDB_LOG((tdb, TDB_DEBUG_WARNING, "tdb_rec_free_read bad magic 0x%x at offset=%d\n", 
+ 			   rec->magic, off));
+ 		return TDB_ERRCODE(TDB_ERR_CORRUPT, -1);
+ 	}
+@@ -286,7 +286,7 @@
+ 	   issues when faced with a slowly increasing record size.
+ 	 */
+ 	while (rec_ptr) {
+-		if (rec_free_read(tdb, rec_ptr, rec) == -1) {
++		if (tdb_rec_free_read(tdb, rec_ptr, rec) == -1) {
+ 			goto fail;
+ 		}
+ 
+@@ -311,7 +311,7 @@
+ 	}
+ 
+ 	if (bestfit.rec_ptr != 0) {
+-		if (rec_free_read(tdb, bestfit.rec_ptr, rec) == -1) {
++		if (tdb_rec_free_read(tdb, bestfit.rec_ptr, rec) == -1) {
+ 			goto fail;
+ 		}
+ 
+
+Modified: branches/SAMBA_4_0/source/lib/tdb/common/freelistcheck.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/tdb/common/freelistcheck.c	2007-04-17 17:17:19 UTC (rev 22318)
++++ branches/SAMBA_4_0/source/lib/tdb/common/freelistcheck.c	2007-04-17 17:24:02 UTC (rev 22319)
+@@ -88,7 +88,7 @@
+ 			goto fail;
+ 		}
+ 
+-		if (rec_free_read(tdb, rec_ptr, &rec) == -1) {
++		if (tdb_rec_free_read(tdb, rec_ptr, &rec) == -1) {
+ 			goto fail;
+ 		}
+ 
+
+Modified: branches/SAMBA_4_0/source/lib/tdb/common/tdb_private.h
+===================================================================
+--- branches/SAMBA_4_0/source/lib/tdb/common/tdb_private.h	2007-04-17 17:17:19 UTC (rev 22318)
++++ branches/SAMBA_4_0/source/lib/tdb/common/tdb_private.h	2007-04-17 17:24:02 UTC (rev 22319)
+@@ -206,5 +206,7 @@
+ 			   struct list_struct *rec);
+ void tdb_io_init(struct tdb_context *tdb);
+ int tdb_expand(struct tdb_context *tdb, tdb_off_t size);
++int tdb_rec_free_read(struct tdb_context *tdb, tdb_off_t off,
++		      struct list_struct *rec);
+ 
+ 
+
+Modified: branches/SAMBA_4_0/source/lib/tdb/config.mk
+===================================================================
+--- branches/SAMBA_4_0/source/lib/tdb/config.mk	2007-04-17 17:17:19 UTC (rev 22318)
++++ branches/SAMBA_4_0/source/lib/tdb/config.mk	2007-04-17 17:24:02 UTC (rev 22319)
+@@ -51,7 +51,6 @@
+ # Start BINARY tdbbackup
+ [BINARY::tdbbackup]
+ INSTALLDIR = BINDIR
+-ENABLE = NO
+ OBJ_FILES= \
+ 		tools/tdbbackup.o
+ PRIVATE_DEPENDENCIES = \
+
+Modified: branches/SAMBA_4_0/source/lib/tdb/tools/tdbbackup.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/tdb/tools/tdbbackup.c	2007-04-17 17:17:19 UTC (rev 22318)
++++ branches/SAMBA_4_0/source/lib/tdb/tools/tdbbackup.c	2007-04-17 17:24:02 UTC (rev 22319)
+@@ -42,10 +42,183 @@
+  */
+ 
+ #include "replace.h"
++#include "system/locale.h"
++#include "system/time.h"
++#include "system/filesys.h"
+ #include "tdb.h"
+-#include "system/filesys.h"
+ 
++#ifdef HAVE_GETOPT_H
++#include <getopt.h>
++#endif
++
++static int failed;
++
++static char *add_suffix(const char *name, const char *suffix)
++{
++	char *ret;
++	int len = strlen(name) + strlen(suffix) + 1;
++	ret = (char *)malloc(len);
++	if (!ret) {
++		fprintf(stderr,"Out of memory!\n");
++		exit(1);
++	}
++	snprintf(ret, len, "%s%s", name, suffix);
++	return ret;
++}
++
++static int copy_fn(TDB_CONTEXT *tdb, TDB_DATA key, TDB_DATA dbuf, void *state)
++{
++	TDB_CONTEXT *tdb_new = (TDB_CONTEXT *)state;
++
++	if (tdb_store(tdb_new, key, dbuf, TDB_INSERT) != 0) {
++		fprintf(stderr,"Failed to insert into %s\n", tdb_name(tdb));
++		failed = 1;
++		return 1;
++	}
++	return 0;
++}
++
++
++static int test_fn(TDB_CONTEXT *tdb, TDB_DATA key, TDB_DATA dbuf, void *state)
++{
++	return 0;
++}
++
+ /*
++  carefully backup a tdb, validating the contents and
++  only doing the backup if its OK
++  this function is also used for restore
++*/
++static int backup_tdb(const char *old_name, const char *new_name, int hash_size)
++{
++	TDB_CONTEXT *tdb;
++	TDB_CONTEXT *tdb_new;
++	char *tmp_name;
++	struct stat st;
++	int count1, count2;
++
++	tmp_name = add_suffix(new_name, ".tmp");
++
++	/* stat the old tdb to find its permissions */
++	if (stat(old_name, &st) != 0) {
++		perror(old_name);
++		free(tmp_name);
++		return 1;
++	}
++
++	/* open the old tdb */
++	tdb = tdb_open(old_name, 0, 0, O_RDWR, 0);
++	if (!tdb) {
++		printf("Failed to open %s\n", old_name);
++		free(tmp_name);
++		return 1;
++	}
++
++	/* create the new tdb */
++	unlink(tmp_name);
++	tdb_new = tdb_open(tmp_name,
++			   hash_size ? hash_size : tdb_hash_size(tdb),
++			   TDB_DEFAULT, O_RDWR|O_CREAT|O_EXCL, 
++			   st.st_mode & 0777);
++	if (!tdb_new) {
++		perror(tmp_name);
++		free(tmp_name);
++		return 1;
++	}
++
++	/* lock the old tdb */
++	if (tdb_lockall(tdb) != 0) {
++		fprintf(stderr,"Failed to lock %s\n", old_name);
++		tdb_close(tdb);
++		tdb_close(tdb_new);
++		unlink(tmp_name);
++		free(tmp_name);
++		return 1;
++	}
++
++	failed = 0;
++
++	/* traverse and copy */
++	count1 = tdb_traverse(tdb, copy_fn, (void *)tdb_new);
++	if (count1 < 0 || failed) {
++		fprintf(stderr,"failed to copy %s\n", old_name);
++		tdb_close(tdb);
++		tdb_close(tdb_new);
++		unlink(tmp_name);
++		free(tmp_name);
++		return 1;
++	}
++
++	/* close the old tdb */
++	tdb_close(tdb);
++
++	/* close the new tdb and re-open read-only */
++	tdb_close(tdb_new);
++	tdb_new = tdb_open(tmp_name, 0, TDB_DEFAULT, O_RDONLY, 0);
++	if (!tdb_new) {
++		fprintf(stderr,"failed to reopen %s\n", tmp_name);
++		unlink(tmp_name);
++		perror(tmp_name);
++		free(tmp_name);
++		return 1;
++	}
++	
++	/* traverse the new tdb to confirm */
++	count2 = tdb_traverse(tdb_new, test_fn, 0);
++	if (count2 != count1) {
++		fprintf(stderr,"failed to copy %s\n", old_name);
++		tdb_close(tdb_new);
++		unlink(tmp_name);
++		free(tmp_name);
++		return 1;
++	}
++
++	/* make sure the new tdb has reached stable storage */
++	fsync(tdb_fd(tdb_new));
++
++	/* close the new tdb and rename it to .bak */
++	tdb_close(tdb_new);
++	unlink(new_name);
++	if (rename(tmp_name, new_name) != 0) {
++		perror(new_name);
++		free(tmp_name);
++		return 1;
++	}
++
++	free(tmp_name);
++
++	return 0;
++}
++
++/*
++  verify a tdb and if it is corrupt then restore from *.bak
++*/
++static int verify_tdb(const char *fname, const char *bak_name)
++{
++	TDB_CONTEXT *tdb;
++	int count = -1;
++
++	/* open the tdb */
++	tdb = tdb_open(fname, 0, 0, O_RDONLY, 0);
++
++	/* traverse the tdb, then close it */
++	if (tdb) {
++		count = tdb_traverse(tdb, test_fn, NULL);
++		tdb_close(tdb);
++	}
++
++	/* count is < 0 means an error */
++	if (count < 0) {
++		printf("restoring %s\n", fname);
++		return backup_tdb(bak_name, fname, 0);
++	}
++
++	printf("%s : %d records\n", fname, count);
++
++	return 0;
++}
++
++/*
+   see if one file is newer than another
+ */
+ static int file_newer(const char *fname1, const char *fname2)
+@@ -66,6 +239,7 @@
+ 	printf("   -h            this help message\n");
+ 	printf("   -s suffix     set the backup suffix\n");
+ 	printf("   -v            verify mode (restore if corrupt)\n");
++	printf("   -n hashsize   set the new hash size for the backup\n");
+ }
+ 		
+ 
+@@ -75,11 +249,10 @@
+ 	int ret = 0;
+ 	int c;
+ 	int verify = 0;
++	int hashsize = 0;
+ 	const char *suffix = ".bak";
+-	extern int optind;
+-	extern char *optarg;
+ 
+-	while ((c = getopt(argc, argv, "vhs:")) != -1) {
++	while ((c = getopt(argc, argv, "vhs:n:")) != -1) {
+ 		switch (c) {
+ 		case 'h':
+ 			usage();
+@@ -90,6 +263,9 @@
+ 		case 's':
+ 			suffix = optarg;
+ 			break;
++		case 'n':
++			hashsize = atoi(optarg);
++			break;
+ 		}
+ 	}
+ 
+@@ -113,7 +289,7 @@
+ 			}
+ 		} else {
+ 			if (file_newer(fname, bak_name) &&
+-			    backup_tdb(fname, bak_name) != 0) {
++			    backup_tdb(fname, bak_name, hashsize) != 0) {
+ 				ret = 1;
+ 			}
+ 		}
+
+Modified: branches/SAMBA_4_0/source/lib/tdb/tools/tdbdump.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/tdb/tools/tdbdump.c	2007-04-17 17:17:19 UTC (rev 22318)
++++ branches/SAMBA_4_0/source/lib/tdb/tools/tdbdump.c	2007-04-17 17:24:02 UTC (rev 22319)
+@@ -19,9 +19,10 @@
+ */
+ 
+ #include "replace.h"
+-#include "tdb.h"
+ #include "system/locale.h"
++#include "system/time.h"
+ #include "system/filesys.h"
++#include "tdb.h"
+ 
+ static void print_data(TDB_DATA d)
+ {
+@@ -37,22 +38,23 @@
+ 	}
+ }
+ 
+-static int traverse_fn(struct tdb_context *tdb, TDB_DATA key, TDB_DATA dbuf, void *state)
++static int traverse_fn(TDB_CONTEXT *tdb, TDB_DATA key, TDB_DATA dbuf, void *state)
+ {
+ 	printf("{\n");
+-	printf("key = \"");
++	printf("key(%d) = \"", (int)key.dsize);
+ 	print_data(key);
+ 	printf("\"\n");
+-	printf("data = \"");
++	printf("data(%d) = \"", (int)dbuf.dsize);
+ 	print_data(dbuf);
+ 	printf("\"\n");
+ 	printf("}\n");
+ 	return 0;
+ }
+ 
+-static int dump_tdb(const char *fname)
++static int dump_tdb(const char *fname, const char *keyname)
+ {
+-	struct tdb_context *tdb;
++	TDB_CONTEXT *tdb;
++	TDB_DATA key, value;
+ 	
+ 	tdb = tdb_open(fname, 0, 0, O_RDONLY, 0);
+ 	if (!tdb) {
+@@ -60,20 +62,55 @@
+ 		return 1;
+ 	}
+ 
+-	tdb_traverse(tdb, traverse_fn, NULL);
++	if (!keyname) {
++		tdb_traverse(tdb, traverse_fn, NULL);
++	} else {
++		key.dptr = discard_const_p(uint8_t,keyname);
++		key.dsize = strlen( keyname);
++		value = tdb_fetch(tdb, key);
++		if (!value.dptr) {
++			return 1;
++		} else {
++			print_data(value);
++			free(value.dptr);
++		}
++	}
++
+ 	return 0;
+ }
+ 
++static void usage( void)
++{
++	printf( "Usage: tdbdump [options] <filename>\n\n");
++	printf( "   -h          this help message\n");
++	printf( "   -k keyname  dumps value of keyname\n");
++}
++
+  int main(int argc, char *argv[])
+ {
+-	char *fname;
++	char *fname, *keyname=NULL;
++	int c;
+ 
+ 	if (argc < 2) {
+ 		printf("Usage: tdbdump <fname>\n");
+ 		exit(1);
+ 	}
+ 
+-	fname = argv[1];
++	while ((c = getopt( argc, argv, "hk:")) != -1) {
++		switch (c) {
++		case 'h':
++			usage();
++			exit( 0);
++		case 'k':
++			keyname = optarg;
++			break;
++		default:
++			usage();
++			exit( 1);
++		}
++	}
+ 
+-	return dump_tdb(fname);
++	fname = argv[optind];
++
++	return dump_tdb(fname, keyname);
+ }
+

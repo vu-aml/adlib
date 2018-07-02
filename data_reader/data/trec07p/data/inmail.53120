@@ -1,0 +1,156 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Jun  7 08:37:40 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l57CbdhB002167
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 7 Jun 2007 08:37:39 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id B25D6163990
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu,  7 Jun 2007 12:37:31 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 8D61016381F; Thu,  7 Jun 2007 12:36:49 +0000 (GMT)
+Date: Thu, 07 Jun 2007 22:16:48 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070607123649.8D61016381F@lists.samba.org>
+Subject: Rev 500: more code rearrangement in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 500
+revision-id: tridge@samba.org-20070607121648-wml5bxdf98o94rqh
+parent: tridge@samba.org-20070607120619-egp84n6ztuhc9520
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Thu 2007-06-07 22:16:48 +1000
+message:
+  more code rearrangement
+renamed:
+  server/ctdb.c => server/ctdb_server.c ctdb.c-20061127094323-t50f58d65iaao5of-2
+  tools/ctdb_control.c => tools/ctdb.c ctdb_control.c-20070426122705-9ehj1l5lu2gn9kuj-1
+modified:
+  .bzrignore                     bzrignore-20061117235536-slq8jlz2b5161dfm-1
+  Makefile.in                    makefile.in-20061117234101-o3qt14umlg9en8z0-1
+  client/ctdb_client.c           ctdb_client.c-20070411010216-3kd8v37k61steeya-1
+  tests/recover.sh               recover.sh-20070502031230-tpuiet6m6tjdotta-1
+=== renamed file 'server/ctdb.c' => 'server/ctdb_server.c'
+=== renamed file 'tools/ctdb_control.c' => 'tools/ctdb.c'
+=== modified file '.bzrignore'
+--- a/.bzrignore	2007-06-04 09:53:19 +0000
++++ b/.bzrignore	2007-06-07 12:16:48 +0000
+@@ -19,3 +19,6 @@
+ web/packages
+ rec.lock
+ test.db
++sock.1
++sock.3
++sock.4
+
+=== modified file 'Makefile.in'
+--- a/Makefile.in	2007-06-07 12:06:19 +0000
++++ b/Makefile.in	2007-06-07 12:16:48 +0000
+@@ -22,7 +22,8 @@
+ 
+ CFLAGS=-g -I$(srcdir)/include -Iinclude -Ilib -Ilib/util -I$(srcdir) \
+        -I@tallocdir@ -I@tdbdir@/include -I@libreplacedir@ \
+-	-DVARDIR=\"$(localstatedir)\" -DETCDIR=\"$(etcdir)\" -DUSE_MMAP=1 @CFLAGS@ $(POPT_CFLAGS)
++	-DVARDIR=\"$(localstatedir)\" -DETCDIR=\"$(etcdir)\" \
++	-DUSE_MMAP=1 @CFLAGS@ $(POPT_CFLAGS)
+ 
+ LIB_FLAGS=@LDFLAGS@ -Llib @LIBS@ $(POPT_LIBS) @INFINIBAND_LIBS@
+ 
+@@ -35,14 +36,15 @@
+ CTDB_TCP_OBJ = tcp/tcp_connect.o tcp/tcp_io.o tcp/tcp_init.o
+ 
+ CTDB_CLIENT_OBJ = client/ctdb_client.o \
+-	$(CTDB_COMMON_OBJ) $(POPT_OBJ) $(UTIL_OBJ) @TALLOC_OBJ@ @TDB_OBJ@ @LIBREPLACEOBJ@ \
+-	$(EXTRA_OBJ) @EVENTS_OBJ@ 
++	$(CTDB_COMMON_OBJ) $(POPT_OBJ) $(UTIL_OBJ) @TALLOC_OBJ@ @TDB_OBJ@ \
++	@LIBREPLACEOBJ@ $(EXTRA_OBJ) @EVENTS_OBJ@ 
+ 
+ CTDB_TAKEOVER_OBJ = takeover/system.o takeover/ctdb_takeover.o
+ 
+-CTDB_SERVER_OBJ = server/ctdbd.o server/ctdb_daemon.o server/ctdb_lockwait.o server/ctdb_recoverd.o \
+-	server/ctdb_recover.o server/ctdb_freeze.o server/ctdb_tunables.o server/ctdb_monitor.o \
+-	server/ctdb.o server/ctdb_control.o server/ctdb_call.o server/ctdb_ltdb_server.o \
++CTDB_SERVER_OBJ = server/ctdbd.o server/ctdb_daemon.o server/ctdb_lockwait.o \
++	server/ctdb_recoverd.o server/ctdb_recover.o server/ctdb_freeze.o \
++	server/ctdb_tunables.o server/ctdb_monitor.o server/ctdb_server.o \
++	server/ctdb_control.o server/ctdb_call.o server/ctdb_ltdb_server.o \
+ 	server/ctdb_traverse.o $(CTDB_CLIENT_OBJ) \
+ 	$(CTDB_TAKEOVER_OBJ) $(CTDB_TCP_OBJ) @INFINIBAND_WRAPPER_OBJ@
+ 
+@@ -71,9 +73,9 @@
+ 	@echo Linking $@
+ 	@$(CC) $(CFLAGS) -o $@ $(CTDB_SERVER_OBJ) $(LIB_FLAGS)
+ 
+-bin/ctdb: $(OBJS) tools/ctdb_control.o 
++bin/ctdb: $(CLIENT_OBJS) tools/ctdb.o 
+ 	@echo Linking $@
+-	@$(CC) $(CFLAGS) -o $@ tools/ctdb_control.o $(CTDB_CLIENT_OBJ) $(LIB_FLAGS)
++	@$(CC) $(CFLAGS) -o $@ tools/ctdb.o $(CTDB_CLIENT_OBJ) $(LIB_FLAGS)
+ 
+ bin/ctdb_bench: $(CTDB_CLIENT_OBJ) tests/ctdb_bench.o 
+ 	@echo Linking $@
+@@ -88,7 +90,7 @@
+ 	@$(CC) $(CFLAGS) -o $@ ib/ibwrapper_test.o $(CTDB_CLIENT_OBJ) $(LIB_FLAGS)
+ 
+ clean:
+-	rm -f *.o */*.o */*/*.o
++	rm -f *.o */*.o */*/*.o */*~
+ 	rm -f $(BINS) $(SBINS) $(TEST_BINS)
+ 
+ distclean: clean
+
+=== modified file 'client/ctdb_client.c'
+--- a/client/ctdb_client.c	2007-06-07 12:06:19 +0000
++++ b/client/ctdb_client.c	2007-06-07 12:16:48 +0000
+@@ -2099,7 +2099,9 @@
+ 	struct ctdb_context *ctdb;
+ 
+ 	ctdb = talloc_zero(ev, struct ctdb_context);
+-	ctdb->ev               = ev;
++	ctdb->ev  = ev;
++	ctdb->idr = idr_init(ctdb);
++	CTDB_NO_MEMORY_NULL(ctdb, ctdb->idr);
+ 
+ 	return ctdb;
+ }
+
+=== modified file 'tests/recover.sh'
+--- a/tests/recover.sh	2007-05-29 05:15:00 +0000
++++ b/tests/recover.sh	2007-06-07 12:16:48 +0000
+@@ -3,10 +3,10 @@
+ killall -q ctdbd
+ 
+ echo "Starting 4 ctdb daemons"
+-bin/ctdbd --recovery-daemon --nlist direct/4nodes.txt
+-bin/ctdbd --recovery-daemon --nlist direct/4nodes.txt --listen=127.0.0.2 --socket=/tmp/ctdb.socket.127.0.0.2
+-bin/ctdbd --recovery-daemon --nlist direct/4nodes.txt --listen=127.0.0.3 --socket=/tmp/ctdb.socket.127.0.0.3
+-bin/ctdbd --recovery-daemon --nlist direct/4nodes.txt --listen=127.0.0.4 --socket=/tmp/ctdb.socket.127.0.0.4
++bin/ctdbd --recovery-daemon --nlist tests/4nodes.txt
++bin/ctdbd --recovery-daemon --nlist tests/4nodes.txt --listen=127.0.0.2 --socket=/tmp/ctdb.socket.127.0.0.2
++bin/ctdbd --recovery-daemon --nlist tests/4nodes.txt --listen=127.0.0.3 --socket=/tmp/ctdb.socket.127.0.0.3
++bin/ctdbd --recovery-daemon --nlist tests/4nodes.txt --listen=127.0.0.4 --socket=/tmp/ctdb.socket.127.0.0.4
+ 
+ echo
+ echo "Attaching to some databases"
+

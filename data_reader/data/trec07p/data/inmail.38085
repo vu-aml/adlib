@@ -1,0 +1,104 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May 16 22:19:57 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4H2JvqD026422
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 16 May 2007 22:19:57 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 9565E162C38
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 17 May 2007 02:19:54 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 3647C162ACC; Thu, 17 May 2007 02:19:29 +0000 (GMT)
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070517021929.3647C162ACC@lists.samba.org>
+Date: Thu, 17 May 2007 02:19:29 +0000 (GMT)
+Subject: svn commit: samba r22960 - in branches/SAMBA_4_0/source/lib/socket:
+	.
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: tridge
+Date: 2007-05-17 02:19:28 +0000 (Thu, 17 May 2007)
+New Revision: 22960
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22960
+
+Log:
+
+added a SOCKET_FLAG_NOCLOSE to allow us to tell the socket layer that
+we will handle the close of the socket
+
+Modified:
+   branches/SAMBA_4_0/source/lib/socket/socket.c
+   branches/SAMBA_4_0/source/lib/socket/socket.h
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/lib/socket/socket.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/socket/socket.c	2007-05-17 02:18:29 UTC (rev 22959)
++++ branches/SAMBA_4_0/source/lib/socket/socket.c	2007-05-17 02:19:28 UTC (rev 22960)
+@@ -30,7 +30,8 @@
+ */
+ static int socket_destructor(struct socket_context *sock)
+ {
+-	if (sock->ops->fn_close) {
++	if (sock->ops->fn_close && 
++	    !(sock->flags & SOCKET_FLAG_NOCLOSE)) {
+ 		sock->ops->fn_close(sock);
+ 	}
+ 	return 0;
+@@ -547,3 +548,10 @@
+ 	talloc_free(options_list);
+ }
+ 
++/*
++  set some flags on a socket 
++ */
++void socket_set_flags(struct socket_context *sock, unsigned flags)
++{
++	sock->flags |= flags;
++}
+
+Modified: branches/SAMBA_4_0/source/lib/socket/socket.h
+===================================================================
+--- branches/SAMBA_4_0/source/lib/socket/socket.h	2007-05-17 02:18:29 UTC (rev 22959)
++++ branches/SAMBA_4_0/source/lib/socket/socket.h	2007-05-17 02:19:28 UTC (rev 22960)
+@@ -109,7 +109,9 @@
+ 					     * is encrypting data.
+ 					     * This modifies the
+ 					     * TESTNONBLOCK case */
++#define SOCKET_FLAG_NOCLOSE      0x00000010 /* don't auto-close on free */
+ 
++
+ struct socket_context {
+ 	enum socket_type type;
+ 	enum socket_state state;
+@@ -196,5 +198,6 @@
+ 			      struct socket_context **result,
+ 			      uint16_t *port);
+ void set_socket_options(int fd, const char *options);
++void socket_set_flags(struct socket_context *socket, unsigned flags);
+ 
+ #endif /* _SAMBA_SOCKET_H */
+

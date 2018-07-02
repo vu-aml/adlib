@@ -1,0 +1,78 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Apr 13 01:06:06 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3D5660I006922
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 13 Apr 2007 01:06:06 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id CC4B4163849
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 13 Apr 2007 05:05:42 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.9 required=3.8 tests=AWL,BAYES_50,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id BB1C5162ACD; Fri, 13 Apr 2007 05:04:57 +0000 (GMT)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Transfer-Encoding: 7bit
+Message-ID: <17951.3982.846146.206844@samba.org>
+Date: Fri, 13 Apr 2007 15:05:18 +1000
+To: Jeremy Allison <jra@samba.org>
+In-Reply-To: <20070413044034.GB14709@jeremy2>
+References: <20070412191630.782C4162AC3@lists.samba.org>
+	<1BA9C598-9C8D-4EE4-92CB-54CB9D7BA593@samba.org>
+	<20070412211445.GH4904@samba1>
+	<E0443EA1-E384-4D23-9B65-A52D36D55041@samba.org>
+	<20070413042721.GB8662@jeremy2> <17951.2430.524429.30931@samba.org>
+	<20070413044034.GB14709@jeremy2>
+X-Mailer: VM 7.19 under Emacs 22.0.95.1
+From: tridge@samba.org
+Cc: samba-technical@lists.samba.org
+Subject: Re: svn commit: samba r22202 - in
+	branches/SAMBA_3_0/source/nsswitch: .
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: tridge@samba.org
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 932
+Lines: 23
+
+Jeremy,
+
+ > Paranoid thinking, that's all. Haven't got a corrupt
+ > file that shows it - but I will try and create one :-).
+
+ok, thanks :)
+
+You could also consider using transactions on this tdb. Transactions
+only affect write speed, and I suspect write speed isn't so critical
+on this tdb, as we should only be writing to the tdb after we've done
+an operation on a remote DC, so I'd guess the speed of the remote
+operation will swamp the transaction fsync/msync time.
+
+Ideally we would use transactions (or ldb which uses transactions
+underneath) on all long lived databases in Samba. Then we can have a
+smb.conf parameter which enables the TDB_NOSYNC flag in tdb_open calls
+for people who want speed instead of safety. 
+
+That flag leaves the same transaction API, but just disables the
+fsync/msync calls, so it means we are safe against kill -9, but not
+safe against system crashes. It also makes it fast again :)
+
+Cheers, Tridge
+

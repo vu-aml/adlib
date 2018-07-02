@@ -1,0 +1,121 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon May 14 16:04:26 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4EK4QqD026667
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 14 May 2007 16:04:26 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 616A4163906
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 14 May 2007 20:04:19 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.5 required=3.8 tests=BAYES_50,RCVD_IN_DSBL 
+	autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+X-Greylist: delayed 620 seconds by postgrey-1.24 at dp.samba.org;
+	Mon, 14 May 2007 20:03:38 GMT
+Received: from mail.wiu.edu (clus1.wiu.edu [143.43.222.205])
+	by lists.samba.org (Postfix) with ESMTP id A89D2162BC6
+	for <samba-technical@lists.samba.org>;
+	Mon, 14 May 2007 20:03:38 +0000 (GMT)
+Received: from fs1.wiu.edu (root@fs1.wiu.edu [143.43.222.201])
+	by mail.wiu.edu (8.9.3/8.9.3) with ESMTP id OAA09368
+	for <samba-technical@lists.samba.org>;
+	Mon, 14 May 2007 14:52:59 -0500 (CDT)
+From: Help <Help@wiu.edu>
+Received: (from root@localhost) by fs1.wiu.edu (8.9.3/8.9.3) id OAA25344
+	for samba-technical@lists.samba.org;
+	Mon, 14 May 2007 14:52:59 -0500 (CDT)
+Date: Mon, 14 May 2007 14:52:59 -0500 (CDT)
+Message-Id: <200705141952.OAA25344@fs1.wiu.edu>
+To: samba-technical@lists.samba.org
+Subject: Microsoft programs overwrite default mask
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+I have a Unix directory with permission set using ACL as follows:
+ 
+# file: testdir
+# owner: sftp
+# group: student
+user::rwx
+user:user1:rwx         #effective:rwx
+user:user2:rwx          #effective:rwx
+group::---              #effective:---
+mask:rwx
+other:---
+default:user::rw-
+default:user:user1:rwx
+default:user:user2:rwx
+default:user:sftp:rwx
+default:group::---
+default:mask:rwx
+default:other:---
+ 
+When user1 drops a file - copies it from a directory on the windows machine - into this share (testdir), it gets the following permissions:
+ 
+# file: testfile
+# owner: user1
+# group: student
+user::rwx
+user:user1:rwx         #effective:rw-
+user:user2:rwx          #effective:rw-
+user:sftp:rwx                #effective:rw-
+group::---              #effective:---
+mask:rw-
+other:---
+
+Which is correct.  However, if he uses MS word or Excel and "Save As" directly to the testdir share, it gets the following permissions:
+ 
+# file: testfile
+# owner: user1
+# group: student
+user::rwx
+user:user1:rwx         #effective:-w-
+user:user2:rwx          #effective:-w-
+user:sftp:rwx                #effective:-w-
+group::---              #effective:---
+mask:-w-
+other:---
+
+Which is wrong?
+ 
+I have tried to change samba options, but no luck. The current options are as follows:
+ 
+[testdata]
+   comment = Transfer area
+   browseable = no
+   read only = no
+   path = /home/sftp/Data
+   public = no
+   writeable = yes
+   inherit permissions = yes
+   create mask = 0700
+ 
+   #force create mode = 0660
+   #force directory mode = 0770
+   #create mask = 0000
+   #directory mask = 0000
+   #force create mode = 0660
+   #nt acl support = no
+   #security mask = 0000
+   #inherit acls = yes
+
+ 
+PS. the commented options are some of my tries.
+ 
+Thanks,
+

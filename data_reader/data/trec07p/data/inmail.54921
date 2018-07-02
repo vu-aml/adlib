@@ -1,0 +1,95 @@
+From r-help-bounces@stat.math.ethz.ch  Sun Jun 10 06:27:57 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5AARuL9001451
+	for <ktwarwic@flax9.uwaterloo.ca>; Sun, 10 Jun 2007 06:27:57 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5AAQRqf019466;
+	Sun, 10 Jun 2007 12:26:45 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.2 required=5.0 tests=AWL, BAYES_50,
+	DKIM_POLICY_SIGNSOME autolearn=no version=3.2.0
+Received: from slim.kubism.ku.dk (slim.kubism.ku.dk [192.38.18.21])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5AAPoKE019341
+	for <r-help@stat.math.ethz.ch>; Sun, 10 Jun 2007 12:25:51 +0200
+Received: from [192.168.1.11] (0x50c633f5.boanxx12.adsl-dhcp.tele.dk
+	[80.198.51.245])
+	by slim.kubism.ku.dk (Postfix) with ESMTP id 9BDD34903F;
+	Sun, 10 Jun 2007 12:25:40 +0200 (CEST)
+Message-ID: <466BD19F.4020903@biostat.ku.dk>
+Date: Sun, 10 Jun 2007 12:25:35 +0200
+From: Peter Dalgaard <p.dalgaard@biostat.ku.dk>
+User-Agent: Thunderbird 1.5.0.12 (X11/20070530)
+MIME-Version: 1.0
+To: Spielas Bates <bates@stat.wisc.edu>
+References: <874da0b40706071701m55cd42fem15f55a8fcde04f17@mail.gmail.com>
+	<40e66e0b0706080547o5c630ac3ne5feadc4247e289a@mail.gmail.com>
+In-Reply-To: <40e66e0b0706080547o5c630ac3ne5feadc4247e289a@mail.gmail.com>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch, Robert Wilkins <irishhacker@gmail.com>
+Subject: Re: [R] Tools For Preparing Data For Analysis
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+Spielas Bates wrote:
+> Frank Harrell indicated that it is possible to do a lot of difficult
+> data transformation within R itself if you try hard enough but that
+> sometimes means working against the S language and its "whole object"
+> view to accomplish what you want and it can require knowledge of
+> subtle aspects of the S language.
+>   
+Actually, I think Frank's point was subtly different: It is *because* of 
+the differences in view that it sometimes seems difficult to find the 
+way to do something in R that  is apparently straightforward in SAS. 
+I.e. the solutions exist and are often elegant, but may require some 
+lateral thinking.
+
+Case in point: Finding the first or the last observation for each 
+subject when there are multiple records for each subject. The SAS way 
+would be a datastep with IF-THEN-DELETE, and a RETAIN statement so that 
+you can compare the subject ID with the one from the previous record, 
+working with data that are sorted appropriately.
+
+You can do the same thing in R with a for loop, but there are better 
+ways e.g.
+subset(df,!duplicated(ID)), and subset(df, rev(!duplicated(rev(ID))), or 
+maybe
+do.call("rbind",lapply(split(df,df$ID), head, 1)), resp. tail. Or 
+something involving aggregate(). (The latter approaches generalize 
+better to other within-subject functionals like cumulative doses, etc.).
+
+The hardest cases that I know of are the ones where you need to turn one 
+record into many, such as occurs in survival analysis with 
+time-dependent, piecewise constant covariates. This may require 
+"transposing the problem", i.e. for each  interval you find out which 
+subjects contribute and with what, whereas the SAS way would be a 
+within-subject loop over intervals containing an OUTPUT statement.
+
+Also, there are some really weird data formats, where e.g. the input 
+format is different in different records. Back in the 80's where 
+punched-card input was still common, it was quite popular to have one 
+card with background information on a patient plus several cards 
+detailing visits, and you'd get a stack of cards containing both kinds. 
+In R you would most likely split on the card type using grep() and then 
+read the two kinds separately and merge() them later.
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

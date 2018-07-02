@@ -1,0 +1,117 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May 23 20:11:37 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4O0BaqD031552
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 23 May 2007 20:11:36 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id B4E99163868
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 24 May 2007 00:11:32 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 6C455162AE4; Thu, 24 May 2007 00:10:31 +0000 (GMT)
+Date: Thu, 24 May 2007 10:10:03 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070524001031.6C455162AE4@lists.samba.org>
+Subject: Rev 337: merge from ronnie in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 337
+revision-id: tridge@samba.org-20070524001002-l15u156fi8sdv574
+parent: tridge@samba.org-20070523101509-vbrbhal0ufirofal
+parent: sahlberg@ronnie-20070523220845-u9ji91tnmc92k9gq
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Thu 2007-05-24 10:10:02 +1000
+message:
+  merge from ronnie
+modified:
+  tools/ctdb_control.c           ctdb_control.c-20070426122705-9ehj1l5lu2gn9kuj-1
+    ------------------------------------------------------------
+    revno: 326.1.5
+    merged: sahlberg@ronnie-20070523220845-u9ji91tnmc92k9gq
+    parent: sahlberg@ronnie-20070523213304-u3vgumzloo0w1gpn
+    parent: tridge@samba.org-20070523100637-sr7fh7uhl7s143rk
+    committer: Ronnie Sahlberg <sahlberg@ronnie>
+    branch nick: ctdb
+    timestamp: Thu 2007-05-24 08:08:45 +1000
+    message:
+      add a new command for ctdb_control to trigger a recovery
+    ------------------------------------------------------------
+    revno: 326.1.4
+    merged: sahlberg@ronnie-20070523213304-u3vgumzloo0w1gpn
+    parent: sahlberg@ronnie-20070520232434-xxhlg6zdpx5kkvjp
+    parent: tridge@samba.org-20070523045041-a6v1tls6f3m01bqx
+    committer: Ronnie Sahlberg <sahlberg@ronnie>
+    branch nick: ctdb
+    timestamp: Thu 2007-05-24 07:33:04 +1000
+    message:
+      merge from tridge
+=== modified file 'tools/ctdb_control.c'
+--- a/tools/ctdb_control.c	2007-05-23 10:06:37 +0000
++++ b/tools/ctdb_control.c	2007-05-23 22:08:45 +0000
+@@ -61,6 +61,7 @@
+ 		"  getpid <vnn>                       get the pid of a ctdb daemon\n"
+ 		"  dumpmemory <vnn|all>               dump memory map to log\n"
+ 		"  shutdown <vnn>                     shutdown a remote ctdb\n"
++		"  recovery <vnn>                     trigger a recovery\n"
+ 		"  freeze <vnn|all>                   freeze a node\n"
+ 		"  thaw <vnn|all>                     thaw a node\n"
+ 	);
+@@ -374,6 +375,28 @@
+ }
+ 
+ /*
++  trigger a recovery
++ */
++static int control_recovery(struct ctdb_context *ctdb, int argc, const char **argv)
++{
++	int ret;
++
++
++	ret = ctdb_ctrl_freeze(ctdb, timeval_current_ofs(timelimit, 0), CTDB_CURRENT_NODE);
++	if (ret != 0) {
++		printf("Unable to freeze node\n");
++		return ret;
++	}
++	ret = ctdb_ctrl_setrecmode(ctdb, timeval_current_ofs(timelimit, 0), CTDB_CURRENT_NODE, CTDB_RECOVERY_ACTIVE);
++	if (ret != 0) {
++		printf("Unable to set recovery mode\n");
++		return ret;
++	}
++
++	return 0;
++}
++
++/*
+   display recovery mode of a remote node
+  */
+ static int control_getrecmode(struct ctdb_context *ctdb, int argc, const char **argv)
+@@ -1056,6 +1079,7 @@
+ 		{ "dumpmemory", control_dumpmemory },
+ 		{ "getpid", control_getpid },
+ 		{ "shutdown", control_shutdown },
++		{ "recovery", control_recovery },
+ 		{ "freeze", control_freeze },
+ 		{ "thaw", control_thaw },
+ 	};
+

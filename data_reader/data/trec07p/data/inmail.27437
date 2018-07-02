@@ -1,0 +1,140 @@
+From r-help-bounces@stat.math.ethz.ch  Thu May  3 00:18:48 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l434Ilb9030764
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 3 May 2007 00:18:48 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l434IDXQ026117;
+	Thu, 3 May 2007 06:18:26 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.4 required=5.0 tests=AWL,
+	BAYES_50 autolearn=no version=3.1.8
+Received: from rwcrmhc13.comcast.net (rwcrmhc13.comcast.net [204.127.192.83])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l434I5e7026076
+	for <r-help@stat.math.ethz.ch>; Thu, 3 May 2007 06:18:06 +0200
+Received: from [192.168.1.101]
+	(c-76-17-205-60.hsd1.mn.comcast.net[76.17.205.60])
+	by comcast.net (rwcrmhc13) with SMTP
+	id <20070503041804m130035uoue>; Thu, 3 May 2007 04:18:05 +0000
+From: Marc Schwartz <marc_schwartz@comcast.net>
+To: Gregory Pierce <pierce.gregory@gmail.com>
+In-Reply-To: <463953a3.501fda2d.614a.ffff814a@mx.google.com>
+References: <463953a3.501fda2d.614a.ffff814a@mx.google.com>
+Date: Wed, 02 May 2007 23:18:03 -0500
+Message-Id: <1178165883.5051.7.camel@localhost.localdomain>
+Mime-Version: 1.0
+X-Mailer: Evolution 2.8.3 (2.8.3-2.fc6) 
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] Survival statistics--displaying multiple plots
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+Reply-To: marc_schwartz@comcast.net
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+Greg,
+
+I suspect that you want something like this:
+
+Use the 'aml' dataset and create a 'meld' column with random values from
+1:25:
+
+library(survival)
+
+set.seed(1)
+aml$meld <- sample(25, 23, replace = TRUE)
+
+> aml$meld
+ [1]  7 10 15 23  6 23 24 17 16  2  6  5 18 10 20 13 18 25 10 20 24  6
+[23] 17
+
+
+Now use cut() to create a 3 level factor from the values in 'meld':
+
+aml$meld.grp <- cut(aml$meld, breaks = c(-Inf, 10, 20, Inf))
+
+> aml$meld.grp
+ [1] (-Inf,10] (-Inf,10] (10,20]   (20, Inf] (-Inf,10] (20, Inf]
+ [7] (20, Inf] (10,20]   (10,20]   (-Inf,10] (-Inf,10] (-Inf,10]
+[13] (10,20]   (-Inf,10] (10,20]   (10,20]   (10,20]   (20, Inf]
+[19] (-Inf,10] (10,20]   (20, Inf] (-Inf,10] (10,20]  
+Levels: (-Inf,10] (10,20] (20, Inf]
+
+
+Now, let's do the plot, grouping by 'meld.grp':
+
+plot(survfit(Surv(time, status) ~ meld.grp, data = aml), 
+     col = 1:3, legend.text = levels(aml$meld.grp),
+     legend.pos = 1)
+
+
+If this is close, see ?cut for creating a factor from a continuous
+vector.
+
+You can of course further tweak the plot aesthetics as you desire.
+
+HTH,
+
+Marc Schwartz
+
+
+
+On Wed, 2007-05-02 at 23:14 -0400, Gregory Pierce wrote:
+> I should clarify. I can generate plots for each category individually but
+> not for all three on the same chart.
+> 
+> Greg
+> 
+> -----Original Message-----
+> From: Gregory Pierce [mailto:pierce.gregory@gmail.com] 
+> Sent: Wednesday, May 02, 2007 10:21 PM
+> To: 'r-help@stat.math.ethz.ch'
+> Subject: Survival statistics--displaying multiple plots
+> 
+> Hello all!
+> 
+> I am once again analyzing patient survival data with chronic liver disease. 
+> 
+> The severity of the liver disease is given by a number which is continuously
+> variable. I have referred to this number as "meld"--model for end stage
+> liver disease--which is the result of a mathematical calculation on
+> underlying laboratory values. So, for example, I can generate a Kaplan-Meier
+> plot of patients undergoing a TIPS procedure with the following:
+> 
+> >plot(survfit(Surv(days,status==1),subset(tips,meld<10)) 
+> 
+> where "tips" is my data set, "days" is the number of days alive, and meld is
+> the meld score.
+> 
+> What I would like to do is display the survival graphs of patients with
+> meld<10, 10<meld<20, and meld>20. I am unsure about how to go about this.
+> 
+> Any suggestions would be appreciated.
+> 
+> Greg
+> 
+> ______________________________________________
+> R-help@stat.math.ethz.ch mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-help
+> PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+> and provide commented, minimal, self-contained, reproducible code.
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

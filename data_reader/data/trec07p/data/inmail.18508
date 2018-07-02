@@ -1,0 +1,264 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Apr 24 04:37:19 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3O8bI6w007289
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 24 Apr 2007 04:37:18 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 90CD0162BCE
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 24 Apr 2007 08:37:18 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.9 required=3.8 tests=AWL,BAYES_50,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 615)
+	id 8ED43162ACC; Tue, 24 Apr 2007 08:36:41 +0000 (GMT)
+To: samba-cvs@samba.org
+From: mimir@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070424083641.8ED43162ACC@lists.samba.org>
+Date: Tue, 24 Apr 2007 08:36:41 +0000 (GMT)
+Subject: svn commit: samba r22499 - in
+	branches/SAMBA_4_0/webapps/swat/source/class/swat/module/netmgr: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 6636
+Lines: 221
+
+Author: mimir
+Date: 2007-04-24 08:36:41 +0000 (Tue, 24 Apr 2007)
+New Revision: 22499
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22499
+
+Log:
+UsrCtx should be created within UsersView. Tree widget just
+opens it and passes the domain name(s) to operate on (selectable
+via combo box).
+
+
+rafal
+
+
+Modified:
+   branches/SAMBA_4_0/webapps/swat/source/class/swat/module/netmgr/Fsm.js
+   branches/SAMBA_4_0/webapps/swat/source/class/swat/module/netmgr/Gui.js
+   branches/SAMBA_4_0/webapps/swat/source/class/swat/module/netmgr/UsersView.js
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/webapps/swat/source/class/swat/module/netmgr/Fsm.js
+===================================================================
+--- branches/SAMBA_4_0/webapps/swat/source/class/swat/module/netmgr/Fsm.js	2007-04-24 07:57:44 UTC (rev 22498)
++++ branches/SAMBA_4_0/webapps/swat/source/class/swat/module/netmgr/Fsm.js	2007-04-24 08:36:41 UTC (rev 22499)
+@@ -73,6 +73,13 @@
+ 	      "Transition_Idle_to_Idle_via_tree_selection_changed"
+           },
+ 
++          "changeSelected":
++          {
++            // this one is dispatched from UsersView widget
++	    "domainName":
++              "Transition_Idle_to_AwaitRpcResult_via_domainName_changed"
++          },
++	 
+ 	  "changeNetCtx" :
+ 	  {
+ 	    "swat.module.netmgr.Gui" :
+@@ -120,7 +127,7 @@
+   var trans = new qx.util.fsm.Transition(
+     "Transition_Idle_to_Idle_via_tree_selection_changed",
+     {
+-      "nextState" : "State_AwaitRpcResult",
++      "nextState" : "State_Idle",
+ 
+       "ontransition" : function(fsm, event)
+       {
+@@ -135,15 +142,14 @@
+         {
+ 	  module.setNetCtx(parentNode.netCtx);
+ 	}
+-
++	
++	var domainName = parentNode.label;
+ 	var nodeName = selectedNode.label;
+-	var callName = undefined;               // rpc call name
+-	var callArgs = [ gui.getNetCtx() ];       // NetContex goes first
+ 
+ 	switch (nodeName)
+         {
+ 	case "Users":
+-	  callName = "UserMgr";
++	  gui.openUserManager(module, domainName);
+ 	  break;
+ 
+ 	case "Groups":
+@@ -155,14 +161,26 @@
+ 	default:
+ 	  alert("Undefined call selected for node=['" + nodeName + "']");
+ 	}
++      }
++      
++    });
+ 
+-	// Bail out if no appropriate call name has been found
+-	if (callName == undefined) return;
++  // Add the new transition
++  state.addTransition(trans);
+ 
+-	var req = _this.callRpc(fsm, "samba.ejsnet", callName, callArgs);
++  var trans = new qx.util.fsm.Transition(
++    "Transition_Idle_to_AwaitRpcResult_via_domainName_changed",
++    {
++      "nextState" : "State_AwaitRpcResult",
++
++      "ontransition" : function(fsm, event)
++      {
++	var domainName = fsm.getObject("domainName").getValue();
++	var netCtxId = swat.module.netmgr.Gui.getInstance().getNetCtx();
++	
++	var req = _this.callRpc(fsm, "samba.ejsnet", "UserMgr", [ netCtxId, domainName ]);
+ 	req.setUserData("requestType", "UserMgr");
+       }
+-      
+     });
+ 
+   // Add the new transition
+@@ -175,7 +193,8 @@
+ 
+       "ontransition" : function(fsm, event)
+       {
+-	var netCtxId = 0;
++	var netCtxId = swat.module.netmgr.Gui.getInstance().getNetCtx();
++
+ 	var req = _this.callRpc(fsm, "samba.ejsnet", "NetContextCreds", [ netCtxId ]);
+ 	req.setUserData("requestType", "NetContextCreds");
+       }
+
+Modified: branches/SAMBA_4_0/webapps/swat/source/class/swat/module/netmgr/Gui.js
+===================================================================
+--- branches/SAMBA_4_0/webapps/swat/source/class/swat/module/netmgr/Gui.js	2007-04-24 07:57:44 UTC (rev 22498)
++++ branches/SAMBA_4_0/webapps/swat/source/class/swat/module/netmgr/Gui.js	2007-04-24 08:36:41 UTC (rev 22499)
+@@ -213,6 +213,20 @@
+ };
+ 
+ 
++qx.Proto.openUserManager = function(module, domainName)
++{
++  // Remove existing panel if there is any
++  if (this._panel.getChildrenLength() > 0)
++  {
++    this._panel.removeAll();
++  }
++
++  // Create user view, pass the context and the view to the panel
++  var view = new swat.module.netmgr.UsersView(module.fsm, domainName);
++  this._panel.add(view);
++};
++
++
+ qx.Proto._addHostNode = function(module, rpcRequest, local)
+ {
+   var fsm = module.fsm;
+@@ -260,14 +274,8 @@
+ 
+ qx.Proto._initUserManager = function(module, rpcRequest)
+ {
+-  // Get obtained UsrCtx handle
++  // Get obtained usrCtx handle
+   var usrCtx = rpcRequest.getUserData("result").data;
+-
+-  // Create user view and pass the context
+-  var view = new swat.module.netmgr.UsersView(module.fsm);
+-  view.setUsrCtx(usrCtx);
+-  
+-  this._panel.add(view);
+ };
+ 
+ 
+
+Modified: branches/SAMBA_4_0/webapps/swat/source/class/swat/module/netmgr/UsersView.js
+===================================================================
+--- branches/SAMBA_4_0/webapps/swat/source/class/swat/module/netmgr/UsersView.js	2007-04-24 07:57:44 UTC (rev 22498)
++++ branches/SAMBA_4_0/webapps/swat/source/class/swat/module/netmgr/UsersView.js	2007-04-24 08:36:41 UTC (rev 22499)
+@@ -11,7 +11,7 @@
+  * Users View 
+  */
+ qx.OO.defineClass("swat.module.netmgr.UsersView", qx.ui.layout.HorizontalBoxLayout,
+-function(fsm)
++function(fsm, domainName)
+ {
+   qx.ui.layout.HorizontalBoxLayout.call(this);
+ 
+@@ -38,6 +38,39 @@
+   var cmbDomain = new qx.ui.form.ComboBox();
+   cmbDomain.setEditable(false);
+ 
++  // there's always BUILTIN domain so add it to the list
++  var item = new qx.ui.form.ListItem("BUILTIN");
++  cmbDomain.add(item);
++
++  var selectedItem = undefined;
++  
++  // Simply add the domain name if it is passed as a string
++  if (typeof(domainName) == "string")
++  {
++    item = new qx.ui.form.ListItem(domainName);
++    cmbDomain.add(item);
++
++    selectedItem = item;
++  }
++  else // if it's not a string we assume it is a list of strings
++  {
++    for (var s in domainName)
++    {
++      item = new qx.ui.form.ListItem(s);
++      cmbDomain.add(s);
++    }
++
++    selectedItem = new qx.ui.form.ListItem(domainName[0]);
++  }
++
++  // Add event handling
++  cmbDomain.addEventListener("changeSelected", fsm.eventListener, fsm);
++  fsm.addObject("domainName", cmbDomain);
++
++  // Set default selection and dispatch the respective event to initialise the view
++  cmbDomain.setSelected(selectedItem);
++  cmbDomain.dispatchEvent(new qx.event.type.Event("changeSelected"), true);
++
+   // Create an empty list view with sample column
+   this._columns = { username : { label: "Username", width: 150, type: "text" }};
+   this._items = [];
+@@ -60,3 +93,15 @@
+ 
+ // UsrMgr context is required for any operation on user accounts
+ qx.OO.addProperty({ name : "usrCtx", type : "number" });
++
++
++qx.Proto.refreshView = function()
++{
++}
++
++
++qx.Proto._initUserManager = function(module, rpcRequest)
++{
++  // Get obtained UsrCtx handle
++  var usrCtx = rpcRequest.getUserData("result").data;
++};
+

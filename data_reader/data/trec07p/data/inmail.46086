@@ -1,0 +1,180 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 29 10:21:15 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4TELEhB031884
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 10:21:14 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 8B2F3163820
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 14:21:09 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 540)
+	id 7A52D162BD6; Tue, 29 May 2007 14:18:18 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jerry@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070529141818.7A52D162BD6@lists.samba.org>
+Date: Tue, 29 May 2007 14:18:18 +0000 (GMT)
+Subject: svn commit: samba r23198 - in branches/SAMBA_3_0_26/source: passdb
+	registry utils
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: jerry
+Date: 2007-05-29 14:18:17 +0000 (Tue, 29 May 2007)
+New Revision: 23198
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23198
+
+Log:
+cherry pick more patches from SAMBA_3_0
+Modified:
+   branches/SAMBA_3_0_26/source/passdb/machine_sid.c
+   branches/SAMBA_3_0_26/source/registry/reg_objects.c
+   branches/SAMBA_3_0_26/source/utils/net_ads.c
+   branches/SAMBA_3_0_26/source/utils/pdbedit.c
+   branches/SAMBA_3_0_26/source/utils/smbcacls.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0_26/source/passdb/machine_sid.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/passdb/machine_sid.c	2007-05-29 14:09:46 UTC (rev 23197)
++++ branches/SAMBA_3_0_26/source/passdb/machine_sid.c	2007-05-29 14:18:17 UTC (rev 23198)
+@@ -220,6 +220,5 @@
+ 
+ 	sid_copy(&dom_sid, sid);
+ 	sid_split_rid(&dom_sid, &rid);
+-	
+-	return sid_equal(&dom_sid, get_global_sam_sid());
++	return sid_check_is_domain(&dom_sid);
+ }
+
+Modified: branches/SAMBA_3_0_26/source/registry/reg_objects.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/registry/reg_objects.c	2007-05-29 14:09:46 UTC (rev 23197)
++++ branches/SAMBA_3_0_26/source/registry/reg_objects.c	2007-05-29 14:18:17 UTC (rev 23198)
+@@ -73,7 +73,7 @@
+ }
+  
+  /***********************************************************************
+- Add a new key to the array
++ Delete a key from the array
+  **********************************************************************/
+ 
+ int regsubkey_ctr_delkey( REGSUBKEY_CTR *ctr, const char *keyname )
+
+Modified: branches/SAMBA_3_0_26/source/utils/net_ads.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/utils/net_ads.c	2007-05-29 14:09:46 UTC (rev 23197)
++++ branches/SAMBA_3_0_26/source/utils/net_ads.c	2007-05-29 14:18:17 UTC (rev 23198)
+@@ -1369,10 +1369,10 @@
+ 		status = ads_dns_lookup_ns( ctx, root_domain, &nameservers, &ns_count );
+ 		
+ 		if ( !NT_STATUS_IS_OK(status) || (ns_count == 0)) {			
+-		DEBUG(3,("net_ads_join: Failed to find name server for the %s "
++			DEBUG(3,("net_ads_join: Failed to find name server for the %s "
+ 			 "realm\n", ads->config.realm));
+-		goto done;
+-	}
++			goto done;
++		}
+ 
+ 		dnsdomain = root_domain;		
+ 		
+
+Modified: branches/SAMBA_3_0_26/source/utils/pdbedit.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/utils/pdbedit.c	2007-05-29 14:09:46 UTC (rev 23197)
++++ branches/SAMBA_3_0_26/source/utils/pdbedit.c	2007-05-29 14:18:17 UTC (rev 23198)
+@@ -761,6 +761,7 @@
+ 	static char *pwd_time_format = NULL;
+ 	static BOOL pw_from_stdin = False;
+ 	struct pdb_methods *bin, *bout, *bdef;
++	char *configfile = NULL;
+ 	poptContext pc;
+ 	struct poptOption long_options[] = {
+ 		POPT_AUTOHELP
+@@ -818,6 +819,9 @@
+ 		case 'C':
+ 			account_policy_value_set = True;
+ 			break;
++		case 's':
++			configfile = optarg;
++			break;
+ 		}
+ 	}
+ 
+
+Modified: branches/SAMBA_3_0_26/source/utils/smbcacls.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/utils/smbcacls.c	2007-05-29 14:09:46 UTC (rev 23197)
++++ branches/SAMBA_3_0_26/source/utils/smbcacls.c	2007-05-29 14:18:17 UTC (rev 23198)
+@@ -381,7 +381,7 @@
+ 	fstring tok;
+ 	SEC_DESC *ret = NULL;
+ 	size_t sd_size;
+-	DOM_SID *group_sid=NULL, *owner_sid=NULL;
++	DOM_SID *grp_sid=NULL, *owner_sid=NULL;
+ 	SEC_ACL *dacl=NULL;
+ 	int revision=1;
+ 
+@@ -407,13 +407,13 @@
+ 		}
+ 
+ 		if (strncmp(tok,"GROUP:", 6) == 0) {
+-			if (group_sid) {
++			if (grp_sid) {
+ 				printf("Only specify group once\n");
+ 				goto done;
+ 			}
+-			group_sid = SMB_CALLOC_ARRAY(DOM_SID, 1);
+-			if (!group_sid ||
+-			    !StringToSid(group_sid, tok+6)) {
++			grp_sid = SMB_CALLOC_ARRAY(DOM_SID, 1);
++			if (!grp_sid ||
++			    !StringToSid(grp_sid, tok+6)) {
+ 				printf("Failed to parse group sid\n");
+ 				goto done;
+ 			}
+@@ -436,11 +436,11 @@
+ 		goto done;
+ 	}
+ 
+-	ret = make_sec_desc(ctx,revision, SEC_DESC_SELF_RELATIVE, owner_sid, group_sid, 
++	ret = make_sec_desc(ctx,revision, SEC_DESC_SELF_RELATIVE, owner_sid, grp_sid, 
+ 			    NULL, dacl, &sd_size);
+ 
+   done:
+-	SAFE_FREE(group_sid);
++	SAFE_FREE(grp_sid);
+ 	SAFE_FREE(owner_sid);
+ 
+ 	return ret;
+@@ -738,7 +738,7 @@
+ 	   and W2K. JRA.
+ 	*/
+ 
+-	sd = make_sec_desc(ctx,old->revision, old->type, old->owner_sid, old->group_sid,
++	sd = make_sec_desc(ctx,old->revision, old->type, old->owner_sid, old->grp_sid,
+ 			   NULL, old->dacl, &sd_size);
+ 
+ 	fnum = cli_nt_create(cli, filename, WRITE_DAC_ACCESS|WRITE_OWNER_ACCESS);
+

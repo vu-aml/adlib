@@ -1,0 +1,174 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu May 10 09:31:44 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4ADViqD009865
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 10 May 2007 09:31:44 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 8097E163A43
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 10 May 2007 13:31:42 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL,UPPERCASE_25_50 autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1017)
+	id 4B7DF16386D; Thu, 10 May 2007 13:31:16 +0000 (GMT)
+To: samba-cvs@samba.org
+From: obnox@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070510133116.4B7DF16386D@lists.samba.org>
+Date: Thu, 10 May 2007 13:31:16 +0000 (GMT)
+Subject: svn commit: samba r22777 - in branches: SAMBA_3_0/source
+	SAMBA_3_0/source/modules SAMBA_3_0_25/source
+	SAMBA_3_0_25/source/modules SAMBA_3_0_26/source
+	SAMBA_3_0_26/source/modules
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: obnox
+Date: 2007-05-10 13:31:15 +0000 (Thu, 10 May 2007)
+New Revision: 22777
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22777
+
+Log:
+Fix for [Bug 4543] - POSIX ACL support on FreeBSD.
+
+This adds vfs_posixacl to the list of static modules and
+makes use of HAVE_ACL_GET_PERM_NP.
+
+This is just a quick fix. FreeBSD acl support is still
+hardcoded in configure.in, but actually this could be
+detected in a unified test for freebsd, linux, *,
+as suggested in the bugreport. This has still to be
+checked and elaborated.
+
+Michael
+
+
+Modified:
+   branches/SAMBA_3_0/source/configure.in
+   branches/SAMBA_3_0/source/modules/vfs_posixacl.c
+   branches/SAMBA_3_0_25/source/configure.in
+   branches/SAMBA_3_0_25/source/modules/vfs_posixacl.c
+   branches/SAMBA_3_0_26/source/configure.in
+   branches/SAMBA_3_0_26/source/modules/vfs_posixacl.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/configure.in
+===================================================================
+--- branches/SAMBA_3_0/source/configure.in	2007-05-10 12:41:20 UTC (rev 22776)
++++ branches/SAMBA_3_0/source/configure.in	2007-05-10 13:31:15 UTC (rev 22777)
+@@ -5303,6 +5303,7 @@
+ 		AC_MSG_RESULT(Using FreeBSD posix ACLs)
+ 		AC_DEFINE(HAVE_POSIX_ACLS,1,[Whether FreeBSD POSIX ACLs are available])
+ 		AC_DEFINE(HAVE_ACL_GET_PERM_NP,1,[Whether acl_get_perm_np() is available])
++		default_static_modules="$default_static_modules vfs_posixacl"
+ 		;;
+ 	*linux*)
+ 		AC_CHECK_LIB(attr,getxattr,[ACL_LIBS="$ACL_LIBS -lattr"])
+
+Modified: branches/SAMBA_3_0/source/modules/vfs_posixacl.c
+===================================================================
+--- branches/SAMBA_3_0/source/modules/vfs_posixacl.c	2007-05-10 12:41:20 UTC (rev 22776)
++++ branches/SAMBA_3_0/source/modules/vfs_posixacl.c	2007-05-10 13:31:15 UTC (rev 22777)
+@@ -200,9 +200,15 @@
+ 		return False;
+ 	}
+ 	ace->a_perm = 0;
++#ifdef HAVE_ACL_GET_PERM_NP
++	ace->a_perm |= (acl_get_perm_np(permset, ACL_READ) ? SMB_ACL_READ : 0);
++	ace->a_perm |= (acl_get_perm_np(permset, ACL_WRITE) ? SMB_ACL_WRITE : 0);
++	ace->a_perm |= (acl_get_perm_np(permset, ACL_EXECUTE) ? SMB_ACL_EXECUTE : 0);
++#else
+ 	ace->a_perm |= (acl_get_perm(permset, ACL_READ) ? SMB_ACL_READ : 0);
+ 	ace->a_perm |= (acl_get_perm(permset, ACL_WRITE) ? SMB_ACL_WRITE : 0);
+ 	ace->a_perm |= (acl_get_perm(permset, ACL_EXECUTE) ? SMB_ACL_EXECUTE : 0);
++#endif
+ 	return True;
+ }
+ 
+
+Modified: branches/SAMBA_3_0_25/source/configure.in
+===================================================================
+--- branches/SAMBA_3_0_25/source/configure.in	2007-05-10 12:41:20 UTC (rev 22776)
++++ branches/SAMBA_3_0_25/source/configure.in	2007-05-10 13:31:15 UTC (rev 22777)
+@@ -5140,6 +5140,7 @@
+ 		AC_MSG_RESULT(Using FreeBSD posix ACLs)
+ 		AC_DEFINE(HAVE_POSIX_ACLS,1,[Whether FreeBSD POSIX ACLs are available])
+ 		AC_DEFINE(HAVE_ACL_GET_PERM_NP,1,[Whether acl_get_perm_np() is available])
++		default_static_modules="$default_static_modules vfs_posixacl"
+ 		;;
+ 	*linux*)
+ 		AC_CHECK_LIB(attr,getxattr,[ACL_LIBS="$ACL_LIBS -lattr"])
+
+Modified: branches/SAMBA_3_0_25/source/modules/vfs_posixacl.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/modules/vfs_posixacl.c	2007-05-10 12:41:20 UTC (rev 22776)
++++ branches/SAMBA_3_0_25/source/modules/vfs_posixacl.c	2007-05-10 13:31:15 UTC (rev 22777)
+@@ -200,9 +200,15 @@
+ 		return False;
+ 	}
+ 	ace->a_perm = 0;
++#ifdef HAVE_ACL_GET_PERM_NP
++	ace->a_perm |= (acl_get_perm_np(permset, ACL_READ) ? SMB_ACL_READ : 0);
++	ace->a_perm |= (acl_get_perm_np(permset, ACL_WRITE) ? SMB_ACL_WRITE : 0);
++	ace->a_perm |= (acl_get_perm_np(permset, ACL_EXECUTE) ? SMB_ACL_EXECUTE : 0);
++#else
+ 	ace->a_perm |= (acl_get_perm(permset, ACL_READ) ? SMB_ACL_READ : 0);
+ 	ace->a_perm |= (acl_get_perm(permset, ACL_WRITE) ? SMB_ACL_WRITE : 0);
+ 	ace->a_perm |= (acl_get_perm(permset, ACL_EXECUTE) ? SMB_ACL_EXECUTE : 0);
++#endif
+ 	return True;
+ }
+ 
+
+Modified: branches/SAMBA_3_0_26/source/configure.in
+===================================================================
+--- branches/SAMBA_3_0_26/source/configure.in	2007-05-10 12:41:20 UTC (rev 22776)
++++ branches/SAMBA_3_0_26/source/configure.in	2007-05-10 13:31:15 UTC (rev 22777)
+@@ -5140,6 +5140,7 @@
+ 		AC_MSG_RESULT(Using FreeBSD posix ACLs)
+ 		AC_DEFINE(HAVE_POSIX_ACLS,1,[Whether FreeBSD POSIX ACLs are available])
+ 		AC_DEFINE(HAVE_ACL_GET_PERM_NP,1,[Whether acl_get_perm_np() is available])
++		default_static_modules="$default_static_modules vfs_posixacl"
+ 		;;
+ 	*linux*)
+ 		AC_CHECK_LIB(attr,getxattr,[ACL_LIBS="$ACL_LIBS -lattr"])
+
+Modified: branches/SAMBA_3_0_26/source/modules/vfs_posixacl.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/modules/vfs_posixacl.c	2007-05-10 12:41:20 UTC (rev 22776)
++++ branches/SAMBA_3_0_26/source/modules/vfs_posixacl.c	2007-05-10 13:31:15 UTC (rev 22777)
+@@ -200,9 +200,15 @@
+ 		return False;
+ 	}
+ 	ace->a_perm = 0;
++#ifdef HAVE_ACL_GET_PERM_NP
++	ace->a_perm |= (acl_get_perm_np(permset, ACL_READ) ? SMB_ACL_READ : 0);
++	ace->a_perm |= (acl_get_perm_np(permset, ACL_WRITE) ? SMB_ACL_WRITE : 0);
++	ace->a_perm |= (acl_get_perm_np(permset, ACL_EXECUTE) ? SMB_ACL_EXECUTE : 0);
++#else
+ 	ace->a_perm |= (acl_get_perm(permset, ACL_READ) ? SMB_ACL_READ : 0);
+ 	ace->a_perm |= (acl_get_perm(permset, ACL_WRITE) ? SMB_ACL_WRITE : 0);
+ 	ace->a_perm |= (acl_get_perm(permset, ACL_EXECUTE) ? SMB_ACL_EXECUTE : 0);
++#endif
+ 	return True;
+ }
+ 
+

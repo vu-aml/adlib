@@ -1,0 +1,92 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May  8 07:21:58 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l48BLwqD011172
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 8 May 2007 07:21:58 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 3F219163841
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue,  8 May 2007 11:21:57 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id A59FA162ACC; Tue,  8 May 2007 11:21:39 +0000 (GMT)
+Date: Tue, 08 May 2007 21:16:30 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070508112139.A59FA162ACC@lists.samba.org>
+Subject: Rev 264: fixed a problem with the number of timed events growing
+	without bound with the new seqnum code in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 264
+revision-id: tridge@samba.org-20070508111629-cgamk1fazmat0dog
+parent: tridge@samba.org-20070506215638-67wvsh0zwt7bbllo
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Tue 2007-05-08 21:16:29 +1000
+message:
+  fixed a problem with the number of timed events growing without bound with the new seqnum code
+modified:
+  common/ctdb_ltdb.c             ctdb_ltdb.c-20061128065342-to93h6eejj5kon81-2
+  include/ctdb_private.h         ctdb_private.h-20061117234101-o3qt14umlg9en8z0-13
+=== modified file 'common/ctdb_ltdb.c'
+--- a/common/ctdb_ltdb.c	2007-05-05 07:35:28 +0000
++++ b/common/ctdb_ltdb.c	2007-05-08 11:16:29 +0000
+@@ -440,8 +440,9 @@
+ 	ctdb_db->seqnum = new_seqnum;
+ 
+ 	/* setup a new timer */
+-	event_add_timed(ctdb->ev, ctdb_db, timeval_current_ofs(ctdb->seqnum_frequency, 0),
+-			ctdb_ltdb_seqnum_check, ctdb_db);
++	ctdb_db->te = event_add_timed(ctdb->ev, ctdb_db, 
++				      timeval_current_ofs(ctdb->seqnum_frequency, 0),
++				      ctdb_ltdb_seqnum_check, ctdb_db);
+ }
+ 
+ /*
+@@ -456,8 +457,11 @@
+ 		return -1;
+ 	}
+ 
+-	event_add_timed(ctdb->ev, ctdb_db, timeval_current_ofs(ctdb->seqnum_frequency, 0),
+-			ctdb_ltdb_seqnum_check, ctdb_db);
++	if (ctdb_db->te == NULL) {
++		ctdb_db->te = event_add_timed(ctdb->ev, ctdb_db, 
++					      timeval_current_ofs(ctdb->seqnum_frequency, 0),
++					      ctdb_ltdb_seqnum_check, ctdb_db);
++	}
+ 
+ 	tdb_enable_seqnum(ctdb_db->ltdb->tdb);
+ 	ctdb_db->seqnum = tdb_get_seqnum(ctdb_db->ltdb->tdb);
+
+=== modified file 'include/ctdb_private.h'
+--- a/include/ctdb_private.h	2007-05-06 19:02:48 +0000
++++ b/include/ctdb_private.h	2007-05-08 11:16:29 +0000
+@@ -246,6 +246,7 @@
+ 	struct tdb_wrap *ltdb;
+ 	struct ctdb_registered_call *calls; /* list of registered calls */
+ 	uint32_t seqnum;
++	struct timed_event *te;
+ };
+ 
+ 
+

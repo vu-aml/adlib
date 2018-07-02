@@ -1,0 +1,78 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon May 28 05:47:04 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4S9l3qD012727
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 28 May 2007 05:47:03 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id F05A7163822
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 28 May 2007 09:46:58 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 28FEB162ABE; Mon, 28 May 2007 09:46:29 +0000 (GMT)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Transfer-Encoding: 7bit
+Message-ID: <18010.42274.413307.424514@samba.org>
+Date: Mon, 28 May 2007 19:47:14 +1000
+To: samba-technical@samba.org
+X-Mailer: VM 7.19 under Emacs 22.0.95.1
+From: tridge@samba.org
+Subject: a way to disable ADS in winbind in samba3
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: tridge@samba.org
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+I've sometimes come across sites where a w2k or w2k3 DC is in use but
+ADS is totally broken. It used to be that in a pinch you could use rpc
+instead, but now winbind insists on working out for itself if ADS is
+supported and using ADS anyway. Unfortunately sometimes this doesn't
+work, and ADS is just too badly broken on the DC to work. Windows
+clients cope with this, but winbind doesn't.
+
+It would be great to improve the auto-detection, but I'd also like to
+suggest the following override:
+
+--- source/nsswitch/winbindd_cm.c       2007-04-11 15:41:35 +0000
++++ source/nsswitch/winbindd_cm.c       2007-05-22 05:50:36 +0000
+@@ -1641,6 +1641,15 @@
+        DEBUG(5,("set_dc_type_and_flags: domain %s is %srunning active directory.\n",
+                  domain->name, domain->active_directory ? "" : "NOT "));
+
++       /* allow override for using ads - a last ditch approach for domain controllers
++          that are terminally broken */
++       if (domain->active_directory &&
++           !lp_parm_bool(-1, "winbind", "ads", True)) {
++               domain->active_directory = False;
++               domain->native_mode = False;
++               DEBUG(0,("Overriding active directory detecting - disabling ADS\n"));
++       }
++
+
+
+so when you are pulling your hair out and can't get an admin to fix a
+broken DC, you can at least get something working by setting
+"winbind:ads = no" as a last desperate measure.
+
+The world is full of broken DCs. We need a way to work with them, sad
+as that may be.
+
+Cheers, Tridge
+

@@ -1,0 +1,125 @@
+From r-help-bounces@stat.math.ethz.ch  Fri Apr 20 04:02:56 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3K82r0I003456
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 20 Apr 2007 04:02:54 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3K81UZS004612;
+	Fri, 20 Apr 2007 10:01:40 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.2 required=5.0 tests=AWL,
+	BAYES_50 autolearn=no version=3.1.8
+Received: from slim.kubism.ku.dk (slim.kubism.ku.dk [192.38.18.21])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3K81F1o004530
+	for <r-help@stat.math.ethz.ch>; Fri, 20 Apr 2007 10:01:15 +0200
+Received: from [192.168.1.11] (0x50c633f5.boanxx12.adsl-dhcp.tele.dk
+	[80.198.51.245])
+	by slim.kubism.ku.dk (Postfix) with ESMTP id 2955962643;
+	Fri, 20 Apr 2007 10:01:05 +0200 (CEST)
+Message-ID: <46287340.8050909@biostat.ku.dk>
+Date: Fri, 20 Apr 2007 10:01:04 +0200
+From: Peter Dalgaard <p.dalgaard@biostat.ku.dk>
+User-Agent: Thunderbird 1.5.0.10 (X11/20070302)
+MIME-Version: 1.0
+To: Charilaos Skiadas <skiadas@hanover.edu>
+References: <46284210.50704@sfu.ca>
+	<69B40AA2-869E-4138-815A-82BD728E10CE@hanover.edu>
+In-Reply-To: <69B40AA2-869E-4138-815A-82BD728E10CE@hanover.edu>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: R-help <r-help@stat.math.ethz.ch>, Michael Toews <mwtoews@sfu.ca>
+Subject: Re: [R] sequential for loop
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+Status: O
+Content-Length: 2335
+Lines: 74
+
+Charilaos Skiadas wrote:
+> Hi Michael,
+> On Apr 20, 2007, at 12:31 AM, Michael Toews wrote:
+>
+>   
+>> Hi all,
+>>
+>> I'm usually comfortable using the *apply functions for vectorizing  
+>> loops
+>> in R. However, my particular problem now is using it in a sequential
+>> operation, which uses values evaluated in an offset of the loop  
+>> vector.
+>>
+>> Here is my example using a for loop approach:
+>>
+>> dat <- data.frame(year=rep(1970:1980,each=365),yday=1:365)
+>> dat$value <- sin(dat$yday*2*pi/365)+rnorm(nrow(dat),sd=0.5)
+>> dat$ca <- dat$cb <- 0 # consecutive above and below 0
+>>
+>> for(n in 2:nrow(dat)){
+>>   if(dat$value[n] > 0)
+>>     dat$ca[n] <- dat$ca[n-1] + 1
+>>   else
+>>     dat$cb[n] <- dat$cb[n-1] + 1
+>> }
+>>
+>> I'm inquiring if there is a straightforward way to vectorize this  
+>> (or a
+>> similar example) in R, since it gets rather slow with larger data
+>> frames. If there is no straightforward method, no worries.
+>>
+>>     
+> Would this do what you want:
+>
+> dat <- data.frame(year=rep(1970:1980,each=365),yday=1:365)
+> dat$value <- sin(dat$yday*2*pi/365)+rnorm(nrow(dat),sd=0.5)
+> positives <- dat$value > 0
+> dat$ca <- cumsum(c(0,positives[-1]))
+> dat$cb <- cumsum(c(0,!positives[-1]))
+>
+>   
+I think not (did you run both codes?).  As I read it, Michael wants ca 
+and cb to count up, then reset to zero on a sign change.
+
+Something like this (only partially tested!)
+
+positives <- dat$value > 0
+chg <- c(0,diff(positives)!= 0)
+grp <- cumsum(chg)
+ix <- unlist(lapply(table(grp),function(n)1:n))
+ca <- ifelse(positives,ix,0)
+cb <- ifelse(positives,0,ix)
+
+(or ...as.vector(table(grp))... to avoid useless name calculations)
+>> Thanks in advance.
+>> +mt
+>>     
+>
+> Haris Skiadas
+> Department of Mathematics and Computer Science
+> Hanover College
+>
+> ______________________________________________
+> R-help@stat.math.ethz.ch mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-help
+> PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+> and provide commented, minimal, self-contained, reproducible code.
+>
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

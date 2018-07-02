@@ -1,0 +1,425 @@
+From r-help-bounces@stat.math.ethz.ch  Tue Apr 17 19:32:11 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3HNW90I002260
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 19:32:10 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3HNUBKB029690;
+	Wed, 18 Apr 2007 01:30:31 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.3 required=5.0 tests=AWL, BAYES_50,
+	FORGED_RCVD_HELO autolearn=no version=3.1.8
+Received: from crcmail1.BCCRC.CA (mail.bccrc.ca [142.103.207.43])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3HNTtc7029266
+	for <r-help@stat.math.ethz.ch>; Wed, 18 Apr 2007 01:29:57 +0200
+X-MimeOLE: Produced By Microsoft Exchange V6.5
+Content-class: urn:content-classes:message
+MIME-Version: 1.0
+Date: Tue, 17 Apr 2007 16:29:54 -0700
+Message-ID: <0BE438149FF2254DB4199E2682C8DFEB0235FBE5@crcmail1.BCCRC.CA>
+X-MS-Has-Attach: 
+X-MS-TNEF-Correlator: 
+Thread-Topic: [R] Extracting approximate Wald test (Chisq) fromcoxph(..frailty)
+Thread-Index: AceBPArjid+xygWtS+y/xg07rw4OrgACzZEO
+References: <696203.74517.qm@web32406.mail.mud.yahoo.com>
+From: "Steven McKinney" <smckinney@bccrc.ca>
+To: <wildscop@yahoo.com>, <r-help@stat.math.ethz.ch>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+X-MIME-Autoconverted: from quoted-printable to 8bit by hypatia.math.ethz.ch id
+	l3HNTtc7029266
+Subject: Re: [R] Extracting approximate Wald test (Chisq)
+	fromcoxph(..frailty)
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+Status: O
+Content-Length: 13197
+Lines: 373
+
+
+Hi Mohammed,
+
+Here's one way to get the information you need.
+
+First I examined the output of your coxph() call:
+
+ > library(survival)
+ > kfitm1<-coxph(formula = Surv(time, status) ~ age +
+ + sex +disease + frailty(id, dist = "gauss"),
+ + data = kidney)
+ > class(kfitm1)
+ [1] "coxph.penal" "coxph"      
+ > attributes(kfitm1)
+ $names
+  [1] "coefficients"      "var"               "var2"             
+  [4] "loglik"            "iter"              "linear.predictors"
+  [7] "residuals"         "means"             "method"           
+ [10] "frail"             "fvar"              "df"               
+ [13] "df2"               "penalty"           "pterms"           
+ [16] "assign2"           "history"           "coxlist1"         
+ [19] "printfun"          "n"                 "terms"            
+ [22] "assign"            "wald.test"         "y"                
+ [25] "formula"           "call"             
+
+ $class
+ [1] "coxph.penal" "coxph"      
+
+So the returned object is actually of class coxph.penal,
+not coxph.  Thus you'll want to look into the functions
+
+
+survival:::summary.coxph.penal
+survival:::print.coxph.penal
+
+I checked the wald piece of the returned object,
+that's not what you needed.
+
+ > kfitm1$wald.test
+ [1] 14.96798
+ 
+
+I see that what you want is in the "temp"
+matrix composed in the
+survival:::summary.coxph.penal
+function.
+
+Make your own copy of the function
+
+my.summary.coxph.penal <- survival:::summary.coxph.penal
+
+Edit the function and return the temp matrix
+(see modified my.summary.coxph.penal function below,
+I added a return list including the temp matrix.)
+
+
+
+> kfitm1.my.summary <- my.summary.coxph.penal(kfitm1)
+Call:
+coxph(formula = Surv(time, status) ~ age + sex + disease + frailty(id, 
+    dist = "gauss"), data = kidney)
+
+  n= 76 
+                          coef     se(coef) se2    Chisq DF   p      
+age                        0.00489 0.0150   0.0106  0.11  1.0 0.74000
+sex                       -1.69703 0.4609   0.3617 13.56  1.0 0.00023
+diseaseGN                  0.17980 0.5447   0.3927  0.11  1.0 0.74000
+diseaseAN                  0.39283 0.5447   0.3982  0.52  1.0 0.47000
+diseasePKD                -1.13630 0.8250   0.6173  1.90  1.0 0.17000
+frailty(id, dist = "gauss                          17.89 12.1 0.12000
+
+           exp(coef) exp(-coef) lower .95 upper .95
+age            1.005      0.995    0.9759     1.035
+sex            0.183      5.458    0.0742     0.452
+diseaseGN      1.197      0.835    0.4116     3.481
+diseaseAN      1.481      0.675    0.5093     4.308
+diseasePKD     0.321      3.115    0.0637     1.617
+
+Iterations: 6 outer, 30 Newton-Raphson
+     Variance of random effect= 0.493 
+Degrees of freedom for terms=  0.5  0.6  1.7 12.1 
+Rsquare= 0.465   (max possible= 0.993 )
+Likelihood ratio test= 47.5  on 14.9 df,   p=2.82e-05
+Wald test            = 15.0  on 14.9 df,   p=0.446
+> attributes(kfitm1.my.summary)
+$names
+[1] "temp" "tmp" 
+
+> kfitm1.my.summary$temp
+                          coef       se(coef) se2      Chisq   DF     p        
+age                       " 0.00489" "0.0150" "0.0106" " 0.11" " 1.0" "0.74000"
+sex                       "-1.69703" "0.4609" "0.3617" "13.56" " 1.0" "0.00023"
+diseaseGN                 " 0.17980" "0.5447" "0.3927" " 0.11" " 1.0" "0.74000"
+diseaseAN                 " 0.39283" "0.5447" "0.3982" " 0.52" " 1.0" "0.47000"
+diseasePKD                "-1.13630" "0.8250" "0.6173" " 1.90" " 1.0" "0.17000"
+frailty(id, dist = "gauss ""         ""       ""       "17.89" "12.1" "0.12000"
+> class(kfitm1.my.summary$temp)
+[1] "matrix"
+> kfitm1.my.summary$temp[grep("frailty", dimnames(kfitm1.my.summary$temp)[[1]]), "Chisq"]
+[1] "17.89"
+>
+
+So you can get the information you need from the returned
+temp matrix as above. 
+There are many other ways to do this, but the above
+ideas can get you going.  
+
+Hope this helps
+
+
+
+
+my.summary.coxph.penal <- 
+function (object, conf.int = 0.95, scale = 1, terms = FALSE, 
+    maxlabel = 25, digits = max(options()$digits - 4, 3), ...) 
+{
+    if (!is.null(object$call)) {
+        cat("Call:\n")
+        dput(object$call)
+        cat("\n")
+    }
+    if (!is.null(object$fail)) {
+        cat(" Coxreg failed.", object$fail, "\n")
+        return()
+    }
+    savedig <- options(digits = digits)
+    on.exit(options(savedig))
+    omit <- object$na.action
+    if (length(omit)) 
+        cat("  n=", object$n, " (", naprint(omit), ")\n", sep = "")
+    else cat("  n=", object$n, "\n")
+    coef <- object$coef
+    if (length(coef) == 0 && length(object$frail) == 0) 
+        stop("Penalized summary function can't be used for a null model")
+    if (length(coef) > 0) {
+        nacoef <- !(is.na(coef))
+        coef2 <- coef[nacoef]
+        if (is.null(coef) | is.null(object$var)) 
+            stop("Input is not valid")
+        se <- sqrt(diag(object$var))
+    }
+    pterms <- object$pterms
+    nterms <- length(pterms)
+    npenal <- sum(pterms > 0)
+    print.map <- rep(0, nterms)
+    if (!is.null(object$printfun)) {
+        temp <- unlist(lapply(object$printfun, is.null))
+        print.map[pterms > 0] <- (1:npenal) * (!temp)
+    }
+    print1 <- NULL
+    pname1 <- NULL
+    if (is.null(object$assign2)) 
+        alist <- object$assign[-1]
+    else alist <- object$assign2
+    print2 <- NULL
+    for (i in 1:nterms) {
+        kk <- alist[[i]]
+        if (print.map[i] > 0) {
+            j <- print.map[i]
+            if (pterms[i] == 2) 
+                temp <- (object$printfun[[j]])(object$frail, 
+                  object$fvar, , object$df[i], object$history[[j]])
+            else temp <- (object$printfun[[j]])(coef[kk], object$var[kk, 
+                kk], object$var2[kk, kk], object$df[i], object$history[[j]])
+            print1 <- rbind(print1, temp$coef)
+            if (is.matrix(temp$coef)) {
+                xx <- dimnames(temp$coef)[[1]]
+                if (is.null(xx)) 
+                  xx <- rep(names(pterms)[i], nrow(temp$coef))
+                else xx <- paste(names(pterms)[i], xx, sep = ", ")
+                pname1 <- c(pname1, xx)
+            }
+            else pname1 <- c(pname1, names(pterms)[i])
+            print2 <- c(print2, temp$history)
+        }
+        else if (terms && length(kk) > 1) {
+            pname1 <- c(pname1, names(pterms)[i])
+            temp <- coxph.wtest(object$var[kk, kk], coef[kk])$test
+            print1 <- rbind(print1, c(NA, NA, NA, temp, object$df[i], 
+                1 - pchisq(temp, 1)))
+        }
+        else {
+            pname1 <- c(pname1, names(coef)[kk])
+            tempe <- (diag(object$var))[kk]
+            temp <- coef[kk]^2/tempe
+            print1 <- rbind(print1, cbind(coef[kk], sqrt(tempe), 
+                sqrt((diag(object$var2))[kk]), temp, 1, 1 - pchisq(temp, 
+                  1)))
+        }
+    }
+    temp <- cbind(format(print1[, 1]), format(print1[, 2]), format(print1[, 
+        3]), format(round(print1[, 4], 2)), format(round(print1[, 
+        5], 2)), format(signif(print1[, 6], 2)))
+    temp <- ifelse(is.na(print1), "", temp)
+    dimnames(temp) <- list(substring(pname1, 1, maxlabel), c("coef", 
+        "se(coef)", "se2", "Chisq", "DF", "p"))
+    prmatrix(temp, quote = FALSE)
+    if (conf.int & length(coef) > 0) {
+        z <- qnorm((1 + conf.int)/2, 0, 1)
+        coef <- coef * scale
+        se <- se * scale
+        tmp <- cbind(exp(coef), exp(-coef), exp(coef - z * se), 
+            exp(coef + z * se))
+        dimnames(tmp) <- list(substring(names(coef), 1, maxlabel), 
+            c("exp(coef)", "exp(-coef)", paste("lower .", round(100 * 
+                conf.int, 2), sep = ""), paste("upper .", round(100 * 
+                conf.int, 2), sep = "")))
+        cat("\n")
+        prmatrix(tmp)
+    }
+    logtest <- -2 * (object$loglik[1] - object$loglik[2])
+    sctest <- object$score
+    cat("\nIterations:", object$iter[1], "outer,", object$iter[2], 
+        "Newton-Raphson\n")
+    if (length(print2)) {
+        for (i in 1:length(print2)) cat("    ", print2[i], "\n")
+    }
+    if (is.null(object$df)) 
+        df <- sum(!is.na(coef))
+    else df <- round(sum(object$df), 2)
+    cat("Degrees of freedom for terms=", format(round(object$df, 
+        1)), "\n")
+    cat("Rsquare=", format(round(1 - exp(-logtest/object$n), 
+        3)), "  (max possible=", format(round(1 - exp(2 * object$loglik[1]/object$n), 
+        3)), ")\n")
+    cat("Likelihood ratio test= ", format(round(logtest, 2)), 
+        "  on ", df, " df,", "   p=", format(1 - pchisq(logtest, 
+            df)), "\n", sep = "")
+    if (!is.null(object$wald.test)) 
+        cat("Wald test            = ", format(round(object$wald.test, 
+            2)), "  on ", df, " df,   p=", format(1 - pchisq(object$wald.test, 
+            df)), sep = "")
+    if (!is.null(object$score)) 
+        cat("\nScore (logrank) test = ", format(round(sctest, 
+            2)), "  on ", df, " df,", "   p=", format(1 - pchisq(sctest, 
+            df)), sep = "")
+    if (is.null(object$rscore)) 
+        cat("\n")
+    else cat(",   Robust = ", format(round(object$rscore, 2)), 
+        "  p=", format(1 - pchisq(object$rscore, df)), "\n", 
+        sep = "")
+    invisible(return(list(temp = temp, tmp = tmp)))
+}
+
+
+
+
+Steven McKinney
+
+Statistician
+Molecular Oncology and Breast Cancer Program
+British Columbia Cancer Research Centre
+
+email: smckinney@bccrc.ca
+
+tel: 604-675-8000 x7561
+
+BCCRC
+Molecular Oncology
+675 West 10th Ave, Floor 4
+Vancouver B.C. 
+V5Z 1L3
+Canada
+
+
+
+
+-----Original Message-----
+From: r-help-bounces@stat.math.ethz.ch on behalf of Mohammad Ehsanul Karim
+Sent: Tue 4/17/2007 2:55 PM
+To: r-help@stat.math.ethz.ch
+Subject: Re: [R] Extracting approximate Wald test (Chisq) fromcoxph(..frailty)
+ 
+Dear list,
+
+I need to extract the approximate Wald test (Chisq) so
+that I can put it in a loop. str seemed like a great
+idea, but I cannot seem to find the approximate Wald
+test for frailty (in the example data below: 17.89 and
+its p-value 0.12000) there. I cannot seem to find it
+in capture.output either as numeric form. Do I need to
+modify some given values? If yes, please give me a
+clue for the example:
+
+library(survival)
+kfitm1<-coxph(formula = Surv(time, status) ~ age +
+sex +disease + frailty(id, dist = "gauss"), 
+data = kidney)
+str(kfitm1)
+capture.output( print(kfitm1) )
+
+
+Mohammad Ehsanul Karim (R - 2.3.1 on windows)
+wildscop at yahoo dot com
+Institute of Statistical Research and Training
+University of Dhaka
+
+
+________________________________
+On Tue, 17 Apr 2007, Mohammad Ehsanul Karim wrote:
+You _can_ use  	tmp <- capture.output( print( <your
+example> ) ) and then further process tmp. A _better_
+solution for most purposes is to look at the object
+produced by coxph() and figure out how to calculate
+the Wald statistic from that 
+object. See  	?coxph.object and  	?str
+Another tactic is to look at how print.coxph() does
+its work and use the code in it to produce just the
+output you desire. Look at page(
+survival:::print.coxph, "print" )
+
+Assign the output of coxph to some object, and use the
+$ extractor function to obtain what you need. ie:
+rtfm <- coxph(formula = Surv(time, status) ~ age + sex
++  disease + frailty(id, dist = "gauss"), data =
+kidney) 
+Age <- coef(rtfm)["age"]
+OR
+Sex <- rtfm$coef["sex"]
+
+Mohammad Ehsanul Karim wrote:
+> Dear List,
+> How do I extract the approximate Wald test for the
+> frailty (in the following example 17.89 value)?
+> What about the P-values, other Chisq, DF, se(coef)
+and > se2? How can they be extracted?
+######################################################>
+kfitm1
+> Call:
+> coxph(formula = Surv(time, status) ~ age + sex +
+> disease + frailty(id, dist = "gauss"), data =
+kidney)
+> 
+>                           coef     se(coef)
+> age                        0.00489 0.0150  
+> sex                       -1.69703 0.4609  
+> diseaseGN                  0.17980 0.5447  
+> diseaseAN                  0.39283 0.5447  
+> diseasePKD                -1.13630 0.8250  
+> frailty(id, dist = "gauss                  
+>                           se2    Chisq DF  
+> age                       0.0106  0.11  1.0
+> sex                       0.3617 13.56  1.0
+> diseaseGN                 0.3927  0.11  1.0
+> diseaseAN                 0.3982  0.52  1.0
+> diseasePKD                0.6173  1.90  1.0
+> frailty(id, dist = "gauss        17.89 12.1
+>                           p      
+> age                       0.74000
+> sex                       0.00023
+> diseaseGN                 0.74000
+> diseaseAN                 0.47000
+> diseasePKD                0.17000
+> frailty(id, dist = "gauss 0.12000
+> 
+> Iterations: 6 outer, 30 Newton-Raphson
+>      Variance of random effect= 0.493 
+> Degrees of freedom for terms=  0.5  0.6  1.7 12.1 
+> Likelihood ratio test=47.5  on 14.9 df, p=2.82e-05 
+n=
+> 76
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

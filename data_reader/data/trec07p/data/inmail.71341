@@ -1,0 +1,512 @@
+From cc-devel-bounces@lists.ibiblio.org  Sun Jul  1 17:34:50 2007
+Return-Path: <cc-devel-bounces@lists.ibiblio.org>
+Received: from metalab.unc.edu (mail.metalab.unc.edu [152.46.7.112])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l61LYnL9005542
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 1 Jul 2007 17:34:49 -0400
+Received: from malecky (unknown [152.46.7.119])
+	by metalab.unc.edu (Postfix) with ESMTP id 8B9A248FFB;
+	Sun,  1 Jul 2007 17:34:13 -0400 (EDT)
+X-Original-To: cc-devel@lists.ibiblio.org
+Delivered-To: cc-devel@lists.ibiblio.org
+Received: from py-out-1112.google.com (py-out-1112.google.com [64.233.166.182])
+	by lists.ibiblio.org (Postfix) with ESMTP id 9D9234C013
+	for <cc-devel@lists.ibiblio.org>; Sun,  1 Jul 2007 17:34:11 -0400 (EDT)
+Received: by py-out-1112.google.com with SMTP id f47so2492215pye
+	for <cc-devel@lists.ibiblio.org>; Sun, 01 Jul 2007 14:34:11 -0700 (PDT)
+Received: by 10.141.159.13 with SMTP id l13mr1273231rvo.1183325650010;
+	Sun, 01 Jul 2007 14:34:10 -0700 (PDT)
+Received: from ?192.168.0.101? ( [67.160.97.153])
+	by mx.google.com with ESMTP id c20sm18237511rvf.2007.07.01.14.34.08
+	(version=TLSv1/SSLv3 cipher=RC4-MD5);
+	Sun, 01 Jul 2007 14:34:09 -0700 (PDT)
+Message-ID: <46881E09.8020503@gmail.com>
+Date: Sun, 01 Jul 2007 14:35:05 -0700
+From: Jason Kivlighn <jkivlighn@gmail.com>
+User-Agent: Thunderbird 2.0.0.4 (X11/20070618)
+MIME-Version: 1.0
+To: jamie <jamiemcc@blueyonder.co.uk>
+References: <4676E1C2.1000104@gmail.com>	
+	<1183227674.6096.32.camel@DemonMachine>
+	<46871D46.4000406@gmail.com>
+	<1183299511.6041.28.camel@DemonMachine>
+In-Reply-To: <1183299511.6041.28.camel@DemonMachine>
+X-Enigmail-Version: 0.95.0
+Content-Type: multipart/mixed; boundary="------------030108070401000709000905"
+Cc: CC Developer Mailing List <cc-devel@lists.ibiblio.org>,
+   tracker-list@gnome.org
+Subject: Re: [cc-devel] [PATCH] Re: Extracting Embedded Licenses
+X-BeenThere: cc-devel@lists.ibiblio.org
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: <cc-devel.lists.ibiblio.org>
+List-Unsubscribe: <http://lists.ibiblio.org/mailman/listinfo/cc-devel>,
+	<mailto:cc-devel-request@lists.ibiblio.org?subject=unsubscribe>
+List-Archive: <http://lists.ibiblio.org/pipermail/cc-devel>
+List-Post: <mailto:cc-devel@lists.ibiblio.org>
+List-Help: <mailto:cc-devel-request@lists.ibiblio.org?subject=help>
+List-Subscribe: <http://lists.ibiblio.org/mailman/listinfo/cc-devel>,
+	<mailto:cc-devel-request@lists.ibiblio.org?subject=subscribe>
+Sender: cc-devel-bounces@lists.ibiblio.org
+Errors-To: cc-devel-bounces@lists.ibiblio.org
+
+This is a multi-part message in MIME format.
+--------------030108070401000709000905
+Content-Type: text/plain; charset=ISO-8859-1
+Content-Transfer-Encoding: 7bit
+
+>
+> On Sat, 2007-06-30 at 20:19 -0700, Jason Kivlighn wrote:
+>   
+>>> these look ok - will apply as soon as the other stuff is tidied up (need
+>>> tracker_read_xmp before I can apply these)
+>>>   
+>>>       
+>> Here's a patch that just adds tracker_read_xmp.  It reads licenses and
+>> dublin core metadata from XMP, and could easily be extended to other
+>> schemas (like exif).
+>>
+>>     
+>
+> its not correct because DC is abstract in tracker and must not be used
+> to store metadata - you must use a subclass of the DC type instead
+>
+> EG 
+>
+> for Docs
+>
+> Doc:Title is a subclass of DC:Title
+>
+> For Images
+>
+> Image:Title is a subclass of DC:Title
+>
+>
+> what you will need to do is use the service type to determine which
+> subclass to use
+>
+> For now you can just set it for Images if you like
+>   
+
+Here's a patch that just uses Image:* for now and fixes the style issues
+(I hope I got them all).  Hopefully this can make it into 0.6, along
+with the extractor updates.
+
+Regarding using the service type, that's going to take more extensive
+updates to Tracker.  All extraction of XMP is done from tracker-extract,
+which doesn't know the service type.  Maybe extend
+tracker_metadata_get_embedded(...) to somehow post-process the extracted
+fields.  Or maybe also pass along the service type to tracker-extract.
+I'm not sure the most elegant solution here.
+
+Cheers,
+Jason
+> also theres still a number of lines which omit spacing EG:
+> if (strcmp(qual_path,"xml:lang") == 0) {
+>
+>
+> I can tidy this up for you but it will probably take a few days as im
+> busy getting 0.6 out of the door atm
+>
+> If you can fix today then I can include it in the next release
+>
+> jamie
+>
+>
+>
+>   
+
+
+--------------030108070401000709000905
+Content-Type: text/plain;
+ name="tracker-read-xmp.patch"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline;
+ filename="tracker-read-xmp.patch"
+
+Index: src/trackerd/tracker-metadata.c
+===================================================================
+--- src/trackerd/tracker-metadata.c	(revision 607)
++++ src/trackerd/tracker-metadata.c	(working copy)
+@@ -83,7 +83,8 @@
+ 			  "application/x-killustrator",
+ 			  "application/x-kivio",
+ 			  "application/x-kontour",
+-			  "application/x-wpg"
++			  "application/x-wpg",
++			  "application/rdf+xml"
+ };
+ 
+ 
+Index: src/tracker-extract/tracker-extract.c
+===================================================================
+--- src/tracker-extract/tracker-extract.c	(revision 607)
++++ src/tracker-extract/tracker-extract.c	(working copy)
+@@ -30,6 +30,11 @@
+ 
+ #define MAX_MEM 128
+ 
++#ifdef HAVE_EXEMPI
++#include <exempi/xmp.h>
++#include <exempi/xmpconsts.h>
++#endif
++
+ typedef enum {
+ 	IGNORE_METADATA,
+ 	NO_METADATA,
+@@ -59,6 +64,9 @@
+ #ifdef HAVE_LIBGSF
+ void tracker_extract_msoffice	(gchar *, GHashTable *);
+ #endif
++#ifdef HAVE_EXEMPI
++void tracker_extract_xmp	(gchar *, GHashTable *);
++#endif
+ void tracker_extract_mp3	(gchar *, GHashTable *);
+ #ifdef HAVE_VORBIS
+ void tracker_extract_vorbis	(gchar *, GHashTable *);
+@@ -92,7 +100,10 @@
+  	{ "application/msword",				tracker_extract_msoffice	},
+  	{ "application/vnd.ms-*",			tracker_extract_msoffice	},
+ #endif
+-  
++#ifdef HAVE_EXEMPI
++ 	{ "application/rdf+xml",			tracker_extract_xmp		},
++#endif
++
+   	/* Video extractors */
+ #ifdef HAVE_GSTREAMER
+  	{ "video/*",					tracker_extract_gstreamer	},
+@@ -183,7 +194,193 @@
+ 
+ }
+ 
++#ifdef HAVE_EXEMPI
++void
++tracker_append_string_to_hash_table( GHashTable *metadata, const gchar *key, const gchar *value, gboolean append )
++{
++	char *new_value;
++	if (append) {
++		char *orig;
++		if (g_hash_table_lookup_extended (metadata, key, NULL, (gpointer)&orig )) {
++			new_value = g_strconcat (orig, " ", value, NULL);
++		} else {
++			new_value = g_strdup (value);
++		}
++	} else {
++		new_value = g_strdup (value);
++	}
++	g_hash_table_insert (metadata, g_strdup(key), new_value);
++}
+ 
++void tracker_xmp_iter(XmpPtr xmp, XmpIteratorPtr iter, GHashTable *metadata, gboolean append);
++void tracker_xmp_iter_simple(GHashTable *metadata, const char *schema, const char *path, const char *value, gboolean append);
++
++/* We have an array, now recursively iterate over it's children.  Set 'append' to true so that all values of the array are added
++   under one entry. */
++void
++tracker_xmp_iter_array(XmpPtr xmp, GHashTable *metadata, const char *schema, const char *path)
++{
++		XmpIteratorPtr iter = xmp_iterator_new (xmp, schema, path, XMP_ITER_JUSTCHILDREN);
++		tracker_xmp_iter (xmp, iter, metadata, TRUE);
++		xmp_iterator_free (iter);
++}
++
++/* We have an array, now recursively iterate over it's children.  Set 'append' to false so that only one item is used. */
++void
++tracker_xmp_iter_alt_text(XmpPtr xmp, GHashTable *metadata, const char *schema, const char *path)
++{
++		XmpIteratorPtr iter = xmp_iterator_new (xmp, schema, path, XMP_ITER_JUSTCHILDREN);
++		tracker_xmp_iter (xmp, iter, metadata, FALSE);
++		xmp_iterator_free (iter);
++}
++
++/* We have a simple element, but need to iterate over the qualifiers */
++void
++tracker_xmp_iter_simple_qual(XmpPtr xmp, GHashTable *metadata,
++   const char *schema, const char *path, const char *value, gboolean append)
++{
++	XmpIteratorPtr iter = xmp_iterator_new(xmp, schema, path, XMP_ITER_JUSTCHILDREN | XMP_ITER_JUSTLEAFNAME);
++
++	XmpStringPtr the_path = xmp_string_new ();
++	XmpStringPtr the_prop = xmp_string_new ();
++
++	char *locale = setlocale (LC_ALL, NULL);
++	char *sep = strchr (locale,'.');
++	if (sep) {
++		locale[sep-locale] = '\0';
++	}
++	sep = strchr(locale,'_');
++	if (sep) {
++		locale[sep-locale] = '-';
++	}
++
++	gboolean ignore_element = FALSE;
++
++	while(xmp_iterator_next (iter, NULL, the_path, the_prop, NULL))
++	{
++		const char *qual_path = xmp_string_cstr (the_path);
++		const char *qual_value = xmp_string_cstr (the_prop);
++
++		if (strcmp(qual_path,"xml:lang") == 0) {
++			/* is this a language we should ignore? */
++			if (strcmp (qual_value, "x-default") != 0 && strcmp (qual_value, "x-repair") != 0 && strcmp (qual_value, locale) != 0) {
++				ignore_element = TRUE;
++				break;
++			}
++		}
++	}
++
++	if (!ignore_element) {
++		tracker_xmp_iter_simple (metadata, schema, path, value, append);
++	}
++
++	xmp_string_free (the_prop);
++	xmp_string_free (the_path);
++
++	xmp_iterator_free (iter);
++}
++
++/* We have a simple element.  Add any metadata we know about to the hash table  */
++void
++tracker_xmp_iter_simple(GHashTable *metadata,
++   const char *schema, const char *path, const char *value, gboolean append)
++{
++	char *name = g_strdup (strchr (path, ':')+1);
++	const char *index = strrchr (name, '[');
++	if (index) {
++		name[index-name] = '\0';
++	}
++
++	/* Dublin Core */
++	if (strcmp(schema, NS_DC) == 0) {
++		if (strcmp (name, "title") == 0) {
++			tracker_append_string_to_hash_table (metadata, "Image:Title", value, append);
++		}
++		else if (strcmp (name, "rights") == 0) {
++			tracker_append_string_to_hash_table (metadata, "File:Copyright", value, append);
++		}
++		else if (strcmp (name, "creator") == 0) {
++			tracker_append_string_to_hash_table (metadata, "Image:Creator", value, append);
++		}
++		else if (strcmp (name, "description") == 0) {
++			tracker_append_string_to_hash_table (metadata, "Image:Description", value, append);
++		}
++		else if (strcmp (name, "date") == 0) {
++			tracker_append_string_to_hash_table (metadata, "Image:Date", value, append);
++		}
++		else if (strcmp (name, "keywords") == 0) {
++			tracker_append_string_to_hash_table (metadata, "Image:Keywords", value, append);
++		}
++	}
++	/* Creative Commons */
++	else if (strcmp (schema, NS_CC) == 0) {
++		if (strcmp (name, "license") == 0) {
++			tracker_append_string_to_hash_table (metadata, "File:License", value, append);
++		}
++	}
++	free(name);
++}
++
++/* Iterate over the XMP, dispatching to the appropriate element type (simple, simple w/qualifiers, or an array) handler */
++void
++tracker_xmp_iter(XmpPtr xmp, XmpIteratorPtr iter, GHashTable *metadata, gboolean append)
++{
++	XmpStringPtr the_schema = xmp_string_new ();
++	XmpStringPtr the_path = xmp_string_new ();
++	XmpStringPtr the_prop = xmp_string_new ();
++
++	uint32_t opt;
++	while(xmp_iterator_next (iter, the_schema, the_path, the_prop, &opt))
++	{
++		const char *schema = xmp_string_cstr (the_schema);
++		const char *path = xmp_string_cstr (the_path);
++		const char *value = xmp_string_cstr (the_prop);
++
++		if (XMP_IS_PROP_SIMPLE (opt)) {
++			if (strcmp (path,"") != 0) {
++				if (XMP_HAS_PROP_QUALIFIERS (opt)) {
++					tracker_xmp_iter_simple_qual (xmp, metadata, schema, path, value, append);
++				} else {
++					tracker_xmp_iter_simple (metadata, schema, path, value, append);
++				}
++			}	
++		}
++		else if (XMP_IS_PROP_ARRAY (opt)) {
++			if (XMP_IS_ARRAY_ALTTEXT (opt)) {
++				tracker_xmp_iter_alt_text (xmp, metadata, schema, path);
++				xmp_iterator_skip (iter, XMP_ITER_SKIPSUBTREE);
++			} else {
++				tracker_xmp_iter_array (xmp, metadata, schema, path);
++				xmp_iterator_skip (iter, XMP_ITER_SKIPSUBTREE);
++			}
++		}
++	}
++
++	xmp_string_free (the_prop);
++	xmp_string_free (the_path);
++	xmp_string_free (the_schema);
++}
++#endif
++
++void
++tracker_read_xmp (const gchar *buffer, size_t len, GHashTable *metadata)
++{
++	#ifdef HAVE_EXEMPI
++	xmp_init ();
++
++	XmpPtr xmp = xmp_new_empty ();
++	xmp_parse (xmp, buffer, len);
++	if (xmp != NULL) {
++		XmpIteratorPtr iter = xmp_iterator_new (xmp, NULL, NULL, XMP_ITER_PROPERTIES);
++		tracker_xmp_iter (xmp, iter, metadata, FALSE);
++		xmp_iterator_free (iter);
++	
++		xmp_free (xmp);
++	}
++	xmp_terminate ();
++	#endif
++}
++
+ static GHashTable *
+ tracker_get_file_metadata (const char *uri, char *mime)
+ {
+Index: src/tracker-extract/tracker-extract.h
+===================================================================
+--- src/tracker-extract/tracker-extract.h	(revision 607)
++++ src/tracker-extract/tracker-extract.h	(working copy)
+@@ -17,6 +17,13 @@
+  * Boston, MA  02110-1301, USA.
+  */
+ 
++#ifndef _TRACKER_EXTRACT_H_
++#define _TRACKER_EXTRACT_H_
++
+ #include <glib.h>
+ 
+ gboolean	tracker_spawn (char **argv, int timeout, char **tmp_stdout, int *exit_status);
++
++void 		tracker_read_xmp (gchar *buffer, size_t len, GHashTable *metadata);
++
++#endif
+Index: src/tracker-extract/tracker-extract-xmp.c
+===================================================================
+--- src/tracker-extract/tracker-extract-xmp.c	(revision 0)
++++ src/tracker-extract/tracker-extract-xmp.c	(revision 0)
+@@ -0,0 +1,40 @@
++/* Tracker Extract - extracts embedded metadata from files
++ * Copyright (C) 2007, Jason Kivlighn (jkivlighn@gmail.com)
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public
++ * License along with this program; if not, write to the
++ * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
++ * Boston, MA  02110-1301, USA.
++ */
++
++#include "config.h"
++
++#ifdef HAVE_EXEMPI
++
++#include <glib.h>
++
++#include "tracker-extract.h"
++
++void tracker_extract_xmp (gchar* filename, GHashTable *metadata)
++{
++	gchar *contents;
++	gsize length;
++	GError *error;
++
++	if ( g_file_get_contents( filename, &contents, &length, &error ) )
++		tracker_read_xmp(contents, length, metadata);
++}
++
++#else
++#warning "Not building XMP metadata extractor."
++#endif  /* HAVE_EXEMPI */
+Index: src/tracker-extract/Makefile.am
+===================================================================
+--- src/tracker-extract/Makefile.am	(revision 607)
++++ src/tracker-extract/Makefile.am	(working copy)
+@@ -5,6 +5,7 @@
+ 	$(LIBGSF_CFLAGS)			\
+ 	$(LIBGSF_CFLAGS)			\
+ 	$(GSTREAMER_CFLAGS)			\
++	$(EXEMPI_CFLAGS)			\
+ 	$(XINE_CFLAGS)
+ 
+ bin_PROGRAMS = tracker-extract
+@@ -33,6 +34,7 @@
+ 	tracker-extract-imagemagick.c		\
+ 	tracker-extract-mplayer.c		\
+ 	tracker-extract-totem.c			\
++	tracker-extract-xmp.c			\
+ 	$(video_sources)
+ 
+ tracker_extract_LDADD = $(GLIB2_LIBS)		\
+@@ -41,4 +43,5 @@
+ 	$(LIBEXIF_LIBS)				\
+ 	$(LIBGSF_LIBS)				\
+ 	$(GSTREAMER_LIBS)			\
++	$(EXEMPI_LIBS)				\
+ 	$(XINE_LIBS)
+Index: configure.ac
+===================================================================
+--- configure.ac	(revision 607)
++++ configure.ac	(working copy)
+@@ -610,6 +610,25 @@
+ 
+ #####################################################
+ 
++##################################################################
++# check for exempi
++##################################################################
++
++EXEMPI_REQUIRED=1.99.2
++
++AC_ARG_ENABLE(xmp, AC_HELP_STRING([--disable-xmp], [Disable XMP extraction]),,[enable_xmp=yes])
++if test "x$enable_xmp" = "xyes"; then
++	PKG_CHECK_MODULES(EXEMPI,[
++		exempi-2.0 >= $EXEMPI_REQUIRED],
++		[have_exempi=yes] , [have_exempi=no])
++	AC_SUBST(EXEMPI_CFLAGS)
++	AC_SUBST(EXEMPI_LIBS)
++else
++	have_exempi="no (disabled)"
++fi
++AM_CONDITIONAL(HAVE_EXEMPI, test "$have_exempi" = "yes")
++test "$have_exempi" = "yes" && AC_DEFINE(HAVE_EXEMPI, [], [Define if we have exempi])
++
+ AC_CONFIG_FILES([
+ 	Makefile
+ 	tracker.pc
+@@ -677,6 +696,7 @@
+ 	exif (jpeg):				$have_libexif
+ 	gsf:					$have_libgsf
+ 	video files:				$videos_are_handled ($videos_handler)
++	embedded xmp:				$have_exempi
+ 
+ "
+ if test "x$enable_external_sqlite" = "xyes"; then
+
+--------------030108070401000709000905
+Content-Type: text/plain; charset="us-ascii"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+
+_______________________________________________
+cc-devel mailing list
+cc-devel@lists.ibiblio.org
+http://lists.ibiblio.org/mailman/listinfo/cc-devel
+
+--------------030108070401000709000905--
+

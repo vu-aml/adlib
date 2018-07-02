@@ -1,0 +1,338 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 29 08:54:20 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4TCsKhB030937
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 08:54:20 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 53AD816388B
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 12:54:12 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 540)
+	id D682A162AE1; Tue, 29 May 2007 12:53:42 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jerry@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070529125342.D682A162AE1@lists.samba.org>
+Date: Tue, 29 May 2007 12:53:42 +0000 (GMT)
+Subject: svn commit: samba r23190 - in branches/SAMBA_3_0_26/source: auth
+	include lib smbd
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: jerry
+Date: 2007-05-29 12:53:42 +0000 (Tue, 29 May 2007)
+New Revision: 23190
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23190
+
+Log:
+svn merge ../SAMBA_3_0 -r22019:22026
+
+This is abartlet's talloc changes to the samu struct stored 
+in the server info state.
+
+
+Modified:
+   branches/SAMBA_3_0_26/source/auth/auth_sam.c
+   branches/SAMBA_3_0_26/source/auth/auth_util.c
+   branches/SAMBA_3_0_26/source/include/smb.h
+   branches/SAMBA_3_0_26/source/lib/util_pw.c
+   branches/SAMBA_3_0_26/source/smbd/password.c
+   branches/SAMBA_3_0_26/source/smbd/session.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0_26/source/auth/auth_sam.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/auth/auth_sam.c	2007-05-29 12:18:41 UTC (rev 23189)
++++ branches/SAMBA_3_0_26/source/auth/auth_sam.c	2007-05-29 12:53:42 UTC (rev 23190)
+@@ -263,10 +263,10 @@
+ 		return NT_STATUS_UNSUCCESSFUL;
+ 	}
+ 
+-	/* Can't use the talloc version here, because the returned struct gets
+-	   kept on the server_info */
++	/* the returned struct gets kept on the server_info, by means
++	   of a steal further down */
+ 
+-	if ( !(sampass = samu_new( NULL )) ) {
++	if ( !(sampass = samu_new( mem_ctx )) ) {
+ 		return NT_STATUS_NO_MEMORY;
+ 	}
+ 
+
+Modified: branches/SAMBA_3_0_26/source/auth/auth_util.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/auth/auth_util.c	2007-05-29 12:18:41 UTC (rev 23189)
++++ branches/SAMBA_3_0_26/source/auth/auth_util.c	2007-05-29 12:53:42 UTC (rev 23190)
+@@ -561,19 +561,23 @@
+ 	DOM_SID unix_group_sid;
+ 	
+ 
+-	if ( !(pwd = getpwnam_alloc(NULL, pdb_get_username(sampass))) ) {
++	if ( !(result = make_server_info(NULL)) ) {
++		return NT_STATUS_NO_MEMORY;
++	}
++
++	if ( !(pwd = getpwnam_alloc(result, pdb_get_username(sampass))) ) {
+ 		DEBUG(1, ("User %s in passdb, but getpwnam() fails!\n",
+ 			  pdb_get_username(sampass)));
++		TALLOC_FREE(result);
+ 		return NT_STATUS_NO_SUCH_USER;
+ 	}
+ 
+-	if ( !(result = make_server_info(NULL)) ) {
+-		TALLOC_FREE(pwd);
+-		return NT_STATUS_NO_MEMORY;
+-	}
+-
+ 	result->sam_account = sampass;
+-	result->unix_name = talloc_strdup(result, pwd->pw_name);
++	/* Ensure thaat the sampass will be freed with the result */
++	talloc_steal(result, sampass);
++	result->unix_name = pwd->pw_name;
++	/* Ensure that we keep pwd->pw_name, because we will free pwd below */
++	talloc_steal(result, pwd->pw_name);
+ 	result->gid = pwd->pw_gid;
+ 	result->uid = pwd->pw_uid;
+ 	
+
+Modified: branches/SAMBA_3_0_26/source/include/smb.h
+===================================================================
+--- branches/SAMBA_3_0_26/source/include/smb.h	2007-05-29 12:18:41 UTC (rev 23189)
++++ branches/SAMBA_3_0_26/source/include/smb.h	2007-05-29 12:53:42 UTC (rev 23190)
+@@ -1757,9 +1757,9 @@
+ 	gid_t gid; /* gid of a validated user */
+ 
+ 	userdom_struct user;
+-	char *homedir;
+-	char *unix_homedir;
+-	char *logon_script;
++	const char *homedir;
++	const char *unix_homedir;
++	const char *logon_script;
+ 	
+ 	BOOL guest;
+ 
+
+Modified: branches/SAMBA_3_0_26/source/lib/util_pw.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/lib/util_pw.c	2007-05-29 12:18:41 UTC (rev 23189)
++++ branches/SAMBA_3_0_26/source/lib/util_pw.c	2007-05-29 12:53:42 UTC (rev 23190)
+@@ -74,7 +74,7 @@
+ 		if ((pwnam_cache[i] != NULL) && 
+ 		    (strcmp(name, pwnam_cache[i]->pw_name) == 0)) {
+ 			DEBUG(10, ("Got %s from pwnam_cache\n", name));
+-			return (struct passwd *)talloc_reference(mem_ctx, pwnam_cache[i]);
++			return tcopy_passwd(mem_ctx, pwnam_cache[i]);
+ 		}
+ 	}
+ 
+@@ -98,15 +98,15 @@
+ 		i = rand() % PWNAMCACHE_SIZE;
+ 
+ 	if (pwnam_cache[i] != NULL) {
+-		TALLOC_FREE(pwnam_cache[i]);
++		/* Remove this old cache entry, from the cache.  We
++		 * use talloc_unlink here because we want to be very
++		 * clear which referece we are removing */
++		talloc_unlink(pwnam_cache, pwnam_cache[i]);
+ 	}
+ 
+ 	pwnam_cache[i] = tcopy_passwd(pwnam_cache, temp);
+-	if (pwnam_cache[i]!= NULL && mem_ctx != NULL) {
+-		return (struct passwd *)talloc_reference(mem_ctx, pwnam_cache[i]);
+-	}
+ 
+-	return tcopy_passwd(NULL, pwnam_cache[i]);
++	return tcopy_passwd(mem_ctx, temp);
+ }
+ 
+ struct passwd *getpwuid_alloc(TALLOC_CTX *mem_ctx, uid_t uid) 
+
+Modified: branches/SAMBA_3_0_26/source/smbd/password.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/smbd/password.c	2007-05-29 12:18:41 UTC (rev 23189)
++++ branches/SAMBA_3_0_26/source/smbd/password.c	2007-05-29 12:53:42 UTC (rev 23190)
+@@ -92,15 +92,8 @@
+ 	if (vuser == NULL)
+ 		return;
+ 	
+-	SAFE_FREE(vuser->homedir);
+-	SAFE_FREE(vuser->unix_homedir);
+-	SAFE_FREE(vuser->logon_script);
+-	
+ 	session_yield(vuser);
+-	SAFE_FREE(vuser->session_keystr);
+ 
+-	TALLOC_FREE(vuser->server_info);
+-
+ 	data_blob_free(&vuser->session_key);
+ 
+ 	DLIST_REMOVE(validated_users, vuser);
+@@ -109,10 +102,7 @@
+ 	   from the vuid 'owner' of connections */
+ 	conn_clear_vuid_cache(vuid);
+ 
+-	SAFE_FREE(vuser->groups);
+-	TALLOC_FREE(vuser->nt_user_token);
+-
+-	SAFE_FREE(vuser);
++	TALLOC_FREE(vuser);
+ 	num_validated_vuids--;
+ }
+ 
+@@ -153,7 +143,7 @@
+ 		  DATA_BLOB session_key, DATA_BLOB response_blob,
+ 		  const char *smb_name)
+ {
+-	user_struct *vuser = NULL;
++	user_struct *vuser;
+ 
+ 	/* Paranoia check. */
+ 	if(lp_security() == SEC_SHARE) {
+@@ -166,14 +156,12 @@
+ 		return UID_FIELD_INVALID;
+ 	}
+ 
+-	if((vuser = SMB_MALLOC_P(user_struct)) == NULL) {
+-		DEBUG(0,("Failed to malloc users struct!\n"));
++	if((vuser = talloc_zero(NULL, user_struct)) == NULL) {
++		DEBUG(0,("Failed to talloc users struct!\n"));
+ 		data_blob_free(&session_key);
+ 		return UID_FIELD_INVALID;
+ 	}
+ 
+-	ZERO_STRUCTP(vuser);
+-
+ 	/* Allocate a free vuid. Yes this is a linear search... :-) */
+ 	while( get_valid_user_struct(next_vuid) != NULL ) {
+ 		next_vuid++;
+@@ -203,6 +191,11 @@
+ 		return vuser->vuid;
+ 	}
+ 
++	/* use this to keep tabs on all our info from the authentication */
++	vuser->server_info = server_info;
++	/* Ensure that the server_info will dissapear with the vuser it is now attached to */
++	talloc_steal(vuser, vuser->server_info);
++
+ 	/* the next functions should be done by a SID mapping system (SMS) as
+ 	 * the new real sam db won't have reference to unix uids or gids
+ 	 */
+@@ -212,14 +205,13 @@
+ 	
+ 	vuser->n_groups = server_info->n_groups;
+ 	if (vuser->n_groups) {
+-		if (!(vuser->groups = (gid_t *)memdup(server_info->groups,
+-						      sizeof(gid_t) *
+-						      vuser->n_groups))) {
+-			DEBUG(0,("register_vuid: failed to memdup "
++		if (!(vuser->groups = (gid_t *)talloc_memdup(vuser, server_info->groups,
++							     sizeof(gid_t) *
++							     vuser->n_groups))) {
++			DEBUG(0,("register_vuid: failed to talloc_memdup "
+ 				 "vuser->groups\n"));
+ 			data_blob_free(&session_key);
+-			free(vuser);
+-			TALLOC_FREE(server_info);
++			TALLOC_FREE(vuser);
+ 			return UID_FIELD_INVALID;
+ 		}
+ 	}
+@@ -247,24 +239,26 @@
+ 			const char *unix_homedir =
+ 				pdb_get_unix_homedir(server_info->sam_account);
+ 			if (unix_homedir) {
+-				vuser->unix_homedir =
+-					smb_xstrdup(unix_homedir);
++				vuser->unix_homedir = unix_homedir;
+ 			}
+ 		} else {
+ 			struct passwd *passwd =
+-				getpwnam_alloc(NULL, vuser->user.unix_name);
++				getpwnam_alloc(vuser, vuser->user.unix_name);
+ 			if (passwd) {
+-				vuser->unix_homedir =
+-					smb_xstrdup(passwd->pw_dir);
++				vuser->unix_homedir = passwd->pw_dir;
++				/* Ensure that the unix_homedir now
++				 * belongs to vuser, so it goes away
++				 * with it, not with passwd below: */
++				talloc_steal(vuser, vuser->unix_homedir);
+ 				TALLOC_FREE(passwd);
+ 			}
+ 		}
+ 		
+ 		if (homedir) {
+-			vuser->homedir = smb_xstrdup(homedir);
++			vuser->homedir = homedir;
+ 		}
+ 		if (logon_script) {
+-			vuser->logon_script = smb_xstrdup(logon_script);
++			vuser->logon_script = logon_script;
+ 		}
+ 	}
+ 
+@@ -280,23 +274,15 @@
+ 		  vuser->user.full_name));	
+ 
+  	if (server_info->ptok) {
+-		vuser->nt_user_token = dup_nt_token(NULL, server_info->ptok);
++		vuser->nt_user_token = dup_nt_token(vuser, server_info->ptok);
+ 	} else {
+ 		DEBUG(1, ("server_info does not contain a user_token - "
+ 			  "cannot continue\n"));
+-		TALLOC_FREE(server_info);
++		TALLOC_FREE(vuser);
+ 		data_blob_free(&session_key);
+-		SAFE_FREE(vuser->homedir);
+-		SAFE_FREE(vuser->unix_homedir);
+-		SAFE_FREE(vuser->logon_script);
+-
+-		SAFE_FREE(vuser);
+ 		return UID_FIELD_INVALID;
+ 	}
+ 
+-	/* use this to keep tabs on all our info from the authentication */
+-	vuser->server_info = server_info;
+-
+ 	DEBUG(3,("UNIX uid %d is UNIX user %s, and will be vuid %u\n",
+ 		 (int)vuser->uid,vuser->user.unix_name, vuser->vuid));
+ 
+
+Modified: branches/SAMBA_3_0_26/source/smbd/session.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/smbd/session.c	2007-05-29 12:18:41 UTC (rev 23189)
++++ branches/SAMBA_3_0_26/source/smbd/session.c	2007-05-29 12:53:42 UTC (rev 23190)
+@@ -205,9 +205,9 @@
+ 			       sessionid.id_str, sessionid.id_num);
+ 	}
+ 
+-	vuser->session_keystr = SMB_STRDUP(keystr);
++	vuser->session_keystr = talloc_strdup(vuser, keystr);
+ 	if (!vuser->session_keystr) {
+-		DEBUG(0, ("session_claim:  strdup() failed for session_keystr\n"));
++		DEBUG(0, ("session_claim:  talloc_strdup() failed for session_keystr\n"));
+ 		return False;
+ 	}
+ 	return True;
+

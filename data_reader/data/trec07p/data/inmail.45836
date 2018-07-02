@@ -1,0 +1,140 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 29 02:02:46 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4T62khB027057
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 02:02:46 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 5367E163831
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 06:02:41 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,UPPERCASE_25_50 autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id A3577162B71; Tue, 29 May 2007 06:02:09 +0000 (GMT)
+Date: Tue, 29 May 2007 16:02:03 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070529060210.A3577162B71@lists.samba.org>
+Subject: Rev 385: - make more options configurable in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 385
+revision-id: tridge@samba.org-20070529060202-b5d16t238ncw2x2q
+parent: tridge@samba.org-20070529055203-vy4qlp6x1syx879n
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Tue 2007-05-29 16:02:02 +1000
+message:
+  - make more options configurable
+  - fixed some warnings
+modified:
+  direct/ctdbd_test.c            ctdbd_test.c-20070411085057-17kgjzfktsh28g99-1
+  packaging/RHEL/ctdb.spec       ctdb.spec-20070527204758-biuh7znabuwan3zn-3
+  packaging/RHEL/setup/ctdb.init ctdb.init-20070527204758-biuh7znabuwan3zn-6
+  packaging/RHEL/setup/ctdb.sysconfig ctdb.sysconfig-20070527204758-biuh7znabuwan3zn-7
+  tools/ctdb_control.c           ctdb_control.c-20070426122705-9ehj1l5lu2gn9kuj-1
+=== modified file 'direct/ctdbd_test.c'
+--- a/direct/ctdbd_test.c	2007-05-04 01:41:29 +0000
++++ b/direct/ctdbd_test.c	2007-05-29 06:02:02 +0000
+@@ -228,7 +228,7 @@
+ 
+ int main(int argc, const char *argv[])
+ {
+-	int fd, pid, vnn, dstvnn, dstpid;
++	int fd, pid=0, vnn, dstvnn, dstpid;
+ 	TDB_DATA message;
+ 	struct ctdb_req_message *reply;
+ 	TDB_DATA dbname;
+
+=== modified file 'packaging/RHEL/ctdb.spec'
+--- a/packaging/RHEL/ctdb.spec	2007-05-29 05:52:03 +0000
++++ b/packaging/RHEL/ctdb.spec	2007-05-29 06:02:02 +0000
+@@ -72,6 +72,7 @@
+ rm -rf $RPM_BUILD_ROOT
+ 
+ %post
++/sbin/chkconfig --add ctdb
+ 
+ %preun
+ if [ $1 = 0 ] ; then
+
+=== modified file 'packaging/RHEL/setup/ctdb.init'
+--- a/packaging/RHEL/setup/ctdb.init	2007-05-29 05:36:42 +0000
++++ b/packaging/RHEL/setup/ctdb.init	2007-05-29 06:02:02 +0000
+@@ -20,6 +20,8 @@
+ # Source networking configuration.
+ . /etc/sysconfig/network
+ 
++CTDB_OPTIONS=""
++
+ # pull in admin specified config 
+ if [ -f /etc/sysconfig/ctdb ]; then
+    . /etc/sysconfig/ctdb 
+@@ -29,12 +31,14 @@
+ [ ${NETWORKING} = "no" ] && exit 0
+ 
+ # build up CTDB_OPTIONS variable
+-CTDB_OPTIONS=""
+ [ -z "$LOGFILE" ]          || CTDB_OPTIONS="$CTDB_OPTIONS --logfile=$LOGFILE"
++[ -z "$NODES" ]            || CTDB_OPTIONS="$CTDB_OPTIONS --nlist=$NODES"
++[ -z "$CTDB_SOCKET" ]      || CTDB_OPTIONS="$CTDB_OPTIONS --socket=$CTDB_SOCKET"
+ [ -z "$PUBLIC_ADDRESSES" ] || CTDB_OPTIONS="$CTDB_OPTIONS --public-addresses=$PUBLIC_ADDRESSES"
+-[ -z "$NODES" ]            || CTDB_OPTIONS="$CTDB_OPTIONS --nlist=$NODES"
+ [ -z "$PUBLIC_INTERFACE" ] || CTDB_OPTIONS="$CTDB_OPTIONS --public-interface=$PUBLIC_INTERFACE"
+ [ -z "$DBDIR" ]            || CTDB_OPTIONS="$CTDB_OPTIONS --dbdir=$DBDIR"
++[ -z "$EVENT_SCRIPT" ]     || CTDB_OPTIONS="$CTDB_OPTIONS --event-script $EVENT_SCRIPT"
++[ -z "$TRANSPORT" ]        || CTDB_OPTIONS="$CTDB_OPTIONS --transport $TRANSPORT"
+ [ -z "$DEBUGLEVEL" ]       || CTDB_OPTIONS="$CTDB_OPTIONS -d $DEBUGLEVEL"
+ 
+ start() {
+
+=== modified file 'packaging/RHEL/setup/ctdb.sysconfig'
+--- a/packaging/RHEL/setup/ctdb.sysconfig	2007-05-29 05:36:42 +0000
++++ b/packaging/RHEL/setup/ctdb.sysconfig	2007-05-29 06:02:02 +0000
+@@ -2,7 +2,14 @@
+ 
+ # DBDIR=/var/ctdb
+ # NODES=/etc/ctdb/nodes
++# EVENT_SCRIPT=/etc/ctdb/events
++# CTDB_SOCKET=/tmp/ctdb.socket
++# TRANSPORT="tcp"
+ # PUBLIC_ADDRESSES=/etc/ctdb/public_addresses
+ # PUBLIC_INTERFACE=eth0
+ # LOGFILE=/var/log/log.ctdb
+ # DEBUGLEVEL=0
++
++# any other options
++# CTDB_OPTIONS=
++
+
+=== modified file 'tools/ctdb_control.c'
+--- a/tools/ctdb_control.c	2007-05-29 02:16:59 +0000
++++ b/tools/ctdb_control.c	2007-05-29 06:02:02 +0000
+@@ -737,7 +737,7 @@
+ 	int opt;
+ 	const char **extra_argv;
+ 	int extra_argc = 0;
+-	int ret, i;
++	int ret=-1, i;
+ 	poptContext pc;
+ 	struct event_context *ev;
+ 	const char *control;
+

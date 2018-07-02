@@ -1,0 +1,405 @@
+From cc-devel-bounces@lists.ibiblio.org  Tue Jun 12 00:11:25 2007
+Return-Path: <cc-devel-bounces@lists.ibiblio.org>
+Received: from metalab.unc.edu (mail.metalab.unc.edu [152.46.7.112])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5C4BPL9022116
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 12 Jun 2007 00:11:25 -0400
+Received: from malecky (unknown [152.46.7.119])
+	by metalab.unc.edu (Postfix) with ESMTP id 1796F4810C;
+	Tue, 12 Jun 2007 00:11:24 -0400 (EDT)
+X-Original-To: cc-devel@lists.ibiblio.org
+Delivered-To: cc-devel@lists.ibiblio.org
+Received: from nz-out-0506.google.com (nz-out-0506.google.com [64.233.162.239])
+	by lists.ibiblio.org (Postfix) with ESMTP id 0CCA24C014
+	for <cc-devel@lists.ibiblio.org>; Tue, 12 Jun 2007 00:11:22 -0400 (EDT)
+Received: by nz-out-0506.google.com with SMTP id r28so1348093nza
+	for <cc-devel@lists.ibiblio.org>; Mon, 11 Jun 2007 21:11:21 -0700 (PDT)
+Received: by 10.115.109.1 with SMTP id l1mr6193351wam.1181621480826;
+	Mon, 11 Jun 2007 21:11:20 -0700 (PDT)
+Received: from ?192.168.0.101? ( [67.160.97.153])
+	by mx.google.com with ESMTP id m24sm9552884waf.2007.06.11.21.11.19
+	(version=TLSv1/SSLv3 cipher=RC4-MD5);
+	Mon, 11 Jun 2007 21:11:20 -0700 (PDT)
+Message-ID: <466E1D1F.7050504@gmail.com>
+Date: Mon, 11 Jun 2007 21:12:15 -0700
+From: Jason Kivlighn <jkivlighn@gmail.com>
+User-Agent: Thunderbird 2.0.0.0 (X11/20070419)
+MIME-Version: 1.0
+To: jamie <jamiemcc@blueyonder.co.uk>, tracker-list@gnome.org,
+   CC Developer Mailing List <cc-devel@lists.ibiblio.org>
+X-Enigmail-Version: 0.95.0
+Content-Type: multipart/mixed; boundary="------------090802020801040206050808"
+Subject: [cc-devel] [PATCH] Read XMP Sidecar
+X-BeenThere: cc-devel@lists.ibiblio.org
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: <cc-devel.lists.ibiblio.org>
+List-Unsubscribe: <http://lists.ibiblio.org/mailman/listinfo/cc-devel>,
+	<mailto:cc-devel-request@lists.ibiblio.org?subject=unsubscribe>
+List-Archive: <http://lists.ibiblio.org/pipermail/cc-devel>
+List-Post: <mailto:cc-devel@lists.ibiblio.org>
+List-Help: <mailto:cc-devel-request@lists.ibiblio.org?subject=help>
+List-Subscribe: <http://lists.ibiblio.org/mailman/listinfo/cc-devel>,
+	<mailto:cc-devel-request@lists.ibiblio.org?subject=subscribe>
+Sender: cc-devel-bounces@lists.ibiblio.org
+Errors-To: cc-devel-bounces@lists.ibiblio.org
+
+This is a multi-part message in MIME format.
+--------------090802020801040206050808
+Content-Type: text/plain; charset=ISO-8859-1
+Content-Transfer-Encoding: 7bit
+
+Here's a patch to have Tracker read XMP sidecar files.  It adds a
+configure check for Exempi, enabling reading XMP if found.
+
+One problem I see is how to handle updating the associated file when
+it's sidecar file is updated.
+
+Cheers,
+Jason
+
+--------------090802020801040206050808
+Content-Type: text/x-patch;
+ name="tracker-read-xmp-sidecar.patch"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline;
+ filename="tracker-read-xmp-sidecar.patch"
+
+Index: src/trackerd/tracker-metadata.c
+===================================================================
+--- src/trackerd/tracker-metadata.c	(revision 598)
++++ src/trackerd/tracker-metadata.c	(working copy)
+@@ -83,7 +83,8 @@
+ 			  "application/x-killustrator",
+ 			  "application/x-kivio",
+ 			  "application/x-kontour",
+-			  "application/x-wpg"
++			  "application/x-wpg",
++			  "application/rdf+xml"
+ };
+ 
+ 
+Index: src/trackerd/tracker-db.c
+===================================================================
+--- src/trackerd/tracker-db.c	(revision 598)
++++ src/trackerd/tracker-db.c	(working copy)
+@@ -26,9 +26,9 @@
+ #include "tracker-email.h"
+ #include "tracker-metadata.h"
+ 
+-
+ extern Tracker *tracker;
+ 
++#define XMP_MIME_TYPE "application/rdf+xml"
+ 
+ typedef struct {
+ 	DBConnection	*db_con;
+@@ -844,8 +844,9 @@
+ 
+ 	GHashTable	*meta_table;
+ 	const char	*ext;
++	char		*filename, *dirname;
+ 	char		*str_link_uri, *service_name;
+-	gboolean	is_file_indexable, service_has_metadata, is_external_service, service_has_fulltext, service_has_thumbs;
++	gboolean	is_file_indexable, service_has_metadata, is_external_service, service_has_fulltext, service_has_thumbs, is_sidecar;
+ 
+ 	const char *uri;
+ 
+@@ -888,15 +889,20 @@
+ 
+ 		tracker_add_metadata_to_table  (meta_table, g_strdup ("File:NameDelimited"), g_strdup (uri));
+ 
+-		ext = strrchr (uri, '.');
++		dirname = g_path_get_dirname (uri);
++		filename = g_path_get_basename (uri);
++		ext = strrchr (filename, '.');
+ 		if (ext) {
+ 			ext++;
+ 			tracker_debug ("file extension is %s", ext);
+ 			tracker_add_metadata_to_table  (meta_table, g_strdup ("File:Ext"), g_strdup (ext));
++			is_sidecar = strcmp("xmp",ext) == 0;
++		} else {
++			is_sidecar = FALSE;
+ 		}
+ 
+-		tracker_add_metadata_to_table  (meta_table, g_strdup ("File:Path"), g_path_get_dirname (uri));
+-		tracker_add_metadata_to_table  (meta_table, g_strdup ("File:Name"), g_path_get_basename (uri));
++		tracker_add_metadata_to_table  (meta_table, g_strdup ("File:Path"), g_strdup(dirname));
++		tracker_add_metadata_to_table  (meta_table, g_strdup ("File:Name"), g_strdup(filename));
+ 
+ 		if (str_link_uri) {
+ 			tracker_add_metadata_to_table  (meta_table, g_strdup ("File:Link"), str_link_uri);
+@@ -911,18 +917,43 @@
+ 		is_file_indexable = (!info->is_directory && (strcmp (info->mime, "unknown") != 0) && (strcmp (info->mime, "symlink") != 0) && tracker_file_is_indexable (info->uri));
+ 
+ 		service_has_metadata = (is_external_service ||
+-					(is_file_indexable && (tracker_str_in_array (service_name, services_with_metadata) != -1)));
++					(is_file_indexable && (tracker_str_in_array (service_name, services_with_metadata) != -1))) && !is_sidecar;
+ 		service_has_fulltext = (is_external_service ||
+-					(is_file_indexable && (tracker_str_in_array (service_name, services_with_text) != -1)));
++					(is_file_indexable && (tracker_str_in_array (service_name, services_with_text) != -1))) && !is_sidecar;
+ 		service_has_thumbs = (is_external_service ||
+ 				      (is_file_indexable && (tracker_str_in_array (service_name, services_with_thumbs) != -1)));
+ 
++		#ifdef HAVE_EXEMPI
++		/* TODO: How can we update the file when the sidecar file changes? */
++		if ( !info->is_directory && !is_sidecar ) {
++			gchar *basename;
++			if ( ext ) {
++				basename = g_strndup(filename,ext-filename-1);
++			}
++			else {
++				basename = g_strdup(filename);
++			}
+ 
++			gchar *sidecar_uri = g_build_filename(dirname,g_strconcat(basename,".xmp",NULL),NULL);
++
++			tracker_debug ("looking for xmp sidecar at %s", sidecar_uri);
++			if ( g_file_test( sidecar_uri, G_FILE_TEST_EXISTS) ) {
++				tracker_debug ("xmp sidecar found for %s", sidecar_uri);
++				tracker_metadata_get_embedded (sidecar_uri, XMP_MIME_TYPE, meta_table);
++			}
++
++			g_free(sidecar_uri);
++			g_free(basename);
++		}
++		#endif
++
+  		tracker_debug ("file %s has fulltext %d with service %s", info->uri, service_has_fulltext, service_name); 
+ 		tracker_db_index_service (db_con, info, service_name, meta_table, uri, attachment_service, service_has_metadata, service_has_fulltext, service_has_thumbs);
+ 
+ 		g_hash_table_destroy (meta_table);
+ 
++		g_free(filename);
++		g_free(dirname);
+ 	} else {
+ 		tracker_db_index_service (db_con, info, service_name, NULL, uri, NULL, FALSE, FALSE, FALSE);
+ 
+Index: src/tracker-extract/tracker-extract.c
+===================================================================
+--- src/tracker-extract/tracker-extract.c	(revision 598)
++++ src/tracker-extract/tracker-extract.c	(working copy)
+@@ -30,6 +30,11 @@
+ 
+ #define MAX_MEM 128
+ 
++#ifdef HAVE_EXEMPI
++#include <exempi/xmp.h>
++#include <exempi/xmpconsts.h>
++#endif
++
+ typedef enum {
+ 	IGNORE_METADATA,
+ 	NO_METADATA,
+@@ -59,9 +64,12 @@
+ #ifdef HAVE_LIBGSF
+ void tracker_extract_msoffice	(gchar *, GHashTable *);
+ #endif
++#ifdef HAVE_EXEMPI
++void tracker_extract_xmp	(gchar *, GHashTable *);
++#endif
+ void tracker_extract_mp3	(gchar *, GHashTable *);
+ #ifdef HAVE_VORBIS
+-void tracker_extract_vorbis	(gchar *, GHashTable *);
++void tracker_extract_vorbis    (gchar *, GHashTable *);
+ #endif
+ void tracker_extract_png	(gchar *, GHashTable *);
+ #ifdef HAVE_LIBEXIF
+@@ -92,7 +100,10 @@
+  	{ "application/msword",				tracker_extract_msoffice	},
+  	{ "application/vnd.ms-*",			tracker_extract_msoffice	},
+ #endif
+-  
++#ifdef HAVE_EXEMPI
++ 	{ "application/rdf+xml",			tracker_extract_xmp		},
++#endif
++
+   	/* Video extractors */
+ #ifdef HAVE_GSTREAMER
+  	{ "video/*",					tracker_extract_gstreamer	},
+@@ -183,7 +194,45 @@
+ 
+ }
+ 
++void
++tracker_read_xmp (gchar *buffer, size_t len, GHashTable *metadata)
++{
++	#ifdef HAVE_EXEMPI
++	xmp_init();
+ 
++	XmpPtr xmp = xmp_new_empty();
++	xmp_parse(xmp, buffer, len);
++	if (xmp != NULL) {
++		XmpIteratorPtr iter = xmp_iterator_new(xmp, NULL, NULL, XMP_ITER_JUSTLEAFNODES);
++		XmpStringPtr the_schema = xmp_string_new();
++		XmpStringPtr the_path = xmp_string_new();
++		XmpStringPtr the_prop = xmp_string_new();
++	
++		while( xmp_iterator_next(iter, the_schema, the_path, the_prop, NULL) )
++		{
++			const char *schema = xmp_string_cstr(the_schema);
++			const char *name = xmp_string_cstr(the_path);
++			const char *value = xmp_string_cstr(the_prop);
++			if (value != NULL) {
++				if ( strcmp(schema,NS_CC) == 0 ) {
++					if (g_str_has_suffix(name,"license")) {
++						g_hash_table_insert (metadata, g_strdup("File:License"), g_strdup (value));
++					}
++				}
++			}
++		}
++	
++		xmp_string_free(the_prop);
++		xmp_string_free(the_path);
++		xmp_string_free(the_schema);
++		xmp_iterator_free(iter);
++	
++		xmp_free(xmp);
++	}
++	xmp_terminate();
++	#endif
++}
++
+ static GHashTable *
+ tracker_get_file_metadata (const char *uri, char *mime)
+ {
+Index: src/tracker-extract/tracker-extract-xmp.c
+===================================================================
+--- src/tracker-extract/tracker-extract-xmp.c	(revision 0)
++++ src/tracker-extract/tracker-extract-xmp.c	(revision 0)
+@@ -0,0 +1,40 @@
++/* Tracker Extract - extracts embedded metadata from files
++ * Copyright (C) 2007, Jason Kivlighn (jkivlighn@gmail.com)
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public
++ * License along with this program; if not, write to the
++ * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
++ * Boston, MA  02110-1301, USA.
++ */
++
++#include "config.h"
++
++#ifdef HAVE_EXEMPI
++
++#include <glib.h>
++
++#include "tracker-extract.h"
++
++void tracker_extract_xmp (gchar* filename, GHashTable *metadata)
++{
++	gchar *contents;
++	gsize length;
++	GError *error;
++
++	if ( g_file_get_contents( filename, &contents, &length, &error ) )
++		tracker_read_xmp(contents, length, metadata);
++}
++
++#else
++#warning "Not building XMP metadata extractor."
++#endif  /* HAVE_EXEMPI */
+Index: src/tracker-extract/tracker-extract.h
+===================================================================
+--- src/tracker-extract/tracker-extract.h	(revision 598)
++++ src/tracker-extract/tracker-extract.h	(working copy)
+@@ -17,6 +17,13 @@
+  * Boston, MA  02110-1301, USA.
+  */
+ 
++#ifndef _TRACKER_EXTRACT_H_
++#define _TRACKER_EXTRACT_H_
++
+ #include <glib.h>
+ 
+ gboolean	tracker_spawn (char **argv, int timeout, char **tmp_stdout, int *exit_status);
++
++void 		tracker_read_xmp (gchar *buffer, size_t len, GHashTable *metadata);
++
++#endif
+Index: src/tracker-extract/Makefile.am
+===================================================================
+--- src/tracker-extract/Makefile.am	(revision 598)
++++ src/tracker-extract/Makefile.am	(working copy)
+@@ -5,6 +5,7 @@
+ 	$(LIBGSF_CFLAGS)			\
+ 	$(LIBGSF_CFLAGS)			\
+ 	$(GSTREAMER_CFLAGS)			\
++	$(EXEMPI_CFLAGS)			\
+ 	$(XINE_CFLAGS)
+ 
+ bin_PROGRAMS = tracker-extract
+@@ -33,6 +34,7 @@
+ 	tracker-extract-imagemagick.c		\
+ 	tracker-extract-mplayer.c		\
+ 	tracker-extract-totem.c			\
++	tracker-extract-xmp.c			\
+ 	$(video_sources)
+ 
+ tracker_extract_LDADD = $(GLIB2_LIBS)		\
+@@ -41,4 +43,5 @@
+ 	$(LIBEXIF_LIBS)				\
+ 	$(LIBGSF_LIBS)				\
+ 	$(GSTREAMER_LIBS)			\
++	$(EXEMPI_LIBS)				\
+ 	$(XINE_LIBS)
+Index: configure.ac
+===================================================================
+--- configure.ac	(revision 598)
++++ configure.ac	(working copy)
+@@ -607,6 +607,25 @@
+ 
+ #####################################################
+ 
++##################################################################
++# check for exempi
++##################################################################
++
++EXEMPI_REQUIRED=1.99.0
++
++AC_ARG_ENABLE(xmp, AC_HELP_STRING([--disable-xmp], [Disable XMP extraction]),,[enable_xmp=yes])
++if test "x$enable_xmp" = "xyes"; then
++	PKG_CHECK_MODULES(EXEMPI,[
++		exempi-2.0 >= $EXEMPI_REQUIRED],
++		[have_exempi=yes] , [have_exempi=no])
++	AC_SUBST(EXEMPI_CFLAGS)
++	AC_SUBST(EXEMPI_LIBS)
++else
++	have_exempi="no (disabled)"
++fi
++AM_CONDITIONAL(HAVE_EXEMPI, test "$have_exempi" = "yes")
++test "$have_exempi" = "yes" && AC_DEFINE(HAVE_EXEMPI, [], [Define if we have exempi])
++
+ AC_CONFIG_FILES([
+ 	Makefile
+ 	tracker.pc
+@@ -675,6 +694,7 @@
+ 	exif (jpeg):				$have_libexif
+ 	gsf:					$have_libgsf
+ 	video files:				$videos_are_handled ($videos_handler)
++	embedded/sidecar xmp:			$have_exempi
+ 
+ "
+ if test "x$enable_external_sqlite" = "xyes"; then
+
+--------------090802020801040206050808
+Content-Type: text/plain; charset="us-ascii"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+
+_______________________________________________
+cc-devel mailing list
+cc-devel@lists.ibiblio.org
+http://lists.ibiblio.org/mailman/listinfo/cc-devel
+
+--------------090802020801040206050808--
+

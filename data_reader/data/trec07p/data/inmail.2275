@@ -1,0 +1,190 @@
+From sugar-bounces@laptop.org  Tue Apr 10 18:11:45 2007
+Return-Path: <sugar-bounces@laptop.org>
+Received: from pedal.laptop.org (pedal.laptop.org [18.85.2.148])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3AMBi0I002605
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 10 Apr 2007 18:11:44 -0400
+Received: from pedal.laptop.org (localhost [127.0.0.1])
+	by pedal.laptop.org (Postfix) with ESMTP id 2A8464F8C2;
+	Tue, 10 Apr 2007 18:10:35 -0400 (EDT)
+X-Original-To: sugar@laptop.org
+Delivered-To: sugar@laptop.org
+Received: from spam.laptop.org (spam.laptop.org [18.85.46.23])
+	by pedal.laptop.org (Postfix) with ESMTP id 0ABA34F78D
+	for <sugar@laptop.org>; Tue, 10 Apr 2007 12:39:14 -0400 (EDT)
+X-ASG-Debug-ID: 1176223167-724200000000-3Xmyjt
+X-Barracuda-URL: http://18.85.46.23:8000/cgi-bin/mark.cgi
+X-Barracuda-Connect: mx1.redhat.com[66.187.233.31]
+X-Barracuda-Start-Time: 1176223167
+Received: from mx1.redhat.com (mx1.redhat.com [66.187.233.31])
+	by spam.laptop.org (Spam Firewall) with ESMTP id 35808203E
+	for <sugar@laptop.org>; Tue, 10 Apr 2007 12:39:27 -0400 (EDT)
+Received: from int-mx1.corp.redhat.com (int-mx1.corp.redhat.com
+	[172.16.52.254])
+	by mx1.redhat.com (8.13.1/8.13.1) with ESMTP id l3AGdPUg016839;
+	Tue, 10 Apr 2007 12:39:25 -0400
+Received: from mail.boston.redhat.com (mail.boston.redhat.com [172.16.76.12])
+	by int-mx1.corp.redhat.com (8.13.1/8.13.1) with ESMTP id
+	l3AGdO0C020668; Tue, 10 Apr 2007 12:39:24 -0400
+Received: from [10.11.14.101] (vpn-14-101.rdu.redhat.com [10.11.14.101])
+	by mail.boston.redhat.com (8.12.11.20060308/8.12.11) with ESMTP id
+	l3AGdNYg027136; Tue, 10 Apr 2007 12:39:23 -0400
+X-ASG-Orig-Subj: [PATCH] telepathy-python: search XDG directories for .manager
+	files
+From: Dan Williams <dcbw@redhat.com>
+To: Dafydd Harries <dafydd.harries@collabora.co.uk>
+Date: Tue, 10 Apr 2007 12:43:06 -0400
+Message-Id: <1176223386.28293.5.camel@localhost.localdomain>
+Mime-Version: 1.0
+X-Mailer: Evolution 2.8.3 (2.8.3-1.fc6) 
+X-Barracuda-Bayes: INNOCENT GLOBAL 0.0000 1.0000 -2.0210
+X-Barracuda-Virus-Scanned: by Barracuda Spam Firewall at laptop.org
+X-Barracuda-Spam-Score: -2.02
+X-Barracuda-Spam-Status: No, SCORE=-2.02 using global scores of TAG_LEVEL=3.5
+	QUARANTINE_LEVEL=1000.0 KILL_LEVEL=5.5 tests=
+X-Barracuda-Spam-Report: Code version 3.1, rules version 3.1.13798
+	Rule breakdown below
+	pts rule name              description
+	---- ----------------------
+	--------------------------------------------------
+Cc: Simon McVittie <simon.mcvittie@collabora.co.uk>, sugar@laptop.org
+Subject: [sugar] [PATCH] telepathy-python: search XDG directories for
+	.manager files
+X-BeenThere: sugar@laptop.org
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Discussion of OLPC design,
+	desktop platform and user experience" <sugar.laptop.org>
+List-Unsubscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=unsubscribe>
+List-Archive: <http://mailman.laptop.org/pipermail/sugar>
+List-Post: <mailto:sugar@laptop.org>
+List-Help: <mailto:sugar-request@laptop.org?subject=help>
+List-Subscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: sugar-bounces@laptop.org
+Errors-To: sugar-bounces@laptop.org
+Status: O
+Content-Length: 4643
+Lines: 118
+
+diff -rN -u old-telepathy-python/telepathy/client/managerregistry.py new-telepathy-python/telepathy/client/managerregistry.py
+--- old-telepathy-python/telepathy/client/managerregistry.py	2007-04-10 12:31:10.000000000 -0400
++++ new-telepathy-python/telepathy/client/managerregistry.py	2007-04-10 12:31:10.000000000 -0400
+@@ -18,59 +18,7 @@
+ # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ 
+ """
+-The registry of managers takes the form of any number of .manager files, which
+-are searched for in /usr/share/telepathy/services or in ~/.telepathy.
+-
+-The name of a manager is the filename minus the .manager suffix
+-For example a file named gabble.manager implies that:
+-  The name of the connmgr is 'gabble'
+-  The object path is /org/freedesktop/Telepathy/ConnectionManager/gabble
+-  The bus name is org.freedesktop.Telepathy.ConnectionManager.gabble
+-
+-The object path and bus names are formed by replacing $name with the connmgr
+-name in the following templates:
+-  Object path: /org/freedesktop/Telepathy/ConnectionManager/$name
+-  Bus name: org.freedesktop.Telepathy.ConnectionManager.$name
+-
+-.manager files should contain any number of proctol support declarators
+-of the form:
+-
+-[Protocol (name of supported protocol)]
+-param-(parameter name) = signature flags
+-default-(paramater name) = value
+-
+-Where:
+-'signature' is a single complete DBus type signature.
+-'flags' is a space-delimited list of flags; valid flags are 'required' and
+-'register'.
+-default-(paramater name) sets the default value for that parameter. e.g.
+-default-port=522 sets te default value of the 'port' parameter to 522.
+- 
+-All connection managers should register as activatable dbus services. They
+-should also close themselves down after an idle time with no open connections.
+-
+-Clients should use the Protocol sections to query the user for necessary
+-information.
+-
+-Telepathy defines a common subset of paramter names to facilitate GUI design.
+-
+-s:server - a fully qualified domain name or numeric IPv4 or IPv6 address.
+-Using the fully-qualified domain name form is RECOMMENDED whenever possible.
+-If this paramter is specified and the user id for that service also specifies
+-a server, this parameter should override that in the user id.
+-
+-q:port - a TCP or UDP port number. If this paramter is specified and the user
+-id for that service also specifies a port, this parameter should override that
+-in the user id.
+-
+-s:password - A password associated with the user.
+-
+-s:proxy-server - a uri for a proxyserver to use for this connection
+-
+-b:require-encryption - require encryption for this connection. A connection
+-should fail if require-encryption is set and encryption is not possible.
+-
+-UIs should display any default values, but should *not* store them.
++Loads .manager files according to http://telepathy.freedesktop.org/wiki/FileFormats
+ """
+ 
+ import ConfigParser, os
+@@ -81,6 +29,16 @@
+ 
+ _dbus_py_version = getattr(dbus, 'version', (0,0,0))
+ 
++def _convert_pathlist(pathlist):
++    dirlist = pathlist.split(":")
++    # Reverse so least-important is first
++    dirlist.reverse()
++    dirs = []
++    for path in dirlist:
++        if len(path):
++            path = os.path.abspath(os.path.expanduser(path))
++            dirs.append(os.path.join(path, "telepathy", "managers"))
++    return dirs
+ 
+ class ManagerRegistry:
+     def __init__(self):
+@@ -116,11 +74,24 @@
+         set to the name of the erronous file.
+         """
+ 
+-        all_paths = (
+-            '/usr/share/telepathy/managers/',
+-            '/usr/local/share/telepathy/managers/',
+-            os.path.expanduser('~/.telepathy'),
+-            )
++        # Later items in the list are _more_ important
++        all_paths = []
++        if os.environ.has_key("XDG_DATA_DIRS"):
++            all_paths += _convert_pathlist(os.environ["XDG_DATA_DIRS"])
++        else:
++            all_paths.append(os.path.join("usr", "share", "telepathy", \
++                "managers"))
++            all_paths.append(os.path.join("usr", "local", "share", \
++                "telepathy", "managers"))
++
++        home = os.path.expanduser("~")
++        if os.environ.has_key("XDG_DATA_HOME"):
++            all_paths += _convert_pathlist(os.environ["XDG_DATA_HOME"])
++        else:
++            all_paths.append(os.path.join(home, ".local", "share", \
++                "telepathy", "managers"))
++
++        all_paths.append(os.path.join(home, ".telepathy"))
+ 
+         for path in all_paths:
+             if os.path.exists(path):
+
+
+
+_______________________________________________
+Sugar mailing list
+Sugar@laptop.org
+http://mailman.laptop.org/mailman/listinfo/sugar
+

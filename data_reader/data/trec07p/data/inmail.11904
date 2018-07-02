@@ -1,0 +1,148 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Apr 17 19:07:41 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3HN7f0I002044
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 19:07:41 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 58C8A163A4F
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 23:07:17 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.3 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 615)
+	id 01391163836; Tue, 17 Apr 2007 23:06:43 +0000 (GMT)
+To: samba-cvs@samba.org
+From: mimir@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070417230644.01391163836@lists.samba.org>
+Date: Tue, 17 Apr 2007 23:06:43 +0000 (GMT)
+Subject: svn commit: samba r22323 - in
+	branches/SAMBA_4_0/source/scripting/ejs/ejsnet: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 3229
+Lines: 105
+
+Author: mimir
+Date: 2007-04-17 23:06:43 +0000 (Tue, 17 Apr 2007)
+New Revision: 22323
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22323
+
+Log:
+- add credentials property to NetContext object
+- change a comment (matches the idea better)
+
+
+rafal
+
+
+Modified:
+   branches/SAMBA_4_0/source/scripting/ejs/ejsnet/net_ctx.c
+   branches/SAMBA_4_0/source/scripting/ejs/ejsnet/net_user.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/scripting/ejs/ejsnet/net_ctx.c
+===================================================================
+--- branches/SAMBA_4_0/source/scripting/ejs/ejsnet/net_ctx.c	2007-04-17 22:35:01 UTC (rev 22322)
++++ branches/SAMBA_4_0/source/scripting/ejs/ejsnet/net_ctx.c	2007-04-17 23:06:43 UTC (rev 22323)
+@@ -43,7 +43,7 @@
+ 	TALLOC_CTX *event_mem_ctx = talloc_new(mprMemCtx());
+ 	struct cli_credentials *creds;
+ 	struct libnet_context *ctx;
+-	struct MprVar obj;
++	struct MprVar obj, mprCreds;
+ 	struct event_context *ev;
+ 
+ 	if (!event_mem_ctx) {
+@@ -59,6 +59,9 @@
+ 	talloc_steal(ctx, event_mem_ctx);
+ 
+ 	if (argc == 0 || (argc == 1 && argv[0]->type == MPR_TYPE_NULL)) {
++		/* 
++		   create the default credentials
++		*/
+ 		creds = cli_credentials_init(ctx);
+ 		if (creds == NULL) {
+ 			ejsSetErrorMsg(eid, "cli_credential_init() failed");
+@@ -68,11 +71,16 @@
+ 		cli_credentials_set_conf(creds);
+ 		cli_credentials_set_anonymous(creds);
+ 
++		mprCreds = mprCredentials(creds);
++
+ 	} else if (argc == 1 && argv[0]->type == MPR_TYPE_OBJECT) {
+-		/* get credential values from credentials object */
+-		creds = mprGetPtr(argv[0], "creds");
++		/*
++		  get credential values from credentials object
++		*/
++		mprCreds = *(argv[0]);
++		creds = mprGetPtr(&mprCreds, "creds");
+ 		if (creds == NULL) {
+-			ejsSetErrorMsg(eid, "userAuth requires a 'creds' first parameter");
++			ejsSetErrorMsg(eid, "invalid credentials parameter");
+ 			talloc_free(ctx);
+ 			return -1;
+ 		}
+@@ -82,15 +90,25 @@
+ 		talloc_free(ctx);
+ 		return -1;
+ 	}
+-
++	
++	/* setup libnet_context credentials */
+ 	ctx->cred = creds;
+ 
+-	obj = mprObject("NetCtx");
++	/* create the NetContext object */
++	obj = mprObject("NetContext");
++
++	/* add internal libnet_context pointer to the NetContext object */
+ 	mprSetPtrChild(&obj, "ctx", ctx);
++
++	/* add properties publicly available from js code */
++	mprCreateProperty(&obj, "credentials", &mprCreds);
+ 	
++	/* add methods to the object */
+ 	mprSetCFunction(&obj, "UserMgr", ejs_net_userman);
+ 	mprSetCFunction(&obj, "JoinDomain", ejs_net_join_domain);
+ 	mprSetCFunction(&obj, "SamSyncLdb", ejs_net_samsync_ldb);
++
++	/* return the object */
+ 	mpr_Return(eid, obj);
+ 
+ 	return 0;
+
+Modified: branches/SAMBA_4_0/source/scripting/ejs/ejsnet/net_user.c
+===================================================================
+--- branches/SAMBA_4_0/source/scripting/ejs/ejsnet/net_user.c	2007-04-17 22:35:01 UTC (rev 22322)
++++ branches/SAMBA_4_0/source/scripting/ejs/ejsnet/net_user.c	2007-04-17 23:06:43 UTC (rev 22323)
+@@ -59,7 +59,7 @@
+ 
+ 	} else if (argc == 1 && mprVarIsString(argv[0]->type)) {
+ 		/* domain name can also be specified explicitly 
+-		   (e.g. to connect remote domain) */
++		   (e.g. to connect BUILTIN domain) */
+ 		userman_domain = mprToString(argv[0]);
+ 
+ 	} else {
+

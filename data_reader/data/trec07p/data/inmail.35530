@@ -1,0 +1,339 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun May 13 21:00:43 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4E10hqD014309
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 13 May 2007 21:00:43 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 3601316382D
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 14 May 2007 01:00:40 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id B813E162AD7; Mon, 14 May 2007 01:00:09 +0000 (GMT)
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070514010009.B813E162AD7@lists.samba.org>
+Date: Mon, 14 May 2007 01:00:09 +0000 (GMT)
+Subject: svn commit: samba r22832 - in branches/SAMBA_4_0/source/lib/tdb:
+	common include
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: tridge
+Date: 2007-05-14 01:00:06 +0000 (Mon, 14 May 2007)
+New Revision: 22832
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22832
+
+Log:
+
+merged the latest tdb changes from ctdb to Samba4
+
+Modified:
+   branches/SAMBA_4_0/source/lib/tdb/common/lock.c
+   branches/SAMBA_4_0/source/lib/tdb/common/tdb.c
+   branches/SAMBA_4_0/source/lib/tdb/include/tdb.h
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/lib/tdb/common/lock.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/tdb/common/lock.c	2007-05-14 00:58:24 UTC (rev 22831)
++++ branches/SAMBA_4_0/source/lib/tdb/common/lock.c	2007-05-14 01:00:06 UTC (rev 22832)
+@@ -28,6 +28,8 @@
+ 
+ #include "tdb_private.h"
+ 
++#define TDB_MARK_LOCK 0x80000000
++
+ /* a byte range locking function - return 0 on success
+    this functions locks/unlocks 1 byte at the specified offset.
+ 
+@@ -109,7 +111,10 @@
+ {
+ 	struct tdb_lock_type *new_lck;
+ 	int i;
++	bool mark_lock = ((ltype & TDB_MARK_LOCK) == TDB_MARK_LOCK);
+ 
++	ltype &= ~TDB_MARK_LOCK;
++
+ 	/* a global lock allows us to avoid per chain locks */
+ 	if (tdb->global_lock.count && 
+ 	    (ltype == tdb->global_lock.ltype || ltype == F_RDLCK)) {
+@@ -158,7 +163,8 @@
+ 
+ 	/* Since fcntl locks don't nest, we do a lock for the first one,
+ 	   and simply bump the count for future ones */
+-	if (tdb->methods->tdb_brlock(tdb,FREELIST_TOP+4*list,ltype, op,
++	if (!mark_lock &&
++	    tdb->methods->tdb_brlock(tdb,FREELIST_TOP+4*list, ltype, op,
+ 				     0, 1)) {
+ 		return -1;
+ 	}
+@@ -200,7 +206,10 @@
+ 	int ret = -1;
+ 	int i;
+ 	struct tdb_lock_type *lck = NULL;
++	bool mark_lock = ((ltype & TDB_MARK_LOCK) == TDB_MARK_LOCK);
+ 
++	ltype &= ~TDB_MARK_LOCK;
++
+ 	/* a global lock allows us to avoid per chain locks */
+ 	if (tdb->global_lock.count && 
+ 	    (ltype == tdb->global_lock.ltype || ltype == F_RDLCK)) {
+@@ -244,8 +253,12 @@
+ 	 * anyway.
+ 	 */
+ 
+-	ret = tdb->methods->tdb_brlock(tdb, FREELIST_TOP+4*list, F_UNLCK,
+-				       F_SETLKW, 0, 1);
++	if (mark_lock) {
++		ret = 0;
++	} else {
++		ret = tdb->methods->tdb_brlock(tdb, FREELIST_TOP+4*list, F_UNLCK,
++					       F_SETLKW, 0, 1);
++	}
+ 	tdb->num_locks--;
+ 
+ 	/*
+@@ -275,8 +288,12 @@
+ 
+ 
+ /* lock/unlock entire database */
+-static int _tdb_lockall(struct tdb_context *tdb, int ltype)
++static int _tdb_lockall(struct tdb_context *tdb, int ltype, int op)
+ {
++	bool mark_lock = ((ltype & TDB_MARK_LOCK) == TDB_MARK_LOCK);
++
++	ltype &= ~TDB_MARK_LOCK;
++
+ 	/* There are no locks on read-only dbs */
+ 	if (tdb->read_only || tdb->traverse_read)
+ 		return TDB_ERRCODE(TDB_ERR_LOCK, -1);
+@@ -296,9 +313,12 @@
+ 		return TDB_ERRCODE(TDB_ERR_LOCK, -1);
+ 	}
+ 
+-	if (tdb->methods->tdb_brlock(tdb, FREELIST_TOP, ltype, F_SETLKW, 
++	if (!mark_lock &&
++	    tdb->methods->tdb_brlock(tdb, FREELIST_TOP, ltype, op,
+ 				     0, 4*tdb->header.hash_size)) {
+-		TDB_LOG((tdb, TDB_DEBUG_ERROR, "tdb_lockall failed (%s)\n", strerror(errno)));
++		if (op == F_SETLKW) {
++			TDB_LOG((tdb, TDB_DEBUG_ERROR, "tdb_lockall failed (%s)\n", strerror(errno)));
++		}
+ 		return -1;
+ 	}
+ 
+@@ -308,9 +328,15 @@
+ 	return 0;
+ }
+ 
++
++
+ /* unlock entire db */
+ static int _tdb_unlockall(struct tdb_context *tdb, int ltype)
+ {
++	bool mark_lock = ((ltype & TDB_MARK_LOCK) == TDB_MARK_LOCK);
++
++	ltype &= ~TDB_MARK_LOCK;
++
+ 	/* There are no locks on read-only dbs */
+ 	if (tdb->read_only || tdb->traverse_read) {
+ 		return TDB_ERRCODE(TDB_ERR_LOCK, -1);
+@@ -325,7 +351,8 @@
+ 		return 0;
+ 	}
+ 
+-	if (tdb->methods->tdb_brlock(tdb, FREELIST_TOP, F_UNLCK, F_SETLKW, 
++	if (!mark_lock &&
++	    tdb->methods->tdb_brlock(tdb, FREELIST_TOP, F_UNLCK, F_SETLKW, 
+ 				     0, 4*tdb->header.hash_size)) {
+ 		TDB_LOG((tdb, TDB_DEBUG_ERROR, "tdb_unlockall failed (%s)\n", strerror(errno)));
+ 		return -1;
+@@ -340,9 +367,27 @@
+ /* lock entire database with write lock */
+ int tdb_lockall(struct tdb_context *tdb)
+ {
+-	return _tdb_lockall(tdb, F_WRLCK);
++	return _tdb_lockall(tdb, F_WRLCK, F_SETLKW);
+ }
+ 
++/* lock entire database with write lock - mark only */
++int tdb_lockall_mark(struct tdb_context *tdb)
++{
++	return _tdb_lockall(tdb, F_WRLCK | TDB_MARK_LOCK, F_SETLKW);
++}
++
++/* unlock entire database with write lock - unmark only */
++int tdb_lockall_unmark(struct tdb_context *tdb)
++{
++	return _tdb_unlockall(tdb, F_WRLCK | TDB_MARK_LOCK);
++}
++
++/* lock entire database with write lock - nonblocking varient */
++int tdb_lockall_nonblock(struct tdb_context *tdb)
++{
++	return _tdb_lockall(tdb, F_WRLCK, F_SETLK);
++}
++
+ /* unlock entire database with write lock */
+ int tdb_unlockall(struct tdb_context *tdb)
+ {
+@@ -352,9 +397,15 @@
+ /* lock entire database with read lock */
+ int tdb_lockall_read(struct tdb_context *tdb)
+ {
+-	return _tdb_lockall(tdb, F_RDLCK);
++	return _tdb_lockall(tdb, F_RDLCK, F_SETLKW);
+ }
+ 
++/* lock entire database with read lock - nonblock varient */
++int tdb_lockall_read_nonblock(struct tdb_context *tdb)
++{
++	return _tdb_lockall(tdb, F_RDLCK, F_SETLK);
++}
++
+ /* unlock entire database with read lock */
+ int tdb_unlockall_read(struct tdb_context *tdb)
+ {
+@@ -376,6 +427,18 @@
+ 	return tdb_lock_nonblock(tdb, BUCKET(tdb->hash_fn(&key)), F_WRLCK);
+ }
+ 
++/* mark a chain as locked without actually locking it. Warning! use with great caution! */
++int tdb_chainlock_mark(struct tdb_context *tdb, TDB_DATA key)
++{
++	return tdb_lock(tdb, BUCKET(tdb->hash_fn(&key)), F_WRLCK | TDB_MARK_LOCK);
++}
++
++/* unmark a chain as locked without actually locking it. Warning! use with great caution! */
++int tdb_chainlock_unmark(struct tdb_context *tdb, TDB_DATA key)
++{
++	return tdb_unlock(tdb, BUCKET(tdb->hash_fn(&key)), F_WRLCK | TDB_MARK_LOCK);
++}
++
+ int tdb_chainunlock(struct tdb_context *tdb, TDB_DATA key)
+ {
+ 	return tdb_unlock(tdb, BUCKET(tdb->hash_fn(&key)), F_WRLCK);
+
+Modified: branches/SAMBA_4_0/source/lib/tdb/common/tdb.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/tdb/common/tdb.c	2007-05-14 00:58:24 UTC (rev 22831)
++++ branches/SAMBA_4_0/source/lib/tdb/common/tdb.c	2007-05-14 01:00:06 UTC (rev 22832)
+@@ -31,10 +31,10 @@
+ TDB_DATA tdb_null;
+ 
+ /*
+-  increment the tdb sequence number if the tdb has been opened using
++  non-blocking increment of the tdb sequence number if the tdb has been opened using
+   the TDB_SEQNUM flag
+ */
+-static void tdb_increment_seqnum(struct tdb_context *tdb)
++void tdb_increment_seqnum_nonblock(struct tdb_context *tdb)
+ {
+ 	tdb_off_t seqnum=0;
+ 	
+@@ -42,17 +42,30 @@
+ 		return;
+ 	}
+ 
+-	if (tdb_brlock(tdb, TDB_SEQNUM_OFS, F_WRLCK, F_SETLKW, 1, 1) != 0) {
+-		return;
+-	}
+-
+ 	/* we ignore errors from this, as we have no sane way of
+ 	   dealing with them.
+ 	*/
+ 	tdb_ofs_read(tdb, TDB_SEQNUM_OFS, &seqnum);
+ 	seqnum++;
+ 	tdb_ofs_write(tdb, TDB_SEQNUM_OFS, &seqnum);
++}
+ 
++/*
++  increment the tdb sequence number if the tdb has been opened using
++  the TDB_SEQNUM flag
++*/
++static void tdb_increment_seqnum(struct tdb_context *tdb)
++{
++	if (!(tdb->flags & TDB_SEQNUM)) {
++		return;
++	}
++
++	if (tdb_brlock(tdb, TDB_SEQNUM_OFS, F_WRLCK, F_SETLKW, 1, 1) != 0) {
++		return;
++	}
++
++	tdb_increment_seqnum_nonblock(tdb);
++
+ 	tdb_brlock(tdb, TDB_SEQNUM_OFS, F_UNLCK, F_SETLKW, 1, 1);
+ }
+ 
+@@ -649,3 +662,11 @@
+ 	return tdb->flags;
+ }
+ 
++
++/*
++  enable sequence number handling on an open tdb
++*/
++void tdb_enable_seqnum(struct tdb_context *tdb)
++{
++	tdb->flags |= TDB_SEQNUM;
++}
+
+Modified: branches/SAMBA_4_0/source/lib/tdb/include/tdb.h
+===================================================================
+--- branches/SAMBA_4_0/source/lib/tdb/include/tdb.h	2007-05-14 00:58:24 UTC (rev 22831)
++++ branches/SAMBA_4_0/source/lib/tdb/include/tdb.h	2007-05-14 01:00:06 UTC (rev 22832)
+@@ -116,9 +116,13 @@
+ int tdb_traverse_read(struct tdb_context *tdb, tdb_traverse_func fn, void *);
+ int tdb_exists(struct tdb_context *tdb, TDB_DATA key);
+ int tdb_lockall(struct tdb_context *tdb);
++int tdb_lockall_nonblock(struct tdb_context *tdb);
+ int tdb_unlockall(struct tdb_context *tdb);
+ int tdb_lockall_read(struct tdb_context *tdb);
++int tdb_lockall_read_nonblock(struct tdb_context *tdb);
+ int tdb_unlockall_read(struct tdb_context *tdb);
++int tdb_lockall_mark(struct tdb_context *tdb);
++int tdb_lockall_unmark(struct tdb_context *tdb);
+ const char *tdb_name(struct tdb_context *tdb);
+ int tdb_fd(struct tdb_context *tdb);
+ tdb_log_func tdb_log_fn(struct tdb_context *tdb);
+@@ -131,6 +135,8 @@
+ int tdb_hash_size(struct tdb_context *tdb);
+ size_t tdb_map_size(struct tdb_context *tdb);
+ int tdb_get_flags(struct tdb_context *tdb);
++void tdb_enable_seqnum(struct tdb_context *tdb);
++void tdb_increment_seqnum_nonblock(struct tdb_context *tdb);
+ 
+ /* Low level locking functions: use with care */
+ int tdb_chainlock(struct tdb_context *tdb, TDB_DATA key);
+@@ -138,6 +144,8 @@
+ int tdb_chainunlock(struct tdb_context *tdb, TDB_DATA key);
+ int tdb_chainlock_read(struct tdb_context *tdb, TDB_DATA key);
+ int tdb_chainunlock_read(struct tdb_context *tdb, TDB_DATA key);
++int tdb_chainlock_mark(struct tdb_context *tdb, TDB_DATA key);
++int tdb_chainlock_unmark(struct tdb_context *tdb, TDB_DATA key);
+ 
+ /* Debug functions. Not used in production. */
+ void tdb_dump_all(struct tdb_context *tdb);
+

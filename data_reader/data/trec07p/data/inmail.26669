@@ -1,0 +1,111 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May  2 03:35:48 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l427Zlb9019082
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 2 May 2007 03:35:47 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 2B52C1638F9
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed,  2 May 2007 07:35:47 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.5 required=3.8 tests=AWL,BAYES_00,RCVD_IN_DSBL,
+	UNPARSEABLE_RELAY autolearn=no version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: from mail.SerNet.de (mail.SerNet.DE [193.175.80.2])
+	by lists.samba.org (Postfix) with ESMTP id 2C40E162BD7
+	for <samba-technical@samba.org>; Wed,  2 May 2007 07:34:54 +0000 (GMT)
+Received: from intern.SerNet.DE by mail.SerNet.DE with esmtp (Exim 4.51 #1)
+	id 1Hj9MU-0002B4-0z; Wed, 02 May 2007 09:34:54 +0200
+Received: by intern.SerNet.DE
+	id 1Hj9MT-00052O-Gt; Wed, 02 May 2007 09:34:53 +0200
+Received: by intern.SerNet.DE
+	id 1Hj9MT-00052L-AU; Wed, 02 May 2007 09:34:53 +0200
+Received: from vlendec by delphin.sernet.de with local (Exim 4.51)
+	id 1Hj9Oc-00013W-VC; Wed, 02 May 2007 09:37:07 +0200
+Date: Wed, 2 May 2007 09:37:06 +0200
+From: Volker Lendecke <Volker.Lendecke@SerNet.DE>
+To: Tim Prouty <tim.prouty@isilon.com>
+References: <3B633E39-CC01-42DD-83D5-C383DCA0ADBC@isilon.com>
+Mime-Version: 1.0
+Content-Type: multipart/signed; micalg=pgp-sha1;
+	protocol="application/pgp-signature"; boundary="0ntfKIWw70PvrIHh"
+Content-Disposition: inline
+In-Reply-To: <3B633E39-CC01-42DD-83D5-C383DCA0ADBC@isilon.com>
+User-Agent: Mutt/1.5.9i
+Message-Id: <E1Hj9MT-00052O-Gt@intern.SerNet.DE>
+Organization: SerNet GmbH, Goettingen, Germany
+Cc: samba-technical@samba.org
+Subject: Re: When sending a HUP signal isn't enough?
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: Volker.Lendecke@SerNet.DE
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+
+--0ntfKIWw70PvrIHh
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+Content-Transfer-Encoding: quoted-printable
+
+On Tue, May 01, 2007 at 10:30:42AM -0700, Tim Prouty wrote:
+> sesssetup request.  If during this period of time smb.conf is changed =20
+> to "security =3D share", and smbd is sent a HUP signal, smbd will panic =
+=20
+> due to this check in register_vuid():
+>=20
+> 	/* Paranoia check. */
+> 	if(lp_security() =3D=3D SEC_SHARE) {
+> 		smb_panic("Tried to register uid in security=3Dshare\n");
+> 	}
+>=20
+> Also, when joining a new domain and changing the realm in smb.conf, =20
+> winbindd does not appear to correctly pick up the changes with a HUP =20
+> signal.  Ideally, sending a HUP signal would always be sufficient, =20
+> but as a workaround, we send a TERM signal when changing the security =20
+> mode or realm.
+>=20
+> Does anyone know of any other smb.conf parameters that a HUP signal =20
+> won't safely pick up the changes for?
+
+While not being aware about this particular one, there are
+probably quite a few of those. For example "netbios name" in
+domain mode will certainly not be picked up correctly, it
+would require a change of our workstation name in the DC.
+
+But when you think about the security=3Duser -> security=3Dshare
+one, there is exactly nothing we can do about that. If that
+is caught between negprot (where we tell the client to do
+sec=3Duser) and the session setup (where we don't want it
+anymore), then the only right thing is to panic or cleanly
+exit. The only other option would be to ignore security=3D
+changes in a child smbd.
+
+Volker
+
+--0ntfKIWw70PvrIHh
+Content-Type: application/pgp-signature
+Content-Disposition: inline
+
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.2 (GNU/Linux)
+
+iD8DBQFGOD+ipZr5CauZH5wRAm6dAKDHuLPqFjsJP7jRo6Au8k8XqkOOoQCgwVdi
+NFSoEkZmPWNI2sKODd3ffm0=
+=bhN1
+-----END PGP SIGNATURE-----
+
+--0ntfKIWw70PvrIHh--
+

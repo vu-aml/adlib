@@ -1,0 +1,244 @@
+From perl6-all-return-81524-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue May 22 12:20:17 2007
+Return-Path: <perl6-all-return-81524-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4MGKFqD014412
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 22 May 2007 12:20:16 -0400
+Received: (qmail 32687 invoked by uid 514); 22 May 2007 16:20:11 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 32682 invoked from network); 22 May 2007 16:20:10 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=0.0 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+Delivered-To: perlmail-parrot-porters@onion.perl.org
+Delivered-To: parrot-porters@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+Date: Tue, 22 May 2007 10:54:45 -0500
+From: "Patrick R. Michaud" <pmichaud@pobox.com>
+To: Allison Randal <allison@perl.org>, p2 <parrot-porters@perl.org>
+Subject: Re: PMC architecture discussion
+Message-ID: <20070522155445.GE16372@host.pmichaud.com>
+References: <46524BE9.7030808@perl.org> <20070522122533.GG20876@plum.flirble.org> <20070522132019.GA16372@host.pmichaud.com>
+Mime-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+In-Reply-To: <20070522132019.GA16372@host.pmichaud.com>
+User-Agent: Mutt/1.4.2.1i
+X-AntiAbuse: This header was added to track abuse, please include it with any abuse report
+X-AntiAbuse: Primary Hostname - host.pmichaud.com
+X-AntiAbuse: Original Domain - perl.org
+X-AntiAbuse: Originator/Caller UID/GID - [32003 505] / [47 12]
+X-AntiAbuse: Sender Address Domain - host.pmichaud.com
+X-Source: 
+X-Source-Args: 
+X-Source-Dir: 
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=0.0 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=0.7 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_NEUTRAL
+
+On Tue, May 22, 2007 at 08:20:19AM -0500, Patrick R. Michaud wrote:
+> On Tue, May 22, 2007 at 01:25:33PM +0100, Nicholas Clark wrote:
+> > 
+> > And how often does the type of a PMC change, such that its internal 
+> > data layout changes? In Perl 5 this morphing happens everywhere, 
+> > but in Parrot?
+
+In fact, this is probably a really good spot for me to review
+what I've been coming across with PMCs and assignment in general.
+
+Returning to the Perl 6 example I gave earlier:
+
+    my @a = (1, 2, 3);
+    my $b := @a[2];
+  
+    @a[2] = foo();
+
+The simplified code that I gave for the last assignment operation
+looked like:
+
+  ##  @a[2] = foo();
+    $P4 = 'foo'()                   # $P4 could be any type
+    find_lex $P5, '@a'              # look up @a
+    set $P6, $P5[2]                 # get reference to @a[2]
+    assign $P6, $P4                 # $P6 needs to morph 
+                                    #   to whatever type $P4 is
+
+Now let's remove the simplifications so that we can see what
+is really having to take place.  First, the C<assign> opcode
+on arbitrary types doesn't do morphing.  However, assigning to
+an .Undef object will cause it to morph to the target type.
+So, what PAST-pm does in its code generation for assignment
+is to first morph the target object into an .Undef, and then 
+perform the assignment:
+
+  ##  @a[2] = foo();
+    $P4 = 'foo'()                   # $P4 could be any type
+    find_lex $P5, '@a'              # look up @a
+    set $P6, $P5[2]                 # get reference to @a[2]
+    morph $P6, .Undef               # morph @a[2] to an Undef
+    assign $P6, $P4                 # and assign $P4 to that Undef
+
+Thanks to Matt Diephouse for letting me know about this approach.
+
+Now then, this assumes that every type knows how to morph itself
+into an .Undef and that .Undef can handle assignment from any type.
+For many PMC classes this isn't (or hasn't been) the case; from
+time to time we stumble across another type that doesn't know
+how to morph itself to .Undef or for which .Undef cannot handle
+the assignment.  When this happens either Matt or I have gone
+in and updated the PMC code to allow these conversions -- the
+prime example is .Sub, but there have been a few others.
+
+There's more.  The PIR code above for assignment also assumes
+that @a[2] already exists, which might not be the case.  If
+@a[2] doesn't exist, then $P6 comes back as NULL, and we
+can't morph a NULL into .Undef.  So the code ends up looking 
+like:
+
+  ##  @a[2] = foo();
+    $P4 = 'foo'()                   # $P4 could be any type
+    find_lex $P5, '@a'              # look up @a
+    set $P6, $P5[2]                 # get reference to @a[2]
+    unless_null $P6, do_morph       # if exists, morph it
+    new $P6, .Undef                 # create a new object
+    set $P5[2], $P6                 # bind @a[2] to the new object
+    goto do_assign                  # now do the assignment
+  do_morph: 
+    morph $P6, .Undef               # morph @a[2] to an Undef
+  do_assign:
+    assign $P6, $P4                 # and assign $P4 to that Undef
+
+And, of course, the code generally ends up looking slightly 
+different if we're talking about assigning to lexical or global
+variables instead of a keyed object.  For example, in the above
+assignment, if '@a' doesn't already exist we need to vivify it also:
+
+  ##  @a[2] = foo();
+    $P4 = 'foo'()                   # $P4 could be any type
+    find_lex $P5, '@a'              # look up @a
+    unless_null $P5, assign_1       # does @a exist?
+    $P5 = new .ResizablePMCArray    # create an object for @a
+    store_lex '@a', $P5             # store it
+  assign_1:
+    set $P6, $P5[2]                 # get reference to @a[2]
+    unless_null $P6, do_morph       # does @a[2] exist?
+    new $P6, .Undef                 # no, create a new object
+    set $P5[2], $P6                 #     bind @a[2] to the new object
+    goto do_assign                  #     now do the assignment
+  do_morph: 
+    morph $P6, .Undef               # morph @a[2] to an Undef
+  do_assign:
+    assign $P6, $P4                 # and assign $P4 to that Undef
+
+This is what the code tends to look like for each assignment
+operation coming out of PAST-pm.  Not very pretty.
+
+On irc:#parrot I've speculated that it might be really useful to
+have opcodes or functions that encapsulate the above into something 
+a bit smaller (and hopefully written in C to be faster).  I'm
+thinking that we're missing an "assign_keyed" opcode, although
+it should probably be called something besides "assign_*" because
+the vrsion I want would create and morph targets as needed
+(the current "assign" opcode doesn't do morphing unless the
+target object explicitly enables it).  But, sticking with the
+slightly-off "assign_keyed" name for now, we'd have
+
+  ##  @a[2] = foo();
+    $P4 = 'foo'()                   # $P4 could be any type
+    find_lex $P5, '@a'              # look up @a
+    unless_null $P5, assign_1       # does @a exist?
+    $P5 = new .ResizablePMCArray    # create an object for @a
+    store_lex '@a', $P5             # store it
+  assign_1:
+    assign_keyed $P5, 2, $P4       # perform assignment
+
+Or perhaps that last statement should be written
+
+    assign $P5[2], $P4
+
+with my earlier caveat that for *this* version of the assign
+opcode, I want it to create and/morph the target object as
+needed to match the type of $P4.
+                                    
+For package-scoped and global variables we'd just use 
+assign_keyed on the namespace objects instead of having to 
+be concerned with the separate set_global, set_hll_global, 
+or set_root_global opcodes:
+
+  ## our $y; $y = foo();
+    $P0 = 'foo'()
+    $P1 = get_namespace
+
+    assign_keyed $P1['$y'], $P0
+
+Again, this is much nicer than the current:
+
+  ## our $y; $y = foo();
+    $P0 = 'foo'()
+    get_global $P1, '$y'
+    unless_null $P1, assign_1
+    clone $P1, $P0
+    set_global $P1, '$y'
+    goto done
+  assign_1:
+    morph $P1, .Undef
+    assign $P1, $P0
+  done:
+
+Also, we get a win because we can get the namespace just
+once at the beginning of any sub that needs it, instead of
+a separate find_global/test existence/store_global for
+each assignment operation:
+
+  ## our $x, $y, $z; $x = foo(); $y = bar(); $z = baz();
+    $P0 = get_namespace
+
+    $P1 = 'foo'()
+    assign_keyed $P0['$x'], $P1
+
+    $P2 = 'bar'()
+    assign_keyed $P0['$y'], $P2
+
+    $P3 = 'baz'()
+    assign_keyed $P0['$z'], $P3
+
+We might also need to have an assign_lex opcode that
+provides the "create/morph target as needed" semantics
+that are currently missing.  Again, my caveat that perhaps
+"assign" is the wrong word here, to avoid semantic confusion
+with the existing "assign" opcode that doesn't provide morphing
+of the targets [1].
+
+Or perhaps we should just change the existing assign opcode
+to morph targets by default, in which case we don't need
+assign_lex.  But I don't know the full ramifications of that
+sort of fundamental design change.
+
+Pm
+
+[1]  Parrot does automatically morph between Integer, Float, and
+     String types when using "assign", but this is part of the
+     semantics of those types and not the assign opcode itself.
+     Other types don't automatically morph via assign, thus we
+     have to go through the .Undef type as described above.
+

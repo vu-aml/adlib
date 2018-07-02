@@ -1,0 +1,168 @@
+From r-help-bounces@stat.math.ethz.ch  Mon Jun 25 09:29:26 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5PDT5LF029094
+	for <ktwarwic@flax9.uwaterloo.ca>; Mon, 25 Jun 2007 09:29:25 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5ONLjVk028829;
+	Mon, 25 Jun 2007 01:21:59 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: ***
+X-Spam-Status: No, score=3.2 required=5.0 tests=BAYES_50, DKIM_POLICY_SIGNSOME,
+	X_IP autolearn=no version=3.2.0
+Received: from wa-out-0708.google.com (wa-out-0708.google.com [209.85.146.251])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5OIsXha031773
+	for <r-help@stat.math.ethz.ch>; Sun, 24 Jun 2007 20:54:36 +0200
+Received: by wa-out-0708.google.com with SMTP id j37so1299844wah
+	for <r-help@stat.math.ethz.ch>; Sun, 24 Jun 2007 11:54:32 -0700 (PDT)
+Received: by 10.114.154.1 with SMTP id b1mr479459wae.1182711272540;
+	Sun, 24 Jun 2007 11:54:32 -0700 (PDT)
+Received: by e9g2000prf.googlegroups.com with HTTP;
+	Sun, 24 Jun 2007 18:54:28 +0000 (UTC)
+X-IP: 64.142.75.44
+From: DarrenWeber <Darren.Weber@radiology.ucsf.edu>
+To: The R Project for Statistical Computing
+	<The-R-Project-for-Statistical-Computing@googlegroups.com>
+Date: Sun, 24 Jun 2007 18:54:28 -0000
+Message-ID: <1182711268.498914.61460@e9g2000prf.googlegroups.com>
+User-Agent: G2/1.0
+X-HTTP-UserAgent: Mozilla/5.0 (X11; U; Linux i686; en-US;
+	rv:1.8.1.4) Gecko/20061201 Firefox/2.0.0.4
+	(Ubuntu-feisty),gzip(gfe),gzip(gfe)
+MIME-Version: 1.0
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+X-Mailman-Approved-At: Mon, 25 Jun 2007 01:21:41 +0200
+Cc: r-help@stat.math.ethz.ch
+Subject: [R] ANOVA non-sphericity test and corrections (eg,
+	Greenhouse-Geisser)
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+
+I'm an experimental psychologist and when I run ANOVA analysis in
+SPSS, I normally ask for a test of non-sphericity (Box's M-test).  I
+also ask for output of the corrections for non-sphericity, such as
+Greenhouse-Geisser and Huhn-Feldt.  These tests and correction factors
+are commonly used in the journals for experimental and other
+psychology reports.  I have been switching from SPSS to R for over a
+year now, but I realize now that I don't have the non-sphericity test
+and correction factors.
+
+The backgroud to this question is that I'm doing a psychophysics
+experiment and the data analysis uses an aov model that looks like
+this:
+
+roiAOV <- aov( roi ~ (Cue*Hemisphere) + Error(Subject/
+(Cue*Hemisphere)), data=roiDataframe)
+
+where Cue is 2 levels (an arrow on a screen that points left or right)
+and Hemisphere is 2 levels (brain activity in the left or right
+cerebral hemisphere).  There are 8 subjects and they all have one
+observation for all levels of Cue * Hemisphere (ie, a within-subjects
+design).
+
+I need some functions for calculation of Box's M and the Greenhouse-
+Geisser correction factor.  Below is some code example that I have for
+the latter, but I don't know how to adapt it so it can take the aov
+object.
+
+# BEGIN CODE BLOCK
+# see pp. 45-47 of
+# http://www.psych.upenn.edu/~baron/rpsych.pdf
+
+# ---
+# create some data
+
+x0 <- rnorm(30)
+x2 <- rnorm(30)
+x4 <- rnorm(30)
+
+data <- cbind(x0,x2,x4)
+
+# n is the number of 'subjects' or rows; while
+# k is the number of levels in the factor (columns),
+# which is the number of repeated measures
+n <- dim(data)[1]
+k <- dim(data)[2]
+
+# if k <= 2, the epsilon correction is not required.
+# When the data are perfectly spherical, epsilon = 1.
+# The minimum value possible for epsilon is
+
+epsi = 1 / (k - 1)
+
+# if epsi == 1 and k == 2, quit now...
+
+# ---
+# calculate variance-covariance matrix
+# diagonal entries are variance,
+# off-diagonal are covariance
+S <- var(data)
+
+# ---
+# Now estimate Epsilon
+
+D <- k^2 * ( mean(diag(S)) - mean(S) )^2
+
+N1 <- sum(S^2)
+N2 <- 2 * k * sum( apply(S,1,mean)^2 )
+N3 <- k^2 * mean(S)^2
+
+epsi <- D / ( (k-1) * (N1 - N2 + N3) )
+
+# e is used to modify the degrees of freedom for the
+# F test, so we have (k-1) becomes epsi(k-1) and also
+# (k - 1)(n - 1) becomes epsi(k - 1)(n - 1).  The new
+# p-value for the F statistic is found with the
+# pf() function.  For example, if we have
+# df1 =  k - 1 = 3 - 1 = 2
+# df2 = (k - 1)(n - 1) = (3 - 1)(10 - 1) = 18
+# F = 40.719
+# then the adjusted 2-tailed p-value is given by:
+#
+
+Fvalue <- 40.719
+Pepsi <- 2 * (1 - pf(Fvalue, df1=epsi*(k-1), df2=epsi*(k-1)*(n-1) ) )
+
+# Huynh-Feldt correction
+# The Greenhouse-Geisser epsilon tends to underestimate
+# epsilon when epsilon is greater than 0.70 (Stevens, 1990).
+# An estimated e=0.96 may be actually 1. Huynh-Feldt
+# correction is less conservative. The Huynh-Feldt
+# epsilon is calculated from the Greenhouse-Geisser epsilon,
+
+epsiHF <- (n * (k-1) * epsi - 2) / ((k-1) * ((n-1) - (k-1)*epsi))
+
+PepsiHF <- 2 * (1 - pf(Fvalue, df1=epsiHF*(k-1),
+df2=epsiHF*(k-1)*(n-1) ) )
+
+# MANOVA (and multivariate tests) may be better if the
+# Greenhouse-Geisser and the Huynh-Feldt corrections do not agree,
+# which may happen when epsilon drops below 0.70. When epsilon
+# drops below 0.40, both the G-G and H-F corrections may indicate
+# that the violation of sphericity is affecting the adjusted p-values.
+# MANOVA is not always appropriate, though. MANOVA usually requires
+# a larger sample size. Maxwell and Delaney (1990, p. 602) suggest
+# a rough rule of thumb that the sample size n should be greater
+# than k+10.
+# END CODE BLOCK
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

@@ -1,0 +1,745 @@
+From perl6-all-return-81311-ktwarwic=speedy.uwaterloo.ca@perl.org  Mon May 14 10:20:49 2007
+Return-Path: <perl6-all-return-81311-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4EEKkqD022927
+	for <ktwarwic@flax9.uwaterloo.ca>; Mon, 14 May 2007 10:20:46 -0400
+Received: (qmail 31291 invoked by uid 514); 14 May 2007 14:20:43 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 31278 invoked from network); 14 May 2007 14:20:43 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: moderator for perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: Mike Mattie (via RT) <parrotbug-followup@parrotcode.org>
+X-RT-NewTicket: yes
+To: bugs-bitbucket@netlabs.develooper.com
+Resent-To: perl6-internals@perl.org
+Mail-Followup-To: perl6-internals@perl.org
+Reply-To: perl6-internals@perl.org
+Date: Mon, 14 May 2007 04:33:56 -0700
+Subject: [perl #42944] [PATCH] new parrot path handling API from static functions in src/library.c 
+In-Reply-To: <20070514043239.4d07edf6@reforged>
+References: <RT-Ticket-42944@perl.org> <20070514043239.4d07edf6@reforged>
+Message-ID: <rt-3.6.HEAD-12281-1179142436-1056.42944-72-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #42944
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: codermattie@gmail.com
+MIME-Version: 1.0
+X-RT-Original-Encoding: utf-8
+Content-type: multipart/mixed; boundary="----------=_1179142436-12281-79"
+Resent-Message-Id: <20070514113357.4A7B82AFDA@x3.develooper.com>
+Resent-Date: Mon, 14 May 2007 04:33:57 -0700 (PDT)
+Resent-From: rt-codermattie=gmail.com@netlabs.develooper.com
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+
+------------=_1179142436-12281-79
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+# New Ticket Created by  Mike Mattie 
+# Please include the string:  [perl #42944]
+# in the subject line of all future correspondence about this issue. 
+# <URL: http://rt.perl.org/rt3/Ticket/Display.html?id=42944 >
+
+
+Hello,
+
+This is a patch, and two new files:
+
+parrot/include/path.h
+src/path.c
+
+These changes move the static path handling utilities out of library.c into their own translation unit.
+This allows all of the parrot code to use a single implementation of common path handling functions.
+
+slight modifications were made to the win32 specific portions that need to be re-tested on that
+platform.
+
+I modified the config/gen/makefiles/root.in to get it compiling properly , but I might have missed
+something as this is my first change to the makefile.
+
+I get two harness failures I haven't figured out yet:
+
+t/op/sprintf.....................................ok 1/308parrot:
+src/string.c:727: string_str_index: Assertion `s->encoding &&
+s->charset && !(((s)->obj.flags) & b_PObj_on_free_list_FLAG)' failed.
+
+This may be because I modified the functions in path.c to use more of the string API instead of
+bypassing it. Someone else may be able to decode this assertion failure so I can pinpoint
+where it is coming from. I suspect that it is coming from path.c:217 .
+
+In fact that entire function needs to be reviewed, I don't have the unicode experience
+to understand it's string manipulation. beyond the change on 217 I haven't touched
+that code with a cleanup yet.
+
+#     Failed test (t/perl/Parrot_IO.t at line 159)
+t/perl/Parrot_IO.................................NOK 51/57# Looks like you failed 1 test of 57.
+
+This one I don't get at all. This could be random.
+
+Other than those two failures the test-suite passed on i686-pc-gnu-linux
+
+Failed Test        Stat Wstat Total Fail  List of Failed
+-------------------------------------------------------------------------------
+t/op/sprintf.t        0     6   308  234  192-308
+t/perl/Parrot_IO.t    1   256    57    1  51
+9 tests and 512 subtests skipped.
+Failed 2/304 test scripts. 118/7217 subtests failed.
+Files=304, Tests=7217, 575 wallclock secs (288.14 cusr + 46.41 csys =
+334.55 CPU)
+Failed 2/304 test programs. 118/7217 subtests failed.
+
+Cheers,
+Mike Mattie
+
+
+------------=_1179142436-12281-79
+Content-Type: text/x-csrc; charset="ascii"; name="path.c"
+Content-Disposition: inline; filename="path.c"
+Content-Transfer-Encoding: 7bit
+RT-Attachment: 42944/259516/113267
+
+/*
+Copyright (C) 2004-2007, The Perl Foundation.
+
+=head1 NAME
+
+src/path.c
+
+=head1 DESCRIPTION
+
+This file contains a C functions for parrot's platform independent
+path handling.
+
+=head2 Functions
+
+=over 6
+
+=cut
+
+*/
+
+#include "parrot/parrot.h"
+#include "parrot/path.h"
+#include "path.str"
+
+static const char parrot_path_separator = '/';
+
+#ifdef WIN32
+static const char platform_path_separator = '\\';
+
+
+/*
+ * Converts a path with forward slashes to one with backward slashes.
+ */
+static void
+cnv_to_platform_filesep (STRING *path) {
+    char* cnv;
+
+    assert(path->encoding == Parrot_fixed_8_encoding_ptr ||
+        path->encoding == Parrot_utf8_encoding_ptr);
+
+    cnv = Parrot_string_cstring(path);
+
+    while ((cnv = strchr(cnv, parrot_path_separator)) != NULL)
+        *cnv = platform_path_seperator;
+}
+
+#else
+
+static const char platform_path_separator = '/';
+
+#endif
+
+
+/*
+
+=item C<STRING *
+parrot_path_is_abs(Interp*, STRING *path)>
+
+return true if the given file is an absolute path, false if relative.
+
+=cut
+
+*/
+
+int
+parrot_path_is_abs(Interp* interp, STRING *path)
+{
+    const char *file_name;
+
+    if ( !string_length(interp, path) )
+        return 0;
+
+    assert(path->encoding == Parrot_fixed_8_encoding_ptr
+           || path->encoding == Parrot_utf8_encoding_ptr);
+
+    file_name = Parrot_string_cstring(interp,path);
+
+    return (file_name[0] == parrot_path_separator
+
+#ifdef WIN32
+            || file_name[0] == platform_path_seperator
+            || (isalpha(file_name[0])
+                && string_length(file) > 2
+                && (strncmp(file_name+1, ":\\", 2) == 0
+                    || strncmp(file_name+1, ":/",  2) == 0))
+#endif
+      ) ? 1 : 0;
+}
+
+/*
+
+=item C<STRING *
+parrot_path_trailing_separator(Interp*, STRING *path)>
+
+Ensure that the given path has a trailing path separator.
+A new string may be returned.
+
+=cut
+
+*/
+
+STRING*
+parrot_path_trailing_separator(Interp *interp, STRING *path)
+{
+    STRING *path_separator_string = string_chr(interp, platform_path_separator);
+
+    /* make sure the path has a trailing slash before appending the file */
+    if (string_index(interp, path , string_length(interp,path) - 1)
+         != string_index(interp, path_separator_string, 0))
+        path = string_append(interp, path , path_separator_string);
+
+    return path;
+}
+
+/*
+
+=item C<STRING *
+parrot_path_platform_localize(Interp*, STRING *path)>
+
+Localize a path to the platform by converting the parrot path
+seperator to the platform seperator if necessary.  Also a "hidden
+zero" is appended to the path making it suitable for use by C API's
+such as platform file/IO.
+
+=cut
+
+*/
+
+STRING*
+parrot_path_platform_localize(Interp *interp, STRING *path)
+{
+
+#ifdef WIN32
+      cnv_to_platform_filesep(path);
+#endif
+
+    /* TODO create a string API that just does that
+     *      a lot of ICU lib functions also need 0-terminated strings
+     *      the goal is just to have for sure an invisible 0 at end
+     */
+
+    STRING *nul = string_chr(interp, '\0');
+
+    path = string_append(interp, path, nul);
+    path->bufused--;
+    path->strlen--;
+
+
+    return path;
+}
+
+/*
+
+=item C<STRING *
+parrot_path_append(Interp*, STRING *orig, STRING *append)>
+
+Concatenate two paths with the platform specific path seperator.  The
+result may be a new string.
+
+=cut
+
+*/
+
+STRING*
+parrot_path_append(Interp *interp, STRING *orig, STRING *append)
+{
+    orig = parrot_path_trailing_separator(interp, orig);
+    return string_append(interp, orig, append);
+}
+
+/*
+
+=item C<STRING *
+parrot_path_concat(Interp*, STRING *orig, STRING *append)>
+
+Concatenate two paths with the platform specific path seperator.
+The result is garunteed to be a new string.
+
+=cut
+
+*/
+
+STRING*
+parrot_path_concat(Interp *interp, STRING *orig, STRING *append)
+{
+    STRING* join;
+
+    join = string_copy(interp, orig);
+    join = parrot_path_trailing_separator(interp, join);
+    return string_append(interp, join , append);
+}
+
+/*
+
+=item C<STRING *
+parrot_split_path_ext(Interp*, STRING *in, STRING **wo_ext, STRING **ext)>
+
+Split the pathstring C<in> into <path><filestem><ext>. Return the
+C<filestem> of the pathstring. Set C<wo_ext> to the part without
+extension and C<ext> to the extension or NULL.
+
+=cut
+
+*/
+
+STRING *
+parrot_split_path_ext(Interp* interp, STRING *in,
+                      STRING **wo_ext, STRING **ext)
+{
+    STRING *slash1, *slash2, *dot, *stem;
+    INTVAL pos_sl, pos_dot, len;
+
+    slash1 = CONST_STRING(interp, "/");
+    slash2 = CONST_STRING(interp, "\\");
+
+    dot    = CONST_STRING(interp, ".");
+    len = string_length(interp, in);
+
+    pos_sl = CHARSET_RINDEX(interp, in, slash1, len);
+    if (pos_sl == -1)
+        pos_sl = CHARSET_RINDEX(interp, in, slash2, len);
+    pos_dot = CHARSET_RINDEX(interp, in, dot, len);
+
+    /* XXX directory parrot-0.4.1 or such */
+    if (pos_dot != -1 && isdigit(((char*)in->strstart)[pos_dot+1]))
+        pos_dot = -1;
+
+    ++pos_dot;
+    ++pos_sl;
+    if (pos_sl && pos_dot) {
+        stem = string_substr(interp, in, pos_sl, pos_dot - pos_sl - 1,
+                NULL, 0);
+        *wo_ext = string_substr(interp, in, 0, pos_dot - 1, NULL, 0);
+        *ext = string_substr(interp, in, pos_dot, len - pos_dot, NULL, 0);
+    }
+    else if (pos_dot) {
+        stem = string_substr(interp, in, 0, pos_dot - 1, NULL, 0);
+        *wo_ext = stem;
+        *ext = string_substr(interp, in, pos_dot, len - pos_dot, NULL, 0);
+    }
+    else if (pos_sl) {
+        stem = string_substr(interp, in, pos_sl, len - pos_sl, NULL, 0);
+        *wo_ext = string_copy(interp, in);
+        *ext = 0;
+    }
+    else {
+        stem = string_copy(interp, in);
+        *wo_ext = stem;
+        *ext = NULL;
+    }
+    return stem;
+}
+
+/*
+
+=back
+
+=head1 SEE ALSO
+
+F<include/parrot/path.h>
+
+=cut
+
+*/
+
+
+/*
+ * Local variables:
+ *   c-file-style: "parrot"
+ * End:
+ * vim: expandtab shiftwidth=4:
+ */
+
+------------=_1179142436-12281-79
+Content-Type: text/x-chdr; charset="ascii"; name="path.h"
+Content-Disposition: inline; filename="path.h"
+Content-Transfer-Encoding: 7bit
+RT-Attachment: 42944/259516/113268
+
+/* path.h
+ *  Copyright (C) 2007, The Perl Foundation.
+ *
+ *  Overview:
+ *      Contains functions for handling paths in a platform
+ *      independent manner, similar to Path::Spec from perl5
+ *
+ *  Data Structure and Algorithms:
+ *  History:
+ *  Notes:
+ *  References:
+ */
+
+#ifndef PARROT_PATH_H_GUARD
+#define PARROT_PATH_H_GUARD
+
+int
+parrot_path_is_abs(Interp* interp, STRING *path);
+
+STRING*
+parrot_path_trailing_separator(Interp *interp, STRING *path);
+
+STRING*
+parrot_path_platform_localize(Interp *interp, STRING *path);
+
+STRING*
+parrot_path_append(Interp *interp, STRING *orig, STRING *append);
+
+STRING*
+parrot_path_concat(Interp *interp, STRING *orig, STRING *append);
+
+STRING * parrot_split_path_ext(Interp* , STRING *in,
+                               STRING **wo_ext, STRING **ext);
+#endif /* PARROT_PATH_H_GUARD */
+
+/*
+ * Local variables:
+ *   c-file-style: "parrot"
+ * End:
+ * vim: expandtab shiftwidth=4:
+ */
+
+------------=_1179142436-12281-79
+Content-Type: text/x-patch; charset="ascii"; name="create-path-api.diff"
+Content-Disposition: inline; filename="create-path-api.diff"
+Content-Transfer-Encoding: 7bit
+RT-Attachment: 42944/259516/113269
+
+--- HEAD/src/dynext.c	2007-05-12 04:26:05.000000000 -0700
++++ path-api/src/dynext.c	2007-05-14 04:02:41.000000000 -0700
+@@ -18,6 +18,7 @@
+ 
+ #include "parrot/parrot.h"
+ #include "parrot/dynext.h"
++#include "parrot/path.h"
+ 
+ /* _PARROTLIB is now the default */
+ /*#define _PARROTLIB not working: "make testr" */
+--- HEAD/src/library.c	2007-05-12 15:41:34.000000000 -0700
++++ path-api/src/library.c	2007-05-14 03:58:26.000000000 -0700
+@@ -19,10 +19,12 @@
+ */
+ 
+ #include "parrot/parrot.h"
+-#include "parrot/dynext.h"
+-#include <assert.h>
++#include "parrot/path.h"
++
+ #include "library.str"
+ 
++#include <assert.h>
++
+ /*
+ 
+ =item C<void parrot_init_library_paths(Interp *)>
+@@ -136,126 +138,6 @@
+     return VTABLE_get_pmc_keyed_int(interp, lib_paths, which);
+ }
+ 
+-static int
+-is_abs_path(Interp* interp, STRING *file)
+-{
+-    char *file_name;
+-
+-    file_name = file->strstart;
+-    if (file->strlen <= 1)
+-        return 0;
+-    assert(file->encoding == Parrot_fixed_8_encoding_ptr ||
+-            file->encoding == Parrot_utf8_encoding_ptr);
+-#ifdef WIN32
+-    if (file_name[0] == '\\' || file_name[0] == '/' ||
+-            (isalpha(file_name[0]) && file->strlen > 2 &&
+-             (strncmp(file_name+1, ":\\", 2) == 0 ||
+-              strncmp(file_name+1, ":/",  2) == 0)))
+-#else
+-        if (file_name[0] == '/')     /* XXX  ../foo, ./bar */
+-#endif
+-        {
+-            return 1;
+-        }
+-    return 0;
+-}
+-
+-static const char path_separator = '/';
+-
+-#ifdef WIN32
+-
+-static const char win32_path_separator = '\\';
+-
+-/*
+-   Converts a path with forward slashes to one with backward slashes.
+-*/
+-static void
+-cnv_to_win32_filesep (STRING *path) {
+-    char* cnv;
+-
+-    assert(path->encoding == Parrot_fixed_8_encoding_ptr ||
+-        path->encoding == Parrot_utf8_encoding_ptr);
+-
+-    cnv = path->strstart;
+-    while ((cnv = strchr(cnv, path_separator)) != NULL)
+-        *cnv = win32_path_separator;
+-}
+-
+-#endif
+-
+-static STRING*
+-path_finalize(Interp *interp, STRING *path)
+-{
+-
+-    /* TODO create a string API that just does that
+-     *      a lot of ICU lib functions also need 0-terminated strings
+-     *      the goal is just to have for sure an invisible 0 at end
+-     */
+-
+-    STRING *nul = string_chr(interp, '\0');
+-
+-    path = string_append(interp, path, nul);
+-    path->bufused--;
+-    path->strlen--;
+-
+-#ifdef WIN32
+-    cnv_to_win32_filesep(path);
+-#endif
+-
+-    return path;
+-}
+-
+-/*
+-  unary path argument. the path string will have a
+-  trailing path-separator appended if it is not
+-  there already.
+- */
+-
+-static STRING*
+-path_guarantee_trailing_separator(Interp *interp, STRING *path)
+-{
+-    STRING *path_separator_string = string_chr(interp, path_separator);
+-
+-    /* make sure the path has a trailing slash before appending the file */
+-    if (string_index(interp, path , path->strlen - 1)
+-         != string_index(interp, path_separator_string, 0))
+-        path = string_append(interp, path , path_separator_string);
+-
+-    return path;
+-}
+-
+-/*
+-  binary path arguments, the left arg is modified.
+-  a trailing separator is guaranteed for the left
+-  argument and the right argument is appended
+- */
+-
+-static STRING*
+-path_append(Interp *interp, STRING *l_path, STRING *r_path)
+-{
+-    l_path = path_guarantee_trailing_separator(interp, l_path);
+-    l_path = string_append(interp, l_path , r_path);
+-
+-    return l_path;
+-}
+-
+-/*
+-  binary path arguments. A new string is created
+-  that is the concatenation of the two path components
+-  with a path-separator.
+- */
+-
+-static STRING*
+-path_concat(Interp *interp, STRING *l_path, STRING *r_path)
+-{
+-    STRING* join;
+-
+-    join = string_copy(interp, l_path);
+-    join = path_guarantee_trailing_separator(interp, join);
+-    join = string_append(interp, join , r_path);
+-
+-    return join;
+-}
+ 
+ #define LOAD_EXT_CODE_LAST 3
+ 
+@@ -280,7 +162,7 @@
+            string_to_cstring(interp, final ));
+ #endif
+ 
+-    final = path_finalize(interp, final );
++    final = parrot_path_platform_localize(interp, final );
+ 
+     if (Parrot_stat_info_intval(interp, final , STAT_EXISTS)) {
+         return final;
+@@ -368,7 +250,7 @@
+ #endif
+ 
+     /* if this is an absolute path return it as is */
+-    if (is_abs_path(interp, file))
++    if (parrot_path_is_abs(interp, file))
+         return file;
+ 
+     if (type & PARROT_RUNTIME_FT_DYNEXT)
+@@ -383,13 +265,13 @@
+     for (i = 0; i < n; ++i) {
+         path = VTABLE_get_string_keyed_int(interp, paths, i);
+         if (string_length(interp, prefix) &&
+-           !is_abs_path(interp,path)) {
+-            full_name = path_concat(interp, prefix , path);
++           !parrot_path_is_abs(interp,path)) {
++            full_name = parrot_path_concat(interp, prefix , path);
+         }
+         else
+             full_name = string_copy(interp, path);
+ 
+-        full_name = path_append(interp, full_name , file);
++        full_name = parrot_path_append(interp, full_name , file);
+ 
+         full_name = ( type & PARROT_RUNTIME_FT_DYNEXT )
+             ? try_load_path(interp, full_name)
+@@ -484,63 +366,6 @@
+ 
+ /*
+ 
+-=item C<STRING *
+-parrot_split_path_ext(Interp*, STRING *in, STRING **wo_ext, STRING **ext)>
+-
+-Split the pathstring C<in> into <path><filestem><ext>. Return the
+-C<filestem> of the pathstring. Set C<wo_ext> to the part without
+-extension and C<ext> to the extension or NULL.
+-
+-=cut
+-
+-*/
+-
+-STRING *
+-parrot_split_path_ext(Interp* interp, STRING *in,
+-        STRING **wo_ext, STRING **ext)
+-{
+-    STRING *slash1, *slash2, *dot, *stem;
+-    INTVAL pos_sl, pos_dot, len;
+-    slash1 = CONST_STRING(interp, "/");
+-    slash2 = CONST_STRING(interp, "\\");
+-    dot    = CONST_STRING(interp, ".");
+-    len = string_length(interp, in);
+-    pos_sl = CHARSET_RINDEX(interp, in, slash1, len);
+-    if (pos_sl == -1)
+-        pos_sl = CHARSET_RINDEX(interp, in, slash2, len);
+-    pos_dot = CHARSET_RINDEX(interp, in, dot, len);
+-
+-    /* XXX directory parrot-0.4.1 or such */
+-    if (pos_dot != -1 && isdigit(((char*)in->strstart)[pos_dot+1]))
+-        pos_dot = -1;
+-
+-    ++pos_dot;
+-    ++pos_sl;
+-    if (pos_sl && pos_dot) {
+-        stem = string_substr(interp, in, pos_sl, pos_dot - pos_sl - 1,
+-                NULL, 0);
+-        *wo_ext = string_substr(interp, in, 0, pos_dot - 1, NULL, 0);
+-        *ext = string_substr(interp, in, pos_dot, len - pos_dot, NULL, 0);
+-    }
+-    else if (pos_dot) {
+-        stem = string_substr(interp, in, 0, pos_dot - 1, NULL, 0);
+-        *wo_ext = stem;
+-        *ext = string_substr(interp, in, pos_dot, len - pos_dot, NULL, 0);
+-    }
+-    else if (pos_sl) {
+-        stem = string_substr(interp, in, pos_sl, len - pos_sl, NULL, 0);
+-        *wo_ext = string_copy(interp, in);
+-        *ext = 0;
+-    }
+-    else {
+-        stem = string_copy(interp, in);
+-        *wo_ext = stem;
+-        *ext = NULL;
+-    }
+-    return stem;
+-}
+-/*
+-
+ =back
+ 
+ =head1 SEE ALSO
+--- HEAD/include/parrot/library.h	2007-05-12 04:26:20.000000000 -0700
++++ path-api/include/parrot/library.h	2007-05-14 03:21:46.000000000 -0700
+@@ -40,8 +40,6 @@
+ 
+ PARROT_API char* Parrot_get_runtime_prefix(Interp *, STRING **prefix);
+ void parrot_init_library_paths(Interp *);
+-STRING * parrot_split_path_ext(Interp* , STRING *in,
+-        STRING **wo_ext, STRING **ext);
+ 
+ #endif /* PARROT_LIBRARY_H_GUARD */
+ 
+--- HEAD/config/gen/makefiles/root.in	2007-05-12 15:41:35.000000000 -0700
++++ path-api/config/gen/makefiles/root.in	2007-05-14 03:50:54.000000000 -0700
+@@ -483,6 +483,7 @@
+     $(PF_DIR)/pf_items$(O) \
+     $(SRC_DIR)/stm/backend$(O) \
+     $(SRC_DIR)/stm/waitlist$(O) \
++    $(SRC_DIR)/path$(O) \
+     @TEMP_gc_o@
+ 
+ O_FILES = \
+@@ -609,6 +610,7 @@
+     $(SRC_DIR)/global.str \
+     $(SRC_DIR)/global_setup.str \
+     $(SRC_DIR)/library.str \
++    $(SRC_DIR)/path.str \
+     $(SRC_DIR)/mmd.str \
+     $(SRC_DIR)/pmc.str \
+     $(SRC_DIR)/objects.str \
+
+------------=_1179142436-12281-79
+Content-Type: application/pgp-signature; name="signature.asc"
+Content-Disposition: inline; filename="signature.asc"
+Content-Transfer-Encoding: base64
+RT-Attachment: 42944/259516/113270
+
+LS0tLS1CRUdJTiBQR1AgU0lHTkFUVVJFLS0tLS0KVmVyc2lvbjogR251UEcg
+djEuNC42IChHTlUvTGludXgpCgppRDhEQlFGR1NFamVkZlJjaHJrQklua1JB
+cVRLQUo5Y0FHWmpVUUNnNmVQVU03MzM3ZmdRU0xKdnRRQ2RFaU1rCklTRXA3
+UTV0N2lRMnhQYWxjdzQrcCtjPQo9RTRqaAotLS0tLUVORCBQR1AgU0lHTkFU
+VVJFLS0tLS0K
+
+------------=_1179142436-12281-79--
+

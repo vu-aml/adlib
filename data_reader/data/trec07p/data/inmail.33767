@@ -1,0 +1,208 @@
+From perl6-all-return-81252-ktwarwic=speedy.uwaterloo.ca@perl.org  Fri May 11 06:49:58 2007
+Return-Path: <perl6-all-return-81252-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4BAnuqD022166
+	for <ktwarwic@flax9.uwaterloo.ca>; Fri, 11 May 2007 06:49:57 -0400
+Received: (qmail 14948 invoked by uid 514); 11 May 2007 10:49:53 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 14943 invoked from network); 11 May 2007 10:49:53 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: moderator for perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: "Alek Storm" (via RT) <parrotbug-followup@parrotcode.org>
+X-RT-NewTicket: yes
+To: bugs-bitbucket@netlabs.develooper.com
+Resent-To: perl6-internals@perl.org
+Mail-Followup-To: perl6-internals@perl.org
+Reply-To: perl6-internals@perl.org
+Date: Thu, 10 May 2007 14:41:48 -0700
+Subject: [perl #42919] [BUG] and [PATCH] overriding 'invoke' requires current object to be explicitly passed 
+In-Reply-To: <189adbd0705101439q956a1beve7039f1e04c9d115@mail.gmail.com>
+References: <RT-Ticket-42919@perl.org> <189adbd0705101439q956a1beve7039f1e04c9d115@mail.gmail.com>
+Message-ID: <rt-3.6.HEAD-12281-1178833308-463.42919-72-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #42919
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: alek.storm@gmail.com
+MIME-Version: 1.0
+X-RT-Original-Encoding: utf-8
+Content-type: multipart/mixed; boundary="----------=_1178833308-12281-52"
+Resent-Message-Id: <20070510214149.37A112AFD8@x3.develooper.com>
+Resent-Date: Thu, 10 May 2007 14:41:49 -0700 (PDT)
+Resent-From: rt-alek.storm=gmail.com@netlabs.develooper.com
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,HTML_MESSAGE,SPF_PASS
+
+------------=_1178833308-12281-52
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+# New Ticket Created by  "Alek Storm" 
+# Please include the string:  [perl #42919]
+# in the subject line of all future correspondence about this issue. 
+# <URL: http://rt.perl.org/rt3/Ticket/Display.html?id=42919 >
+
+
+Because PIR can't tell the difference between invoking an object PMC and
+invoking a sub PMC, it doesn't generate a correct set_args when an object is
+invoked.  Since the 'invoke' override is a method, it expects the current
+object to be the first parameter.  There are currently two workarounds: pass
+the current object explicitly as the first parameter, or don't declare
+'invoke' as a :method.  The first is inconvenient and unintuitive, and the
+second means 'invoke' doesn't get access to its own object.
+
+Example code for bug:
+.sub _ :main
+  $P0 = newclass "Foo"
+  $P1 = new "Foo"
+  $P1("bar")
+.end
+
+.namespace ["Foo"]
+.sub 'invoke' :method :vtable
+  .param string bar
+  say bar
+  self.'baz'()
+.end
+
+.sub 'baz' :method
+  say "baz"
+.end
+
+Output:
+too few arguments passed (1) - 2 params expected
+current instr.: 'parrot;Foo;invoke' pc 16 (/home/alek/test2.pir:8)
+called from Sub '_' pc 11 (/home/alek/test2.pir:4)
+
+I've attached a patch that fixes this by grabbing the args signature inside
+delegate.invoke() and unshifting an arg of type PARROT_ARG_PMC |
+PARROT_ARG_OBJECT.  It also modifies src/inter_call.c to handle this by
+setting the arg equal to interp->current_object, and enums.h to add the new
+argument flag.  The tests in t/pmc/parrotobject.t have been changed to
+include :method on the 'invoke' overrides, and to remove the test for
+#41732, which is no longer applicable.
+
+-- 
+Alek Storm
+
+------------=_1178833308-12281-52
+Content-Type: application/octet-stream; name="invoke.patch"
+Content-Disposition: inline; filename="invoke.patch"
+Content-Transfer-Encoding: base64
+RT-Attachment: 42919/259208/113077
+
+SW5kZXg6IHNyYy9pbnRlcl9jYWxsLmMKPT09PT09PT09PT09PT09PT09PT09
+PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09
+PQotLS0gc3JjL2ludGVyX2NhbGwuYwkocmV2aXNpb24gMTg0OTQpCisrKyBz
+cmMvaW50ZXJfY2FsbC5jCSh3b3JraW5nIGNvcHkpCkBAIC0zMTIsNyArMzEy
+LDEwIEBACiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAg
+IDogQ1RYX1JFR19OVU0oc3QtPnNyYy5jdHgsIGlkeCk7CiAgICAgICAgICAg
+ICBicmVhazsKICAgICAgICAgY2FzZSBQQVJST1RfQVJHX1BNQzoKLSAgICAg
+ICAgICAgIFVWYWxfcG1jKHN0LT52YWwpID0gY29uc3RhbnQgPyBzdC0+c3Jj
+LmN0eC0+Y29uc3RhbnRzW2lkeF0tPnUua2V5CisgICAgICAgICAgICBpZiAo
+c3QtPnNyYy5zaWcgJiBQQVJST1RfQVJHX09CSkVDVCkKKyAgICAgICAgICAg
+ICAgICBVVmFsX3BtYyhzdC0+dmFsKSA9IENPTlRFWFQoaW50ZXJwLT5jdHgp
+LT5jdXJyZW50X29iamVjdDsKKyAgICAgICAgICAgIGVsc2UKKyAgICAgICAg
+ICAgICAgICBVVmFsX3BtYyhzdC0+dmFsKSA9IGNvbnN0YW50ID8gc3QtPnNy
+Yy5jdHgtPmNvbnN0YW50c1tpZHhdLT51LmtleQogICAgICAgICAgICAgICAg
+ICAgICAgICAgICAgICAgICAgICAgICA6IENUWF9SRUdfUE1DKHN0LT5zcmMu
+Y3R4LCBpZHgpOwogCiAgICAgICAgICAgICBpZiAoc3QtPnNyYy5zaWcgJiBQ
+QVJST1RfQVJHX0ZMQVRURU4pIHsKSW5kZXg6IHNyYy9wbWMvZGVsZWdhdGUu
+cG1jCj09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09
+PT09PT09PT09PT09PT09PT09PT09PT09PT0KLS0tIHNyYy9wbWMvZGVsZWdh
+dGUucG1jCShyZXZpc2lvbiAxODQ5NCkKKysrIHNyYy9wbWMvZGVsZWdhdGUu
+cG1jCSh3b3JraW5nIGNvcHkpCkBAIC0xMzUsNiArMTM1LDI1IEBACiAgICAg
+ICAgIFBNQyAqc3ViID0gUGFycm90X2ZpbmRfdnRhYmxlX21ldGgoSU5URVJQ
+LCBTRUxGLCBtZXRoKTsKICAgICAgICAgaWYgKFBNQ19JU19OVUxMKHN1Yikp
+CiAgICAgICAgICAgICB2dGFibGVfbWV0aF9ub3RfZm91bmQoSU5URVJQLCBT
+RUxGLCAiaW52b2tlIik7CisKKyAgICAgICAgLyogU2luY2UgaW52b2tlKCkg
+aXMgYSBub3JtYWwgbWV0aG9kLCAnc2VsZicgbXVzdCBiZSBwYXNzZWQgYXMg
+dGhlCisgICAgICAgICAqIGZpcnN0IGFyZ3VtZW50LCBidXQgYmVjYXVzZSB0
+aGlzIGxvb2tzIGxpa2UgYSBub24tbWV0aG9kIGNhbGwgaW4KKyAgICAgICAg
+ICogUElSLCB0aGUgYXJncyBzaWduYXR1cmUgZG9lc24ndCBoYXZlIGl0LCBz
+byB3ZSBoYXZlIHRvIGdldCB0aGUKKyAgICAgICAgICogYXJncyBzaWduYXR1
+cmUgYW5kIHVuc2hpZnQgJ3NlbGYnIG9udG8gaXQuICovCisgICAgICAgIFBN
+QyAqb2xkX3NpZyA9IENPTlRFWFQoaW50ZXJwLT5jdHgpLT5jb25zdGFudHNb
+KihpbnRlcnAtPmN1cnJlbnRfYXJncysxKV0tPnUua2V5OworICAgICAgICBJ
+TlRWQUwgc2lnX2xlbiA9IFZUQUJMRV9lbGVtZW50cyhpbnRlcnAsIG9sZF9z
+aWcpICsgMTsKKyAgICAgICAgaW50IGk7CisKKyAgICAgICAgUE1DICptZXRo
+X3NpZyA9IHBtY19uZXcoaW50ZXJwLCBlbnVtX2NsYXNzX0ZpeGVkSW50ZWdl
+ckFycmF5KTsKKyAgICAgICAgVlRBQkxFX3NldF9pbnRlZ2VyX25hdGl2ZShp
+bnRlcnAsIG1ldGhfc2lnLCBzaWdfbGVuKTsKKworICAgICAgICBWVEFCTEVf
+c2V0X2ludGVnZXJfa2V5ZWRfaW50KGludGVycCwgbWV0aF9zaWcsIDAsIFBB
+UlJPVF9BUkdfUE1DIHwgUEFSUk9UX0FSR19PQkpFQ1QpOworICAgICAgICBm
+b3IgKCBpID0gMTsgaSA8IHNpZ19sZW47IGkrKyApCisgICAgICAgICAgICBW
+VEFCTEVfc2V0X2ludGVnZXJfa2V5ZWRfaW50KGludGVycCwgbWV0aF9zaWcs
+IGksIFZUQUJMRV9nZXRfaW50ZWdlcl9rZXllZF9pbnQoaW50ZXJwLCBvbGRf
+c2lnLCBpLTEpKTsKKworICAgICAgICBpbnRlcnAtPmFyZ3Nfc2lnbmF0dXJl
+ID0gbWV0aF9zaWc7CisgICAgICAgIGludGVycC0+Y3VycmVudF9hcmdzKys7
+CisKICAgICAgICAgSU5URVJQLT5jdXJyZW50X29iamVjdCA9IFNFTEY7CiAg
+ICAgICAgIHJldHVybiBWVEFCTEVfaW52b2tlKGludGVycCwgc3ViLCBuZXh0
+KTsKICAgICB9CkluZGV4OiBpbmNsdWRlL3BhcnJvdC9lbnVtcy5oCj09PT09
+PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09
+PT09PT09PT09PT09PT09PT0KLS0tIGluY2x1ZGUvcGFycm90L2VudW1zLmgJ
+KHJldmlzaW9uIDE4NDk0KQorKysgaW5jbHVkZS9wYXJyb3QvZW51bXMuaAko
+d29ya2luZyBjb3B5KQpAQCAtNjEsNyArNjEsOCBAQAogICAgIC8qIHVudXNl
+ZCAtIDB4MDQwICovCiAgICAgUEFSUk9UX0FSR19PUFRJT05BTCAgICAgICAg
+ID0gMHgwODAsIC8qIDEyOCAqLwogICAgIFBBUlJPVF9BUkdfT1BUX0ZMQUcg
+ICAgICAgICA9IDB4MTAwLCAvKiAyNTYgcHJldiBvcHRpb25hbCB3YXMgc2V0
+ICovCi0gICAgUEFSUk9UX0FSR19OQU1FICAgICAgICAgICAgID0gMHgyMDAg
+IC8qIDUxMiB0aGlzIFN0cmluZyBpcyBhbiBhcmcgbmFtZSAqLworICAgIFBB
+UlJPVF9BUkdfTkFNRSAgICAgICAgICAgICA9IDB4MjAwLCAvKiA1MTIgdGhp
+cyBTdHJpbmcgaXMgYW4gYXJnIG5hbWUgKi8KKyAgICBQQVJST1RfQVJHX09C
+SkVDVCAgICAgICAgICAgPSAweDQwMCAgLyogMTAyNCAqLwogICAgIC8qIG1v
+cmUgdG8gY29tZSBzb29uICovCiAKIH0gQ2FsbF9iaXRzX2VudW1fdDsK
+
+------------=_1178833308-12281-52
+Content-Type: application/octet-stream; name="invoke_tests.patch"
+Content-Disposition: inline; filename="invoke_tests.patch"
+Content-Transfer-Encoding: base64
+RT-Attachment: 42919/259208/113078
+
+SW5kZXg6IHQvcG1jL3BhcnJvdG9iamVjdC50Cj09PT09PT09PT09PT09PT09
+PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09
+PT09PT0KLS0tIHQvcG1jL3BhcnJvdG9iamVjdC50CShyZXZpc2lvbiAxODQ5
+NCkKKysrIHQvcG1jL3BhcnJvdG9iamVjdC50CSh3b3JraW5nIGNvcHkpCkBA
+IC02LDcgKzYsNyBAQAogdXNlIHdhcm5pbmdzOwogdXNlIGxpYiBxdyggLiBs
+aWIgLi4vbGliIC4uLy4uL2xpYiApOwogdXNlIFRlc3Q6Ok1vcmU7Ci11c2Ug
+UGFycm90OjpUZXN0IHRlc3RzID0+IDExOwordXNlIFBhcnJvdDo6VGVzdCB0
+ZXN0cyA9PiAxMDsKIAogPWhlYWQxIE5BTUUKIApAQCAtMTk1LDcgKzE5NSw3
+IEBACiBwaXJfb3V0cHV0X2lzKCA8PCdDT0RFJywgPDwnT1VUJywgJ1JUIzQx
+NzMzIC0gRXhlY3V0aW9uIGVuZHMgYWZ0ZXIgcmV0dXJuaW5nIGZyb20gaW52
+b2tlJyApOwogLm5hbWVzcGFjZSBbJ0ZvbyddCiAKLS5zdWIgaW52b2tlIDp2
+dGFibGUKKy5zdWIgaW52b2tlIDp2dGFibGUgOm1ldGhvZAogc2F5ICJ5b3Ug
+aW52b2tlZCBtZSEiCiAucmV0dXJuKCkKIC5lbmQKQEAgLTIxNCw3ICsyMTQs
+NyBAQAogcGlyX291dHB1dF9pcyggPDwnQ09ERScsIDw8J09VVCcsICdwYXJh
+bXMvcmV0dXJucyBmcm9tIG92ZXJyaWRkZW4gaW52b2tlJyApOwogLm5hbWVz
+cGFjZSBbJ0ZvbyddCiAKLS5zdWIgaW52b2tlIDp2dGFibGUKKy5zdWIgaW52
+b2tlIDp2dGFibGUgOm1ldGhvZAogICAucGFyYW0gaW50IGEKICAgcHJpbnQg
+YQogICBwcmludCAiXG4iCkBAIC0yMzQsMjMgKzIzNCw2IEBACiAzCiBPVVQK
+IAotcGlyX291dHB1dF9saWtlKCA8PCdDT0RFJywgPDwnT1VUJywgJ1JUIzQx
+NzMyJyApOwotLm5hbWVzcGFjZSBbJ0ZvbyddCi0KLS5zdWIgaW52b2tlIDp2
+dGFibGUKLSAgLnBhcmFtIHBtYyBhCi0gIHNheSAnaGknCi0uZW5kCi0KLS5z
+dWIgbWFpbiA6bWFpbgotICAgICRQMCA9IG5ld2NsYXNzICJGb28iCi0gICAg
+JFAxID0gbmV3ICJGb28iCi0gICAgJFAxKCkKLS5lbmQKLUNPREUKLS8xIHBh
+cmFtcyBleHBlY3RlZC8KLU9VVAotCiAjICcKIAogIyBMb2NhbCBWYXJpYWJs
+ZXM6Cg==
+
+------------=_1178833308-12281-52--
+

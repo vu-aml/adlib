@@ -1,0 +1,71 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 29 20:22:16 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4U0MFhB005647
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 20:22:15 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 40429162AD2
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 30 May 2007 00:22:10 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 8B0CE162AD2; Wed, 30 May 2007 00:21:31 +0000 (GMT)
+Date: Wed, 30 May 2007 10:21:17 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070530002131.8B0CE162AD2@lists.samba.org>
+Subject: Rev 393: auto-restart NFS if its running when we release an IP in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 393
+revision-id: tridge@samba.org-20070530002116-kz22u8npsxt6hhom
+parent: tridge@samba.org-20070529125328-29gu0158ljg4rcgn
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Wed 2007-05-30 10:21:16 +1000
+message:
+  auto-restart NFS if its running when we release an IP
+modified:
+  tools/events                   events-20070529030121-04fjh63cxfh8v1pj-1
+=== modified file 'tools/events'
+--- a/tools/events	2007-05-29 09:34:04 +0000
++++ b/tools/events	2007-05-30 00:21:16 +0000
+@@ -36,11 +36,18 @@
+ 	}
+ 	# if we have a local arp entry for this IP then remove it
+ 	/sbin/arp -d $ip 2> /dev/null
++	echo $ip >> /etc/ctdb/released_ips
+ 	exit 0
+ 	;;
+ 
+      recovered)
+         # restart any services as necessary, like NFS
++	# 
++	[ -f /etc/ctdb/released_ips ] && {
++		( /sbin/service nfs status > /dev/null 2>&1 && 
++                      /sbin/service nfs restart > /dev/null 2>&1 ) &
++	} > /dev/null 2>&1
++	/bin/rm -f /etc/ctdb/released_ips
+ 	exit 0
+ 	;;
+ 
+

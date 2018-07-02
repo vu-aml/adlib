@@ -1,0 +1,127 @@
+From r-help-bounces@stat.math.ethz.ch  Wed Jul  4 19:05:55 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l64N5rL9016646
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 4 Jul 2007 19:05:55 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l64N5DGN012150;
+	Thu, 5 Jul 2007 01:05:29 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.2 required=5.0 tests=AWL, BAYES_50,
+	DKIM_POLICY_SIGNSOME autolearn=no version=3.2.0
+Received: from slim.kubism.ku.dk (slim.kubism.ku.dk [192.38.18.21])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l64N5124012115
+	for <r-help@stat.math.ethz.ch>; Thu, 5 Jul 2007 01:05:01 +0200
+Received: from titmouse2.kubism.ku.dk (0x50c633f5.boanxx12.adsl-dhcp.tele.dk
+	[80.198.51.245])
+	by slim.kubism.ku.dk (Postfix) with ESMTP id A341B48B6E;
+	Thu,  5 Jul 2007 01:04:50 +0200 (CEST)
+Message-ID: <468C2791.4040505@biostat.ku.dk>
+Date: Thu, 05 Jul 2007 01:04:49 +0200
+From: Peter Dalgaard <p.dalgaard@biostat.ku.dk>
+User-Agent: Thunderbird 2.0.0.4 (X11/20070615)
+MIME-Version: 1.0
+To: Michael Frumin <michael@frumin.net>
+References: <11435994.post@talk.nabble.com> <468BF958.9060102@biostat.ku.dk>
+	<468C13C3.7070701@frumin.net>
+In-Reply-To: <468C13C3.7070701@frumin.net>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] Lookups in R
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+Michael Frumin wrote:
+> i wish it were that simple.  unfortunately the logic i have to do on 
+> each transaction is substantially more complicated, and involves 
+> referencing the existing values of the user table through a number of 
+> conditions.
+>
+> any other thoughts on how to get better-than-linear performance time?  
+> is there a recommended binary searching/sorting (i.e. BTree) module that 
+> I could use to maintain my own index?
+>   
+The point remains: To do anything efficient in R, you need to get rid of 
+that for loop and use something vectorized. Notice that you can expand 
+values from the user table into the transaction table by indexing with 
+transactions$userid, or you can use a merge operation.
+
+> thanks,
+> mike
+>
+> Peter Dalgaard wrote:
+>   
+>> mfrumin wrote:
+>>     
+>>> Hey all; I'm a beginner++ user of R, trying to use it to do some 
+>>> processing
+>>> of data sets of over 1M rows, and running into a snafu.  imagine that my
+>>> input is a huge table of transactions, each linked to a specif user 
+>>> id.  as
+>>> I run through the transactions, I need to update a separate table for 
+>>> the
+>>> users, but I am finding that the traditional ways of doing a table 
+>>> lookup
+>>> are way too slow to support this kind of operation.
+>>>
+>>> i.e:
+>>>
+>>> for(i in 1:1000000) {
+>>>    userid = transactions$userid[i];
+>>>    amt = transactions$amounts[i];
+>>>    users[users$id == userid,'amt'] += amt;
+>>> }
+>>>
+>>> I assume this is a linear lookup through the users table (in which 
+>>> there are
+>>> 10's of thousands of rows), when really what I need is O(constant 
+>>> time), or
+>>> at worst O(log(# users)).
+>>>
+>>> is there any way to manage a list of ID's (be they numeric, string, 
+>>> etc) and
+>>> have them efficiently mapped to some other table index?
+>>>
+>>> I see the CRAN package for SQLite hashes, but that seems to be going 
+>>> a bit
+>>> too far.
+>>>   
+>>>       
+>> Sometimes you need a bit of lateral thinking. I suspect that you could 
+>> do it like this:
+>>
+>> tbl <- with(transactions, tapply(amount, userid, sum))
+>> users$amt <- users$amt + tbl[users$id]
+>>
+>> one catch is that there could be users with no transactions, in which 
+>> case you may need to replace userid by factor(userid, 
+>> levels=users$id). None of this is tested, of course.
+>>     
+>
+> ______________________________________________
+> R-help@stat.math.ethz.ch mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-help
+> PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+> and provide commented, minimal, self-contained, reproducible code.
+>
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

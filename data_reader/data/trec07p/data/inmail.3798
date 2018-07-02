@@ -1,0 +1,179 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Apr 12 08:00:15 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3CC0E0I029242
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 12 Apr 2007 08:00:14 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id CA7CB1639DF
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 12 Apr 2007 11:59:51 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 620)
+	id 637F9162C20; Thu, 12 Apr 2007 11:59:39 +0000 (GMT)
+To: samba-cvs@samba.org
+From: metze@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070412115939.637F9162C20@lists.samba.org>
+Date: Thu, 12 Apr 2007 11:59:39 +0000 (GMT)
+Subject: svn commit: samba r22195 - in
+	branches/SAMBA_4_0/source/torture/rpc: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 4130
+Lines: 136
+
+Author: metze
+Date: 2007-04-12 11:59:38 +0000 (Thu, 12 Apr 2007)
+New Revision: 22195
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22195
+
+Log:
+fix compiler warnings and convert the whole torture/rpc/unixinfo.c code
+to the new torture ui functions
+
+metze
+Modified:
+   branches/SAMBA_4_0/source/torture/rpc/unixinfo.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/torture/rpc/unixinfo.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/rpc/unixinfo.c	2007-04-12 11:42:09 UTC (rev 22194)
++++ branches/SAMBA_4_0/source/torture/rpc/unixinfo.c	2007-04-12 11:59:38 UTC (rev 22195)
+@@ -28,21 +28,18 @@
+ /**
+   test the SidToUid interface
+ */
+-static BOOL test_sidtouid(struct dcerpc_pipe *p, TALLOC_CTX *mem_ctx)
++static bool test_sidtouid(struct torture_context *tctx, struct dcerpc_pipe *p)
+ {
+ 	NTSTATUS status;
+ 	struct unixinfo_SidToUid r;
+ 	struct dom_sid *sid;
+ 	
+-	sid = dom_sid_parse_talloc(mem_ctx, "S-1-5-32-1234-5432");
++	sid = dom_sid_parse_talloc(tctx, "S-1-5-32-1234-5432");
+ 	r.in.sid = *sid;
+ 
+-	status = dcerpc_unixinfo_SidToUid(p, mem_ctx, &r);
++	status = dcerpc_unixinfo_SidToUid(p, tctx, &r);
+ 	if (NT_STATUS_EQUAL(NT_STATUS_NONE_MAPPED, status)) {
+-	} else if (!NT_STATUS_IS_OK(status)) {
+-		printf("SidToUid failed == %s\n", nt_errstr(status));
+-		return False;
+-	}
++	} else torture_assert_ntstatus_ok(tctx, status, "SidToUid failed");
+ 
+ 	return True;
+ }
+@@ -50,8 +47,7 @@
+ /*
+   test the UidToSid interface
+ */
+-static bool test_uidtosid(struct torture_context *tctx, 
+-						  struct dcerpc_pipe *p)
++static bool test_uidtosid(struct torture_context *tctx, struct dcerpc_pipe *p)
+ {
+ 	struct unixinfo_UidToSid r;
+ 	struct dom_sid sid;
+@@ -60,13 +56,13 @@
+ 	r.out.sid = &sid;
+ 
+ 	torture_assert_ntstatus_ok(tctx, dcerpc_unixinfo_UidToSid(p, tctx, &r), 
+-							   "UidToSid failed");
++				   "UidToSid failed");
+ 
+ 	return true;
+ }
+ 
+ static bool test_getpwuid(struct torture_context *tctx, 
+-						  struct dcerpc_pipe *p)
++			  struct dcerpc_pipe *p)
+ {
+ 	uint64_t uids[512];
+ 	uint32_t num_uids = ARRAY_SIZE(uids);
+@@ -93,40 +89,35 @@
+ /*
+   test the SidToGid interface
+ */
+-static BOOL test_sidtogid(struct dcerpc_pipe *p, TALLOC_CTX *mem_ctx)
++static bool test_sidtogid(struct torture_context *tctx, struct dcerpc_pipe *p)
+ {
+ 	NTSTATUS status;
+ 	struct unixinfo_SidToGid r;
+ 	struct dom_sid *sid;
+-	
+-	sid = dom_sid_parse_talloc(mem_ctx, "S-1-5-32-1234-5432");
++
++	sid = dom_sid_parse_talloc(tctx, "S-1-5-32-1234-5432");
+ 	r.in.sid = *sid;
+ 
+-	status = dcerpc_unixinfo_SidToGid(p, mem_ctx, &r);
++	status = dcerpc_unixinfo_SidToGid(p, tctx, &r);
+ 	if (NT_STATUS_EQUAL(NT_STATUS_NONE_MAPPED, status)) {
+-	} else if (!NT_STATUS_IS_OK(status)) {
+-		printf("SidToGid failed == %s\n", nt_errstr(status));
+-		return False;
+-	}
++	} else torture_assert_ntstatus_ok(tctx, status, "SidToGid failed");
+ 
+-	return True;
++	return true;
+ }
+ 
+ /*
+   test the GidToSid interface
+ */
+-static BOOL test_gidtosid(struct torture_context *tctx, struct dcerpc_pipe *p)
++static bool test_gidtosid(struct torture_context *tctx, struct dcerpc_pipe *p)
+ {
+-	NTSTATUS status;
+ 	struct unixinfo_GidToSid r;
+ 	struct dom_sid sid;
+ 
+ 	r.in.gid = 1000;
+ 	r.out.sid = &sid;
+ 
+-	status = dcerpc_unixinfo_GidToSid(p, tctx, &r);
+-	if (NT_STATUS_EQUAL(NT_STATUS_NO_SUCH_GROUP, status)) {
+-	} else torture_assert_ntstatus_ok(tctx, status, "GidToSid failed");
++	torture_assert_ntstatus_ok(tctx, dcerpc_unixinfo_GidToSid(p, tctx, &r), 
++				   "GidToSid failed");
+ 
+ 	return true;
+ }
+@@ -138,10 +129,12 @@
+ 
+ 	suite = torture_suite_create(talloc_autofree_context(), "UNIXINFO");
+ 	tcase = torture_suite_add_rpc_iface_tcase(suite, "unixinfo", 
+-											  &dcerpc_table_unixinfo);
++						  &dcerpc_table_unixinfo);
+ 
++	torture_rpc_tcase_add_test(tcase, "sidtouid", test_sidtouid);
+ 	torture_rpc_tcase_add_test(tcase, "uidtosid", test_uidtosid);
+ 	torture_rpc_tcase_add_test(tcase, "getpwuid", test_getpwuid);
++	torture_rpc_tcase_add_test(tcase, "sidtogid", test_sidtogid);
+ 	torture_rpc_tcase_add_test(tcase, "gidtosid", test_gidtosid);
+ 
+ 	return suite;
+

@@ -1,0 +1,122 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Jun 27 08:55:18 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5RCtHL9026766
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 27 Jun 2007 08:55:17 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 5B856163A9D
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 27 Jun 2007 12:55:14 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.6 required=3.8 tests=AWL,BAYES_00,RCVD_IN_DSBL 
+	autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from mail.univention.de (mail.univention.de [195.90.9.8])
+	by lists.samba.org (Postfix) with ESMTP id EC384162AD2
+	for <samba-technical@lists.samba.org>;
+	Wed, 27 Jun 2007 12:54:21 +0000 (GMT)
+Received: from localhost (localhost [127.0.0.1])
+	by anton.knut.univention.de (Postfix) with ESMTP id E2CBCB707C
+	for <samba-technical@lists.samba.org>;
+	Wed, 27 Jun 2007 14:54:20 +0200 (CEST)
+Received: from localhost (localhost [127.0.0.1])
+	by anton.knut.univention.de (Postfix) with ESMTP id AA924B7083
+	for <samba-technical@lists.samba.org>;
+	Wed, 27 Jun 2007 14:54:20 +0200 (CEST)
+Received: from mail.univention.de ([127.0.0.1])
+	by localhost (anton [127.0.0.1]) (amavisd-new, port 10024) with ESMTP
+	id 30029-04 for <samba-technical@lists.samba.org>;
+	Wed, 27 Jun 2007 14:54:19 +0200 (CEST)
+Received: from anton.knut.univention.de (anton.knut.univention.de
+	[192.168.100.2])
+	by anton.knut.univention.de (Postfix) with ESMTP id D57B6B707C
+	for <samba-technical@lists.samba.org>;
+	Wed, 27 Jun 2007 14:54:19 +0200 (CEST)
+From: Moritz =?iso-8859-1?q?M=FChlenhoff?= <muehlenhoff@univention.de>
+To: "samba-tech" <samba-technical@lists.samba.org>
+Date: Wed, 27 Jun 2007 14:54:17 +0200
+User-Agent: KMail/1.7 (proko2 branch after 2.1.4)
+MIME-Version: 1.0
+Content-Type: text/plain;
+  charset="us-ascii"
+Content-Disposition: inline
+Message-Id: <200706271454.17638.muehlenhoff@univention.de>
+X-Virus-Scanned: by amavisd-new-2.2.1 (20041222) (Debian) at univention.de
+Subject: SAMR_SET_USERINFO on Windows NT
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Content-Transfer-Encoding: 8bit
+X-MIME-Autoconverted: from quoted-printable to 8bit by flax9.uwaterloo.ca id l5RCtHL9026766
+
+Hi,
+we noticed a problem with domain joins on Windows NT4 when using the LDAP 
+backend. This is a different issue than the one solved with the patch 
+referenced in http://lists.samba.org/archive/samba/2006-December/127605.html.
+
+>From rpc_server/srv_samr_util.c , function copy_id23_to_sam_passwd():
+
+if (from->fields_present & ACCT_PRIMARY_GID) {
+	if  (from->group_rid == 0) {
+		DEBUG(10, ("INFO_23: Asked to set Group RID to 0 !? Skipping change!\n"));
+	} else if (from->group_rid != pdb_get_group_rid(to)) {
+		DEBUG(10,("INFO_23 
+GROUP_RID: %u -> %u\n",pdb_get_group_rid(to),from->group_rid));
+                        pdb_set_group_sid_from_rid(to, from->group_rid, 	
+PDB_CHANGED);
+	}
+}
+
+In the log we find:
+
+[2007/06/27 00:30:25, 5] passdb/pdb_interface.c:pdb_default_lookup_rids(1601)
+  lookup_rids: Windows Hosts:2
+[2007/06/27 00:30:25, 10] passdb/lookup_sid.c:lookup_sid(867)
+  Sid S-1-5-21-735105577-1126129934-2591602541-11011 -> HOSTS3\Windows 
+Hosts(2)
+[2007/06/27 00:30:25, 10] 
+rpc_server/srv_samr_util.c:copy_id23_to_sam_passwd(485)
+  INFO_23 GROUP_RID: 11011 -> 513
+
+11011 is the correct RID for "Windows Hosts", however 513 is "Domain Users", 
+which causes subsequent breakages such as object class violations in LDAP.
+
+Apparently the value is taken directly from the SAMR_SET_USERINFO packet, as 
+0x201 results in 513.
+
+[2007/06/27 00:30:25, 5] rpc_parse/parse_prs.c:prs_uint32(704)
+              00bc group_rid     : 00000201
+
+However, if compared with a Windows XP client no such RID is passed from 
+Windows:
+
+[2007/04/21 04:04:21, 5] rpc_parse/parse_prs.c:prs_uint32(704)
+              00bc group_rid     : 00000000
+
+This didn't cause problems up to 3.0.22, but with later versions (likely 
+caused by the user and group changes in 3.0.23) this results in NT4 clients 
+no longer being able to join (at least with the LDAP backend).
+
+Is this known Windows behaviour or a known Samba bug? Does anyone know a 
+workaround or fix?
+
+Cheers,
+Moritz
+-- 
+Moritz Muehlenhoff muehlenhoff@univention.de     fon: +49 421 22 232- 0
+Development        Linux for Your Business       fax: +49 421 22 232-99
+Univention GmbH    http://www.univention.de/   mobil: +49 175 22 999 23
+

@@ -1,0 +1,188 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat Jun  2 04:55:04 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l528t3hB021222
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 2 Jun 2007 04:55:03 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 0554C162B01
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat,  2 Jun 2007 08:54:57 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id B3C59162ACE; Sat,  2 Jun 2007 08:54:15 +0000 (GMT)
+Date: Sat, 02 Jun 2007 18:51:06 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070602085415.B3C59162ACE@lists.samba.org>
+Subject: Rev 434: add an easy way to setup ctdb to start/stop samba in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 434
+revision-id: tridge@samba.org-20070602085105-lqk6s1tvj4fgn26b
+parent: tridge@samba.org-20070602080816-xkcs5l60md7prakr
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Sat 2007-06-02 18:51:05 +1000
+message:
+  add an easy way to setup ctdb to start/stop samba
+modified:
+  packaging/ctdb.init            ctdb.init-20070527204758-biuh7znabuwan3zn-6
+  tools/ctdb.sysconfig           ctdb.sysconfig-20070527204758-biuh7znabuwan3zn-7
+  tools/events.d/nfs             nfs-20070601141008-hy3h4qgbk1jd2jci-1
+  tools/events.d/samba           samba-20070601105340-vlcvnp6euoj3zdwy-3
+  tools/functions                functions-20070601105405-gajwirydr5a9zd6x-1
+=== modified file 'packaging/ctdb.init'
+--- a/packaging/ctdb.init	2007-06-02 01:36:42 +0000
++++ b/packaging/ctdb.init	2007-06-02 08:51:05 +0000
+@@ -119,13 +119,17 @@
+   	restart
+ 	;;
+   status)
+-  	rhstatus
++  	status
+ 	;;
+   condrestart)
+   	ctdb status > /dev/null && restart || :
+ 	;;
++  cron)
++	# used from cron to auto-restart ctdb
++  	ctdb status > /dev/null || start
++	;;
+   *)
+-	echo $"Usage: $0 {start|stop|restart|status|condrestart}"
++	echo $"Usage: $0 {start|stop|restart|status|cron|condrestart}"
+ 	exit 1
+ esac
+ 
+
+=== modified file 'tools/ctdb.sysconfig'
+--- a/tools/ctdb.sysconfig	2007-06-02 06:33:17 +0000
++++ b/tools/ctdb.sysconfig	2007-06-02 08:51:05 +0000
+@@ -5,6 +5,20 @@
+ # there is no default
+ # CTDB_RECOVERY_LOCK="/some/place/on/shared/storage"
+ 
++# should ctdb do IP takeover? If it should, then specify a file
++# containing the list of public IP addresses that ctdb will manage
++# Note that these IPs must be different from those in $NODES above
++# there is no default
++# PUBLIC_ADDRESSES=/etc/ctdb/public_addresses
++
++# when doing IP takeover you also must specify what network interface
++# to use for the public addresses
++# there is no default
++# PUBLIC_INTERFACE=eth0
++
++# should ctdb manage starting/stopping the Samba service for you?
++# default is to not manage Samba
++# CTDB_MANAGES_SAMBA=yes
+ 
+ # the NODES file must be specified or ctdb won't start
+ # it should contain a list of IPs that ctdb will use
+@@ -29,17 +43,6 @@
+ # defaults to tcp
+ # TRANSPORT="tcp"
+ 
+-# should ctdb do IP takeover? If it should, then specify a file
+-# containing the list of public IP addresses that ctdb will manage
+-# Note that these IPs must be different from those in $NODES above
+-# there is no default
+-# PUBLIC_ADDRESSES=/etc/ctdb/public_addresses
+-
+-# when doing IP takeover you also must specify what network interface
+-# to use for the public addresses
+-# there is no default
+-# PUBLIC_INTERFACE=eth0
+-
+ # where to log messages
+ # the default is /var/log/log.ctdb
+ # LOGFILE=/var/log/log.ctdb
+
+=== modified file 'tools/events.d/nfs'
+--- a/tools/events.d/nfs	2007-06-02 06:44:15 +0000
++++ b/tools/events.d/nfs	2007-06-02 08:51:05 +0000
+@@ -33,8 +33,8 @@
+         # restart NFS to ensure that all TCP connections to the released ip
+ 	# are closed
+ 	[ -f /etc/ctdb/state/nfs/restart ] && {
+-		( /sbin/service nfs status > /dev/null 2>&1 && 
+-                      /sbin/service nfs restart > /dev/null 2>&1 ) &
++		( service nfs status > /dev/null 2>&1 && 
++                      service nfs restart > /dev/null 2>&1 ) &
+ 	} > /dev/null 2>&1
+ 	/bin/rm -f /etc/ctdb/state/nfs/restart
+ 	;;
+
+=== modified file 'tools/events.d/samba'
+--- a/tools/events.d/samba	2007-06-01 14:10:22 +0000
++++ b/tools/events.d/samba	2007-06-02 08:51:05 +0000
+@@ -9,8 +9,14 @@
+ cmd="$1"
+ shift
+ 
++[ "$CTDB_MANAGES_SAMBA" = "yes" ] || exit 0
++
+ case $cmd in 
+      startup)
++	# start Samba service
++	service smb start
++	service winbind start
++
+ 	# wait for the Samba tcp ports to become available
+ 	smb_ports=`testparm -stv 2> /dev/null | egrep '\s*smb ports =' | cut -d= -f2`
+ 	ctdb_wait_tcp_ports "Samba" $smb_ports
+@@ -35,7 +41,8 @@
+ 
+      shutdown)
+ 	# shutdown Samba when ctdb goes down
+-	killall -q smbd nmbd winbindd
++	service smb stop
++	service winbind stop
+ 	;;
+ esac
+ 
+
+=== modified file 'tools/functions'
+--- a/tools/functions	2007-06-01 13:25:33 +0000
++++ b/tools/functions	2007-06-02 08:51:05 +0000
+@@ -2,6 +2,20 @@
+ 
+ 
+ ######################################################
++# simulate /sbin/service on platforms that don't have it
++service() { 
++  service_name="$1"
++  op="$2"
++  if [ -x /sbin/service ]; then
++      /sbin/service "$service_name" "$op"
++  elif [ -x /etc/init.d/$service_name ]; then
++      /etc/init.d/$service_name "$op"
++  elif [ -x /etc/rc.d/init.d/$service_name ]; then
++      /etc/init.d/$service_name "$op"
++  fi
++}
++
++######################################################
+ # wait for a set of tcp ports
+ # usage: ctdb_wait_tcp_ports SERICE_NAME <ports...>
+ ######################################################
+

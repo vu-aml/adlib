@@ -1,0 +1,354 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Jun  6 20:01:32 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5701WhB027698
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 6 Jun 2007 20:01:32 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 36190163825
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu,  7 Jun 2007 00:01:26 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 549)
+	id A9DC9162B6F; Thu,  7 Jun 2007 00:00:50 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jra@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070607000050.A9DC9162B6F@lists.samba.org>
+Date: Thu,  7 Jun 2007 00:00:50 +0000 (GMT)
+Subject: svn commit: samba r23370 - in branches:
+	SAMBA_3_0/source/lib/tdb/common SAMBA_3_0_25/source/tdb/common
+	SAMBA_3_0_26/source/lib/tdb/common SAMBA_4_0/source/lib/tdb/common
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: jra
+Date: 2007-06-07 00:00:45 +0000 (Thu, 07 Jun 2007)
+New Revision: 23370
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23370
+
+Log:
+Traverse in tdb wasn't consistently using the
+travlocks.lock_rw for lock read/write types, it
+was sometimes using it (tdb_next_lock) and
+sometimes explicitly using F_WRLCK instead.
+Change this to consistently use travlocks.lock_rw
+only.
+I'm pretty sure about this fix (else I woudn't
+be checking this in :-) but tridge and Volker
+please review.
+Jeremy.
+
+Modified:
+   branches/SAMBA_3_0/source/lib/tdb/common/traverse.c
+   branches/SAMBA_3_0_25/source/tdb/common/traverse.c
+   branches/SAMBA_3_0_26/source/lib/tdb/common/traverse.c
+   branches/SAMBA_4_0/source/lib/tdb/common/traverse.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/lib/tdb/common/traverse.c
+===================================================================
+--- branches/SAMBA_3_0/source/lib/tdb/common/traverse.c	2007-06-06 16:13:14 UTC (rev 23369)
++++ branches/SAMBA_3_0/source/lib/tdb/common/traverse.c	2007-06-07 00:00:45 UTC (rev 23370)
+@@ -263,12 +263,15 @@
+ 	tdb->travlocks.off = tdb->travlocks.hash = 0;
+ 	tdb->travlocks.lock_rw = F_RDLCK;
+ 
++	/* Grab first record: locks chain and returns record. */
+ 	if (tdb_next_lock(tdb, &tdb->travlocks, &rec) <= 0)
+ 		return tdb_null;
+ 	/* now read the key */
+ 	key.dsize = rec.key_len;
+ 	key.dptr =tdb_alloc_read(tdb,tdb->travlocks.off+sizeof(rec),key.dsize);
+-	if (tdb_unlock(tdb, BUCKET(tdb->travlocks.hash), F_WRLCK) != 0)
++
++	/* Unlock the hash chain of the record we just read. */
++	if (tdb_unlock(tdb, tdb->travlocks.hash, tdb->travlocks.lock_rw) != 0)
+ 		TDB_LOG((tdb, TDB_DEBUG_FATAL, "tdb_firstkey: error occurred while tdb_unlocking!\n"));
+ 	return key;
+ }
+@@ -283,7 +286,7 @@
+ 
+ 	/* Is locked key the old key?  If so, traverse will be reliable. */
+ 	if (tdb->travlocks.off) {
+-		if (tdb_lock(tdb,tdb->travlocks.hash,F_WRLCK))
++		if (tdb_lock(tdb,tdb->travlocks.hash,tdb->travlocks.lock_rw))
+ 			return tdb_null;
+ 		if (tdb_rec_read(tdb, tdb->travlocks.off, &rec) == -1
+ 		    || !(k = tdb_alloc_read(tdb,tdb->travlocks.off+sizeof(rec),
+@@ -294,7 +297,7 @@
+ 				SAFE_FREE(k);
+ 				return tdb_null;
+ 			}
+-			if (tdb_unlock(tdb, tdb->travlocks.hash, F_WRLCK) != 0) {
++			if (tdb_unlock(tdb, tdb->travlocks.hash, tdb->travlocks.lock_rw) != 0) {
+ 				SAFE_FREE(k);
+ 				return tdb_null;
+ 			}
+@@ -306,7 +309,7 @@
+ 
+ 	if (!tdb->travlocks.off) {
+ 		/* No previous element: do normal find, and lock record */
+-		tdb->travlocks.off = tdb_find_lock_hash(tdb, oldkey, tdb->hash_fn(&oldkey), F_WRLCK, &rec);
++		tdb->travlocks.off = tdb_find_lock_hash(tdb, oldkey, tdb->hash_fn(&oldkey), tdb->travlocks.lock_rw, &rec);
+ 		if (!tdb->travlocks.off)
+ 			return tdb_null;
+ 		tdb->travlocks.hash = BUCKET(rec.full_hash);
+@@ -317,19 +320,18 @@
+ 	}
+ 	oldhash = tdb->travlocks.hash;
+ 
+-	/* Grab next record: locks chain and returned record,
++	/* Grab next record: locks chain and returns record,
+ 	   unlocks old record */
+ 	if (tdb_next_lock(tdb, &tdb->travlocks, &rec) > 0) {
+ 		key.dsize = rec.key_len;
+ 		key.dptr = tdb_alloc_read(tdb, tdb->travlocks.off+sizeof(rec),
+ 					  key.dsize);
+ 		/* Unlock the chain of this new record */
+-		if (tdb_unlock(tdb, tdb->travlocks.hash, F_WRLCK) != 0)
++		if (tdb_unlock(tdb, tdb->travlocks.hash, tdb->travlocks.lock_rw) != 0)
+ 			TDB_LOG((tdb, TDB_DEBUG_FATAL, "tdb_nextkey: WARNING tdb_unlock failed!\n"));
+ 	}
+ 	/* Unlock the chain of old record */
+-	if (tdb_unlock(tdb, BUCKET(oldhash), F_WRLCK) != 0)
++	if (tdb_unlock(tdb, BUCKET(oldhash), tdb->travlocks.lock_rw) != 0)
+ 		TDB_LOG((tdb, TDB_DEBUG_FATAL, "tdb_nextkey: WARNING tdb_unlock failed!\n"));
+ 	return key;
+ }
+-
+
+Modified: branches/SAMBA_3_0_25/source/tdb/common/traverse.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/tdb/common/traverse.c	2007-06-06 16:13:14 UTC (rev 23369)
++++ branches/SAMBA_3_0_25/source/tdb/common/traverse.c	2007-06-07 00:00:45 UTC (rev 23370)
+@@ -263,12 +263,15 @@
+ 	tdb->travlocks.off = tdb->travlocks.hash = 0;
+ 	tdb->travlocks.lock_rw = F_RDLCK;
+ 
++	/* Grab first record: locks chain and returns record. */
+ 	if (tdb_next_lock(tdb, &tdb->travlocks, &rec) <= 0)
+ 		return tdb_null;
+ 	/* now read the key */
+ 	key.dsize = rec.key_len;
+ 	key.dptr =tdb_alloc_read(tdb,tdb->travlocks.off+sizeof(rec),key.dsize);
+-	if (tdb_unlock(tdb, BUCKET(tdb->travlocks.hash), F_WRLCK) != 0)
++
++	/* Unlock the hash chain of the record we just read. */
++	if (tdb_unlock(tdb, tdb->travlocks.hash, tdb->travlocks.lock_rw) != 0)
+ 		TDB_LOG((tdb, TDB_DEBUG_FATAL, "tdb_firstkey: error occurred while tdb_unlocking!\n"));
+ 	return key;
+ }
+@@ -283,7 +286,7 @@
+ 
+ 	/* Is locked key the old key?  If so, traverse will be reliable. */
+ 	if (tdb->travlocks.off) {
+-		if (tdb_lock(tdb,tdb->travlocks.hash,F_WRLCK))
++		if (tdb_lock(tdb,tdb->travlocks.hash,tdb->travlocks.lock_rw))
+ 			return tdb_null;
+ 		if (tdb_rec_read(tdb, tdb->travlocks.off, &rec) == -1
+ 		    || !(k = tdb_alloc_read(tdb,tdb->travlocks.off+sizeof(rec),
+@@ -294,7 +297,7 @@
+ 				SAFE_FREE(k);
+ 				return tdb_null;
+ 			}
+-			if (tdb_unlock(tdb, tdb->travlocks.hash, F_WRLCK) != 0) {
++			if (tdb_unlock(tdb, tdb->travlocks.hash, tdb->travlocks.lock_rw) != 0) {
+ 				SAFE_FREE(k);
+ 				return tdb_null;
+ 			}
+@@ -306,7 +309,7 @@
+ 
+ 	if (!tdb->travlocks.off) {
+ 		/* No previous element: do normal find, and lock record */
+-		tdb->travlocks.off = tdb_find_lock_hash(tdb, oldkey, tdb->hash_fn(&oldkey), F_WRLCK, &rec);
++		tdb->travlocks.off = tdb_find_lock_hash(tdb, oldkey, tdb->hash_fn(&oldkey), tdb->travlocks.lock_rw, &rec);
+ 		if (!tdb->travlocks.off)
+ 			return tdb_null;
+ 		tdb->travlocks.hash = BUCKET(rec.full_hash);
+@@ -317,19 +320,18 @@
+ 	}
+ 	oldhash = tdb->travlocks.hash;
+ 
+-	/* Grab next record: locks chain and returned record,
++	/* Grab next record: locks chain and returns record,
+ 	   unlocks old record */
+ 	if (tdb_next_lock(tdb, &tdb->travlocks, &rec) > 0) {
+ 		key.dsize = rec.key_len;
+ 		key.dptr = tdb_alloc_read(tdb, tdb->travlocks.off+sizeof(rec),
+ 					  key.dsize);
+ 		/* Unlock the chain of this new record */
+-		if (tdb_unlock(tdb, tdb->travlocks.hash, F_WRLCK) != 0)
++		if (tdb_unlock(tdb, tdb->travlocks.hash, tdb->travlocks.lock_rw) != 0)
+ 			TDB_LOG((tdb, TDB_DEBUG_FATAL, "tdb_nextkey: WARNING tdb_unlock failed!\n"));
+ 	}
+ 	/* Unlock the chain of old record */
+-	if (tdb_unlock(tdb, BUCKET(oldhash), F_WRLCK) != 0)
++	if (tdb_unlock(tdb, BUCKET(oldhash), tdb->travlocks.lock_rw) != 0)
+ 		TDB_LOG((tdb, TDB_DEBUG_FATAL, "tdb_nextkey: WARNING tdb_unlock failed!\n"));
+ 	return key;
+ }
+-
+
+Modified: branches/SAMBA_3_0_26/source/lib/tdb/common/traverse.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/lib/tdb/common/traverse.c	2007-06-06 16:13:14 UTC (rev 23369)
++++ branches/SAMBA_3_0_26/source/lib/tdb/common/traverse.c	2007-06-07 00:00:45 UTC (rev 23370)
+@@ -263,12 +263,15 @@
+ 	tdb->travlocks.off = tdb->travlocks.hash = 0;
+ 	tdb->travlocks.lock_rw = F_RDLCK;
+ 
++	/* Grab first record: locks chain and returns record. */
+ 	if (tdb_next_lock(tdb, &tdb->travlocks, &rec) <= 0)
+ 		return tdb_null;
+ 	/* now read the key */
+ 	key.dsize = rec.key_len;
+ 	key.dptr =tdb_alloc_read(tdb,tdb->travlocks.off+sizeof(rec),key.dsize);
+-	if (tdb_unlock(tdb, BUCKET(tdb->travlocks.hash), F_WRLCK) != 0)
++
++	/* Unlock the hash chain of the record we just read. */
++	if (tdb_unlock(tdb, tdb->travlocks.hash, tdb->travlocks.lock_rw) != 0)
+ 		TDB_LOG((tdb, TDB_DEBUG_FATAL, "tdb_firstkey: error occurred while tdb_unlocking!\n"));
+ 	return key;
+ }
+@@ -283,7 +286,7 @@
+ 
+ 	/* Is locked key the old key?  If so, traverse will be reliable. */
+ 	if (tdb->travlocks.off) {
+-		if (tdb_lock(tdb,tdb->travlocks.hash,F_WRLCK))
++		if (tdb_lock(tdb,tdb->travlocks.hash,tdb->travlocks.lock_rw))
+ 			return tdb_null;
+ 		if (tdb_rec_read(tdb, tdb->travlocks.off, &rec) == -1
+ 		    || !(k = tdb_alloc_read(tdb,tdb->travlocks.off+sizeof(rec),
+@@ -294,7 +297,7 @@
+ 				SAFE_FREE(k);
+ 				return tdb_null;
+ 			}
+-			if (tdb_unlock(tdb, tdb->travlocks.hash, F_WRLCK) != 0) {
++			if (tdb_unlock(tdb, tdb->travlocks.hash, tdb->travlocks.lock_rw) != 0) {
+ 				SAFE_FREE(k);
+ 				return tdb_null;
+ 			}
+@@ -306,7 +309,7 @@
+ 
+ 	if (!tdb->travlocks.off) {
+ 		/* No previous element: do normal find, and lock record */
+-		tdb->travlocks.off = tdb_find_lock_hash(tdb, oldkey, tdb->hash_fn(&oldkey), F_WRLCK, &rec);
++		tdb->travlocks.off = tdb_find_lock_hash(tdb, oldkey, tdb->hash_fn(&oldkey), tdb->travlocks.lock_rw, &rec);
+ 		if (!tdb->travlocks.off)
+ 			return tdb_null;
+ 		tdb->travlocks.hash = BUCKET(rec.full_hash);
+@@ -317,19 +320,18 @@
+ 	}
+ 	oldhash = tdb->travlocks.hash;
+ 
+-	/* Grab next record: locks chain and returned record,
++	/* Grab next record: locks chain and returns record,
+ 	   unlocks old record */
+ 	if (tdb_next_lock(tdb, &tdb->travlocks, &rec) > 0) {
+ 		key.dsize = rec.key_len;
+ 		key.dptr = tdb_alloc_read(tdb, tdb->travlocks.off+sizeof(rec),
+ 					  key.dsize);
+ 		/* Unlock the chain of this new record */
+-		if (tdb_unlock(tdb, tdb->travlocks.hash, F_WRLCK) != 0)
++		if (tdb_unlock(tdb, tdb->travlocks.hash, tdb->travlocks.lock_rw) != 0)
+ 			TDB_LOG((tdb, TDB_DEBUG_FATAL, "tdb_nextkey: WARNING tdb_unlock failed!\n"));
+ 	}
+ 	/* Unlock the chain of old record */
+-	if (tdb_unlock(tdb, BUCKET(oldhash), F_WRLCK) != 0)
++	if (tdb_unlock(tdb, BUCKET(oldhash), tdb->travlocks.lock_rw) != 0)
+ 		TDB_LOG((tdb, TDB_DEBUG_FATAL, "tdb_nextkey: WARNING tdb_unlock failed!\n"));
+ 	return key;
+ }
+-
+
+Modified: branches/SAMBA_4_0/source/lib/tdb/common/traverse.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/tdb/common/traverse.c	2007-06-06 16:13:14 UTC (rev 23369)
++++ branches/SAMBA_4_0/source/lib/tdb/common/traverse.c	2007-06-07 00:00:45 UTC (rev 23370)
+@@ -259,12 +259,15 @@
+ 	tdb->travlocks.off = tdb->travlocks.hash = 0;
+ 	tdb->travlocks.lock_rw = F_RDLCK;
+ 
++	/* Grab first record: locks chain and returns record. */
+ 	if (tdb_next_lock(tdb, &tdb->travlocks, &rec) <= 0)
+ 		return tdb_null;
+ 	/* now read the key */
+ 	key.dsize = rec.key_len;
+ 	key.dptr =tdb_alloc_read(tdb,tdb->travlocks.off+sizeof(rec),key.dsize);
+-	if (tdb_unlock(tdb, BUCKET(tdb->travlocks.hash), F_WRLCK) != 0)
++
++	/* Unlock the hash chain of the record we just read. */
++	if (tdb_unlock(tdb, tdb->travlocks.hash, tdb->travlocks.lock_rw) != 0)
+ 		TDB_LOG((tdb, TDB_DEBUG_FATAL, "tdb_firstkey: error occurred while tdb_unlocking!\n"));
+ 	return key;
+ }
+@@ -279,7 +282,7 @@
+ 
+ 	/* Is locked key the old key?  If so, traverse will be reliable. */
+ 	if (tdb->travlocks.off) {
+-		if (tdb_lock(tdb,tdb->travlocks.hash,F_WRLCK))
++		if (tdb_lock(tdb,tdb->travlocks.hash,tdb->travlocks.lock_rw))
+ 			return tdb_null;
+ 		if (tdb_rec_read(tdb, tdb->travlocks.off, &rec) == -1
+ 		    || !(k = tdb_alloc_read(tdb,tdb->travlocks.off+sizeof(rec),
+@@ -290,7 +293,7 @@
+ 				SAFE_FREE(k);
+ 				return tdb_null;
+ 			}
+-			if (tdb_unlock(tdb, tdb->travlocks.hash, F_WRLCK) != 0) {
++			if (tdb_unlock(tdb, tdb->travlocks.hash, tdb->travlocks.lock_rw) != 0) {
+ 				SAFE_FREE(k);
+ 				return tdb_null;
+ 			}
+@@ -302,7 +305,7 @@
+ 
+ 	if (!tdb->travlocks.off) {
+ 		/* No previous element: do normal find, and lock record */
+-		tdb->travlocks.off = tdb_find_lock_hash(tdb, oldkey, tdb->hash_fn(&oldkey), F_WRLCK, &rec);
++		tdb->travlocks.off = tdb_find_lock_hash(tdb, oldkey, tdb->hash_fn(&oldkey), tdb->travlocks.lock_rw, &rec);
+ 		if (!tdb->travlocks.off)
+ 			return tdb_null;
+ 		tdb->travlocks.hash = BUCKET(rec.full_hash);
+@@ -313,19 +316,18 @@
+ 	}
+ 	oldhash = tdb->travlocks.hash;
+ 
+-	/* Grab next record: locks chain and returned record,
++	/* Grab next record: locks chain and returns record,
+ 	   unlocks old record */
+ 	if (tdb_next_lock(tdb, &tdb->travlocks, &rec) > 0) {
+ 		key.dsize = rec.key_len;
+ 		key.dptr = tdb_alloc_read(tdb, tdb->travlocks.off+sizeof(rec),
+ 					  key.dsize);
+ 		/* Unlock the chain of this new record */
+-		if (tdb_unlock(tdb, tdb->travlocks.hash, F_WRLCK) != 0)
++		if (tdb_unlock(tdb, tdb->travlocks.hash, tdb->travlocks.lock_rw) != 0)
+ 			TDB_LOG((tdb, TDB_DEBUG_FATAL, "tdb_nextkey: WARNING tdb_unlock failed!\n"));
+ 	}
+ 	/* Unlock the chain of old record */
+-	if (tdb_unlock(tdb, BUCKET(oldhash), F_WRLCK) != 0)
++	if (tdb_unlock(tdb, BUCKET(oldhash), tdb->travlocks.lock_rw) != 0)
+ 		TDB_LOG((tdb, TDB_DEBUG_FATAL, "tdb_nextkey: WARNING tdb_unlock failed!\n"));
+ 	return key;
+ }
+-
+

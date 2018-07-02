@@ -1,0 +1,197 @@
+From perl6-all-return-81949-ktwarwic=speedy.uwaterloo.ca@perl.org  Wed Jun 13 17:46:26 2007
+Return-Path: <perl6-all-return-81949-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l5DLkPL9012884
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 13 Jun 2007 17:46:25 -0400
+Received: (qmail 1126 invoked by uid 514); 13 Jun 2007 21:46:23 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 1117 invoked from network); 13 Jun 2007 21:46:23 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+Delivered-To: perlmail-parrot-porters@onion.perl.org
+Delivered-To: parrot-porters@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Virus-Scanned: Debian amavisd-new at wet.ekstrom.org
+Message-ID: <467065B9.2040607@tewk.com>
+Date: Wed, 13 Jun 2007 15:46:33 -0600
+From: Kevin Tew <tewk@tewk.com>
+User-Agent: Mozilla-Thunderbird 2.0.0.0 (X11/20070601)
+MIME-Version: 1.0
+To: chromatic <chromatic@wgz.org>
+CC: parrot-porters@perl.org
+Subject: Re: I Hate find_vtable_meth_ns()
+References: <200706131140.55630.chromatic@wgz.org>
+In-Reply-To: <200706131140.55630.chromatic@wgz.org>
+Content-Type: multipart/mixed;
+ boundary="------------090909090408030406070102"
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=3.4 required=8.0
+	tests=BAYES_20,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,RCVD_IN_CBL,RDNS_NONE,SPF_PASS
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-0.4 required=8.0
+	tests=BAYES_05,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_NEUTRAL
+
+--------------090909090408030406070102
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+
+My patch only fails these tests.
+
+Failed Test          Stat Wstat Total Fail  List of Failed
+-------------------------------------------------------------------------------
+t/library/range.t       1   256    78   18  70-78
+t/pmc/parrotobject.t    1   256    11    1  3
+
+
+Chromatic was right,
+vtables should be stored in the namespace in an additional hash indexed 
+by vtable_index.
+This will fix theses failures which are do to the following syntax:
+
+runtime/parrot/library/Range.pir:202
+.sub 'pop' :vtable('pop_pmc') :method
+This causes the t/library/range.t  failure
+
+t/pmc/parrotobject.t:49:
+.sub monkey :method :vtable("get_string_keyed_int")
+This causes the parrotobject.t failure
+
+Kevin
+
+chromatic wrote:
+> Look in src/objects.c, around line 80.  This function looks up a vtable method 
+> in a namespace.  It has the name of the vtable method, as well as the number 
+> of the vtable method.
+>
+> Look how it reaches *inside* the namespace, grabs an iterator, and proceeds to 
+> iterate through all of the keys of the namespace, trying to match the name or 
+> the type number.
+>
+> (One wonders why we bother with hashes, if O(n) is so much better for 
+> something we do as often as looking up methods.)
+>
+> For kicks, here's a slightly nicer version.  There are potential improvements 
+> there, but it's shorter, clearer, and O(1) instead of O(n).  This makes a big 
+> difference.  Here's what callgrind thinks of parrot perl6.pbc 
+> t/01-sanity/01-tap.t before the change:
+>
+>            Ir sysCount sysTime 
+> --------------------------------------------------------------------------------
+> 2,859,808,451      452     591  PROGRAM TOTALS
+>
+> --------------------------------------------------------------------------------
+>          Ir sysCount sysTime  file:function
+> --------------------------------------------------------------------------------
+> 370,031,493        .       .  hash.c:parrot_hash_get_idx 
+> 296,162,666        .       .  ascii.c:ascii_compare 
+> 216,535,642        .       .  hash.c:parrot_hash_get_bucket 
+> 205,389,756        .       .  string.c:string_compare 
+> 188,198,076        .       .  objects.c:find_vtable_meth_ns 
+> 132,994,291        .       .  dod.c:Parrot_dod_sweep 
+> 116,631,596        .       .   
+> namespace.pmc:Parrot_NameSpace_get_pmc_keyed_str
+>
+> ... and after:
+>
+>          Ir sysCount sysTime 
+> --------------------------------------------------------------------------------
+> 880,046,504      495  22,527  PROGRAM TOTALS
+>
+> --------------------------------------------------------------------------------
+>         Ir sysCount sysTime  file:function
+> --------------------------------------------------------------------------------
+> 98,680,680        .       .  dod.c:Parrot_dod_sweep 
+> 78,138,108        .       .  resources.c:compact_pool 
+> 70,556,241        .       .  ascii.c:ascii_compute_hash 
+> 49,233,260        .       .  string.c:string_make_direct 
+> 41,103,096        .       .  headers.c:get_free_buffer 
+> 30,652,923        .       .  resources.c:Parrot_allocate_string 
+> 30,365,471        .       .  strcmp.c:strcmp
+>
+> The resulting work is 30% that of the previous.  This is a huge amount of 
+> execution time.  (Note how even the functions in both lists do much less work 
+> in the second one.)
+>
+> Unfortunately, applying this patch fails some other tests, and I'm not sure 
+> why.  (My guess is that more PMCNULLs will help.)
+>
+> I wonder if changing the Namespace PMC to store all vtable methods in such a 
+> way that an indexed lookup will work is a benefit.  It might simplify the 
+> code even further.
+>
+> -- c
+>
+>   
+
+
+--------------090909090408030406070102
+Content-Type: text/x-patch;
+ name="objects.c.patch"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline;
+ filename="objects.c.patch"
+
+=== src/objects.c
+==================================================================
+--- src/objects.c	(revision 60)
++++ src/objects.c	(local)
+@@ -81,27 +81,19 @@
+ static PMC*
+ find_vtable_meth_ns(Interp *interp, PMC *ns, INTVAL vtable_index)
+ {
+-    const INTVAL k   = VTABLE_elements(interp, ns);
+-    PMC   * const key = VTABLE_nextkey_keyed(interp, key_new(interp), ns,
+-        ITERATE_FROM_START);
++    const char * const  meth     = Parrot_vtable_slot_names[vtable_index];
++    STRING     * const  meth_str = string_from_cstring(interp, meth, 0);
++    STRING     * const  meth_str2 = string_from_cstring(interp, meth + 2, 0);
++    PMC        * const res       = VTABLE_get_pmc_keyed_str(interp, ns, meth_str);
++    PMC        * const res2      = VTABLE_get_pmc_keyed_str(interp, ns, meth_str2);
+ 
+-    const char * const meth     = Parrot_vtable_slot_names[vtable_index];
+-    STRING     * const meth_str = string_from_cstring(interp, meth, strlen(meth));
+ 
+-    int         j;
+-
+-    for (j = 0; j < k; ++j) {
+-        STRING * const ns_key = (STRING *)parrot_hash_get_idx(interp,
+-                            (Hash *)PMC_struct_val(ns), key);
+-        PMC * const res    = VTABLE_get_pmc_keyed_str(interp, ns, ns_key);
+-
+-        /* success if matching vtable index or double-underscored name */
+-        if (res->vtable->base_type == enum_class_Sub &&
+-               (PMC_sub(res)->vtable_index == vtable_index ||
+-                string_compare(interp, meth_str, ns_key) == 0))
+-            return res;
++    if ( ! PMC_IS_NULL(res) && VTABLE_isa(interp, res, CONST_STRING(interp, "Sub"))) {
++      return res;
+     }
+-
++    else if ( ! PMC_IS_NULL(res2) && VTABLE_isa(interp, res2, CONST_STRING(interp, "Sub"))) {
++      return res2;
++    }
+     return PMCNULL;
+ }
+ 
+
+--------------090909090408030406070102--
+

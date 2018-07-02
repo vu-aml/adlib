@@ -1,0 +1,146 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Apr 13 11:58:34 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3DFwX0I013601
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 13 Apr 2007 11:58:33 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 586F7162BCB
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 13 Apr 2007 15:58:10 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_05,
+	UNPARSEABLE_RELAY autolearn=ham version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: from mail.SerNet.de (mail.SerNet.DE [193.175.80.2])
+	by lists.samba.org (Postfix) with ESMTP id 8322F162ADA
+	for <samba-cvs@samba.org>; Fri, 13 Apr 2007 15:57:39 +0000 (GMT)
+Received: from intern.SerNet.DE by mail.SerNet.DE with esmtp (Exim 4.51 #1)
+	for samba-cvs@samba.org
+	id 1HcO9a-0006Ef-Eq; Fri, 13 Apr 2007 17:57:38 +0200
+Received: by intern.SerNet.DE
+	id 1HcO9a-0008Ko-3S; Fri, 13 Apr 2007 17:57:38 +0200
+Received: by intern.SerNet.DE
+	id 1HcO9Z-0008Ki-Sr; Fri, 13 Apr 2007 17:57:37 +0200
+Received: from mad by nirvana.sernet.private with local (Exim 4.63)
+	(envelope-from <ma@sernet.de>)
+	id 1HcO9Z-0008PG-E4; Fri, 13 Apr 2007 17:57:37 +0200
+To: samba-cvs@samba.org
+From: Michael Adam <ma@sernet.de>
+Date: Fri, 13 Apr 2007 17:57:37 +0200
+Message-Id: <E1HcO9a-0008Ko-3S@intern.SerNet.DE>
+Organization: SerNet GmbH, Goettingen, Germany
+Subject: Rev 5354: refactoring: Move initialization of regdb into a function
+	of its in http://samba.sernet.de/ma/bzr/SAMBA_3_0-registry.bzr/
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2533
+Lines: 93
+
+At http://samba.sernet.de/ma/bzr/SAMBA_3_0-registry.bzr/
+
+------------------------------------------------------------
+revno: 5354
+revision-id: ma@sernet.de-20070413155735-bcd3cd2c2e57f281
+parent: ma@sernet.de-20070412141700-8ecb2c6ec62e1b2b
+committer: Michael Adam <ma@sernet.de>
+branch nick: SAMBA_3_0-registry.bzr
+timestamp: Fri 2007-04-13 17:57:35 +0200
+message:
+  refactoring: Move initialization of regdb into a function of its
+  own. (peparation for use of registry in loadparm.c)
+modified:
+  source/lib/util_reg.c          util_reg.c-20060711181331-c2d45d0e1f4a8648
+  source/utils/net_conf.c        net_conf.c-20070409110216-64p0zt0mes4j6yoe-1
+=== modified file 'source/lib/util_reg.c'
+--- a/source/lib/util_reg.c	2007-04-12 12:27:43 +0000
++++ b/source/lib/util_reg.c	2007-04-13 15:57:35 +0000
+@@ -20,6 +20,8 @@
+ 
+ #include "includes.h"
+ 
++extern REGISTRY_OPS smbconf_reg_ops;
++
+ const char *reg_type_lookup(enum winreg_Type type)
+ {
+ 	const char *result;
+@@ -246,3 +248,29 @@
+ 	return token;
+ }
+ 
++BOOL registry_init_regdb(void)
++{
++	BOOL ret = False;
++	int saved_errno = 0;
++	REGISTRY_HOOK smbconf_reg_hook = {KEY_SMBCONF, &smbconf_reg_ops};
++
++	if (!regdb_init()) {
++		saved_errno = errno;
++		DEBUG(1, ("Can't open the registry"));
++		if (saved_errno) {
++			DEBUGADD(1, (": %s", strerror(saved_errno)));
++		}
++		DEBUGADD(1, (".\n"));
++		goto done;
++	}
++	reghook_cache_init();
++	if (!reghook_cache_add(&smbconf_reg_hook)) {
++		DEBUG(1, ("Error adding smbconf reghooks to reghook cache.\n"));
++		goto done;
++	}
++
++	ret = True;
++
++done:
++	return ret;
++}
+
+=== modified file 'source/utils/net_conf.c'
+--- a/source/utils/net_conf.c	2007-04-12 12:27:43 +0000
++++ b/source/utils/net_conf.c	2007-04-13 15:57:35 +0000
+@@ -1075,7 +1075,6 @@
+ int net_conf(int argc, const char **argv)
+ {
+ 	int ret = -1;
+-	int saved_errno = 0;
+ 	struct functable2 func[] = {
+ 		{"list", net_conf_list, 
+ 		 "Dump the complete configuration in smb.conf like format."},
+@@ -1098,21 +1097,10 @@
+ 		{NULL, NULL, NULL}
+ 	};
+ 
+-	REGISTRY_HOOK smbconf_reg_hook = {KEY_SMBCONF, &smbconf_reg_ops};
+-	
+-	if (!regdb_init()) {
+-		saved_errno = errno;
+-		d_fprintf(stderr, "Can't open the registry");
+-		if (saved_errno) {
+-			d_fprintf(stderr, ": %s\n", strerror(saved_errno));
+-		}
+-		else {
+-			d_fprintf(stderr, "!\n");
+-		}
++	if (!registry_init_regdb()) {
++		d_fprintf(stderr, "Error initializing the registry!\n");
+ 		goto done;
+ 	}
+-	reghook_cache_init();
+-	reghook_cache_add(&smbconf_reg_hook);
+ 
+ 	ret = net_run_function2(argc, argv, "net conf", func);
+ 
+

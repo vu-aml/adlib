@@ -1,0 +1,137 @@
+From r-help-bounces@stat.math.ethz.ch  Fri Apr 20 05:52:14 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3K9qB0I004377
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 20 Apr 2007 05:52:12 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3K9oiiJ006191;
+	Fri, 20 Apr 2007 11:51:04 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.0 required=5.0 tests=BAYES_50 autolearn=no
+	version=3.1.8
+Received: from an-out-0708.google.com (an-out-0708.google.com [209.85.132.248])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3K9mqED004720
+	for <r-help@stat.math.ethz.ch>; Fri, 20 Apr 2007 11:48:52 +0200
+Received: by an-out-0708.google.com with SMTP id c24so879196ana
+	for <r-help@stat.math.ethz.ch>; Fri, 20 Apr 2007 02:48:51 -0700 (PDT)
+Received: by 10.114.194.1 with SMTP id r1mr1171598waf.1177062531134;
+	Fri, 20 Apr 2007 02:48:51 -0700 (PDT)
+Received: by 10.114.155.3 with HTTP; Fri, 20 Apr 2007 02:48:51 -0700 (PDT)
+Message-ID: <47fce0650704200248t6c923aa5sb294eab558dcd981@mail.gmail.com>
+Date: Fri, 20 Apr 2007 11:48:51 +0200
+From: Hans-Peter <gchappi@gmail.com>
+To: "Alberto Monteiro" <albmont@centroin.com.br>
+In-Reply-To: <20070419141401.M59273@centroin.com.br>
+MIME-Version: 1.0
+Content-Disposition: inline
+References: <8B7B0FD99E8AF541A21609104D1961589128BD@izs-xchg01.izs.fraunhofer.de>
+	<20070418165505.M37208@centroin.com.br>
+	<47fce0650704190003r7fca6b34n11de305dbb6ee7c9@mail.gmail.com>
+	<20070419141401.M59273@centroin.com.br>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: "Schmitt, Corinna" <Corinna.Schmitt@igb.fraunhofer.de>,
+   r-help@stat.math.ethz.ch
+Subject: Re: [R] importing excel-file
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+Status: O
+Content-Length: 2918
+Lines: 82
+
+Hi Alberto,
+
+
+> I can't call read.xls while Excel is opening the xls file.
+> R crashes and must be aborted.
+
+Could not reproduce here (Win2000, Excel 2003, R 2.4.1 and
+2.5.0.alpha). Who knows... but I cannot think of anything that could
+cause such a problem: xlsReadWrite works on the plain file (Excel is
+not even needed), doesn't lock the file and, if there were problems,
+handles eventual exceptions before leaving the DLL. If you have a
+reproducible test case I would be very interested in it.
+
+[Unrelated with this, I found that read.xls doesn't work any longer
+with R versions <= 2.3.1. Reason: I used 'default.stringsAsFactors()'
+in the stringsAsFactor argument.  => DESCRIPTION-Depends field updated
+in v1.3.3].
+
+
+> I have a spreadsheet where in the first line A1..ZZ1 there are the
+> names of some products. However, A1 is empty,
+                                   ~~~~~~~~~~~~
+This is the problem. With rowNames=NA (the default) the first Excel
+column will be *considered* (under certain conditions) to contain the
+*rownames*. The first element beeing empty is such a condition. It's
+in the help, but not 100 % clear and some conditions have been
+missing. [=> help text updated in v1.3.3]
+
+'rowNames = FALSE' prevents the auto-row-consideration.
+
+
+> I will lose the first column: test1[1,1] will be B2.
+
+The first column has been taken for the rownames.
+
+
+> If I do:
+> test3 <- read.xls(filename, sheet = "sheet name", colNames = FALSE)
+> I will get A8..A311 (but these are not numbers, and I can't convert them to the dates.
+
+If you have a title row in Excel, you should skip this row (i.e. in
+your case use 'from=2') because otherwise the columns will be
+recognized as character columns which is not what you want.
+
+
+> I get A8..A311 as something remotely similar to dates (I can even
+> display them as dates:
+> as.POSIXlt("1899-12-30", "GMT") + test4[8:17, 1] * 86400
+
+If you set dateTimeAs="isodatetime" or use the colClasses entries
+"isodate", "isotime" or "isodatetime" you can get them directly as
+character date strings.
+
+Another option is to retrieve the numbers and use the new conversion
+functions dateTimeToStr or dateTimeToIsoStr.
+
+
+> will return a vector of dates!), but then I will lose the meaning
+> of the columns, because test4[,1] is no longer the list of the
+> product names.
+> So it seems that none of the four possibilities is entirely satisfactory.
+
+Well, supreme satisfaction can definitely only be gained with the pro
+version...
+
+...but the following should make you happy too:
+
+test9 <- read.xls( filename, sheet = "sheet name", rowNames = FALSE,
+dateTimeAs = "isodatetime" )
+
+;-)
+
+
+-- 
+Regards,
+Hans-Peter
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

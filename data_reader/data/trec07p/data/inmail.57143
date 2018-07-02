@@ -1,0 +1,320 @@
+From perl6-all-return-81956-ktwarwic=speedy.uwaterloo.ca@perl.org  Thu Jun 14 02:53:47 2007
+Return-Path: <perl6-all-return-81956-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l5E6rjL9017429
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 14 Jun 2007 02:53:45 -0400
+Received: (qmail 24444 invoked by uid 514); 14 Jun 2007 06:53:43 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 24439 invoked from network); 14 Jun 2007 06:53:43 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=0.0 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: softfail (x1.develooper.com: transitioning domain of chromatic@wgz.org does not designate 63.251.223.186 as permitted sender)
+Delivered-To: perlmail-parrot-porters@onion.perl.org
+Delivered-To: parrot-porters@perl.org
+Received-SPF: pass (x1.develooper.com: domain of chromatic@wgz.org designates 63.105.17.39 as permitted sender)
+From: chromatic <chromatic@wgz.org>
+Organization: Snafu
+To: parrot-porters@perl.org
+Subject: I No Longer Hate find_vtable_meth_ns() As Much (But I'm Still Going to Delete It Very Soon)
+Date: Wed, 13 Jun 2007 23:52:51 -0700
+User-Agent: KMail/1.9.6
+MIME-Version: 1.0
+Content-Type: Multipart/Mixed;
+  boundary="Boundary-00=_DXOcG59y/n7V8mF"
+Message-Id: <200706132352.51790.chromatic@wgz.org>
+X-Virus-Scanned: by amavisd-new at wgz.org
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=0.0 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=0.6 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_SOFTFAIL
+
+--Boundary-00=_DXOcG59y/n7V8mF
+Content-Type: text/plain;
+  charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+
+With a hint from Jonathan about storing vtable methods separately in 
+namespaces and a reminder from Kevin that named lookups were still important, 
+I wrestled my earlier patch into shape.
+
+All tests pass.
+
+I hate to brag too much about microbenchmarks, but before:
+
+$ prove t/compilers/pge/p5regex/p5rx.t
+t/compilers/pge/p5regex/p5rx....ok                                           
+        355/960 skipped: various reasons
+All tests successful, 355 subtests skipped.
+Files=1, Tests=960,  7 wallclock secs ( 6.30 cusr +  0.20 csys =  6.50 CPU)
+
+... after:
+
+$ prove t/compilers/pge/p5regex/p5rx.t
+t/compilers/pge/p5regex/p5rx....ok                                           
+        355/960 skipped: various reasons
+All tests successful, 355 subtests skipped.
+Files=1, Tests=960,  2 wallclock secs ( 2.28 cusr +  0.10 csys =  2.38 CPU)
+
+Speeding up PGE doesn't hurt my feelings.
+
+Oh, how's Perl 6?  I'm glad you asked.  Before:
+
+Files=27, Tests=198, 47 wallclock secs (44.69 cusr +  0.50 csys = 45.19 CPU)
+
+... after:
+
+Files=27, Tests=198, 11 wallclock secs ( 9.30 cusr +  0.32 csys =  9.62 CPU)
+
+Callgrind is happier too.  Before:
+
+2,859,808,451      452     591  PROGRAM TOTALS
+
+370,031,493        .       .  hash.c:parrot_hash_get_idx 
+296,162,666        .       .  ascii.c:ascii_compare 
+216,535,642        .       .  hash.c:parrot_hash_get_bucket 
+205,389,756        .       .  string.c:string_compare 
+188,198,076        .       .  objects.c:find_vtable_meth_ns 
+132,994,291        .       .  dod.c:Parrot_dod_sweep 
+116,631,596        .       .  namespace.pmc:Parrot_NameSpace_get_pmc_keyed_str 
+
+... after:
+
+880,046,504      495  22,527  PROGRAM TOTALS
+
+98,680,680        .       .  dod.c:Parrot_dod_sweep 
+78,138,108        .       .  resources.c:compact_pool 
+70,556,241        .       .  ascii.c:ascii_compute_hash 
+49,233,260        .       .  string.c:string_make_direct 
+41,103,096        .       .  headers.c:get_free_buffer 
+30,652,923        .       .  resources.c:Parrot_allocate_string 
+
+I do think there are still some cleanups in this area, but getting a three to 
+five time speedup *without breaking any tests* as well as simplifying some a 
+grotty code seems like a good thing to me.
+
+-- c
+
+--Boundary-00=_DXOcG59y/n7V8mF
+Content-Type: text/x-diff;
+  charset="us-ascii";
+  name="vtable_lookup.patch"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: attachment;
+	filename="vtable_lookup.patch"
+
+=== compilers/imcc/pbc.c
+==================================================================
+--- compilers/imcc/pbc.c	(revision 4018)
++++ compilers/imcc/pbc.c	(local)
+@@ -782,8 +782,6 @@
+     else
+         sub->multi_signature = NULL;
+ 
+-    Parrot_store_sub_in_namespace(interp, sub_pmc);
+-
+     if (unit->is_vtable_method == 1) {
+         /* Work out the name of the vtable method. */
+         if (unit->vtable_name != NULL)
+@@ -808,6 +806,8 @@
+         sub->vtable_index = vtable_index;
+     }
+ 
++    Parrot_store_sub_in_namespace(interp, sub_pmc);
++
+     pfc->type     = PFC_PMC;
+     pfc->u.key    = sub_pmc;
+     unit->sub_pmc = sub_pmc;
+=== src/objects.c
+==================================================================
+--- src/objects.c	(revision 4018)
++++ src/objects.c	(local)
+@@ -81,28 +81,7 @@
+ static PMC*
+ find_vtable_meth_ns(Interp *interp, PMC *ns, INTVAL vtable_index)
+ {
+-    const INTVAL k   = VTABLE_elements(interp, ns);
+-    PMC   * const key = VTABLE_nextkey_keyed(interp, key_new(interp), ns,
+-        ITERATE_FROM_START);
+-
+-    const char * const meth     = Parrot_vtable_slot_names[vtable_index];
+-    STRING     * const meth_str = string_from_cstring(interp, meth, strlen(meth));
+-
+-    int         j;
+-
+-    for (j = 0; j < k; ++j) {
+-        STRING * const ns_key = (STRING *)parrot_hash_get_idx(interp,
+-                            (Hash *)PMC_struct_val(ns), key);
+-        PMC * const res    = VTABLE_get_pmc_keyed_str(interp, ns, ns_key);
+-
+-        /* success if matching vtable index or double-underscored name */
+-        if (res->vtable->base_type == enum_class_Sub &&
+-               (PMC_sub(res)->vtable_index == vtable_index ||
+-                string_compare(interp, meth_str, ns_key) == 0))
+-            return res;
+-    }
+-
+-    return PMCNULL;
++    return VTABLE_get_pmc_keyed_int(interp, ns, vtable_index);
+ }
+ 
+ /*
+=== src/pmc/namespace.pmc
+==================================================================
+--- src/pmc/namespace.pmc	(revision 4018)
++++ src/pmc/namespace.pmc	(local)
+@@ -1,5 +1,5 @@
+ /*
+-Copyright (C) 2005, The Perl Foundation.
++Copyright (C) 2005-2007, The Perl Foundation.
+ $Id$
+ 
+ =head1 NAME
+@@ -12,8 +12,8 @@
+ 
+ =head2 Data
+ 
+-  PMC_struct_val       ... the hash, bucket->value is either a
+-                           var/sub or a namespace, of a FixedPMCarray
++  PMC_struct_val       ... the hash, bucket->value is a
++                           var/sub, a namespace, or a FixedPMCarray
+                            of 2 PMCs (namespace, sub/var) slots
+   PMC_pmc_val          ... parent namespace
+   PMC_data             ... Namespace information struct (name, class/role)
+@@ -30,14 +30,14 @@
+ #include <assert.h>
+ 
+ /*
+- * Typically a named slot either contains another namespace or a
++ * Typically a named slot contains either another namespace or a
+  * var/sub (not both).
+  * In case that the bucket->value is occupied, a FixedPMCArray is
+  * created, and the items are moved over to that extra storage.
+  * The array is flagged with FPA_is_ns_ext to distinguish it from a
+  * plain array variable.
+  *
+- * This could easily expanded to a full-fledged typed namespace if needed.
++ * This could easily expand to a full-fledged typed namespace if needed.
+  */
+ 
+ enum {
+@@ -52,11 +52,12 @@
+ /* We store extra information about the namespace in a struct, which we will
+  * hang off the PMC_data slot. */
+ typedef struct Parrot_NSInfo {
+-    STRING *name;  /* Name of this namespace part. */
+-    PMC *_class;   /* The class or role attached to this namespace. */
++    STRING *name;     /* Name of this namespace part. */
++    PMC    *_class;   /* The class or role attached to this namespace. */
++    PMC    *vtable;
+ } Parrot_NSInfo;
+ 
+-/* Macro for easy access to the namespcae info. */
++/* Macro for easy access to the namespace info. */
+ #define PARROT_NSINFO(o) ((Parrot_NSInfo *) PMC_data(o))
+ 
+ 
+@@ -74,9 +75,10 @@
+ */
+ 
+     void init() {
+-        SUPER();                        /* _struct_val := Hash */
+-        PMC_pmc_val(SELF) = NULL;       /* parent */
+-        PMC_data(SELF)    = mem_allocate_zeroed_typed(Parrot_NSInfo);
++        SUPER();                             /* _struct_val := Hash */
++        PMC_pmc_val(SELF)           = NULL;  /* parent */
++        PMC_data(SELF)              = mem_allocate_zeroed_typed(Parrot_NSInfo);
++        PARROT_NSINFO(SELF)->vtable = PMCNULL;
+     }
+ 
+ /*
+@@ -97,6 +99,8 @@
+             pobject_lives(INTERP, (PObj*)nsinfo->name);
+         if (nsinfo->_class)
+             pobject_lives(INTERP, (PObj*)nsinfo->_class);
++        if (nsinfo->vtable)
++            pobject_lives(INTERP, (PObj*)nsinfo->vtable);
+     }
+ 
+ /*
+@@ -132,7 +136,7 @@
+ Return the given namespace or PMCNULL. C<key> is either an array of
+ strings, or a possibly nested key.
+ 
+-=item C<PMC* get_pmc_keyed_str(PMC *key)>
++=item C<PMC* get_pmc_keyed_str(STRING *key)>
+ 
+ Return the given namespace item or PMCNULL. If the named item is either
+ a NameSpace or a var, the NameSpace is returned.
+@@ -198,6 +202,31 @@
+             VTABLE_set_pmc_keyed_int(INTERP, new_tuple, NS_slot_var_sub, value);
+             b->value = new_tuple;
+         }
++
++        if (value->vtable->base_type == enum_class_Sub) {
++            Parrot_NSInfo *nsinfo    = PARROT_NSINFO(SELF);
++            PMC           *vtable    = nsinfo->vtable;
++            Parrot_sub    *sub       = PMC_sub(value);
++
++            if (PMC_IS_NULL(vtable))
++                nsinfo->vtable = vtable = pmc_new(interp, enum_class_Hash);
++
++            if (sub->vtable_index == -1) {
++                STRING *meth_name = key;
++
++                if (string_str_index(interp, key,
++                    CONST_STRING(interp, "__"), 0 == 0)) {
++                    meth_name = string_substr(interp, key, 2,
++                        string_length(interp, key) - 2, NULL, 0);
++                }
++
++                sub->vtable_index = Parrot_get_vtable_index(interp, meth_name);
++            }
++
++            if (sub->vtable_index != -1)
++                VTABLE_set_pmc_keyed_int(INTERP, vtable,
++                    sub->vtable_index, value);
++        }
+     }
+ 
+     void set_pmc_keyed(PMC *key, PMC *value) {
+@@ -263,6 +292,16 @@
+         return PMCNULL;
+     }
+ 
++    PMC* get_pmc_keyed_int(INTVAL key) {
++        Parrot_NSInfo *nsinfo = PARROT_NSINFO(SELF);
++        PMC           *vtable = nsinfo->vtable;
++
++        if (PMC_IS_NULL(vtable))
++            return PMCNULL;
++
++        return VTABLE_get_pmc_keyed_int(interp, vtable, key);
++    }
++
+ /*
+ 
+ =item C<void* get_pointer_keyed_str(STRING *key)>
+
+--Boundary-00=_DXOcG59y/n7V8mF--
+

@@ -1,0 +1,114 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May 23 21:57:35 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4O1vZqD032393
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 23 May 2007 21:57:35 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id E36561638B2
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 24 May 2007 01:57:30 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL,UPPERCASE_25_50 autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 549)
+	id DF2F5162B6E; Thu, 24 May 2007 01:57:04 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jra@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070524015704.DF2F5162B6E@lists.samba.org>
+Date: Thu, 24 May 2007 01:57:04 +0000 (GMT)
+Subject: svn commit: samba r23107 - in branches: SAMBA_3_0/source/smbd
+	SAMBA_3_0_25/source/smbd SAMBA_3_0_26/source/smbd
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: jra
+Date: 2007-05-24 01:57:02 +0000 (Thu, 24 May 2007)
+New Revision: 23107
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23107
+
+Log:
+Fix renames on file descriptors that are supposed to overwrite the
+target. Needs merging for 3.0.25a (sorry).
+Jeremy.
+
+Modified:
+   branches/SAMBA_3_0/source/smbd/reply.c
+   branches/SAMBA_3_0_25/source/smbd/reply.c
+   branches/SAMBA_3_0_26/source/smbd/reply.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/smbd/reply.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/reply.c	2007-05-24 00:13:24 UTC (rev 23106)
++++ branches/SAMBA_3_0/source/smbd/reply.c	2007-05-24 01:57:02 UTC (rev 23107)
+@@ -4245,9 +4245,10 @@
+ 	ZERO_STRUCT(sbuf);
+ 
+ 	status = unix_convert(conn, newname, False, newname_last_component, &sbuf);
+-	/* We expect this to be NT_STATUS_OBJECT_PATH_NOT_FOUND */
+-	if (!NT_STATUS_EQUAL(NT_STATUS_OBJECT_PATH_NOT_FOUND, status)) {
+-		return NT_STATUS_OBJECT_NAME_COLLISION;
++
++	/* If an error we expect this to be NT_STATUS_OBJECT_PATH_NOT_FOUND */
++
++	if (!NT_STATUS_IS_OK(status) && !NT_STATUS_EQUAL(NT_STATUS_OBJECT_PATH_NOT_FOUND, status)) {
+ 		return status;
+ 	}
+ 
+
+Modified: branches/SAMBA_3_0_25/source/smbd/reply.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/smbd/reply.c	2007-05-24 00:13:24 UTC (rev 23106)
++++ branches/SAMBA_3_0_25/source/smbd/reply.c	2007-05-24 01:57:02 UTC (rev 23107)
+@@ -4195,9 +4195,10 @@
+ 	ZERO_STRUCT(sbuf);
+ 
+ 	status = unix_convert(conn, newname, False, newname_last_component, &sbuf);
+-	/* We expect this to be NT_STATUS_OBJECT_PATH_NOT_FOUND */
+-	if (!NT_STATUS_EQUAL(NT_STATUS_OBJECT_PATH_NOT_FOUND, status)) {
+-		return NT_STATUS_OBJECT_NAME_COLLISION;
++
++	/* If an error we expect this to be NT_STATUS_OBJECT_PATH_NOT_FOUND */
++
++	if (!NT_STATUS_IS_OK(status) && !NT_STATUS_EQUAL(NT_STATUS_OBJECT_PATH_NOT_FOUND, status)) {
+ 		return status;
+ 	}
+ 
+
+Modified: branches/SAMBA_3_0_26/source/smbd/reply.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/smbd/reply.c	2007-05-24 00:13:24 UTC (rev 23106)
++++ branches/SAMBA_3_0_26/source/smbd/reply.c	2007-05-24 01:57:02 UTC (rev 23107)
+@@ -4243,9 +4243,10 @@
+ 	ZERO_STRUCT(sbuf);
+ 
+ 	status = unix_convert(conn, newname, False, newname_last_component, &sbuf);
+-	/* We expect this to be NT_STATUS_OBJECT_PATH_NOT_FOUND */
+-	if (!NT_STATUS_EQUAL(NT_STATUS_OBJECT_PATH_NOT_FOUND, status)) {
+-		return NT_STATUS_OBJECT_NAME_COLLISION;
++
++	/* If an error we expect this to be NT_STATUS_OBJECT_PATH_NOT_FOUND */
++
++	if (!NT_STATUS_IS_OK(status) && !NT_STATUS_EQUAL(NT_STATUS_OBJECT_PATH_NOT_FOUND, status)) {
+ 		return status;
+ 	}
+ 
+

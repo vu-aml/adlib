@@ -1,0 +1,279 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Apr 16 15:11:13 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3GJBD0I017474
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 16 Apr 2007 15:11:13 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 765861638F6
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 16 Apr 2007 19:10:49 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 549)
+	id 19F70162ACC; Mon, 16 Apr 2007 19:10:20 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jra@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070416191021.19F70162ACC@lists.samba.org>
+Date: Mon, 16 Apr 2007 19:10:20 +0000 (GMT)
+Subject: svn commit: samba r22266 - in branches: SAMBA_3_0/source/include
+	SAMBA_3_0/source/param SAMBA_3_0/source/smbd
+	SAMBA_3_0_25/source/include SAMBA_3_0_25/source/param
+	SAMBA_3_0_25/source/smbd
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 8068
+Lines: 234
+
+Author: jra
+Date: 2007-04-16 19:10:16 +0000 (Mon, 16 Apr 2007)
+New Revision: 22266
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22266
+
+Log:
+Fix bug #4512 - we were returning a volume label greater than
+32 unicode chars. Windows XP doesn't like that :-).
+Jeremy
+
+Modified:
+   branches/SAMBA_3_0/source/include/smb.h
+   branches/SAMBA_3_0/source/param/loadparm.c
+   branches/SAMBA_3_0/source/smbd/connection.c
+   branches/SAMBA_3_0/source/smbd/trans2.c
+   branches/SAMBA_3_0_25/source/include/smb.h
+   branches/SAMBA_3_0_25/source/param/loadparm.c
+   branches/SAMBA_3_0_25/source/smbd/connection.c
+   branches/SAMBA_3_0_25/source/smbd/trans2.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/include/smb.h
+===================================================================
+--- branches/SAMBA_3_0/source/include/smb.h	2007-04-16 12:44:13 UTC (rev 22265)
++++ branches/SAMBA_3_0/source/include/smb.h	2007-04-16 19:10:16 UTC (rev 22266)
+@@ -878,7 +878,7 @@
+ 	int cnum;
+ 	uid_t uid;
+ 	gid_t gid;
+-	char name[24];
++	char servicename[FSTRING_LEN];
+ 	char addr[24];
+ 	char machine[FSTRING_LEN];
+ 	time_t start;
+
+Modified: branches/SAMBA_3_0/source/param/loadparm.c
+===================================================================
+--- branches/SAMBA_3_0/source/param/loadparm.c	2007-04-16 12:44:13 UTC (rev 22265)
++++ branches/SAMBA_3_0/source/param/loadparm.c	2007-04-16 19:10:16 UTC (rev 22266)
+@@ -5299,15 +5299,22 @@
+  A useful volume label function. 
+ ********************************************************************/
+ 
+-char *volume_label(int snum)
++const char *volume_label(int snum)
+ {
+-	char *ret = lp_volume(snum);
+-	if (!*ret)
+-		return lp_servicename(snum);
+-	return (ret);
++	char *ret;
++	const char *label = lp_volume(snum);
++	if (!*label) {
++		label = lp_servicename(snum);
++	}
++		
++	/* This returns a 33 byte guarenteed null terminated string. */
++	ret = talloc_strndup(main_loop_talloc_get(), label, 32);
++	if (!ret) {
++		return "";
++	}		
++	return ret;
+ }
+ 
+-
+ /*******************************************************************
+  Set the server type we will announce as via nmbd.
+ ********************************************************************/
+
+Modified: branches/SAMBA_3_0/source/smbd/connection.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/connection.c	2007-04-16 12:44:13 UTC (rev 22265)
++++ branches/SAMBA_3_0/source/smbd/connection.c	2007-04-16 19:10:16 UTC (rev 22266)
+@@ -108,13 +108,13 @@
+ 
+ 	if (cs->Clear && !process_exists(crec.pid) && (errno == ESRCH)) {
+ 		DEBUG(2,("pid %s doesn't exist - deleting connections %d [%s]\n",
+-			procid_str_static(&crec.pid), crec.cnum, crec.name));
++			procid_str_static(&crec.pid), crec.cnum, crec.servicename));
+ 		if (tdb_delete(the_tdb, kbuf) != 0)
+ 			DEBUG(0,("count_fn: tdb_delete failed with error %s\n", tdb_errorstr(tdb) ));
+ 		return 0;
+ 	}
+ 
+-	if (strequal(crec.name, cs->name))
++	if (strequal(crec.servicename, cs->name))
+ 		cs->curr_connections++;
+ 
+ 	return 0;
+@@ -191,8 +191,8 @@
+ 	if (conn) {
+ 		crec.uid = conn->uid;
+ 		crec.gid = conn->gid;
+-		safe_strcpy(crec.name,
+-			    lp_servicename(SNUM(conn)),sizeof(crec.name)-1);
++		safe_strcpy(crec.servicename,
++			    lp_servicename(SNUM(conn)),sizeof(crec.servicename)-1);
+ 	}
+ 	crec.start = time(NULL);
+ 	crec.bcast_msg_flags = msg_flags;
+
+Modified: branches/SAMBA_3_0/source/smbd/trans2.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/trans2.c	2007-04-16 12:44:13 UTC (rev 22265)
++++ branches/SAMBA_3_0/source/smbd/trans2.c	2007-04-16 19:10:16 UTC (rev 22266)
+@@ -2247,7 +2247,7 @@
+ 	uint16 info_level;
+ 	int data_len, len;
+ 	SMB_STRUCT_STAT st;
+-	char *vname = volume_label(SNUM(conn));
++	const char *vname = volume_label(SNUM(conn));
+ 	int snum = SNUM(conn);
+ 	char *fstype = lp_fstype(SNUM(conn));
+ 	int quota_flag = 0;
+@@ -2368,9 +2368,11 @@
+ 			SIVAL(pdata,8,str_checksum(lp_servicename(snum)) ^ 
+ 				(str_checksum(get_local_machine_name())<<16));
+ 
++			/* Max label len is 32 characters. */
+ 			len = srvstr_push(outbuf, pdata+18, vname, -1, STR_UNICODE);
+ 			SIVAL(pdata,12,len);
+ 			data_len = 18+len;
++
+ 			DEBUG(5,("call_trans2qfsinfo : SMB_QUERY_FS_VOLUME_INFO namelen = %d, vol=%s serv=%s\n", 
+ 				(int)strlen(vname),vname, lp_servicename(snum)));
+ 			break;
+
+Modified: branches/SAMBA_3_0_25/source/include/smb.h
+===================================================================
+--- branches/SAMBA_3_0_25/source/include/smb.h	2007-04-16 12:44:13 UTC (rev 22265)
++++ branches/SAMBA_3_0_25/source/include/smb.h	2007-04-16 19:10:16 UTC (rev 22266)
+@@ -885,7 +885,7 @@
+ 	int cnum;
+ 	uid_t uid;
+ 	gid_t gid;
+-	char name[24];
++	char servicename[FSTRING_LEN];
+ 	char addr[24];
+ 	char machine[FSTRING_LEN];
+ 	time_t start;
+
+Modified: branches/SAMBA_3_0_25/source/param/loadparm.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/param/loadparm.c	2007-04-16 12:44:13 UTC (rev 22265)
++++ branches/SAMBA_3_0_25/source/param/loadparm.c	2007-04-16 19:10:16 UTC (rev 22266)
+@@ -5293,15 +5293,22 @@
+  A useful volume label function. 
+ ********************************************************************/
+ 
+-char *volume_label(int snum)
++const char *volume_label(int snum)
+ {
+-	char *ret = lp_volume(snum);
+-	if (!*ret)
+-		return lp_servicename(snum);
+-	return (ret);
++	char *ret;
++	const char *label = lp_volume(snum);
++	if (!*label) {
++		label = lp_servicename(snum);
++	}
++		
++	/* This returns a 33 byte guarenteed null terminated string. */
++	ret = talloc_strndup(main_loop_talloc_get(), label, 32);
++	if (!ret) {
++		return "";
++	}		
++	return ret;
+ }
+ 
+-
+ /*******************************************************************
+  Set the server type we will announce as via nmbd.
+ ********************************************************************/
+
+Modified: branches/SAMBA_3_0_25/source/smbd/connection.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/smbd/connection.c	2007-04-16 12:44:13 UTC (rev 22265)
++++ branches/SAMBA_3_0_25/source/smbd/connection.c	2007-04-16 19:10:16 UTC (rev 22266)
+@@ -108,13 +108,13 @@
+ 
+ 	if (cs->Clear && !process_exists(crec.pid) && (errno == ESRCH)) {
+ 		DEBUG(2,("pid %s doesn't exist - deleting connections %d [%s]\n",
+-			procid_str_static(&crec.pid), crec.cnum, crec.name));
++			procid_str_static(&crec.pid), crec.cnum, crec.servicename));
+ 		if (tdb_delete(the_tdb, kbuf) != 0)
+ 			DEBUG(0,("count_fn: tdb_delete failed with error %s\n", tdb_errorstr(tdb) ));
+ 		return 0;
+ 	}
+ 
+-	if (strequal(crec.name, cs->name))
++	if (strequal(crec.servicename, cs->name))
+ 		cs->curr_connections++;
+ 
+ 	return 0;
+@@ -191,8 +191,8 @@
+ 	if (conn) {
+ 		crec.uid = conn->uid;
+ 		crec.gid = conn->gid;
+-		safe_strcpy(crec.name,
+-			    lp_servicename(SNUM(conn)),sizeof(crec.name)-1);
++		safe_strcpy(crec.servicename,
++			    lp_servicename(SNUM(conn)),sizeof(crec.servicename)-1);
+ 	}
+ 	crec.start = time(NULL);
+ 	crec.bcast_msg_flags = msg_flags;
+
+Modified: branches/SAMBA_3_0_25/source/smbd/trans2.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/smbd/trans2.c	2007-04-16 12:44:13 UTC (rev 22265)
++++ branches/SAMBA_3_0_25/source/smbd/trans2.c	2007-04-16 19:10:16 UTC (rev 22266)
+@@ -2232,7 +2232,7 @@
+ 	uint16 info_level;
+ 	int data_len, len;
+ 	SMB_STRUCT_STAT st;
+-	char *vname = volume_label(SNUM(conn));
++	const char *vname = volume_label(SNUM(conn));
+ 	int snum = SNUM(conn);
+ 	char *fstype = lp_fstype(SNUM(conn));
+ 	int quota_flag = 0;
+@@ -2353,9 +2353,11 @@
+ 			SIVAL(pdata,8,str_checksum(lp_servicename(snum)) ^ 
+ 				(str_checksum(get_local_machine_name())<<16));
+ 
++			/* Max label len is 32 characters. */
+ 			len = srvstr_push(outbuf, pdata+18, vname, -1, STR_UNICODE);
+ 			SIVAL(pdata,12,len);
+ 			data_len = 18+len;
++
+ 			DEBUG(5,("call_trans2qfsinfo : SMB_QUERY_FS_VOLUME_INFO namelen = %d, vol=%s serv=%s\n", 
+ 				(int)strlen(vname),vname, lp_servicename(snum)));
+ 			break;
+

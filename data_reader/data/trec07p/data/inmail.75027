@@ -1,0 +1,178 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Jul  5 17:51:54 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l65LpsL9031892
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 5 Jul 2007 17:51:54 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id A84641638B9
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu,  5 Jul 2007 21:51:49 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.6 required=3.8 tests=BAYES_50,FORGED_RCVD_HELO,
+	RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: from ns3.mintra.com (host13.unitech.host.ifl.telecomplete.net
+	[213.160.120.213])
+	by lists.samba.org (Postfix) with ESMTP id 00BA3163823
+	for <samba-technical@samba.org>; Thu,  5 Jul 2007 21:51:14 +0000 (GMT)
+X-ClientAddr: 195.137.84.84
+Received: from hypercubesystems.co.uk (i-195-137-84-84.freedom2surf.net
+	[195.137.84.84]) (authenticated bits=0)
+	by ns3.mintra.com (8.12.11/8.12.11) with ESMTP id l65NExrZ002173;
+	Fri, 6 Jul 2007 00:15:03 +0100
+From: Seb James <seb@esfnet.co.uk>
+To: Jeremy Allison <jra@samba.org>
+In-Reply-To: <20070705171221.GD1687@samba1>
+References: <1183652146.16597.8.camel@circle.hypercube>
+	<20070705171221.GD1687@samba1>
+Content-Type: multipart/mixed; boundary="=-8Mkq+otCHcqCbWvCxGlT"
+Date: Thu, 05 Jul 2007 22:51:18 +0100
+Message-Id: <1183672278.32458.6.camel@circle.hypercube>
+Mime-Version: 1.0
+X-Mailer: Evolution 2.6.2 
+X-Mintra-MailScanner-Information: Please contact the ISP for more information
+X-Mintra-MailScanner: Not scanned: please contact your Internet E-Mail Service
+	Provider for details
+X-MailScanner-From: seb@esfnet.co.uk
+Cc: samba-technical@samba.org
+Subject: Re: smbtree patch - adds option to print out share type
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+
+--=-8Mkq+otCHcqCbWvCxGlT
+Content-Type: text/plain
+Content-Transfer-Encoding: 7bit
+
+On Thu, 2007-07-05 at 10:12 -0700, Jeremy Allison wrote:
+
+> Hi Seb,
+> 
+> 	Could you post this patch to the list please ? It's much easier
+> for us to pick up patches that have been publicly posted.
+> 
+
+Hello,
+
+No problem, I'll attach the patch to this email, rather than placing it
+inline, I hope that's ok.
+
+> PS. I'll be in Sheffield late July - where abouts are you ?
+
+I live in Walkley with my wife and two young boys. I moved here about
+six years ago now. You missed an amazing flood last week. I hope none of
+your family were affected.
+
+regards,
+
+Seb James
+
+--=-8Mkq+otCHcqCbWvCxGlT
+Content-Disposition: attachment; filename=smbtree_showsharetype.patch
+Content-Type: text/x-patch; name=smbtree_showsharetype.patch; charset=us-ascii
+Content-Transfer-Encoding: 7bit
+
+--- smbtree.c.Release_3.0.24	2007-07-05 15:49:56.000000000 +0000
++++ smbtree.c	2007-07-05 15:21:49.000000000 +0000
+@@ -23,6 +23,7 @@
+ #include "includes.h"
+ 
+ static BOOL use_bcast;
++static BOOL show_type;
+ 
+ /* How low can we go? */
+ 
+@@ -200,6 +201,8 @@
+ static BOOL print_tree(struct user_auth_info *user_info)
+ {
+         struct name_list *wg, *sv, *sh;
++	char share_type[16];
++	
+ 
+         /* List workgroups */
+ 
+@@ -233,11 +236,46 @@
+                             !get_shares(sv->name, user_info))
+                                 continue;
+ 
++			/* 
++			 * From libsmbclient.c:
++			 *
++			 * We need to process the type a little ...
++			 *
++			 * Disk share     = 0x00000000
++			 * Print share    = 0x00000001
++			 * Comms share    = 0x00000002 (obsolete?)
++			 * IPC$ share     = 0x00000003 
++			 *
++			 * administrative shares:
++			 * ADMIN$, IPC$, C$, D$, E$ ...  are type |= 0x80000000
++			 */
+                         for (sh = shares; sh; sh = sh->next) {
+-                                printf("\t\t\\\\%s\\%-15s\t%s\n", 
+-				       sv->name, sh->name, sh->comment);
+-                        }
+-                }
++				if (show_type) {
++					if ((sh->server_type & 0xffff) == 0) {
++						snprintf (share_type, 5, "Disk");
++					} else if ((sh->server_type & 0xffff) == 0x1) {
++						snprintf (share_type, 6, "Print");
++					} else if ((sh->server_type & 0xffff) == 0x2) {
++						snprintf (share_type, 6, "Comms");
++					} else if ((sh->server_type & 0xffff) == 0x3) {
++						snprintf (share_type, 4, "IPC");
++					} else {
++						snprintf (share_type, 8, "Unknown");
++					}
++
++					if (sh->server_type & 0x80000000) {
++						strncat (share_type, " (admin)", 8);
++					}
++
++					printf("\t\t\\\\%s\\%-15s\t%-15s\t%s\n", 
++					       sv->name, sh->name, share_type, sh->comment);
++
++				} else {
++					printf("\t\t\\\\%s\\%-15s\t%s\n",
++					       sv->name, sh->name, sh->comment);
++				}           
++			}
++		}
+         }
+ 
+         return True;
+@@ -253,6 +291,7 @@
+ 		{ "broadcast", 'b', POPT_ARG_VAL, &use_bcast, True, "Use broadcast instead of using the master browser" },
+ 		{ "domains", 'D', POPT_ARG_VAL, &level, LEV_WORKGROUP, "List only domains (workgroups) of tree" },
+ 		{ "servers", 'S', POPT_ARG_VAL, &level, LEV_SERVER, "List domains(workgroups) and servers of tree" },
++		{ "sharetype", 'H', POPT_ARG_VAL, &show_type, True, "Include the share type (Disk, print, IPC) in the output" },
+ 		POPT_COMMON_SAMBA
+ 		POPT_COMMON_CREDENTIALS
+ 		POPT_TABLEEND
+@@ -283,7 +322,7 @@
+ 		if (pass) {
+ 			pstrcpy(cmdline_auth_info.password, pass);
+ 		}
+-        cmdline_auth_info.got_pass = True;
++		cmdline_auth_info.got_pass = True;
+ 	}
+ 
+ 	/* Now do our stuff */
+
+--=-8Mkq+otCHcqCbWvCxGlT--
+

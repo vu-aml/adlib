@@ -1,0 +1,121 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Apr 19 13:42:27 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3JHgQ0I027583
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 19 Apr 2007 13:42:26 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id EC0D2163899
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 19 Apr 2007 17:42:01 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-2.4 required=3.8 tests=ALL_TRUSTED,AWL,BAYES_00,
+	RCVD_IN_DSBL autolearn=ham version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from [IPv6:::1] (dp [66.70.73.150])
+	by lists.samba.org (Postfix) with ESMTP id 9B826162ADA;
+	Thu, 19 Apr 2007 17:41:44 +0000 (GMT)
+Message-Id: <3495631D-6315-4450-8386-41C2F4092239@samba.org>
+From: James Peach <jpeach@samba.org>
+To: "Gerald (Jerry) Carter" <jerry@samba.org>
+In-Reply-To: <46278171.7030301@samba.org>
+Content-Type: text/plain; charset=US-ASCII; format=flowed; delsp=yes
+Content-Transfer-Encoding: 7bit
+Mime-Version: 1.0 (Apple Message framework v880)
+Date: Thu, 19 Apr 2007 10:41:43 -0700
+References: <20070418205000.88D4B1638B9@lists.samba.org>	<1176929909.16886.16.camel@localhost.localdomain>	<1176986243.23884.7.camel@localhost.localdomain>	<200704191330.l3JDUHaM092847@au.padl.com>
+	<1176990812.23884.9.camel@localhost.localdomain>
+	<46278171.7030301@samba.org>
+X-Mailer: Apple Mail (2.880)
+Cc: samba-technical@lists.samba.org, simo <idra@samba.org>
+Subject: Re: Broken idmap interface design
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2728
+Lines: 70
+
+On 19/04/2007, at 7:49 AM, Gerald (Jerry) Carter wrote:
+
+> -----BEGIN PGP SIGNED MESSAGE-----
+> Hash: SHA1
+>
+> Simo,
+>
+>> On Thu, 2007-04-19 at 23:30 +1000, Luke Howard wrote:
+>>> Sorry to jump in here, one thing I'd like to see
+>>> in idmap_ad is support for using the Global Catalog. Shouldn't
+>>> be too hard. Thoughts?
+>>
+>> Well IIRC rfc2307 attributes are not exposed via GC by
+>> default, so to use it we must have fallback code in place.
+>> Not that hard, but I guess this is more of a 3.0.26 feature.
+>> I am working only to stabilize the code for offline
+>> usage right now.
+>
+> It's actually worse than that.  The idmap interface is
+> badly broken.  I hate to say this, but the calls into
+> winbindd from the idmap child has to go.  I know how you
+> arrived at the design assumptions.
+>
+> You designed the unixids_to_sids() and sids_to_unixids()
+> with the assumption that the idmap plugin would have
+> knowledge about the SID type.  I didn't catch this
+> because the backend I'm using for primary testing operates
+> similarly to idmap_ad and can obtain the SID type based
+> on LDAP searches.  This is ok for something like idmap_ad
+> which can get the information.  But the general and
+> default case is idmap_tdb (or even idmap_ldap).
+
+There's two cases for mapping from SIDs to UGIDs.
+
+First case is where full SIDs are explicitly stored in the directory  
+or have a static partitioning (like Unix Users and Unix Groups). In  
+this case, you don't need to be told what kind of ID the caller is  
+looking for, because the SID is globally unique, and must only map to  
+one ID.
+
+Second case is where the SID is dynamically generated from other  
+information in the directory. In this case, knowing the type of ID in  
+advance helps a lot and can prevent you generating bogus SIDs.
+
+I take it that it is this second case that is problematic?
+
+> Requiring the idmap_tdb code (or idmap_rid) to issues a
+> winbindd client call is wrong and a layering violation.  The
+> caller should specify the SID type which is exactly what
+> the WINBINDD_SID_TO_UID, et. al. calls used to do.
+
+I don't see any winbind client calls in idmap_tdb.c. Could you spell  
+this out a bit more?
+
+> Right now I'm going to do several things in order to get
+> the code to a release point.
+>
+> (a) Remove WINBINDD_SIDS_TO_XIDS from winbindd_nss.h to
+>    prevent us from having to support the broken call in
+>    future releases.  The existing idmap_methods API will
+>    not change but will become solely an internal interface
+>    used by winbindd.
+>
+> (b) Overload the id_map.xid.type to be specified by the caller
+>    and not filled by the idmap backend.
+
+So existing idmap modules will need to be changed?
+
+--
+James Peach | jpeach@samba.org
+

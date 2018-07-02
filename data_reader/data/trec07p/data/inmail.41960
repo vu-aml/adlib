@@ -1,0 +1,87 @@
+From perl6-all-return-81549-ktwarwic=speedy.uwaterloo.ca@perl.org  Wed May 23 00:18:20 2007
+Return-Path: <perl6-all-return-81549-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4N4IHqD020713
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 23 May 2007 00:18:18 -0400
+Received: (qmail 7005 invoked by uid 514); 23 May 2007 04:18:13 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 6999 invoked from network); 23 May 2007 04:18:12 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-1.1 required=8.0
+	tests=BAYES_05,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: softfail (x1.develooper.com: transitioning domain of chromatic@wgz.org does not designate 63.251.223.186 as permitted sender)
+Delivered-To: perlmail-parrot-porters@onion.perl.org
+Delivered-To: parrot-porters@perl.org
+Received-SPF: pass (x1.develooper.com: domain of chromatic@wgz.org designates 63.105.17.39 as permitted sender)
+From: chromatic <chromatic@wgz.org>
+Organization: Snafu
+To: parrot-porters@perl.org
+Subject: Why You Can Only Call Sub PMCs from C
+Date: Tue, 22 May 2007 21:11:13 -0700
+User-Agent: KMail/1.9.6
+MIME-Version: 1.0
+Content-Type: text/plain;
+  charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+Message-Id: <200705222111.13748.chromatic@wgz.org>
+X-Virus-Scanned: by amavisd-new at wgz.org
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-0.2 required=8.0
+	tests=BAYES_40,SPF_PASS
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=1.5 required=8.0
+	tests=BAYES_05,DKIM_POLICY_SIGNSOME,KARMA_CONNECT_NEGATIVE,SPF_SOFTFAIL
+
+If you have a Sub PMC (or subclass), you can invoke that PMC from C code using 
+Parrot_call_sub() or a similar function.  Of course, if you want to pass 
+arguments to that PMC, something needs to translate those arguments from C's 
+calling conventions to Parrot's calling conventions.
+
+That something is a function something like runops_args() in src/inter_run.c.
+
+Here's the fun part.
+
+This function calls:
+
+	    dest = VTABLE_invoke(interp, sub, NULL);
+
+That is, it invokes the PMC.  A Sub PMC returns the address of the next opcode 
+to run -- the first opcode of the sub.  runops_args() can check that opcode 
+to see if it fetches arguments.  A subroutine that takes arguments will start 
+with an opcode to fetch the arguments.
+
+The important thing is that this doesn't really execute the subroutine.  It 
+just gets the address of the next opcode to run.  Parrot can run that later, 
+after it sets up the arguments appropriately.
+
+Of course, an NCI PMC (a subclass of the Sub PMC) doesn't really have an 
+opcodes to execute, as it's a function pointer to execute.  Its invoke() 
+vtable override actually calls the function.
+
+Note that this happens *before* Parrot translates the arguments from the C 
+conventions into Parrot's conventions, so in the NCI thunk that translate 
+arguments from Parrot's conventions back into C's conventions, the arguments 
+Just Aren't There.
+
+I'm not sure what the right solution is, but Liskov cries a little bit.  
+Clearly, invoke() behaves very differently for Sub and NCI subs.
+
+I haven't looked at how Multi behaves, but I have my guesses.
+
+-- c
+

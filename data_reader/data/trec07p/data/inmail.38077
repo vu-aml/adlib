@@ -1,0 +1,112 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May 16 22:09:27 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4H29RqD026316
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 16 May 2007 22:09:27 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 47C8A163881
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 17 May 2007 02:09:24 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.5 required=3.8 tests=AWL,BAYES_00,NO_RELAYS,
+	RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: by lists.samba.org (Postfix, from userid 549)
+	id 41A2D162AD0; Thu, 17 May 2007 02:08:40 +0000 (GMT)
+Date: Wed, 16 May 2007 19:08:28 -0700
+From: Jeremy Allison <jra@samba.org>
+To: Jeff Coffler <jeff-list-sambatech@taltos.com>
+Message-ID: <20070517020828.GE28071@samba1>
+References: <1179363594.31486.TMDA@kidsrock.taltos.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+In-Reply-To: <1179363594.31486.TMDA@kidsrock.taltos.com>
+User-Agent: Mutt/1.5.11
+Cc: samba-technical@lists.samba.org
+Subject: Re: Problems with dfs and Samba 3.0.24-5/3.0.25-7 - please help
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: Jeremy Allison <jra@samba.org>
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+On Wed, May 16, 2007 at 05:59:41PM -0700, Jeff Coffler wrote:
+> Hi,
+> 
+> I'm running Fedora Core 6, and I'm having a heck of a problem with 
+> Samba.  I'm pretty sure it's related to the dfs code.  I noticed this 
+> code change from Jeremy:
+> 
+>    http://lists.samba.org/archive/samba-cvs/2007-March/075343.html
+> 
+> It seemed like this was related based on my level 3 logs.  But I 
+> verified that 3.0.25-7 has that fix, and yet my problem continues.
+> 
+> My server is just a simple standalone server with user authentication.  
+> When I connect from Windows XP, I get:
+> 
+>    % net use x: \\miffy\jeff
+>    System error 3 has occurred.
+> 
+>    The system cannot find the path specified.
+> 
+> Samba 3.0.24-1 (downloaded as part of FC6) works perfectly.  The above 
+> works without an issue.
+> Samba 3.0.24-5 (downloaded as an update of FC6) is broken.
+> If I download 3.0.25-7 from Samba.org for FC6, it's broken.
+> 
+> In the logs for the broken cases (log level 3), the point where I 
+> *think* things go sour is here:
+> 
+> [2007/05/16 14:27:29, 3] smbd/msdfs.c:get_referred_path(624)
+>  get_referred_path: |jeff| in dfs path \miffy\jeff is not a dfs root.
+> [2007/05/16 14:27:29, 3] smbd/error.c:error_packet_set(106)
+>  error packet at smbd/trans2.c(6184) cmd=50 (SMBtrans2) NT_STATUS_NOT_FOUND
+> 
+> It goes downhill from there.  But I'm not certain, as I don't have a lot 
+> of experience looking at Samba logs.
+> 
+> I have log level 3's of the working case (3.0.24-1) and the broken cases:
+> 
+> The working case:
+>    https://webdav.taltos.com/jcoffler-lap.log.good
+> 
+> The broken case (3.0.24-5):
+>    https://webdav.taltos.com/jcoffler-lap.log.bad.24-5
+> 
+> And the broken case (3.0.25-7):
+>    https://webdav.taltos.com/jcoffler-lap.log.bad
+> 
+> I'm at a loss of where to go from here.  Can anyone offer any advice?  
+> It seems like there was some sort of code change here that broke things, 
+> but my usage case seems so simple, I just don't get it.
+
+Ah - this explains a lot. The default for the "msdfs root"
+parameter changed between 3.0.24 from True to False.
+
+Has this client been restarted since the new Samba
+load was added and restarted ?
+
+If not - try rebooting the client. The clients remember
+if a server was a dfs root and act accordingly until a
+restart.
+
+The decision was made to change "msdfs root = no"
+due to problems detecting that the initial name given in
+a dfs root path belonged to this server (as I recall).
+
+Jeremy.
+

@@ -1,0 +1,84 @@
+From perl6-all-return-80625-ktwarwic=speedy.uwaterloo.ca@perl.org  Mon Apr 16 05:05:03 2007
+Return-Path: <perl6-all-return-80625-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3G9520I003886
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 16 Apr 2007 05:05:02 -0400
+Received: (qmail 16484 invoked by uid 514); 16 Apr 2007 09:04:37 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 16478 invoked from network); 16 Apr 2007 09:04:37 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+Message-ID: <46233C1C.2020805@jnthn.net>
+Date: Mon, 16 Apr 2007 10:04:28 +0100
+From: Jonathan Worthington <jonathan@jnthn.net>
+User-Agent: Thunderbird 1.5.0.10 (Windows/20070221)
+MIME-Version: 1.0
+To: perl6-internals@perl.org
+Subject: Re: [perl #42547] [PATCH] fix segfault by implementing init() in
+ Object.pmc
+References: <RT-Ticket-42547@perl.org> <189adbd0704151836y6f042f49h3c17e6a701613449@mail.gmail.com> <rt-3.6.HEAD-30557-1176687438-1016.42547-72-0@perl.org>
+In-Reply-To: <rt-3.6.HEAD-30557-1176687438-1016.42547-72-0@perl.org>
+Content-Type: text/plain; charset=UTF-8; format=flowed
+Content-Transfer-Encoding: 7bit
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+Status: O
+Content-Length: 1717
+Lines: 38
+
+Alek Storm (via RT) wrote:
+> The following code causes a segfault:
+> .sub main :main
+>   $P0 = new "Object"
+>   $P0.'foo'()
+> .end
+>
+> This is because the vtable methods in Object assume a valid pointer to
+> the object's internal representation, which is only initialized in
+> init_pmc.
+That probably has to change too, otherwise people can do:
+
+obj = new Object, class
+
+Which is bad, because class.new() never gets called in the process and 
+(provided it hasn't been instantiated before) you don't end up with a 
+valid class (nor one with the instantiated flag set), so it'll only 
+cause breakage further down the line.
+
+> I've attached two patches solving the problem by implementing init(), the first of which creates an empty, anonymous Class for the Object; the second throws an exception when init() is called.  I prefer the former, because it follows the programmer's instinct of what should happen: a completely empty Object is created.
+>   
+The second was what I had in mind; the patch to do the first of these 
+isn't going to work out too well (for the reasons I stated with init_pmc).
+
+What should happen: Class manufactures an object and init and init_pmc 
+of Object both throw exceptions. That means creating a new Object PMC in 
+the new method of Class using pmc_new_noinit (IIRC) and setting up its 
+guts from within Class.
+
+As part of this, the structs, typedefs and macros for Parrot_Object and 
+Parrot_Class need to go in a header file pulled in by Class and Object 
+PMCs (but *only* by those two - it's fine for Class and Object to know 
+about each others guts, but everything else should use the external 
+interface, so it can work with other, HLL specific classes and object).
+
+Thanks,
+
+Jonathan
+

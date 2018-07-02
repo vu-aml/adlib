@@ -1,0 +1,146 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Apr 18 07:13:44 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3IBDi0I009496
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 18 Apr 2007 07:13:44 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 9F2381639FF
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 18 Apr 2007 11:13:19 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.8 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1017)
+	id 6D527163844; Wed, 18 Apr 2007 11:12:33 +0000 (GMT)
+To: samba-cvs@samba.org
+From: obnox@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070418111233.6D527163844@lists.samba.org>
+Date: Wed, 18 Apr 2007 11:12:33 +0000 (GMT)
+Subject: svn commit: samba r22330 - in branches/SAMBA_3_0: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 3012
+Lines: 104
+
+Author: obnox
+Date: 2007-04-18 11:12:31 +0000 (Wed, 18 Apr 2007)
+New Revision: 22330
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22330
+
+Log:
+For my own convenience (changes discussed some weeks ago with
+Jerry, who basically didn't care - now I can commit them myself;-):
+
+- Add a call to mkversion.sh to ensure sane version number even
+  from a plain checkout.
+- Add a "nodocs" switch to allow for calling make-tarball.sh without
+  the need of having samba-docs and using-samba around.
+
+
+Modified:
+   branches/SAMBA_3_0/make-tarball.sh
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/make-tarball.sh
+===================================================================
+--- branches/SAMBA_3_0/make-tarball.sh	2007-04-18 11:08:16 UTC (rev 22329)
++++ branches/SAMBA_3_0/make-tarball.sh	2007-04-18 11:12:31 UTC (rev 22330)
+@@ -4,35 +4,43 @@
+ ## You either need to include the using_samba cvs module in the
+ ## parent directory or tell the script where to find it 
+ ##
+-## Usgae:  ./make-tarball.sh
++## Usgae:  ./make-tarball.sh [nodocs]
+ 
++NODOCS=0
++if [ x"$1" = x"nodocs" ] ; then
++	NODOCS=1
++	echo Not including docs.
++fi
++
+ DOCSDIR=../samba-docs/
+ USING_SAMBA=../using_samba/
+ SRCDIR=`pwd`
+ 
+-if [ ! -d $USING_SAMBA ]; then
+-
+-	echo Cannot find "Using Samba" directory \(assuming $USING_SAMBA\).  
+-	echo Please set the USING_SAMBA variable in this script to the correct
+-	echo location.  The html files are available in the using_samba CVS 
+-	echo module on cvs.samba.org.  See http://cvs/samba.org/ for details 
+-	echo about anonymous CVS access.  Exiting now....
+-
+-	exit 1
+-
++if [ $NODOCS -eq 0 ]; then
++	if [ ! -d $USING_SAMBA ]; then
++	
++		echo Cannot find "Using Samba" directory \(assuming $USING_SAMBA\).  
++		echo Please set the USING_SAMBA variable in this script to the correct
++		echo location.  The html files are available in the using_samba CVS 
++		echo module on cvs.samba.org.  See http://cvs.samba.org/ for details 
++		echo about anonymous CVS access.  Exiting now....
++	
++		exit 1
++	
++	fi
++	
++	if [ ! -d $DOCSDIR ]; then
++	
++		echo Cannot find samba-docs \(assuming $DOCSDIR\).
++		echo Please set the DOCSDIR variable in this script 
++		echo to the correct path.
++	
++		exit 1
++	
++	fi
+ fi
+ 
+-if [ ! -d $DOCSDIR ]; then
+-
+-	echo Cannot find samba-docs \(assuming $DOCSDIR\).
+-	echo Please set the DOCSDIR variable in this script 
+-	echo to the correct path.
+-
+-	exit 1
+-
+-fi
+-
+-
++( cd source ; sh script/mkversion.sh )
+ VERSION=`grep SAMBA_VERSION_OFFICIAL_STRING source/include/version.h | cut -d\" -f2 | sed 's/ /_/g'`
+ TARBALLDIR=/tmp/samba-$VERSION
+ 
+@@ -44,8 +52,10 @@
+ mkdir $TARBALLDIR
+ rsync -aC ./ $TARBALLDIR
+ /bin/rm -rf $TARBALLDIR/docs/*
+-rsync -aC $DOCSDIR/ $TARBALLDIR/docs/ 
+-rsync -aC $USING_SAMBA $TARBALLDIR/docs/htmldocs/
++if [ $NODOCS -eq 0 ]; then
++	rsync -aC $DOCSDIR/ $TARBALLDIR/docs/ 
++	rsync -aC $USING_SAMBA $TARBALLDIR/docs/htmldocs/
++fi
+ 
+ echo Creating packaging scripts...
+ ( cd $TARBALLDIR/packaging; sh bin/update-pkginfo $VERSION 1 )
+

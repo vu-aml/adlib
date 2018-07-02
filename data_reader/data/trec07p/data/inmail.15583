@@ -1,0 +1,239 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat Apr 21 03:23:24 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3L7NN0I024553
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 21 Apr 2007 03:23:23 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id EFDD5163926
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 21 Apr 2007 07:22:58 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.5 required=3.8 tests=AWL,BAYES_00,
+	DATE_IN_PAST_12_24,NO_REAL_NAME,NO_RELAYS,RCVD_IN_DSBL autolearn=no 
+	version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id E62D2162BDC; Sat, 21 Apr 2007 07:22:16 +0000 (GMT)
+Date: Fri, 20 Apr 2007 21:02:53 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070421072216.E62D2162BDC@lists.samba.org>
+Subject: Rev 171: - expanded status to include count of each call type in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 6583
+Lines: 197
+
+------------------------------------------------------------
+revno: 171
+revision-id: tridge@samba.org-20070420110253-c6f53b7412bca669
+parent: tridge@samba.org-20070420100747-e2555d41345ac055
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Fri 2007-04-20 21:02:53 +1000
+message:
+  - expanded status to include count of each call type
+  - added lockwait latency
+modified:
+  common/ctdb.c                  ctdb.c-20061127094323-t50f58d65iaao5of-2
+  common/ctdb_daemon.c           ctdb_daemon.c-20070409200331-3el1kqgdb9m4ib0g-1
+  common/ctdb_lockwait.c         ctdb_lockwait.c-20070416214118-n1aeonljj3vpdd9q-1
+  include/ctdb_private.h         ctdb_private.h-20061117234101-o3qt14umlg9en8z0-13
+  tools/ctdb_status.c            ctdb_status.c-20070420100703-w2y116bm9be7hmlv-2
+=== modified file 'common/ctdb.c'
+--- a/common/ctdb.c	2007-04-20 10:07:47 +0000
++++ b/common/ctdb.c	2007-04-20 11:02:53 +0000
+@@ -246,34 +246,42 @@
+ 
+ 	switch (hdr->operation) {
+ 	case CTDB_REQ_CALL:
++		ctdb->status.count.req_call++;
+ 		ctdb_request_call(ctdb, hdr);
+ 		break;
+ 
+ 	case CTDB_REPLY_CALL:
++		ctdb->status.count.reply_call++;
+ 		ctdb_reply_call(ctdb, hdr);
+ 		break;
+ 
+ 	case CTDB_REPLY_ERROR:
++		ctdb->status.count.reply_error++;
+ 		ctdb_reply_error(ctdb, hdr);
+ 		break;
+ 
+ 	case CTDB_REPLY_REDIRECT:
++		ctdb->status.count.reply_redirect++;
+ 		ctdb_reply_redirect(ctdb, hdr);
+ 		break;
+ 
+ 	case CTDB_REQ_DMASTER:
++		ctdb->status.count.req_dmaster++;
+ 		ctdb_request_dmaster(ctdb, hdr);
+ 		break;
+ 
+ 	case CTDB_REPLY_DMASTER:
++		ctdb->status.count.reply_dmaster++;
+ 		ctdb_reply_dmaster(ctdb, hdr);
+ 		break;
+ 
+ 	case CTDB_REQ_MESSAGE:
++		ctdb->status.count.req_message++;
+ 		ctdb_request_message(ctdb, hdr);
+ 		break;
+ 
+ 	case CTDB_REQ_FINISHED:
++		ctdb->status.count.req_finished++;
+ 		ctdb_request_finished(ctdb, hdr);
+ 		break;
+ 
+
+=== modified file 'common/ctdb_daemon.c'
+--- a/common/ctdb_daemon.c	2007-04-20 10:07:47 +0000
++++ b/common/ctdb_daemon.c	2007-04-20 11:02:53 +0000
+@@ -443,6 +443,7 @@
+ 	struct ctdb_req_header *hdr = (struct ctdb_req_header *)data;
+ 	struct ctdb_client *client = talloc_get_type(p, struct ctdb_client);
+ 	TALLOC_CTX *tmp_ctx;
++	struct ctdb_context *ctdb = client->ctdb;
+ 
+ 	/* place the packet as a child of a tmp_ctx. We then use
+ 	   talloc_free() below to free it. If any of the calls want
+@@ -463,26 +464,32 @@
+ 
+ 	switch (hdr->operation) {
+ 	case CTDB_REQ_CALL:
++		ctdb->status.client.req_call++;
+ 		daemon_request_call_from_client(client, (struct ctdb_req_call *)hdr);
+ 		break;
+ 
+ 	case CTDB_REQ_REGISTER:
++		ctdb->status.client.req_register++;
+ 		daemon_request_register_message_handler(client, 
+ 							(struct ctdb_req_register *)hdr);
+ 		break;
+ 	case CTDB_REQ_MESSAGE:
++		ctdb->status.client.req_message++;
+ 		daemon_request_message_from_client(client, (struct ctdb_req_message *)hdr);
+ 		break;
+ 
+ 	case CTDB_REQ_CONNECT_WAIT:
++		ctdb->status.client.req_connect_wait++;
+ 		daemon_request_connect_wait(client, (struct ctdb_req_connect_wait *)hdr);
+ 		break;
+ 
+ 	case CTDB_REQ_SHUTDOWN:
++		ctdb->status.client.req_shutdown++;
+ 		daemon_request_shutdown(client, (struct ctdb_req_shutdown *)hdr);
+ 		break;
+ 
+ 	case CTDB_REQ_STATUS:
++		ctdb->status.client.req_status++;
+ 		daemon_request_status(client, (struct ctdb_req_status *)hdr);
+ 		break;
+ 
+
+=== modified file 'common/ctdb_lockwait.c'
+--- a/common/ctdb_lockwait.c	2007-04-20 10:07:47 +0000
++++ b/common/ctdb_lockwait.c	2007-04-20 11:02:53 +0000
+@@ -35,7 +35,7 @@
+ 	pid_t child;
+ 	void *private_data;
+ 	void (*callback)(void *);
+-	struct timeval t;
++	struct timeval start_time;
+ };
+ 
+ static void lockwait_handler(struct event_context *ev, struct fd_event *fde, 
+@@ -48,7 +48,7 @@
+ 	pid_t child = h->child;
+ 	talloc_set_destructor(h, NULL);
+ 	close(h->fd[0]);
+-	DEBUG(3,(__location__ " lockwait took %.6f seconds\n", timeval_elapsed(&h->t)));
++	ctdb_latency(&h->ctdb->status.max_lockwait_latency, h->start_time);
+ 	h->ctdb->status.pending_lockwait_calls--;
+ 	talloc_free(h);	
+ 	callback(p);
+@@ -133,7 +133,7 @@
+ 		return NULL;
+ 	}
+ 
+-	result->t = timeval_current();
++	result->start_time = timeval_current();
+ 
+ 	return result;
+ }
+
+=== modified file 'include/ctdb_private.h'
+--- a/include/ctdb_private.h	2007-04-20 10:07:47 +0000
++++ b/include/ctdb_private.h	2007-04-20 11:02:53 +0000
+@@ -122,6 +122,25 @@
+ 	uint32_t client_packets_recv;
+ 	uint32_t node_packets_sent;
+ 	uint32_t node_packets_recv;
++	struct {
++		uint32_t req_call;
++		uint32_t reply_call;
++		uint32_t reply_redirect;
++		uint32_t req_dmaster;
++		uint32_t reply_dmaster;
++		uint32_t reply_error;
++		uint32_t req_message;
++		uint32_t req_finished;
++	} count;
++	struct {
++		uint32_t req_call;
++		uint32_t req_message;
++		uint32_t req_finished;
++		uint32_t req_register;
++		uint32_t req_connect_wait;
++		uint32_t req_shutdown;
++		uint32_t req_status;
++	} client;
+ 	uint32_t total_calls;
+ 	uint32_t pending_calls;
+ 	uint32_t lockwait_calls;
+
+=== modified file 'tools/ctdb_status.c'
+--- a/tools/ctdb_status.c	2007-04-20 10:07:47 +0000
++++ b/tools/ctdb_status.c	2007-04-20 11:02:53 +0000
+@@ -33,8 +33,24 @@
+ {
+ 	printf(" client_packets_sent     %u\n", s->client_packets_sent);
+ 	printf(" client_packets_recv     %u\n", s->client_packets_recv);
++	printf("   req_call              %u\n", s->client.req_call);
++	printf("   req_message           %u\n", s->client.req_message);
++	printf("   req_finished          %u\n", s->client.req_finished);
++	printf("   req_register          %u\n", s->client.req_register);
++	printf("   req_connect_wait      %u\n", s->client.req_connect_wait);
++	printf("   req_shutdown          %u\n", s->client.req_shutdown);
++	printf("   req_status            %u\n", s->client.req_status);
+ 	printf(" node_packets_sent       %u\n", s->node_packets_sent);
+ 	printf(" node_packets_recv       %u\n", s->node_packets_recv);
++	printf("   req_call              %u\n", s->client.req_call);
++	printf("   reply_call            %u\n", s->count.reply_call);
++	printf("   reply_redirect        %u\n", s->count.reply_redirect);
++	printf("   req_dmaster           %u\n", s->count.req_dmaster);
++	printf("   reply_dmaster         %u\n", s->count.reply_dmaster);
++	printf("   reply_error           %u\n", s->count.reply_error);
++	printf("   reply_redirect        %u\n", s->count.reply_redirect);
++	printf("   req_message           %u\n", s->count.req_message);
++	printf("   req_finished          %u\n", s->count.req_finished);
+ 	printf(" total_calls             %u\n", s->total_calls);
+ 	printf(" pending_calls           %u\n", s->pending_calls);
+ 	printf(" lockwait_calls          %u\n", s->lockwait_calls);
+

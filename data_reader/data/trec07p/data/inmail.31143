@@ -1,0 +1,161 @@
+From sugar-bounces@laptop.org  Tue May  8 03:23:25 2007
+Return-Path: <sugar-bounces@laptop.org>
+Received: from pedal.laptop.org (pedal.laptop.org [18.85.2.148])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l487NOqD008004
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 8 May 2007 03:23:24 -0400
+Received: from pedal.laptop.org (localhost [127.0.0.1])
+	by pedal.laptop.org (Postfix) with ESMTP id 8C7C74F680;
+	Tue,  8 May 2007 03:23:12 -0400 (EDT)
+X-Original-To: sugar@laptop.org
+Delivered-To: sugar@laptop.org
+Received: from spam.laptop.org (spam.laptop.org [18.85.46.23])
+	by pedal.laptop.org (Postfix) with ESMTP id B7E884F680
+	for <sugar@laptop.org>; Tue,  8 May 2007 03:23:11 -0400 (EDT)
+X-ASG-Debug-ID: 1178609000-738b00000000-3Xmyjt
+X-Barracuda-URL: http://18.85.46.23:8000/cgi-bin/mark.cgi
+X-Barracuda-Connect: www.WarpOMatic.com[66.98.182.86]
+X-Barracuda-Start-Time: 1178609000
+X-Barracuda-Encrypted: DHE-RSA-AES256-SHA
+Received: from WarpOMatic.com (www.WarpOMatic.com [66.98.182.86])
+	(using TLSv1 with cipher DHE-RSA-AES256-SHA (256/256 bits))
+	(No client certificate requested)
+	by spam.laptop.org (Spam Firewall) with ESMTP id C87FD8BD9
+	for <sugar@laptop.org>; Tue,  8 May 2007 03:23:20 -0400 (EDT)
+Received: from [10.13.0.64] (adsl-75-31-130-29.dsl.pltn13.sbcglobal.net
+	[75.31.130.29]) (authenticated bits=0)
+	by WarpOMatic.com (8.12.10/8.12.10) with ESMTP id l487JC8u004122;
+	Tue, 8 May 2007 00:19:12 -0700
+Message-ID: <46402561.6000009@DonHopkins.com>
+Date: Tue, 08 May 2007 00:23:13 -0700
+From: Don Hopkins <dhopkins@DonHopkins.com>
+User-Agent: Thunderbird 1.5.0.10 (Windows/20070221)
+MIME-Version: 1.0
+To: "'Sugar List'" <sugar@laptop.org>, John Gilmore <gnu@toad.com>,
+   Don Hopkins <dhopkins@DonHopkins.com>
+X-ASG-Orig-Subj: Bug in pygtk RadioAction
+X-ImpeachBushNow-Information: Please contact postmaster@WarpOMatic.com for
+	more information
+X-ImpeachBushNow: Found to be clean
+X-Barracuda-Bayes: INNOCENT GLOBAL 0.0011 1.0000 -2.0138
+X-Barracuda-Virus-Scanned: by Barracuda Spam Firewall at laptop.org
+X-Barracuda-Spam-Score: -2.01
+X-Barracuda-Spam-Status: No, SCORE=-2.01 using global scores of TAG_LEVEL=3.5
+	QUARANTINE_LEVEL=1000.0 KILL_LEVEL=5.5 tests=
+X-Barracuda-Spam-Report: Code version 3.1, rules version 3.1.16348
+	Rule breakdown below
+	pts rule name              description
+	---- ----------------------
+	--------------------------------------------------
+Subject: [sugar] Bug in pygtk RadioAction
+X-BeenThere: sugar@laptop.org
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Discussion of OLPC design,
+	desktop platform and user experience" <sugar.laptop.org>
+List-Unsubscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=unsubscribe>
+List-Archive: <http://mailman.laptop.org/pipermail/sugar>
+List-Post: <mailto:sugar@laptop.org>
+List-Help: <mailto:sugar-request@laptop.org?subject=help>
+List-Subscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: sugar-bounces@laptop.org
+Errors-To: sugar-bounces@laptop.org
+
+(I've filed the following bugs against gtk/pygtk):
+
+http://bugzilla.gnome.org/show_bug.cgi?id=436796
+
+Apparently a RadioAction does not create the documented classes 
+RadioMenuItem when you call create_menu_item(), and RadioToolButton when 
+you call create_tool_item(). Instead of a RadioMenuItem it creates a 
+RadioToggleItem, and instead of RadioToolItem it creates a CheckMenuItem.
+
+I discovered this issue when I tried to create my own subclass of 
+RadioAction called SugarRadioAction and went 
+SugarRadioAction.set_tool_item_type(SugarRadioToolButton) so it would 
+make my own subclass of gtk.RadioToolButton. Unfortunately it did not 
+work when my SugarRadioToolButton was a subclass of gtk.RadioToolButton 
+-- it selected all the buttons at once and never let me deselect them, 
+instead of only having one selected at once like a good radio button 
+set. But I noticed that normal RadioActions were actually creating 
+gtk.ToggleToolButton's instead of gtk.RadioToolButton's, so I changed 
+SugarRadioButton to subclass gtk.ToggleToolButton instead of 
+gtk.RadioToolButton, and suddenly it started working correctly!
+
+Here is the documentation for pygtk's Radio Actions, which incorrectly 
+states the corresponding proxy widgets are RadioMenuItem and 
+RadioToolButton. The gtk+ documentation itself is more vague, just 
+muttering something about how RadioAction is similar to RadioMenuItem, 
+but not specifying which proxy classes RadioAction actually makes.
+
+http://www.pygtk.org/pygtk2tutorial/ch-NewInPyGTK2.4.html
+
+    16.1.1.7. Radio Actions
+
+    A RadioAction is a subclass of ToggleAction that can be grouped so 
+that only one RadioAction is active at a time. The corresponding proxy 
+widgets are the RadioMenuItem and RadioToolButton.
+
+http://www.pygtk.org/docs/pygtk/class-gtkradioaction.html
+
+    A gtk.RadioAction is a subclass of gtk.ToggleAction and similar to 
+gtk.RadioMenuItem. A number of radio actions can be linked together so 
+that only one may be active at any one time.
+
+Here is a minimal test program that demonstrates the problem, followed 
+by its output.
+
+    -Don
+
+########################################################################
+# gtk_action_bug.py
+# Don Hopkins (dhopkins@DonHopkins.com)
+
+
+import gtk
+
+# Test ToggleAction, which works as documented.
+
+toggle_action = gtk.ToggleAction('a', 'label', None, None)
+print "Made toggle_action", toggle_action
+
+toggle_tool_item = toggle_action.create_tool_item()
+print "toggle_action.create_tool_item() RETURNED", toggle_tool_item, "SHOULD BE", gtk.ToggleToolButton, "AND IT IS!"
+
+toggle_menu_item = toggle_action.create_menu_item()
+print "toggle_action.create_menu_item RETURNED", toggle_menu_item, "SHOULD BE", gtk.CheckMenuItem, "AND IT IS!"
+
+# Test RadioAction, which does not work as documented.
+
+radio_action = gtk.RadioAction('a', 'label', None, None, 1)
+print "Made radio_action", radio_action
+
+radio_tool_item = radio_action.create_tool_item()
+print "radio_action.create_tool_item() RETURNED", radio_tool_item, "SHOULD BE", gtk.RadioToolButton, "BUT IT IS NOT!!!"
+
+radio_menu_item = radio_action.create_menu_item()
+print "radio_action.create_menu_item() RETURNED", radio_menu_item, "SHOULD BE", gtk.RadioMenuItem, "BUT IT IS NOT!!!"
+
+
+
+# Output:
+"""
+Made toggle_action <gtk.ToggleAction object at 0xb7ec8be4 (GtkToggleAction at 0xa020d10)>
+toggle_action.create_tool_item() RETURNED <gtk.ToggleToolButton object at 0xb7ec85cc (GtkToggleToolButton at 0xa030810)> SHOULD BE <type 'gtk.ToggleToolButton'> AND IT IS!
+toggle_action.create_menu_item RETURNED <gtk.CheckMenuItem object at 0xb7ec8824 (GtkCheckMenuItem at 0xa021570)> SHOULD BE <type 'gtk.CheckMenuItem'> AND IT IS!
+Made radio_action <gtk.RadioAction object at 0xb7ec884c (GtkRadioAction at 0xa03d808)>
+radio_action.create_tool_item() RETURNED <gtk.ToggleToolButton object at 0xb7ec8dc4 (GtkToggleToolButton at 0xa030940)> SHOULD BE <type 'gtk.RadioToolButton'> BUT IT IS NOT!!!
+radio_action.create_menu_item() RETURNED <gtk.CheckMenuItem object at 0xb7ec8dec (GtkCheckMenuItem at 0xa0215d8)> SHOULD BE <type 'gtk.RadioMenuItem'> BUT IT IS NOT!!!
+
+
+"""
+
+
+_______________________________________________
+Sugar mailing list
+Sugar@laptop.org
+http://mailman.laptop.org/mailman/listinfo/sugar
+

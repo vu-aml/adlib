@@ -1,0 +1,249 @@
+From perl6-all-return-81140-ktwarwic=speedy.uwaterloo.ca@perl.org  Mon May  7 01:28:23 2007
+Return-Path: <perl6-all-return-81140-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l475SMqD027422
+	for <ktwarwic@flax9.uwaterloo.ca>; Mon, 7 May 2007 01:28:22 -0400
+Received: (qmail 7680 invoked by uid 514); 7 May 2007 05:28:20 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 7675 invoked from network); 7 May 2007 05:28:20 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Delivered-To: parrotbug-followup@parrotcode.org
+Received-SPF: pass (x1.develooper.com: domain of mark@glines.org designates 72.36.206.66 as permitted sender)
+Date: Sun, 6 May 2007 22:27:08 -0700
+From: Mark Glines <mark@glines.org>
+To: parrotbug-followup@parrotcode.org
+Subject: Re: [perl #42883] [PATCH] Fix up headerfile guards
+Message-ID: <20070506222708.41a6be75@chirp>
+In-Reply-To: <rt-3.6.HEAD-12281-1178377124-1835.42883-74-0@perl.org>
+References: <RT-Ticket-42883@perl.org>
+	<20070504143850.229cc5ad@chirp>
+	<rt-3.6.HEAD-12281-1178377124-1835.42883-74-0@perl.org>
+Organization: Glines.org
+X-Mailer: Claws Mail 2.9.0 (GTK+ 2.10.11; i686-pc-linux-gnu)
+X-Useless-Header: yay!
+Mime-Version: 1.0
+Content-Type: multipart/mixed; boundary=MP_wJybkoXA28UGGp33+ElDd1C
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-0.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,KARMA_CONNECT_NEGATIVE,SPF_HELO_PASS,SPF_PASS
+
+--MP_wJybkoXA28UGGp33+ElDd1C
+Content-Type: text/plain; charset=US-ASCII
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+
+On Sat, 05 May 2007 07:58:45 -0700
+"Bernhard Schmalhofer via RT" <parrotbug-followup@parrotcode.org> wrote:
+> > * Fix up the indentation problems caused by the above bullet point.
+> > (TODO: why does t/codingstd/c_indent.t require indentation for #if
+> > and #ifdef, but not for #ifndef?)
+> As far as I understand c_indent.t, #ifndef is also covered
+
+Except that it isn't.  If you apply the attached patch, you will see
+that t/codingstd/c_indent.t starts failing.  C_indent.t will not be
+happy until you reindent everything else, inside of it.  (This patch
+should not be checked in, it only exhibits the problem, it does not
+solve anything.)
+
+
+
+> > I'd like to write some tests for this stuff, and then fix up the
+> > rest of the cases (I know I've missed a bunch).  How would the list
+> > feel about a patch to PDD07 specifying the above for header files,
+> > and a codingstd test to enforce it?
+> My feeling is that we need to differentiate two cases:
+> i. header files that define an interfaces for e.g. a subsystem
+> ii. Convenience headers, that contain declaration of internal
+> functions
+> 
+> Case i. might need stricter checks than ii.
+
+
+Thanks for your input.  I have written a test case for this,
+t/codingstd/c_header_guards.t (attached), which checks the following:
+
+* The existence of an #ifndef PARROT_*_GUARD
+* That each header file only contains one #ifndef PARROT_*_GUARD
+* The existence of a matching #define (this caught a few misspells)
+* The existence of an #endif /* PARROT_*_GUARD */
+* That the PARROT_*_GUARD macro is unique (doesn't stomp on any other
+files)
+
+I patched up another large set of headers, to pass this test.  But
+before I send in another big patch with some changes to type ii
+("convenience") headers, can you please tell me if there's a clean,
+programmatic way to determine which headers it should perform strict
+checks on?  That way I can fix the test to only run on the
+non-"convenience" subset of headers.
+
+Also, should any of the above tests be applied to type ii headers, or
+should they only apply to type i headers?  (Should type ii headers be
+ignored completely, or only subjected to a subset of the tests?)
+
+ Mark
+
+--MP_wJybkoXA28UGGp33+ElDd1C
+Content-Type: text/x-patch; name=c_indent_doesnt_recognise_ifndef.diff
+Content-Transfer-Encoding: 7bit
+Content-Disposition: attachment;
+ filename=c_indent_doesnt_recognise_ifndef.diff
+
+Index: src/stm/stm_internal.h
+===================================================================
+--- src/stm/stm_internal.h	(revision 18445)
++++ src/stm/stm_internal.h	(working copy)
+@@ -1,4 +1,4 @@
+-#ifndef PARROT_STM_INTERNAL_H_GUARD
++#if !defined(PARROT_STM_INTERNAL_H_GUARD)
+ #define PARROT_STM_INTERNAL_H_GUARD
+ 
+ #include <parrot/parrot.h>
+
+--MP_wJybkoXA28UGGp33+ElDd1C
+Content-Type: text/troff; name=c_header_guards.t
+Content-Transfer-Encoding: 7bit
+Content-Disposition: attachment; filename=c_header_guards.t
+
+#! perl
+# Copyright (C) 2006-2007, The Perl Foundation.
+# $Id$
+
+use strict;
+use warnings;
+
+use lib qw( . lib ../lib ../../lib );
+use Test::More tests => 5;
+use Parrot::Distribution;
+
+=head1 NAME
+
+t/codingstd/c_header_guards.t - checks for rules related to guards in C header files
+
+=head1 SYNOPSIS
+
+    # test all files
+    % prove t/codingstd/c_header_guards.t
+
+    # test specific files
+    % perl t/codingstd/c_header_guards.t include/parrot/bar.h
+
+=head1 DESCRIPTION
+
+Checks that all C language header files have an #ifndef PARROT_WHATEVER_H_GUARD definition,
+and an #endif /* PARROT_WHATEVER_H_GUARD */ at the end, as specified in PDD07.
+
+=head1 SEE ALSO
+
+L<docs/pdds/pdd07_codingstd.pod>
+
+=cut
+
+my $DIST = Parrot::Distribution->new();
+my @files = @ARGV ? @ARGV : map { $_->path() } $DIST->c_header_files();
+
+#foreach my $file ( @files ) {
+#    print $file, "\n";
+#}
+#exit;
+
+check_header_guards(@files);
+
+exit;
+
+sub check_header_guards {
+    my (%guardnames, %redundants, %collisions,
+        %missing_guard, %missing_define, %missing_comment);
+
+F:  foreach my $file (@_) {
+        open my $fh, '<', $file
+            or die "Can not open '$file' for reading!\n";
+        my @source = <$fh>;
+        close $fh;
+        chomp @source;
+
+        my ($ifndef, $define, $endif);
+L:          foreach my $line (@source) {
+            $line =~ s/\s+/ /;
+            $line =~ s/^ //;
+
+            # skip Bison parser files
+            next F if $line =~ /A Bison parser/;
+
+            # skip the non-preprocessor lines
+            next L unless substr($line,0,1) eq '#';
+
+            # skip the "#", and any leading whitespace
+            $line = substr($line, 1);
+            $line =~ s/^ //;
+
+            if($line =~ m[ifndef (PARROT_.+_GUARD)$]) {
+                # check for multiple guards in the same file
+                $redundants{$file} = $1 if defined $ifndef;
+                # check for the same guard-name in multiple files
+                $collisions{$file} = $guardnames{$1}
+                    if exists $guardnames{1};
+
+                $ifndef = $1;
+                $guardnames{$1} = $file;
+            }
+
+            if($line =~ m[define (PARROT_.+_GUARD)$]) {
+                $define = $1
+                    if(defined($ifndef) && $ifndef eq $1);
+            }
+
+            if($line =~ m[endif /\* (PARROT_.+_GUARD) \*/$]) {
+                $endif = $1
+                    if(defined($ifndef) && $ifndef eq $1);
+            }
+        }
+        
+        $missing_guard{$file}   = 1 unless defined $ifndef;
+        $missing_define{$file}  = 1 unless defined $define;
+        $missing_comment{$file} = 1 unless defined $endif;
+    }
+    ok(!(scalar %collisions),
+       "identical PARROT_*_GUARD macro names used in headers "
+       . join(", ", %collisions));
+    ok(!(scalar %redundants),
+       "multiple PARROT_*_GUARD macros found in headers "
+       . join(", ", keys %redundants));
+    ok(!(scalar %missing_guard),
+       "missing or misspelled PARROT_*_GUARD ifndef in headers "
+       . join(", ", sort keys %missing_guard));
+    ok(!(scalar %missing_define),
+       "missing or misspelled PARROT_*_GUARD define in headers "
+       . join(", ", sort keys %missing_define));
+    ok(!(scalar %missing_comment), 
+       "missing or misspelled PARROT_*_GUARD comment after the #endif in headers "
+       . join(", ", sort keys %missing_comment));
+}
+return 0;
+
+# Local Variables:
+#   mode: cperl
+#   cperl-indent-level: 4
+#   fill-column: 100
+# End:
+# vim: expandtab shiftwidth=4:
+
+--MP_wJybkoXA28UGGp33+ElDd1C--
+

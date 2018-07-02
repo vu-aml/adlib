@@ -1,0 +1,63 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun May 13 23:50:43 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4E3ohqD016097
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 13 May 2007 23:50:43 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 472611638C6
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 14 May 2007 03:50:41 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 5A41016381B; Mon, 14 May 2007 03:50:19 +0000 (GMT)
+Date: Mon, 14 May 2007 13:49:03 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070514035019.5A41016381B@lists.samba.org>
+Subject: Rev 297: kill the lockwait child if the pipe goes away in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 297
+revision-id: tridge@samba.org-20070514034901-vpwg24spu188ab97
+parent: tridge@samba.org-20070514034840-njb68t1bfrmcbhtl
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Mon 2007-05-14 13:49:01 +1000
+message:
+  kill the lockwait child if the pipe goes away
+modified:
+  common/ctdb_lockwait.c         ctdb_lockwait.c-20070416214118-n1aeonljj3vpdd9q-1
+=== modified file 'common/ctdb_lockwait.c'
+--- a/common/ctdb_lockwait.c	2007-05-05 07:19:59 +0000
++++ b/common/ctdb_lockwait.c	2007-05-14 03:49:01 +0000
+@@ -131,7 +131,9 @@
+ 		close(result->fd[0]);
+ 		tdb_chainlock(ctdb_db->ltdb->tdb, key);
+ 		write(result->fd[1], &c, 1);
+-		pause();
++		/* this read will exit when the parent closes its end
++		   of the pipe, or the parent dies */
++		read(result->fd[1], &c, 1);
+ 		_exit(0);
+ 	}
+ 
+

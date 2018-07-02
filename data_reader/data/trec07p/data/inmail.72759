@@ -1,0 +1,137 @@
+From perl6-all-return-82519-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue Jul  3 08:38:50 2007
+Return-Path: <perl6-all-return-82519-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l63CcnL9028523
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 3 Jul 2007 08:38:50 -0400
+Received: (qmail 8532 invoked by uid 514); 3 Jul 2007 12:38:45 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 8527 invoked from network); 3 Jul 2007 12:38:44 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: jonathan@cvs.develooper.com
+To: perl6-internals@perl.org
+Subject: [svn:parrot-pdd] r19555 - trunk/docs/pdds/draft
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Message-Id: <20070703123822.B66BFCB9E1@x12.develooper.com>
+Date: Tue,  3 Jul 2007 05:38:22 -0700 (PDT)
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+
+Author: jonathan
+Date: Tue Jul  3 05:38:21 2007
+New Revision: 19555
+
+Modified:
+   trunk/docs/pdds/draft/pdd17_pmc.pod
+
+Log:
+[PDD17]: Properly document my proposal for how inheriting from PMCs will be made to work.
+
+Modified: trunk/docs/pdds/draft/pdd17_pmc.pod
+==============================================================================
+--- trunk/docs/pdds/draft/pdd17_pmc.pod	(original)
++++ trunk/docs/pdds/draft/pdd17_pmc.pod	Tue Jul  3 05:38:21 2007
+@@ -77,6 +77,7 @@
+     struct PMC {
+         pobj_t obj;
+         VTABLE *vtable;
++        PMC *real_self;
+  #if ! PMC_DATA_IN_EXT
+         DPOINTER *data;
+  #endif
+@@ -121,6 +122,15 @@
+ L<Vtable Functions> that implement the basic behaviour of the PMC
+ (i.e. how it behaves under addition, subtraction, cloning etc.)
+ 
++{{ PROPOSED:
++C<real_self> holds a pointer to the PMC that dynamically dispatched method
++calls should be made on. Normally this will be a pointer directly back to the
++PMC itself. However, in the case that the PMC has been subclassed by a non-PMC
++it will hold a pointer to the real object. This is so DYNSELF.method() style
++calls will dispatch correctly, calling any methods and/or v-table methods that
++have been overridden in PIR.
++}}
++
+ C<data> (if present) holds a pointer to any additional data associated  with
+ the PMC. This may be NULL.
+ 
+@@ -1024,6 +1034,60 @@
+ {{ Address the problem of high-level objects inheriting from low-level PMCs,
+ and any structural changes to low-level PMCs that might require. }}
+ 
++{{ PROPOSED:
++
++High-level objects, as specified in PDD15, need to be able to inherit from
++PMCs. This is achieved through the combination of a C<PMCProxy> PMC and
++delegation.
++
++For PDD15 objects, there is a corresponding instance of the C<Class> PMC. For
++a PMC, however, the class definition is written in C and compiled away. There
++needs to be something that can be placed in the parents list for a PDD15
++class. That something is the C<PMCProxy> PMC. Like a PDD15 class, it is
++attached to the namespace that a PMC is attached to, provides introspection
++facilities and can sit in an inheritance hierarchy.
++
++Therefore, subclassing a PMC looks, at a PIR level, like subclassing a high
++level class.
++
++  $P0 = get_class 'Hash'
++  $P1 = new 'Class'
++  addparent $P1, $P0     # The new class inherits from the Hash PMC
++
++PMCs store state in a very different way to PDD15 objects. When a method
++inherited from a PMC is called on a PDD15 object, that method needs to get
++a chunk of state that it can use as it wishes. Further to this, if multiple
++PMCs are inherited from, they may use the state in different ways. Users of
++Parrot at a PIR level should not have to care about such issues.
++
++Therefore, when a PDD15 object is instantiated and it inherits from PMCs, an
++instance of each of the PMCs that it inherits from is also created. These are
++stored at the end of the object's attributes store.
++
++When a method is called on an object whose class has PMC parents, the call is
++delegated up to each of the PMC parents, in MRO order. The invocant must be
++the appropriate PMC instance from the object's attribute store. For v-table
++calls, this is just a case of passing the correct thing. For other methods
++that are located by C<find_method>, a C<Bound_NCI> PMC is used to ensure that
++the method from the PMC is invoked with the correct instance, so it has access
++to the correct state.
++
++When a PMC calls a method on itself, it may have been overridden in a high
++level class. Therefore dynamic dispatches of method calls need to be done with
++the vtable of the high level class, not the vtable of the PMC itself.
++
++For PMCs that are instantiated and not overridden, the C<real_self> pointer in
++the PMC structure is a reference to the PMC instance itself. If, however, it
++is just acting to provide the state a PMC needs but is not the real instance,
++this pointer will point to the instance of the high level class (an instance
++of the C<Object> PMC). Method dispatches using C<DYNSELF> will always go
++through this mechanism.
++
++Attribute access is, like method access, delegated upwards. Since attribute
++lookup is a vtable method, the down case is covered by the previous paragraph.
++
++}}
++
+ If a low-level PMC expects to be overridden by high-level classes (which means
+ all the core low-level PMC types), it must respect a standard interface. It
+ must implement the C<get_attr> and C<set_attr> vtable entries for any core
+

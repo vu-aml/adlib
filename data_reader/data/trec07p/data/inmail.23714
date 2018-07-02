@@ -1,0 +1,132 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat Apr 28 12:55:43 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3SGth6w010014
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 28 Apr 2007 12:55:43 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id DFBF3163947
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 28 Apr 2007 16:55:41 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id C9B8B162AF4; Sat, 28 Apr 2007 16:54:59 +0000 (GMT)
+Date: Sat, 28 Apr 2007 18:55:38 +0200
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070428165459.C9B8B162AF4@lists.samba.org>
+Subject: Rev 219: removed unnecessary variable in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 3179
+Lines: 91
+
+------------------------------------------------------------
+revno: 219
+revision-id: tridge@samba.org-20070428165537-dq8tirclx8okd1ec
+parent: tridge@samba.org-20070428161833-g1jbj1dibtxk28ih
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Sat 2007-04-28 18:55:37 +0200
+message:
+  removed unnecessary variable
+modified:
+  common/ctdb_call.c             ctdb_call.c-20061128065342-to93h6eejj5kon81-1
+  include/ctdb_private.h         ctdb_private.h-20061117234101-o3qt14umlg9en8z0-13
+=== modified file 'common/ctdb_call.c'
+--- a/common/ctdb_call.c	2007-04-28 16:18:33 +0000
++++ b/common/ctdb_call.c	2007-04-28 16:55:37 +0000
+@@ -434,8 +434,8 @@
+ 	/* if we are not the dmaster, then send a redirect to the
+ 	   requesting node */
+ 	if (header.dmaster != ctdb->vnn) {
++		talloc_free(data.dptr);
+ 		ctdb_call_send_redirect(ctdb, call.key, c, &header);
+-		talloc_free(data.dptr);
+ 		ctdb_ltdb_unlock(ctdb_db, call.key);
+ 		return;
+ 	}
+@@ -595,7 +595,7 @@
+ */
+ static int ctdb_call_destructor(struct ctdb_call_state *state)
+ {
+-	ctdb_reqid_remove(state->node->ctdb, state->reqid);
++	ctdb_reqid_remove(state->ctdb_db->ctdb, state->reqid);
+ 	return 0;
+ }
+ 
+@@ -609,7 +609,7 @@
+ 	struct ctdb_call_state *state = talloc_get_type(private_data, struct ctdb_call_state);
+ 	DEBUG(0,(__location__ " call timeout for reqid %d\n", state->c->hdr.reqid));
+ 	state->state = CTDB_CALL_ERROR;
+-	ctdb_set_error(state->node->ctdb, "ctdb_call %u timed out",
++	ctdb_set_error(state->ctdb_db->ctdb, "ctdb_call %u timed out",
+ 		       state->c->hdr.reqid);
+ 	if (state->async.fn) {
+ 		state->async.fn(state);
+@@ -650,7 +650,6 @@
+ 	talloc_steal(state, data->dptr);
+ 
+ 	state->state = CTDB_CALL_DONE;
+-	state->node = ctdb->nodes[ctdb->vnn];
+ 	state->call = *call;
+ 	state->ctdb_db = ctdb_db;
+ 
+@@ -711,7 +710,6 @@
+ 	state->call.call_data.dptr = &state->c->data[call->key.dsize];
+ 	state->call.key.dptr       = &state->c->data[0];
+ 
+-	state->node   = ctdb->nodes[header->dmaster];
+ 	state->state  = CTDB_CALL_WAIT;
+ 	state->header = *header;
+ 	state->ctdb_db = ctdb_db;
+@@ -734,16 +732,16 @@
+ int ctdb_daemon_call_recv(struct ctdb_call_state *state, struct ctdb_call *call)
+ {
+ 	while (state->state < CTDB_CALL_DONE) {
+-		event_loop_once(state->node->ctdb->ev);
++		event_loop_once(state->ctdb_db->ctdb->ev);
+ 	}
+ 	if (state->state != CTDB_CALL_DONE) {
+-		ctdb_set_error(state->node->ctdb, "%s", state->errmsg);
++		ctdb_set_error(state->ctdb_db->ctdb, "%s", state->errmsg);
+ 		talloc_free(state);
+ 		return -1;
+ 	}
+ 
+ 	if (state->call.reply_data.dsize) {
+-		call->reply_data.dptr = talloc_memdup(state->node->ctdb,
++		call->reply_data.dptr = talloc_memdup(state->ctdb_db->ctdb,
+ 						      state->call.reply_data.dptr,
+ 						      state->call.reply_data.dsize);
+ 		call->reply_data.dsize = state->call.reply_data.dsize;
+
+=== modified file 'include/ctdb_private.h'
+--- a/include/ctdb_private.h	2007-04-28 16:18:33 +0000
++++ b/include/ctdb_private.h	2007-04-28 16:55:37 +0000
+@@ -263,7 +263,6 @@
+ 	uint32_t reqid;
+ 	struct ctdb_req_call *c;
+ 	struct ctdb_db_context *ctdb_db;
+-	struct ctdb_node *node;
+ 	const char *errmsg;
+ 	struct ctdb_call call;
+ 	struct ctdb_ltdb_header header;
+

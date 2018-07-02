@@ -1,0 +1,127 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May  1 21:16:01 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l421G0b9015565
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 1 May 2007 21:16:00 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 8050B163935
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 30 Apr 2007 22:31:55 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.2 required=3.8 tests=AWL,BAYES_00,
+	DATE_IN_PAST_06_12,NO_REAL_NAME,NO_RELAYS,RCVD_IN_DSBL autolearn=no 
+	version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 1F7A0162AEF; Mon, 30 Apr 2007 22:31:34 +0000 (GMT)
+Date: Mon, 30 Apr 2007 15:54:07 +0200
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070430223134.1F7A0162AEF@lists.samba.org>
+Subject: Rev 225: added attach command in ctdb_control in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 225
+revision-id: tridge@samba.org-20070430135406-5f2krpfqjekpa2n3
+parent: tridge@samba.org-20070430133140-79ydyjc7o4pq21k9
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Mon 2007-04-30 15:54:06 +0200
+message:
+  added attach command in ctdb_control
+renamed:
+  direct/ctdbd.sh => tests/ctdbd.sh ctdbd.sh-20070411085038-phusiewluwzyqjpc-2
+modified:
+  tests/run_tests.sh             run_tests.sh-20070428085745-ec2w6vybjf07vtvg-1
+  tools/ctdb_control.c           ctdb_control.c-20070426122705-9ehj1l5lu2gn9kuj-1
+  tests/ctdbd.sh                 ctdbd.sh-20070411085038-phusiewluwzyqjpc-2
+=== renamed file 'direct/ctdbd.sh' => 'tests/ctdbd.sh'
+--- a/direct/ctdbd.sh	2007-04-29 20:42:23 +0000
++++ b/tests/ctdbd.sh	2007-04-30 13:54:06 +0000
+@@ -23,8 +23,12 @@
+ 
+ echo "Testing map calls"
+ bin/ctdb_control getvnnmap 0 || exit 1
++
++echo "Attaching to some databases"
++bin/ctdb_control attach test1.tdb || exit 1
++bin/ctdb_control attach test2.tdb || exit 1
++
++echo "Testing getdbmap"
+ bin/ctdb_control getdbmap 0 || exit 1
+ 
+ killall -q ctdbd
+-
+-
+
+=== modified file 'tests/run_tests.sh'
+--- a/tests/run_tests.sh	2007-04-29 20:42:23 +0000
++++ b/tests/run_tests.sh	2007-04-30 13:54:06 +0000
+@@ -3,7 +3,7 @@
+ tests/fetch.sh 4 || exit 1
+ tests/bench.sh 4 || exit 1
+ tests/test.sh || exit 1
+-direct/ctdbd.sh || exit 1
++tests/ctdbd.sh || exit 1
+ 
+ echo "All OK"
+ exit 0
+
+=== modified file 'tools/ctdb_control.c'
+--- a/tools/ctdb_control.c	2007-04-28 17:13:36 +0000
++++ b/tools/ctdb_control.c	2007-04-30 13:54:06 +0000
+@@ -436,6 +436,28 @@
+ 	return 0;
+ }
+ 
++
++/*
++  attach to a database
++ */
++static int control_attach(struct ctdb_context *ctdb, int argc, const char **argv)
++{
++	const char *db_name;
++	struct ctdb_db_context *ctdb_db;
++	if (argc < 1) {
++		usage();
++	}
++	db_name = argv[0];
++
++	ctdb_db = ctdb_attach(ctdb, db_name);
++	if (ctdb_db == NULL) {
++		DEBUG(0,("Unable to attach to database '%s'\n", db_name));
++		return -1;
++	}
++
++	return 0;
++}
++
+ /*
+   main program
+ */
+@@ -508,6 +530,8 @@
+ 		ret = control_debug(ctdb, extra_argc-1, extra_argv+1);
+ 	} else if (strcmp(control, "debuglevel") == 0) {
+ 		ret = control_debuglevel(ctdb, extra_argc-1, extra_argv+1);
++	} else if (strcmp(control, "attach") == 0) {
++		ret = control_attach(ctdb, extra_argc-1, extra_argv+1);
+ 	} else {
+ 		printf("Unknown control '%s'\n", control);
+ 		exit(1);
+

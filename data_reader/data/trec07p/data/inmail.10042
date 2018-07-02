@@ -1,0 +1,106 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Apr 16 05:13:36 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3G9DZ0I003959
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 16 Apr 2007 05:13:35 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 8D8011638FD
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 16 Apr 2007 09:13:11 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.1 required=3.8 tests=AWL,BAYES_50,
+	UNPARSEABLE_RELAY autolearn=ham version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: from mail.SerNet.de (mail.SerNet.DE [193.175.80.2])
+	by lists.samba.org (Postfix) with ESMTP id 7E14E162AD6;
+	Mon, 16 Apr 2007 09:12:52 +0000 (GMT)
+Received: from intern.SerNet.DE by mail.SerNet.DE with esmtp (Exim 4.51 #1)
+	id 1HdNGW-0002nz-1U; Mon, 16 Apr 2007 11:12:52 +0200
+Received: by intern.SerNet.DE
+	id 1HdNGV-0000Ub-MP; Mon, 16 Apr 2007 11:12:51 +0200
+Received: by intern.SerNet.DE
+	id 1HdNGV-0000U3-GB; Mon, 16 Apr 2007 11:12:51 +0200
+Received: from vlendec by delphin.sernet.de with local (Exim 4.51)
+	id 1HdNHp-00065F-PR; Mon, 16 Apr 2007 11:14:14 +0200
+Date: Mon, 16 Apr 2007 11:14:13 +0200
+From: Volker Lendecke <Volker.Lendecke@SerNet.DE>
+To: tridge@samba.org
+References: <17955.4880.90755.415666@samba.org>
+	<E1HdL1p-00021P-Qi@intern.SerNet.DE>
+	<17955.9354.219727.384511@samba.org>
+Mime-Version: 1.0
+Content-Type: multipart/signed; micalg=pgp-sha1;
+	protocol="application/pgp-signature"; boundary="bg08WKrSYDhXBjb5"
+Content-Disposition: inline
+In-Reply-To: <17955.9354.219727.384511@samba.org>
+User-Agent: Mutt/1.5.9i
+Message-Id: <E1HdNGV-0000Ub-MP@intern.SerNet.DE>
+Organization: SerNet GmbH, Goettingen, Germany
+Cc: ronniesahlberg@gmail.com, samba-technical@samba.org
+Subject: Re: ctdb shortcut locking
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: Volker.Lendecke@SerNet.DE
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 1593
+Lines: 44
+
+
+--bg08WKrSYDhXBjb5
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+
+On Mon, Apr 16, 2007 at 05:23:54PM +1000, tridge@samba.org wrote:
+> yes, but it seems to be fine in practice. You can simulate N children
+> contending as fast as they can on one lock using the -n option to the
+> test prog. I'm pretty happy with how it performs, even though it can
+> loop more than once in the most heavily contended case.
+
+For my taste this too much depends on the order in which the
+SETLKW requests are replied. Under Linux it seems that new
+requests are added to the end of the queue. But I don't feel
+good to count on this for all Unixes. From the docs I've
+looked at I did not see a guaranteed ordering on who wins
+the SETLKW race.
+
+How about the following thought: Why does the parent ctdbd
+have to fcntl lock the tdb anyway? For the smbd<>ctdb link
+smbd could chainlock the record, it would figure out we're
+not dmaster and ask ctdbd to get us the data. For the
+inter-node ctdb<>ctdb operations we could fork, the child
+would do the necessary tdb operations, and send the record
+contents back via the socket. This shifts the race above to
+user-space: Which pipe do we handle first? Here we could
+prioritize much easier than relying on the kernel to order
+lock granting.
+
+Volker
+
+--bg08WKrSYDhXBjb5
+Content-Type: application/pgp-signature
+Content-Disposition: inline
+
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.2 (GNU/Linux)
+
+iD8DBQFGIz5lpZr5CauZH5wRAim3AKCgxWtROstEHMd5Ej8AQBfs+UuxpACgz+nh
+4XRKvTUBqfPCgI/cI8+YQ4E=
+=TgHi
+-----END PGP SIGNATURE-----
+
+--bg08WKrSYDhXBjb5--
+

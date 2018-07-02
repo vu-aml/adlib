@@ -1,0 +1,421 @@
+From perl6-all-return-80855-ktwarwic=speedy.uwaterloo.ca@perl.org  Wed Apr 25 01:07:03 2007
+Return-Path: <perl6-all-return-80855-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3P5716w024566
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 25 Apr 2007 01:07:01 -0400
+Received: (qmail 19679 invoked by uid 514); 25 Apr 2007 05:07:00 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 19673 invoked from network); 25 Apr 2007 05:07:00 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-1.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO,NO_REAL_NAME
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-language-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-language
+List-Id: <perl6-language.perl.org>
+Delivered-To: mailing list perl6-language@perl.org
+Delivered-To: perl6-language@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: larry@cvs.develooper.com
+To: perl6-language@perl.org
+Subject: [svn:perl6-synopsis] r14382 - doc/trunk/design/syn
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Message-Id: <20070425050634.5D1D0CB9B8@x12.develooper.com>
+Date: Tue, 24 Apr 2007 22:06:34 -0700 (PDT)
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-3.4 required=8.0
+	tests=ALL_TRUSTED,BAYES_00,DK_POLICY_SIGNSOME,NO_REAL_NAME
+Status: O
+Content-Length: 15596
+Lines: 378
+
+Author: larry
+Date: Tue Apr 24 22:06:33 2007
+New Revision: 14382
+
+Modified:
+   doc/trunk/design/syn/S06.pod
+   doc/trunk/design/syn/S12.pod
+
+Log:
+Clarifications suggested by TheDamian++
+Killed "next METHOD", now just use nextsame etc.
+Defined "lastcall" to allow return from final candidate.
+Set up WHENCE mechanism for undefined prototype objects to autovivify lazily.
+
+
+Modified: doc/trunk/design/syn/S06.pod
+==============================================================================
+--- doc/trunk/design/syn/S06.pod	(original)
++++ doc/trunk/design/syn/S06.pod	Tue Apr 24 22:06:33 2007
+@@ -2100,7 +2100,15 @@
+ C<callsame> and C<callwith>, but a tail call is explicitly enforced;
+ any code following the call will be unreached, as if a return had
+ been executed there before calling into the destination routine.
+-Within a method C<nextsame> is equivalent to C<next METHOD>.
++
++Within an ordinary method dispatch these functions treat the rest
++of the dispatcher's candidate list as the wrapped function, which
++generally works out to calling the same method in one of our parent
++(or older sibling) classes.  Likewise within a multiple dispatch the
++current routine may defer to candidates further down the candidate
++list.  Although not necessarily related by a class hierarchy, such
++later candidates are considered more generic and hence likelier
++to be able to handle various unforeseen conditions (perhaps).
+ 
+ =head2 The C<&?ROUTINE> object
+ 
+
+Modified: doc/trunk/design/syn/S12.pod
+==============================================================================
+--- doc/trunk/design/syn/S12.pod	(original)
++++ doc/trunk/design/syn/S12.pod	Tue Apr 24 22:06:33 2007
+@@ -12,9 +12,9 @@
+ 
+   Maintainer: Larry Wall <larry@wall.org>
+   Date: 27 Oct 2004
+-  Last Modified: 13 Apr 2007
++  Last Modified: 24 Apr 2007
+   Number: 12
+-  Version: 46
++  Version: 47
+ 
+ =head1 Overview
+ 
+@@ -199,14 +199,14 @@
+ Indirect object notation now requires a colon after the invocant,
+ even if there are no arguments after the colon:
+ 
+-    $handle.close
+-    close $handle:
++    $handle.close;
++    close $handle:;
+ 
+ To reject method call and only consider subs, simply omit the colon
+ from the invocation line:
+ 
+-    close($handle)
+-    close $handle
++    close($handle);
++    close $handle;
+ 
+ However, here the built-in B<IO> class defines C<method close is export ()>,
+ which puts a C<multi sub close (IO)> in scope by default.  Thus if the
+@@ -233,7 +233,7 @@
+     .'+'               # same as +$_
+ 
+ And in fact, if there is a choice between a unary prefix and a postfix
+-operator, the indirect forms will choose the prefix operator.  See S03.
++operator, the quoted forms will choose the prefix operator.  See S03.
+ Likewise, presuming that C<$op> does not name an ordinary method on
+ C<$left>, this calls any arbitrary infix operator:
+ 
+@@ -392,8 +392,10 @@
+ visible to derived classes via inheritance.  A submethod is called
+ only when a method call is dispatched directly to the current class.
+ 
+-[Conjecture: there is some relationship between "submethod BUILD" and
+-"method ^BUILD" that possibly rises to the level of a unifiable identity...]
++Conjecture: in order to catch spelling errors it is a compile-time
++warning to define a submethod in any class that does not inherit the
++corresponding method name from some base class.  (But note that the
++standard C<Object> class supplies a default C<BUILD> and C<new>.)
+ 
+ =head1 Attributes
+ 
+@@ -564,7 +566,7 @@
+ The default C<BUILD> and C<BUILDALL> are inherited from C<Object>, so
+ you need to write initialization routines only if you wish to modify
+ the default behavior.  If the name of a named argument begins with a
+-C<::> and corresponds to a class or role being built, the list value
++C<::> and corresponds to a (super)class or role being built, the list value
+ of that argument is passed as a list of named arguments to that class
+ or role's C<BUILD>.  (If the value of that argument is a closure
+ instead of a list, that closure will be called to return a list.
+@@ -572,6 +574,9 @@
+ being initialized.)  In the absence of a class-labeled pair, all
+ the arguments to C<bless> are passed to the C<BUILD>.
+ 
++    class Dog is Animal {...}
++    my $pet = Dog.new( :name<Fido>, Animal => [:blood<warm> :legs(4)] );
++
+ You can clone an object, changing some of the attributes:
+ 
+     $newdog = $olddog.clone(:trick<RollOver>);
+@@ -661,9 +666,7 @@
+     $object."+meth"(@args)
+     $object.'VAR'(@args)
+ 
+-Any method can defer to the next candidate method in the list by
+-saying C<next METHOD>.  Any method can stop the progression by saying
+-C<last METHOD>.  The order and selection of the candidates may be
++The order and selection of the candidates may be
+ specified by arguments to a pseudo-class known as C<WALK>:
+ 
+     $object.*WALK[:breadth:omit($?CLASS)]::meth(@args);
+@@ -681,10 +684,15 @@
+     :omit(Selector)     # only classes that don't match selector
+     :include(Selector)  # only classes that match selector
+ 
+-In addition to C<next METHOD>, the special functions C<callsame>,
+-C<callwith>, C<nextsame>, and C<nextwith> dispatch to the next
+-candidate, possibly with a new argument list, and if the "next"
+-variant is used, without returning:
++Any method can defer to the next candidate method in the list by
++the special functions C<callsame>, C<callwith>, C<nextsame>, and
++C<nextwith>.  The "same" variants reuse the original argument list
++passed to the current method, whereas the "with" variants allow a
++new argument list to be substituted for the rest of the candidates.
++The "call" variants dispatch to the rest of the candidates and return
++their values to the current method for subsequent processing, whereas
++while the "next" variants don't return, but merely defer to the rest
++of the candidate list:
+ 
+     callsame;           # call with the original arguments (return here)
+     callwith();         # call with no arguments (return here)
+@@ -693,6 +701,21 @@
+     nextwith();         # redispatch with no arguments (no return)
+     nextwith(1,2,3);    # redispatch with a new set of arguments (no return)
+ 
++For dispatches using C<.> and C<.?>, the return value is the
++C<Capture> returned by the first method completed without deferring.
++(Such a return value may in fact be failure, but it still counts as a
++successful call from the standpoint of the dispatcher.)  Likewise the
++return value of C<.*> and C<.+> is a list of C<Captures> returned by
++those methods that ran to completion without deferring to next method.
++
++It is also possible to trim the candidate list so that the current
++call is considered the final candidate.  (This is implicitly the case
++already for the dispatch variants that want a single successful call.)
++For the multiple call variants, C<lastcall> will cause the dispatcher
++to throw away the rest of the candidate list, and the subsequent
++return from the current method will produce the final C<Capture>
++in the returned list.
++
+ =head1 Parallel dispatch
+ 
+ Any of the method call forms may be turned into a hyperoperator by
+@@ -705,6 +728,10 @@
+     @object».=meth(@args)  # calls mutator method on each
+     @object»!meth(@args)   # calls private method on each
+ 
++The return value is a list with exactly the same number of elements
++as C<@object>.  Each such return value is a Capture or List of Captures
++as specified above for the non-hyper "dot" variants.
++
+ Hyperoperators treat a junction as a scalar value, so saying:
+ 
+     $junction».meth(@args);
+@@ -756,10 +783,14 @@
+ in a grammar by declaring a C<proto> C<token> or C<proto> C<rule>.  (Perl 6's
+ grammar does this, for instance.)
+ 
+-You can have multiple C<multi> variables in the same scope, and they
+-all share the same storage location and type.  Usually these are
+-declared by one C<proto> declaration at the top, and leaving the
+-C<multi> implicit on the rest of the declarations.
++You can have multiple C<multi> variables of the same name in the
++same scope, and they all share the same storage location and type.
++Usually these are declared by one C<proto> declaration at the top,
++and leaving the C<multi> implicit on the rest of the declarations.
++You might do this when you suspect you'll have multiple declarations
++of the same variable name (such code might be produced by a macro
++or by a code generator, for instance) and you wish to suppress any
++possible warnings about redefinition.
+ 
+ In contrast, C<multi> routines can have only one instance of the long
+ name in any namespace, and that instance hides any outer (or less-derived)
+@@ -896,9 +927,9 @@
+ only on positional parameters.  Note that most builtins will map known
+ named parameters to positional via a C<proto> declaration.
+ 
+-Within a multiple dispatch, C<next METHOD> means to try the next best
++Within a multiple dispatch, C<nextsame> means to try the next best
+ match, or next best default in case of tie, or the proto sub if there
+-is one.  The C<nextsame> function has the same effect.
++is one.
+ 
+ Attributes are tied to a particular class definition, so a multi method
+ can only directly access the attributes of a class it's defined within
+@@ -943,7 +974,7 @@
+         method feed ($food) {
+             $food.open_can;
+             $food.put_in_bowl;
+-            self.some_other_method;
++            self.eat($food);
+         }
+     }
+ 
+@@ -999,7 +1030,7 @@
+ Roles may have attributes:
+ 
+     role Pet {
+-        has $.collar = { Collar.new(Tag.new) };
++        has $.collar = Collar.new(Tag.new);
+         method id () { return $.collar.tag }
+         method lose_collar () { undefine $.collar }
+     }
+@@ -1113,6 +1144,12 @@
+ 
+     proto method shake {...}
+ 
++(This declaration need not preceed the C<does> clause textually, since
++roles are not actually composed until the end of the class definition,
++at which point we know how which roles are to be composed together
++in a single logical operation, as well as how the class intends to
++override the roles.)
++
+ The proto method will be called if the multi fails:
+ 
+     proto method shake { warn "They couldn't decide" }
+@@ -1135,13 +1172,16 @@
+     $dog.bark();        # picks Dog role's bark method
+     $tree.bark();       # picks Tree role's bark method
+ 
++If there is such a mechanism, it may only be used as a tie-breaker.
++Otherwise we break the normal polymorphism expectations.
++
+ Run-time mixins are done with C<does> and C<but>.  The C<does> binary
+ operator is a mutator that derives a new anonymous class (if necessary)
+ and binds the object to it:
+ 
+     $fido does Sentry
+ 
+-The C<does> operator is non-associative, so this is a syntax error:
++The C<does> infix operator is non-associative, so this is a syntax error:
+ 
+     $fido does Sentry does Tricks does TailChasing does Scratch;
+ 
+@@ -1152,6 +1192,10 @@
+     $fido does TailChasing;
+     $fido does Scratch;
+ 
++And since it returns the left side, you can also say:
++
++    ((($fido does Sentry) does Tricks) does TailChasing) does Scratch;
++
+ Unlike the compile-time role composition, each of these layers on a new
+ mixin with a new level of inheritance, creating a new anonymous class
+ for dear old Fido, so that a C<.chase> method from C<TailChasing> hides a
+@@ -1161,12 +1205,14 @@
+ 
+     $fido does (Sentry, Tricks, TailChasing, Scratch);
+ 
+-This will level the playing field for collisions among the new set of roles,
+-and guarantees the creation of no more than one more anonymous class.
+-
+-A role still can't conflict with itself, but it can hide its previous
+-methods in the parent class, and the calculation of what conflicts
+-is done again for the set of roles being mixed in.
++This will level the playing field for collisions among the new
++set of roles, and guarantees the creation of no more than one more
++anonymous class.  Such a role still can't conflict with itself, but it
++can hide its previous methods in the parent class, and the calculation
++of what conflicts is done again for the set of roles being mixed in.
++If you can't do compile-time composition, we strongly recommend this
++approach for run-time mixins since it approximates a compile-time
++composition at least for the new roles involved.
+ 
+ A role applied with C<does> may be parameterized with an initializer
+ in parentheses, but only if the role supplies exactly one attribute
+@@ -1175,6 +1221,13 @@
+     $fido does Wag($tail);
+     $line does taint($istainted);
+ 
++The supplied initializer will be coerced to type of the attribute.
++Note that this initializer is in addition to any parametric type
++supplied in square brackets, which is considered part of the actual
++type name:
++
++    $myobj does Array[:of(Int)](@initial)
++
+ The C<but> operator creates a copy and works on that.  It also knows
+ how to generalize a particular enumerated value to its role.  So
+ 
+@@ -1306,13 +1359,13 @@
+ 
+ You can specify multiple method names:
+ 
+-    has $.legs handles <walk run lope shake pee>;
++    has $.legs handles <walk run lope shake lift>;
+ 
+ It's illegal to call the outer method unless the attribute
+ has been initialized to an object of a type supporting the method,
+ such as by:
+ 
+-    has Tail $.tail handles 'wag' = { .new(|%_) };
++    has Tail $.tail handles 'wag' .= new(|%_);
+ 
+ Note that putting a C<Tail> type on the attribute does not necessarily
+ mean that the method is always delegated to the C<Tail> class.
+@@ -1383,9 +1436,8 @@
+                  StBernard => $woof,
+                          * => $ruff,
+                 );
+-    method prefix:<~>( return "$.breed" )
+ 
+-If the current object matches no Selector, a "C<next METHOD>" is
++If the current object matches no Selector, a "C<nextsame>" is
+ automatically performed.
+ 
+ =head1 Types and Subtypes
+@@ -1658,11 +1710,11 @@
+ By default, all methods and submethods that do not declare an explicit
+ C<*%> parameter will get an implicit C<*%_> parameter declared for
+ them whether they like it or not.  In other words, all methods allow
+-unexpected named arguments, so that C<next METHOD> semantics work
++unexpected named arguments, so that C<nextsame> semantics work
+ consistently.
+ 
+ If you mark a class "C<is hidden>", it hides the current class
+-from "C<next METHOD>" semantics, and incidentally suppresses the
++from "C<nextsame>" semantics, and incidentally suppresses the
+ autogeneration of C<*%_> parameters.  Hidden classes may be visited
+ as C<SUPER::>, but not via "C<next>".
+ 
+@@ -1680,6 +1732,7 @@
+     HOW         the metaclass object: "Higher Order Workings"
+     WHEN        (reserved for events?)
+     WHY         (reserved for documentation?)
++    WHENCE      autovivification closure
+ 
+ These may be used either as methods or as unary operators:
+ 
+@@ -1738,7 +1791,7 @@
+ 
+ Class traits may include:
+ 
+-    identifier    Dog-1.2.1-http://www.some.com/~jrandom
++    identifier  { :name<Dog> :ver<1.2.1> :auth<http://www.some.com/~jrandom> } 
+         name      Dog
+         version   1.2.1
+         authority http://www.some.com/~jrandom
+@@ -1833,4 +1886,16 @@
+ a method of a particular name if it's required and hasn't been supplied
+ by the class or one of its roles.
+ 
++Conjecture: The C<WHENCE> property of an object is its autovivifying
++closure.  Any undefined prototype object may carry such a closure that
++can lazily create an object of the appropriate type.  For instance,
++a C<CANDO> routine, instead of creating a C<Dog> object directly,
++could instead return something like:
++
++    Dog but WHENCE({ .new(:name<Fido>) })
++
++which runs the closure if the object ever needs to be autovivified.
++The closure can capture whatever initializers were available in the
++original lexical scope.
++
+ =for vim:set expandtab sw=4:
+

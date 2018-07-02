@@ -1,0 +1,134 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Jun  1 06:16:12 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l51AGBhB008321
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 1 Jun 2007 06:16:11 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 20F15163888
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri,  1 Jun 2007 10:16:06 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.3 required=3.8 tests=AWL,BAYES_00,
+	UNPARSEABLE_RELAY autolearn=ham version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from mail.SerNet.de (mail.SerNet.DE [193.175.80.2])
+	by lists.samba.org (Postfix) with ESMTP id D0A1B162AC4;
+	Fri,  1 Jun 2007 10:15:07 +0000 (GMT)
+Received: from intern.SerNet.DE by mail.SerNet.DE with esmtp (Exim 4.51 #1)
+	id 1Hu49y-0007sy-Ra; Fri, 01 Jun 2007 12:15:06 +0200
+Received: by intern.SerNet.DE
+	id 1Hu49y-0006NY-J4; Fri, 01 Jun 2007 12:15:06 +0200
+Received: by intern.SerNet.DE
+	id 1Hu49y-0006NU-8f; Fri, 01 Jun 2007 12:15:06 +0200
+Date: Fri, 1 Jun 2007 12:15:06 +0200
+From: Michael Adam <ma@sernet.de>
+To: Jeremy Allison <jra@samba.org>
+References: <20070531235540.6F78A162AD3@lists.samba.org>
+	<20070601034114.GA6218@jeremy-laptop>
+	<20070601090751.GA19641@sernet.de>
+Mime-Version: 1.0
+Content-Type: text/plain; charset=iso-8859-1
+Content-Disposition: inline
+In-Reply-To: <20070601090751.GA19641@sernet.de>
+User-Agent: Mutt/1.5.9i
+Message-Id: <E1Hu49y-0006NY-J4@intern.SerNet.DE>
+Organization: SerNet GmbH, Goettingen, Germany
+Cc: samba-technical@lists.samba.org
+Subject: Re: svn commit: samba r23283 - in
+	branches/SAMBA_3_0/source/nsswitch: .
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Content-Transfer-Encoding: 8bit
+X-MIME-Autoconverted: from quoted-printable to 8bit by flax9.uwaterloo.ca id l51AGBhB008321
+
+Jeremy, please forget my last mail!
+
+I overlooked the "subtlety" that talloc_move of course
+takes a pointer to the arg passed to talloc_steal ... ;-/
+
+I have changed it: r23287
+
+Michael
+
+On Fri, Jun 01, 2007 at 11:07:51AM +0200, Michael Adam wrote:
+> On Thu, May 31, 2007 at 08:41:14PM -0700, Jeremy Allison wrote:
+> > On Thu, May 31, 2007 at 11:55:40PM +0000, obnox@samba.org wrote:
+> > > Author: obnox
+> > > Date: 2007-05-31 23:55:37 +0000 (Thu, 31 May 2007)
+> > > New Revision: 23283
+> > > 
+> > > WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23283
+> > > 
+> > > Log:
+> > > Use a temporary talloc context in ads:lookup_groupmem. 
+> > > And clean up unused stuff at the end.
+> > > Daringly, I use talloc_steal at some point, where it 
+> > > appears natural to me.
+> > 
+> > Rather than using talloc_steal() here :
+> > 
+> > (*names)[*num_names] = talloc_steal(names, names_nocache[i]);
+> > 
+> > please talloc_move() instead, as that's what you're
+> > actually doing.
+> > 
+> > It should look like :
+> > 
+> > (*names)[*num_names] = talloc_move(tmp_ctx, &names_nocache[i]);
+> > 
+> > as you should no longer be accessing names_nocache[i] after
+> > the move.
+> 
+> Hi Jeremy, 
+> 
+> this is what I did first, as it thought it best suited.
+> But it gives me compile warnings:
+> 
+> Compiling nsswitch/winbindd_ads.c
+> nsswitch/winbindd_ads.c: In function `lookup_groupmem':
+> nsswitch/winbindd_ads.c:1057: warning: cast from pointer to integer of different size
+> nsswitch/winbindd_ads.c:1057: warning: assignment makes pointer from integer without a cast
+> 
+> An so I fell back to talloc_steal.
+> Are you telling me that this is not harmful?
+> 
+> Maybe the talloc_move macro should be extended to look like the
+> talloc_steal macro? Some extended casting is performed in talloc_steal:
+> 
+> #define talloc_steal(ctx, ptr) ({ \
+> 	_TALLOC_TYPEOF(ptr) __talloc_steal_ret = \
+> 		(_TALLOC_TYPEOF(ptr))_talloc_steal((ctx),(ptr)); \
+> 	__talloc_steal_ret; \
+> })
+> 
+> vs.
+> 
+> #define talloc_move(ctx, ptr) ( \
+> 	_TALLOC_TYPEOF(*(ptr)))_talloc_move((ctx),(void *)(ptr) \
+> )
+> 
+> (I added some whitespace and "\" here)
+> 
+> Cheers, Michael
+
+-- 
+Michael Adam <ma@sernet.de>
+SerNet GmbH, Bahnhofsallee 1b, 37081 Göttingen
+phone: +49-551-370000-0, fax: +49-551-370000-9
+AG Göttingen, HRB 2816, GF: Dr. Johannes Loxen
+http://www.SerNet.DE, mailto: Info @ SerNet.DE
+

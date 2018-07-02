@@ -1,0 +1,110 @@
+From perl6-all-return-82251-ktwarwic=speedy.uwaterloo.ca@perl.org  Fri Jun 22 19:03:09 2007
+Return-Path: <perl6-all-return-82251-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l5MN37L9010424
+	for <ktwarwic@flax9.uwaterloo.ca>; Fri, 22 Jun 2007 19:03:07 -0400
+Received: (qmail 9769 invoked by uid 514); 22 Jun 2007 16:27:48 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 9764 invoked from network); 22 Jun 2007 16:27:48 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: neutral (x1.develooper.com: 63.251.223.186 is neither permitted nor denied by domain of nick@flirble.org)
+Delivered-To: perlmail-parrot-porters@onion.perl.org
+Delivered-To: parrot-porters@perl.org
+Received-SPF: pass (x1.develooper.com: domain of nick@flirble.org designates 194.70.3.20 as permitted sender)
+Date: Fri, 22 Jun 2007 17:26:52 +0100
+From: Nicholas Clark <nick@ccl4.org>
+To: chromatic <chromatic@wgz.org>
+Cc: Mark Glines <mark@glines.org>, parrot-porters@perl.org
+Subject: Re: [svn:parrot] r19231 - trunk/languages/perl6/src/pmc
+Message-ID: <20070622162652.GO20876@plum.flirble.org>
+Mail-Followup-To: chromatic <chromatic@wgz.org>,
+	Mark Glines <mark@glines.org>, parrot-porters@perl.org
+References: <20070621190535.61B17CB9E1@x12.develooper.com> <200706212308.25363.chromatic@wgz.org> <20070622090732.GN20876@plum.flirble.org> <200811071428.40407.chromatic@wgz.org>
+Mime-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+In-Reply-To: <200811071428.40407.chromatic@wgz.org>
+User-Agent: Mutt/1.4.2.1i
+X-Organisation: Tetrachloromethane
+Sender: Nicholas Clark <nick@flirble.org>
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_HELO_PASS,SPF_PASS
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-1.9 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_NEUTRAL
+
+On Fri, Nov 07, 2008 at 03:28:40PM -0700, chromatic wrote:
+> On Friday 22 June 2007 02:07:32 Nicholas Clark wrote:
+> 
+> > > We have a lot of string_from_cstring() calls with constant second
+> > > parameters and third parameters of 0 that could use updating.  There's no
+> > > sense in calling strlen() all the time.
+> 
+> > I think that you need something like this
+> >
+> > /* concatenating with "" ensures that only literal strings are accepted as
+> > argument */ #define STR_WITH_LEN(s)  (s ""), (sizeof(s)-1)
+> >
+> > /* STR_WITH_LEN() shortcuts */
+> > #define newSVpvs(str) Perl_newSVpvn(aTHX_ STR_WITH_LEN(str))
+> 
+> I'm not sure that's what I was asking.
+> 
+> string_from_cstring()'s third parameter can be either the length of the string 
+> or zero.  If it's zero, the function will call strlen() to get the string's 
+> length.
+> 
+> If we're passing in a string literal, it seems silly to pass in a length of 0, 
+> as we're recalculating a constant on every call.  I don't see that this macro 
+> fixes that.
+
+long(er) hand, one would write
+
+string_from_cstring(INTERP, STR_WITH_LEN("Bool"));
+
+but that's a bit obfuscated, because the macro really is a text substitution
+that returns 2 values separated by a comma. And quite deliberately not wrapped
+in ().
+
+So the next step is to make another macro that behaves like a conventional
+function:
+
+#define string_from_cstring_constant(I, S) \
+    string_from_cstring(I, STR_WITH_LEN(S))
+
+
+or something like that, so that the messiness is all in one header. At which
+point
+
+string_from_cstring_constant(INTERP, "Bool");
+
+looks like a regular function call, but is optimally efficient.
+(Although names that long will start to scare the VMS porters, as it's getting
+close to 32 characters)
+
+> I do agree that updating strings and string lengths can be tedious, but I'm 
+> not aware of any C89-compliant solution to keep the two synchronized.
+
+If I've explained it clearly, then I think that it meets your requirements.
+No strlen() call, but the correct length. And a syntax error from the compiler
+if someone mistakenly passes in anything other than a string constant.
+
+Nicholas Clark
+

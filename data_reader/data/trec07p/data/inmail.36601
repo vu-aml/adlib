@@ -1,0 +1,125 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 15 03:03:11 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4F73BqD001807
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 03:03:11 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id F200F163890
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 07:03:08 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.2 required=3.8 tests=AWL,BAYES_00,RCVD_IN_DSBL,
+	SPF_NEUTRAL,UPPERCASE_25_50 autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from mail.mx-netz.de (ip-217-172-181-76.mx-netz.de [217.172.181.76])
+	by lists.samba.org (Postfix) with ESMTP id B3860162BC9
+	for <samba-technical@lists.samba.org>;
+	Tue, 15 May 2007 07:02:54 +0000 (GMT)
+Received: from [172.30.76.9] (unknown [172.30.76.9])
+	(using TLSv1 with cipher RC4-MD5 (128/128 bits))
+	(No client certificate requested)
+	(SASL METHOD:[PLAIN] USERNAME:[metze])
+	by mail.mx-netz.de (SMTP-MAIL-SERVER) with ESMTP
+	id 8801920C54A; Tue, 15 May 2007 09:02:30 +0200 (CEST)
+Message-ID: <46495B2B.6040501@samba.org>
+Date: Tue, 15 May 2007 09:03:07 +0200
+From: "Stefan (metze) Metzmacher" <metze@samba.org>
+User-Agent: Thunderbird 1.5.0.10 (X11/20060911)
+MIME-Version: 1.0
+To: Andrew Bartlett <abartlet@samba.org>
+References: <20070515012122.235FB162AC3@lists.samba.org>	
+	<4649567B.1080004@samba.org>
+	<1179212084.2940.51.camel@localhost.localdomain>
+In-Reply-To: <1179212084.2940.51.camel@localhost.localdomain>
+X-Enigmail-Version: 0.94.2.0
+OpenPGP: id=0E53083F
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 7bit
+Cc: samba-technical@lists.samba.org
+Subject: Re: svn commit: samba r22874 - in
+ branches/SAMBA_4_0/source:	ntvfs/ipc torture/raw
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA1
+
+Andrew Bartlett schrieb:
+> On Tue, 2007-05-15 at 08:43 +0200, Stefan (metze) Metzmacher wrote:
+>> -----BEGIN PGP SIGNED MESSAGE-----
+>> Hash: SHA1
+>>
+>>>  /*
+>>> @@ -602,6 +609,39 @@
+>>>  static NTSTATUS ipc_qfileinfo(struct ntvfs_module_context *ntvfs,
+>>>  			      struct ntvfs_request *req, union smb_fileinfo *info)
+>>>  {
+>>> +	struct ipc_private *private = ntvfs->private_data;
+>>> +	switch (info->generic.level) {
+>>> +	case RAW_FILEINFO_GENERIC: 
+>>> +	{
+>>> +		struct pipe_state *p;
+>>> +		p = pipe_state_find(private, info->generic.in.file.ntvfs);
+>>> +		if (!p) {
+>>> +			return NT_STATUS_INVALID_HANDLE;
+>>> +		}
+>>> +		ZERO_STRUCT(info->generic.out);
+>>> +		info->generic.out.attrib = FILE_ATTRIBUTE_NORMAL;
+>>> +		info->generic.out.fname.s = strrchr(p->pipe_name, '\\');
+>>> +		info->generic.out.alloc_size = 4096;
+>>> +		info->generic.out.nlink = 1;
+>>> +		/* What the heck?  Match Win2k3: IPC$ pipes are delete pending */
+>>> +		info->generic.out.delete_pending = 1;
+>>> +		return NT_STATUS_OK;
+>>> +	}
+>>> +	case RAW_FILEINFO_ALT_NAME_INFO:
+>>> +	case RAW_FILEINFO_ALT_NAME_INFORMATION:
+>>> +	case RAW_FILEINFO_STREAM_INFO:
+>>> +	case RAW_FILEINFO_STREAM_INFORMATION:
+>>> +	case RAW_FILEINFO_COMPRESSION_INFO:
+>>> +	case RAW_FILEINFO_COMPRESSION_INFORMATION:
+>>> +	case RAW_FILEINFO_NETWORK_OPEN_INFORMATION:
+>>> +	case RAW_FILEINFO_ATTRIBUTE_TAG_INFORMATION:
+>>> +		return NT_STATUS_INVALID_PARAMETER;
+>>> +	case  RAW_FILEINFO_ALL_EAS:
+>>> +		return NT_STATUS_ACCESS_DENIED;
+>>> +	default:
+>>> +		return ntvfs_map_qfileinfo(ntvfs, req, info);
+>>> +	}
+>>> +	
+>> Hi Andrew,
+>>
+>> are you sure that the other levels always give INVALID_PARAMETER and
+>> not INVALID_HANDLE even if the handle isn't valid?
+> 
+> I didn't explore that, but that seems reasonable.  Any suggestions on a
+> reliably un-used fnum?  (0xffff)?
+
+0xffff is only valid on flush.
+
+but a test is what we need
+
+metze
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.5 (GNU/Linux)
+Comment: Using GnuPG with SUSE - http://enigmail.mozdev.org
+
+iD8DBQFGSVsqm70gjA5TCD8RAnbMAKCv5UFUEQ0lYqwXwN97p6OhgIyxcgCgpu6/
+GKuIziANDomr/5dxZPR6BPo=
+=za8o
+-----END PGP SIGNATURE-----
+

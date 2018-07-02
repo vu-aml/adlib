@@ -1,0 +1,211 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Apr 19 21:53:34 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3K1rY0I032547
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 19 Apr 2007 21:53:34 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id DAD2F162C3B
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 20 Apr 2007 01:53:08 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.6 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 531)
+	id 27729162AF4; Fri, 20 Apr 2007 01:52:46 +0000 (GMT)
+To: samba-cvs@samba.org
+From: herb@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070420015246.27729162AF4@lists.samba.org>
+Date: Fri, 20 Apr 2007 01:52:46 +0000 (GMT)
+Subject: svn commit: samba r22395 - in branches: SAMBA_3_0/source/profile
+	SAMBA_3_0/source/smbd SAMBA_3_0_25/source/profile
+	SAMBA_3_0_25/source/smbd
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 5993
+Lines: 167
+
+Author: herb
+Date: 2007-04-20 01:52:44 +0000 (Fri, 20 Apr 2007)
+New Revision: 22395
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22395
+
+Log:
+allow profiling level to be set on startup
+
+Modified:
+   branches/SAMBA_3_0/source/profile/profile.c
+   branches/SAMBA_3_0/source/smbd/server.c
+   branches/SAMBA_3_0_25/source/profile/profile.c
+   branches/SAMBA_3_0_25/source/smbd/server.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/profile/profile.c
+===================================================================
+--- branches/SAMBA_3_0/source/profile/profile.c	2007-04-19 23:47:55 UTC (rev 22394)
++++ branches/SAMBA_3_0/source/profile/profile.c	2007-04-20 01:52:44 UTC (rev 22395)
+@@ -42,14 +42,10 @@
+ BOOL do_profile_times = False;
+ 
+ /****************************************************************************
+-receive a set profile level message
++Set a profiling level.
+ ****************************************************************************/
+-void profile_message(int msg_type, struct process_id src,
+-		     void *buf, size_t len, void *private_data)
++void set_profile_level(int level, struct process_id src)
+ {
+-        int level;
+-
+-	memcpy(&level, buf, sizeof(int));
+ #ifdef WITH_PROFILE
+ 	switch (level) {
+ 	case 0:		/* turn off profiling */
+@@ -95,6 +91,17 @@
+ }
+ 
+ /****************************************************************************
++receive a set profile level message
++****************************************************************************/
++void profile_message(int msg_type, struct process_id src, void *buf, size_t len, void *private_data)
++{
++        int level;
++
++	memcpy(&level, buf, sizeof(int));
++	set_profile_level(level, src);
++}
++
++/****************************************************************************
+ receive a request profile level message
+ ****************************************************************************/
+ void reqprofile_message(int msg_type, struct process_id src,
+
+Modified: branches/SAMBA_3_0/source/smbd/server.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/server.c	2007-04-19 23:47:55 UTC (rev 22394)
++++ branches/SAMBA_3_0/source/smbd/server.c	2007-04-20 01:52:44 UTC (rev 22395)
+@@ -863,6 +863,7 @@
+ 	static BOOL no_process_group = False;
+ 	static BOOL log_stdout = False;
+ 	static char *ports = NULL;
++	static char *profile_level = NULL;
+ 	int opt;
+ 	poptContext pc;
+ 
+@@ -875,6 +876,7 @@
+ 	{"log-stdout", 'S', POPT_ARG_VAL, &log_stdout, True, "Log to stdout" },
+ 	{"build-options", 'b', POPT_ARG_NONE, NULL, 'b', "Print build options" },
+ 	{"port", 'p', POPT_ARG_STRING, &ports, 0, "Listen on the specified ports"},
++	{"profiling-level", 'P', POPT_ARG_STRING, &profile_level, 0, "Set profiling level","PROFILE_LEVEL"},
+ 	POPT_COMMON_SAMBA
+ 	POPT_COMMON_DYNCONFIG
+ 	POPT_TABLEEND
+@@ -997,6 +999,14 @@
+ 		DEBUG(0,("ERROR: failed to setup profiling\n"));
+ 		return -1;
+ 	}
++	if (profile_level != NULL) {
++		int pl = atoi(profile_level);
++		struct process_id src;
++
++		DEBUG(1, ("setting profiling level: %s\n",profile_level));
++		src.pid = getpid();
++		set_profile_level(pl, src);
++	}
+ #endif
+ 
+ 	DEBUG(3,( "loaded services\n"));
+
+Modified: branches/SAMBA_3_0_25/source/profile/profile.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/profile/profile.c	2007-04-19 23:47:55 UTC (rev 22394)
++++ branches/SAMBA_3_0_25/source/profile/profile.c	2007-04-20 01:52:44 UTC (rev 22395)
+@@ -42,13 +42,10 @@
+ BOOL do_profile_times = False;
+ 
+ /****************************************************************************
+-receive a set profile level message
++Set a profiling level.
+ ****************************************************************************/
+-void profile_message(int msg_type, struct process_id src, void *buf, size_t len, void *private_data)
++void set_profile_level(int level, struct process_id src)
+ {
+-        int level;
+-
+-	memcpy(&level, buf, sizeof(int));
+ #ifdef WITH_PROFILE
+ 	switch (level) {
+ 	case 0:		/* turn off profiling */
+@@ -94,6 +91,17 @@
+ }
+ 
+ /****************************************************************************
++receive a set profile level message
++****************************************************************************/
++void profile_message(int msg_type, struct process_id src, void *buf, size_t len, void *private_data)
++{
++        int level;
++
++	memcpy(&level, buf, sizeof(int));
++	set_profile_level(level, src);
++}
++
++/****************************************************************************
+ receive a request profile level message
+ ****************************************************************************/
+ void reqprofile_message(int msg_type, struct process_id src,
+
+Modified: branches/SAMBA_3_0_25/source/smbd/server.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/smbd/server.c	2007-04-19 23:47:55 UTC (rev 22394)
++++ branches/SAMBA_3_0_25/source/smbd/server.c	2007-04-20 01:52:44 UTC (rev 22395)
+@@ -833,6 +833,7 @@
+ 	static BOOL no_process_group = False;
+ 	static BOOL log_stdout = False;
+ 	static char *ports = NULL;
++	static char *profile_level = NULL;
+ 	int opt;
+ 	poptContext pc;
+ 
+@@ -845,6 +846,7 @@
+ 	{"log-stdout", 'S', POPT_ARG_VAL, &log_stdout, True, "Log to stdout" },
+ 	{"build-options", 'b', POPT_ARG_NONE, NULL, 'b', "Print build options" },
+ 	{"port", 'p', POPT_ARG_STRING, &ports, 0, "Listen on the specified ports"},
++	{"profiling-level", 'P', POPT_ARG_STRING, &profile_level, 0, "Set profiling level","PROFILE_LEVEL"},
+ 	POPT_COMMON_SAMBA
+ 	POPT_COMMON_DYNCONFIG
+ 	POPT_TABLEEND
+@@ -967,6 +969,14 @@
+ 		DEBUG(0,("ERROR: failed to setup profiling\n"));
+ 		return -1;
+ 	}
++	if (profile_level != NULL) {
++		int pl = atoi(profile_level);
++		struct process_id src;
++
++		DEBUG(1, ("setting profiling level: %s\n",profile_level));
++		src.pid = getpid();
++		set_profile_level(pl, src);
++	}
+ #endif
+ 
+ 	DEBUG(3,( "loaded services\n"));
+

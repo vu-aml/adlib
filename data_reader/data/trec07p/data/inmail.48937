@@ -1,0 +1,120 @@
+From perl6-all-return-81731-ktwarwic=speedy.uwaterloo.ca@perl.org  Fri Jun  1 18:51:29 2007
+Return-Path: <perl6-all-return-81731-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l51MpShB015829
+	for <ktwarwic@flax9.uwaterloo.ca>; Fri, 1 Jun 2007 18:51:29 -0400
+Received: (qmail 26973 invoked by uid 514); 1 Jun 2007 22:51:22 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 26967 invoked from network); 1 Jun 2007 22:51:22 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: moderator for perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: "Mehmet Yavuz Selim Soyturk" (via RT) <parrotbug-followup@parrotcode.org>
+X-RT-NewTicket: yes
+To: bugs-bitbucket@netlabs.develooper.com
+Resent-To: perl6-internals@perl.org
+Mail-Followup-To: perl6-internals@perl.org
+Reply-To: perl6-internals@perl.org
+Date: Fri, 01 Jun 2007 13:39:32 -0700
+Subject: [perl #43105] [PATCH] function mmd.c::mmd_expand_y: newly allocated memory unitialized 
+In-Reply-To: <1abd9eb20706011338l5ed33ec7s9537dac27a0f873@mail.gmail.com>
+References: <RT-Ticket-43105@perl.org> <1abd9eb20706011338l5ed33ec7s9537dac27a0f873@mail.gmail.com>
+Message-ID: <rt-3.6.HEAD-1668-1180730372-1019.43105-72-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #43105
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: mehmet.yavuz.selim@gmail.com
+MIME-Version: 1.0
+X-RT-Original-Encoding: utf-8
+Content-type: multipart/mixed; boundary="----------=_1180730372-1668-37"
+Resent-Message-Id: <20070601203933.324842AFDD@x3.develooper.com>
+Resent-Date: Fri,  1 Jun 2007 13:39:33 -0700 (PDT)
+Resent-From: rt-mehmet.yavuz.selim=gmail.com@netlabs.develooper.com
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+
+------------=_1180730372-1668-37
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+# New Ticket Created by  "Mehmet Yavuz Selim Soyturk" 
+# Please include the string:  [perl #43105]
+# in the subject line of all future correspondence about this issue. 
+# <URL: http://rt.perl.org/rt3/Ticket/Display.html?id=43105 >
+
+
+Function mmd_expand_y in src/mmd.c allocates new memory for the mmd
+table, but does not initialize the newy allocated memory to NULL,
+which causes segfaults for some cases. The attached patch solves that
+problem.
+
+
+-- 
+Mehmet
+
+------------=_1180730372-1668-37
+Content-Type: text/x-patch; charset="ascii"; name="mmd.patch"
+Content-Disposition: inline; filename="mmd.patch"
+Content-Transfer-Encoding: 7bit
+RT-Attachment: 43105/261488/114287
+
+Index: src/mmd.c
+===================================================================
+--- src/mmd.c	(revision 18722)
++++ src/mmd.c	(working copy)
+@@ -624,18 +624,30 @@
+ mmd_expand_y(Interp *interp, INTVAL func_nr, INTVAL new_y)
+ {
+     funcptr_t *new_table;
+-    UINTVAL    new_size;
++    UINTVAL x;
++    UINTVAL y;
++    UINTVAL i;
++    UINTVAL new_size;
+     MMD_table * const table = interp->binop_mmd_funcs + func_nr;
+ 
+     assert(table->x);
++    
++    x = table->x;
++    y = table->y;
+ 
+-    new_size = sizeof (funcptr_t) * table->x * new_y;
++    new_size = sizeof (funcptr_t) * x * new_y;
+ 
+     if (table->mmd_funcs)
+-        table->mmd_funcs = mem_sys_realloc(table->mmd_funcs, new_size);
++        new_table = mem_sys_realloc(table->mmd_funcs, new_size);
+     else
+-        table->mmd_funcs = (funcptr_t *)mem_sys_allocate(new_size);
+-
++        new_table = (funcptr_t *)mem_sys_allocate(new_size);
++    
++    /* Initialize the newly allocated space with NULLs */
++    for (i = x * y; i < x * new_y; i++) {
++        new_table[i] = NULL;
++    }
++    
++    table->mmd_funcs = new_table;
+     table->y = new_y;
+ }
+ 
+
+------------=_1180730372-1668-37--
+

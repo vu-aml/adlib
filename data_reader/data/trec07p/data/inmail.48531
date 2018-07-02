@@ -1,0 +1,91 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Jun  1 08:25:04 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l51CP3hB009591
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 1 Jun 2007 08:25:03 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 6533C163C3F
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri,  1 Jun 2007 12:24:58 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.8 required=3.8 tests=AWL,BAYES_00,
+	DATE_IN_PAST_03_06,NO_REAL_NAME,NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 0F9E0163BDA; Fri,  1 Jun 2007 12:19:33 +0000 (GMT)
+Date: Fri, 01 Jun 2007 19:04:51 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070601121933.0F9E0163BDA@lists.samba.org>
+Subject: Rev 416: convert ctdbd.sh tests to use an event script in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 416
+revision-id: tridge@samba.org-20070601090451-j8awt4re8c546udf
+parent: tridge@samba.org-20070601071619-cmxuezizcypnfhx7
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Fri 2007-06-01 19:04:51 +1000
+message:
+  convert ctdbd.sh tests to use an event script
+modified:
+  tests/ctdbd.sh                 ctdbd.sh-20070411085038-phusiewluwzyqjpc-2
+=== modified file 'tests/ctdbd.sh'
+--- a/tests/ctdbd.sh	2007-05-29 02:16:59 +0000
++++ b/tests/ctdbd.sh	2007-06-01 09:04:51 +0000
+@@ -3,8 +3,10 @@
+ killall -q ctdbd
+ 
+ echo "Starting 2 ctdb daemons"
+-$VALGRIND bin/ctdbd --nlist direct/nodes.txt
+-$VALGRIND bin/ctdbd --nlist direct/nodes.txt
++$VALGRIND bin/ctdbd --nlist direct/nodes.txt --event-script=tests/events --logfile=-
++$VALGRIND bin/ctdbd --nlist direct/nodes.txt --event-script=tests/events --logfile=-
++
++sleep 2
+ 
+ echo "Testing ping"
+ $VALGRIND bin/ctdb ping || exit 1
+@@ -19,7 +21,7 @@
+ $VALGRIND bin/ctdb -n all statisticsreset || exit 1
+ 
+ echo "Testing debug"
+-$VALGRIND bin/ctdb -n all setdebug 5 || exit 1
++$VALGRIND bin/ctdb -n all setdebug 3 || exit 1
+ $VALGRIND bin/ctdb -n all getdebug || exit 1
+ $VALGRIND bin/ctdb -n all setdebug 0 || exit 1
+ $VALGRIND bin/ctdb -n all getdebug || exit 1
+@@ -31,6 +33,15 @@
+ echo "Testing getdbmap"
+ $VALGRIND bin/ctdb getdbmap || exit 1
+ 
++echo "Testing status"
++$VALGRIND bin/ctdb status || exit 1
++
++sleep 1
++
++echo "Testing shutdown"
++$VALGRIND bin/ctdb shutdown -n all || exit 1
++
++sleep 1
++
+ echo "All done"
+-
+ killall -q ctdbd
+

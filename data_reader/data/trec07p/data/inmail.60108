@@ -1,0 +1,153 @@
+From r-help-bounces@stat.math.ethz.ch  Mon Jun 18 17:02:54 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5IL2rL9021813
+	for <ktwarwic@flax9.uwaterloo.ca>; Mon, 18 Jun 2007 17:02:54 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5IL0o0t032069;
+	Mon, 18 Jun 2007 23:01:04 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: *
+X-Spam-Status: No, score=1.7 required=5.0 tests=AWL, BAYES_50,
+	DKIM_POLICY_SIGNSOME,
+	RCVD_NUMERIC_HELO autolearn=no version=3.2.0
+Received: from rutherford.zen.co.uk (rutherford.zen.co.uk [212.23.3.142])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5IL0iME031985
+	for <R-help@stat.math.ethz.ch>; Mon, 18 Jun 2007 23:00:44 +0200
+Received: from [88.96.44.206] (helo=88.96.44.206)
+	by rutherford.zen.co.uk with esmtp (Exim 4.50)
+	id 1I0OL5-0001ON-SR; Mon, 18 Jun 2007 21:00:44 +0000
+Received: (from efh@localhost) by 88.96.44.206 (8.8.8/8.8.5) id WAA11429;
+	Mon, 18 Jun 2007 22:00:36 +0100
+Message-ID: <XFMail.070618220036.ted.harding@nessie.mcc.ac.uk>
+X-Mailer: XFMail 1.3-alpha-031298 [p0] on Linux
+X-Priority: 3 (Normal)
+MIME-Version: 1.0
+In-Reply-To: <4676D4BE.7040906@stats.uwo.ca>
+Date: Mon, 18 Jun 2007 22:00:36 +0100 (BST)
+From: (Ted Harding) <ted.harding@nessie.mcc.ac.uk>
+To: R Help <R-help@stat.math.ethz.ch>
+X-Originating-Rutherford-IP: [88.96.44.206]
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Subject: Re: [R] source a specific function
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+Reply-To: ted.harding@manchester.ac.uk
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+On 18-Jun-07 18:53:50, Duncan Murdoch wrote:
+> 
+> The exact syntax you list there won't work, but in any case, changing 
+> the environment of a function in a package is a bad idea -- it may need
+> to reference things from the namespace of the package.
+
+Well, as I said before, "(assuming that you know about
+interdependencies)"!
+
+I tried Gabor's suggested syntax as follows, bearing in mind that
+mvrnorm in MASS is pure R code calling only "base" functions:
+
+library(MASS)
+environment(mvrnorm) <- .GlobalEnv
+mu=c(0,0)
+V<-matrix(c(1.0,0.5,0.5,1.0),ncol=2)
+detach()
+ls()
+[1] "%.+%"    "%+.%"    "mu"      "mvrnorm" "V"      
+
+mvrnorm(10,mu,V)
+             [,1]       [,2]
+ [1,] -1.80466069 -1.8229928
+ [2,]  0.05565147 -1.6279434
+ [3,] -0.28505572 -0.8927696
+ [4,] -0.48919795  0.0750501
+ [5,] -0.08437832  0.1349296
+ [6,]  2.17399713  1.2881640
+ [7,]  1.59934824  1.3784665
+ [8,]  0.30555420  0.3835743
+ [9,]  0.11120527 -0.7287910
+[10,] -0.77281783 -1.2265502
+
+so that one seems to have worked.
+
+However, I'm not sure about the space used by MASS "going away"
+after detach():
+
+Starting R from scratch:
+
+Type 'q()' to quit R.
+
+> gc()
+         used (Mb) gc trigger (Mb)
+Ncells 412589 11.1     597831   16
+Vcells 102417  0.8     786432    6
+
+> library(MASS)
+> gc()
+         used (Mb) gc trigger (Mb)
+Ncells 459471 12.3     667722 17.9
+Vcells 111187  0.9     786432  6.0
+
+> environment(mvrnorm) <- .GlobalEnv
+> detach()
+> gc()
+         used (Mb) gc trigger (Mb)
+Ncells 459297 12.3     741108 19.8
+Vcells 111105  0.9     786432  6.0
+> gc()
+         used (Mb) gc trigger (Mb)
+Ncells 459304 12.3     818163 21.9
+Vcells 111118  0.9     786432  6.0
+
+so only about 170KB of the 2.2MB used by MASS has been recovered
+after detach(). Or am I looking at the wrong indicator of space used?
+
+On the other hand, if I first extract the code 9f mvrnorm()
+which is a few lines of pure R, I get:
+
+1. Start R from scratch:
+gc()
+         used (Mb) gc trigger (Mb)
+Ncells 412589 11.1     597831   16
+Vcells 102417  0.8     786432    6
+
+2. Paste in the code for mvrnorm, and then:
+gc()
+         used (Mb) gc trigger (Mb)
+Ncells 412844 11.1     667722 17.9
+Vcells 102591  0.8     786432  6.0
+
+so mrvnorm on its own is only taking up about
+
+ (412844-412589) + (102591-102417) = 429KB
+
+Hence I wonder whether the space first occupied by MASS (2.2MB)
+apart from mvrnorm gets freed up at all?
+
+Thanks for the comments.
+Ted.
+
+--------------------------------------------------------------------
+E-Mail: (Ted Harding) <ted.harding@nessie.mcc.ac.uk>
+Fax-to-email: +44 (0)870 094 0861
+Date: 18-Jun-07                                       Time: 22:00:33
+------------------------------ XFMail ------------------------------
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

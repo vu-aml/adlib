@@ -1,0 +1,94 @@
+From perl6-all-return-80783-ktwarwic=speedy.uwaterloo.ca@perl.org  Sun Apr 22 16:48:17 2007
+Return-Path: <perl6-all-return-80783-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3MKmG0I023942
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 22 Apr 2007 16:48:16 -0400
+Received: (qmail 26354 invoked by uid 514); 22 Apr 2007 20:47:50 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 26349 invoked from network); 22 Apr 2007 20:47:50 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: domain of rutski89@gmail.com designates 209.85.132.244 as permitted sender)
+DKIM-Signature: a=rsa-sha1; c=relaxed/relaxed;
+        d=gmail.com; s=beta;
+        h=domainkey-signature:received:received:in-reply-to:references:mime-version:content-type:message-id:cc:content-transfer-encoding:from:subject:date:to:x-mailer;
+        b=H3SliE0Y4tKXXw7sTOZ1lHBTOhVBDZanSw8i5CIhxzgi05QEfXw6TPnp0JKKiL9uTqF6pe0hn753Dj7dZyiMhsUcz/l55SaYTA7V50bUVfDx/+FWJd3m3dJBkonKaOYohR4dDPTg5gy3N0bg+PPZXnkLrhWuqKk1WE2vySC4ziI=
+DomainKey-Signature: a=rsa-sha1; c=nofws;
+        d=gmail.com; s=beta;
+        h=received:in-reply-to:references:mime-version:content-type:message-id:cc:content-transfer-encoding:from:subject:date:to:x-mailer;
+        b=bQ7Zc+G3mq+LF8U84toBbnbSWwyCLjI0LF9DgrQ7SmDMCH6xBS7TDYudey2jN69qufmjmmc3ngl4M1vs737HfyJJOjdk3Q+Ujw+1q7y3P+jg066axx//mzlB8xFTirvyWlfy41kTrf3eNGGGCWdYZxHjIsZc0u2Hze9SyU9cokA=
+In-Reply-To: <200704221736.35220.lt@toetsch.at>
+References: <200704211824.18554.chromatic@wgz.org> <200704221156.34317.lt@toetsch.at> <61275CFA-2D22-4D24-8A50-5E78E7D6FB02@gmail.com> <200704221736.35220.lt@toetsch.at>
+Mime-Version: 1.0 (Apple Message framework v752.2)
+Content-Type: text/plain; charset=US-ASCII; delsp=yes; format=flowed
+Message-Id: <4394E0C5-9004-4144-8C0B-28BA0EDA3391@gmail.com>
+Cc: Joshua Isom <jrisom@gmail.com>, chromatic <chromatic@wgz.org>,
+   perl6-internals@perl.org
+Content-Transfer-Encoding: 7bit
+From: Patrick Rutkowski <rutski89@gmail.com>
+Subject: Re: I Don't Understand The Context Allocation/Destruction Code
+Date: Sun, 22 Apr 2007 16:47:21 -0400
+To: Leopold Toetsch <lt@toetsch.at>
+X-Mailer: Apple Mail (2.752.2)
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED,SPF_PASS
+Status: O
+Content-Length: 1276
+Lines: 39
+
+Yes, I see that now, but that doesn't answer the questions.
+
+Why did you choose reg_alloc/8 as an index into free_list?
+
+Why does the code need to increase the size of free_list so
+dramatically in the branching into the first if()?
+
+I was also going to ask again how free_list is meant to be used, but
+then I found this in the comments at the top of register.c:
+
+"Context/register memory is malloced. C<ctx_mem.free> is used as a
+free list of reusable items."
+
+On Apr 22, 2007, at 11:36 AM, Leopold Toetsch wrote:
+
+> Am Sonntag, 22. April 2007 14:40 schrieb Patrick Rutkowski:
+>> Ok, so I see now that reg_alloc is rounded up to a multiple of 8 by
+>> the following two lines:
+>>
+>>    /*code*/ const int slot = (reg_alloc + 7) >> 3;
+>>    /*code*/ reg_alloc = slot << 3;
+>>
+>> However, this still begs the question of what the slot variable is
+>> for. Clearly it's being used as an index into
+>> interp->ctx_mem.free_list; but its value, which is always set to
+>> reg_alloc/8, seems to me to be rather arbitrary (either that or it  
+>> has
+>> some meaning but I just don't know any better).
+>
+> Alloc size     slot
+>   0, 4           0
+>   8, 12          1
+>  16, 20          2
+>  ...
+>
+> (As this is for registers, the sizes are not more fine grained).
+>
+> That's all.
+> leo
+

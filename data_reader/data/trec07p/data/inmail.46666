@@ -1,0 +1,103 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May 30 02:38:04 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4U6c4hB010162
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 30 May 2007 02:38:04 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 562A1163828
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 30 May 2007 06:37:59 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 8A030162AEF; Wed, 30 May 2007 06:37:34 +0000 (GMT)
+Date: Wed, 30 May 2007 16:37:40 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070530063734.8A030162AEF@lists.samba.org>
+Subject: Rev 404: tell newly connected nodes about any tcp tickle records
+	that we have that they don't have in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 404
+revision-id: tridge@samba.org-20070530063739-zc29gbh3p4b307ic
+parent: tridge@samba.org-20070530061139-3n42c8eoi2nk007e
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Wed 2007-05-30 16:37:39 +1000
+message:
+  tell newly connected nodes about any tcp tickle records that we have that they don't have
+modified:
+  takeover/ctdb_takeover.c       ctdb_takeover.c-20070525071636-a5n1ihghjtppy08r-2
+=== modified file 'takeover/ctdb_takeover.c'
+--- a/takeover/ctdb_takeover.c	2007-05-30 06:11:39 +0000
++++ b/takeover/ctdb_takeover.c	2007-05-30 06:37:39 +0000
+@@ -463,6 +463,13 @@
+ 
+ 	if (NULL == ctdb_tcp_find(ctdb->tcp_list, tcp)) {
+ 		DLIST_ADD(ctdb->tcp_list, tcp);
++		DEBUG(2,("Added tickle info for %s:%u from vnn %u\n",
++			 inet_ntoa(tcp->daddr.sin_addr), ntohs(tcp->daddr.sin_port),
++			 tcp->vnn));
++	} else {
++		DEBUG(4,("Already had tickle info for %s:%u from vnn %u\n",
++			 inet_ntoa(tcp->daddr.sin_addr), ntohs(tcp->daddr.sin_port),
++			 tcp->vnn));
+ 	}
+ 
+ 	return 0;
+@@ -484,7 +491,11 @@
+ 
+ 	tcp = ctdb_tcp_find(ctdb->tcp_list, &t);
+ 	if (tcp) {
++		DEBUG(2,("Removed tickle info for %s:%u from vnn %u\n",
++			 inet_ntoa(tcp->daddr.sin_addr), ntohs(tcp->daddr.sin_port),
++			 tcp->vnn));
+ 		DLIST_REMOVE(ctdb->tcp_list, tcp);
++		talloc_free(tcp);
+ 	}
+ 
+ 	return 0;
+@@ -503,6 +514,24 @@
+ 			DLIST_REMOVE(ctdb->tcp_list, tcp);
+ 			talloc_free(tcp);
+ 		}
++
++		/* and tell the new guy about any that he should have
++		   from us */
++		if (tcp->vnn == ctdb->vnn) {
++			struct ctdb_control_tcp_vnn t;
++			TDB_DATA data;
++
++			t.vnn  = tcp->vnn;
++			t.src  = tcp->saddr;
++			t.dest = tcp->daddr;
++
++			data.dptr = (uint8_t *)&t;
++			data.dsize = sizeof(t);
++
++			ctdb_daemon_send_control(ctdb, vnn, 0, 
++						 CTDB_CONTROL_TCP_ADD,
++						 0, CTDB_CTRL_FLAG_NOREPLY, data, NULL, NULL);
++		}
+ 	}
+ 	return 0;
+ }
+

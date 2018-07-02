@@ -1,0 +1,149 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Apr 11 23:32:39 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3C3Wd0I025287
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 11 Apr 2007 23:32:39 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 28A041638B2
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 12 Apr 2007 03:32:16 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=3.8 tests=ALL_TRUSTED,AWL,BAYES_50,
+	RCVD_IN_DSBL autolearn=ham version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from [9???N???p????1?$IPv6:::1] (dp [66.70.73.150])
+	by lists.samba.org (Postfix) with ESMTP id 6031B162BDA;
+	Thu, 12 Apr 2007 03:31:07 +0000 (GMT)
+In-Reply-To: <461D8CA0.6000209@sgi.com>
+References: <461C5C7C.20000@sgi.com>
+	<D1E2CFB3-F872-4BE0-8C55-52AC3CD0C56D@samba.org>
+	<461D8CA0.6000209@sgi.com>
+Mime-Version: 1.0 (Apple Message framework v752.3)
+Content-Type: text/plain; charset=US-ASCII; delsp=yes; format=flowed
+Message-Id: <220FFB6F-15AE-4A7D-8061-F96212F491BA@samba.org>
+Content-Transfer-Encoding: 7bit
+From: James Peach <jpeach@samba.org>
+Date: Wed, 11 Apr 2007 20:30:48 -0700
+To: Alison Winters <alisonw@sgi.com>
+X-Mailer: Apple Mail (2.752.3)
+Cc: samba-technical@lists.samba.org
+Subject: Re: samba profiling and pcp pmda
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 3754
+Lines: 98
+
+On 11/04/2007, at 6:34 PM, Alison Winters wrote:
+
+> CC:ed into samba-technical from personal email, this is a discussion
+> about the steps we could to take to enhance the existing profiling  
+> code
+> in Samba.
+>
+> James Peach wrote:
+>> The metrics export mechanism from jpeach-xmetrics belongs in the main
+>> samba tree.
+>>
+> Agreed.
+>
+>> The first thing you need to do to get this in is to split it into
+>> multiple mmap'ed files. That is, each different metrics structure  
+>> should
+>> have its own mmap and backing store. Once you do this, the allocator
+>> becomes a simple slot allocator and most of the really ugly code  
+>> goes away.
+>>
+> Do you mean having one header file that everything mmaps and a  
+> bunch of
+> files for each connected client and configured share that get mmapped
+> separately?
+
+I mean to use one mmap per record type. The current scheme is ugly  
+because it really doesn't want to be a proper allocator but it has to  
+deal with 2 different sizes of records in the mmap. If you have a  
+separate mmap for each record type, the allocator goes back to being  
+nice and simple.
+
+> I'm assuming the ugly code you're referring to is the bit
+> where it has to keep growing the file whenever new connections join  
+> etc.
+
+No, I'm referring to the allocation of metric records inside the mmap.
+
+>
+>> The second thing that you need os some way of gathering the stats  
+>> that
+>> is not that horrible VFS module :)
+>>
+> That's in the pipeline :)  What i'm planning is to just add a bit of
+> extra magic to the existing Samba profiling macros that allow us to
+> split it out per-client and per-share along with the existing  
+> recording
+> of global counts and times.  I'm pretty sure this is going to be  
+> fairly
+> elegant and small if i get it right.
+
+That sounds neat. It would be great if you had some code to reconcile  
+the existing profiling stats with these metrics.
+
+> I have a separate patch which i can't submit yet (it's copyright SGI)
+> that splits out all of the current profiling statistics into smaller
+> groups that we can turn on and off independently.
+
+Do you mean the stats that currently live in the sysv shared memory  
+segment?
+
+> This will allow us
+> more granular control over what to profile, and will hopefully avoid
+> nasty performance hits when we're only interested in isolated areas of
+> the code.
+
+IIRC you only get a big performance hit when you are timing  
+operations. You can probably avoid this (to some degree) by using  
+platform-specific timers.
+
+>> Once you have a stable, versioned export mechanism, then the PMDA can
+>> simply be one of the consumers of the exported metrics. There's  
+>> not real
+>> need for it to be in the Samba tree. I'd be OK with making the client
+>> interfaces (header file and shared library) LGPL.
+>>
+> I guess my real problem with this is that there's already a PMDA in  
+> the
+> pcp/ subdirectory in Samba.  This PMDA is broken right now - it won't
+> compile because some definitions have been moved around.  If it's not
+> going to be maintained then it should be removed from the tree - i can
+> just have a closed-source PMDA that builds independently (assuming  
+> LGPL
+> headers).  On the other hand, since it's in the tree anyway it  
+> could be
+> maintained as part of Samba - in which case i think applying the
+> attached two patches (move, then add) would be the right thing to do.
+> These patches move the PMDA into the main build - they're just a  
+> subset
+> of your xmetrics branch.
+
+IMHO, the Samba PMDA belongs in the PCP tree, not in the Samba tree.  
+Since you are going to be the one maintaining it, it's easier all  
+round if it lives there. We can simply remove the existing PMDA from  
+the Samba tree.
+
+--
+James Peach | jpeach@samba.org
+
+

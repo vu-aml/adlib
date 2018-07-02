@@ -1,0 +1,74 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Apr 19 04:32:10 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3J8W90I022350
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 19 Apr 2007 04:32:10 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 6F1F8163B36
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 19 Apr 2007 08:31:45 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 1E089162BC1; Thu, 19 Apr 2007 08:31:21 +0000 (GMT)
+Date: Thu, 19 Apr 2007 18:31:49 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070419083121.1E089162BC1@lists.samba.org>
+Subject: Rev 166: fixed a bug found by volker - initialse the record on disk
+	when initialised in memory in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 1043
+Lines: 33
+
+------------------------------------------------------------
+revno: 166
+revision-id: tridge@samba.org-20070419083149-bc28d74eb9e5df7b
+parent: tridge@samba.org-20070419074327-cdc474844a1e1d90
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Thu 2007-04-19 18:31:49 +1000
+message:
+  fixed a bug found by volker - initialse the record on disk when initialised in memory
+modified:
+  common/ctdb_ltdb.c             ctdb_ltdb.c-20061128065342-to93h6eejj5kon81-2
+=== modified file 'common/ctdb_ltdb.c'
+--- a/common/ctdb_ltdb.c	2007-04-19 07:43:27 +0000
++++ b/common/ctdb_ltdb.c	2007-04-19 08:31:49 +0000
+@@ -156,13 +156,15 @@
+ 
+ 	rec = tdb_fetch(ctdb_db->ltdb->tdb, key);
+ 	if (rec.dsize < sizeof(*header)) {
++		TDB_DATA d2;
+ 		/* return an initial header */
+-		free(rec.dptr);
++		if (rec.dptr) free(rec.dptr);
+ 		ltdb_initial_header(ctdb_db, key, header);
++		ZERO_STRUCT(d2);
+ 		if (data) {
+-			data->dptr = NULL;
+-			data->dsize = 0;
++			*data = d2;
+ 		}
++		ctdb_ltdb_store(ctdb_db, key, header, d2);
+ 		return 0;
+ 	}
+ 
+

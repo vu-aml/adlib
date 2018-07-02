@@ -1,0 +1,187 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri May 18 10:59:28 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4IExSqD015162
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 18 May 2007 10:59:28 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 07621163C33
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 18 May 2007 14:59:25 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 8CB26163B3B; Fri, 18 May 2007 14:58:51 +0000 (GMT)
+Date: Sat, 19 May 2007 00:56:49 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070518145851.8CB26163B3B@lists.samba.org>
+Subject: Rev 321: a better way to resend calls after recovery in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 321
+revision-id: tridge@samba.org-20070518145649-ftagi1x44wuzm36n
+parent: tridge@samba.org-20070518134829-y384ldoxc07qxxi5
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Sat 2007-05-19 00:56:49 +1000
+message:
+  a better way to resend calls after recovery
+modified:
+  common/ctdb_call.c             ctdb_call.c-20061128065342-to93h6eejj5kon81-1
+  common/ctdb_freeze.c           ctdb_freeze.c-20070512051503-935zdtyuqknqnhmo-1
+  include/ctdb_private.h         ctdb_private.h-20061117234101-o3qt14umlg9en8z0-13
+=== modified file 'common/ctdb_call.c'
+--- a/common/ctdb_call.c	2007-05-18 13:23:36 +0000
++++ b/common/ctdb_call.c	2007-05-18 14:56:49 +0000
+@@ -607,37 +607,20 @@
+ */
+ static int ctdb_call_destructor(struct ctdb_call_state *state)
+ {
++	DLIST_REMOVE(state->ctdb_db->ctdb->pending_calls, state);
+ 	ctdb_reqid_remove(state->ctdb_db->ctdb, state->reqid);
+ 	return 0;
+ }
+ 
+ 
+ /*
+-  called when a ctdb_call times out
++  called when a ctdb_call needs to be resent after a reconfigure event
+ */
+-static void ctdb_call_timeout(struct event_context *ev, struct timed_event *te, 
+-			      struct timeval t, void *private_data)
++static void ctdb_call_resend(struct ctdb_call_state *state)
+ {
+-	struct ctdb_call_state *state = talloc_get_type(private_data, struct ctdb_call_state);
+ 	struct ctdb_context *ctdb = state->ctdb_db->ctdb;
+ 
+-	ctdb->status.timeouts.call++;
+-
+-	event_add_timed(ctdb->ev, state, timeval_current_ofs(CTDB_CALL_TIMEOUT, 0), 
+-			ctdb_call_timeout, state);
+-
+-	if (++state->resend_count < 10 &&
+-	    (ctdb->vnn_map->generation == state->generation ||
+-	     ctdb->recovery_mode != CTDB_RECOVERY_NORMAL)) {
+-		/* the call is just being slow, or we are curently
+-		   recovering, give it more time */
+-		return;
+-	}
+-
+-	/* the generation count changed or we're timing out too much -
+-	   the call must be re-issued */
+ 	state->generation = ctdb->vnn_map->generation;
+-	state->resend_count = 0;
+ 
+ 	/* use a new reqid, in case the old reply does eventually come in */
+ 	ctdb_reqid_remove(ctdb, state->reqid);
+@@ -651,7 +634,19 @@
+ 	state->c->hdr.destnode = ctdb->vnn;
+ 
+ 	ctdb_queue_packet(ctdb, &state->c->hdr);
+-	DEBUG(0,("requeued ctdb_call after timeout\n"));
++	DEBUG(0,("resent ctdb_call\n"));
++}
++
++/*
++  resend all pending calls on recovery
++ */
++void ctdb_call_resend_all(struct ctdb_context *ctdb)
++{
++	struct ctdb_call_state *state, *next;
++	for (state=ctdb->pending_calls;state;state=next) {
++		next = state->next;
++		ctdb_call_resend(state);
++	}
+ }
+ 
+ /*
+@@ -743,10 +738,10 @@
+ 	state->state  = CTDB_CALL_WAIT;
+ 	state->generation = ctdb->vnn_map->generation;
+ 
++	DLIST_ADD(ctdb->pending_calls, state);
++
+ 	ctdb_queue_packet(ctdb, &state->c->hdr);
+ 
+-	event_add_timed(ctdb->ev, state, timeval_current_ofs(CTDB_CALL_TIMEOUT, 0), 
+-			ctdb_call_timeout, state);
+ 	return state;
+ }
+ 
+
+=== modified file 'common/ctdb_freeze.c'
+--- a/common/ctdb_freeze.c	2007-05-12 11:25:26 +0000
++++ b/common/ctdb_freeze.c	2007-05-18 14:56:49 +0000
+@@ -223,5 +223,6 @@
+ {
+ 	talloc_free(ctdb->freeze_handle);
+ 	ctdb->freeze_handle = NULL;
++	ctdb_call_resend_all(ctdb);
+ 	return 0;
+ }
+
+=== modified file 'include/ctdb_private.h'
+--- a/include/ctdb_private.h	2007-05-18 13:48:29 +0000
++++ b/include/ctdb_private.h	2007-05-18 14:56:49 +0000
+@@ -265,6 +265,7 @@
+ 	uint32_t num_clients;
+ 	uint32_t seqnum_frequency;
+ 	uint32_t recovery_master;
++	struct ctdb_call_state *pending_calls;
+ };
+ 
+ struct ctdb_db_context {
+@@ -300,11 +301,6 @@
+           ctdb_fatal(ctdb, "Out of memory in " __location__ ); \
+ 	  }} while (0)
+ 
+-/* timeout for ctdb call operations. When this timeout expires we
+-   check if the generation count has changed, and if it has then
+-   re-issue the call */
+-#define CTDB_CALL_TIMEOUT 2
+-
+ /* maximum timeout for ctdb control calls */
+ #define CTDB_CONTROL_TIMEOUT 60
+ 
+@@ -390,6 +386,7 @@
+   state of a in-progress ctdb call
+ */
+ struct ctdb_call_state {
++	struct ctdb_call_state *next, *prev;
+ 	enum call_state state;
+ 	uint32_t reqid;
+ 	struct ctdb_req_call *c;
+@@ -397,7 +394,6 @@
+ 	const char *errmsg;
+ 	struct ctdb_call call;
+ 	uint32_t generation;
+-	uint32_t resend_count;
+ 	struct {
+ 		void (*fn)(struct ctdb_call_state *);
+ 		void *private_data;
+@@ -828,5 +824,6 @@
+ void ctdb_send_keepalive(struct ctdb_context *ctdb, uint32_t destnode);
+ 
+ void ctdb_daemon_cancel_controls(struct ctdb_context *ctdb, struct ctdb_node *node);
++void ctdb_call_resend_all(struct ctdb_context *ctdb);
+ 
+ #endif
+

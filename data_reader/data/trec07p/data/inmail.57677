@@ -1,0 +1,80 @@
+From perl6-all-return-81972-ktwarwic=speedy.uwaterloo.ca@perl.org  Thu Jun 14 16:38:49 2007
+Return-Path: <perl6-all-return-81972-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l5EKclL9026216
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 14 Jun 2007 16:38:47 -0400
+Received: (qmail 8432 invoked by uid 514); 14 Jun 2007 20:38:45 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 8427 invoked from network); 14 Jun 2007 20:38:45 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=0.0 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: Leopold Toetsch <lt@toetsch.at>
+To: perl6-internals@perl.org
+Subject: Re: [GC] Pin Key PMCs During Method Lookup
+Date: Thu, 14 Jun 2007 22:32:21 +0200
+User-Agent: KMail/1.9.1
+Cc: chromatic <chromatic@wgz.org>
+References: <200706122002.29443.chromatic@wgz.org>
+In-Reply-To: <200706122002.29443.chromatic@wgz.org>
+MIME-Version: 1.0
+Content-Type: text/plain;
+  charset="iso-8859-15"
+Content-Disposition: inline
+Message-Id: <200706142232.21409.lt@toetsch.at>
+X-Scan-Signature: 5fc63ffc4a09ec98bfdb5e0fd7991b2b
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=0.0 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+Content-Transfer-Encoding: 8bit
+X-MIME-Autoconverted: from quoted-printable to 8bit by flax9.uwaterloo.ca id l5EKclL9026216
+
+Am Mittwoch, 13. Juni 2007 05:02 schrieb chromatic:
+>         PMC   * const key = VTABLE_nextkey_keyed(interp, key_new(interp),
+> ns, ITERATE_FROM_START);
+>
+> If a GC run happens in the rest of this function, it could collect the
+> newly created Key -- PMCs created and held outside of structures visible to
+> GC are vulnerable to collection.
+
+This really shouldn't happen. All GC runs that are done due to lack of some 
+ressource are walking the C-stack and the CPU registers I hope[1]. GC runs 
+initiated at the run-loop level don't need this BTW.
+
+[1] the real problem might be that on MS the marking of the CPU-registers 
+isn't happening.
+
+See also trace_system_areas() in src/cpu_dep.c and e.g. ...
+
+#  ifdef PARROT_HAS_HEADER_SETJMP
+    Parrot_jump_buff env;
+
+    /* Zero the Parrot_jump_buff, otherwise you will trace stale objects */
+    memset(&env, 0, sizeof (env));
+
+    /* this should put registers in env, which then get marked in
+     * trace_system_stack below
+     */
+    setjmp(env);
+#  endif
+
+... how to use a standard C lib function to force CPU registers onto the 
+stack. Other methods for other CPUs are present in that file too.
+
+leo
+

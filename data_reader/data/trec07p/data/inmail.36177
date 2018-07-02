@@ -1,0 +1,170 @@
+From perl6-all-return-81324-ktwarwic=speedy.uwaterloo.ca@perl.org  Mon May 14 14:14:49 2007
+Return-Path: <perl6-all-return-81324-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4EIEmqD025598
+	for <ktwarwic@flax9.uwaterloo.ca>; Mon, 14 May 2007 14:14:48 -0400
+Received: (qmail 8434 invoked by uid 514); 14 May 2007 18:14:44 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 8429 invoked from network); 14 May 2007 18:14:44 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: domain of mehmet.yavuz.selim@gmail.com designates 64.233.162.226 as permitted sender)
+DKIM-Signature: a=rsa-sha1; c=relaxed/relaxed;
+        d=gmail.com; s=beta;
+        h=domainkey-signature:received:received:message-id:date:from:to:subject:in-reply-to:mime-version:content-type:content-transfer-encoding:content-disposition:references;
+        b=kyldpMxLDJRmPskCfiM4uFE6LH4jS4phuiiynMbvopdoYu40BslDlgNIzeODYKusMtOH/zv2mCeAG671iy2jWT6u3mnYgDcvuCv/qtuQ1yMuADWNDhlkkzNUNDvF7baxaisqvi1KgGmJDf/rmb8LBtVGHwrz6pupHwUqL5292b8=
+DomainKey-Signature: a=rsa-sha1; c=nofws;
+        d=gmail.com; s=beta;
+        h=received:message-id:date:from:to:subject:in-reply-to:mime-version:content-type:content-transfer-encoding:content-disposition:references;
+        b=maoEX0OctHkDMXe7Ius/MwsNw1EdRYxIYfUdUvQRQJCMz4gvCmY/uKCZb0YQ+yD/z9o8nTILdl863Wllw8atIE8L+NK217fkm8XzPLNB2ZkQPKPKNVBEzDH73vhC4oZzRDbG/QoX1ki7Yxs4sb/urd15rnDJ92Ryre0uk2fwgNA=
+Message-ID: <1abd9eb20705141114g5c652bf9w54cda2ac2934fac6@mail.gmail.com>
+Date: Mon, 14 May 2007 20:14:11 +0200
+From: "Mehmet Yavuz Selim Soyturk" <mehmet.yavuz.selim@gmail.com>
+To: perl6-internals@perl.org
+Subject: Re: [perl #42919] [BUG] and [PATCH] overriding 'invoke' requires current object to be explicitly passed
+In-Reply-To: <rt-3.6.HEAD-12281-1178833308-463.42919-72-0@perl.org>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+References: <RT-Ticket-42919@perl.org>
+	 <189adbd0705101439q956a1beve7039f1e04c9d115@mail.gmail.com>
+	 <rt-3.6.HEAD-12281-1178833308-463.42919-72-0@perl.org>
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED,SPF_PASS
+
+On 5/10/07, via RT Alek Storm <parrotbug-followup@parrotcode.org> wrote:
+> # New Ticket Created by  "Alek Storm"
+> # Please include the string:  [perl #42919]
+> # in the subject line of all future correspondence about this issue.
+> # <URL: http://rt.perl.org/rt3/Ticket/Display.html?id=42919 >
+>
+>
+> Because PIR can't tell the difference between invoking an object PMC and
+> invoking a sub PMC, it doesn't generate a correct set_args when an object is
+> invoked.  Since the 'invoke' override is a method, it expects the current
+> object to be the first parameter.  There are currently two workarounds: pass
+> the current object explicitly as the first parameter, or don't declare
+> 'invoke' as a :method.  The first is inconvenient and unintuitive, and the
+> second means 'invoke' doesn't get access to its own object.
+>
+> Example code for bug:
+> .sub _ :main
+>   $P0 = newclass "Foo"
+>   $P1 = new "Foo"
+>   $P1("bar")
+> .end
+>
+> .namespace ["Foo"]
+> .sub 'invoke' :method :vtable
+>   .param string bar
+>   say bar
+>   self.'baz'()
+> .end
+>
+> .sub 'baz' :method
+>   say "baz"
+> .end
+>
+> Output:
+> too few arguments passed (1) - 2 params expected
+> current instr.: 'parrot;Foo;invoke' pc 16 (/home/alek/test2.pir:8)
+> called from Sub '_' pc 11 (/home/alek/test2.pir:4)
+>
+> I've attached a patch that fixes this by grabbing the args signature inside
+> delegate.invoke() and unshifting an arg of type PARROT_ARG_PMC |
+> PARROT_ARG_OBJECT.  It also modifies src/inter_call.c to handle this by
+> setting the arg equal to interp->current_object, and enums.h to add the new
+> argument flag.  The tests in t/pmc/parrotobject.t have been changed to
+> include :method on the 'invoke' overrides, and to remove the test for
+> #41732, which is no longer applicable.
+>
+> --
+> Alek Storm
+
+Should we not be able to use an object that implements 'invoke' as a
+method of another object? There is some strange behaviour when I try
+to.
+
+
+.sub main :main
+    $P0 = newclass 'Func'
+    $P1 = newclass 'Obj'
+    $P2 = new 'Obj'
+    $P2.'some_method'()
+.end
+
+.namespace ['Func']
+
+.sub invoke :vtable :method
+    .param pmc an_arg
+
+    print 'vtable invoke with self = "'
+    print self
+    print '", arg = "'
+    print an_arg
+    say '"'
+.end
+
+.sub get_string :vtable
+    .return ('an instance of Func')
+.end
+
+.namespace ['Obj']
+
+.sub find_method :vtable :method
+    .param string meth_name
+
+    print 'find_method "'
+    print meth_name
+    print '" from "'
+    print self
+    say '" (***)'
+
+
+    .local pmc func
+    func = new 'Func'
+    .return (func)
+.end
+
+.sub get_string :vtable
+    .return ('an instance of Obj')
+.end
+
+=====
+
+I expect as output:
+
+find_method "some_method" from "an instance of Obj" (***)
+vtable invoke with self = "an instance of Func", arg = "an instance of Obj"
+
+I don't know about the internals of parameter passing, it could be
+that it's not possible.
+
+
+The current output is:
+
+find_method "some_method" from "an instance of Obj" (***)
+vtable invoke with self = "an instance of Func", arg = "" (***)"
+
+Some strange things are happening with registers.
+
+-- 
+Mehmet
+

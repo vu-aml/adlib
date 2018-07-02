@@ -1,0 +1,210 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun Apr  8 21:36:46 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l391ak0I008154
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 8 Apr 2007 21:36:46 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 0256E162C3E
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon,  9 Apr 2007 01:36:24 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.3 required=3.8 tests=ALL_TRUSTED,AWL,BAYES_20,
+	RCVD_IN_DSBL autolearn=unavailable version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from [????N???p??0UAIPv6:::1] (dp [66.70.73.150])
+	by lists.samba.org (Postfix) with ESMTP id A1843162ACF;
+	Mon,  9 Apr 2007 01:35:32 +0000 (GMT)
+In-Reply-To: <20070409002314.GB3242@jeremy2>
+References: <20070408194148.3B527162AD8@lists.samba.org>
+	<D0B4E1FF-553F-4CFF-80CF-991EB3422980@samba.org>
+	<20070408235416.GA3242@jeremy2>
+	<3C75FD5D-28AF-4EC7-B1D6-1E96F9CD86C6@samba.org>
+	<20070409002314.GB3242@jeremy2>
+Mime-Version: 1.0 (Apple Message framework v752.3)
+Content-Type: text/plain; charset=US-ASCII; delsp=yes; format=flowed
+Message-Id: <BE9770F2-C98A-44A5-A585-E71C5BC548D5@samba.org>
+Content-Transfer-Encoding: 7bit
+From: James Peach <jpeach@samba.org>
+Date: Sun, 8 Apr 2007 18:35:18 -0700
+To: Jeremy Allison <jra@samba.org>
+X-Mailer: Apple Mail (2.752.3)
+Cc: samba-technical@lists.samba.org, samba-cvs@samba.org
+Subject: Re: svn commit: samba r22132 - in branches:
+	SAMBA_3_0/source/modules SAMBA_3_0/source/smbd
+	SAMBA_3_0_25/source/modules SAMBA_3_0_25/source/smbd
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 5258
+Lines: 155
+
+
+On 08/04/2007, at 5:23 PM, Jeremy Allison wrote:
+
+> On Sun, Apr 08, 2007 at 05:09:36PM -0700, James Peach wrote:
+>>
+>> You could add this to vfs_cacheprime, and just have an option that
+>> determines whether it does a readahead (ie. I/O hint) or an actual
+>> read(2).
+>
+> I await your patch :-).
+
+I knew you were going to say that!
+>> Sure, but 2 modules that do *almost* the same thing is just  
+>> confusing.
+>
+> I don't think they do. readahead is built around
+> this one syscall on Linux. It's not the same as
+> cacheprime - cacheprime reads from the start of
+> the file, readahead triggers on every pread/sendfile
+> request that matches offset MOD readahead_offset.
+
+They're not *exactly* the same, but they are mostly the same. The  
+difference is quite subtle. This patch should resolve the differences:
+
+Index: SAMBA_3_0/source/modules/vfs_cacheprime.c
+===================================================================
+--- SAMBA_3_0/source/modules/vfs_cacheprime.c	(revision 22132)
++++ SAMBA_3_0/source/modules/vfs_cacheprime.c	(working copy)
+@@ -1,5 +1,6 @@
+/*
+- * Copyright (c) James Peach 2005-2006
++ * Copyright (c) James Peach 2005-2007
++ * Copyright (c) Jeremy Allison 2007
+   *
+   * This program is free software; you can redistribute it and/or  
+modify
+   * it under the terms of the GNU General Public License as  
+published by
+@@ -31,6 +32,14 @@
+   *      cacheprime:rsize    Amount of readahead in bytes. This  
+should be a
+   *                          multiple of the RAID stripe width.
+   *      cacheprime:debug    Debug level at which to emit messages.
++ *      cacheprime:force alignment
++ *                          Force all I/O to be aligned to an rsize  
+boundary.
++ *                          If this is false, we simply issue a  
+readahead on
++ *                          each rsize boundary.
++ *
++ * To configure for Vista:
++ *      cacheprime:rsize = 0x80000
++ *      cacheprime:force alignment = no
+   */
+#define READAHEAD_MIN       (128 * 1024)        /* min is 128 KiB */
+@@ -41,7 +50,38 @@
+static int module_debug;
+static ssize_t g_readsz = 0;
+static void * g_readbuf = NULL;
++static BOOL g_forcealign = False;
++static void sys_readahead(int fd, SMB_OFF_T offset, SMB_OFF_T len)
++{
++        static BOOL didmsg = False;
++        int err;
++
++#if defined(HAVE_LINUX_READAHEAD)
++		err = readahead(fromfd, offset, (size_t)rhd->len);
++
++		DEBUG(10,("%s: readahead on fd %u, offset %llu, len %u returned %d 
+\n",
++                MODULE,
++			(unsigned int)fromfd,
++			(unsigned long long)offset,
++			(unsigned int)rhd->len,
++		        err ));
++#elif defined(HAVE_POSIX_FADVISE)
++		err = posix_fadvise(fromfd, offset, (off_t)rhd->len,  
+POSIX_FADV_WILLNEED);
++		DEBUG(10,("%s: posix_fadvise on fd %u, offset %llu, len %u  
+returned %d\n",
++            MODULE,
++			(unsigned int)fromfd,
++			(unsigned long long)offset,
++			(unsigned int)rhd->len,
++			err ));
++#else
++		if (!didmsg) {
++			DEBUG(0,("%s: no readahead on this platform\n", MODULE));
++			didmsg = True;
++		}
++#endif
++}
++
+/* Prime the kernel buffer cache with data from the specified file.  
+We use
+   * per-fsp data to make sure we only ever do this once. If pread is  
+being
+   * emulated by seek/read/seek, when this will suck quite a lot.
+@@ -71,15 +111,20 @@
+              return False;
+          }
+-        DEBUG(module_debug,
+-            ("%s: doing readahead of %lld bytes at %lld for %s\n",
+-            MODULE, (long long)g_readsz, (long long)*last,
+-            fsp->fsp_name));
++        if (g_forcealign) {
++                DEBUG(module_debug,
++                    ("%s: doing readahead of %lld bytes at %lld for % 
+s\n",
++                    MODULE, (long long)g_readsz, (long long)*last,
++                    fsp->fsp_name));
+-        nread = sys_pread(fd, g_readbuf, g_readsz, *last);
+-        if (nread < 0) {
+-            *last = -1;
+-            return False;
++                nread = sys_pread(fd, g_readbuf, g_readsz, *last);
++                if (nread < 0) {
++                    *last = -1;
++                    return False;
++                }
++        } else {
++                sys_readahead(fd, *last, g_readsz);
++                nread += g_readsz;
+          }
+          *last += nread;
+@@ -103,6 +148,9 @@
+          g_readsz = conv_str_size(lp_parm_const_string(SNUM(handle- 
+ >conn),
+                                          MODULE, "rsize", NULL));
++        g_forcealign = lp_parm_bool(SNUM(handle->conn), MODULE,
++                            "force alignment", False);
++
+          if (g_readsz < READAHEAD_MIN) {
+                  DEBUG(module_debug, ("%s: %ld bytes of readahead "
+                              "requested, using minimum of %u\n",
+@@ -115,9 +163,11 @@
+                  g_readsz = READAHEAD_MAX;
+          }
+-        if ((g_readbuf = SMB_MALLOC(g_readsz)) == NULL) {
+-                /* Turn off readahead if we can't get a buffer. */
+-                g_readsz = 0;
++        if (g_forcealign == True) {
++                if ((g_readbuf = SMB_MALLOC(g_readsz)) == NULL) {
++                        /* Turn off readahead if we can't get a  
+buffer. */
++                        g_readsz = 0;
++                }
+          }
+          return SMB_VFS_NEXT_CONNECT(handle, service, user);
+
+
+
+--
+James Peach | jpeach@samba.org
+
+

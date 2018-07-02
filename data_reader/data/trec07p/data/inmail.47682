@@ -1,0 +1,134 @@
+From perl6-all-return-81680-ktwarwic=speedy.uwaterloo.ca@perl.org  Thu May 31 09:54:56 2007
+Return-Path: <perl6-all-return-81680-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4VDsthB028586
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 31 May 2007 09:54:55 -0400
+Received: (qmail 26977 invoked by uid 514); 31 May 2007 13:54:49 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 26972 invoked from network); 31 May 2007 13:54:48 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-0.7 required=8.0
+	tests=BAYES_20,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: moderator for perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: domain of Andy_Bach@wiwb.uscourts.gov designates 208.27.203.43 as permitted sender)
+X-IronPort-AV: E=Sophos;i="4.14,596,1170651600"; 
+   d="scan'208";a="2651795"
+In-Reply-To: <26605.127.0.0.1.1180571697.squirrel@localhost>
+To: andrew@acooke.org, "parrot " <perl6-internals@perl.org>
+Subject: Re: Newb: path/LD_LIBRARY_PATH/other
+MIME-Version: 1.0
+X-Mailer: Lotus Notes Release 6.5.4 HF852 January 26, 2006
+Message-ID: <OF8AD33D01.94D83AF7-ON862572EC.000648EA-862572EC.000B2284@uscmail.uscourts.gov>
+From: Andy_Bach@wiwb.uscourts.gov
+Date: Wed, 30 May 2007 21:01:49 -0500
+X-MIMETrack: Serialize by Router on 07WIWMAIL01a/M/07/USCOURTS(Release 6.5.4FP3 HF3|February
+ 23, 2006) at 05/30/2007 09:01:52 PM,
+	Serialize complete at 05/30/2007 09:01:52 PM
+Content-Type: text/plain; charset="US-ASCII"
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=0.0 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+
+Hi Andrew,
+
+I just svn-ed the latest and I got the same error. I'm no parrot expert 
+but it appears it's looking for the include file
+  .include 'src/abc_gen.pir'
+
+and there's no such file.  It appears the generated (?) abc_gen.pir file 
+isn't there. Other langs have that (lua/src/lua.pir) so my guess is its 
+generated. So, at the top level I ran:
+/parrot # find . -name pgc.pir 
+
+and saw:
+./languages/abc/config/makefiles/root.in:       $(PARROT) 
+$(PGE_DIR)/pgc.pir --output=src/abc_gen.pir src/abc.pg
+
+so I ran:
+parrot/ #./parrot compilers/pge/pgc.pir 
+--output=languages/abc/src/abc_gen.pir languages/abc/src/abc.pg
+
+and now I 've got the abc_gen.pir file. Soooo looking in that 
+makefiles/root.in file, there's also a line for PASTGrammar_gen.pir, 
+another needed, generated file so:
+parrot/ # ./parrot compilers/tge/tgc.pir 
+--output=languages/abc/src/PASTGrammar_gen.pir 
+languages/abc/src/PASTGrammar.tg
+
+and then create the abc.pbc (a test?):
+parrot/ #cd languages/abc
+parrot/languages/abc # ../../parrot -o abc.pbc abc.pir 
+
+and it works!
+parrot/languages/abc # ../../parrot abc.pir
+> 1 + 2
+3
+> ^D
+
+a
+
+Note, I had to modify
+config/init/hints/linux.pm
+
+to comment out the -fvisibility=hidden cflag
+   else {
+         # hide non-exported symbols
+        #$cflags .= ' -fvisibility=hidden';
+
+as my perl Makefile.pl got a test.cco
+c1: error: unrecognized option `-fvisibility=hidden'
+
+for a test.c of:
+*
+    * testparrotfuncptr.c - figure out if the compiler will let us do
+    *                       non-ansi function pointer casts.
+    */
+
+It fails at:
+Determining whether lex is 
+installed...............................skipped.
+Determining whether yacc is 
+installed..............................skipped.
+Determining if your C compiler is actually gcc...
+step auto::gcc died during execution: C compiler failed (see test.cco) at 
+lib/Parrot/Configure/Step.pm line 505
+        Parrot::Configure::Step::cc_build() called at config/auto/gcc.pm 
+line 37
+ 
+auto::gcc::runstep('auto::gcc=HASH(0x838de04)','Parrot::Configure=HASH(0x823b470)') 
+called at lib/Parrot/Configure.pm line 266
+        eval {...} called at lib/Parrot/Configure.pm line 260
+ 
+Parrot::Configure::_runstep('Parrot::Configure=HASH(0x823b470)','Parrot::Configure::Task=HASH(0x827c104)','undef','undef','undef',11) 
+called at lib/Parrot/Configure.pm line 192
+        Parrot::Configure::runsteps('Parrot::Configure=HASH(0x823b470)') 
+called at Configure.pl line 350
+
+ at Configure.pl line 350
+
+and goes south from there.
+
+Andy Bach
+Systems Mangler
+Internet: andy_bach@wiwb.uscourts.gov
+VOICE: (608) 261-5738  FAX 264-5932
+
+The competent programmer is fully aware of the strictly limited size of
+his own skull; therefore he approaches the programming task in full
+humility, and among other things he avoids clever tricks like the
+plague. -- Edsger Dijkstra
+

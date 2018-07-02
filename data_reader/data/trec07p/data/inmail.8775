@@ -1,0 +1,338 @@
+From perl6-all-return-80589-ktwarwic=speedy.uwaterloo.ca@perl.org  Sat Apr 14 15:45:26 2007
+Return-Path: <perl6-all-return-80589-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3EJjO0I004882
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 14 Apr 2007 15:45:25 -0400
+Received: (qmail 17843 invoked by uid 514); 14 Apr 2007 19:45:00 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 17830 invoked from network); 14 Apr 2007 19:45:00 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: chromatic (via RT) <parrotbug-followup@parrotcode.org>
+X-RT-NewTicket: yes
+To: bugs-bitbucket@netlabs.develooper.com
+Resent-To: perl6-internals@perl.org
+Mail-Followup-To: perl6-internals@perl.org
+Reply-To: perl6-internals@perl.org
+Date: Sat, 14 Apr 2007 12:44:32 -0700
+Subject: [perl #42510] Move main() Out of compilers/imcc/main.c 
+In-Reply-To: <200704141242.26539.chromatic@wgz.org>
+References: <RT-Ticket-42510@perl.org> <200704141242.26539.chromatic@wgz.org>
+Message-ID: <rt-3.6.HEAD-30201-1176579873-656.42510-72-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #42510
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: chromatic@wgz.org
+MIME-Version: 1.0
+X-RT-Original-Encoding: utf-8
+Content-type: multipart/mixed; boundary="----------=_1176579873-30201-182"
+Resent-Message-Id: <20070414194434.5A5BA2AFE2@x3.develooper.com>
+Resent-Date: Sat, 14 Apr 2007 12:44:34 -0700 (PDT)
+Resent-From: rt-chromatic=wgz.org@netlabs.develooper.com
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-4.4 required=8.0
+	tests=ALL_TRUSTED,BAYES_00,DK_POLICY_SIGNSOME
+Status: O
+Content-Length: 7746
+Lines: 281
+
+------------=_1176579873-30201-182
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+# New Ticket Created by  chromatic 
+# Please include the string:  [perl #42510]
+# in the subject line of all future correspondence about this issue. 
+# <URL: http://rt.perl.org/rt3/Ticket/Display.html?id=42510 >
+
+
+The attached patch moves only the main() function out of compilers/imcc/main.c 
+into src/main.c.  There's a lot more work to do to clean up this mess, 
+including RT #37248.
+
+For example, the options processing and help() and version() functions need to 
+move into src/main.c too, but because of the intertwining with IMCC details, 
+it's difficult to do so.
+
+I'd like to get test results from this patch on a few other platforms before I 
+apply it in a couple of days; it was  a bit of work to get pbc_merge to 
+compile.
+
+-- c
+
+
+------------=_1176579873-30201-182
+Content-Type: text/x-diff; charset="us-ascii"; name="move_main.patch"
+Content-Disposition: inline; filename="move_main.patch"
+Content-Transfer-Encoding: 7bit
+RT-Attachment: 42510/245177/110294
+
+=== MANIFEST
+==================================================================
+--- MANIFEST	(revision 3175)
++++ MANIFEST	(local)
+@@ -769,6 +769,7 @@
+ include/parrot/hash.h                                       [main]include
+ include/parrot/headers.h                                    [main]include
+ include/parrot/hll.h                                        [main]include
++include/parrot/imcc.h                                       [main]include
+ include/parrot/inter_call.h                                 [main]include
+ include/parrot/interpreter.h                                [main]include
+ include/parrot/intlist.h                                    [main]include
+@@ -2539,6 +2540,7 @@
+ src/longopt.c                                               []
+ src/malloc-trace.c                                          []
+ src/malloc.c                                                []
++src/main.c                                                  []
+ src/misc.c                                                  []
+ src/mmd.c                                                   []
+ src/nci_test.c                                              []
+=== compilers/imcc/main.c
+==================================================================
+--- compilers/imcc/main.c	(revision 3175)
++++ compilers/imcc/main.c	(local)
+@@ -194,7 +194,7 @@
+ }
+ 
+ /* most stolen from test_main.c */
+-static char *
++char *
+ parseflags(Parrot_Interp interp, int *argc, char **argv[])
+ {
+     struct longopt_opt_info opt = LONGOPT_OPT_INFO_INIT;
+@@ -511,7 +511,7 @@
+     return;
+ }
+ 
+-static int
++int
+ imcc_initialize(Interp *interp)
+ {
+     yyscan_t yyscanner = IMCC_INFO(interp)->yyscanner;
+@@ -592,7 +592,7 @@
+     free(packed);
+ }
+ 
+-static int
++int
+ imcc_run(Interp *interp, const char *sourcefile, int argc, char * argv[])
+ {
+     PackFile *pf;
+@@ -760,41 +760,6 @@
+     return 0;
+ }
+ 
+-int
+-main(int argc, char * argv[])
+-{
+-    char    *sourcefile;
+-    Interp  *interp;
+-    STRING  *executable_name;
+-    PMC     *executable_name_pmc;
+-    int      status;
+-
+-    Parrot_set_config_hash();
+-
+-    interp     = Parrot_new(NULL);
+-    if (!imcc_initialize(interp))
+-        internal_exception(1, "Could not initialize IMCC\n");
+-
+-    /* We parse the arguments, but first store away the name of the Parrot
+-       executable, since parsing destroys that and we want to make it
+-       available. */
+-    executable_name     = string_from_cstring(interp, argv[0], 0);
+-    executable_name_pmc = pmc_new(interp, enum_class_String);
+-    VTABLE_set_string_native(interp, executable_name_pmc, executable_name);
+-    VTABLE_set_pmc_keyed_int(interp, interp->iglobals, IGLOBALS_EXECUTABLE,
+-        executable_name_pmc);
+-
+-    sourcefile = parseflags(interp, &argc, &argv);
+-    status     = imcc_run(interp, sourcefile, argc, argv);
+-
+-    /* Clean-up after ourselves */
+-    Parrot_destroy(interp);
+-    Parrot_exit(interp, 0);
+-
+-    return status;
+-}
+-
+-
+ /*
+  * Local variables:
+  *   c-file-style: "parrot"
+=== config/gen/makefiles/root.in
+==================================================================
+--- config/gen/makefiles/root.in	(revision 3175)
++++ config/gen/makefiles/root.in	(local)
+@@ -371,6 +371,7 @@
+     $(IMCC_DIR)/imcparser$(O) \
+     $(IMCC_DIR)/imclexer$(O) \
+     $(IMCC_DIR)/imc$(O) \
++    $(IMCC_DIR)/main$(O) \
+     $(IMCC_DIR)/symreg$(O) \
+     $(IMCC_DIR)/instructions$(O) \
+     $(IMCC_DIR)/cfg$(O) \
+@@ -425,6 +426,7 @@
+     $(SRC_DIR)/inter_run$(O)  \
+     $(SRC_DIR)/gc/register$(O) \
+     $(SRC_DIR)/gc/memory$(O) \
++    $(SRC_DIR)/main$(O) \
+     $(SRC_DIR)/objects$(O) \
+     $(SRC_DIR)/packfile$(O) \
+     $(SRC_DIR)/stacks$(O) \
+@@ -1082,6 +1084,8 @@
+ 
+ $(SRC_DIR)/gc/memory$(O) : $(GENERAL_H_FILES)
+ 
++$(SRC_DIR)/main$(O) : $(SRC_DIR)/main.c $(GENERAL_H_FILES)
++
+ $(SRC_DIR)/pic$(O) : $(GENERAL_H_FILES)
+ 
+ $(SRC_DIR)/pic_jit$(O) : $(GENERAL_H_FILES)
+=== include/parrot/imcc.h
+==================================================================
+--- include/parrot/imcc.h	(revision 3175)
++++ include/parrot/imcc.h	(local)
+@@ -0,0 +1,15 @@
++#if !defined(PARROT_IMCC_H_GUARD)
++#define PARROT_IMCC_H_GUARD
++
++int imcc_initialize(Interp *interp);
++char * parseflags(Interp *interp, int *argc, char **argv[]);
++int imcc_run(Interp *interp, const char *sourcefile, int argc, char * argv[]);
++
++#endif
++
++/*
++ * Local variables:
++ *   c-file-style: "parrot"
++ * End:
++ * vim: expandtab shiftwidth=4:
++ */
+
+Property changes on: include/parrot/imcc.h
+___________________________________________________________________
+Name: svn:eol-style
+ +native
+Name: svn:keywords
+ +Author Date Id Revision
+
+=== src/main.c
+==================================================================
+--- src/main.c	(revision 3175)
++++ src/main.c	(local)
+@@ -0,0 +1,85 @@
++/*
++Copyright (C) 2007, The Perl Foundation
++$Id$
++
++=head1 NAME
++
++src/main.c - the Entry Point to Parrot Programs
++
++=head1 DESCRIPTION
++
++Start Parrot
++
++=head2 Functions
++
++=over 4
++
++=cut
++
++*/
++
++#include <stdio.h>
++#include <string.h>
++
++#include "parrot/parrot.h"
++#include "parrot/embed.h"
++#include "parrot/imcc.h"
++
++/*
++
++=item C<int main(int argc, char * argv[])>
++
++The entry point from the command line into Parrot.
++
++*/
++
++int
++main(int argc, char * argv[])
++{
++    char    *sourcefile;
++    Interp  *interp;
++    STRING  *executable_name;
++    PMC     *executable_name_pmc;
++    int      status;
++
++    Parrot_set_config_hash();
++
++    interp     = Parrot_new(NULL);
++    if (!imcc_initialize(interp))
++        internal_exception(1, "Could not initialize IMCC\n");
++
++    /* We parse the arguments, but first store away the name of the Parrot
++       executable, since parsing destroys that and we want to make it
++       available. */
++    executable_name     = string_from_cstring(interp, argv[0], 0);
++    executable_name_pmc = pmc_new(interp, enum_class_String);
++    VTABLE_set_string_native(interp, executable_name_pmc, executable_name);
++    VTABLE_set_pmc_keyed_int(interp, interp->iglobals, IGLOBALS_EXECUTABLE,
++        executable_name_pmc);
++
++    sourcefile = parseflags(interp, &argc, &argv);
++    status     = imcc_run(interp, sourcefile, argc, argv);
++
++    /* Clean-up after ourselves */
++    Parrot_destroy(interp);
++    Parrot_exit(interp, 0);
++
++    return status;
++}
++
++=back
++
++=head1 SEE ALSO
++
++F<compilers/imcc/main.c>, unfortunately.
++
++=cut
++
++*/
++
++/*
++ * Local variables:
++ *   c-file-style: "parrot"
++ * End:
++ * vim: expandtab shiftwidth=4:
++ */
+
+Property changes on: src/main.c
+___________________________________________________________________
+Name: svn:eol-style
+ +native
+Name: svn:keywords
+ +Author Date Id Revision
+
+
+------------=_1176579873-30201-182--
+

@@ -1,0 +1,304 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 15 08:18:50 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4FCInqD004719
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 08:18:49 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 44385163A22
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 12:18:47 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id C5E1A162AE4; Tue, 15 May 2007 12:18:18 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070515121818.C5E1A162AE4@lists.samba.org>
+Date: Tue, 15 May 2007 12:18:18 +0000 (GMT)
+Subject: svn commit: samba r22900 - in branches: SAMBA_3_0/source/profile
+	SAMBA_3_0/source/smbd SAMBA_3_0/source/utils
+	SAMBA_3_0_26/source/profile SAMBA_3_0_26/source/smbd
+	SAMBA_3_0_26/source/utils
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-05-15 12:18:17 +0000 (Tue, 15 May 2007)
+New Revision: 22900
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22900
+
+Log:
+Convert profile/ to messaging_send_pid/messaging_register
+
+Modified:
+   branches/SAMBA_3_0/source/profile/profile.c
+   branches/SAMBA_3_0/source/smbd/server.c
+   branches/SAMBA_3_0/source/utils/status_profile.c
+   branches/SAMBA_3_0_26/source/profile/profile.c
+   branches/SAMBA_3_0_26/source/smbd/server.c
+   branches/SAMBA_3_0_26/source/utils/status_profile.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/profile/profile.c
+===================================================================
+--- branches/SAMBA_3_0/source/profile/profile.c	2007-05-15 11:26:03 UTC (rev 22899)
++++ branches/SAMBA_3_0/source/profile/profile.c	2007-05-15 12:18:17 UTC (rev 22900)
+@@ -93,20 +93,31 @@
+ /****************************************************************************
+ receive a set profile level message
+ ****************************************************************************/
+-void profile_message(int msg_type, struct server_id src, void *buf, size_t len,
+-		     void *private_data)
++static void profile_message(struct messaging_context *msg_ctx,
++			    void *private_data,
++			    uint32_t msg_type,
++			    struct server_id src,
++			    DATA_BLOB *data)
+ {
+         int level;
+ 
+-	memcpy(&level, buf, sizeof(int));
++	if (data->length != sizeof(level)) {
++		DEBUG(0, ("got invalid profile message\n"));
++		return;
++	}
++
++	memcpy(&level, data->data, sizeof(level));
+ 	set_profile_level(level, src);
+ }
+ 
+ /****************************************************************************
+ receive a request profile level message
+ ****************************************************************************/
+-void reqprofile_message(int msg_type, struct server_id src,
+-			void *buf, size_t len, void *private_data)
++static void reqprofile_message(struct messaging_context *msg_ctx,
++			       void *private_data, 
++			       uint32_t msg_type, 
++			       struct server_id src,
++			       DATA_BLOB *data)
+ {
+         int level;
+ 
+@@ -117,7 +128,8 @@
+ #endif
+ 	DEBUG(1,("INFO: Received REQ_PROFILELEVEL message from PID %u\n",
+ 		 (unsigned int)procid_to_pid(&src)));
+-	message_send_pid(src, MSG_PROFILELEVEL, &level, sizeof(int), True);
++	messaging_send_buf(msg_ctx, src, MSG_PROFILELEVEL,
++			   (uint8 *)&level, sizeof(level));
+ }
+ 
+ /*******************************************************************
+@@ -184,7 +196,7 @@
+ }
+ #endif
+ 
+-BOOL profile_setup(BOOL rdonly)
++BOOL profile_setup(struct messaging_context *msg_ctx, BOOL rdonly)
+ {
+ 	struct shmid_ds shm_ds;
+ 
+@@ -238,7 +250,7 @@
+ 	}
+ 
+ 	if (shm_ds.shm_segsz != sizeof(*profile_h)) {
+-		DEBUG(0,("WARNING: profile size is %d (expected %lu). Deleting\n",
++		DEBUG(0,("WARNING: profile size is %d (expected %d). Deleting\n",
+ 			 (int)shm_ds.shm_segsz, sizeof(*profile_h)));
+ 		if (shmctl(shm_id, IPC_RMID, &shm_ds) == 0) {
+ 			goto again;
+@@ -255,8 +267,12 @@
+ 	}
+ 
+ 	profile_p = &profile_h->stats;
+-	message_register(MSG_PROFILE, profile_message, NULL);
+-	message_register(MSG_REQ_PROFILELEVEL, reqprofile_message, NULL);
++	if (msg_ctx != NULL) {
++		messaging_register(msg_ctx, NULL, MSG_PROFILE,
++				   profile_message);
++		messaging_register(msg_ctx, NULL, MSG_REQ_PROFILELEVEL,
++				   reqprofile_message);
++	}
+ 	return True;
+ }
+ 
+
+Modified: branches/SAMBA_3_0/source/smbd/server.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/server.c	2007-05-15 11:26:03 UTC (rev 22899)
++++ branches/SAMBA_3_0/source/smbd/server.c	2007-05-15 12:18:17 UTC (rev 22900)
+@@ -917,7 +917,7 @@
+ 	init_structs();
+ 
+ #ifdef WITH_PROFILE
+-	if (!profile_setup(False)) {
++	if (!profile_setup(smbd_messaging_context(), False)) {
+ 		DEBUG(0,("ERROR: failed to setup profiling\n"));
+ 		return -1;
+ 	}
+
+Modified: branches/SAMBA_3_0/source/utils/status_profile.c
+===================================================================
+--- branches/SAMBA_3_0/source/utils/status_profile.c	2007-05-15 11:26:03 UTC (rev 22899)
++++ branches/SAMBA_3_0/source/utils/status_profile.c	2007-05-15 12:18:17 UTC (rev 22900)
+@@ -47,7 +47,7 @@
+ BOOL status_profile_dump(BOOL verbose)
+ {
+ #ifdef WITH_PROFILE
+-	if (!profile_setup(True)) {
++	if (!profile_setup(NULL, True)) {
+ 		fprintf(stderr,"Failed to initialise profile memory\n");
+ 		return False;
+ 	}
+@@ -487,7 +487,7 @@
+ 		    usec_to_sec(sample_interval_usec));
+ 	}
+ 
+-	if (!profile_setup(True)) {
++	if (!profile_setup(NULL, True)) {
+ 		fprintf(stderr,"Failed to initialise profile memory\n");
+ 		return False;
+ 	}
+
+Modified: branches/SAMBA_3_0_26/source/profile/profile.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/profile/profile.c	2007-05-15 11:26:03 UTC (rev 22899)
++++ branches/SAMBA_3_0_26/source/profile/profile.c	2007-05-15 12:18:17 UTC (rev 22900)
+@@ -93,20 +93,31 @@
+ /****************************************************************************
+ receive a set profile level message
+ ****************************************************************************/
+-void profile_message(int msg_type, struct server_id src, void *buf, size_t len,
+-		     void *private_data)
++static void profile_message(struct messaging_context *msg_ctx,
++			    void *private_data,
++			    uint32_t msg_type,
++			    struct server_id src,
++			    DATA_BLOB *data)
+ {
+         int level;
+ 
+-	memcpy(&level, buf, sizeof(int));
++	if (data->length != sizeof(level)) {
++		DEBUG(0, ("got invalid profile message\n"));
++		return;
++	}
++
++	memcpy(&level, data->data, sizeof(level));
+ 	set_profile_level(level, src);
+ }
+ 
+ /****************************************************************************
+ receive a request profile level message
+ ****************************************************************************/
+-void reqprofile_message(int msg_type, struct server_id src,
+-			void *buf, size_t len, void *private_data)
++static void reqprofile_message(struct messaging_context *msg_ctx,
++			       void *private_data, 
++			       uint32_t msg_type, 
++			       struct server_id src,
++			       DATA_BLOB *data)
+ {
+         int level;
+ 
+@@ -117,7 +128,8 @@
+ #endif
+ 	DEBUG(1,("INFO: Received REQ_PROFILELEVEL message from PID %u\n",
+ 		 (unsigned int)procid_to_pid(&src)));
+-	message_send_pid(src, MSG_PROFILELEVEL, &level, sizeof(int), True);
++	messaging_send_buf(msg_ctx, src, MSG_PROFILELEVEL,
++			   (uint8 *)&level, sizeof(level));
+ }
+ 
+ /*******************************************************************
+@@ -184,7 +196,7 @@
+ }
+ #endif
+ 
+-BOOL profile_setup(BOOL rdonly)
++BOOL profile_setup(struct messaging_context *msg_ctx, BOOL rdonly)
+ {
+ 	struct shmid_ds shm_ds;
+ 
+@@ -238,7 +250,7 @@
+ 	}
+ 
+ 	if (shm_ds.shm_segsz != sizeof(*profile_h)) {
+-		DEBUG(0,("WARNING: profile size is %d (expected %lu). Deleting\n",
++		DEBUG(0,("WARNING: profile size is %d (expected %d). Deleting\n",
+ 			 (int)shm_ds.shm_segsz, sizeof(*profile_h)));
+ 		if (shmctl(shm_id, IPC_RMID, &shm_ds) == 0) {
+ 			goto again;
+@@ -255,8 +267,12 @@
+ 	}
+ 
+ 	profile_p = &profile_h->stats;
+-	message_register(MSG_PROFILE, profile_message, NULL);
+-	message_register(MSG_REQ_PROFILELEVEL, reqprofile_message, NULL);
++	if (msg_ctx != NULL) {
++		messaging_register(msg_ctx, NULL, MSG_PROFILE,
++				   profile_message);
++		messaging_register(msg_ctx, NULL, MSG_REQ_PROFILELEVEL,
++				   reqprofile_message);
++	}
+ 	return True;
+ }
+ 
+
+Modified: branches/SAMBA_3_0_26/source/smbd/server.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/smbd/server.c	2007-05-15 11:26:03 UTC (rev 22899)
++++ branches/SAMBA_3_0_26/source/smbd/server.c	2007-05-15 12:18:17 UTC (rev 22900)
+@@ -966,7 +966,7 @@
+ 	init_structs();
+ 
+ #ifdef WITH_PROFILE
+-	if (!profile_setup(False)) {
++	if (!profile_setup(smbd_messaging_context(), False)) {
+ 		DEBUG(0,("ERROR: failed to setup profiling\n"));
+ 		return -1;
+ 	}
+
+Modified: branches/SAMBA_3_0_26/source/utils/status_profile.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/utils/status_profile.c	2007-05-15 11:26:03 UTC (rev 22899)
++++ branches/SAMBA_3_0_26/source/utils/status_profile.c	2007-05-15 12:18:17 UTC (rev 22900)
+@@ -47,7 +47,7 @@
+ BOOL status_profile_dump(BOOL verbose)
+ {
+ #ifdef WITH_PROFILE
+-	if (!profile_setup(True)) {
++	if (!profile_setup(NULL, True)) {
+ 		fprintf(stderr,"Failed to initialise profile memory\n");
+ 		return False;
+ 	}
+@@ -487,7 +487,7 @@
+ 		    usec_to_sec(sample_interval_usec));
+ 	}
+ 
+-	if (!profile_setup(True)) {
++	if (!profile_setup(NULL, True)) {
+ 		fprintf(stderr,"Failed to initialise profile memory\n");
+ 		return False;
+ 	}
+

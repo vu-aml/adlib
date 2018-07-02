@@ -1,0 +1,220 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 29 15:32:20 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4TJWKhB002646
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 15:32:20 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 51D21163901
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 19:32:15 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.8 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id 756D6162AE8; Tue, 29 May 2007 19:31:58 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070529193158.756D6162AE8@lists.samba.org>
+Date: Tue, 29 May 2007 19:31:58 +0000 (GMT)
+Subject: svn commit: samba r23225 - in branches/SAMBA_3_0/source/nsswitch: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-05-29 19:31:57 +0000 (Tue, 29 May 2007)
+New Revision: 23225
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23225
+
+Log:
+Attached find a patch that makes use of NetSamLogonEx in
+winbind. With this and W2k3 DCs around it is possible to use
+more than one winbind on the same machine account, because
+NetSamLogonEx does not use the credentials chain.
+
+I added the flag domain->can_do_samlogon_ex because this
+only works against W2k3 and with schannel. The theory is to
+try if we're AD and have schannel, and fall back to
+NetSamLogon if this fails. can_do_samlogon_ex is thus a
+protection against multiple failures.
+
+Only checking into 3_0, this needs more review before going
+into a production release.
+
+Feel free to comment :-)
+
+
+Modified:
+   branches/SAMBA_3_0/source/nsswitch/winbindd.h
+   branches/SAMBA_3_0/source/nsswitch/winbindd_cm.c
+   branches/SAMBA_3_0/source/nsswitch/winbindd_pam.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/nsswitch/winbindd.h
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/winbindd.h	2007-05-29 19:09:38 UTC (rev 23224)
++++ branches/SAMBA_3_0/source/nsswitch/winbindd.h	2007-05-29 19:31:57 UTC (rev 23225)
+@@ -169,6 +169,14 @@
+ 	time_t startup_time;		       /* When we set "startup" true. */
+ 	BOOL startup;                          /* are we in the first 30 seconds after startup_time ? */
+ 
++	BOOL can_do_samlogon_ex; /* Due to the lack of finer control what type
++				  * of DC we have, let us try to do a
++				  * credential-chain less samlogon_ex call
++				  * with AD and schannel. If this fails with
++				  * DCERPC_FAULT_OP_RNG_ERROR, then set this
++				  * to False. This variable is around so that
++				  * we don't have to try _ex every time. */
++
+ 	/* Lookup methods for this domain (LDAP or RPC) */
+ 	struct winbindd_methods *methods;
+ 
+
+Modified: branches/SAMBA_3_0/source/nsswitch/winbindd_cm.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/winbindd_cm.c	2007-05-29 19:09:38 UTC (rev 23224)
++++ branches/SAMBA_3_0/source/nsswitch/winbindd_cm.c	2007-05-29 19:31:57 UTC (rev 23225)
+@@ -2201,6 +2201,12 @@
+  no_schannel:
+ 	if ((lp_client_schannel() == False) ||
+ 			((neg_flags & NETLOGON_NEG_SCHANNEL) == 0)) {
++
++		/*
++		 * NetSamLogonEx only works for schannel
++		 */
++		domain->can_do_samlogon_ex = False;
++
+ 		/* We're done - just keep the existing connection to NETLOGON
+ 		 * open */
+ 		conn->netlogon_pipe = netlogon_pipe;
+@@ -2232,6 +2238,11 @@
+ 		return !NT_STATUS_IS_OK(result) ? result : NT_STATUS_PIPE_NOT_AVAILABLE;
+ 	}
+ 
++	/*
++	 * Try NetSamLogonEx for AD domains
++	 */
++	domain->can_do_samlogon_ex = domain->active_directory;
++	
+ 	*cli = conn->netlogon_pipe;
+ 	return NT_STATUS_OK;
+ }
+
+Modified: branches/SAMBA_3_0/source/nsswitch/winbindd_pam.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/winbindd_pam.c	2007-05-29 19:09:38 UTC (rev 23224)
++++ branches/SAMBA_3_0/source/nsswitch/winbindd_pam.c	2007-05-29 19:31:57 UTC (rev 23225)
+@@ -1200,6 +1200,17 @@
+ 	/* check authentication loop */
+ 
+ 	do {
++		NTSTATUS (*logon_fn)(struct rpc_pipe_client
++				     *cli, TALLOC_CTX *mem_ctx,
++				     uint32 logon_parameters,
++				     const char *server,
++				     const char *username,
++				     const char *domain,
++				     const char *workstation, 
++				     const uint8 chal[8], 
++				     DATA_BLOB lm_response,
++				     DATA_BLOB nt_response,
++				     NET_USER_INFO_3 *info3);
+ 
+ 		ZERO_STRUCTP(my_info3);
+ 		retry = False;
+@@ -1211,7 +1222,11 @@
+ 			goto done;
+ 		}
+ 
+-		result = rpccli_netlogon_sam_network_logon(netlogon_pipe,
++		logon_fn = contact_domain->can_do_samlogon_ex
++			? rpccli_netlogon_sam_network_logon_ex
++			: rpccli_netlogon_sam_network_logon;
++
++		result = logon_fn(netlogon_pipe,
+ 							   state->mem_ctx,
+ 							   0,
+ 							   contact_domain->dcname, /* server name */
+@@ -1222,6 +1237,16 @@
+ 							   lm_resp,
+ 							   nt_resp,
+ 							   my_info3);
++
++		if ((NT_STATUS_V(result) == DCERPC_FAULT_OP_RNG_ERROR)
++		    && contact_domain->can_do_samlogon_ex) {
++			DEBUG(3, ("Got a DC that can not do NetSamLogonEx, "
++				  "retrying with NetSamLogon\n"));
++			contact_domain->can_do_samlogon_ex = False;
++			retry = True;
++			continue;
++		}
++			
+ 		attempts += 1;
+ 
+ 		/* We have to try a second time as cm_connect_netlogon
+@@ -1807,6 +1832,18 @@
+ 	}
+ 
+ 	do {
++		NTSTATUS (*logon_fn)(struct rpc_pipe_client
++				     *cli, TALLOC_CTX *mem_ctx,
++				     uint32 logon_parameters,
++				     const char *server,
++				     const char *username,
++				     const char *domain,
++				     const char *workstation, 
++				     const uint8 chal[8], 
++				     DATA_BLOB lm_response,
++				     DATA_BLOB nt_response,
++				     NET_USER_INFO_3 *info3);
++
+ 		ZERO_STRUCT(info3);
+ 		retry = False;
+ 
+@@ -1819,7 +1856,11 @@
+ 			goto done;
+ 		}
+ 
+-		result = rpccli_netlogon_sam_network_logon(netlogon_pipe,
++		logon_fn = contact_domain->can_do_samlogon_ex
++			? rpccli_netlogon_sam_network_logon_ex
++			: rpccli_netlogon_sam_network_logon;
++
++		result = logon_fn(netlogon_pipe,
+ 							   state->mem_ctx,
+ 							   state->request.data.auth_crap.logon_parameters,
+ 							   contact_domain->dcname,
+@@ -1832,6 +1873,15 @@
+ 							   nt_resp,
+ 							   &info3);
+ 
++		if ((NT_STATUS_V(result) == DCERPC_FAULT_OP_RNG_ERROR)
++		    && contact_domain->can_do_samlogon_ex) {
++			DEBUG(3, ("Got a DC that can not do NetSamLogonEx, "
++				  "retrying with NetSamLogon\n"));
++			contact_domain->can_do_samlogon_ex = False;
++			retry = True;
++			continue;
++		}
++			
+ 		attempts += 1;
+ 
+ 		/* We have to try a second time as cm_connect_netlogon
+

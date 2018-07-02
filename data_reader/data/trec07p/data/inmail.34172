@@ -1,0 +1,94 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri May 11 17:45:40 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4BLjeqD002347
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 11 May 2007 17:45:40 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 30052162C4D
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 11 May 2007 21:45:38 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.3 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 615)
+	id E86BA162AD9; Fri, 11 May 2007 21:45:04 +0000 (GMT)
+To: samba-cvs@samba.org
+From: mimir@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070511214504.E86BA162AD9@lists.samba.org>
+Date: Fri, 11 May 2007 21:45:04 +0000 (GMT)
+Subject: svn commit: samba r22809 - in branches/SAMBA_4_0/source/libnet: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: mimir
+Date: 2007-05-11 21:45:03 +0000 (Fri, 11 May 2007)
+New Revision: 22809
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22809
+
+Log:
+use buffer size specified in libnet context.
+
+
+rafal
+
+
+Modified:
+   branches/SAMBA_4_0/source/libnet/libnet_domain.c
+   branches/SAMBA_4_0/source/libnet/libnet_domain.h
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/libnet/libnet_domain.c
+===================================================================
+--- branches/SAMBA_4_0/source/libnet/libnet_domain.c	2007-05-11 21:44:18 UTC (rev 22808)
++++ branches/SAMBA_4_0/source/libnet/libnet_domain.c	2007-05-11 21:45:03 UTC (rev 22809)
+@@ -956,7 +956,7 @@
+ 		/* prepare next round of enumeration */
+ 		s->enumdom.in.connect_handle = &s->connect_handle;
+ 		s->enumdom.in.resume_handle  = &s->resume_handle;
+-		s->enumdom.in.buf_size       = s->buf_size;
++		s->enumdom.in.buf_size       = s->ctx->samr.buf_size;
+ 		s->enumdom.out.resume_handle = &s->resume_handle;
+ 
+ 		/* send the request */
+@@ -1073,9 +1073,6 @@
+ 	s->hostname = talloc_strdup(c, io->in.hostname);
+ 	if (composite_nomem(s->hostname, c)) return c;
+ 
+-	/* set the default buffer size if not stated explicitly */
+-	s->buf_size = (io->in.buf_size == 0) ? 512 : io->in.buf_size;
+-
+ 	/* check whether samr pipe has already been opened */
+ 	if (ctx->samr.pipe == NULL) {
+ 		/* prepare rpc connect call */
+
+Modified: branches/SAMBA_4_0/source/libnet/libnet_domain.h
+===================================================================
+--- branches/SAMBA_4_0/source/libnet/libnet_domain.h	2007-05-11 21:44:18 UTC (rev 22808)
++++ branches/SAMBA_4_0/source/libnet/libnet_domain.h	2007-05-11 21:45:03 UTC (rev 22809)
+@@ -52,7 +52,6 @@
+ struct libnet_DomainList {
+ 	struct {
+ 		const char *hostname;
+-		const int buf_size;
+ 	} in;
+ 	struct {
+ 		int count;
+

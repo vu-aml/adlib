@@ -1,0 +1,137 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat Jun  9 08:04:37 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l59C4bL9009275
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 9 Jun 2007 08:04:37 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 34AF7163874
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat,  9 Jun 2007 12:04:37 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 22E24162C3A; Sat,  9 Jun 2007 12:00:39 +0000 (GMT)
+Date: Sat, 09 Jun 2007 21:47:06 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070609120039.22E24162C3A@lists.samba.org>
+Subject: Rev 522: support up takeover in testing when root in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 522
+revision-id: tridge@samba.org-20070609114706-yyeee2n33bdie2jb
+parent: tridge@samba.org-20070609114642-748hfwtukybwnilg
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Sat 2007-06-09 21:47:06 +1000
+message:
+  support up takeover in testing when root
+modified:
+  takeover/ctdb_takeover.c       ctdb_takeover.c-20070525071636-a5n1ihghjtppy08r-2
+  tests/events                   events-20070601105359-jc8p0xp6iq7phful-1
+  tests/start_daemons.sh         start_daemons.sh-20070604074603-fbb8x90srun04xn0-1
+=== modified file 'takeover/ctdb_takeover.c'
+--- a/takeover/ctdb_takeover.c	2007-06-07 12:26:27 +0000
++++ b/takeover/ctdb_takeover.c	2007-06-09 11:47:06 +0000
+@@ -65,7 +65,7 @@
+ 
+ 	ret = ctdb_sys_send_arp(&arp->sin, arp->ctdb->takeover.interface);
+ 	if (ret != 0) {
+-		DEBUG(0,(__location__ "sending of arp failed (%s)\n", strerror(errno)));
++		DEBUG(0,(__location__ " sending of arp failed (%s)\n", strerror(errno)));
+ 	}
+ 
+ 	for (tcp=arp->tcp_list;tcp;tcp=tcp->next) {
+
+=== modified file 'tests/events'
+--- a/tests/events	2007-06-06 01:13:24 +0000
++++ b/tests/events	2007-06-09 11:47:06 +0000
+@@ -15,15 +15,44 @@
+ 	;;
+ 	
+      takeip)
++	if [ $# != 3 ]; then
++	   echo "must supply interface, IP and maskbits"
++	   exit 1
++	fi
++	iface=$1
++	ip=$2
++	maskbits=$3
++
++	[ `id -u` = 0 ] && {
++	    /sbin/ip addr add $ip/$maskbits dev $iface || {
++		echo "`/bin/date` Failed to add $ip/$maskbits on dev $iface"
++		exit 1
++	    }
++	}
++	exit 0;
++	;;
++
++
++     ##################################################
++     # called when ctdbd wants to release an IP address
++     releaseip)
++	if [ $# != 3 ]; then
++	   echo "`/bin/date` must supply interface, IP and maskbits"
++	   exit 1
++	fi
++	iface=$1
++	ip=$2
++	maskbits=$3
++	[ `id -u` = 0 ] && {
++	    /sbin/ip addr del $ip/$maskbits dev $iface || {
++		echo "`/bin/date` Failed to del $ip on dev $iface"
++		exit 1
++	    }
++	}
+ 	echo "`date` ctdb takeip event for $1 $2 $3"
+ 	exit 0
+ 	;;
+ 
+-     releaseip)
+-	echo "`date` ctdb releaseip event for $1 $2 $3"
+-	exit 0
+-	;;
+-
+      recovered)
+ 	echo "`date` ctdb recovered event"
+ 	exit 0
+
+=== modified file 'tests/start_daemons.sh'
+--- a/tests/start_daemons.sh	2007-06-04 09:53:19 +0000
++++ b/tests/start_daemons.sh	2007-06-09 11:47:06 +0000
+@@ -5,9 +5,14 @@
+ 
+ killall -q ctdbd
+ 
++CTDB_OPTIONS="--reclock=rec.lock --nlist $NODES --event-script=tests/events --logfile=-  --dbdir=test.db"
++if [ `id -u` -eq 0 ]; then
++    CTDB_OPTIONS="$CTDB_OPTIONS --public-addresses=tests/public_addresses --public-interface=lo"
++fi
++
+ echo "Starting $NUMNODES ctdb daemons"
+ for i in `seq 1 $NUMNODES`; do
+-    $VALGRIND bin/ctdbd --reclock=rec.lock --nlist $NODES --event-script=tests/events --logfile=- --socket=sock.$i --dbdir=test.db || exit 1
++    $VALGRIND bin/ctdbd --socket=sock.$i $CTDB_OPTIONS || exit 1
+ done
+ ln -sf $PWD/sock.1 /tmp/ctdb.socket || exit 1
+ 
+

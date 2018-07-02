@@ -1,0 +1,111 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun May 20 04:43:37 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4K8haqD017094
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 20 May 2007 04:43:36 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 7803D163820
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 20 May 2007 08:43:33 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 8A0D3162ACD; Sun, 20 May 2007 08:43:04 +0000 (GMT)
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070520084304.8A0D3162ACD@lists.samba.org>
+Date: Sun, 20 May 2007 08:43:04 +0000 (GMT)
+Subject: svn commit: samba r23018 - in
+	branches/SAMBA_4_0/source/smb_server/smb: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: tridge
+Date: 2007-05-20 08:43:03 +0000 (Sun, 20 May 2007)
+New Revision: 23018
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23018
+
+Log:
+
+fixed a memory leak in our server side session setup code for failed
+session setups
+
+Modified:
+   branches/SAMBA_4_0/source/smb_server/smb/sesssetup.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/smb_server/smb/sesssetup.c
+===================================================================
+--- branches/SAMBA_4_0/source/smb_server/smb/sesssetup.c	2007-05-20 08:01:02 UTC (rev 23017)
++++ branches/SAMBA_4_0/source/smb_server/smb/sesssetup.c	2007-05-20 08:43:03 UTC (rev 23018)
+@@ -60,7 +60,7 @@
+ 	union smb_sesssetup *sess = talloc_get_type(req->io_ptr, union smb_sesssetup);
+ 	struct auth_serversupplied_info *server_info = NULL;
+ 	struct auth_session_info *session_info;
+-	struct smbsrv_session *smb_sess;
++	struct smbsrv_session *smb_sess = NULL;
+ 	NTSTATUS status;
+ 
+ 	status = auth_check_password_recv(areq, req, &server_info);
+@@ -88,6 +88,10 @@
+ 	sess->old.out.vuid = smb_sess->vuid;
+ 
+ failed:
++	if (!NT_STATUS_IS_OK(status)) {
++		talloc_free(smb_sess);
++		req->session = NULL;
++	}
+ 	status = auth_nt_status_squash(status);
+ 	smbsrv_sesssetup_backend_send(req, sess, status);
+ }
+@@ -155,7 +159,7 @@
+ 	union smb_sesssetup *sess = talloc_get_type(req->io_ptr, union smb_sesssetup);
+ 	struct auth_serversupplied_info *server_info = NULL;
+ 	struct auth_session_info *session_info;
+-	struct smbsrv_session *smb_sess;
++	struct smbsrv_session *smb_sess = NULL;
+ 	NTSTATUS status;
+ 
+ 	status = auth_check_password_recv(areq, req, &server_info);
+@@ -204,6 +208,10 @@
+ done:
+ 	status = NT_STATUS_OK;
+ failed:
++	if (!NT_STATUS_IS_OK(status)) {
++		talloc_free(smb_sess);
++		req->session = NULL;
++	}
+ 	status = auth_nt_status_squash(status);
+ 	smbsrv_sesssetup_backend_send(req, sess, status);
+ }
+@@ -337,6 +345,10 @@
+ done:
+ 	sess->spnego.out.vuid = smb_sess->vuid;
+ failed:
++	if (!NT_STATUS_IS_OK(status)) {
++		talloc_free(smb_sess);
++		req->session = NULL;
++	}
+ 	status = auth_nt_status_squash(status);
+ 	smbsrv_sesssetup_backend_send(req, sess, status);
+ }
+

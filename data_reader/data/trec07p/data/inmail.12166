@@ -1,0 +1,150 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Apr 18 01:36:16 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3I5aF0I005578
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 18 Apr 2007 01:36:16 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 6A5F11639E0
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 18 Apr 2007 05:35:51 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.8 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id D2ACF16381A; Wed, 18 Apr 2007 05:35:23 +0000 (GMT)
+Date: Wed, 18 Apr 2007 15:35:41 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070418053523.D2ACF16381A@lists.samba.org>
+Subject: Rev 151: simpler shutdown process. The reply is not actually needed,
+	and in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 3537
+Lines: 109
+
+------------------------------------------------------------
+revno: 151
+revision-id: tridge@samba.org-20070418053541-815ac1776bf2937f
+parent: tridge@samba.org-20070418052738-c581c86e6c27b24e
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Wed 2007-04-18 15:35:41 +1000
+message:
+  simpler shutdown process. The reply is not actually needed, and
+  occasionally leads to problems if an immediate send on the socket
+  causes a context switch and the client exiting before the daemon. We
+  now exit the client when the daemon goes away.
+modified:
+  common/ctdb_client.c           ctdb_client.c-20070411010216-3kd8v37k61steeya-1
+  common/ctdb_daemon.c           ctdb_daemon.c-20070409200331-3el1kqgdb9m4ib0g-1
+  include/ctdb_private.h         ctdb_private.h-20061117234101-o3qt14umlg9en8z0-13
+=== modified file 'common/ctdb_client.c'
+--- a/common/ctdb_client.c	2007-04-18 04:08:45 +0000
++++ b/common/ctdb_client.c	2007-04-18 05:35:41 +0000
+@@ -93,19 +93,6 @@
+ }
+ 
+ /*
+-  called in the client when we receive a CTDB_REPLY_SHUTDOWN from the daemon
+-
+-  This packet comes in response to a CTDB_REQ_SHUTDOWN request packet. It
+-  contains any reply data from the call
+-*/
+-void ctdb_reply_shutdown(struct ctdb_context *ctdb, struct ctdb_req_header *hdr)
+-{
+-	talloc_free(ctdb);
+-
+-	exit(10);
+-}
+-
+-/*
+   this is called in the client, when data comes in from the daemon
+  */
+ static void ctdb_client_read_cb(uint8_t *data, size_t cnt, void *args)
+@@ -121,9 +108,13 @@
+ 	tmp_ctx = talloc_new(ctdb);
+ 	talloc_steal(tmp_ctx, hdr);
+ 
++	if (cnt == 0) {
++		DEBUG(2,("Daemon has exited - shutting down client\n"));
++		exit(0);
++	}
++
+ 	if (cnt < sizeof(*hdr)) {
+-		ctdb_set_error(ctdb, "Bad packet length %d in client\n", cnt);
+-		exit(1); /* XXX - temporary for debugging */
++		DEBUG(0,("Bad packet length %d in client\n", cnt));
+ 		goto done;
+ 	}
+ 	if (cnt != hdr->length) {
+@@ -159,10 +150,6 @@
+ 		ctdb_reply_fetch_lock(ctdb, hdr);
+ 		break;
+ 
+-	case CTDB_REPLY_SHUTDOWN:
+-		ctdb_reply_shutdown(ctdb, hdr);
+-		break;
+-
+ 	default:
+ 		DEBUG(0,("bogus operation code:%d\n",hdr->operation));
+ 	}
+
+=== modified file 'common/ctdb_daemon.c'
+--- a/common/ctdb_daemon.c	2007-04-18 04:08:45 +0000
++++ b/common/ctdb_daemon.c	2007-04-18 05:35:41 +0000
+@@ -197,7 +197,6 @@
+ static void daemon_request_shutdown(struct ctdb_client *client, 
+ 				      struct ctdb_req_shutdown *f)
+ {
+-	struct ctdb_reply_shutdown rs;
+ 	struct ctdb_context *ctdb = talloc_get_type(client->ctdb, struct ctdb_context);
+ 	int len;
+ 	uint32_t node;
+@@ -240,16 +239,6 @@
+ 		event_loop_once(ctdb->ev);
+ 	}
+ 
+-	/* send a shutdown reply back to the client */
+-	len = sizeof(struct ctdb_reply_shutdown);
+-	ZERO_STRUCT(rs);
+-	rs.hdr.length       = len;
+-	rs.hdr.ctdb_magic   = CTDB_MAGIC;
+-	rs.hdr.ctdb_version = CTDB_VERSION;
+-	rs.hdr.operation    = CTDB_REPLY_SHUTDOWN;
+-	ctdb_queue_send(client->queue, (uint8_t *)&(rs.hdr), rs.hdr.length);
+-	/* XXX we should wait here until the packet has been sent to the client */
+-
+ 	/* all daemons have requested to finish - we now exit */
+ 	DEBUG(1,("All daemons finished - exiting\n"));
+ 	_exit(0);
+
+=== modified file 'include/ctdb_private.h'
+--- a/include/ctdb_private.h	2007-04-18 02:39:03 +0000
++++ b/include/ctdb_private.h	2007-04-18 05:35:41 +0000
+@@ -222,8 +222,7 @@
+ 	CTDB_REPLY_CONNECT_WAIT = 1002,
+ 	CTDB_REQ_FETCH_LOCK     = 1003,
+ 	CTDB_REPLY_FETCH_LOCK   = 1004,
+-	CTDB_REQ_SHUTDOWN       = 1005,
+-	CTDB_REPLY_SHUTDOWN     = 1006,
++	CTDB_REQ_SHUTDOWN       = 1005
+ };
+ 
+ #define CTDB_MAGIC 0x43544442 /* CTDB */
+

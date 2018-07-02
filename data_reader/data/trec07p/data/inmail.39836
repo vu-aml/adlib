@@ -1,0 +1,115 @@
+From perl6-all-return-81474-ktwarwic=speedy.uwaterloo.ca@perl.org  Sat May 19 14:39:20 2007
+Return-Path: <perl6-all-return-81474-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4JIdJqD029414
+	for <ktwarwic@flax9.uwaterloo.ca>; Sat, 19 May 2007 14:39:19 -0400
+Received: (qmail 10857 invoked by uid 514); 19 May 2007 18:39:15 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 10852 invoked from network); 19 May 2007 18:39:14 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+Delivered-To: perlmail-parrot-porters@onion.perl.org
+Delivered-To: parrot-porters@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="Qv+aY+y82H"
+Content-Transfer-Encoding: 7bit
+Message-ID: <17999.17427.994094.734635@rgrjr.dyndns.org>
+Date: Sat, 19 May 2007 14:38:11 -0400
+From: Bob Rogers <rogers-perl6@rgrjr.dyndns.org>
+To: parrot-porters@perl.org
+Subject: Small tweak to Pmc2c.pm
+X-Mailer: VM 7.19 under Emacs 22.1.50.1
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=0.5 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,FH_HOST_EQ_D_D_D_D,RCVD_IN_PBL,RCVD_IN_SORBS_DUL,RDNS_DYNAMIC,SPF_PASS
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-1.9 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_NEUTRAL
+
+--Qv+aY+y82H
+Content-Type: text/plain; charset=us-ascii
+Content-Description: message body text
+Content-Disposition: inline
+Content-Transfer-Encoding: 7bit
+
+   This reports unknown method names when generating C code for PMCs.
+WDOT?  Is this the right place for it?  Should it die instead of warn?
+
+					-- Bob Rogers
+					   http://rgrjr.dyndns.org/
+
+
+
+--Qv+aY+y82H
+Content-Type: text/plain
+Content-Description: 
+Content-Disposition: inline;
+	filename="pmc2c-unk-methods-1.patch"
+Content-Transfer-Encoding: 7bit
+
+* lib/Parrot/Pmc2c.pm:
+   + Warn about definitions for unknown methods.
+
+Diffs between last version checked in and current workfile(s):
+
+Index: lib/Parrot/Pmc2c.pm
+===================================================================
+--- lib/Parrot/Pmc2c.pm	(revision 18587)
++++ lib/Parrot/Pmc2c.pm	(working copy)
+@@ -629,15 +629,16 @@
+     my ( $self, $line, $out_name ) = @_;
+ 
+     my $cout = "";
++    my %method_used_p;
+ 
+     # vtable methods
+     foreach my $method ( @{ $self->{vtable}{methods} } ) {
+         my $meth = $method->{meth};
+-        next if $meth eq 'class_init';
+         if ( $self->implements($meth) ) {
+             my $ret = $self->body( $method, $line, $out_name );
+             $line += count_newlines($ret);
+             $cout .= $ret;
++            $method_used_p{$meth}++;
+         }
+     }
+ 
+@@ -647,8 +648,16 @@
+         my $ret = $self->body( $method, $line, $out_name );
+         $line += count_newlines($ret);
+         $cout .= $ret;
++        $method_used_p{$method->{meth}}++;
+     }
+ 
++    # check for mispeled or unimplemented method names.
++    foreach my $method ( @{ $self->{methods} } ) {
++        my $meth = $method->{meth};
++        warn "Cannot generate code for method '$meth', which is unknown.\n"
++            unless $method_used_p{$meth} || $meth eq 'class_init';
++    }
++
+     $cout =~ s/^\s+$//mg;
+     return $cout;
+ }
+
+End of diffs.
+
+--Qv+aY+y82H--
+

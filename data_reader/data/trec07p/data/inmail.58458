@@ -1,0 +1,117 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Jun 15 17:38:39 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5FLcdL9006960
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 15 Jun 2007 17:38:39 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id D1F91162C35
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 15 Jun 2007 21:38:37 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.4 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1017)
+	id 099EC162B6E; Fri, 15 Jun 2007 21:38:13 +0000 (GMT)
+To: samba-cvs@samba.org
+From: obnox@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070615213813.099EC162B6E@lists.samba.org>
+Date: Fri, 15 Jun 2007 21:38:13 +0000 (GMT)
+Subject: svn commit: samba r23509 - in branches: SAMBA_3_0/source
+	SAMBA_3_0/source/include SAMBA_3_0/source/param
+	SAMBA_3_0/source/registry SAMBA_3_0_26/source
+	SAMBA_3_0_26/source/include SAMBA_3_0_26/source/param
+	SAMBA_3_0_26/source/registry
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: obnox
+Date: 2007-06-15 21:38:10 +0000 (Fri, 15 Jun 2007)
+New Revision: 23509
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23509
+
+Log:
+This activates the global options from the registry in loadparm. 
+The global options are stored as values in the subkey "global"
+of the SMBCONF registry key. 
+
+The activation is accomplished in smb.conf though a new special 
+semantic of the "include" parameter: "include = registry" triggers
+the processing of the registry global options exactly at the
+position of the include statement. Options read from the registry
+take the same precedence as parameters loaded from a file via
+include. Need to reload the registry globals is detected by
+watching the tdb sequence number. 
+
+Registry shares are automatically activated when the registry
+globals are processed.
+
+So a "registry only" configuration can be realized by an
+smb.conf that looks as follows:
+
+================================
+[global]
+include = registry
+================================
+
+The global options and registry shares can be conveniently
+edited with the "net conf" utility.
+
+
+Caveat:
+
+A possible pitfall consists in using "include = registry"
+together with the "lock directory" directive in the registry.
+This problem will be addressed in the next time.
+
+
+Note on the code:
+
+Processing of the registry options is accomplished by a function
+process_registry_globals() in loadparm.c The current version is
+only an interim solution: It is handcoded instead of using the
+infrastructure of reg_api.c. The reason for this is that using 
+reg_api still has too large linker dependencies, bloating virtually
+all targets by PASSDB_OBJ, SMBLDAP_OBJ, GROUPDB_OBJ and LDB stuff.
+A version of process_registry_globals that uses reg_api is 
+included but commented out. The goal is to eventually refactor
+and restructure the registry code so that one can use the reg_api
+to access only the registry tdb and not link all the dynamic
+backends with all their linking implications.
+
+
+
+Added:
+   branches/SAMBA_3_0/source/include/reg_db.h
+   branches/SAMBA_3_0_26/source/include/reg_db.h
+Modified:
+   branches/SAMBA_3_0/source/Makefile.in
+   branches/SAMBA_3_0/source/include/includes.h
+   branches/SAMBA_3_0/source/param/loadparm.c
+   branches/SAMBA_3_0/source/registry/reg_db.c
+   branches/SAMBA_3_0_26/source/Makefile.in
+   branches/SAMBA_3_0_26/source/include/includes.h
+   branches/SAMBA_3_0_26/source/param/loadparm.c
+   branches/SAMBA_3_0_26/source/registry/reg_db.c
+
+
+Changeset:
+Sorry, the patch is too large (865 lines) to include; please use WebSVN to see it!
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23509
+

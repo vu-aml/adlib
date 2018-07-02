@@ -1,0 +1,70 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Apr 26 09:39:54 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3QDds6w012890
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 26 Apr 2007 09:39:54 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id C40E01639BA
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 26 Apr 2007 13:39:53 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 1F1C9162C2E; Thu, 26 Apr 2007 13:39:33 +0000 (GMT)
+Date: Thu, 26 Apr 2007 15:38:34 +0200
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070426133933.1F1C9162C2E@lists.samba.org>
+Subject: Rev 191: validate the vnn in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 1019
+Lines: 30
+
+------------------------------------------------------------
+revno: 191
+revision-id: tridge@samba.org-20070426133833-4ks6f3c2exb25p1q
+parent: tridge@samba.org-20070426133317-geuqvda21m707azi
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Thu 2007-04-26 15:38:33 +0200
+message:
+  validate the vnn
+modified:
+  common/ctdb.c                  ctdb.c-20061127094323-t50f58d65iaao5of-2
+=== modified file 'common/ctdb.c'
+--- a/common/ctdb.c	2007-04-26 13:28:13 +0000
++++ b/common/ctdb.c	2007-04-26 13:38:33 +0000
+@@ -394,7 +394,15 @@
+ {
+ 	struct ctdb_node *node;
+ 	ctdb->status.node_packets_sent++;
++
++	if (!ctdb_validate_vnn(ctdb, hdr->destnode)) {
++	  	DEBUG(0,(__location__ " cant send to node %u that does not exist\n", 
++			 hdr->destnode));
++		return;
++	}
++
+ 	node = ctdb->nodes[hdr->destnode];
++
+ 	if (hdr->destnode == ctdb->vnn && !(ctdb->flags & CTDB_FLAG_SELF_CONNECT)) {
+ 		ctdb_defer_packet(ctdb, hdr);
+ 	} else if (ctdb->methods->queue_pkt(node, (uint8_t *)hdr, hdr->length) != 0) {
+

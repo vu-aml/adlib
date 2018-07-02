@@ -1,0 +1,145 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon May 14 20:18:08 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4F0I8qD029144
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 14 May 2007 20:18:08 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 4C39F162AF7
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 00:18:06 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id B9DCF162ACA; Tue, 15 May 2007 00:17:20 +0000 (GMT)
+Date: Tue, 15 May 2007 09:44:34 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070515001720.B9DCF162ACA@lists.samba.org>
+Subject: Rev 301: added a -i switch to run ctdbd without forking in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 301
+revision-id: tridge@samba.org-20070514234433-s9apc5wp2heogcya
+parent: tridge@samba.org-20070514234403-ghdhn9vpf6fyqnhq
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Tue 2007-05-15 09:44:33 +1000
+message:
+  added a -i switch to run ctdbd without forking
+modified:
+  common/ctdb_daemon.c           ctdb_daemon.c-20070409200331-3el1kqgdb9m4ib0g-1
+  direct/ctdbd.c                 ctdbd.c-20070411085044-dqmhr6mfeexnyt4m-1
+  include/ctdb.h                 ctdb.h-20061117234101-o3qt14umlg9en8z0-11
+=== modified file 'common/ctdb_daemon.c'
+--- a/common/ctdb_daemon.c	2007-05-12 23:20:16 +0000
++++ b/common/ctdb_daemon.c	2007-05-14 23:44:33 +0000
+@@ -62,7 +62,10 @@
+ 	}
+ 
+ 	/* start the transport running */
+-	ctdb->methods->start(ctdb);
++	if (ctdb->methods->start(ctdb) != 0) {
++		DEBUG(0,("transport failed to start!\n"));
++		ctdb_fatal(ctdb, "transport failed to start");
++	}
+ 
+ 	/* go into a wait loop to allow other nodes to complete */
+ 	event_loop_wait(ctdb->ev);
+@@ -603,11 +606,14 @@
+ 		return -1;
+ 	}
+ 
++#if 0
++	/* AIX doesn't like this :( */
+ 	if (fchown(ctdb->daemon.sd, geteuid(), getegid()) != 0 ||
+ 	    fchmod(ctdb->daemon.sd, 0700) != 0) {
+ 		DEBUG(0,("Unable to secure ctdb socket '%s', ctdb->daemon.name\n"));
+ 		goto failed;
+ 	}
++#endif
+ 
+ 	set_non_blocking(ctdb->daemon.sd);
+ 
+@@ -701,7 +707,7 @@
+ /*
+   start the protocol going as a daemon
+ */
+-int ctdb_start_daemon(struct ctdb_context *ctdb)
++int ctdb_start_daemon(struct ctdb_context *ctdb, bool do_fork)
+ {
+ 	int res;
+ 	struct fd_event *fde;
+@@ -717,13 +723,15 @@
+ 		exit(10);
+ 	}
+ 
+-	if (fork()) {
++	if (do_fork && fork()) {
+ 		return 0;
+ 	}
+ 
+ 	tdb_reopen_all(False);
+ 
+-	setsid();
++	if (do_fork) {
++		setsid();
++	}
+ 	block_signal(SIGPIPE);
+ 	block_signal(SIGCHLD);
+ 
+
+=== modified file 'direct/ctdbd.c'
+--- a/direct/ctdbd.c	2007-04-30 13:31:40 +0000
++++ b/direct/ctdbd.c	2007-05-14 23:44:33 +0000
+@@ -45,10 +45,12 @@
+ int main(int argc, const char *argv[])
+ {
+ 	struct ctdb_context *ctdb;
++	int interactive = 0;
+ 
+ 	struct poptOption popt_options[] = {
+ 		POPT_AUTOHELP
+ 		POPT_CTDB_CMDLINE
++		{ "interactive", 'i', POPT_ARG_NONE, &interactive, 0, "don't fork", NULL },
+ 		POPT_TABLEEND
+ 	};
+ 	int opt;
+@@ -90,5 +92,5 @@
+ 	}
+ 
+ 	/* start the protocol running (as a child) */
+-	return ctdb_start_daemon(ctdb);
++	return ctdb_start_daemon(ctdb, interactive?False:True);
+ }
+
+=== modified file 'include/ctdb.h'
+--- a/include/ctdb.h	2007-05-12 05:15:27 +0000
++++ b/include/ctdb.h	2007-05-14 23:44:33 +0000
+@@ -112,7 +112,7 @@
+   start the ctdb protocol
+ */
+ int ctdb_start(struct ctdb_context *ctdb);
+-int ctdb_start_daemon(struct ctdb_context *ctdb);
++int ctdb_start_daemon(struct ctdb_context *ctdb, bool do_fork);
+ 
+ /*
+   attach to a ctdb database
+

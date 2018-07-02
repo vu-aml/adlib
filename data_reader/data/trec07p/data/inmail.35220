@@ -1,0 +1,286 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun May 13 08:53:02 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4DCr1qD008202
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 13 May 2007 08:53:02 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 99C68163895
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 13 May 2007 12:52:58 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 620)
+	id 14834162ACF; Sun, 13 May 2007 12:52:14 +0000 (GMT)
+To: samba-cvs@samba.org
+From: metze@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070513125214.14834162ACF@lists.samba.org>
+Date: Sun, 13 May 2007 12:52:14 +0000 (GMT)
+Subject: svn commit: samba r22824 - in
+	branches/SAMBA_4_0/source/torture/smb2: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: metze
+Date: 2007-05-13 12:52:13 +0000 (Sun, 13 May 2007)
+New Revision: 22824
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22824
+
+Log:
+- add a simple test which shows how a lock rejects
+  a write on a different file handle.
+  SMB2-LOCK-BLOCK-WRITE
+
+- make it possible to run each SMB2-LOCK-* test on its own
+ 
+metze
+Modified:
+   branches/SAMBA_4_0/source/torture/smb2/lock.c
+   branches/SAMBA_4_0/source/torture/smb2/smb2.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/torture/smb2/lock.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/smb2/lock.c	2007-05-13 11:56:25 UTC (rev 22823)
++++ branches/SAMBA_4_0/source/torture/smb2/lock.c	2007-05-13 12:52:13 UTC (rev 22824)
+@@ -27,6 +27,8 @@
+ #include "torture/torture.h"
+ #include "torture/smb2/proto.h"
+ 
++#include "librpc/gen_ndr/ndr_security.h"
++
+ #define CHECK_STATUS(status, correct) do { \
+ 	if (!NT_STATUS_EQUAL(status, correct)) { \
+ 		printf("(%s) Incorrect status %s - should be %s\n", \
+@@ -43,7 +45,7 @@
+ 		goto done; \
+ 	}} while (0)
+ 
+-static BOOL test_valid_request(TALLOC_CTX *mem_ctx, struct smb2_tree *tree)
++static BOOL test_valid_request(struct torture_context *torture, struct smb2_tree *tree)
+ {
+ 	BOOL ret = True;
+ 	NTSTATUS status;
+@@ -195,21 +197,115 @@
+ 	return ret;
+ }
+ 
+-/* basic testing of SMB2 locking
+-*/
+-BOOL torture_smb2_lock(struct torture_context *torture)
++static BOOL test_block_write(struct torture_context *torture, struct smb2_tree *tree)
+ {
+-	TALLOC_CTX *mem_ctx = talloc_new(NULL);
+-	struct smb2_tree *tree;
+ 	BOOL ret = True;
++	NTSTATUS status;
++	struct smb2_handle h1, h2;
++	uint8_t buf[200];
++	struct smb2_lock lck;
++	struct smb2_create cr;
++	struct smb2_write wr;
++	const char *fname = "lock2.txt";
+ 
+-	if (!torture_smb2_connection(mem_ctx, &tree)) {
+-		return False;
+-	}
++	ZERO_STRUCT(buf);
+ 
+-	ret &= test_valid_request(mem_ctx, tree);
++	status = torture_smb2_testfile(tree, fname, &h1);
++	CHECK_STATUS(status, NT_STATUS_OK);
+ 
+-	talloc_free(mem_ctx);
++	status = smb2_util_write(tree, h1, buf, 0, ARRAY_SIZE(buf));
++	CHECK_STATUS(status, NT_STATUS_OK);
+ 
++	lck.in.unknown1		= 0x0001;
++	lck.in.unknown2		= 0x00000000;
++	lck.in.file.handle	= h1;
++	lck.in.offset		= 0;
++	lck.in.count		= ARRAY_SIZE(buf)/2;
++	lck.in.unknown5		= 0x00000000;
++	lck.in.flags		= SMB2_LOCK_FLAG_EXCLUSIV;
++	status = smb2_lock(tree, &lck);
++	CHECK_STATUS(status, NT_STATUS_OK);
++	CHECK_VALUE(lck.out.unknown1, 0);
++
++	lck.in.unknown1		= 0x0001;
++	lck.in.unknown2		= 0x00000000;
++	lck.in.file.handle	= h1;
++	lck.in.offset		= ARRAY_SIZE(buf)/2;
++	lck.in.count		= ARRAY_SIZE(buf)/2;
++	lck.in.unknown5		= 0x00000000;
++	lck.in.flags		= SMB2_LOCK_FLAG_EXCLUSIV;
++	status = smb2_lock(tree, &lck);
++	CHECK_STATUS(status, NT_STATUS_OK);
++	CHECK_VALUE(lck.out.unknown1, 0);
++
++	ZERO_STRUCT(cr);
++	cr.in.oplock_flags = 0;
++	cr.in.access_mask = SEC_RIGHTS_FILE_ALL;
++	cr.in.file_attr   = FILE_ATTRIBUTE_NORMAL;
++	cr.in.open_disposition = NTCREATEX_DISP_OPEN_IF;
++	cr.in.share_access = 
++		NTCREATEX_SHARE_ACCESS_DELETE|
++		NTCREATEX_SHARE_ACCESS_READ|
++		NTCREATEX_SHARE_ACCESS_WRITE;
++	cr.in.create_options = 0;
++	cr.in.fname = fname;
++
++	status = smb2_create(tree, tree, &cr);
++	CHECK_STATUS(status, NT_STATUS_OK);
++
++	h2 = cr.out.file.handle;
++
++
++	ZERO_STRUCT(wr);
++	wr.in.file.handle = h1;
++	wr.in.offset      = ARRAY_SIZE(buf)/2;
++	wr.in.data        = data_blob_const(buf, ARRAY_SIZE(buf)/2);
++
++	status = smb2_write(tree, &wr);
++	CHECK_STATUS(status, NT_STATUS_OK);
++
++	ZERO_STRUCT(wr);
++	wr.in.file.handle = h2;
++	wr.in.offset      = ARRAY_SIZE(buf)/2;
++	wr.in.data        = data_blob_const(buf, ARRAY_SIZE(buf)/2);
++
++	status = smb2_write(tree, &wr);
++	CHECK_STATUS(status, NT_STATUS_FILE_LOCK_CONFLICT);
++
++	lck.in.unknown1		= 0x0001;
++	lck.in.unknown2		= 0x00000000;
++	lck.in.file.handle	= h1;
++	lck.in.offset		= ARRAY_SIZE(buf)/2;
++	lck.in.count		= ARRAY_SIZE(buf)/2;
++	lck.in.unknown5		= 0x00000000;
++	lck.in.flags		= SMB2_LOCK_FLAG_UNLOCK;
++	status = smb2_lock(tree, &lck);
++	CHECK_STATUS(status, NT_STATUS_OK);
++	CHECK_VALUE(lck.out.unknown1, 0);
++
++	ZERO_STRUCT(wr);
++	wr.in.file.handle = h2;
++	wr.in.offset      = ARRAY_SIZE(buf)/2;
++	wr.in.data        = data_blob_const(buf, ARRAY_SIZE(buf)/2);
++
++	status = smb2_write(tree, &wr);
++	CHECK_STATUS(status, NT_STATUS_OK);
++
++done:
+ 	return ret;
+ }
++
++/* basic testing of SMB2 locking
++*/
++struct torture_suite *torture_smb2_lock_init(void)
++{
++	struct torture_suite *suite = torture_suite_create(talloc_autofree_context(), "LOCK");
++
++	torture_suite_add_1smb2_test(suite, "VALID-REQUEST", test_valid_request);
++	torture_suite_add_1smb2_test(suite, "BLOCK-WRITE", test_block_write);
++
++	suite->description = talloc_strdup(suite, "SMB2-LOCK tests");
++
++	return suite;
++}
++
+
+Modified: branches/SAMBA_4_0/source/torture/smb2/smb2.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/smb2/smb2.c	2007-05-13 11:56:25 UTC (rev 22823)
++++ branches/SAMBA_4_0/source/torture/smb2/smb2.c	2007-05-13 12:52:13 UTC (rev 22824)
+@@ -24,12 +24,55 @@
+ 
+ #include "torture/torture.h"
+ #include "torture/smb2/proto.h"
++#include "lib/util/dlinklist.h"
+ 
++static bool wrap_simple_1smb2_test(struct torture_context *torture_ctx,
++				   struct torture_tcase *tcase,
++				   struct torture_test *test)
++{
++	bool (*fn) (struct torture_context *, struct smb2_tree *);
++	bool ret;
++
++	struct smb2_tree *tree1;
++
++	if (!torture_smb2_connection(torture_ctx, &tree1))
++		return false;
++
++	fn = test->fn;
++
++	ret = fn(torture_ctx, tree1);
++
++	talloc_free(tree1);
++
++	return ret;
++}
++
++_PUBLIC_ struct torture_test *torture_suite_add_1smb2_test(struct torture_suite *suite,
++							   const char *name,
++							   bool (*run) (struct torture_context *,
++									struct smb2_tree *))
++{
++	struct torture_test *test; 
++	struct torture_tcase *tcase;
++	
++	tcase = torture_suite_add_tcase(suite, name);
++
++	test = talloc(tcase, struct torture_test);
++
++	test->name = talloc_strdup(test, name);
++	test->description = NULL;
++	test->run = wrap_simple_1smb2_test;
++	test->fn = run;
++	test->dangerous = false;
++
++	DLIST_ADD_END(tcase->tests, test, struct torture_test *);
++
++	return test;
++}
++
+ NTSTATUS torture_smb2_init(void)
+ {
+-	struct torture_suite *suite = torture_suite_create(
+-										talloc_autofree_context(),
+-										"SMB2");
++	struct torture_suite *suite = torture_suite_create(talloc_autofree_context(), "SMB2");
+ 	torture_suite_add_simple_test(suite, "CONNECT", torture_smb2_connect);
+ 	torture_suite_add_simple_test(suite, "SCAN", torture_smb2_scan);
+ 	torture_suite_add_simple_test(suite, "SCANGETINFO", torture_smb2_getinfo_scan);
+@@ -38,11 +81,10 @@
+ 	torture_suite_add_simple_test(suite, "GETINFO", torture_smb2_getinfo);
+ 	torture_suite_add_simple_test(suite, "SETINFO", torture_smb2_setinfo);
+ 	torture_suite_add_simple_test(suite, "FIND", torture_smb2_find);
+-	torture_suite_add_simple_test(suite, "LOCK", torture_smb2_lock);
++	torture_suite_add_suite(suite, torture_smb2_lock_init());
+ 	torture_suite_add_simple_test(suite, "NOTIFY", torture_smb2_notify);
+ 
+-	suite->description = talloc_strdup(suite, 
+-							"SMB2-specific tests");
++	suite->description = talloc_strdup(suite, "SMB2-specific tests");
+ 
+ 	torture_register_suite(suite);
+ 
+

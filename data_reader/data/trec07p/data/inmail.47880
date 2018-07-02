@@ -1,0 +1,481 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu May 31 14:00:34 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4VI0YhB031257
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 31 May 2007 14:00:34 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id EB3EC1638A9
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 31 May 2007 18:00:28 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.3 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 540)
+	id BB4D1162B6E; Thu, 31 May 2007 17:59:06 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jerry@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070531175906.BB4D1162B6E@lists.samba.org>
+Date: Thu, 31 May 2007 17:59:06 +0000 (GMT)
+Subject: svn commit: samba r23274 - in branches/SAMBA_3_0/source: . include
+	rpc_parse rpc_server
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: jerry
+Date: 2007-05-31 17:59:04 +0000 (Thu, 31 May 2007)
+New Revision: 23274
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23274
+
+Log:
+merge CloseEventlog() pidl conversion from 3.0.26 && fix a few init call renames for svcctl in the previous commit
+Modified:
+   branches/SAMBA_3_0/source/Makefile.in
+   branches/SAMBA_3_0/source/configure.in
+   branches/SAMBA_3_0/source/include/includes.h
+   branches/SAMBA_3_0/source/include/rpc_eventlog.h
+   branches/SAMBA_3_0/source/include/rpc_svcctl.h
+   branches/SAMBA_3_0/source/rpc_parse/parse_eventlog.c
+   branches/SAMBA_3_0/source/rpc_server/srv_eventlog.c
+   branches/SAMBA_3_0/source/rpc_server/srv_eventlog_nt.c
+   branches/SAMBA_3_0/source/rpc_server/srv_pipe.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/Makefile.in
+===================================================================
+--- branches/SAMBA_3_0/source/Makefile.in	2007-05-31 17:33:47 UTC (rev 23273)
++++ branches/SAMBA_3_0/source/Makefile.in	2007-05-31 17:59:04 UTC (rev 23274)
+@@ -395,7 +395,8 @@
+ 
+ RPC_SPOOLSS_OBJ = rpc_server/srv_spoolss.o rpc_server/srv_spoolss_nt.o
+ 
+-RPC_EVENTLOG_OBJ = rpc_server/srv_eventlog.o rpc_server/srv_eventlog_nt.o rpc_server/srv_eventlog_lib.o
++RPC_EVENTLOG_OBJ = rpc_server/srv_eventlog.o rpc_server/srv_eventlog_nt.o \
++		   rpc_server/srv_eventlog_lib.o librpc/gen_ndr/srv_eventlog.o
+ 
+ RPC_PIPE_OBJ = rpc_server/srv_pipe_hnd.o \
+                rpc_server/srv_pipe.o rpc_server/srv_lsa_hnd.o
+
+Modified: branches/SAMBA_3_0/source/configure.in
+===================================================================
+--- branches/SAMBA_3_0/source/configure.in	2007-05-31 17:33:47 UTC (rev 23273)
++++ branches/SAMBA_3_0/source/configure.in	2007-05-31 17:59:04 UTC (rev 23274)
+@@ -692,7 +692,7 @@
+ 
+ dnl Add modules that have to be built by default here
+ dnl These have to be built static:
+-default_static_modules="pdb_smbpasswd pdb_tdbsam rpc_lsa rpc_samr rpc_winreg rpc_initshutdown rpc_lsa_ds rpc_wkssvc rpc_svcctl rpc_ntsvcs rpc_net rpc_netdfs rpc_srvsvc rpc_spoolss rpc_eventlog rpc_unixinfo rpc_epmapper auth_sam auth_unix auth_winbind auth_server auth_domain auth_builtin vfs_default nss_info_template"
++default_static_modules="pdb_smbpasswd pdb_tdbsam rpc_lsa rpc_samr rpc_winreg rpc_initshutdown rpc_lsa_ds rpc_wkssvc rpc_svcctl2 rpc_ntsvcs rpc_net rpc_netdfs rpc_srvsvc rpc_spoolss rpc_eventlog2 rpc_unixinfo rpc_epmapper auth_sam auth_unix auth_winbind auth_server auth_domain auth_builtin vfs_default nss_info_template"
+ 
+ dnl These are preferably build shared, and static if dlopen() is not available
+ default_shared_modules="vfs_recycle vfs_audit vfs_extd_audit vfs_full_audit vfs_netatalk vfs_fake_perms vfs_default_quota vfs_readonly vfs_cap vfs_expand_msdfs vfs_shadow_copy charset_CP850 charset_CP437 auth_script vfs_readahead"
+@@ -6277,13 +6277,13 @@
+ SMB_MODULE(rpc_initshutdown, \$(RPC_INITSHUTDOWN_OBJ), "bin/librpc_initshutdown.$SHLIBEXT", RPC)
+ SMB_MODULE(rpc_lsa_ds, \$(RPC_LSA_DS_OBJ), "bin/librpc_lsa_ds.$SHLIBEXT", RPC)
+ SMB_MODULE(rpc_wkssvc, \$(RPC_WKS_OBJ), "bin/librpc_wkssvc.$SHLIBEXT", RPC)
+-SMB_MODULE(rpc_svcctl, \$(RPC_SVCCTL_OBJ), "bin/librpc_svcctl.$SHLIBEXT", RPC)
++SMB_MODULE(rpc_svcctl2, \$(RPC_SVCCTL_OBJ), "bin/librpc_svcctl2.$SHLIBEXT", RPC)
+ SMB_MODULE(rpc_ntsvcs, \$(RPC_NTSVCS_OBJ), "bin/librpc_ntsvcs.$SHLIBEXT", RPC)
+ SMB_MODULE(rpc_net, \$(RPC_NETLOG_OBJ), "bin/librpc_NETLOGON.$SHLIBEXT", RPC)
+ SMB_MODULE(rpc_netdfs, \$(RPC_DFS_OBJ), "bin/librpc_netdfs.$SHLIBEXT", RPC)
+ SMB_MODULE(rpc_srvsvc, \$(RPC_SVC_OBJ), "bin/librpc_srvsvc.$SHLIBEXT", RPC)
+ SMB_MODULE(rpc_spoolss, \$(RPC_SPOOLSS_OBJ), "bin/librpc_spoolss.$SHLIBEXT", RPC)
+-SMB_MODULE(rpc_eventlog, \$(RPC_EVENTLOG_OBJ), "bin/librpc_eventlog.$SHLIBEXT", RPC)
++SMB_MODULE(rpc_eventlog2, \$(RPC_EVENTLOG_OBJ), "bin/librpc_eventlog2.$SHLIBEXT", RPC)
+ SMB_MODULE(rpc_samr, \$(RPC_SAMR_OBJ), "bin/librpc_samr.$SHLIBEXT", RPC)
+ SMB_MODULE(rpc_rpcecho, \$(RPC_ECHO_OBJ), "bin/librpc_echo.$SHLIBEXT", RPC)
+ SMB_MODULE(rpc_unixinfo, \$(RPC_UNIXINFO_OBJ), "bin/librpc_unixinfo.$SHLIBEXT", RPC)
+
+Modified: branches/SAMBA_3_0/source/include/includes.h
+===================================================================
+--- branches/SAMBA_3_0/source/include/includes.h	2007-05-31 17:33:47 UTC (rev 23273)
++++ branches/SAMBA_3_0/source/include/includes.h	2007-05-31 17:59:04 UTC (rev 23274)
+@@ -782,6 +782,7 @@
+ #include "librpc/gen_ndr/srv_echo.h"
+ #include "librpc/gen_ndr/srv_svcctl.h"
+ #include "librpc/gen_ndr/srv_lsa.h"
++#include "librpc/gen_ndr/srv_eventlog.h"
+ 
+ /***** automatically generated prototypes *****/
+ #ifndef NO_PROTO_H
+
+Modified: branches/SAMBA_3_0/source/include/rpc_eventlog.h
+===================================================================
+--- branches/SAMBA_3_0/source/include/rpc_eventlog.h	2007-05-31 17:33:47 UTC (rev 23273)
++++ branches/SAMBA_3_0/source/include/rpc_eventlog.h	2007-05-31 17:59:04 UTC (rev 23274)
+@@ -84,18 +84,6 @@
+ 
+ typedef struct {
+ 	POLICY_HND handle;
+-} EVENTLOG_Q_CLOSE_EVENTLOG;
+-
+-typedef struct {
+-	POLICY_HND handle;
+-	NTSTATUS status;
+-} EVENTLOG_R_CLOSE_EVENTLOG;
+-
+-
+-/***********************************/
+-
+-typedef struct {
+-	POLICY_HND handle;
+ } EVENTLOG_Q_GET_NUM_RECORDS;
+ 
+ typedef struct {
+
+Modified: branches/SAMBA_3_0/source/include/rpc_svcctl.h
+===================================================================
+--- branches/SAMBA_3_0/source/include/rpc_svcctl.h	2007-05-31 17:33:47 UTC (rev 23273)
++++ branches/SAMBA_3_0/source/include/rpc_svcctl.h	2007-05-31 17:59:04 UTC (rev 23274)
+@@ -202,17 +202,6 @@
+ /**************************/
+ 
+ typedef struct {
+-	POLICY_HND handle;
+-} SVCCTL_Q_CLOSE_SERVICE;
+-
+-typedef struct {
+-        POLICY_HND handle;
+-	WERROR status;
+-} SVCCTL_R_CLOSE_SERVICE;
+-
+-/**************************/
+-
+-typedef struct {
+ 	UNISTR2 *servername;
+ 	UNISTR2 *database; 
+ 	uint32 access;
+
+Modified: branches/SAMBA_3_0/source/rpc_parse/parse_eventlog.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpc_parse/parse_eventlog.c	2007-05-31 17:33:47 UTC (rev 23273)
++++ branches/SAMBA_3_0/source/rpc_parse/parse_eventlog.c	2007-05-31 17:59:04 UTC (rev 23274)
+@@ -174,45 +174,6 @@
+ 	return True;
+ }
+ 
+-BOOL eventlog_io_q_close_eventlog(const char *desc, EVENTLOG_Q_CLOSE_EVENTLOG *q_u,
+-				  prs_struct *ps, int depth)
+-{
+-	if(q_u == NULL)
+-		return False;
+-
+-	prs_debug(ps, depth, desc, "eventlog_io_q_close_eventlog");
+-	depth++;
+-    
+-	if(!(prs_align(ps)))
+-		return False;
+-
+-	if(!(smb_io_pol_hnd("log handle", &(q_u->handle), ps, depth)))
+-		return False;
+-
+-	return True;
+-}
+-
+-BOOL eventlog_io_r_close_eventlog(const char *desc, EVENTLOG_R_CLOSE_EVENTLOG *r_u,
+-				  prs_struct *ps, int depth)
+-{
+-	if(r_u == NULL)
+-		return False;
+-
+-	prs_debug(ps, depth, desc, "eventlog_io_r_close_eventlog");
+-	depth++;
+-
+-	if(!(prs_align(ps)))
+-		return False;
+-
+-	if(!(smb_io_pol_hnd("log handle", &(r_u->handle), ps, depth)))
+-		return False;
+-
+-	if(!(prs_ntstatus("status code", ps, depth, &r_u->status)))
+-		return False;
+-
+-	return True;
+-}
+-
+ BOOL eventlog_io_q_read_eventlog(const char *desc, EVENTLOG_Q_READ_EVENTLOG *q_u,
+ 				 prs_struct *ps, int depth)
+ {
+
+Modified: branches/SAMBA_3_0/source/rpc_server/srv_eventlog.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpc_server/srv_eventlog.c	2007-05-31 17:33:47 UTC (rev 23273)
++++ branches/SAMBA_3_0/source/rpc_server/srv_eventlog.c	2007-05-31 17:59:04 UTC (rev 23274)
+@@ -1,7 +1,8 @@
+ /* 
+  *  Unix SMB/CIFS implementation.
+  *  RPC Pipe client / server routines
+- *  Copyright (C) Marcin Krzysztof Porwit    2005.
++ *  Copyright (C) Marcin Krzysztof Porwit         2005.
++ *  Copyright (C) Gerald Carter                   2005 - 2007
+  *  
+  *  This program is free software; you can redistribute it and/or modify
+  *  it under the terms of the GNU General Public License as published by
+@@ -23,6 +24,23 @@
+ #undef DBGC_CLASS
+ #define DBGC_CLASS DBGC_RPC_SRV
+ 
++static BOOL proxy_eventlog_call(pipes_struct *p, uint8 opnum)
++{
++	struct api_struct *fns;
++	int n_fns;
++
++	eventlog_get_pipe_fns(&fns, &n_fns);
++
++	if (opnum >= n_fns)
++		return False;
++
++	if (fns[opnum].opnum != opnum) {
++		smb_panic("EVENTLOG function table not sorted\n");
++	}
++
++	return fns[opnum].fn(p);
++}
++
+ static BOOL api_eventlog_open_eventlog(pipes_struct *p)
+ {
+ 	EVENTLOG_Q_OPEN_EVENTLOG q_u;
+@@ -50,27 +68,7 @@
+ 
+ static BOOL api_eventlog_close_eventlog(pipes_struct *p)
+ {
+-	EVENTLOG_Q_CLOSE_EVENTLOG q_u;
+-	EVENTLOG_R_CLOSE_EVENTLOG r_u;
+-	prs_struct *data = &p->in_data.data;
+-	prs_struct *rdata = &p->out_data.rdata;
+-
+-	ZERO_STRUCT(q_u);
+-	ZERO_STRUCT(r_u);
+-
+-	if (!(eventlog_io_q_close_eventlog("", &q_u, data, 0))) {
+-		DEBUG(0, ("eventlog_io_q_close_eventlog: unable to unmarshall EVENTLOG_Q_CLOSE_EVENTLOG.\n"));
+-		return False;
+-	}
+-
+-	r_u.status = _eventlog_close_eventlog(p, &q_u, &r_u);
+-
+-	if (!(eventlog_io_r_close_eventlog("", &r_u, rdata, 0))) {
+-		DEBUG(0, ("eventlog_io_r_close_eventlog: unable to marshall EVENTLOG_R_CLOSE_EVENTLOG.\n"));
+-		return False;
+-	}
+-
+-	return True;
++	return proxy_eventlog_call( p, DCERPC_EVENTLOG_CLOSEEVENTLOG );	
+ }
+ 
+ static BOOL api_eventlog_get_num_records(pipes_struct *p)
+@@ -186,14 +184,14 @@
+ 	{"EVENTLOG_CLEAREVENTLOG", 	EVENTLOG_CLEAREVENTLOG, 	api_eventlog_clear_eventlog   }
+ };
+ 
+-NTSTATUS rpc_eventlog_init(void)
++NTSTATUS rpc_eventlog2_init(void)
+ {
+ 	return rpc_pipe_register_commands(SMB_RPC_INTERFACE_VERSION, 
+ 		"eventlog", "eventlog", api_eventlog_cmds,
+ 		sizeof(api_eventlog_cmds)/sizeof(struct api_struct));
+ }
+ 
+-void eventlog_get_pipe_fns(struct api_struct **fns, int *n_fns)
++void eventlog2_get_pipe_fns(struct api_struct **fns, int *n_fns)
+ {
+ 	*fns = api_eventlog_cmds;
+ 	*n_fns = sizeof(api_eventlog_cmds) / sizeof(struct api_struct);
+
+Modified: branches/SAMBA_3_0/source/rpc_server/srv_eventlog_nt.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpc_server/srv_eventlog_nt.c	2007-05-31 17:33:47 UTC (rev 23273)
++++ branches/SAMBA_3_0/source/rpc_server/srv_eventlog_nt.c	2007-05-31 17:59:04 UTC (rev 23274)
+@@ -658,11 +658,9 @@
+ /********************************************************************
+  ********************************************************************/
+ 
+-NTSTATUS _eventlog_close_eventlog( pipes_struct * p,
+-				 EVENTLOG_Q_CLOSE_EVENTLOG * q_u,
+-				 EVENTLOG_R_CLOSE_EVENTLOG * r_u )
++NTSTATUS _eventlog_CloseEventLog( pipes_struct * p, struct eventlog_CloseEventLog *r )
+ {
+-	return elog_close( p, &q_u->handle );
++	return elog_close( p, r->in.handle );
+ }
+ 
+ /********************************************************************
+@@ -801,3 +799,142 @@
+ 
+ 	return NT_STATUS_OK;
+ }
++
++NTSTATUS _eventlog_ClearEventLogW(pipes_struct *p, struct eventlog_ClearEventLogW *r)
++{
++	p->rng_fault_state = True;
++	return NT_STATUS_NOT_IMPLEMENTED;
++}
++
++NTSTATUS _eventlog_BackupEventLogW(pipes_struct *p, struct eventlog_BackupEventLogW *r)
++{
++	p->rng_fault_state = True;
++	return NT_STATUS_NOT_IMPLEMENTED;
++}
++
++NTSTATUS _eventlog_DeregisterEventSource(pipes_struct *p, struct eventlog_DeregisterEventSource *r)
++{
++	p->rng_fault_state = True;
++	return NT_STATUS_NOT_IMPLEMENTED;
++}
++
++NTSTATUS _eventlog_GetNumRecords(pipes_struct *p, struct eventlog_GetNumRecords *r)
++{
++	p->rng_fault_state = True;
++	return NT_STATUS_NOT_IMPLEMENTED;
++}
++
++NTSTATUS _eventlog_GetOldestRecord(pipes_struct *p, struct eventlog_GetOldestRecord *r)
++{
++	p->rng_fault_state = True;
++	return NT_STATUS_NOT_IMPLEMENTED;
++}
++
++NTSTATUS _eventlog_ChangeNotify(pipes_struct *p, struct eventlog_ChangeNotify *r)
++{
++	p->rng_fault_state = True;
++	return NT_STATUS_NOT_IMPLEMENTED;
++}
++
++NTSTATUS _eventlog_OpenEventLogW(pipes_struct *p, struct eventlog_OpenEventLogW *r)
++{
++	p->rng_fault_state = True;
++	return NT_STATUS_NOT_IMPLEMENTED;
++}
++
++NTSTATUS _eventlog_RegisterEventSourceW(pipes_struct *p, struct eventlog_RegisterEventSourceW *r)
++{
++	p->rng_fault_state = True;
++	return NT_STATUS_NOT_IMPLEMENTED;
++}
++
++NTSTATUS _eventlog_OpenBackupEventLogW(pipes_struct *p, struct eventlog_OpenBackupEventLogW *r)
++{
++	p->rng_fault_state = True;
++	return NT_STATUS_NOT_IMPLEMENTED;
++}
++
++NTSTATUS _eventlog_ReadEventLogW(pipes_struct *p, struct eventlog_ReadEventLogW *r)
++{
++	p->rng_fault_state = True;
++	return NT_STATUS_NOT_IMPLEMENTED;
++}
++
++NTSTATUS _eventlog_ReportEventW(pipes_struct *p, struct eventlog_ReportEventW *r)
++{
++	p->rng_fault_state = True;
++	return NT_STATUS_NOT_IMPLEMENTED;
++}
++
++NTSTATUS _eventlog_ClearEventLogA(pipes_struct *p, struct eventlog_ClearEventLogA *r)
++{
++	p->rng_fault_state = True;
++	return NT_STATUS_NOT_IMPLEMENTED;
++}
++
++NTSTATUS _eventlog_BackupEventLogA(pipes_struct *p, struct eventlog_BackupEventLogA *r)
++{
++	p->rng_fault_state = True;
++	return NT_STATUS_NOT_IMPLEMENTED;
++}
++
++NTSTATUS _eventlog_OpenEventLogA(pipes_struct *p, struct eventlog_OpenEventLogA *r)
++{
++	p->rng_fault_state = True;
++	return NT_STATUS_NOT_IMPLEMENTED;
++}
++
++NTSTATUS _eventlog_RegisterEventSourceA(pipes_struct *p, struct eventlog_RegisterEventSourceA *r)
++{
++	p->rng_fault_state = True;
++	return NT_STATUS_NOT_IMPLEMENTED;
++}
++
++NTSTATUS _eventlog_OpenBackupEventLogA(pipes_struct *p, struct eventlog_OpenBackupEventLogA *r)
++{
++	p->rng_fault_state = True;
++	return NT_STATUS_NOT_IMPLEMENTED;
++}
++
++NTSTATUS _eventlog_ReadEventLogA(pipes_struct *p, struct eventlog_ReadEventLogA *r)
++{
++	p->rng_fault_state = True;
++	return NT_STATUS_NOT_IMPLEMENTED;
++}
++
++NTSTATUS _eventlog_ReportEventA(pipes_struct *p, struct eventlog_ReportEventA *r)
++{
++	p->rng_fault_state = True;
++	return NT_STATUS_NOT_IMPLEMENTED;
++}
++
++NTSTATUS _eventlog_RegisterClusterSvc(pipes_struct *p, struct eventlog_RegisterClusterSvc *r)
++{
++	p->rng_fault_state = True;
++	return NT_STATUS_NOT_IMPLEMENTED;
++}
++
++NTSTATUS _eventlog_DeregisterClusterSvc(pipes_struct *p, struct eventlog_DeregisterClusterSvc *r)
++{
++	p->rng_fault_state = True;
++	return NT_STATUS_NOT_IMPLEMENTED;
++}
++
++NTSTATUS _eventlog_WriteClusterEvents(pipes_struct *p, struct eventlog_WriteClusterEvents *r)
++{
++	p->rng_fault_state = True;
++	return NT_STATUS_NOT_IMPLEMENTED;
++}
++
++NTSTATUS _eventlog_GetLogIntormation(pipes_struct *p, struct eventlog_GetLogIntormation *r)
++{
++	p->rng_fault_state = True;
++	return NT_STATUS_NOT_IMPLEMENTED;
++}
++
++NTSTATUS _eventlog_FlushEventLog(pipes_struct *p, struct eventlog_FlushEventLog *r)
++{
++	p->rng_fault_state = True;
++	return NT_STATUS_NOT_IMPLEMENTED;
++}
++
+
+Modified: branches/SAMBA_3_0/source/rpc_server/srv_pipe.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpc_server/srv_pipe.c	2007-05-31 17:33:47 UTC (rev 23273)
++++ branches/SAMBA_3_0/source/rpc_server/srv_pipe.c	2007-05-31 17:59:04 UTC (rev 23274)
+@@ -2380,10 +2380,10 @@
+ 			netdfs_get_pipe_fns( &cmds, &n_cmds );
+ 			break;
+ 		case PI_SVCCTL:
+-			svcctl_get_pipe_fns( &cmds, &n_cmds );
++			svcctl2_get_pipe_fns( &cmds, &n_cmds );
+ 			break;
+ 		case PI_EVENTLOG:
+-			eventlog_get_pipe_fns( &cmds, &n_cmds );
++			eventlog2_get_pipe_fns( &cmds, &n_cmds );
+ 			break;
+ 		case PI_UNIXINFO:
+ 			unixinfo_get_pipe_fns( &cmds, &n_cmds );
+

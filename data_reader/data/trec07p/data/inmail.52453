@@ -1,0 +1,140 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Jun  6 11:37:06 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l56Fb6hB023259
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 6 Jun 2007 11:37:06 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 396E9163915
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed,  6 Jun 2007 15:36:58 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 614)
+	id 366B5162ACC; Wed,  6 Jun 2007 15:36:51 +0000 (GMT)
+To: samba-cvs@samba.org
+From: ab@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070606153651.366B5162ACC@lists.samba.org>
+Date: Wed,  6 Jun 2007 15:36:51 +0000 (GMT)
+Subject: svn commit: samba-docs r1123 - in trunk: manpages-3 xslt
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: ab
+Date: 2007-06-06 15:36:50 +0000 (Wed, 06 Jun 2007)
+New Revision: 1123
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba-docs&rev=1123
+
+Log:
+Fix another bunch of samba-docs bugs. Use <literal> to escape slashes with text
+Modified:
+   trunk/manpages-3/smb.conf.5.xml
+   trunk/xslt/man.xsl
+
+
+Changeset:
+Modified: trunk/manpages-3/smb.conf.5.xml
+===================================================================
+--- trunk/manpages-3/smb.conf.5.xml	2007-06-06 13:43:17 UTC (rev 1122)
++++ trunk/manpages-3/smb.conf.5.xml	2007-06-06 15:36:50 UTC (rev 1123)
+@@ -55,7 +55,7 @@
+ 	</para>
+ 
+ 	<para>
+-	Any line ending in a <quote>\\</quote> is continued on the next line in the customary UNIX fashion.
++	Any line ending in a <quote><literal>\</literal></quote> is continued on the next line in the customary UNIX fashion.
+ 	</para>
+ 
+ 	<para>
+@@ -677,7 +677,7 @@
+ 		<listitem><para>
+ 		If the client has passed a username/password pair and that username/password pair is validated by the UNIX 
+ 		system's password programs, the connection is made as that username. This includes the
+-		<literal>\\server\service%<replaceable>username</replaceable></literal> method of passing a username.
++		<literal>\\server\service</literal>%<replaceable>username</replaceable> method of passing a username.
+ 		</para></listitem>
+ 
+ 		<listitem><para>
+
+Modified: trunk/xslt/man.xsl
+===================================================================
+--- trunk/xslt/man.xsl	2007-06-06 13:43:17 UTC (rev 1122)
++++ trunk/xslt/man.xsl	2007-06-06 15:36:50 UTC (rev 1123)
+@@ -9,6 +9,27 @@
+ <xsl:param name="chunk.first.sections" select="1"/>
+ <xsl:param name="use.id.as.filename" select="1"/>
+ 
++<xsl:template name="string-subst">
++  <xsl:param name="content" select="''"/>
++  <xsl:param name="replace" select="''"/>
++  <xsl:param name="with" select="''"/>
++  <xsl:choose>
++    <xsl:when test="not(contains($content,$replace))">
++      <xsl:value-of select="$content"/>
++    </xsl:when>
++    <xsl:otherwise>
++      <xsl:value-of select="substring-before($content,$replace)"/>
++      <xsl:value-of select="$with"/>
++      <xsl:call-template name="string-subst">
++        <xsl:with-param name="content"
++             select="substring-after($content,$replace)"/>
++        <xsl:with-param name="replace" select="$replace"/>
++        <xsl:with-param name="with" select="$with"/>
++      </xsl:call-template>
++    </xsl:otherwise>
++  </xsl:choose>
++</xsl:template>
++
+ <!-- 
+     Our ulink stylesheet omits @url part if content was specified
+ -->
+@@ -138,6 +159,31 @@
+   <xsl:text>\fR</xsl:text>
+ </xsl:template>
+ 
++<xsl:template match="//literal">
++<xsl:variable name="foo">
++  <xsl:apply-templates />
++</xsl:variable>
++  <xsl:call-template name="string-subst">
++    <xsl:with-param name="content" select="$foo" />
++    <xsl:with-param name="replace" select="'\'" />
++    <xsl:with-param name="with" select="'\\'" />
++  </xsl:call-template>
++</xsl:template>
++
++<xsl:template match="itemizedlist/listitem">
++  <xsl:text>\(bu&#10;</xsl:text>
++  <xsl:apply-templates/>
++  <xsl:if test="following-sibling::listitem">
++    <xsl:text>.TP</xsl:text> 
++    <xsl:if test="not($list-indent = '')">
++      <xsl:text> </xsl:text>
++      <xsl:value-of select="$list-indent"/>
++    </xsl:if>
++    <xsl:text>&#10;</xsl:text>
++  </xsl:if>
++</xsl:template>
++
++
+ <xsl:template match="para|simpara|remark" mode="list">
+   <xsl:variable name="foo">
+     <xsl:apply-templates/>
+

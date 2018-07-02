@@ -1,0 +1,157 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat May 12 05:59:04 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4C9x4qD009487
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 12 May 2007 05:59:04 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 3547A16384D
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 12 May 2007 09:59:02 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.6 required=3.8 tests=AWL,BAYES_05,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 5D1C3162AE0; Sat, 12 May 2007 09:58:35 +0000 (GMT)
+Date: Sat, 12 May 2007 19:54:41 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070512095835.5D1C3162AE0@lists.samba.org>
+Subject: Rev 288: simplify the generation checking on incoming call packets
+	in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 288
+revision-id: tridge@samba.org-20070512095440-atc4dhk3kbgv6cxu
+parent: tridge@samba.org-20070512080850-g6h43oqsh8ngm5np
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Sat 2007-05-12 19:54:40 +1000
+message:
+  simplify the generation checking on incoming call packets
+modified:
+  common/ctdb.c                  ctdb.c-20061127094323-t50f58d65iaao5of-2
+=== modified file 'common/ctdb.c'
+--- a/common/ctdb.c	2007-05-09 22:13:19 +0000
++++ b/common/ctdb.c	2007-05-12 09:54:40 +0000
+@@ -261,8 +261,12 @@
+ 
+ 	switch (hdr->operation) {
+ 	case CTDB_REQ_CALL:
+-		/* verify that the remote node that sent us the call
+-		   is running in the same generation instance as this node
++	case CTDB_REPLY_CALL:
++	case CTDB_REQ_DMASTER:
++	case CTDB_REPLY_DMASTER:
++		/* for ctdb_call inter-node operations verify that the
++		   remote node that sent us the call is running in the
++		   same generation instance as this node
+ 		*/
+ 		if (ctdb->vnn_map->generation != hdr->generation) {
+ 			DEBUG(0,(__location__ " ctdb request %d"
+@@ -273,20 +277,12 @@
+ 				hdr->srcnode, hdr->destnode, 
+ 				ctdb->vnn_map->generation, 
+ 				hdr->generation));
+-			break;
+-		}
+-		/* if we are in recovery mode we discard all traffic
+-		   until the cluster has recovered.
+-		*/
+-		if (ctdb->recovery_mode != CTDB_RECOVERY_NORMAL) {
+-			DEBUG(0,(__location__ " ctdb request %d"
+-				" length %d from node %d to %d"
+-				" while we are in recovery mode\n", 
+-				hdr->reqid, hdr->length, 
+-				 hdr->srcnode, hdr->destnode));
+-			break;
+-		}
++			goto done;
++		}
++	}
+ 
++	switch (hdr->operation) {
++	case CTDB_REQ_CALL:
+ 		ctdb->status.node.req_call++;
+ 		ctdb_request_call(ctdb, hdr);
+ 		break;
+@@ -302,63 +298,11 @@
+ 		break;
+ 
+ 	case CTDB_REQ_DMASTER:
+-		/* verify that the remote node that sent us dmaster req
+-		   is running in the same generation instance as this node
+-		*/
+-		if (ctdb->vnn_map->generation != hdr->generation) {
+-			DEBUG(0,(__location__ " ctdb dmaster request %d"
+-				" length %d from node %d to %d had an"
+-				" invalid generation id:%d while our"
+-				" generation id is:%d\n", 
+-				hdr->reqid, hdr->length, 
+-				hdr->srcnode, hdr->destnode, 
+-				ctdb->vnn_map->generation, 
+-				hdr->generation));
+-			break;
+-		}
+-		/* if we are in recovery mode we discard all traffic
+-		   until the cluster has recovered.
+-		*/
+-		if (ctdb->recovery_mode != CTDB_RECOVERY_NORMAL) {
+-			DEBUG(0,(__location__ " ctdb dmaster request %d"
+-				" length %d from node %d to %d"
+-				" while we are in recovery mode\n", 
+-				hdr->reqid, hdr->length, 
+-				 hdr->srcnode, hdr->destnode));
+-			break;
+-		}
+-
+ 		ctdb->status.node.req_dmaster++;
+ 		ctdb_request_dmaster(ctdb, hdr);
+ 		break;
+ 
+ 	case CTDB_REPLY_DMASTER:
+-		/* verify that the remote node that sent us dmaster reply
+-		   is running in the same generation instance as this node
+-		*/
+-		if (ctdb->vnn_map->generation != hdr->generation) {
+-			DEBUG(0,(__location__ " ctdb dmaster reply %d"
+-				" length %d from node %d to %d had an"
+-				" invalid generation id:%d while our"
+-				" generation id is:%d\n", 
+-				hdr->reqid, hdr->length, 
+-				hdr->srcnode, hdr->destnode, 
+-				ctdb->vnn_map->generation, 
+-				hdr->generation));
+-			break;
+-		}
+-		/* if we are in recovery mode we discard all traffic
+-		   until the cluster has recovered.
+-		*/
+-		if (ctdb->recovery_mode != CTDB_RECOVERY_NORMAL) {
+-			DEBUG(0,(__location__ " ctdb dmaster reply %d "
+-				" length %d from node %d to %d"
+-				" while we are in recovery mode\n", 
+-				hdr->reqid, hdr->length, 
+-				 hdr->srcnode, hdr->destnode));
+-			break;
+-		}
+-
+ 		ctdb->status.node.reply_dmaster++;
+ 		ctdb_reply_dmaster(ctdb, hdr);
+ 		break;
+

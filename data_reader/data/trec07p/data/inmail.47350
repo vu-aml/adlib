@@ -1,0 +1,143 @@
+From perl6-all-return-81677-ktwarwic=speedy.uwaterloo.ca@perl.org  Wed May 30 22:31:50 2007
+Return-Path: <perl6-all-return-81677-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4V2VmhB022201
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 30 May 2007 22:31:49 -0400
+Received: (qmail 18827 invoked by uid 514); 31 May 2007 02:31:41 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 18822 invoked from network); 31 May 2007 02:31:41 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: James Keenan (via RT) <parrotbug-followup@parrotcode.org>
+X-RT-NewTicket: yes
+To: bugs-bitbucket@netlabs.develooper.com
+Resent-To: perl6-internals@perl.org
+Mail-Followup-To: perl6-internals@perl.org
+Reply-To: perl6-internals@perl.org
+Date: Wed, 30 May 2007 19:30:39 -0700
+Subject: [perl #43085] [PATCH] Parrot::OpsFile::read_ops():  Can we refactor the setting of VERSION 
+In-Reply-To: <9F07D14F-6075-4A7B-BDC7-16B648070E01@verizon.net>
+References: <RT-Ticket-43085@perl.org> <9F07D14F-6075-4A7B-BDC7-16B648070E01@verizon.net>
+Message-ID: <rt-3.6.HEAD-1668-1180578639-1876.43085-72-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #43085
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: jkeen@verizon.net
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+X-RT-Original-Encoding: utf-8
+Resent-Message-Id: <20070531023039.E25B22AFDA@x3.develooper.com>
+Resent-Date: Wed, 30 May 2007 19:30:39 -0700 (PDT)
+Resent-From: rt-jkeen=verizon.net@netlabs.develooper.com
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+
+# New Ticket Created by  James Keenan 
+# Please include the string:  [perl #43085]
+# in the subject line of all future correspondence about this issue. 
+# <URL: http://rt.perl.org/rt3/Ticket/Display.html?id=43085 >
+
+
+Parrot::OpsFile (lib/Parrot/OpsFile.pm) has, AFAICT, no unit tests  
+dedicated to it.  Since it is called at a number of points inside  
+Parrot::Ops2c::Utils and Parrot::Ops2pm::Utils (which are in turn  
+called by tools/build/ops2c.pl and tools/build/ops2pm.pl, both of  
+which are invoked by make), it ends up being well tested by the test  
+suites I have written for those two packages (t/tools/ops2cutils/*.t  
+and t/tools/ops2pmutils/*.t).
+
+But there is more untested code in this package than I am comfortable  
+with.  You can see statement coverage at http://thenceforward.net/ 
+parrot/coverage/configure-build/lib-Parrot-OpsFile-pm.html and click  
+on links for branch and condition coverage.
+
+Parrot::OpsFile::read_ops() reads an .ops file line-by-line and  
+parses it.  Here's some code beginning at line 253.  (I've eliminated  
+some whitespace and cuddled some braces to save space.)
+
+             if (m/^\s*VERSION\s*=\s*"(\d+\.\d+\.\d+)"\s*;\s*$/) {
+                 if ( exists $self->{VERSION} ) {
+                     #die "VERSION MULTIPLY DEFINED!";
+                 }
+                 $self->version($1);
+                 $_ = '';
+             }
+             elsif (m/^\s*VERSION\s*=\s*PARROT_VERSION\s*;\s*$/) {
+                 if ( exists $self->{VERSION} ) {
+                     #die "VERSION MULTIPLY DEFINED!";
+                 }
+                 $self->version( $PConfig{VERSION} );
+                 $_ = '';
+             }
+
+I interpret this as:  If you come to a line where a 3-part version  
+number is assigned to VERSION, capture and use that version number  
+(unless for some odd reason the VERSION attribute has already been  
+set).  Else, if you come to a line that reads 'VERSION =  
+PARROT_VERSION', capture and use that version number.  Else, ...  
+well, there's no 'else' stanza here, which is problematic from a  
+testing and coverage point of view.
+
+The coverage analysis cited above, however, indicates that the 'if'  
+stanza is never reached during testing, i.e., there is no instance of  
+something like 'VERSION = 0.4.11;'.  The coverage analysis also  
+suggests that the implicit 'else' branch is never reached, either.   
+In other words, during testing *only* the 'elsif' branch is reached.
+
+This is not surprising, because if you call 'ack VERSION src/ops/ 
+*.ops', you will find 17 instances of 'VERSION = PARROT_VERSION' --  
+exactly corresponding to the 17 .ops files in that directory.
+
+	src/ops/bit.ops:5:VERSION = PARROT_VERSION;
+	src/ops/cmp.ops:5:VERSION = PARROT_VERSION;
+	src/ops/core.ops:9:VERSION = PARROT_VERSION;
+	src/ops/debug.ops:5:VERSION = PARROT_VERSION;
+	src/ops/experimental.ops:7:VERSION = PARROT_VERSION;
+	src/ops/io.ops:5:VERSION = PARROT_VERSION;
+	src/ops/math.ops:8:VERSION = PARROT_VERSION;
+	src/ops/object.ops:11:VERSION = PARROT_VERSION;
+	src/ops/obscure.ops:7:VERSION = PARROT_VERSION;
+	src/ops/pic.ops:11:VERSION = PARROT_VERSION;
+	src/ops/pmc.ops:10:VERSION = PARROT_VERSION;
+	src/ops/set.ops:5:VERSION = PARROT_VERSION;
+	src/ops/stack.ops:5:VERSION = PARROT_VERSION;
+	src/ops/stm.ops:21:VERSION = PARROT_VERSION;
+	src/ops/string.ops:5:VERSION = PARROT_VERSION;
+	src/ops/sys.ops:5:VERSION = PARROT_VERSION;
+	src/ops/var.ops:5:VERSION = PARROT_VERSION;
+
+In other words, no src/ops/.ops file currently sets VERSION in any  
+way other than by assignment from PARROT_VERSION.
+
+I therefore ask:  Why should we not stipulate that 'VERSION =  
+PARROT_VERSION' is the *sole* way to set VERSION in an .ops file?  In  
+that case, (a) we could eliminate the aforementioned 'if' stanza in  
+Parrot::OpsFile::read_ops() and (b) we could probably get away with  
+hard-coding 'VERSION = PARROT_VERSION' in exactly one location and  
+dispense with coding it in each of the .ops files.
+
+Is there any reason why we should continue to maintain the unused  
+option of coding a src/ops/.ops file with a specific 3-part version  
+number?  (I'll submit an actual patch if people agree with this.)
+
+Thank you very much.
+Jim Keenan
+

@@ -1,0 +1,234 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Apr 10 01:07:40 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3A57e0I024706
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 10 Apr 2007 01:07:40 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id BCA47163830
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 10 Apr 2007 05:07:17 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.8 required=3.8 tests=AWL,BAYES_50,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 737BF162ACE; Tue, 10 Apr 2007 05:06:45 +0000 (GMT)
+Date: Tue, 10 Apr 2007 14:48:13 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070410050645.737BF162ACE@lists.samba.org>
+Subject: Rev 80: merge tcp changes from ronnie in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 5144
+Lines: 193
+
+------------------------------------------------------------
+revno: 80
+revision-id: tridge@samba.org-20070410044813-b5c4d10a223f32dd
+parent: tridge@samba.org-20070410044632-78db5388490c3d40
+parent: ronniesahlberg@gmail.com-20070410031715-9ec894cesu1zghs4
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Tue 2007-04-10 14:48:13 +1000
+message:
+  merge tcp changes from ronnie
+modified:
+  common/ctdb.c                  ctdb.c-20061127094323-t50f58d65iaao5of-2
+  tcp/ctdb_tcp.h                 ctdb_tcp.h-20061127103747-l8xeniwiapbydehq-3
+  tcp/tcp_io.c                   tcp_io.c-20061128004937-x70q1cu5xzg5g2tm-3
+    ------------------------------------------------------------
+    merged: ronniesahlberg@gmail.com-20070410031715-9ec894cesu1zghs4
+    parent: ronniesahlberg@gmail.com-20070410023925-skzpy7ls4t4z5lzp
+    committer: Ronnie sahlberg <ronniesahlberg@gmail.com>
+    branch nick: ctdb
+    timestamp: Tue 2007-04-10 13:17:15 +1000
+    message:
+      change the tcp code to call ctdb_read_pdu() instead of doing the partial read thing explicitely
+=== modified file 'common/ctdb.c'
+--- a/common/ctdb.c	2007-04-10 02:39:25 +0000
++++ b/common/ctdb.c	2007-04-10 03:17:15 +0000
+@@ -340,8 +340,6 @@
+ 
+ int ctdb_start(struct ctdb_context *ctdb)
+ {
+-	int res;
+-
+ 	if (ctdb->flags&CTDB_FLAG_DAEMON_MODE) {
+ 		return ctdbd_start(ctdb);
+ 	}
+
+=== modified file 'tcp/ctdb_tcp.h'
+--- a/tcp/ctdb_tcp.h	2006-12-19 01:07:07 +0000
++++ b/tcp/ctdb_tcp.h	2007-04-10 03:17:15 +0000
+@@ -25,22 +25,12 @@
+ };
+ 
+ /*
+-  incoming packet structure - only used when we get a partial packet
+-  on read
+-*/
+-struct ctdb_tcp_partial {
+-	uint8_t *data;
+-	uint32_t length;
+-};
+-
+-
+-/*
+   state associated with an incoming connection
+ */
+ struct ctdb_incoming {
+ 	struct ctdb_context *ctdb;
+ 	int fd;
+-	struct ctdb_tcp_partial partial;
++	struct ctdb_partial partial;
+ };
+ 
+ /*
+
+=== modified file 'tcp/tcp_io.c'
+--- a/tcp/tcp_io.c	2007-02-07 02:26:07 +0000
++++ b/tcp/tcp_io.c	2007-04-10 03:17:15 +0000
+@@ -98,6 +98,38 @@
+ }
+ 
+ 
++
++static void tcp_read_cb(uint8_t *data, int cnt, void *args)
++{
++	struct ctdb_incoming *in = talloc_get_type(args, struct ctdb_incoming);
++	struct ctdb_req_header *hdr;
++
++	if (cnt < sizeof(*hdr)) {
++		ctdb_set_error(in->ctdb, "Bad packet length %d\n", cnt);
++		return;
++	}
++	hdr = (struct ctdb_req_header *)data;
++	if (cnt != hdr->length) {
++		ctdb_set_error(in->ctdb, "Bad header length %d expected %d\n", 
++			       hdr->length, cnt);
++		return;
++	}
++
++	if (hdr->ctdb_magic != CTDB_MAGIC) {
++		ctdb_set_error(in->ctdb, "Non CTDB packet rejected\n");
++		return;
++	}
++
++	if (hdr->ctdb_version != CTDB_VERSION) {
++		ctdb_set_error(in->ctdb, "Bad CTDB version 0x%x rejected\n", hdr->ctdb_version);
++		return;
++	}
++
++	/* most common case - we got a whole packet in one go
++	   tell the ctdb layer above that we have a packet */
++	in->ctdb->upcalls->recv_pkt(in->ctdb, data, cnt);
++}
++
+ /*
+   called when an incoming connection is readable
+ */
+@@ -105,85 +137,8 @@
+ 			    uint16_t flags, void *private)
+ {
+ 	struct ctdb_incoming *in = talloc_get_type(private, struct ctdb_incoming);
+-	int num_ready = 0;
+-	ssize_t nread;
+-	uint8_t *data, *data_base;
+-
+-	if (ioctl(in->fd, FIONREAD, &num_ready) != 0 ||
+-	    num_ready == 0) {
+-		/* we've lost the link from another node. We don't
+-		   notify the upper layers, as we only want to trigger
+-		   a full node reorganisation when a send fails - that
+-		   allows nodes to restart without penalty as long as
+-		   the network is idle */
+-		talloc_free(in);
+-		return;
+-	}
+-
+-	in->partial.data = talloc_realloc_size(in, in->partial.data, 
+-					       num_ready + in->partial.length);
+-	if (in->partial.data == NULL) {
+-		/* not much we can do except drop the socket */
+-		talloc_free(in);
+-		return;
+-	}
+-
+-	nread = read(in->fd, in->partial.data+in->partial.length, num_ready);
+-	if (nread <= 0) {
+-		/* the connection must be dead */
+-		talloc_free(in);
+-		return;
+-	}
+-
+-	data = in->partial.data;
+-	nread += in->partial.length;
+-
+-	in->partial.data = NULL;
+-	in->partial.length = 0;
+-
+-	if (nread >= 4 && *(uint32_t *)data == nread) {
+-		/* most common case - we got a whole packet in one go
+-		   tell the ctdb layer above that we have a packet */
+-		in->ctdb->upcalls->recv_pkt(in->ctdb, data, nread);
+-		return;
+-	}
+-
+-	data_base = data;
+-
+-	while (nread >= 4 && *(uint32_t *)data <= nread) {
+-		/* we have at least one packet */
+-		uint8_t *d2;
+-		uint32_t len;
+-		len = *(uint32_t *)data;
+-		d2 = talloc_memdup(in, data, len);
+-		if (d2 == NULL) {
+-			/* sigh */
+-			talloc_free(in);
+-			return;
+-		}
+-		in->ctdb->upcalls->recv_pkt(in->ctdb, d2, len);
+-		data += len;
+-		nread -= len;		
+-	}
+-
+-	if (nread > 0) {
+-		/* we have only part of a packet */
+-		if (data_base == data) {
+-			in->partial.data = data;
+-			in->partial.length = nread;
+-		} else {
+-			in->partial.data = talloc_memdup(in, data, nread);
+-			if (in->partial.data == NULL) {
+-				talloc_free(in);
+-				return;
+-			}
+-			in->partial.length = nread;
+-			talloc_free(data_base);
+-		}
+-		return;
+-	}
+-
+-	talloc_free(data_base);
++
++	ctdb_read_pdu(in->fd, in, &in->partial, tcp_read_cb, in);
+ }
+ 
+ /*
+

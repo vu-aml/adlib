@@ -1,0 +1,98 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat May  5 03:21:28 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l457LSqD024777
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 5 May 2007 03:21:28 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id D0866163843
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat,  5 May 2007 07:21:27 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 3F30E162AD3; Sat,  5 May 2007 07:20:39 +0000 (GMT)
+Date: Sat, 05 May 2007 17:18:06 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070505072039.3F30E162AD3@lists.samba.org>
+Subject: Rev 258: use the new lib/events autoconf code in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 258
+revision-id: tridge@samba.org-20070505071806-hatj3yhl0nl335p3
+parent: tridge@samba.org-20070505071725-5n1dbqmzop11bmcp
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Sat 2007-05-05 17:18:06 +1000
+message:
+  use the new lib/events autoconf code
+modified:
+  Makefile.in                    makefile.in-20061117234101-o3qt14umlg9en8z0-1
+  autogen.sh                     autogen.sh-20061117234101-o3qt14umlg9en8z0-3
+  configure.ac                   configure.ac-20061117234101-o3qt14umlg9en8z0-10
+=== modified file 'Makefile.in'
+--- a/Makefile.in	2007-05-03 22:30:18 +0000
++++ b/Makefile.in	2007-05-05 07:18:06 +0000
+@@ -23,9 +23,6 @@
+ 
+ LIB_FLAGS=@LDFLAGS@ -Llib @LIBS@ $(POPT_LIBS) @INFINIBAND_LIBS@
+ 
+-EVENTS_OBJ = lib/events/events.o lib/events/events_standard.o \
+-	lib/events/events_signal.o lib/events/events_timed.o
+-
+ UTIL_OBJ = lib/util/idtree.o lib/util/db_wrap.o lib/util/strlist.o lib/util/util.o
+ 
+ CTDB_COMMON_OBJ = common/ctdb.o common/ctdb_daemon.o common/ctdb_client.o \
+@@ -38,7 +35,7 @@
+ 
+ CTDB_OBJ = $(CTDB_COMMON_OBJ) $(CTDB_TCP_OBJ) $(POPT_OBJ)
+ 
+-OBJS = @TDB_OBJ@ @TALLOC_OBJ@ @LIBREPLACEOBJ@ @INFINIBAND_WRAPPER_OBJ@ $(EXTRA_OBJ) $(EVENTS_OBJ) $(CTDB_OBJ) $(UTIL_OBJ)
++OBJS = @TDB_OBJ@ @TALLOC_OBJ@ @LIBREPLACEOBJ@ @INFINIBAND_WRAPPER_OBJ@ $(EXTRA_OBJ) @EVENTS_OBJ@ $(CTDB_OBJ) $(UTIL_OBJ)
+ 
+ BINS = bin/ctdbd bin/ctdbd_test bin/ctdb_test bin/ctdb_bench bin/ctdb_messaging bin/ctdb_fetch bin/ctdb_fetch1 bin/lockwait bin/ctdb_control bin/ctdb_dump bin/recoverd @INFINIBAND_BINS@
+ 
+
+=== modified file 'autogen.sh'
+--- a/autogen.sh	2006-11-17 23:41:20 +0000
++++ b/autogen.sh	2007-05-05 07:18:06 +0000
+@@ -7,6 +7,8 @@
+ IPATHS="$IPATHS -I lib/talloc -I talloc -I ../talloc"
+ IPATHS="$IPATHS -I lib/tdb -I tdb -I ../tdb"
+ IPATHS="$IPATHS -I lib/popt -I popt -I ../popt"
++IPATHS="$IPATHS -I lib/events"
++
+ autoheader $IPATHS || exit 1
+ autoconf $IPATHS || exit 1
+ 
+
+=== modified file 'configure.ac'
+--- a/configure.ac	2007-05-02 19:21:14 +0000
++++ b/configure.ac	2007-05-05 07:18:06 +0000
+@@ -27,6 +27,7 @@
+ m4_include(libpopt.m4)
+ m4_include(libtalloc.m4)
+ m4_include(libtdb.m4)
++m4_include(libevents.m4)
+ m4_include(ib/config.m4)
+ 
+ AC_SUBST(EXTRA_OBJ)
+

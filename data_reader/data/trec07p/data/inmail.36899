@@ -1,0 +1,373 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 15 11:50:44 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4FFoiqD006736
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 11:50:44 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 70CEA16386B
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 15:50:41 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id C08A9162AC8; Tue, 15 May 2007 15:50:01 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070515155001.C08A9162AC8@lists.samba.org>
+Date: Tue, 15 May 2007 15:50:01 +0000 (GMT)
+Subject: svn commit: samba r22911 - in branches: SAMBA_3_0/source/lib
+	SAMBA_3_0/source/nmbd SAMBA_3_0/source/rpc_server
+	SAMBA_3_0/source/smbd SAMBA_3_0/source/utils
+	SAMBA_3_0_26/source/lib SAMBA_3_0_26/source/nmbd
+	SAMBA_3_0_26/source/rpc_server SAMBA_3_0_26/source/smbd
+	SAMBA_3_0_26/source/utils
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-05-15 15:49:55 +0000 (Tue, 15 May 2007)
+New Revision: 22911
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22911
+
+Log:
+Pass a messaging_context to message_send_all
+
+Modified:
+   branches/SAMBA_3_0/source/lib/messages.c
+   branches/SAMBA_3_0/source/nmbd/nmbd_processlogon.c
+   branches/SAMBA_3_0/source/rpc_server/srv_netlog_nt.c
+   branches/SAMBA_3_0/source/rpc_server/srv_spoolss_nt.c
+   branches/SAMBA_3_0/source/rpc_server/srv_srvsvc_nt.c
+   branches/SAMBA_3_0/source/smbd/lanman.c
+   branches/SAMBA_3_0/source/smbd/statcache.c
+   branches/SAMBA_3_0/source/utils/smbcontrol.c
+   branches/SAMBA_3_0_26/source/lib/messages.c
+   branches/SAMBA_3_0_26/source/nmbd/nmbd_processlogon.c
+   branches/SAMBA_3_0_26/source/rpc_server/srv_netlog_nt.c
+   branches/SAMBA_3_0_26/source/rpc_server/srv_spoolss_nt.c
+   branches/SAMBA_3_0_26/source/rpc_server/srv_srvsvc_nt.c
+   branches/SAMBA_3_0_26/source/smbd/lanman.c
+   branches/SAMBA_3_0_26/source/smbd/statcache.c
+   branches/SAMBA_3_0_26/source/utils/smbcontrol.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/lib/messages.c
+===================================================================
+--- branches/SAMBA_3_0/source/lib/messages.c	2007-05-15 15:41:37 UTC (rev 22910)
++++ branches/SAMBA_3_0/source/lib/messages.c	2007-05-15 15:49:55 UTC (rev 22911)
+@@ -659,7 +659,8 @@
+  *
+  * @retval True for success.
+  **/
+-BOOL message_send_all(int msg_type,
++BOOL message_send_all(struct messaging_context *msg_ctx,
++		      int msg_type,
+ 		      const void *buf, size_t len,
+ 		      BOOL duplicates_allowed,
+ 		      int *n_sent)
+
+Modified: branches/SAMBA_3_0/source/nmbd/nmbd_processlogon.c
+===================================================================
+--- branches/SAMBA_3_0/source/nmbd/nmbd_processlogon.c	2007-05-15 15:41:37 UTC (rev 22910)
++++ branches/SAMBA_3_0/source/nmbd/nmbd_processlogon.c	2007-05-15 15:49:55 UTC (rev 22911)
+@@ -40,8 +40,8 @@
+ {
+         DEBUG(3, ("sending replication message, serial = 0x%04x\n", 
+                   low_serial));
+-        message_send_all(MSG_SMB_SAM_REPL, &low_serial,
+-                         sizeof(low_serial), False, NULL);
++        message_send_all(nmbd_messaging_context(), MSG_SMB_SAM_REPL,
++			 &low_serial, sizeof(low_serial), False, NULL);
+ }
+ 
+ /****************************************************************************
+
+Modified: branches/SAMBA_3_0/source/rpc_server/srv_netlog_nt.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpc_server/srv_netlog_nt.c	2007-05-15 15:41:37 UTC (rev 22910)
++++ branches/SAMBA_3_0/source/rpc_server/srv_netlog_nt.c	2007-05-15 15:49:55 UTC (rev 22911)
+@@ -76,7 +76,8 @@
+ static void send_sync_message(void)
+ {
+         DEBUG(3, ("sending sam synchronisation message\n"));
+-        message_send_all(MSG_SMB_SAM_SYNC, NULL, 0, False, NULL);
++        message_send_all(smbd_messaging_context(), MSG_SMB_SAM_SYNC, NULL, 0,
++			 False, NULL);
+ }
+ 
+ /*************************************************************************
+
+Modified: branches/SAMBA_3_0/source/rpc_server/srv_spoolss_nt.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpc_server/srv_spoolss_nt.c	2007-05-15 15:41:37 UTC (rev 22910)
++++ branches/SAMBA_3_0/source/rpc_server/srv_spoolss_nt.c	2007-05-15 15:49:55 UTC (rev 22911)
+@@ -311,7 +311,8 @@
+ 		
+ 	if ( (ret = smbrun(command, NULL)) == 0 ) {
+ 		/* Tell everyone we updated smb.conf. */
+-		message_send_all(MSG_SMB_CONF_UPDATED, NULL, 0, False, NULL);
++		message_send_all(smbd_messaging_context(),
++				 MSG_SMB_CONF_UPDATED, NULL, 0, False, NULL);
+ 	}
+ 		
+ 	if ( is_print_op )
+@@ -6255,7 +6256,8 @@
+ 	
+ 	if ( (ret = smbrun(command, &fd)) == 0 ) {
+ 		/* Tell everyone we updated smb.conf. */
+-		message_send_all(MSG_SMB_CONF_UPDATED, NULL, 0, False, NULL);
++		message_send_all(smbd_messaging_context(),
++				 MSG_SMB_CONF_UPDATED, NULL, 0, False, NULL);
+ 	}
+ 
+ 	if ( is_print_op )
+
+Modified: branches/SAMBA_3_0/source/rpc_server/srv_srvsvc_nt.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpc_server/srv_srvsvc_nt.c	2007-05-15 15:41:37 UTC (rev 22910)
++++ branches/SAMBA_3_0/source/rpc_server/srv_srvsvc_nt.c	2007-05-15 15:49:55 UTC (rev 22911)
+@@ -1421,7 +1421,8 @@
+ 
+ 		if ( (ret = smbrun(command, NULL)) == 0 ) {
+ 			/* Tell everyone we updated smb.conf. */
+-			message_send_all(MSG_SMB_CONF_UPDATED,
++			message_send_all(smbd_messaging_context(),
++					 MSG_SMB_CONF_UPDATED,
+ 					 NULL, 0, False, NULL);
+ 		}
+ 
+@@ -1517,7 +1518,8 @@
+ 
+ 		if ( (ret = smbrun(command, NULL)) == 0 ) {
+ 			/* Tell everyone we updated smb.conf. */
+-			message_send_all(MSG_SMB_CONF_UPDATED,
++			message_send_all(smbd_messaging_context(),
++					 MSG_SMB_CONF_UPDATED,
+ 					 NULL, 0, False, NULL);
+ 		}
+ 
+@@ -1575,7 +1577,8 @@
+ 			
+ 		if ( (ret = smbrun(command, NULL)) == 0 ) {
+ 			/* Tell everyone we updated smb.conf. */
+-			message_send_all(MSG_SMB_CONF_UPDATED,
++			message_send_all(smbd_messaging_context(),
++					 MSG_SMB_CONF_UPDATED,
+ 					 NULL, 0, False, NULL);
+ 		}
+ 		
+
+Modified: branches/SAMBA_3_0/source/smbd/lanman.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/lanman.c	2007-05-15 15:41:37 UTC (rev 22910)
++++ branches/SAMBA_3_0/source/smbd/lanman.c	2007-05-15 15:49:55 UTC (rev 22911)
+@@ -1894,7 +1894,8 @@
+ 			goto error_exit;
+ 		} else {
+ 			SAFE_FREE(command);
+-			message_send_all(MSG_SMB_CONF_UPDATED, NULL, 0,
++			message_send_all(smbd_messaging_context(),
++					 MSG_SMB_CONF_UPDATED, NULL, 0,
+ 					 False, NULL);
+ 		}
+ 	} else {
+
+Modified: branches/SAMBA_3_0/source/smbd/statcache.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/statcache.c	2007-05-15 15:41:37 UTC (rev 22910)
++++ branches/SAMBA_3_0/source/smbd/statcache.c	2007-05-15 15:49:55 UTC (rev 22911)
+@@ -292,7 +292,8 @@
+ void send_stat_cache_delete_message(const char *name)
+ {
+ #ifdef DEVELOPER
+-	message_send_all(MSG_SMB_STAT_CACHE_DELETE,
++	message_send_all(smbd_messaging_context(),
++			MSG_SMB_STAT_CACHE_DELETE,
+ 			name,
+ 			strlen(name)+1,
+ 			True,
+
+Modified: branches/SAMBA_3_0/source/utils/smbcontrol.c
+===================================================================
+--- branches/SAMBA_3_0/source/utils/smbcontrol.c	2007-05-15 15:41:37 UTC (rev 22910)
++++ branches/SAMBA_3_0/source/utils/smbcontrol.c	2007-05-15 15:49:55 UTC (rev 22911)
+@@ -60,7 +60,7 @@
+ 			messaging_send_buf(msg_ctx, pid, msg_type,
+ 					   (uint8 *)buf, len));
+ 
+-	ret = message_send_all(msg_type, buf, len, duplicates,
++	ret = message_send_all(msg_ctx, msg_type, buf, len, duplicates,
+ 			       &n_sent);
+ 	DEBUG(10,("smbcontrol/send_message: broadcast message to "
+ 		  "%d processes\n", n_sent));
+
+Modified: branches/SAMBA_3_0_26/source/lib/messages.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/lib/messages.c	2007-05-15 15:41:37 UTC (rev 22910)
++++ branches/SAMBA_3_0_26/source/lib/messages.c	2007-05-15 15:49:55 UTC (rev 22911)
+@@ -659,7 +659,8 @@
+  *
+  * @retval True for success.
+  **/
+-BOOL message_send_all(int msg_type,
++BOOL message_send_all(struct messaging_context *msg_ctx,
++		      int msg_type,
+ 		      const void *buf, size_t len,
+ 		      BOOL duplicates_allowed,
+ 		      int *n_sent)
+
+Modified: branches/SAMBA_3_0_26/source/nmbd/nmbd_processlogon.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/nmbd/nmbd_processlogon.c	2007-05-15 15:41:37 UTC (rev 22910)
++++ branches/SAMBA_3_0_26/source/nmbd/nmbd_processlogon.c	2007-05-15 15:49:55 UTC (rev 22911)
+@@ -40,8 +40,8 @@
+ {
+         DEBUG(3, ("sending replication message, serial = 0x%04x\n", 
+                   low_serial));
+-        message_send_all(MSG_SMB_SAM_REPL, &low_serial,
+-                         sizeof(low_serial), False, NULL);
++        message_send_all(nmbd_messaging_context(), MSG_SMB_SAM_REPL,
++			 &low_serial, sizeof(low_serial), False, NULL);
+ }
+ 
+ /****************************************************************************
+
+Modified: branches/SAMBA_3_0_26/source/rpc_server/srv_netlog_nt.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/rpc_server/srv_netlog_nt.c	2007-05-15 15:41:37 UTC (rev 22910)
++++ branches/SAMBA_3_0_26/source/rpc_server/srv_netlog_nt.c	2007-05-15 15:49:55 UTC (rev 22911)
+@@ -76,7 +76,8 @@
+ static void send_sync_message(void)
+ {
+         DEBUG(3, ("sending sam synchronisation message\n"));
+-        message_send_all(MSG_SMB_SAM_SYNC, NULL, 0, False, NULL);
++        message_send_all(smbd_messaging_context(), MSG_SMB_SAM_SYNC, NULL, 0,
++			 False, NULL);
+ }
+ 
+ /*************************************************************************
+
+Modified: branches/SAMBA_3_0_26/source/rpc_server/srv_spoolss_nt.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/rpc_server/srv_spoolss_nt.c	2007-05-15 15:41:37 UTC (rev 22910)
++++ branches/SAMBA_3_0_26/source/rpc_server/srv_spoolss_nt.c	2007-05-15 15:49:55 UTC (rev 22911)
+@@ -311,7 +311,8 @@
+ 		
+ 	if ( (ret = smbrun(command, NULL)) == 0 ) {
+ 		/* Tell everyone we updated smb.conf. */
+-		message_send_all(MSG_SMB_CONF_UPDATED, NULL, 0, False, NULL);
++		message_send_all(smbd_messaging_context(),
++				 MSG_SMB_CONF_UPDATED, NULL, 0, False, NULL);
+ 	}
+ 		
+ 	if ( is_print_op )
+@@ -6117,7 +6118,8 @@
+ 	
+ 	if ( (ret = smbrun(command, &fd)) == 0 ) {
+ 		/* Tell everyone we updated smb.conf. */
+-		message_send_all(MSG_SMB_CONF_UPDATED, NULL, 0, False, NULL);
++		message_send_all(smbd_messaging_context(),
++				 MSG_SMB_CONF_UPDATED, NULL, 0, False, NULL);
+ 	}
+ 
+ 	if ( is_print_op )
+
+Modified: branches/SAMBA_3_0_26/source/rpc_server/srv_srvsvc_nt.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/rpc_server/srv_srvsvc_nt.c	2007-05-15 15:41:37 UTC (rev 22910)
++++ branches/SAMBA_3_0_26/source/rpc_server/srv_srvsvc_nt.c	2007-05-15 15:49:55 UTC (rev 22911)
+@@ -1609,7 +1609,9 @@
+ 			
+ 		if ( (ret = smbrun(command, NULL)) == 0 ) {
+ 			/* Tell everyone we updated smb.conf. */
+-			message_send_all(MSG_SMB_CONF_UPDATED, NULL, 0, False, NULL);
++			message_send_all(smbd_messaging_context(),
++					 MSG_SMB_CONF_UPDATED, NULL, 0,
++					 False, NULL);
+ 		}
+ 		
+ 		if ( is_disk_op )
+@@ -1771,7 +1773,8 @@
+ 
+ 	if ( (ret = smbrun(command, NULL)) == 0 ) {
+ 		/* Tell everyone we updated smb.conf. */
+-		message_send_all(MSG_SMB_CONF_UPDATED, NULL, 0, False, NULL);
++		message_send_all(smbd_messaging_context(),
++				 MSG_SMB_CONF_UPDATED, NULL, 0, False, NULL);
+ 	}
+ 
+ 	if ( is_disk_op )
+@@ -1862,7 +1865,8 @@
+ 
+ 	if ( (ret = smbrun(command, NULL)) == 0 ) {
+ 		/* Tell everyone we updated smb.conf. */
+-		message_send_all(MSG_SMB_CONF_UPDATED, NULL, 0, False, NULL);
++		message_send_all(smbd_messaging_context(),
++				 MSG_SMB_CONF_UPDATED, NULL, 0, False, NULL);
+ 	}
+ 
+ 	if ( is_disk_op )
+
+Modified: branches/SAMBA_3_0_26/source/smbd/lanman.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/smbd/lanman.c	2007-05-15 15:41:37 UTC (rev 22910)
++++ branches/SAMBA_3_0_26/source/smbd/lanman.c	2007-05-15 15:49:55 UTC (rev 22911)
+@@ -1893,7 +1893,8 @@
+ 			goto error_exit;
+ 		} else {
+ 			SAFE_FREE(command);
+-			message_send_all(MSG_SMB_CONF_UPDATED, NULL, 0,
++			message_send_all(smbd_messaging_context(),
++					 MSG_SMB_CONF_UPDATED, NULL, 0,
+ 					 False, NULL);
+ 		}
+ 	} else {
+
+Modified: branches/SAMBA_3_0_26/source/smbd/statcache.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/smbd/statcache.c	2007-05-15 15:41:37 UTC (rev 22910)
++++ branches/SAMBA_3_0_26/source/smbd/statcache.c	2007-05-15 15:49:55 UTC (rev 22911)
+@@ -292,7 +292,8 @@
+ void send_stat_cache_delete_message(const char *name)
+ {
+ #ifdef DEVELOPER
+-	message_send_all(MSG_SMB_STAT_CACHE_DELETE,
++	message_send_all(smbd_messaging_context(),
++			MSG_SMB_STAT_CACHE_DELETE,
+ 			name,
+ 			strlen(name)+1,
+ 			True,
+
+Modified: branches/SAMBA_3_0_26/source/utils/smbcontrol.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/utils/smbcontrol.c	2007-05-15 15:41:37 UTC (rev 22910)
++++ branches/SAMBA_3_0_26/source/utils/smbcontrol.c	2007-05-15 15:49:55 UTC (rev 22911)
+@@ -60,7 +60,7 @@
+ 			messaging_send_buf(msg_ctx, pid, msg_type,
+ 					   (uint8 *)buf, len));
+ 
+-	ret = message_send_all(msg_type, buf, len, duplicates,
++	ret = message_send_all(msg_ctx, msg_type, buf, len, duplicates,
+ 			       &n_sent);
+ 	DEBUG(10,("smbcontrol/send_message: broadcast message to "
+ 		  "%d processes\n", n_sent));
+

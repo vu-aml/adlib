@@ -1,0 +1,132 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri May 11 07:54:56 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4BBsuqD022758
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 11 May 2007 07:54:56 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id BE43C162BD1
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 11 May 2007 11:54:54 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.8 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1004)
+	id 8B52E162AC5; Fri, 11 May 2007 11:54:42 +0000 (GMT)
+To: samba-cvs@samba.org
+From: gd@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070511115442.8B52E162AC5@lists.samba.org>
+Date: Fri, 11 May 2007 11:54:42 +0000 (GMT)
+Subject: svn commit: samba r22794 - in branches:
+	SAMBA_3_0/examples/pam_winbind SAMBA_3_0/source/nsswitch
+	SAMBA_3_0_26/examples/pam_winbind SAMBA_3_0_26/source/nsswitch
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: gd
+Date: 2007-05-11 11:54:41 +0000 (Fri, 11 May 2007)
+New Revision: 22794
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22794
+
+Log:
+Add "debug_state" and "silent" to pam_winbind.conf template. Honor the silent
+argument when parsing pam configuration file options.
+
+Guenther
+
+Modified:
+   branches/SAMBA_3_0/examples/pam_winbind/pam_winbind.conf
+   branches/SAMBA_3_0/source/nsswitch/pam_winbind.c
+   branches/SAMBA_3_0_26/examples/pam_winbind/pam_winbind.conf
+   branches/SAMBA_3_0_26/source/nsswitch/pam_winbind.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/examples/pam_winbind/pam_winbind.conf
+===================================================================
+--- branches/SAMBA_3_0/examples/pam_winbind/pam_winbind.conf	2007-05-11 10:15:20 UTC (rev 22793)
++++ branches/SAMBA_3_0/examples/pam_winbind/pam_winbind.conf	2007-05-11 11:54:41 UTC (rev 22794)
+@@ -9,6 +9,9 @@
+ # turn on debugging
+ ;debug = no
+ 
++# turn on extended PAM state debugging
++;debug_state = no
++
+ # request a cached login if possible
+ # (needs "winbind offline logon = yes" in smb.conf)
+ ;cached_login = no
+@@ -24,3 +27,6 @@
+ # make successful authentication dependend on membership of one SID
+ # (can also take a name)
+ ;require_membership_of =
++
++# omit pam conversations
++;silent = no
+
+Modified: branches/SAMBA_3_0/source/nsswitch/pam_winbind.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/pam_winbind.c	2007-05-11 10:15:20 UTC (rev 22793)
++++ branches/SAMBA_3_0/source/nsswitch/pam_winbind.c	2007-05-11 11:54:41 UTC (rev 22794)
+@@ -273,6 +273,8 @@
+ 			ctrl |= WINBIND_DEBUG_ARG;
+ 		else if (!strcasecmp(*v, "debug_state"))
+ 			ctrl |= WINBIND_DEBUG_STATE;
++		else if (!strcasecmp(*v, "silent"))
++			ctrl |= WINBIND_SILENT;
+ 		else if (!strcasecmp(*v, "use_authtok"))
+ 			ctrl |= WINBIND_USE_AUTHTOK_ARG;
+ 		else if (!strcasecmp(*v, "use_first_pass"))
+
+Modified: branches/SAMBA_3_0_26/examples/pam_winbind/pam_winbind.conf
+===================================================================
+--- branches/SAMBA_3_0_26/examples/pam_winbind/pam_winbind.conf	2007-05-11 10:15:20 UTC (rev 22793)
++++ branches/SAMBA_3_0_26/examples/pam_winbind/pam_winbind.conf	2007-05-11 11:54:41 UTC (rev 22794)
+@@ -9,6 +9,9 @@
+ # turn on debugging
+ ;debug = no
+ 
++# turn on extended PAM state debugging
++;debug_state = no
++
+ # request a cached login if possible
+ # (needs "winbind offline logon = yes" in smb.conf)
+ ;cached_login = no
+@@ -24,3 +27,6 @@
+ # make successful authentication dependend on membership of one SID
+ # (can also take a name)
+ ;require_membership_of =
++
++# omit pam conversations
++;silent = no
+
+Modified: branches/SAMBA_3_0_26/source/nsswitch/pam_winbind.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/nsswitch/pam_winbind.c	2007-05-11 10:15:20 UTC (rev 22793)
++++ branches/SAMBA_3_0_26/source/nsswitch/pam_winbind.c	2007-05-11 11:54:41 UTC (rev 22794)
+@@ -273,6 +273,8 @@
+ 			ctrl |= WINBIND_DEBUG_ARG;
+ 		else if (!strcasecmp(*v, "debug_state"))
+ 			ctrl |= WINBIND_DEBUG_STATE;
++		else if (!strcasecmp(*v, "silent"))
++			ctrl |= WINBIND_SILENT;
+ 		else if (!strcasecmp(*v, "use_authtok"))
+ 			ctrl |= WINBIND_USE_AUTHTOK_ARG;
+ 		else if (!strcasecmp(*v, "use_first_pass"))
+

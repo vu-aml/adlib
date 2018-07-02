@@ -1,0 +1,385 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri May 11 07:26:52 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4BBQpqD022460
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 11 May 2007 07:26:51 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 71391162C2E
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 11 May 2007 11:26:49 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=1.0 required=3.8 tests=BAYES_50,NO_REAL_NAME 
+	autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: from mtagate8.de.ibm.com (mtagate8.de.ibm.com [195.212.29.157])
+	by lists.samba.org (Postfix) with ESMTP id 2B75F162ABE
+	for <samba-cvs@samba.org>; Fri, 11 May 2007 11:26:14 +0000 (GMT)
+Received: from d12nrmr1607.megacenter.de.ibm.com
+	(d12nrmr1607.megacenter.de.ibm.com [9.149.167.49])
+	by mtagate8.de.ibm.com (8.13.8/8.13.8) with ESMTP id l4BBQCNj311554
+	for <samba-cvs@samba.org>; Fri, 11 May 2007 11:26:12 GMT
+Received: from d12av02.megacenter.de.ibm.com (d12av02.megacenter.de.ibm.com
+	[9.149.165.228])
+	by d12nrmr1607.megacenter.de.ibm.com (8.13.8/8.13.8/NCO v8.3) with
+	ESMTP id l4BBQCHv3719362
+	for <samba-cvs@samba.org>; Fri, 11 May 2007 13:26:12 +0200
+Received: from d12av02.megacenter.de.ibm.com (loopback [127.0.0.1])
+	by d12av02.megacenter.de.ibm.com (8.12.11.20060308/8.13.3) with ESMTP
+	id l4BBQCCC003762
+	for <samba-cvs@samba.org>; Fri, 11 May 2007 13:26:12 +0200
+Received: from localhost (linux-psomogyi.bud.hu.ibm.com [9.157.226.68])
+	by d12av02.megacenter.de.ibm.com (8.12.11.20060308/8.12.11) with SMTP
+	id l4BBQBAq003748
+	for <samba-cvs@samba.org>; Fri, 11 May 2007 13:26:11 +0200
+Date: Fri, 11 May 2007 13:25:20 +0200
+From: psomogyi@gamax.hu
+To: samba-cvs@samba.org
+Message-ID: <464452a0.o5it45jmdw8Q5LPm%psomogyi@gamax.hu>
+User-Agent: nail 11.25 7/29/05
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Transfer-Encoding: 7bit
+Subject: Rev 94: ctdb/ib: added statistics + some cleanup in
+ http://samba.org/~tridge/psomogyi/
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 94
+revision-id: psomogyi@gamax.hu-20070511112450-wjf21qva3pjifxy9
+parent: psomogyi@gamax.hu-20070502152756-cgv2olqgrryuhpvq
+committer: Peter Somogyi <psomogyi@gamax.hu>
+branch nick: ctdb
+timestamp: Fri 2007-05-11 13:24:50 +0200
+message:
+  ctdb/ib: added statistics + some cleanup
+modified:
+  ib/ibwrapper.c                 ibwrapper.c-20061204130028-0125b4f5a72f4b11
+  ib/ibwrapper_internal.h        ibwrapper_internal.h-20061204130028-47f0a7e658b16ca2
+=== modified file 'ib/ibwrapper.c'
+--- a/ib/ibwrapper.c	2007-05-02 15:27:56 +0000
++++ b/ib/ibwrapper.c	2007-05-11 11:24:50 +0000
+@@ -48,11 +48,6 @@
+ #define IBW_LASTERR_BUFSIZE 512
+ static char ibw_lasterr[IBW_LASTERR_BUFSIZE];
+ 
+-#define IBW_MAX_SEND_WR 256
+-#define IBW_MAX_RECV_WR 1024
+-#define IBW_RECV_BUFSIZE 256
+-#define IBW_RECV_THRESHOLD (1 * 1024 * 1024)
+-
+ static void ibw_event_handler_verbs(struct event_context *ev,
+ 	struct fd_event *fde, uint16_t flags, void *private_data);
+ static int ibw_fill_cq(struct ibw_conn *conn);
+@@ -79,6 +74,13 @@
+ 		return NULL;
+ 	}
+ 
++	#ifdef IBW_ENABLE_STATS
++		/* increment statistics */
++		pctx->stats.n_alloc_mr++;
++		if (n>pctx->stats.n_max_largebuf_size)
++			pctx->stats.n_max_largebuf_size = n;
++	#endif
++
+ 	return buf;
+ }
+ 
+@@ -340,15 +342,18 @@
+ 
+ 	DEBUG(10, ("ibw_refill_cq_recv(cmid: %p)\n", pconn->cm_id));
+ 
+-	list.addr = (uintptr_t) pconn->buf_recv + pctx->opts.recv_bufsize * pconn->recv_index;
+-	wr.wr_id = pconn->recv_index;
+-	pconn->recv_index = (pconn->recv_index + 1) % pctx->opts.max_recv_wr;
+-
+-	rc = ibv_post_recv(pconn->cm_id->qp, &wr, &bad_wr);
+-	if (rc) {
+-		sprintf(ibw_lasterr, "refill/ibv_post_recv failed with %d\n", rc);
+-		DEBUG(0, (ibw_lasterr));
+-		return -2;
++	while(pconn->nrecv)  {
++		list.addr = (uintptr_t) pconn->buf_recv + pctx->opts.recv_bufsize * pconn->recv_index;
++		wr.wr_id = pconn->recv_index;
++		pconn->recv_index = (pconn->recv_index + 1) % pctx->opts.max_recv_wr;
++	
++		rc = ibv_post_recv(pconn->cm_id->qp, &wr, &bad_wr);
++		if (rc) {
++			sprintf(ibw_lasterr, "refill/ibv_post_recv failed with %d\n", rc);
++			DEBUG(0, (ibw_lasterr));
++			return -2;
++		}
++		pconn->nrecv--;
+ 	}
+ 
+ 	return 0;
+@@ -585,6 +590,39 @@
+ 	return;
+ }
+ 
++static int ibw_wc_handler(struct ibw_conn *conn, struct ibv_wc *wc)
++{
++	if (wc->status) {
++		sprintf(ibw_lasterr, "cq completion failed status=%d, opcode=%d\n",
++			wc->status, wc->opcode);
++		return -1;
++	}
++
++	switch(wc->opcode) {
++	case IBV_WC_SEND:
++		DEBUG(10, ("send completion\n"));
++		return ibw_wc_send(conn, wc);
++
++	case IBV_WC_RDMA_WRITE:
++		DEBUG(10, ("rdma write completion\n"));
++		break;
++
++	case IBV_WC_RDMA_READ:
++		DEBUG(10, ("rdma read completion\n"));
++		break;
++
++	case IBV_WC_RECV:
++		DEBUG(10, ("recv completion\n"));
++		return ibw_wc_recv(conn, wc);
++
++	default:
++		break; /* see below */
++	}
++
++	sprintf(ibw_lasterr, "unknown completion %d\n", wc->opcode);
++	return -1;
++}
++
+ static void ibw_event_handler_verbs(struct event_context *ev,
+ 	struct fd_event *fde, uint16_t flags, void *private_data)
+ {
+@@ -592,12 +630,15 @@
+ 	struct ibw_conn_priv *pconn = talloc_get_type(conn->internal, struct ibw_conn_priv);
+ 	struct ibw_ctx_priv *pctx = talloc_get_type(conn->ctx->internal, struct ibw_ctx_priv);
+ 
+-	struct ibv_wc wc;
+-	int rc;
++	struct ibv_wc wc[IBW_MAX_WC_POLL];
++	int rc, i;
+ 	struct ibv_cq *ev_cq;
+ 	void          *ev_ctx;
+ 
+ 	DEBUG(10, ("ibw_event_handler_verbs(%u)\n", (uint32_t)flags));
++	#ifdef IBW_ENABLE_STATS
++		pctx->stats.n_events++;
++	#endif
+ 
+ 	/* TODO: check whether if it's good to have more channels here... */
+ 	rc = ibv_get_cq_event(pconn->verbs_channel, &ev_cq, &ev_ctx);
+@@ -615,44 +656,21 @@
+ 		goto error;
+ 	}
+ 
+-	while((rc=ibv_poll_cq(pconn->cq, 1, &wc))==1) {
+-		if (wc.status) {
+-			sprintf(ibw_lasterr, "cq completion failed status=%d, opcode=%d, rc=%d\n",
+-				wc.status, wc.opcode, rc);
+-			goto error;
+-		}
+-
+-		switch(wc.opcode) {
+-		case IBV_WC_SEND:
+-			DEBUG(10, ("send completion\n"));
+-			if (ibw_wc_send(conn, &wc))
+-				goto error;
+-			break;
+-
+-		case IBV_WC_RDMA_WRITE:
+-			DEBUG(10, ("rdma write completion\n"));
+-			break;
+-	
+-		case IBV_WC_RDMA_READ:
+-			DEBUG(10, ("rdma read completion\n"));
+-			break;
+-
+-		case IBV_WC_RECV:
+-			DEBUG(10, ("recv completion\n"));
+-			if (ibw_wc_recv(conn, &wc))
+-				goto error;
+-			break;
+-
+-		default:
+-			sprintf(ibw_lasterr, "unknown completion %d\n", wc.opcode);
+-			goto error;
+-		}
++	/* we _have_ to use 'while' here not to loose the event */
++	while((rc=ibv_poll_cq(pconn->cq, IBW_MAX_WC_POLL, wc))>0) {
++		for(i=0; i<rc; i++)
++			if (ibw_wc_handler(conn, &wc[i]))
++				goto error;
+ 	}
+-	if (rc!=0) {
++	if (rc<0) {
+ 		sprintf(ibw_lasterr, "ibv_poll_cq error %d\n", rc);
+ 		goto error;
+ 	}
+ 
++	if (pconn->nrecv) {
++		ibw_refill_cq_recv(conn);
++	}
++
+ 	ibv_ack_cq_events(pconn->cq, 1);
+ 
+ 	return;
+@@ -715,6 +733,9 @@
+ 
+ 	DEBUG(10, ("ibw_wc_send(cmid: %p, wr_id: %u, bl: %u)\n",
+ 		pconn->cm_id, (uint32_t)wc->wr_id, (uint32_t)wc->byte_len));
++	#ifdef IBW_ENABLE_STATS
++		pctx->stats.n_send_wc++;
++	#endif
+ 
+ 	assert(pconn->cm_id->qp->qp_num==wc->qp_num);
+ 	assert(wc->wr_id >= pctx->opts.max_recv_wr);
+@@ -826,6 +847,11 @@
+ 
+ 	DEBUG(10, ("ibw_wc_recv: cmid=%p, wr_id: %u, bl: %u\n",
+ 		pconn->cm_id, (uint32_t)wc->wr_id, remain));
++	#ifdef IBW_ENABLE_STATS
++		pctx->stats.n_recv_wc++;
++	#endif
++
++	pconn->nrecv++;
+ 
+ 	assert(pconn->cm_id->qp->qp_num==wc->qp_num);
+ 	assert((int)wc->wr_id < pctx->opts.max_recv_wr);
+@@ -891,9 +917,6 @@
+ 		}
+ 	} /* <remain> is always decreased at least by 1 */
+ 
+-	if (ibw_refill_cq_recv(conn))
+-		goto error;
+-
+ 	return 0;
+ 
+ error:
+@@ -1216,6 +1239,9 @@
+ 			goto error;
+ 		}
+ 		*buf = (void *)p->buf_large;
++		#ifdef IBW_ENABLE_STATS
++			pctx->stats.n_large_allocs++;
++		#endif
+ 
+ 		DLIST_REMOVE(pconn->extra_avail, p);
+ 		/* we don't have prepared index for this, so that
+@@ -1312,6 +1338,9 @@
+ 
+ 		DEBUG(10, ("ibw_send#frag(cmid: %p, buf: %p, len: %u)\n",
+ 			pconn->cm_id, buf, len));
++		#ifdef IBW_ENABLE_STATS
++			pctx->stats.n_frags++;
++		#endif
+ 
+ 		/* single threaded => no race here: */
+ 		assert(p->ref_cnt==0);
+@@ -1337,33 +1366,6 @@
+ 	return rc;
+ }
+ 
+-int ibw_cancel_send_buf(struct ibw_conn *conn, void *buf, void *key)
+-{
+-	struct ibw_ctx_priv *pctx = talloc_get_type(conn->ctx->internal, struct ibw_ctx_priv);
+-	struct ibw_conn_priv *pconn = talloc_get_type(conn->internal, struct ibw_conn_priv);
+-	struct ibw_wr *p = talloc_get_type(key, struct ibw_wr);
+-
+-	assert(p!=NULL);
+-	assert(buf!=NULL);
+-	assert(conn!=NULL);
+-
+-	if (p->buf_large!=NULL)
+-		ibw_free_mr(&p->buf_large, &p->mr_large);
+-
+-	/* parallel case */
+-	if (p->wr_id < pctx->opts.max_send_wr) {
+-		DEBUG(10, ("ibw_cancel_send_buf#1 %u", (int)p->wr_id));
+-		DLIST_REMOVE(pconn->wr_list_used, p);
+-		DLIST_ADD(pconn->wr_list_avail, p);
+-	} else { /* "extra" packet */
+-		DEBUG(10, ("ibw_cancel_send_buf#2 %u", (int)p->wr_id));
+-		DLIST_REMOVE(pconn->extra_sent, p);
+-		DLIST_ADD(pconn->extra_avail, p);
+-	}
+-
+-	return 0;
+-}
+-
+ const char *ibw_getLastError(void)
+ {
+ 	return ibw_lasterr;
+
+=== modified file 'ib/ibwrapper_internal.h'
+--- a/ib/ibwrapper_internal.h	2007-02-08 18:06:14 +0000
++++ b/ib/ibwrapper_internal.h	2007-05-11 11:24:50 +0000
+@@ -21,6 +21,17 @@
+  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+  */
+ 
++
++#define IBW_MAX_SEND_WR 256
++#define IBW_MAX_RECV_WR 1024
++#define IBW_RECV_BUFSIZE 256
++#define IBW_RECV_THRESHOLD (1 * 1024 * 1024)
++#define IBW_MAX_WC_POLL 10
++
++/* eats some CPU - can't afford here in production */
++#define talloc_get_type(ptr, type) (type *)ptr
++#define IBW_ENABLE_STATS
++
+ struct ibw_opts {
+ 	uint32_t	max_send_wr;
+ 	uint32_t	max_recv_wr;
+@@ -45,6 +56,16 @@
+ 	struct ibw_wr *qnext, *qprev; /* in queue */
+ };
+ 
++struct ibw_stats {
++	uint32_t	n_alloc_mr;
++	uint32_t	n_large_allocs;
++	uint32_t	n_frags;
++	uint32_t	n_max_largebuf_size;
++	uint32_t	n_send_wc;
++	uint32_t	n_recv_wc;
++	uint32_t	n_events;
++};
++
+ struct ibw_ctx_priv {
+ 	struct event_context *ectx;
+ 
+@@ -59,6 +80,9 @@
+ 	ibw_receive_fn_t receive_func; /* see ibw_init */
+ 
+ 	long	pagesize; /* sysconf result for memalign */
++
++	/* some stats */
++	struct ibw_stats stats;
+ };
+ 
+ struct ibw_part {
+@@ -96,6 +120,7 @@
+ 	struct ibv_mr *mr_recv;
+ 	int recv_index; /* index of the next recv buffer when refilling */
+ 	struct ibw_part part;
++	int	nrecv; /* received packets */
+ };
+ 
+ /* remove an element from a list - element doesn't have to be in list. */
+

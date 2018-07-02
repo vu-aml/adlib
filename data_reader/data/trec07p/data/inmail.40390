@@ -1,0 +1,122 @@
+From perl6-all-return-81486-ktwarwic=speedy.uwaterloo.ca@perl.org  Sun May 20 15:53:55 2007
+Return-Path: <perl6-all-return-81486-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4KJrsqD022951
+	for <ktwarwic@flax9.uwaterloo.ca>; Sun, 20 May 2007 15:53:55 -0400
+Received: (qmail 17755 invoked by uid 514); 20 May 2007 19:53:49 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 17750 invoked from network); 20 May 2007 19:53:49 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DKIM_SIGNED,DK_POLICY_SIGNSOME,DK_SIGNED,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Delivered-To: parrotbug-followup@parrotcode.org
+Received-SPF: pass (x1.develooper.com: domain of bgeron@gmail.com designates 66.249.92.174 as permitted sender)
+DKIM-Signature: a=rsa-sha1; c=relaxed/relaxed;
+        d=gmail.com; s=beta;
+        h=domainkey-signature:received:received:message-id:date:from:user-agent:mime-version:to:subject:references:in-reply-to:x-enigmail-version:openpgp:content-type;
+        b=AgDad2zeCU0rXhfsm6WRhzZZ1yf9osTb82rGWIJBU31f8T76c9wbGV5Kwmd+n4+s1CDpenptgmkBDnxxoZwh6rlOpwZU6VYuwzW/EydqXnwf2m+9yPXTR+Iz5m/6vylqBFYFlACPujkK6hnVCAbvASz9q/QsKiBIjIL6LpQ939U=
+DomainKey-Signature: a=rsa-sha1; c=nofws;
+        d=gmail.com; s=beta;
+        h=received:message-id:date:from:user-agent:mime-version:to:subject:references:in-reply-to:x-enigmail-version:openpgp:content-type;
+        b=Pk5gcPYmMkfRfEHyuhUMWLLws+fjvDv/SuKTdKCYWPmKsSNcgJKzM1ivLKPOzrZHQRSZFEAnivQ3F/xrlmQ2B6s1zQl7yv2vAXIpPTcbYmw289iyow76wlBvMUeflvV1Thg0ESXqXwKGOQrqNVzCNqFprspd2Yf+HYIGmAj8VSE=
+Message-ID: <4650A6CE.6060104@gmail.com>
+Date: Sun, 20 May 2007 21:51:42 +0200
+From: Bram Geron <bgeron@gmail.com>
+User-Agent: Icedove 1.5.0.10 (X11/20070329)
+MIME-Version: 1.0
+To: parrotbug-followup@parrotcode.org
+Subject: Re: [perl #43006] Tail call force-frees current context
+References: <46507292.4040608@gmail.com>
+In-Reply-To: <46507292.4040608@gmail.com>
+X-Enigmail-Version: 0.94.2.0
+OpenPGP: id=E7B9E65E
+Content-Type: multipart/mixed;
+ boundary="------------010503030106080006080400"
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED,SPF_PASS
+
+--------------010503030106080006080400
+Content-Type: text/plain; charset=ISO-8859-1
+Content-Transfer-Encoding: 7bit
+
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA1
+
+Bram Geron wrote:
+> The patch in <parrot.solution1.patch> fixes the problem for me.
+
+I realized that contexts currently initially have a ref_count of 0, if
+they're not used as :outer targets for other subs. So in 'normal'
+situations, the caller's context's ref_count now drops from 0 to -1 in a
+tail call, and since -1 != 0 the caller's context will never be freed,
+resulting in a memory leak. Attached <parrot.solution1.updated.patch>
+should fix that.
+
+Still, I'm left with a question. How can we DOD a closure? To me it
+seems that once a closure exists, it references its context. Often the
+context is still left in a register, so the context references the
+closure PMC, which in turn references the closure. Because we use
+reference counting in these cases, no count ever drops to zero, and they
+all live forever.
+
+Sorry for the extra disturbance, thanks for looking at my mail,
+- --
+Bram Geron | GPG 0xE7B9E65E
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.6 (GNU/Linux)
+Comment: Using GnuPG with Mozilla - http://enigmail.mozdev.org
+
+iD8DBQFGUKbOvquQbee55l4RAp5wAJ0czwrfQc5Ta/xtMn7FqhSeptq/awCfbNg2
+FxMZOHymYqUQCNoyK54pBmo=
+=bjro
+-----END PGP SIGNATURE-----
+
+--------------010503030106080006080400
+Content-Type: text/x-patch;
+ name="parrot.solution1.updated.patch"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline;
+ filename="parrot.solution1.updated.patch"
+
+Index: src/pmc/sub.pmc
+===================================================================
+--- src/pmc/sub.pmc	(revision 18597)
++++ src/pmc/sub.pmc	(working copy)
+@@ -284,8 +284,9 @@
+         if (PObj_get_FLAGS(SELF) & SUB_FLAG_IS_OUTER) {
+             /* don't destroy context */
+             ccont->vtable = interp->vtables[enum_class_Continuation];
+-            context->ref_count++;
+         }
++        /* reference counting should work */
++        context->ref_count++;
+ 
+         if (!PMC_IS_NULL(INTERP->current_object)) {
+             context->current_object = INTERP->current_object;
+@@ -322,7 +323,7 @@
+                 PObj_get_FLAGS(ccont) &= ~SUB_FLAG_TAILCALL;
+                 context->caller_ctx    = caller_ctx->caller_ctx;
+ 
+-                Parrot_free_context(INTERP, caller_ctx, 1);
++                Parrot_free_context(INTERP, caller_ctx, 0);
+             }
+         }
+ 
+
+--------------010503030106080006080400--
+

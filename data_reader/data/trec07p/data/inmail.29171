@@ -1,0 +1,205 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat May  5 03:55:24 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l457tNqD025051
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 5 May 2007 03:55:23 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 19335162BE3
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat,  5 May 2007 07:55:23 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id E58CC162AD0; Sat,  5 May 2007 07:54:42 +0000 (GMT)
+Date: Sat, 05 May 2007 17:35:29 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070505075442.E58CC162AD0@lists.samba.org>
+Subject: Rev 261: merged vnn map broadcast from ronnie in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 261
+revision-id: tridge@samba.org-20070505073528-7a0k8rak6j00p6bl
+parent: tridge@samba.org-20070505071959-wvf5a3e37mch3vy3
+parent: sahlberg@ronnie-20070505031726-667ed50c2053a8aa
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Sat 2007-05-05 17:35:28 +1000
+message:
+  merged vnn map broadcast from ronnie
+modified:
+  common/ctdb.c                  ctdb.c-20061127094323-t50f58d65iaao5of-2
+  common/ctdb_control.c          ctdb_control.c-20070426122724-j6gkpiofhbwdin63-1
+  common/ctdb_ltdb.c             ctdb_ltdb.c-20061128065342-to93h6eejj5kon81-2
+  common/ctdb_traverse.c         ctdb_traverse.c-20070503021550-ztfs5rwx8jfm8qqx-1
+  include/ctdb_private.h         ctdb_private.h-20061117234101-o3qt14umlg9en8z0-13
+  tools/ctdb_control.c           ctdb_control.c-20070426122705-9ehj1l5lu2gn9kuj-1
+    ------------------------------------------------------------
+    revno: 197.1.57
+    merged: sahlberg@ronnie-20070505031726-667ed50c2053a8aa
+    parent: sahlberg@ronnie-20070505014644-64544864493dc596
+    committer: Ronnie Sahlberg <sahlberg@ronnie>
+    branch nick: ctdb
+    timestamp: Sat 2007-05-05 13:17:26 +1000
+    message:
+      split the vnn broadcast address into two
+      one broadcast address for all nodes
+      and one broadcast address for all nodes in the current vnnmap
+      
+      update all useage of the old flag to now only broadcast to the vnnmap
+      except for tools/ctdb_control where it makes more sense to broadcast to 
+      all nodes
+    ------------------------------------------------------------
+    revno: 197.1.56
+    merged: sahlberg@ronnie-20070505014644-64544864493dc596
+    parent: sahlberg@ronnie-20070504152230-2e8efa9c50c6791a
+    parent: tridge@samba.org-20070505010310-wlknjyla4cqkbdld
+    committer: Ronnie Sahlberg <sahlberg@ronnie>
+    branch nick: ctdb
+    timestamp: Sat 2007-05-05 11:46:44 +1000
+    message:
+      merge from tridge
+=== modified file 'common/ctdb.c'
+--- a/common/ctdb.c	2007-05-04 22:11:54 +0000
++++ b/common/ctdb.c	2007-05-05 03:17:26 +0000
+@@ -469,7 +469,7 @@
+ /*
+   broadcast a packet to all nodes
+ */
+-static void ctdb_broadcast_packet(struct ctdb_context *ctdb, struct ctdb_req_header *hdr)
++static void ctdb_broadcast_packet_all(struct ctdb_context *ctdb, struct ctdb_req_header *hdr)
+ {
+ 	int i;
+ 	for (i=0;i<ctdb_get_num_nodes(ctdb);i++) {
+@@ -479,14 +479,30 @@
+ }
+ 
+ /*
++  broadcast a packet to all nodes in the current vnnmap
++*/
++static void ctdb_broadcast_packet_vnnmap(struct ctdb_context *ctdb, struct ctdb_req_header *hdr)
++{
++	int i;
++	for (i=0;i<ctdb->vnn_map->size;i++) {
++		hdr->destnode = ctdb->vnn_map->map[i];
++		ctdb_queue_packet(ctdb, hdr);
++	}
++}
++
++/*
+   queue a packet or die
+ */
+ void ctdb_queue_packet(struct ctdb_context *ctdb, struct ctdb_req_header *hdr)
+ {
+ 	struct ctdb_node *node;
+ 
+-	if (hdr->destnode == CTDB_BROADCAST_VNN) {
+-		ctdb_broadcast_packet(ctdb, hdr);
++	switch (hdr->destnode) {
++	case CTDB_BROADCAST_ALL:
++		ctdb_broadcast_packet_all(ctdb, hdr);
++		return;
++	case CTDB_BROADCAST_VNNMAP:
++		ctdb_broadcast_packet_vnnmap(ctdb, hdr);
+ 		return;
+ 	}
+ 
+
+=== modified file 'common/ctdb_control.c'
+--- a/common/ctdb_control.c	2007-05-05 04:09:46 +0000
++++ b/common/ctdb_control.c	2007-05-05 07:35:28 +0000
+@@ -533,7 +533,7 @@
+ 	struct ctdb_control_state *state;
+ 	size_t len;
+ 
+-	if (destnode == CTDB_BROADCAST_VNN && !(flags & CTDB_CTRL_FLAG_NOREPLY)) {
++	if (((destnode == CTDB_BROADCAST_VNNMAP) || (destnode == CTDB_BROADCAST_VNNMAP)) && !(flags & CTDB_CTRL_FLAG_NOREPLY)) {
+ 		DEBUG(0,("Attempt to broadcast control without NOREPLY\n"));
+ 		return -1;
+ 	}
+
+=== modified file 'common/ctdb_ltdb.c'
+--- a/common/ctdb_ltdb.c	2007-05-05 07:19:59 +0000
++++ b/common/ctdb_ltdb.c	2007-05-05 07:35:28 +0000
+@@ -387,7 +387,7 @@
+ 	}
+ 	
+ 	/* tell all the other nodes about this database */
+-	ctdb_daemon_send_control(ctdb, CTDB_BROADCAST_VNN, 0,
++	ctdb_daemon_send_control(ctdb, CTDB_BROADCAST_VNNMAP, 0,
+ 				 CTDB_CONTROL_DB_ATTACH, 0, CTDB_CTRL_FLAG_NOREPLY,
+ 				 indata, NULL, NULL);
+ 
+@@ -433,7 +433,7 @@
+ 		TDB_DATA data;
+ 		data.dptr = (uint8_t *)&ctdb_db->db_id;
+ 		data.dsize = sizeof(uint32_t);
+-		ctdb_daemon_send_control(ctdb, CTDB_BROADCAST_VNN, 0,
++		ctdb_daemon_send_control(ctdb, CTDB_BROADCAST_VNNMAP, 0,
+ 					 CTDB_CONTROL_UPDATE_SEQNUM, 0, CTDB_CTRL_FLAG_NOREPLY,
+ 					 data, NULL, NULL);		
+ 	}
+
+=== modified file 'common/ctdb_traverse.c'
+--- a/common/ctdb_traverse.c	2007-05-05 07:19:59 +0000
++++ b/common/ctdb_traverse.c	2007-05-05 07:35:28 +0000
+@@ -262,7 +262,7 @@
+ 	data.dsize = sizeof(r);
+ 
+ 	/* tell all the nodes in the cluster to start sending records to this node */
+-	ret = ctdb_daemon_send_control(ctdb, CTDB_BROADCAST_VNN, 0, CTDB_CONTROL_TRAVERSE_ALL,
++	ret = ctdb_daemon_send_control(ctdb, CTDB_BROADCAST_VNNMAP, 0, CTDB_CONTROL_TRAVERSE_ALL,
+ 				       0, CTDB_CTRL_FLAG_NOREPLY, data, NULL, NULL);
+ 	if (ret != 0) {
+ 		talloc_free(state);
+
+=== modified file 'include/ctdb_private.h'
+--- a/include/ctdb_private.h	2007-05-05 04:09:46 +0000
++++ b/include/ctdb_private.h	2007-05-05 07:35:28 +0000
+@@ -33,8 +33,12 @@
+ #define CTDB_NULL_FUNC      0xFF000001
+ #define CTDB_FETCH_FUNC     0xFF000002
+ 
+-#define CTDB_CURRENT_NODE  0xF0000001
+-#define CTDB_BROADCAST_VNN 0xF0000002
++/* used on the domain socket, send a pdu to the local daemon */
++#define CTDB_CURRENT_NODE     0xF0000001
++/* send a broadcast to all nodes in the cluster, active or not */
++#define CTDB_BROADCAST_ALL    0xF0000002
++/* send a broadcast to all nodes in the current vnn map */
++#define CTDB_BROADCAST_VNNMAP 0xF0000003
+ 
+ #define CTDB_MAX_REDIRECT_COUNT 3
+ #define CTDB_DEFAULT_SEQNUM_FREQUENCY 1
+
+=== modified file 'tools/ctdb_control.c'
+--- a/tools/ctdb_control.c	2007-05-05 04:09:46 +0000
++++ b/tools/ctdb_control.c	2007-05-05 07:35:28 +0000
+@@ -946,7 +946,7 @@
+ 		usage();
+ 	}
+ 	if (strcmp(argv[0], "all") == 0) {
+-		vnn = CTDB_BROADCAST_VNN;
++		vnn = CTDB_BROADCAST_ALL;
+ 	} else {
+ 		vnn = strtoul(argv[0], NULL, 0);
+ 	}
+

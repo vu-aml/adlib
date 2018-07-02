@@ -1,0 +1,826 @@
+From sugar-bounces@laptop.org  Wed May 16 06:31:41 2007
+Return-Path: <sugar-bounces@laptop.org>
+Received: from pedal.laptop.org (pedal.laptop.org [18.85.2.148])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4GAVeqD017389
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 16 May 2007 06:31:41 -0400
+Received: from pedal.laptop.org (localhost [127.0.0.1])
+	by pedal.laptop.org (Postfix) with ESMTP id 8B2A24F688;
+	Wed, 16 May 2007 06:31:08 -0400 (EDT)
+X-Original-To: sugar@laptop.org
+Delivered-To: sugar@laptop.org
+Received: from spam.laptop.org (spam.laptop.org [18.85.46.23])
+	by pedal.laptop.org (Postfix) with ESMTP id C27ED4F688
+	for <sugar@laptop.org>; Wed, 16 May 2007 06:31:07 -0400 (EDT)
+X-ASG-Debug-ID: 1179311489-55e500050000-3Xmyjt
+X-Barracuda-URL: http://18.85.46.23:8000/cgi-bin/mark.cgi
+X-Barracuda-Connect: dhansak.collabora.co.uk[195.10.223.134]
+X-Barracuda-Start-Time: 1179311489
+X-Barracuda-Encrypted: DHE-RSA-AES256-SHA
+Received: from dhansak.collabora.co.uk (dhansak.collabora.co.uk
+	[195.10.223.134])
+	(using TLSv1 with cipher DHE-RSA-AES256-SHA (256/256 bits))
+	(No client certificate requested)
+	by spam.laptop.org (Spam Firewall) with ESMTP id 7CC89BA37
+	for <sugar@laptop.org>; Wed, 16 May 2007 06:31:30 -0400 (EDT)
+Received: by dhansak.collabora.co.uk (Postfix, from userid 1014)
+	id 6B79630AFBBF; Wed, 16 May 2007 11:31:29 +0100 (BST)
+Date: Wed, 16 May 2007 11:31:24 +0100
+From: Simon McVittie <simon.mcvittie@collabora.co.uk>
+To: sugar@laptop.org
+X-ASG-Orig-Subj: [PATCH] sugar.presence.presenceservice,
+	services/presence: Use named loggers.
+Message-ID: <20070516103124.GA23582@celebrin.pseudorandom.co.uk>
+Mail-Followup-To: sugar@laptop.org
+MIME-Version: 1.0
+Content-Disposition: inline
+User-Agent: Mutt/1.5.13 (2006-08-11)
+X-Barracuda-Bayes: INNOCENT GLOBAL 0.0000 1.0000 -2.0210
+X-Barracuda-Virus-Scanned: by Barracuda Spam Firewall at laptop.org
+X-Barracuda-Spam-Score: -0.97
+X-Barracuda-Spam-Status: No, SCORE=-0.97 using global scores of TAG_LEVEL=3.5
+	QUARANTINE_LEVEL=1000.0 KILL_LEVEL=5.5 tests=BSF_RULE_7582B
+X-Barracuda-Spam-Report: Code version 3.1, rules version 3.1.17105
+	Rule breakdown below
+	pts rule name              description
+	---- ----------------------
+	--------------------------------------------------
+	1.05 BSF_RULE_7582B         BODY: Custom Rule 7582B
+Subject: [sugar] [PATCH] sugar.presence.presenceservice,
+	services/presence: Use named loggers.
+X-BeenThere: sugar@laptop.org
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Discussion of OLPC design,
+	desktop platform and user experience" <sugar.laptop.org>
+List-Unsubscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=unsubscribe>
+List-Archive: <http://mailman.laptop.org/pipermail/sugar>
+List-Post: <mailto:sugar@laptop.org>
+List-Help: <mailto:sugar-request@laptop.org?subject=help>
+List-Subscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: sugar-bounces@laptop.org
+Errors-To: sugar-bounces@laptop.org
+
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA1
+
+This causes events in the log to be annotated with the module that emitted the
+message.
+
+Before: DEBUG - root: Starting up...
+After: DEBUG - s-p-s.server_plugin: Starting up...
+
+I've used a log domain of "sugar.presence..." for the client library and
+e.g. "s-p-s.activity" for the service internals.
+- ---
+ services/presence/activity.py            |   14 ++++---
+ services/presence/buddy.py               |   27 +++++++------
+ services/presence/presenceservice.py     |   33 ++++++++-------
+ services/presence/psutils.py             |   11 +++--
+ services/presence/server_plugin.py       |   64 +++++++++++++++--------------
+ services/presence/sugar-presence-service |   12 ++++--
+ sugar/presence/presenceservice.py        |   16 ++++---
+ 7 files changed, 98 insertions(+), 79 deletions(-)
+
+diff --git a/services/presence/activity.py b/services/presence/activity.py
+index d295ce3..ee91bc8 100644
+- --- a/services/presence/activity.py
++++ b/services/presence/activity.py
+@@ -36,6 +36,8 @@ _PROP_LOCAL = "local"
+ _PROP_JOINED = "joined"
+ _PROP_CUSTOM_PROPS = "custom-props"
+ 
++_logger = logging.getLogger('s-p-s.activity')
++
+ class Activity(ExportedGObject):
+     """Represents a potentially shareable activity on the network.
+     """
+@@ -359,7 +361,7 @@ class Activity(ExportedGObject):
+         Called by the _shared_cb and _joined_cb methods.
+         """
+         if not text_channel:
+- -            logging.debug("Error sharing: text channel was None, shouldn't happen")
++            _logger.debug("Error sharing: text channel was None, shouldn't happen")
+             raise RuntimeError("Plugin returned invalid text channel")
+ 
+         self._text_channel = text_channel
+@@ -379,14 +381,14 @@ class Activity(ExportedGObject):
+         self._tp.disconnect(sigid)
+ 
+         if exc:
+- -            logging.debug("Share of activity %s failed: %s" % (self._id, exc))
++            _logger.debug("Share of activity %s failed: %s" % (self._id, exc))
+             async_err_cb(exc)
+         else:
+             self._handle_share_join(tp, text_channel)
+             self.send_properties()
+             owner.add_activity(self)
+             async_cb(dbus.ObjectPath(self._object_path))
+- -            logging.debug("Share of activity %s succeeded." % self._id)
++            _logger.debug("Share of activity %s succeeded." % self._id)
+ 
+     def _share(self, (async_cb, async_err_cb), owner):
+         """XXX - not documented yet
+@@ -394,13 +396,13 @@ class Activity(ExportedGObject):
+         XXX - This method is called externally by the PresenceService despite the fact
+         that this is supposed to be an internal method!
+         """
+- -        logging.debug("Starting share of activity %s" % self._id)
++        _logger.debug("Starting share of activity %s" % self._id)
+         if self._joined:
+             async_err_cb(RuntimeError("Already shared activity %s" % self.props.id))
+             return
+         sigid = self._tp.connect('activity-shared', self._shared_cb)
+         self._tp.share_activity(self.props.id, (sigid, owner, async_cb, async_err_cb))
+- -        logging.debug("done with share attempt %s" % self._id)
++        _logger.debug("done with share attempt %s" % self._id)
+ 
+     def _joined_cb(self, tp, activity_id, text_channel, exc, userdata):
+         """XXX - not documented yet
+@@ -506,7 +508,7 @@ class Activity(ExportedGObject):
+             if type != self._type:
+                 # Type can never be changed after first set
+                 if self._type:
+- -                    logging.debug("Activity type changed by network; this is illegal")
++                    _logger.debug("Activity type changed by network; this is illegal")
+                 else:
+                     self._type = type
+                     changed = True
+diff --git a/services/presence/buddy.py b/services/presence/buddy.py
+index 200401b..429f824 100644
+- --- a/services/presence/buddy.py
++++ b/services/presence/buddy.py
+@@ -49,6 +49,9 @@ _PROP_VALID = "valid"
+ # Will go away soon
+ _PROP_IP4_ADDRESS = "ip4-address"
+ 
++_logger = logging.getLogger('s-p-s.buddy')
++
++
+ class Buddy(ExportedGObject):
+     """Person on the network (tracks properties and shared activites)
+     
+@@ -130,7 +133,7 @@ class Buddy(ExportedGObject):
+         _ALLOWED_INIT_PROPS = [_PROP_NICK, _PROP_KEY, _PROP_ICON, _PROP_CURACT, _PROP_COLOR, _PROP_IP4_ADDRESS]
+         for (key, value) in kwargs.items():
+             if key not in _ALLOWED_INIT_PROPS:
+- -                logging.debug("Invalid init property '%s'; ignoring..." % key)
++                _logger.debug("Invalid init property '%s'; ignoring..." % key)
+                 del kwargs[key]
+ 
+         # Set icon after superclass init, because it sends DBus and GObject
+@@ -625,7 +628,7 @@ class TestOwner(GenericOwner):
+         color = xocolor.XoColor().to_string()
+         icon = _get_random_image()
+ 
+- -        logging.debug("pubkey is %s" % pubkey)
++        _logger.debug("pubkey is %s" % pubkey)
+         GenericOwner.__init__(self, ps, bus_name, object_id, key=pubkey, nick=nick,
+                 color=color, icon=icon, registered=registered, key_hash=privkey_hash)
+ 
+@@ -636,13 +639,13 @@ class TestOwner(GenericOwner):
+     def _share_reply_cb(self, actid, object_path):
+         activity = self._ps.internal_get_activity(actid)
+         if not activity or not object_path:
+- -            logging.debug("Couldn't find activity %s even though it was shared." % actid)
++            _logger.debug("Couldn't find activity %s even though it was shared." % actid)
+             return
+- -        logging.debug("Shared activity %s (%s)." % (actid, activity.props.name))
++        _logger.debug("Shared activity %s (%s)." % (actid, activity.props.name))
+         self._test_activities.append(activity)
+ 
+     def _share_error_cb(self, actid, err):
+- -        logging.debug("Error sharing activity %s: %s" % (actid, str(err)))
++        _logger.debug("Error sharing activity %s: %s" % (actid, str(err)))
+ 
+     def _ps_connection_status_cb(self, ps, connected):
+         if not connected:
+@@ -735,7 +738,7 @@ def _hash_private_key(self):
+         lines = f.readlines()
+         f.close()
+     except IOError, e:
+- -        logging.error("Error reading private key: %s" % e)
++        _logger.error("Error reading private key: %s" % e)
+         return
+ 
+     key = ""
+@@ -747,7 +750,7 @@ def _hash_private_key(self):
+             continue
+         key += l
+     if not len(key):
+- -        logging.error("Error parsing public key.")
++        _logger.error("Error parsing public key.")
+ 
+     # hash it
+     key_hash = util._sha_data(key)
+@@ -759,7 +762,7 @@ def _extract_public_key(keyfile):
+         lines = f.readlines()
+         f.close()
+     except IOError, e:
+- -        logging.error("Error reading public key: %s" % e)
++        _logger.error("Error reading public key: %s" % e)
+         return None
+ 
+     # Extract the public key
+@@ -772,7 +775,7 @@ def _extract_public_key(keyfile):
+         key = l[len(magic):]
+         break
+     if not len(key):
+- -        logging.error("Error parsing public key.")
++        _logger.error("Error parsing public key.")
+         return None
+     return key
+ 
+@@ -784,7 +787,7 @@ def _extract_private_key(keyfile):
+         lines = f.readlines()
+         f.close()
+     except IOError, e:
+- -        logging.error("Error reading private key: %s" % e)
++        _logger.error("Error reading private key: %s" % e)
+         return None
+ 
+     key = ""
+@@ -796,7 +799,7 @@ def _extract_private_key(keyfile):
+             continue
+         key += l
+     if not len(key):
+- -        logging.error("Error parsing private key.")
++        _logger.error("Error parsing private key.")
+         return None
+     return key
+ 
+@@ -821,7 +824,7 @@ def _get_new_keypair(num):
+     print "Done."
+     pubkey = privkey = None
+     if s != 0:
+- -        logging.error("Could not generate key pair: %d (%s)" % (s, o))
++        _logger.error("Could not generate key pair: %d (%s)" % (s, o))
+     else:
+         pubkey = _extract_public_key(pubkeyfile)
+         privkey = _extract_private_key(privkeyfile)
+diff --git a/services/presence/presenceservice.py b/services/presence/presenceservice.py
+index 6b67357..c554ce6 100644
+- --- a/services/presence/presenceservice.py
++++ b/services/presence/presenceservice.py
+@@ -40,6 +40,9 @@ _PRESENCE_INTERFACE = "org.laptop.Sugar.Presence"
+ _PRESENCE_PATH = "/org/laptop/Sugar/Presence"
+ 
+ 
++_logger = logging.getLogger('s-p-s.presenceservice')
++
++
+ class NotFoundError(dbus.DBusException):
+     def __init__(self, msg):
+         dbus.DBusException.__init__(self, msg)
+@@ -101,7 +104,7 @@ class PresenceService(ExportedGObject):
+ 
+     def _connection_disconnected_cb(self, foo=None):
+         """Log event when D-Bus kicks us off the bus for some reason"""
+- -        logging.debug("Disconnected from session bus!!!")
++        _logger.debug("Disconnected from session bus!!!")
+ 
+     def _server_status_cb(self, plugin, status, reason):
+         # FIXME: figure out connection status when we have a salut plugin too
+@@ -135,10 +138,10 @@ class PresenceService(ExportedGObject):
+     def _buddy_validity_changed_cb(self, buddy, valid):
+         if valid:
+             self.BuddyAppeared(buddy.object_path())
+- -            logging.debug("New Buddy: %s (%s)" % (buddy.props.nick, buddy.props.color))
++            _logger.debug("New Buddy: %s (%s)" % (buddy.props.nick, buddy.props.color))
+         else:
+             self.BuddyDisappeared(buddy.object_path())
+- -            logging.debug("Buddy left: %s (%s)" % (buddy.props.nick, buddy.props.color))
++            _logger.debug("Buddy left: %s (%s)" % (buddy.props.nick, buddy.props.color))
+ 
+     def _contact_offline(self, tp, handle):
+         if not self._handles_buddies[tp].has_key(handle):
+@@ -152,7 +155,7 @@ class PresenceService(ExportedGObject):
+         if not buddy.handles:
+             if buddy.props.valid:
+                 self.BuddyDisappeared(buddy.object_path())
+- -                logging.debug("Buddy left: %s (%s)" % (buddy.props.nick, buddy.props.color))
++                _logger.debug("Buddy left: %s (%s)" % (buddy.props.nick, buddy.props.color))
+             self._buddies.pop(key)
+ 
+     def _get_next_object_id(self):
+@@ -163,21 +166,21 @@ class PresenceService(ExportedGObject):
+     def _avatar_updated(self, tp, handle, avatar):
+         buddy = self._handles_buddies[tp].get(handle)
+         if buddy and not buddy.props.owner:
+- -            logging.debug("Buddy %s icon updated" % buddy.props.nick)
++            _logger.debug("Buddy %s icon updated" % buddy.props.nick)
+             buddy.props.icon = avatar
+ 
+     def _buddy_properties_changed(self, tp, handle, properties):
+         buddy = self._handles_buddies[tp].get(handle)
+         if buddy:
+             buddy.set_properties(properties)
+- -            logging.debug("Buddy %s properties updated: %s" % (buddy.props.nick, properties.keys()))
++            _logger.debug("Buddy %s properties updated: %s" % (buddy.props.nick, properties.keys()))
+ 
+     def _new_activity(self, activity_id, tp):
+         try:
+             objid = self._get_next_object_id()
+             activity = Activity(self._bus_name, objid, tp, id=activity_id)
+         except Exception, e:
+- -            logging.debug("Invalid activity: %s" % e)
++            _logger.debug("Invalid activity: %s" % e)
+             return None
+ 
+         activity.connect("validity-changed", self._activity_validity_changed_cb)
+@@ -185,7 +188,7 @@ class PresenceService(ExportedGObject):
+         return activity
+ 
+     def _remove_activity(self, activity):
+- -        logging.debug("remove activity %s" % activity.props.id)
++        _logger.debug("remove activity %s" % activity.props.id)
+ 
+         self.ActivityDisappeared(activity.object_path())
+         del self._activities[activity.props.id]
+@@ -194,7 +197,7 @@ class PresenceService(ExportedGObject):
+         acts = []
+         for act in activities:
+             acts.append(str(act))
+- -        logging.debug("Handle %s activities changed: %s" % (contact_handle, acts))
++        _logger.debug("Handle %s activities changed: %s" % (contact_handle, acts))
+         buddies = self._handles_buddies[tp]
+         buddy = buddies.get(contact_handle)
+ 
+@@ -202,7 +205,7 @@ class PresenceService(ExportedGObject):
+             # We don't know this buddy
+             # FIXME: What should we do here? 
+             # FIXME: Do we need to check if the buddy is valid or something?
+- -            logging.debug("contact_activities_changed: buddy unknown")
++            _logger.debug("contact_activities_changed: buddy unknown")
+             return
+ 
+         old_activities = set()
+@@ -213,7 +216,7 @@ class PresenceService(ExportedGObject):
+ 
+         activities_joined = new_activities - old_activities
+         for act in activities_joined:
+- -            logging.debug("Handle %s joined activity %s" % (contact_handle, act))
++            _logger.debug("Handle %s joined activity %s" % (contact_handle, act))
+             activity = self._activities.get(act)
+             if not activity:
+                 # new activity, can fail
+@@ -225,7 +228,7 @@ class PresenceService(ExportedGObject):
+ 
+         activities_left = old_activities - new_activities
+         for act in activities_left:
+- -            logging.debug("Handle %s left activity %s" % (contact_handle, act))
++            _logger.debug("Handle %s left activity %s" % (contact_handle, act))
+             activity = self._activities.get(act)
+             if not activity:
+                 continue
+@@ -341,10 +344,10 @@ class PresenceService(ExportedGObject):
+     def _activity_validity_changed_cb(self, activity, valid):
+         if valid:
+             self.ActivityAppeared(activity.object_path())
+- -            logging.debug("New Activity: %s (%s)" % (activity.props.name, activity.props.id))
++            _logger.debug("New Activity: %s (%s)" % (activity.props.name, activity.props.id))
+         else:
+             self.ActivityDisappeared(activity.object_path())
+- -            logging.debug("Activity disappeared: %s (%s)" % (activity.props.name, activity.props.id))
++            _logger.debug("Activity disappeared: %s (%s)" % (activity.props.name, activity.props.id))
+ 
+     def _activity_properties_changed(self, tp, act_id, props):
+         activity = self._activities.get(act_id)
+@@ -364,7 +367,7 @@ def main(test_num=0, randomize=False):
+         loop.run()
+     except KeyboardInterrupt:
+         ps.cleanup()
+- -        logging.debug('Ctrl+C pressed, exiting...')
++        _logger.debug('Ctrl+C pressed, exiting...')
+ 
+ if __name__ == "__main__":
+     main()
+diff --git a/services/presence/psutils.py b/services/presence/psutils.py
+index b24b1df..73a5315 100644
+- --- a/services/presence/psutils.py
++++ b/services/presence/psutils.py
+@@ -18,6 +18,9 @@ import dbus, dbus.glib, gobject
+ import logging
+ 
+ 
++_logger = logging.getLogger('s-p-s.psutils')
++
++
+ def bytes_to_string(bytes):
+     """The function converts a  D-BUS byte array provided by dbus to string format.
+     
+@@ -92,7 +95,7 @@ class IP4AddressMonitor(gobject.GObject):
+             return
+ 
+         self._addr = new_addr
+- -        logging.debug("IP4 address now '%s'" % new_addr)
++        _logger.debug("IP4 address now '%s'" % new_addr)
+         self.emit('address-changed', new_addr)
+ 
+     def _connect_to_nm(self):
+@@ -102,7 +105,7 @@ class IP4AddressMonitor(gobject.GObject):
+             proxy = sys_bus.get_object(NM_SERVICE, NM_PATH)
+             self._nm_obj = dbus.Interface(proxy, NM_IFACE)
+         except dbus.DBusException, err:
+- -            logging.debug("Error finding NetworkManager: %s" % err)
++            _logger.debug("Error finding NetworkManager: %s" % err)
+             self._nm_present = False
+             return
+ 
+@@ -141,7 +144,7 @@ class IP4AddressMonitor(gobject.GObject):
+         self._update_address(props[6])
+ 
+     def _device_properties_error_cb(self, err):
+- -        logging.debug("Error querying device properties: %s" % err)
++        _logger.debug("Error querying device properties: %s" % err)
+ 
+     def _query_device_properties(self, device):
+         sys_bus = dbus.SystemBus()
+@@ -156,7 +159,7 @@ class IP4AddressMonitor(gobject.GObject):
+             self._query_device_properties(op)
+ 
+     def _get_devices_error_cb(self, err):
+- -        logging.debug("Error getting NetworkManager devices: %s" % err)
++        _logger.debug("Error getting NetworkManager devices: %s" % err)
+ 
+     def _query_devices(self):
+         """Query NM for a list of network devices"""
+diff --git a/services/presence/server_plugin.py b/services/presence/server_plugin.py
+index c7f6257..b3b9482 100644
+- --- a/services/presence/server_plugin.py
++++ b/services/presence/server_plugin.py
+@@ -42,6 +42,8 @@ CONN_INTERFACE_ACTIVITY_PROPERTIES = 'org.laptop.Telepathy.ActivityProperties'
+ 
+ _PROTOCOL = "jabber"
+ 
++_logger = logging.getLogger('s-p-s.server_plugin')
++
+ class InvalidBuddyError(Exception):
+     """(Unused) exception to indicate an invalid buddy specifier"""
+ 
+@@ -144,14 +146,14 @@ class ServerPlugin(gobject.GObject):
+         self._ip4am.connect('address-changed', self._ip4_address_changed_cb)
+ 
+     def _ip4_address_changed_cb(self, ip4am, address):
+- -        logging.debug("::: IP4 address now %s" % address)
++        _logger.debug("::: IP4 address now %s" % address)
+         if address:
+- -            logging.debug("::: valid IP4 address, conn_status %s" % self._conn_status)
++            _logger.debug("::: valid IP4 address, conn_status %s" % self._conn_status)
+             if self._conn_status == CONNECTION_STATUS_DISCONNECTED:
+- -                logging.debug("::: will connect")
++                _logger.debug("::: will connect")
+                 self.start()
+         else:
+- -            logging.debug("::: invalid IP4 address, will disconnect")
++            _logger.debug("::: invalid IP4 address, will disconnect")
+             self.cleanup()
+ 
+     def _owner_property_changed_cb(self, owner, properties):
+@@ -169,7 +171,7 @@ class ServerPlugin(gobject.GObject):
+         depending on which properties are present in the 
+         set of properties.
+         """
+- -        logging.debug("Owner properties changed: %s" % properties)
++        _logger.debug("Owner properties changed: %s" % properties)
+ 
+         if properties.has_key("current-activity"):
+             self._set_self_current_activity()
+@@ -185,7 +187,7 @@ class ServerPlugin(gobject.GObject):
+ 
+     def _owner_icon_changed_cb(self, owner, icon):
+         """Owner has changed their icon, forward to network"""
+- -        logging.debug("Owner icon changed to size %d" % len(str(icon)))
++        _logger.debug("Owner icon changed to size %d" % len(str(icon)))
+         self._set_self_avatar(icon)
+ 
+     def _get_account_info(self):
+@@ -250,7 +252,7 @@ class ServerPlugin(gobject.GObject):
+ 
+     def _connect_error_cb(self, exception):
+         """Handle connection failure"""
+- -        logging.debug("Connect error: %s" % exception)
++        _logger.debug("Connect error: %s" % exception)
+ 
+     def _init_connection(self):
+         """Set up our connection 
+@@ -336,7 +338,7 @@ class ServerPlugin(gobject.GObject):
+         subscribe[CHANNEL_INTERFACE_GROUP].AddMembers(not_subscribed, '')
+ 
+         if CONN_INTERFACE_BUDDY_INFO not in self._conn.get_valid_interfaces():
+- -            logging.debug('OLPC information not available')
++            _logger.debug('OLPC information not available')
+             return False
+ 
+         self._conn[CONN_INTERFACE_BUDDY_INFO].connect_to_signal('PropertiesChanged',
+@@ -394,7 +396,7 @@ class ServerPlugin(gobject.GObject):
+ 
+         types, minw, minh, maxw, maxh, maxsize = self._conn[CONN_INTERFACE_AVATARS].GetAvatarRequirements()
+         if not "image/jpeg" in types:
+- -            logging.debug("server does not accept JPEG format avatars.")
++            _logger.debug("server does not accept JPEG format avatars.")
+             return
+ 
+         img_data = _get_buddy_icon_at_size(icon_data, min(maxw, 96), min(maxh, 96), maxsize)
+@@ -414,7 +416,7 @@ class ServerPlugin(gobject.GObject):
+ 
+         if (activity_id, handles[0]) in self._joined_activities:
+             e = RuntimeError("Already joined activity %s" % activity_id)
+- -            logging.debug(str(e))
++            _logger.debug(str(e))
+             self.emit(signal, activity_id, None, e, userdata)
+             return
+ 
+@@ -425,7 +427,7 @@ class ServerPlugin(gobject.GObject):
+ 
+     def _join_error_cb(self, activity_id, signal, userdata, err):
+         e = Exception("Error joining/sharing activity %s: %s" % (activity_id, err))
+- -        logging.debug(str(e))
++        _logger.debug(str(e))
+         self.emit(signal, activity_id, None, e, userdata)
+ 
+     def _internal_join_activity(self, activity_id, signal, userdata):
+@@ -470,7 +472,7 @@ class ServerPlugin(gobject.GObject):
+ 
+     def _log_error_cb(self, msg, err):
+         """Log a message (error) at debug level with prefix msg"""
+- -        logging.debug("Error %s: %s" % (msg, err))
++        _logger.debug("Error %s: %s" % (msg, err))
+ 
+     def _set_self_olpc_properties(self):
+         """Set color and key on our Telepathy server identity"""
+@@ -519,7 +521,7 @@ class ServerPlugin(gobject.GObject):
+                 # dont advertise a current activity that's not shared
+                 cur_activity = ""
+ 
+- -        logging.debug("Setting current activity to '%s' (handle %s)" % (cur_activity, cur_activity_handle))
++        _logger.debug("Setting current activity to '%s' (handle %s)" % (cur_activity, cur_activity_handle))
+         self._conn[CONN_INTERFACE_BUDDY_INFO].SetCurrentActivity(cur_activity,
+                 cur_activity_handle,
+                 reply_handler=self._ignore_success_cb,
+@@ -549,17 +551,17 @@ class ServerPlugin(gobject.GObject):
+ 
+         if status == CONNECTION_STATUS_CONNECTING:
+             self._conn_status = status
+- -            logging.debug("status: connecting...")
++            _logger.debug("status: connecting...")
+         elif status == CONNECTION_STATUS_CONNECTED:
+             if self._connected_cb():
+- -                logging.debug("status: connected")
++                _logger.debug("status: connected")
+                 self._conn_status = status
+             else:
+                 self.cleanup()
+- -                logging.debug("status: was connected, but an error occurred")
++                _logger.debug("status: was connected, but an error occurred")
+         elif status == CONNECTION_STATUS_DISCONNECTED:
+             self.cleanup()
+- -            logging.debug("status: disconnected (reason %r)" % reason)
++            _logger.debug("status: disconnected (reason %r)" % reason)
+             if reason == CONNECTION_STATUS_REASON_AUTHENTICATION_FAILED:
+                 # FIXME: handle connection failure; retry later?
+                 pass
+@@ -580,7 +582,7 @@ class ServerPlugin(gobject.GObject):
+         status -- CONNECTION_STATUS_*
+         reason -- integer code describing the reason...
+         """
+- -        logging.debug("::: connection status changed to %s" % status)
++        _logger.debug("::: connection status changed to %s" % status)
+         self._handle_connection_status_change(status, reason)
+ 
+     def start(self):
+@@ -594,7 +596,7 @@ class ServerPlugin(gobject.GObject):
+         otherwise initiate a connection and transfer control to 
+             _connect_reply_cb or _connect_error_cb
+         """
+- -        logging.debug("Starting up...")
++        _logger.debug("Starting up...")
+ 
+         if self._reconnect_id > 0:
+             gobject.source_remove(self._reconnect_id)
+@@ -602,10 +604,10 @@ class ServerPlugin(gobject.GObject):
+ 
+         # Only init connection if we have a valid IP address
+         if self._ip4am.props.address:
+- -            logging.debug("::: Have IP4 address %s, will connect" % self._ip4am.props.address)
++            _logger.debug("::: Have IP4 address %s, will connect" % self._ip4am.props.address)
+             self._init_connection()
+         else:
+- -            logging.debug("::: No IP4 address, postponing connection")
++            _logger.debug("::: No IP4 address, postponing connection")
+ 
+     def cleanup(self):
+         """If we still have a connection, disconnect it"""
+@@ -638,14 +640,14 @@ class ServerPlugin(gobject.GObject):
+ 
+     def _contact_online_activities_error_cb(self, handle, err):
+         """Handle contact's activity list being unavailable"""
+- -        logging.debug("Handle %s - Error getting activities: %s" % (handle, err))
++        _logger.debug("Handle %s - Error getting activities: %s" % (handle, err))
+         # Don't drop the buddy if we can't get their activities, for now
+         #self._contact_offline(handle)
+ 
+     def _contact_online_aliases_cb(self, handle, props, aliases):
+         """Handle contact's alias being received (do further queries)"""
+         if not self._conn or not aliases or not len(aliases):
+- -            logging.debug("Handle %s - No aliases" % handle)
++            _logger.debug("Handle %s - No aliases" % handle)
+             self._contact_offline(handle)
+             return
+ 
+@@ -660,17 +662,17 @@ class ServerPlugin(gobject.GObject):
+ 
+     def _contact_online_aliases_error_cb(self, handle, err):
+         """Handle failure to retrieve given user's alias/information"""
+- -        logging.debug("Handle %s - Error getting nickname: %s" % (handle, err))
++        _logger.debug("Handle %s - Error getting nickname: %s" % (handle, err))
+         self._contact_offline(handle)
+ 
+     def _contact_online_properties_cb(self, handle, props):
+         """Handle failure to retrieve given user's alias/information"""
+         if not props.has_key('key'):
+- -            logging.debug("Handle %s - invalid key." % handle)
++            _logger.debug("Handle %s - invalid key." % handle)
+             self._contact_offline(handle)
+             return
+         if not props.has_key('color'):
+- -            logging.debug("Handle %s - invalid color." % handle)
++            _logger.debug("Handle %s - invalid color." % handle)
+             self._contact_offline(handle)
+             return
+ 
+@@ -683,7 +685,7 @@ class ServerPlugin(gobject.GObject):
+         
+     def _contact_online_properties_error_cb(self, handle, err):
+         """Handle error retrieving property-set for a user (handle)"""
+- -        logging.debug("Handle %s - Error getting properties: %s" % (handle, err))
++        _logger.debug("Handle %s - Error getting properties: %s" % (handle, err))
+         self._contact_offline(handle)
+ 
+     def _contact_online(self, handle):
+@@ -712,7 +714,7 @@ class ServerPlugin(gobject.GObject):
+                 jid = self._conn[CONN_INTERFACE].InspectHandles(CONNECTION_HANDLE_TYPE_CONTACT, [handle])[0]
+                 olstr = "ONLINE"
+                 if not online: olstr = "OFFLINE"
+- -                logging.debug("Handle %s (%s) was %s, status now '%s'." % (handle, jid, olstr, status))
++                _logger.debug("Handle %s (%s) was %s, status now '%s'." % (handle, jid, olstr, status))
+                 if not online and status in ["available", "away", "brb", "busy", "dnd", "xa"]:
+                     self._contact_online(handle)
+                 elif status in ["offline", "invisible"]:
+@@ -726,12 +728,12 @@ class ServerPlugin(gobject.GObject):
+             return
+ 
+         if not self._online_contacts.has_key(handle):
+- -            logging.debug("Handle %s unknown." % handle)
++            _logger.debug("Handle %s unknown." % handle)
+             return
+ 
+         jid = self._online_contacts[handle]
+         if not jid:
+- -            logging.debug("Handle %s not valid yet..." % handle)
++            _logger.debug("Handle %s not valid yet..." % handle)
+             return
+ 
+         icon = self._icon_cache.get_icon(jid, new_avatar_token)
+@@ -787,7 +789,7 @@ class ServerPlugin(gobject.GObject):
+         if not len(activity) or not util.validate_activity_id(activity):
+             activity = None
+         prop = {'current-activity': activity}
+- -        logging.debug("Handle %s: current activity now %s" % (handle, activity))
++        _logger.debug("Handle %s: current activity now %s" % (handle, activity))
+         self._buddy_properties_changed_cb(handle, prop)
+ 
+     def _new_channel_cb(self, object_path, channel_type, handle_type, handle, suppress_handler):
+diff --git a/services/presence/sugar-presence-service b/services/presence/sugar-presence-service
+index 1680fea..6ab871c 100755
+- --- a/services/presence/sugar-presence-service
++++ b/services/presence/sugar-presence-service
+@@ -24,8 +24,12 @@ import os
+ from sugar import logger
+ from sugar import env
+ 
++
++_logger = logging.getLogger('s-p-s')
++
++
+ def usage():
+- -    logging.debug("Usage: sugar-presence-service [<test buddy number (1 - 10)>] [randomize]")
++    _logger.debug("Usage: sugar-presence-service [<test buddy number (1 - 10)>] [randomize]")
+ 
+ sys.path.append(env.get_service_path('presence'))
+ 
+@@ -35,9 +39,9 @@ if len(sys.argv) in [2, 3]:
+     try:
+         test_num = int(sys.argv[1])
+     except ValueError:
+- -        logging.debug("Bad test user number.")
++        _logger.debug("Bad test user number.")
+     if test_num < 1 or test_num > 10:
+- -        logging.debug("Bad test user number.")
++        _logger.debug("Bad test user number.")
+ 
+     if len(sys.argv) == 3 and sys.argv[2] == "randomize":
+         randomize = True
+@@ -54,6 +58,6 @@ else:
+ 
+ import presenceservice
+ 
+- -logging.info('Starting presence service...')
++_logger.info('Starting presence service...')
+ 
+ presenceservice.main(test_num, randomize)
+diff --git a/sugar/presence/presenceservice.py b/sugar/presence/presenceservice.py
+index 621a289..1bc9a57 100644
+- --- a/sugar/presence/presenceservice.py
++++ b/sugar/presence/presenceservice.py
+@@ -36,6 +36,8 @@ DBUS_SERVICE = "org.laptop.Sugar.Presence"
+ DBUS_INTERFACE = "org.laptop.Sugar.Presence"
+ DBUS_PATH = "/org/laptop/Sugar/Presence"
+ 
++_logger = logging.getLogger('sugar.presence.presenceservice')
++
+ 
+ class PresenceService(gobject.GObject):
+     """UI-side interface to the dbus presence service 
+@@ -116,7 +118,7 @@ class PresenceService(gobject.GObject):
+                     DBUS_INTERFACE
+                 )
+             except dbus.exceptions.DBusException, err:
+- -                logging.error(
++                _logger.error(
+                     """Failure retrieving %r interface from the D-BUS service %r %r: %s""",
+                     DBUS_INTERFACE, DBUS_SERVICE, DBUS_PATH, err
+                 )
+@@ -247,7 +249,7 @@ class PresenceService(gobject.GObject):
+         try:
+             resp = self._ps.GetActivities()
+         except dbus.exceptions.DBusException, err:
+- -            logging.warn(
++            _logger.warn(
+                 """Unable to retrieve activity list from presence service: %s"""
+                 % err
+             )
+@@ -269,7 +271,7 @@ class PresenceService(gobject.GObject):
+         try:
+             act_op = self._ps.GetActivityById(activity_id)
+         except dbus.exceptions.DBusException, err:
+- -            logging.warn(
++            _logger.warn(
+                 """Unable to retrieve activity handle for %r from presence service: %s"""
+                 % (activity_id, err)
+             )
+@@ -285,7 +287,7 @@ class PresenceService(gobject.GObject):
+         try:
+             resp = self._ps.GetBuddies()
+         except dbus.exceptions.DBusException, err:
+- -            logging.warn(
++            _logger.warn(
+                 """Unable to retrieve buddy-list from presence service: %s"""
+                 % err
+             )
+@@ -308,7 +310,7 @@ class PresenceService(gobject.GObject):
+         try:
+             buddy_op = self._ps.GetBuddyByPublicKey(dbus.ByteArray(key))
+         except dbus.exceptions.DBusException, err:
+- -            logging.warn(
++            _logger.warn(
+                 """Unable to retrieve buddy handle for %r from presence service: %s"""
+                 % key, err
+             )
+@@ -320,7 +322,7 @@ class PresenceService(gobject.GObject):
+         try:
+             owner_op = self._ps.GetOwner()
+         except dbus.exceptions.DBusException, err:
+- -            logging.warn(
++            _logger.warn(
+                 """Unable to retrieve local user/owner from presence service: %s"""
+                 % err
+             )
+@@ -335,7 +337,7 @@ class PresenceService(gobject.GObject):
+ 
+     def _share_activity_error_cb(self, activity, err):
+         """Notify with GObject event of unsuccessful sharing of activity"""
+- -        logging.debug("Error sharing activity %s: %s" % (activity.get_id(), err))
++        _logger.debug("Error sharing activity %s: %s" % (activity.get_id(), err))
+         self.emit("activity-shared", False, None, err)
+ 
+     def share_activity(self, activity, properties={}):
+- -- 
+1.5.2-rc2.GIT
+
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.6 (GNU/Linux)
+Comment: OpenPGP key: http://www.pseudorandom.co.uk/2003/contact/ or pgp.net
+
+iD8DBQFGSt18WSc8zVUw7HYRAmLPAKCUpheFwvYGQO2DLtG3SPiza825WgCfX+Td
+thvqL+myErLrCmgc7rFvF0o=
+=I56s
+-----END PGP SIGNATURE-----
+_______________________________________________
+Sugar mailing list
+Sugar@laptop.org
+http://mailman.laptop.org/mailman/listinfo/sugar
+

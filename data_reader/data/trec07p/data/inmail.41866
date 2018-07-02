@@ -1,0 +1,87 @@
+From perl6-all-return-81538-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue May 22 19:27:39 2007
+Return-Path: <perl6-all-return-81538-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4MNRcqD018414
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 22 May 2007 19:27:38 -0400
+Received: (qmail 13169 invoked by uid 514); 22 May 2007 23:27:33 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 13164 invoked from network); 22 May 2007 23:27:33 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: softfail (x1.develooper.com: transitioning domain of chromatic@wgz.org does not designate 63.251.223.186 as permitted sender)
+Delivered-To: perlmail-parrot-porters@onion.perl.org
+Delivered-To: parrot-porters@perl.org
+Received-SPF: pass (x1.develooper.com: domain of chromatic@wgz.org designates 63.105.17.39 as permitted sender)
+From: chromatic <chromatic@wgz.org>
+Organization: Snafu
+To: parrot-porters@perl.org
+Subject: FOTW src/debug.c
+Date: Tue, 22 May 2007 15:50:07 -0700
+User-Agent: KMail/1.9.6
+MIME-Version: 1.0
+Content-Disposition: inline
+Message-Id: <200705221550.07740.chromatic@wgz.org>
+Content-Type: text/plain;
+  charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+X-Virus-Scanned: by amavisd-new at wgz.org
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=2.9 required=8.0
+	tests=BAYES_05,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,RCVD_IN_CBL,SPF_PASS
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-0.0 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,KARMA_CONNECT_NEGATIVE,SPF_SOFTFAIL
+
+This file implements most of the Parrot debugger.  The interpreter struct has 
+a slot called pdb that contains a PDB_t (parrot/debug.h).
+
+This file is somewhat messy.  It has some string manipulation functions 
+(nextarg(), skip_ws(), parse_int(), parse_string()) that should probably go 
+elsewhere.
+
+There are also some places that seem somewhat careless about memory allocation 
+and freeing.  For example, where in this file does interp->pdb get 
+initialized?  (Answer: in src/embed.c - Parrot_disassemble()).
+
+Where does it get freed?  (Answer: nowhere that I can tell.)
+
+The freeing *could* go in Parrot_really_destroy() in src/inter_create.c (did 
+you catch the contradiction in names there?), but I'm starting to think that 
+each file that represents the entry point into a system should have two 
+functions, one that initializes the system and its necessary data structures 
+and another that finalizes and frees things.
+
+I don't know if we have any good tests for the debugger; this is something we 
+ought to consider if we're going to move code around.  Sadly, I don't know 
+any easy way to test things apart from opening a Parrot process and feeding 
+data in and out.  Making the debugger scriptable from PIR is a bigger project 
+than I'm comfortable suggesting until it gets more tests.
+
+Some of the other memory-related functions have a little bit too much magic.  
+For example, PDB_free_file() takes the file to free out of the current 
+debugger.  It does the right thing to free files, but there appear to be 
+cases where it's useful to free a file that's not the debugger's current 
+file, so this function is inappropriately general.
+
+Other functions have odd names -- PDB_hasInstructions() (no underscore?), 
+PDB_print() (should be PDB_print_registers()).
+
+The code is fairly decent.  Most of the issues here relate to organization.
+
+-- c
+

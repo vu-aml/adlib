@@ -1,0 +1,123 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu May 31 11:42:27 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4VFgQhB029683
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 31 May 2007 11:42:26 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id C337F163863
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 31 May 2007 15:42:21 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.3 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,UPPERCASE_25_50 autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 540)
+	id E9134162AE7; Thu, 31 May 2007 15:41:46 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jerry@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070531154146.E9134162AE7@lists.samba.org>
+Date: Thu, 31 May 2007 15:41:46 +0000 (GMT)
+Subject: svn commit: samba r23267 - in branches/SAMBA_3_0_26/source: . script
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: jerry
+Date: 2007-05-31 15:41:46 +0000 (Thu, 31 May 2007)
+New Revision: 23267
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23267
+
+Log:
+Merge idl Makefile target and associated files from SAMBA_3_0
+Added:
+   branches/SAMBA_3_0_26/source/script/build_idl.sh
+Modified:
+   branches/SAMBA_3_0_26/source/Makefile.in
+
+
+Changeset:
+Modified: branches/SAMBA_3_0_26/source/Makefile.in
+===================================================================
+--- branches/SAMBA_3_0_26/source/Makefile.in	2007-05-31 13:59:08 UTC (rev 23266)
++++ branches/SAMBA_3_0_26/source/Makefile.in	2007-05-31 15:41:46 UTC (rev 23267)
+@@ -33,6 +33,8 @@
+ PYTHON=@PYTHON@
+ PERL=@PERL@
+ 
++PIDL_ARGS=@PIDL_ARGS@
++
+ TERMLDFLAGS=@TERMLDFLAGS@
+ TERMLIBS=@TERMLIBS@
+ PRINT_LIBS=@PRINT_LIBS@
+@@ -172,7 +174,7 @@
+ 
+ EVERYTHING_PROGS = bin/debug2html@EXEEXT@ bin/smbfilter@EXEEXT@ \
+ 	bin/talloctort@EXEEXT@ bin/replacetort@EXEEXT@ \
+-	bin/log2pcap@EXEEXT@ bin/sharesec@EXEEXT@
++	bin/log2pcap@EXEEXT@ bin/sharesec@EXEEXT@ bin/ndrdump@EXEEXT@
+ 
+ SHLIBS = @LIBSMBCLIENT@ @LIBSMBSHAREMODES@ @LIBMSRPC@ @LIBADDNS@
+ 
+@@ -729,6 +731,11 @@
+ 		lib/replace/test/strptime.o \
+ 		$(LIBREPLACE_OBJ)
+ 
++NDRDUMP_OBJ = librpc/tools/ndrdump.o \
++			  $(PARAM_OBJ) $(LIBNDR_GEN_OBJ) \
++			  $(LIBSAMBA_OBJ) $(LIB_NONSMBD_OBJ) $(POPT_LIB_OBJ) \
++			  $(RPC_PARSE_OBJ1) $(DOSERR_OBJ) $(SECRETS_OBJ)
++
+ RPCTORTURE_OBJ = torture/rpctorture.o \
+              rpcclient/display.o \
+              rpcclient/cmd_lsarpc.o \
+@@ -900,6 +907,20 @@
+ cac: SHOWFLAGS $(LIBMSRPC)
+ 
+ 
++#####################################################################
++## Perl IDL Compiler
++IDL_FILES = unixinfo.idl lsa.idl dfs.idl echo.idl winreg.idl initshutdown.idl \
++	srvsvc.idl svcctl.idl eventlog.idl wkssvc.idl netlogon.idl notify.idl \
++	epmapper.idl messaging.idl
++
++idl:
++	@IDL_FILES="$(IDL_FILES)" CPP="$(CPP)" PERL="$(PERL)" \
++	 srcdir="$(srcdir)" $(srcdir)/script/build_idl.sh $(PIDL_ARGS)
++
++
++#####################################################################
++
++
+ everything: all libsmbclient debug2html smbfilter talloctort replacetort modules torture \
+ 	$(EVERYTHING_PROGS)
+ 
+@@ -1165,6 +1186,11 @@
+ 	@echo Linking $@
+ 	@$(CC) $(FLAGS) -o $@ $(RPCTORTURE_OBJ) $(DYNEXP) $(LDFLAGS) $(LIBS) $(KRB5LIBS) $(LDAP_LIBS)
+ 
++bin/ndrdump@EXEEXT@: $(NDRDUMP_OBJ) bin/.dummy
++	@echo Linking $@
++	@$(CC) $(FLAGS) -o $@ $(NDRDUMP_OBJ) $(DYNEXP) $(LDFLAGS) $(LIBS) \
++		@POPTLIBS@ @LDAP_LIBS@
++
+ bin/debug2html@EXEEXT@: proto_exists $(DEBUG2HTML_OBJ) bin/.dummy
+ 	@echo Linking $@
+ 	@$(CC) $(FLAGS) -o $@ $(DEBUG2HTML_OBJ) $(LDFLAGS) $(DYNEXP) $(LIBS)
+
+Copied: branches/SAMBA_3_0_26/source/script/build_idl.sh (from rev 23266, branches/SAMBA_3_0/source/script/build_idl.sh)
+

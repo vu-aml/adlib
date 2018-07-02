@@ -1,0 +1,278 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun May 20 16:29:16 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4KKTGqD023271
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 20 May 2007 16:29:16 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id B8733163851
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 20 May 2007 20:29:12 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id 45533162AD3; Sun, 20 May 2007 20:28:46 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070520202846.45533162AD3@lists.samba.org>
+Date: Sun, 20 May 2007 20:28:46 +0000 (GMT)
+Subject: svn commit: samba r23025 - in branches: SAMBA_3_0/source/lib
+	SAMBA_3_0_26/source/lib
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-05-20 20:28:45 +0000 (Sun, 20 May 2007)
+New Revision: 23025
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23025
+
+Log:
+Some logic simplifications
+
+Modified:
+   branches/SAMBA_3_0/source/lib/messages.c
+   branches/SAMBA_3_0_26/source/lib/messages.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/lib/messages.c
+===================================================================
+--- branches/SAMBA_3_0/source/lib/messages.c	2007-05-20 20:11:23 UTC (rev 23024)
++++ branches/SAMBA_3_0/source/lib/messages.c	2007-05-20 20:28:45 UTC (rev 23025)
+@@ -208,32 +208,36 @@
+ 		errno = saved_errno;
+ 	}
+ 
+-	if (ret == -1) {
+-		if (errno == ESRCH) {
+-			DEBUG(2,("pid %d doesn't exist - deleting messages record\n",
+-				 (int)pid));
+-			tdb_delete(tdb, message_key_pid(procid));
++	if (ret == 0) {
++		return NT_STATUS_OK;
++	}
+ 
+-			/*
+-			 * INVALID_HANDLE is the closest I can think of -- vl
+-			 */
+-			return NT_STATUS_INVALID_HANDLE;
+-		}
++	/*
++	 * Something has gone wrong
++	 */
+ 
+-		DEBUG(2,("message to process %d failed - %s\n", (int)pid,
+-			 strerror(errno)));
++	if (errno == ESRCH) {
++		DEBUG(2,("pid %d doesn't exist - deleting messages record\n",
++			 (int)pid));
++		tdb_delete(tdb, message_key_pid(procid));
+ 
+ 		/*
+-		 * No call to map_nt_error_from_unix -- don't want to link in
+-		 * errormap.o into lots of utils.
++		 * INVALID_HANDLE is the closest I can think of -- vl
+ 		 */
+-
+-		if (errno == EINVAL) return NT_STATUS_INVALID_PARAMETER;
+-		if (errno == EPERM)  return NT_STATUS_ACCESS_DENIED;
+-		return NT_STATUS_UNSUCCESSFUL;
++		return NT_STATUS_INVALID_HANDLE;
+ 	}
+ 
+-	return NT_STATUS_OK;
++	DEBUG(2,("message to process %d failed - %s\n", (int)pid,
++		 strerror(errno)));
++
++	/*
++	 * No call to map_nt_error_from_unix -- don't want to link in
++	 * errormap.o into lots of utils.
++	 */
++
++	if (errno == EINVAL) return NT_STATUS_INVALID_PARAMETER;
++	if (errno == EPERM)  return NT_STATUS_ACCESS_DENIED;
++	return NT_STATUS_UNSUCCESSFUL;
+ }
+ 
+ /****************************************************************************
+@@ -243,7 +247,6 @@
+ static NTSTATUS message_send_pid(struct server_id pid, int msg_type,
+ 				 const void *buf, size_t len)
+ {
+-	TDB_DATA kbuf;
+ 	TDB_DATA dbuf;
+ 	struct message_rec rec;
+ 	int ret;
+@@ -266,8 +269,6 @@
+ 	rec.src = procid_self();
+ 	rec.len = buf ? len : 0;
+ 
+-	kbuf = message_key_pid(pid);
+-
+ 	dbuf.dptr = (uint8 *)SMB_MALLOC(len + sizeof(rec));
+ 	if (!dbuf.dptr) {
+ 		return NT_STATUS_NO_MEMORY;
+@@ -279,7 +280,7 @@
+ 
+ 	dbuf.dsize = len + sizeof(rec);
+ 
+-	ret = tdb_append(tdb, kbuf, dbuf);
++	ret = tdb_append(tdb, message_key_pid(pid), dbuf);
+ 
+ 	SAFE_FREE(dbuf.dptr);
+ 
+@@ -297,14 +298,11 @@
+ 
+ unsigned int messages_pending_for_pid(struct server_id pid)
+ {
+-	TDB_DATA kbuf;
+ 	TDB_DATA dbuf;
+ 	uint8 *buf;
+ 	unsigned int message_count = 0;
+ 
+-	kbuf = message_key_pid(pid);
+-
+-	dbuf = tdb_fetch(tdb, kbuf);
++	dbuf = tdb_fetch(tdb, message_key_pid(pid));
+ 	if (dbuf.dptr == NULL || dbuf.dsize == 0) {
+ 		SAFE_FREE(dbuf.dptr);
+ 		return 0;
+@@ -337,7 +335,7 @@
+ 	*msgs_buf = NULL;
+ 	*total_len = 0;
+ 
+-	kbuf = message_key_pid(pid_to_procid(sys_getpid()));
++	kbuf = message_key_pid(procid_self());
+ 
+ 	if (tdb_chainlock(tdb, kbuf) == -1)
+ 		return False;
+
+Modified: branches/SAMBA_3_0_26/source/lib/messages.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/lib/messages.c	2007-05-20 20:11:23 UTC (rev 23024)
++++ branches/SAMBA_3_0_26/source/lib/messages.c	2007-05-20 20:28:45 UTC (rev 23025)
+@@ -208,32 +208,36 @@
+ 		errno = saved_errno;
+ 	}
+ 
+-	if (ret == -1) {
+-		if (errno == ESRCH) {
+-			DEBUG(2,("pid %d doesn't exist - deleting messages record\n",
+-				 (int)pid));
+-			tdb_delete(tdb, message_key_pid(procid));
++	if (ret == 0) {
++		return NT_STATUS_OK;
++	}
+ 
+-			/*
+-			 * INVALID_HANDLE is the closest I can think of -- vl
+-			 */
+-			return NT_STATUS_INVALID_HANDLE;
+-		}
++	/*
++	 * Something has gone wrong
++	 */
+ 
+-		DEBUG(2,("message to process %d failed - %s\n", (int)pid,
+-			 strerror(errno)));
++	if (errno == ESRCH) {
++		DEBUG(2,("pid %d doesn't exist - deleting messages record\n",
++			 (int)pid));
++		tdb_delete(tdb, message_key_pid(procid));
+ 
+ 		/*
+-		 * No call to map_nt_error_from_unix -- don't want to link in
+-		 * errormap.o into lots of utils.
++		 * INVALID_HANDLE is the closest I can think of -- vl
+ 		 */
+-
+-		if (errno == EINVAL) return NT_STATUS_INVALID_PARAMETER;
+-		if (errno == EPERM)  return NT_STATUS_ACCESS_DENIED;
+-		return NT_STATUS_UNSUCCESSFUL;
++		return NT_STATUS_INVALID_HANDLE;
+ 	}
+ 
+-	return NT_STATUS_OK;
++	DEBUG(2,("message to process %d failed - %s\n", (int)pid,
++		 strerror(errno)));
++
++	/*
++	 * No call to map_nt_error_from_unix -- don't want to link in
++	 * errormap.o into lots of utils.
++	 */
++
++	if (errno == EINVAL) return NT_STATUS_INVALID_PARAMETER;
++	if (errno == EPERM)  return NT_STATUS_ACCESS_DENIED;
++	return NT_STATUS_UNSUCCESSFUL;
+ }
+ 
+ /****************************************************************************
+@@ -243,7 +247,6 @@
+ static NTSTATUS message_send_pid(struct server_id pid, int msg_type,
+ 				 const void *buf, size_t len)
+ {
+-	TDB_DATA kbuf;
+ 	TDB_DATA dbuf;
+ 	struct message_rec rec;
+ 	int ret;
+@@ -266,8 +269,6 @@
+ 	rec.src = procid_self();
+ 	rec.len = buf ? len : 0;
+ 
+-	kbuf = message_key_pid(pid);
+-
+ 	dbuf.dptr = (uint8 *)SMB_MALLOC(len + sizeof(rec));
+ 	if (!dbuf.dptr) {
+ 		return NT_STATUS_NO_MEMORY;
+@@ -279,7 +280,7 @@
+ 
+ 	dbuf.dsize = len + sizeof(rec);
+ 
+-	ret = tdb_append(tdb, kbuf, dbuf);
++	ret = tdb_append(tdb, message_key_pid(pid), dbuf);
+ 
+ 	SAFE_FREE(dbuf.dptr);
+ 
+@@ -297,14 +298,11 @@
+ 
+ unsigned int messages_pending_for_pid(struct server_id pid)
+ {
+-	TDB_DATA kbuf;
+ 	TDB_DATA dbuf;
+ 	uint8 *buf;
+ 	unsigned int message_count = 0;
+ 
+-	kbuf = message_key_pid(pid);
+-
+-	dbuf = tdb_fetch(tdb, kbuf);
++	dbuf = tdb_fetch(tdb, message_key_pid(pid));
+ 	if (dbuf.dptr == NULL || dbuf.dsize == 0) {
+ 		SAFE_FREE(dbuf.dptr);
+ 		return 0;
+@@ -337,7 +335,7 @@
+ 	*msgs_buf = NULL;
+ 	*total_len = 0;
+ 
+-	kbuf = message_key_pid(pid_to_procid(sys_getpid()));
++	kbuf = message_key_pid(procid_self());
+ 
+ 	if (tdb_chainlock(tdb, kbuf) == -1)
+ 		return False;
+

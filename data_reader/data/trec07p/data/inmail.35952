@@ -1,0 +1,278 @@
+From sugar-bounces@laptop.org  Mon May 14 10:08:40 2007
+Return-Path: <sugar-bounces@laptop.org>
+Received: from pedal.laptop.org (pedal.laptop.org [18.85.2.148])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4EE8dqD022798
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 14 May 2007 10:08:39 -0400
+Received: from pedal.laptop.org (localhost [127.0.0.1])
+	by pedal.laptop.org (Postfix) with ESMTP id 2015F4F68C;
+	Mon, 14 May 2007 10:08:15 -0400 (EDT)
+X-Original-To: sugar@laptop.org
+Delivered-To: sugar@laptop.org
+Received: from spam.laptop.org (spam.laptop.org [18.85.46.23])
+	by pedal.laptop.org (Postfix) with ESMTP id 578DF4F68C
+	for <sugar@laptop.org>; Mon, 14 May 2007 10:08:14 -0400 (EDT)
+X-ASG-Debug-ID: 1179151714-256800140000-3Xmyjt
+X-Barracuda-URL: http://18.85.46.23:8000/cgi-bin/mark.cgi
+X-Barracuda-Connect: dhansak.collabora.co.uk[195.10.223.134]
+X-Barracuda-Start-Time: 1179151714
+X-Barracuda-Encrypted: DHE-RSA-AES256-SHA
+Received: from dhansak.collabora.co.uk (dhansak.collabora.co.uk
+	[195.10.223.134])
+	(using TLSv1 with cipher DHE-RSA-AES256-SHA (256/256 bits))
+	(No client certificate requested)
+	by spam.laptop.org (Spam Firewall) with ESMTP id 33C2BADFD
+	for <sugar@laptop.org>; Mon, 14 May 2007 10:08:35 -0400 (EDT)
+Received: by dhansak.collabora.co.uk (Postfix, from userid 1014)
+	id C7ACA30960AB; Mon, 14 May 2007 15:08:33 +0100 (BST)
+Date: Mon, 14 May 2007 15:08:28 +0100
+From: Simon McVittie <simon.mcvittie@collabora.co.uk>
+To: sugar@laptop.org
+X-ASG-Orig-Subj: Re: [sugar] Obtaining Buddy objects as contacts are
+	encountered
+Message-ID: <20070514140828.GA5597@celebrin.pseudorandom.co.uk>
+Mail-Followup-To: sugar@laptop.org
+References: <20070510153235.GA30162@celebrin.pseudorandom.co.uk>
+MIME-Version: 1.0
+Content-Disposition: inline
+In-Reply-To: <20070510153235.GA30162@celebrin.pseudorandom.co.uk>
+User-Agent: Mutt/1.5.13 (2006-08-11)
+X-Barracuda-Bayes: INNOCENT GLOBAL 0.3624 1.0000 -0.1102
+X-Barracuda-Virus-Scanned: by Barracuda Spam Firewall at laptop.org
+X-Barracuda-Spam-Score: 0.39
+X-Barracuda-Spam-Status: No, SCORE=0.39 using global scores of TAG_LEVEL=3.5
+	QUARANTINE_LEVEL=1000.0 KILL_LEVEL=5.5 tests=BSF_RULE7568M
+X-Barracuda-Spam-Report: Code version 3.1, rules version 3.1.16929
+	Rule breakdown below
+	pts rule name              description
+	---- ----------------------
+	--------------------------------------------------
+	0.50 BSF_RULE7568M          BODY: Custom Rule 7568M
+Subject: Re: [sugar] Obtaining Buddy objects as contacts are encountered
+X-BeenThere: sugar@laptop.org
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Discussion of OLPC design,
+	desktop platform and user experience" <sugar.laptop.org>
+List-Unsubscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=unsubscribe>
+List-Archive: <http://mailman.laptop.org/pipermail/sugar>
+List-Post: <mailto:sugar@laptop.org>
+List-Help: <mailto:sugar-request@laptop.org?subject=help>
+List-Subscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: sugar-bounces@laptop.org
+Errors-To: sugar-bounces@laptop.org
+
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA1
+
+Summarizing some more issues discussed offline and in #sugar.
+
+The difficult case for me at the moment is when a new person, who we don't know
+anything about, turns up in our (public) Tubes channel and joins a tube.
+
+Protocol constraints:
+=====================
+
+In the XMPP implementation, they are deemed to have joined the
+channel when they join the chat-room on the server (when we first
+receive a presence message for them that came through the room), and they are
+deemed to have joined the Tube when we first receive a presence message
+for them that indicates that they are in the Tube.
+
+The only identifying information we have in the presence message is their
+JID, e.g. 87654321f00d1234deadbeef@conference.olpc.collabora.co.uk on the
+test server. This is presented in the Telepathy API as the contact's "handle",
+which is a small integer used as an abstraction for all protocols' ideas of
+unique identifiers.
+
+The PS currently constructs JIDs by taking the hex SHA-1 of the public key,
+but it appears this is intended to be an internal implementation detail
+only, so we shouldn't rely on this (and neuralis doesn't want SHA-1 to
+be used for anything cryptographically significant, which is fair enough).
+Because this generates very unfriendly JIDs, we can't use the JID as a
+fall-back or a unique ID in the user interface like we would on the desktop
+(seeing a contact called bob.smith@example.com is useful, seeing a contact
+called 87654321f00d1234deadbeef is unhelpful).
+
+To find out the buddy's public key and real name (their immutable
+identity) and their colour, avatar and nickname (their mutable
+identity) we have to query the server, which takes network round-trips,
+which might be slow and should be done asynchronously.
+
+On the mesh contacts are again identified by Telepathy handles; this
+time the handles represent mesh-specific unique IDs (nickname + "@" + IP
+address, I think). The protocol hasn't been fully designed yet, but I expect it
+to be "fast" (round-trip-free) to retrieve the name, nick, colour and server
+JID, and probably "slow" to retrieve the public key and avatar, which are both
+larger.
+
+The message flow inside the Tube is a D-Bus connection, in which
+participants are identified by unique bus name (in our case these are
+randomly generated). The Telepathy API provides a mapping between
+Telepathy handles and unique names. As soon as someone has a unique
+name, they are a full participant in the tube and can send and receive
+D-Bus messages.
+
+Because we trust the server and (in future) have an encrypted and
+authenticated connection to it, there is no additional encryption -
+unencrypted Base64 messages flow through the server.
+
+On the mesh the problem is probably easier - because there's no trusted
+server, setting up a secure connection requires key negotiation in any
+case.
+
+Requirements:
+=============
+
+Buddy objects
+- -------------
+To avoid forcing activity authors to deal with Telepathy handles
+directly, we want to provide a map between unique bus names and Buddy
+objects, so the activity author can just deal with those.
+
+Ordering
+- --------
+To allow the network protocol to be relatively simple, we want the
+order of D-Bus messages in the tube to be guaranteed in the same way it is on
+a normal, daemon-based bus - namely, that everyone sees broadcast
+messages (signals) arriving in the same order, and that all the messages
+coming from a particular peer can be received in the same order they're
+sent in.
+
+Key as unique ID
+- ----------------
+Dan requires that the Buddy be uniquely identified by
+its public key and no Buddy object may be created until the public key is
+known. This is part of the current PS architecture.
+
+No undetected eavesdropping
+- ---------------------------
+(A softer requirement)
+
+Users should be able to tell when someone can receive their messages
+(and preferably who that someone is, but failing that it's useful to be able
+to tell that some as-yet unknown person has joined). Consider the
+case where Alice invites Bob to join the channel without Chris' knowledge,
+and Chris says something Bob wasn't meant to see having not realised Bob has
+already joined.
+
+Possible solutions
+==================
+
+Advantages/disadvantages marked +/-. Having thought these over, I quite
+like "Newcomer broadcasts key", which isn't a solution I'd thought of
+before writing this email, so I've put that one first.
+
+Newcomer broadcasts key
+- -----------------------
+When the new contact joins, they broadcast their key. Everyone else
+observes it and uses it to create a Buddy object if necessary. Until the
+key broadcast has been done, one of the other solutions (block the tube?
+drop their messages? buddy is None?) is used. Optionally, they could
+include their colour, nick and other small, useful things in the key
+broadcast.
+
+This could either be done inside each Tube (this would prevent activities
+from using an existing D-Bus protocol completely unchanged inside a
+Tube), in a special-purpose Tube (service name org.laptop.Tubes.BuddyInfo
+or something - I'd prefer this option), or in the Tubes channel outside
+any Tube (this would require a Telepathy spec extension).
+
++ in Salut the "key broadcast" might be synthesized by the CM since it
+  must already have the key in order to create the channel/tube
++ could be used as a basis for encrypted tubes in a future Telepathy
+  spec version? (an advantage for the community rather than for OLPC, really)
+- - unnecessary broadcast if everyone in the channel already has the
+  newcomer's key (n people joining a channel only cause O(n) traffic
+  though, and the key isn't huge)
+- - they can eavesdrop undetected until their identity is found, unless
+  the action taken until the broadcast prevents this
+
+Drop ordering
+- -------------
+Drop the Ordering requirement. When a new contact joins
+a tube, defer processsing all their messages until their identity can be
+discovered.
+
+- - writing robust protocols becomes hard
+- - eavesdropping possible
+- - it's hard to include the new contact in the UI as an "anonymous" grey XO
+  or something
+
+Blocked tube
+- ------------
+When a new contact joins a tube (or possibly a tubes channel),
+you stop processing all tube messages in that tube/channel (by
+detaching its fd from the main loop) until finding out the contact's identity
+has either succeeded or failed (if it fails, they can be shown in the UI
+as some sort of anonymous buddy - this would happen if an ordinary XMPP
+client joined, for instance).
+
++ conceptually very simple
++ the new contact can't eavesdrop on messages, if the blocking is
+  channel-wide
+- - suspending processing for the tube or channel may not be easy or even
+  possible in all bindings (this can of course be fixed by writing code)
+- - easy DoS in public channels - just join and don't reply to
+  identity-finding messages
+
+Ack required
+- ------------
+When a new contact joins a tube/channel, all messages from
+them in that tube/all tubes in the channel are dropped until all existing
+contacts in the tube/channel have acknowledged them. Existing contacts will
+only acknowledge the new contact when finding their identity has either failed
+or succeeded.
+
++ conceptually quite simple
+- - the unID'd client can eavesdrop in the meantime
+- - n people joining an empty channel cause O(n^2) broadcast messages and
+  O(n^3) traffic
+
+buddy is None
+- -------------
+When a new contact joins a tube/channel, their buddy
+object is None until their identity can be discovered. It's up to the
+activity how to deal with this - it could defer messages, implement an
+activity-specific protocol with acknowledgements required, or whatever.
+The application author knows what protocol they're implementing, so
+knows whether deferring messages is safe.
+
++ trivial to implement in the PS
++ UI immediately shows that *someone*'s joined
+- - moves the burden onto application authors, and there are more of them
+  than PS authors
+
+JID as unique ID
+- ----------------
+Drop the "key as unique ID" requirement. Look up Buddy objects by JID -
+then we can immediately know whether to create a new Buddy object and
+use an existing one.
+
++ A good fit for what's going on at the protocol level, so easy to
+  implement
++ Matches the behaviour expected from non-OLPC clients, so will be
+  familiar to desktop IM developers
+- - Major conceptual change to the Presence Service may break things
+- - You still don't have their public key until some later point
+
+Comments? Questions? Complaints? Additional requirements I haven't
+addressed or should think about?
+
+	Simon
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.6 (GNU/Linux)
+Comment: OpenPGP key: http://www.pseudorandom.co.uk/2003/contact/ or pgp.net
+
+iD8DBQFGSG1cWSc8zVUw7HYRAkolAKDehUQVxj//YeNvl1qrV0CjHglTjACdFEIG
+eKop+mO4VieiQnte1liL5Y0=
+=h3rw
+-----END PGP SIGNATURE-----
+_______________________________________________
+Sugar mailing list
+Sugar@laptop.org
+http://mailman.laptop.org/mailman/listinfo/sugar
+

@@ -1,0 +1,141 @@
+From perl6-all-return-81859-ktwarwic=speedy.uwaterloo.ca@perl.org  Thu Jun  7 04:07:14 2007
+Return-Path: <perl6-all-return-81859-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l5787ChB032093
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 7 Jun 2007 04:07:13 -0400
+Received: (qmail 30079 invoked by uid 514); 7 Jun 2007 08:07:04 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 30074 invoked from network); 7 Jun 2007 08:07:04 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: softfail (x1.develooper.com: transitioning domain of chromatic@wgz.org does not designate 63.251.223.186 as permitted sender)
+Delivered-To: perlmail-parrot-porters@onion.perl.org
+Delivered-To: parrot-porters@perl.org
+Received-SPF: pass (x1.develooper.com: domain of chromatic@wgz.org designates 63.105.17.39 as permitted sender)
+From: chromatic <chromatic@wgz.org>
+Organization: Snafu
+To: parrot-porters@perl.org
+Subject: P6 String Assertion Failure (diagnosis and fix)
+Date: Thu, 7 Jun 2007 01:06:13 -0700
+User-Agent: KMail/1.9.6
+MIME-Version: 1.0
+Content-Type: text/plain;
+  charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+Message-Id: <200706070106.13907.chromatic@wgz.org>
+X-Virus-Scanned: by amavisd-new at wgz.org
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.0 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_SOFTFAIL
+
+When I run the t/01-sanity/06-use.t test in languages/perl6, I get an 
+assertion failure:
+
+	parrot: src/string.c:2028: string_hash: Assertion `s->encoding && s->charset 
+&& !(((s)->obj.flags) & b_PObj_on_free_list_FLAG)' failed.
+
+This happens when trying to hash a string (specifically the 
+string 'Perl6::Grammar::quote_term').  I dug into this a little bit.  It's 
+the last test that fails; the string IS on the free list.  Something isn't 
+marking it as live appropriately.
+
+Here's the backtrace:
+
+Program received signal SIGABRT, Aborted.
+[Switching to Thread -1212417840 (LWP 15328)]
+0xffffe410 in __kernel_vsyscall ()
+(gdb) bt
+#0  0xffffe410 in __kernel_vsyscall ()
+#1  0x4d068df0 in raise () from /lib/tls/i686/cmov/libc.so.6
+#2  0x4d06a641 in abort () from /lib/tls/i686/cmov/libc.so.6
+#3  0x4d06243b in __assert_fail () from /lib/tls/i686/cmov/libc.so.6
+#4  0xb7dbbc0d in string_hash (interp=0x804e008, s=0x81e1600, seed=3793)
+    at src/string.c:2028
+#5  0xb7dc30be in key_hash_STRING (interp=0x804e008, value=0x81e1600, 
+    seed=3793) at src/hash.c:57
+#6  0xb7dc3dee in parrot_hash_get_bucket (interp=0x804e008, hash=0x805d138, 
+    key=0x81e1600) at src/hash.c:726
+#7  0xb7ea2663 in Parrot_Hash_exists_keyed (interp=0x804e008, pmc=0x82ab8b0, 
+    key=0x0) at ./src/pmc/hash.pmc:900
+#8  0xb7cd1f1b in Parrot_exists_i_p_kc (cur_opcode=0xb6af4230, 
+    interp=0x804e008) at src/ops/pmc.ops:327
+#9  0xb7dbe35b in runops_slow_core (interp=0x804e008, pc=0xb6af4230)
+    at src/runops_cores.c:184
+#10 0xb7da8d5e in runops_int (interp=0x804e008, offset=58)
+    at src/interpreter.c:779
+
+I poked around some more and found out that the string is in a Key PMC (okay, 
+that's obvious from the backtrace).  I can't see that the Key itself is 
+getting marked as live, which is a problem.
+
+The problem is that the actual string is in a register, in 
+TGE::Tree::_scan_node(), lines 66 - 75:
+
+    # Iterate over the elements of the visit hash for the given type
+    .local pmc actions
+    .local int index
+    .local pmc currule
+    $P2 = getattribute self, 'visit'
+    $I2 = exists $P2[type]
+    unless $I2 goto end_loop
+    actions = $P2[type]
+    index = actions
+
+That exists call is frame #8 in the backtrace.
+
+It makes *some* sense that the Key PMC created for that call doesn't mark the 
+String explicitly.  It's sort of a temporary thing (and the String has a flag 
+set marking that it's in a register).
+
+I wondered if register values weren't getting marked as live appropriately.  I 
+dug into mark_context() in src/sub.c and annotated that, to see if the string 
+does get marked.  (String registers do get marked as live.)
+
+Then I had an insight.  There's no guarantee that a GC run will occur unless 
+you force it, so I forced it in TGE::Tree just before the exists call:
+
+    .local pmc interp
+    interp = getinterp
+    interp.'run_gc'()
+    $P2 = getattribute self, 'visit'
+    $I2 = exists $P2[type]
+
+The test then passed.  The assertion was okay.  The String is obviously live, 
+after it gets marked as live.  I then wondered if strings get marked as live 
+when they're created.  The answer was in new_string_header() in 
+src/headers.c:
+
+	PObj_get_FLAGS(string) |= flags |PObj_is_string_FLAG|PObj_is_COWable_FLAG;
+
+I changed it:
+
+	PObj_get_FLAGS(string) |= flags |
+	        PObj_is_string_FLAG | PObj_is_COWable_FLAG | PObj_live_FLAG;
+
+Adding the live flag fixed the problem (r18855).
+
+Alternately, deleting that part of the assertion wouldn't entirely suck 
+either.  I'm not sure that anyone has dug into the encoding problem though, 
+so it ought to stay until we're sure that things work.
+
+-- c
+

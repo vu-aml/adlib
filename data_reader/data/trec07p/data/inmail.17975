@@ -1,0 +1,111 @@
+From perl6-all-return-80820-ktwarwic=speedy.uwaterloo.ca@perl.org  Mon Apr 23 15:04:27 2007
+Return-Path: <perl6-all-return-80820-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3NJ4Q0I005196
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 23 Apr 2007 15:04:27 -0400
+Received: (qmail 22865 invoked by uid 514); 23 Apr 2007 19:03:59 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 22860 invoked from network); 23 Apr 2007 19:03:58 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Delivered-To: parrotbug-followup@parrotcode.org
+Received-SPF: pass (x1.develooper.com: domain of jerry.gay@gmail.com designates 66.249.92.170 as permitted sender)
+DKIM-Signature: a=rsa-sha1; c=relaxed/relaxed;
+        d=gmail.com; s=beta;
+        h=domainkey-signature:received:received:message-id:date:from:to:subject:cc:in-reply-to:mime-version:content-type:content-transfer-encoding:content-disposition:references;
+        b=aBtG/RyFO1JfPRwfuA5j/BesgGmEcoHYyrt5rarbUpGE6OUPNOaWap0RjxA3sv/1ci7BfQ+We6XNMBUNq5pMMbFnamkqus41VwBM+s0J/VyFUs97YpzggZMfYC6a6lvUiSLqnotjMV+LDmIQ09CRLIvb7j9M+vZhGLe1htcrW8Q=
+DomainKey-Signature: a=rsa-sha1; c=nofws;
+        d=gmail.com; s=beta;
+        h=received:message-id:date:from:to:subject:cc:in-reply-to:mime-version:content-type:content-transfer-encoding:content-disposition:references;
+        b=kiH7qeZdBjP9plZWW+axv2mqiQFSPh0EknYH60tl42TMGC109dQV3LlLDosKPJAaKWSi6SgcOy0UjXgLhScOSjUJojsHpARpxav/zQpq7hivonk80omdXaOzLTi0SpZCYUg5hibt8SbnX/YeSbxIVHwPk/N8zGB6eKbOp9gaGHQ=
+Message-ID: <1d9a3f400704231142w69a466bbyd60f5063d21e74b5@mail.gmail.com>
+Date: Mon, 23 Apr 2007 11:42:49 -0700
+From: "jerry gay" <jerry.gay@gmail.com>
+To: chromatic <chromatic@wgz.org>
+Subject: Re: [perl #42320] [BUG] Memory leak with String pmc
+Cc: perl6-internals@perl.org,
+   "via RT Mehmet Yavuz Selim Soyturk" <parrotbug-followup@parrotcode.org>,
+   bugs-bitbucket@netlabs.develooper.com
+In-Reply-To: <200704231123.15215.chromatic@wgz.org>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8; format=flowed
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+References: <RT-Ticket-42320@perl.org>
+	 <1abd9eb20704051656o12ebe92eld3cc08374274e305@mail.gmail.com>
+	 <rt-3.6.HEAD-30557-1175817387-1673.42320-72-0@perl.org>
+	 <200704231123.15215.chromatic@wgz.org>
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED,SPF_PASS
+Status: O
+Content-Length: 1541
+Lines: 51
+
+On 4/23/07, chromatic <chromatic@wgz.org> wrote:
+> On Thursday 05 April 2007 16:56, Mehmet Yavuz Selim Soyturk wrote:
+>
+> > The next program causes a memory leak for me.
+> >
+> > .sub main :main
+> > loop:
+> >     $P0 = new .String
+> >     goto loop
+> > .end
+> >
+> >
+> > Interestingly, no memory leak with:
+> >
+> > .sub main :main
+> > loop:
+> >         $S0 = "foo"
+> >         $P0 = new .String
+> >         goto loop
+> > .end
+>
+> I can't explain that, but here's some suspicious code in
+> Parrot_allocate_string() in src/resources.c:
+>
+>     new_size = aligned_string_size(str, size);
+>     mem      = (char *)mem_allocate(interp, new_size, pool);
+>     mem     += sizeof (void*);
+>
+>     PObj_bufstart(str) =  str->strstart = mem;
+>     PObj_buflen(str)   = new_size - sizeof (void*);
+>
+> If I identify and read the related freeing code correctly (Parrot_dod_sweep()
+> in src/gc/dod.c):
+>
+>                 else if (PObj_sysmem_TEST(b) && PObj_bufstart(b)) {
+>                     /* has sysmem allocated, e.g. string_pin */
+>                     mem_sys_free(PObj_bufstart(b));
+>                     PObj_bufstart(b) = NULL;
+>                     PObj_buflen(b)   = 0;
+>                 }
+>
+> ... then there's a leak the sizeof (void *).
+>
+> I don't guarantee that I've identified the appropriate code clearly though;
+> digging through this is tricky.
+>
+> Does this sound familiar or interesting or fun to anyone else?
+>
+sounds to me like it could be a reason for the pge garbage collection
+problems that andy and i have experienced.
+~jerry
+

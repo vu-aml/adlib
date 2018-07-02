@@ -1,0 +1,140 @@
+From r-help-bounces@stat.math.ethz.ch  Thu May 17 11:48:22 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4HFmHqD001425
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 17 May 2007 11:48:18 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4HFlmeT000523;
+	Thu, 17 May 2007 17:47:54 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.0 required=5.0 tests=BAYES_50 autolearn=no
+	version=3.1.8
+Received: from thumper.research.telcordia.com (thumper.research.telcordia.com
+	[128.96.41.1])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4HFkftA032551
+	for <r-help@stat.math.ethz.ch>; Thu, 17 May 2007 17:46:56 +0200
+Received: from [192.4.9.36] (mc-pc.research.telcordia.com [192.4.9.36])
+	by thumper.research.telcordia.com (8.13.6/8.13.5) with ESMTP id
+	l4HFkeOg025692
+	for <r-help@stat.math.ethz.ch.>; Thu, 17 May 2007 11:46:40 -0400 (EDT)
+Message-ID: <464C78DF.2020103@research.telcordia.com>
+Date: Thu, 17 May 2007 11:46:39 -0400
+From: Allen McIntosh <mcintosh@research.telcordia.com>
+User-Agent: Thunderbird 1.5.0.10 (X11/20070301)
+MIME-Version: 1.0
+To: r-help@stat.math.ethz.ch
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Subject: [R] Passing single precision arrays to legacy code
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+System: Fedora Core 5
+R: 2.2.1 and 2.4.1, complied from source
+gcc: 4.1.1
+
+I'm trying to pass a single precision array to some legacy code.  I 
+ultimately got the code working by ignoring part of the help 
+documentation.  The code is actually in Fortran, but the following C 
+program illustrates the problem:
+
+$  cat foo.c
+#include <stdio.h>
+void
+foo(float *t) {
+         int *bar;
+         float f;
+         double d;
+         bar = (int *) t;
+         printf("hello world\n");
+         printf("%f %f\n", t[0], t[1]);
+         printf("%08x %08x %08x\n", bar[0], bar[1], bar[2]);
+         f = 1.0;
+         bar = (int *)&f;
+         printf("(float) 1.0 in hex: %08x\n", bar[0]);
+         d = 1.0;
+         bar = (int *)&d;
+         printf("(double) 1.0 in hex: %08x %08x\n", bar[0], bar[1]);
+}
+
+$ gcc -O0 -c foo.c
+$ gcc -shared -o foo.so foo.o
+$ R
+
+R version 2.4.1 (2006-12-18)
+Copyright (C) 2006 The R Foundation for Statistical Computing
+ISBN 3-900051-07-0
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+ > dyn.load("foo.so")
+ > .C("foo", as.single(1:3), DUP=F, PACKAGE="foo")
+hello world
+0.000000 1.875000
+00000000 3ff00000 00000000
+(float) 1.0 in hex: 3f800000
+(double) 1.0 in hex: 00000000 3ff00000
+[[1]]
+[1] 1 2 3
+attr(,"Csingle")
+[1] TRUE
+
+It's pretty clear from this that the array is getting passed as double, 
+despite the documentation:
+
+ > help(.C)
+... stuff omitted...
+      Numeric vectors in R will be passed as type 'double *' to C (and
+      as 'double precision' to Fortran) unless (i) '.C' or '.Fortran' is
+      used, (ii) 'DUP' is false and (iii) the argument has attribute
+      'Csingle' set to 'TRUE' (use 'as.single' or 'single').  This
+      mechanism is only intended to be used to facilitate the
+      interfacing of existing C and Fortran code.
+
+
+
+The online "Writing R Extensions" document doesn't mention DUP, and 
+indeed the following works:
+
+ > .C("foo", as.single(1:3), DUP=T, PACKAGE="foo")
+hello world
+1.000000 2.000000
+3f800000 40000000 40400000
+(float) 1.0 in hex: 3f800000
+(double) 1.0 in hex: 00000000 3ff00000
+[[1]]
+[1] 1 2 3
+attr(,"Csingle")
+[1] TRUE
+
+So is the help document incorrect?
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

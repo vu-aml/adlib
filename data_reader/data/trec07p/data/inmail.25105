@@ -1,0 +1,125 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Apr 30 04:54:57 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3U8su6w010978
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 30 Apr 2007 04:54:57 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id CD33E163959
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 30 Apr 2007 08:54:54 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL,UPPERCASE_25_50 autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 539)
+	id ECC65163836; Mon, 30 Apr 2007 08:53:57 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jelmer@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070430085357.ECC65163836@lists.samba.org>
+Date: Mon, 30 Apr 2007 08:53:57 +0000 (GMT)
+Subject: svn commit: samba r22596 - in branches/SAMBA_4_0: . source/lib/ldb
+	source/lib/talloc source/lib/tdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2685
+Lines: 82
+
+Author: jelmer
+Date: 2007-04-30 08:53:56 +0000 (Mon, 30 Apr 2007)
+New Revision: 22596
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22596
+
+Log:
+Set _CFLAGS variables rather than putting knowledge in the ldb Makefile. 
+This should make it easier to allow use of system tdb or talloc libs using 
+pkg-config.
+
+Modified:
+   branches/SAMBA_4_0/
+   branches/SAMBA_4_0/source/lib/ldb/Makefile.in
+   branches/SAMBA_4_0/source/lib/talloc/libtalloc.m4
+   branches/SAMBA_4_0/source/lib/tdb/libtdb.m4
+
+
+Changeset:
+
+Property changes on: branches/SAMBA_4_0
+___________________________________________________________________
+Name: bzr:merge
+...skipped...
+
+Modified: branches/SAMBA_4_0/source/lib/ldb/Makefile.in
+===================================================================
+--- branches/SAMBA_4_0/source/lib/ldb/Makefile.in	2007-04-30 08:08:36 UTC (rev 22595)
++++ branches/SAMBA_4_0/source/lib/ldb/Makefile.in	2007-04-30 08:53:56 UTC (rev 22596)
+@@ -18,11 +18,20 @@
+ EXTRA_OBJ=@EXTRA_OBJ@
+ TESTS=test-tdb.sh @TESTS@
+ 
++TALLOC_LIBS = @TALLOC_LIBS@
++TALLOC_CFLAGS = @TALLOC_CFLAGS@
++
++TDB_LIBS = @TDB_LIBS@
++TDB_CFLAGS = @TDB_CFLAGS@
++
++POPT_LIBS = @POPT_LIBS@
++POPT_CFLAGS = @POPT_CFLAGS@
++
+ CFLAGS=-g -I$(srcdir)/include -Iinclude -I$(srcdir) -I$(srcdir)/.. \
+-       @POPT_CFLAGS@ -I@tallocdir@ -I@tdbdir@/include -I@libreplacedir@ \
++       $(POPT_CFLAGS) $(TALLOC_CFLAGS) $(TDB_CFLAGS) -I@libreplacedir@ \
+ 	-DLIBDIR=\"$(libdir)\" -DSHLIBEXT=\"@SHLIBEXT@\" -DUSE_MMAP=1 @CFLAGS@
+ 
+-LIB_FLAGS=@LDFLAGS@ -Llib -lldb @LIBS@ @POPT_LIBS@
++LIB_FLAGS=@LDFLAGS@ -Llib -lldb @LIBS@ $(POPT_LIBS)
+ 
+ LDB_TDB_DIR=ldb_tdb
+ LDB_TDB_OBJ=$(LDB_TDB_DIR)/ldb_tdb.o \
+
+Modified: branches/SAMBA_4_0/source/lib/talloc/libtalloc.m4
+===================================================================
+--- branches/SAMBA_4_0/source/lib/talloc/libtalloc.m4	2007-04-30 08:08:36 UTC (rev 22595)
++++ branches/SAMBA_4_0/source/lib/talloc/libtalloc.m4	2007-04-30 08:53:56 UTC (rev 22596)
+@@ -15,6 +15,9 @@
+ TALLOCOBJ="talloc.o"
+ AC_SUBST(TALLOCOBJ)
+ 
++TALLOC_CFLAGS="-I$tallocdir"
++AC_SUBST(TALLOC_CFLAGS)
++
+ AC_CHECK_SIZEOF(size_t,cross)
+ AC_CHECK_SIZEOF(void *,cross)
+ 
+
+Modified: branches/SAMBA_4_0/source/lib/tdb/libtdb.m4
+===================================================================
+--- branches/SAMBA_4_0/source/lib/tdb/libtdb.m4	2007-04-30 08:08:36 UTC (rev 22595)
++++ branches/SAMBA_4_0/source/lib/tdb/libtdb.m4	2007-04-30 08:53:56 UTC (rev 22596)
+@@ -17,6 +17,9 @@
+ AC_SUBST(TDBOBJ)
+ AC_SUBST(LIBREPLACEOBJ)
+ 
++TDB_CFLAGS="-I$tdbdir/include"
++AC_SUBST(TDB_CFLAGS)
++
+ AC_CHECK_FUNCS(mmap pread pwrite getpagesize utime)
+ AC_CHECK_HEADERS(getopt.h sys/select.h sys/time.h)
+ 
+

@@ -1,0 +1,99 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May  2 14:46:44 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l42Ikib9025666
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 2 May 2007 14:46:44 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id BDBC7163875
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed,  2 May 2007 18:46:43 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.8 required=3.8 tests=BAYES_20,RCVD_IN_DSBL 
+	autolearn=no version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+X-Greylist: delayed 781 seconds by postgrey-1.24 at dp.samba.org;
+	Wed, 02 May 2007 18:46:06 GMT
+Received: from seaxch08.isilon.com (seaxch08.isilon.com [70.103.106.47])
+	by lists.samba.org (Postfix) with ESMTP id 4942D162ABF
+	for <samba-technical@samba.org>; Wed,  2 May 2007 18:46:06 +0000 (GMT)
+X-MimeOLE: Produced By Microsoft Exchange V6.5
+Content-class: urn:content-classes:message
+MIME-Version: 1.0
+Content-Type: text/plain;
+	charset="iso-8859-9"
+Date: Wed, 2 May 2007 11:33:03 -0700
+Message-ID: <80AC4A1F89131B46B4EBB0E168202F130115DCF4@seaxch08.desktop.isilon.com>
+In-Reply-To: <200704291324.58321.jhml@gmx.net>
+X-MS-Has-Attach: 
+X-MS-TNEF-Correlator: 
+Thread-Topic: Bug #3024 still trivial, still applies, still not in svn :-(
+Thread-Index: AceKaQlBq+lZr5ggQvisUku4a429JACe0WSQ
+References: <200704291324.58321.jhml@gmx.net>
+From: =?iso-8859-9?Q?Kaya_Bekiro=F0lu?= <kaya.bekiroglu@isilon.com>
+To: "Johann Hanne" <jhml@gmx.net>, <samba-technical@samba.org>
+Subject: RE: Bug #3024 still trivial, still applies, still not in svn :-(
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Content-Transfer-Encoding: 8bit
+X-MIME-Autoconverted: from quoted-printable to 8bit by flax9.uwaterloo.ca id l42Ikib9025666
+
+I independently fixed this for Isilon.  Our patches are essentially the same.  I added an additional fix for an incorrect usage of sam_entry_index in a DEBUG().  Using a while(1) is not correct as we could then overrun user_list.  We need a proper termination condition.
+
+--Kaya
+
+@@ -672,3 +696,9 @@ void winbindd_getpwent(struct winbindd_c
+ 
+-       for (i = 0; i < num_users; i++) {
++       /*
++        * samba.org's for loop is broken for large domains, because if
++        * winbindd_fill_pwent() fails, it will still count that iteration as
++        * one of the num_users.  This while condition will ensure that all
++        * num_users have been enumerated.
++        */
++       while (user_list_ndx < num_users) {
+                struct getpwent_user *name_list = NULL;
+@@ -713,6 +743,5 @@ void winbindd_getpwent(struct winbindd_c
+                        name_list[ent->sam_entry_index].shell,
++                       name_list[ent->sam_entry_index].email,
+                        &user_list[user_list_ndx]);
+ 
+-               ent->sam_entry_index++;
+-
+                /* Add user to return list */
+@@ -729,2 +758,9 @@ void winbindd_getpwent(struct winbindd_c
+                                  name_list[ent->sam_entry_index].name));
++ 
++               ent->sam_entry_index++;
+        }
+--Kaya
+
+
+-----Original Message-----
+From: samba-technical-bounces+kaya=isilon.com@lists.samba.org [mailto:samba-technical-bounces+kaya=isilon.com@lists.samba.org] On Behalf Of Johann Hanne
+Sent: Sunday, April 29, 2007 4:25 AM
+To: samba-technical@samba.org
+Subject: Bug #3024 still trivial, still applies, still not in svn :-(
+
+Hi,
+
+I just tested 3.0.25rc3 and found out, that bug #3024 is still in. Moreover, 
+the proposed patch still applies and it still fixes the bug. I'm getting a 
+little desperate on this. What's the problem? I'd do anything I can to get it 
+applied?!
+
+Cheers, Johann
+

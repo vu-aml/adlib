@@ -1,0 +1,172 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun May 13 21:04:42 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4E14fqD014355
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 13 May 2007 21:04:41 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 80E7516385E
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 14 May 2007 01:04:39 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 8FE8C162AD7; Mon, 14 May 2007 01:04:03 +0000 (GMT)
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070514010403.8FE8C162AD7@lists.samba.org>
+Date: Mon, 14 May 2007 01:04:03 +0000 (GMT)
+Subject: svn commit: samba r22834 - in branches/SAMBA_4_0/source/torture: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: tridge
+Date: 2007-05-14 01:04:01 +0000 (Mon, 14 May 2007)
+New Revision: 22834
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22834
+
+Log:
+
+fixed a memory leak in the torture_open_connection() code, and removed
+the duplicate handling of the unclist. This now exposes a function
+torture_get_conn_index() which can be used by tests to work out which
+host to talk to using the unclist. I will be using that as part of a
+set of tests for clustered Samba that need to do auto-reconnect (to
+allow testing of cluster node failure)
+
+Modified:
+   branches/SAMBA_4_0/source/torture/util_smb.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/torture/util_smb.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/util_smb.c	2007-05-14 01:01:05 UTC (rev 22833)
++++ branches/SAMBA_4_0/source/torture/util_smb.c	2007-05-14 01:04:01 UTC (rev 22834)
+@@ -486,71 +486,66 @@
+ 	return True;
+ }
+ 
+-_PUBLIC_ bool torture_open_connection(struct smbcli_state **c, int conn_index)
++_PUBLIC_ bool torture_get_conn_index(int conn_index,
++				     TALLOC_CTX *mem_ctx,
++				     char **host, char **share)
+ {
+-	const char *host = lp_parm_string(-1, "torture", "host");
+-	const char *share = lp_parm_string(-1, "torture", "share");
+ 	char **unc_list = NULL;
+ 	int num_unc_names = 0;
+ 	const char *p;
++
++	(*host) = talloc_strdup(mem_ctx, lp_parm_string(-1, "torture", "host"));
++	(*share) = talloc_strdup(mem_ctx, lp_parm_string(-1, "torture", "share"));
+ 	
+ 	p = lp_parm_string(-1, "torture", "unclist");
+-	if (p) {
+-		char *h, *s;
+-		unc_list = file_lines_load(p, &num_unc_names, NULL);
+-		if (!unc_list || num_unc_names <= 0) {
+-			printf("Failed to load unc names list from '%s'\n", p);
+-			exit(1);
+-		}
++	if (!p) {
++		return True;
++	}
+ 
+-		if (!smbcli_parse_unc(unc_list[conn_index % num_unc_names],
+-				      NULL, &h, &s)) {
+-			printf("Failed to parse UNC name %s\n",
+-			       unc_list[conn_index % num_unc_names]);
+-			exit(1);
+-		}
+-		host = h;
+-		share = s;
++	unc_list = file_lines_load(p, &num_unc_names, NULL);
++	if (!unc_list || num_unc_names <= 0) {
++		DEBUG(0,("Failed to load unc names list from '%s'\n", p));
++		return False;
+ 	}
+ 
+-	return torture_open_connection_share(NULL, c, host, share, NULL);
++	if (!smbcli_parse_unc(unc_list[conn_index % num_unc_names],
++			      mem_ctx, host, share)) {
++		DEBUG(0, ("Failed to parse UNC name %s\n",
++			  unc_list[conn_index % num_unc_names]));
++		return False;
++	}
++
++	talloc_free(unc_list);
++	return True;
+ }
+ 
++
++
+ _PUBLIC_ bool torture_open_connection_ev(struct smbcli_state **c,
+ 					 int conn_index,
+ 					 struct event_context *ev)
+ {
+-	const char *host = lp_parm_string(-1, "torture", "host");
+-	const char *share = lp_parm_string(-1, "torture", "share");
+-	char **unc_list = NULL;
+-	int num_unc_names = 0;
+-	const char *p;
+-	
+-	p = lp_parm_string(-1, "torture", "unclist");
+-	if (p) {
+-		char *h, *s;
+-		unc_list = file_lines_load(p, &num_unc_names, NULL);
+-		if (!unc_list || num_unc_names <= 0) {
+-			printf("Failed to load unc names list from '%s'\n", p);
+-			exit(1);
+-		}
++	char *host, *share;
++	bool ret;
+ 
+-		if (!smbcli_parse_unc(unc_list[conn_index % num_unc_names],
+-				      NULL, &h, &s)) {
+-			printf("Failed to parse UNC name %s\n",
+-			       unc_list[conn_index % num_unc_names]);
+-			exit(1);
+-		}
+-		host = h;
+-		share = s;
++	if (!torture_get_conn_index(conn_index, ev, &host, &share)) {
++		return False;
+ 	}
+ 
++	ret = torture_open_connection_share(NULL, c, host, share, ev);
++	talloc_free(host);
++	talloc_free(share);
+ 
+-	return torture_open_connection_share(NULL, c, host, share, ev);
++	return ret;
+ }
+ 
++_PUBLIC_ bool torture_open_connection(struct smbcli_state **c, int conn_index)
++{
++	return torture_open_connection_ev(c, conn_index, NULL);
++}
+ 
+ 
++
+ _PUBLIC_ bool torture_close_connection(struct smbcli_state *c)
+ {
+ 	bool ret = True;
+

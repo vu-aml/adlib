@@ -1,0 +1,114 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Apr 23 05:46:48 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3N9km0I031927
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 23 Apr 2007 05:46:48 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 2EDAA163888
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 23 Apr 2007 09:46:23 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.7 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL,UPPERCASE_25_50 autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 535)
+	id 98BEE162AD9; Mon, 23 Apr 2007 09:46:07 +0000 (GMT)
+To: samba-cvs@samba.org
+From: idra@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070423094607.98BEE162AD9@lists.samba.org>
+Date: Mon, 23 Apr 2007 09:46:07 +0000 (GMT)
+Subject: svn commit: samba r22482 - in branches/SAMBA_3_0_25/source: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2397
+Lines: 72
+
+Author: idra
+Date: 2007-04-23 09:46:06 +0000 (Mon, 23 Apr 2007)
+New Revision: 22482
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22482
+
+Log:
+
+Fix our brokeness in building shared libraries.
+Mixing -shared and -pie is not sane.
+
+Jerry this should be in 3.0.25 final, it fixed building on IA64
+and works ok on F7 (test using libsmbclient)
+
+
+Modified:
+   branches/SAMBA_3_0_25/source/Makefile.in
+
+
+Changeset:
+Modified: branches/SAMBA_3_0_25/source/Makefile.in
+===================================================================
+--- branches/SAMBA_3_0_25/source/Makefile.in	2007-04-23 09:19:35 UTC (rev 22481)
++++ branches/SAMBA_3_0_25/source/Makefile.in	2007-04-23 09:46:06 UTC (rev 22482)
+@@ -23,10 +23,10 @@
+ CFLAGS=@CFLAGS@
+ CPPFLAGS=-DHAVE_CONFIG_H @CPPFLAGS@
+ EXEEXT=@EXEEXT@
+-LDFLAGS=@PIE_LDFLAGS@ @LDFLAGS@
+ AR=@AR@
+ LDSHFLAGS=@LDSHFLAGS@ @LDFLAGS@
+ WINBIND_NSS_LDSHFLAGS=@WINBIND_NSS_LDSHFLAGS@ @LDFLAGS@
++LDFLAGS=@PIE_LDFLAGS@ @LDFLAGS@
+ AWK=@AWK@
+ PICFLAG=@PICFLAG@
+ DYNEXP=@DYNEXP@
+@@ -1144,7 +1144,7 @@
+ 
+ bin/libaddns.@SHLIBEXT@: proto_exists $(LIBADDNS_OBJ)
+ 	@echo Linking libaddns shared library $@
+-	@$(SHLD) $(LDSHFLAGS) -o $@ $(LIBADDNS_OBJ) $(LDFLAGS) $(LIBS) \
++	@$(SHLD) $(LDSHFLAGS) -o $@ $(LIBADDNS_OBJ) $(LIBS) \
+ 		$(KRB5LIBS) $(UUID_LIBS)\
+ 		@SONAMEFLAG@`basename $@`.$(LIBADDNS_MAJOR)
+ 
+@@ -1154,7 +1154,7 @@
+ 
+ bin/libsmbclient.@SHLIBEXT@: proto_exists $(LIBSMBCLIENT_OBJ)
+ 	@echo Linking libsmbclient shared library $@
+-	@$(SHLD) $(LDSHFLAGS) -o $@ $(LIBSMBCLIENT_OBJ) $(LDFLAGS) $(LIBS) \
++	@$(SHLD) $(LDSHFLAGS) -o $@ $(LIBSMBCLIENT_OBJ) $(LIBS) \
+ 		$(KRB5LIBS) $(LDAP_LIBS) $(NSCD_LIBS) \
+ 		@SONAMEFLAG@`basename $@`.$(LIBSMBCLIENT_MAJOR)
+ 
+@@ -1164,7 +1164,7 @@
+ 
+ bin/libsmbsharemodes.@SHLIBEXT@: proto_exists $(LIBSMBSHAREMODES_OBJ)
+ 	@echo Linking libsmbsharemodes shared library $@
+-	@$(SHLD) $(LDSHFLAGS) -o $@ $(LIBSMBSHAREMODES_OBJ) $(LDFLAGS) $(LIBS) \
++	@$(SHLD) $(LDSHFLAGS) -o $@ $(LIBSMBSHAREMODES_OBJ) $(LIBS) \
+ 		$(KRB5LIBS) $(LDAP_LIBS) \
+ 		@SONAMEFLAG@`basename $@`.$(LIBSMBSHAREMODES_MAJOR)
+ 
+@@ -1174,7 +1174,7 @@
+ 
+ bin/libmsrpc.@SHLIBEXT@: proto_exists $(CAC_OBJ)
+ 	@echo Linking libmsrpc shared library $@
+-	@$(SHLD) $(LDSHFLAGS) -o $@ $(CAC_OBJ) $(LDFLAGS) $(LIBS) \
++	@$(SHLD) $(LDSHFLAGS) -o $@ $(CAC_OBJ) $(LIBS) \
+ 	@SONAMEFLAG@`basename $@`.$(LIBMSRPC_MAJOR)
+ 
+ bin/libmsrpc.a: proto_exists $(CAC_OBJ)
+

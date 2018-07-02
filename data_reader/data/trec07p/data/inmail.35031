@@ -1,0 +1,106 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun May 13 00:09:06 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4D496qD023467
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 13 May 2007 00:09:06 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 99E73162BCD
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 13 May 2007 04:09:03 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.3 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL,UPPERCASE_25_50 autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1013)
+	id 39656162AD4; Sun, 13 May 2007 04:08:27 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jpeach@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070513040827.39656162AD4@lists.samba.org>
+Date: Sun, 13 May 2007 04:08:27 +0000 (GMT)
+Subject: svn commit: samba r22820 - in branches/SAMBA_3_0/source: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: jpeach
+Date: 2007-05-13 04:08:26 +0000 (Sun, 13 May 2007)
+New Revision: 22820
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22820
+
+Log:
+Move FAM libraries from smbd to vfs_fam_notify. Should fix bugzilla #4426.
+
+Modified:
+   branches/SAMBA_3_0/source/Makefile.in
+   branches/SAMBA_3_0/source/configure.in
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/Makefile.in
+===================================================================
+--- branches/SAMBA_3_0/source/Makefile.in	2007-05-12 19:53:47 UTC (rev 22819)
++++ branches/SAMBA_3_0/source/Makefile.in	2007-05-13 04:08:26 UTC (rev 22820)
+@@ -1620,7 +1620,7 @@
+ 
+ bin/notify_fam.@SHLIBEXT@: $(VFS_NOTIFY_FAM_OBJ)
+ 	@echo "Building plugin $@"
+-	@$(SHLD_MODULE) $(VFS_NOTIFY_FAM_OBJ)
++	@$(SHLD_MODULE) $(VFS_NOTIFY_FAM_OBJ) @SMB_FAM_LIBS@
+ 
+ bin/readahead.@SHLIBEXT@: $(VFS_READAHEAD_OBJ)
+ 	@echo "Building plugin $@"
+
+Modified: branches/SAMBA_3_0/source/configure.in
+===================================================================
+--- branches/SAMBA_3_0/source/configure.in	2007-05-12 19:53:47 UTC (rev 22819)
++++ branches/SAMBA_3_0/source/configure.in	2007-05-13 04:08:26 UTC (rev 22820)
+@@ -2645,13 +2645,13 @@
+         # On IRIX, libfam requires libC, but other FAM implementations
+ 	# might not need it.
+         AC_CHECK_LIB(fam, FAMOpen2,
+-            [samba_cv_HAVE_LIBFAM=yes; samba_fam_libs="-lfam"],
++            [samba_cv_HAVE_LIBFAM=yes; SMB_FAM_LIBS="-lfam"],
+             [samba_cv_HAVE_LIBFAM=no])
+ 
+         if test x"$samba_cv_HAVE_LIBFAM" = x"no" ; then
+             samba_fam_xtra=-lC
+             AC_CHECK_LIB_EXT(fam, samba_fam_xtra, FAMOpen2,
+-                [samba_cv_HAVE_LIBFAM=yes; samba_fam_libs="-lfam -lC"],
++                [samba_cv_HAVE_LIBFAM=yes; SMB_FAM_LIBS="-lfam -lC"],
+                 [samba_cv_HAVE_LIBFAM=no])
+             unset samba_fam_xtra
+         fi
+@@ -2671,6 +2671,8 @@
+     fi
+ fi
+ 
++AC_SUBST(SMB_FAM_LIBS)
++
+ #################################################
+ # Check for DMAPI interfaces in libdm/libjfsdm/libxsdm
+ 
+@@ -6376,7 +6378,7 @@
+ 
+ # Stuff the smbd-only libraries at the end of the smbd link
+ # path (if we have them).
+-SMBD_LIBS="$samba_fam_libs $samba_dmapi_libs"
++SMBD_LIBS="$samba_dmapi_libs"
+ AC_SUBST(SMBD_LIBS)
+ 
+ AC_OUTPUT(include/stamp-h Makefile script/findsmb smbadduser script/gen-8bit-gap.sh script/installbin.sh script/uninstallbin.sh)
+

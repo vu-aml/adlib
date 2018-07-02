@@ -1,0 +1,223 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Jun 11 06:48:03 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5BAm2L9013060
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 11 Jun 2007 06:48:02 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 1AB131638BE
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 11 Jun 2007 10:48:02 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1017)
+	id 020FE1638D3; Mon, 11 Jun 2007 10:46:27 +0000 (GMT)
+To: samba-cvs@samba.org
+From: obnox@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070611104628.020FE1638D3@lists.samba.org>
+Date: Mon, 11 Jun 2007 10:46:27 +0000 (GMT)
+Subject: svn commit: samba r23415 - in branches/SAMBA_3_0_26/source: . utils
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: obnox
+Date: 2007-06-11 10:46:25 +0000 (Mon, 11 Jun 2007)
+New Revision: 23415
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23415
+
+Log:
+Merge introduction of lib/util_reg.c from r16945.
+(Can't find logs/diffs from trunk anymore.)
+
+Michael
+
+
+Modified:
+   branches/SAMBA_3_0_26/source/Makefile.in
+   branches/SAMBA_3_0_26/source/utils/net_rpc_printer.c
+   branches/SAMBA_3_0_26/source/utils/net_rpc_registry.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0_26/source/Makefile.in
+===================================================================
+--- branches/SAMBA_3_0_26/source/Makefile.in	2007-06-11 10:28:23 UTC (rev 23414)
++++ branches/SAMBA_3_0_26/source/Makefile.in	2007-06-11 10:46:25 UTC (rev 23415)
+@@ -267,7 +267,7 @@
+ 	  lib/ufc.o lib/genrand.o lib/username.o \
+ 	  lib/util_pw.o lib/access.o lib/smbrun.o \
+ 	  lib/bitmap.o lib/crc32.o lib/dprintf.o \
+-	  lib/xfile.o lib/wins_srv.o \
++	  lib/xfile.o lib/wins_srv.o lib/util_reg.o \
+ 	  lib/util_str.o lib/clobber.o lib/util_sid.o lib/util_uuid.o \
+ 	  lib/util_unistr.o lib/util_file.o lib/data_blob.o \
+ 	  lib/util.o lib/util_sock.o lib/sock_exec.o lib/util_sec.o \
+
+Modified: branches/SAMBA_3_0_26/source/utils/net_rpc_printer.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/utils/net_rpc_printer.c	2007-06-11 10:28:23 UTC (rev 23414)
++++ branches/SAMBA_3_0_26/source/utils/net_rpc_printer.c	2007-06-11 10:46:25 UTC (rev 23415)
+@@ -129,18 +129,23 @@
+ 		break;
+ 
+ 	case REG_MULTI_SZ: {
+-		uint16 *curstr = (uint16 *) value.data_p;
+-		uint8 *start = value.data_p;
+-		d_printf("\t[%s:%s]: REG_MULTI_SZ:\n", subkey, value.valuename);
+-		while ((*curstr != 0) && 
+-		       ((uint8 *) curstr < start + value.size)) {
+-			rpcstr_pull(text, curstr, sizeof(text), -1, 
+-				    STR_TERMINATE);
+-			d_printf("%s\n", text);
+-			curstr += strlen(text) + 1;
++		int i, num_values;
++		char **values;
++
++		if (!NT_STATUS_IS_OK(reg_pull_multi_sz(NULL, value.data_p,
++						       value.size,
++						       &num_values,
++						       &values))) {
++			d_printf("reg_pull_multi_sz failed\n");
++			break;
+ 		}
++
++		for (i=0; i<num_values; i++) {
++			d_printf("%s\n", values[i]);
++		}
++		TALLOC_FREE(values);
++		break;
+ 	}
+-	break;
+ 
+ 	default:
+ 		d_printf("\t%s: unknown type %d\n", value.valuename, value.type);
+
+Modified: branches/SAMBA_3_0_26/source/utils/net_rpc_registry.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/utils/net_rpc_registry.c	2007-06-11 10:28:23 UTC (rev 23414)
++++ branches/SAMBA_3_0_26/source/utils/net_rpc_registry.c	2007-06-11 10:46:25 UTC (rev 23415)
+@@ -25,35 +25,6 @@
+ /********************************************************************
+ ********************************************************************/
+ 
+-char* dump_regval_type( uint32 type )
+-{
+-	static fstring string;
+-	
+-	switch (type) {
+-	case REG_SZ:
+-		fstrcpy( string, "REG_SZ" );
+-		break;
+-	case REG_MULTI_SZ:
+-		fstrcpy( string, "REG_MULTI_SZ" );
+-		break;
+-	case REG_EXPAND_SZ:
+-		fstrcpy( string, "REG_EXPAND_SZ" );
+-		break;
+-	case REG_DWORD:
+-		fstrcpy( string, "REG_DWORD" );
+-		break;
+-	case REG_BINARY:
+-		fstrcpy( string, "REG_BINARY" );
+-		break;
+-	default:
+-		fstr_sprintf( string, "UNKNOWN [%d]", type );
+-	}
+-	
+-	return string;
+-}
+-/********************************************************************
+-********************************************************************/
+-
+ void dump_regval_buffer( uint32 type, REGVAL_BUFFER *buffer )
+ {
+ 	pstring string;
+@@ -64,9 +35,26 @@
+ 		rpcstr_pull( string, buffer->buffer, sizeof(string), -1, STR_TERMINATE );
+ 		d_printf("%s\n", string);
+ 		break;
+-	case REG_MULTI_SZ:
++	case REG_MULTI_SZ: {
++		int i, num_values;
++		char **values;
++
+ 		d_printf("\n");
++
++		if (!NT_STATUS_IS_OK(reg_pull_multi_sz(NULL, buffer->buffer,
++						       buffer->buf_len,
++						       &num_values,
++						       &values))) {
++			d_printf("reg_pull_multi_sz failed\n");
++			break;
++		}
++
++		for (i=0; i<num_values; i++) {
++			d_printf("%s\n", values[i]);
++		}
++		TALLOC_FREE(values);
+ 		break;
++	}
+ 	case REG_DWORD:
+ 		value = IVAL( buffer->buffer, 0 );
+ 		d_printf( "0x%x\n", value );
+@@ -113,16 +101,17 @@
+ 	
+ 	result = rpccli_reg_connect(pipe_hnd, mem_ctx, hive, MAXIMUM_ALLOWED_ACCESS, &pol_hive );
+ 	if ( !W_ERROR_IS_OK(result) ) {
+-		d_fprintf(stderr, "Unable to connect to remote registry\n");
++		d_fprintf(stderr, "Unable to connect to remote registry: "
++			  "%s\n", dos_errstr(result));
+ 		return werror_to_ntstatus(result);
+ 	}
+ 	
+-	if ( strlen( subpath ) != 0 ) {
+-		result = rpccli_reg_open_entry(pipe_hnd, mem_ctx, &pol_hive, subpath, MAXIMUM_ALLOWED_ACCESS, &pol_key );
+-		if ( !W_ERROR_IS_OK(result) ) {
+-			d_fprintf(stderr, "Unable to open [%s]\n", argv[0]);
+-			return werror_to_ntstatus(result);
+-		}
++	result = rpccli_reg_open_entry(pipe_hnd, mem_ctx, &pol_hive, subpath,
++				       MAXIMUM_ALLOWED_ACCESS, &pol_key );
++	if ( !W_ERROR_IS_OK(result) ) {
++		d_fprintf(stderr, "Unable to open [%s]: %s\n", argv[0],
++			  dos_errstr(result));
++		return werror_to_ntstatus(result);
+ 	}
+ 	
+ 	/* get the subkeys */
+@@ -173,7 +162,7 @@
+ 		}
+ 			
+ 		d_printf("Valuename  = %s\n", name );
+-		d_printf("Type       = %s\n", dump_regval_type(type) );
++		d_printf("Type       = %s\n", reg_type_lookup(type));
+ 		d_printf("Data       = " );
+ 		dump_regval_buffer( type, &value );
+ 		d_printf("\n" );
+@@ -279,7 +268,7 @@
+ 
+ 	for ( i=0; i<nk->num_values; i++ ) {
+ 		d_printf( "\"%s\" = ", nk->values[i].valuename ? nk->values[i].valuename : "(default)" );
+-		d_printf( "(%s) ", dump_regval_type( nk->values[i].type ) );
++		d_printf( "(%s) ", reg_type_lookup( nk->values[i].type ) );
+ 
+ 		data_size = nk->values[i].data_size & ~VK_DATA_IN_OFFSET;
+ 		switch ( nk->values[i].type ) {
+

@@ -1,0 +1,100 @@
+From perl6-all-return-81530-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue May 22 17:24:59 2007
+Return-Path: <perl6-all-return-81530-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4MLOvqD017212
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 22 May 2007 17:24:58 -0400
+Received: (qmail 16214 invoked by uid 514); 22 May 2007 21:24:53 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 16209 invoked from network); 22 May 2007 21:24:53 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: Steve Peters (via RT) <parrotbug-followup@parrotcode.org>
+X-RT-NewTicket: yes
+To: bugs-bitbucket@netlabs.develooper.com
+Resent-To: perl6-internals@perl.org
+Mail-Followup-To: perl6-internals@perl.org
+Reply-To: perl6-internals@perl.org
+Date: Tue, 22 May 2007 14:24:14 -0700
+Subject: [perl #43033] [PATCH] Silence warning 
+In-Reply-To: <20070522212346.GA30259@kirk.peters.homeunix.org>
+References: <RT-Ticket-43033@perl.org> <20070522212346.GA30259@kirk.peters.homeunix.org>
+Message-ID: <rt-3.6.HEAD-4015-1179869054-174.43033-72-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #43033
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: steve@fisharerojo.org
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+X-RT-Original-Encoding: utf-8
+Resent-Message-Id: <20070522212414.E4A572AFDA@x3.develooper.com>
+Resent-Date: Tue, 22 May 2007 14:24:14 -0700 (PDT)
+Resent-From: rt-steve=fisharerojo.org@netlabs.develooper.com
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+
+# New Ticket Created by  Steve Peters 
+# Please include the string:  [perl #43033]
+# in the subject line of all future correspondence about this issue. 
+# <URL: http://rt.perl.org/rt3/Ticket/Display.html?id=43033 >
+
+
+free() assumes its passed a void *.  mem_sys_free() should take the same type
+of argument.  Assuming that what you are passing to free() will never be 
+modified is a bit risky and may prevent various memory debugging aids from
+working correctly.
+
+Steve Peters
+steve@fisharerojo.org
+
+Index: src/gc/memory.c
+===================================================================
+--- src/gc/memory.c     (revision 18626)
++++ src/gc/memory.c     (working copy)
+@@ -153,13 +153,13 @@
+ */
+
+ void
+-mem_sys_free(const void * const from)
++mem_sys_free(void * from)
+ {
+ #ifdef DETAIL_MEMORY_DEBUG
+     fprintf(stderr, "Freed %p\n", from);
+ #endif
+     if (from)
+-        free((void *)from);
++        free(from);
+ }
+
+ void
+Index: include/parrot/memory.h
+===================================================================
+--- include/parrot/memory.h     (revision 18626)
++++ include/parrot/memory.h     (working copy)
+@@ -19,7 +19,7 @@
+
+ PARROT_API void *mem__sys_realloc(void *, size_t);
+ #define mem_sys_realloc(x,y) (assert(x!=NULL), mem__sys_realloc(x,y))
+-PARROT_API void mem_sys_free(const void * const);
++PARROT_API void mem_sys_free(void *);
+
+ void *mem__internal_allocate(size_t, const char *, int);
+ #define mem_internal_allocate(x) mem__internal_allocate(x, __FILE__, __LINE__)
+

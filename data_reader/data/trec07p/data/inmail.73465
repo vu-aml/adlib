@@ -1,0 +1,101 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Jul  4 01:16:35 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l645GZL9006061
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 4 Jul 2007 01:16:35 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 549F4163838
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed,  4 Jul 2007 05:16:31 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id EF6DD162BCC; Wed,  4 Jul 2007 05:16:20 +0000 (GMT)
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070704051620.EF6DD162BCC@lists.samba.org>
+Date: Wed,  4 Jul 2007 05:16:20 +0000 (GMT)
+Subject: svn commit: samba r23700 - in branches/SAMBA_4_0/source/smb_server:
+	.
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: tridge
+Date: 2007-07-04 05:16:19 +0000 (Wed, 04 Jul 2007)
+New Revision: 23700
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23700
+
+Log:
+
+pre-open the sam in the parent smbd. This has the effect of loading
+the schema. That stops us loading the schema for each new connection.
+
+In future I would prefer to share a lot more of our ldb contexts with
+children. That will require a larger piece of surgery.
+
+Modified:
+   branches/SAMBA_4_0/source/smb_server/smb_server.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/smb_server/smb_server.c
+===================================================================
+--- branches/SAMBA_4_0/source/smb_server/smb_server.c	2007-07-04 05:15:06 UTC (rev 23699)
++++ branches/SAMBA_4_0/source/smb_server/smb_server.c	2007-07-04 05:16:19 UTC (rev 23700)
+@@ -32,6 +32,7 @@
+ #include "system/network.h"
+ #include "lib/socket/netif.h"
+ #include "param/share.h"
++#include "dsdb/samdb/samdb.h"
+ 
+ static NTSTATUS smbsrv_recv_generic_request(void *private, DATA_BLOB blob)
+ {
+@@ -192,7 +193,20 @@
+ 	return NT_STATUS_OK;
+ }
+ 
++
+ /*
++  pre-open some of our ldb databases, to prevent an explosion of memory usage
++  when we fork
++ */
++static void smbsrv_preopen_ldb(struct task_server *task)
++{
++	/* yes, this looks strange. It is a hack to preload the
++	   schema. I'd like to share most of the ldb context with the
++	   child too. That will come later */
++	talloc_free(samdb_connect(task, NULL));
++}
++
++/*
+   open the smb server sockets
+ */
+ static void smbsrv_task_init(struct task_server *task)
+@@ -220,6 +234,8 @@
+ 		if (!NT_STATUS_IS_OK(status)) goto failed;
+ 	}
+ 
++	smbsrv_preopen_ldb(task);
++
+ 	return;
+ failed:
+ 	task_server_terminate(task, "Failed to startup smb server task");	
+

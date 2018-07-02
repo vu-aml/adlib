@@ -1,0 +1,103 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Apr 11 00:54:27 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3B4sQ0I012763
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 11 Apr 2007 00:54:26 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 7BF6B1638BC
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 11 Apr 2007 04:54:03 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.0 required=3.8 tests=AWL,BAYES_50,NO_RELAYS,
+	RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: by lists.samba.org (Postfix, from userid 549)
+	id 4B480162AD4; Wed, 11 Apr 2007 04:53:48 +0000 (GMT)
+Date: Tue, 10 Apr 2007 21:52:47 -0700
+From: Jeremy Allison <jra@samba.org>
+To: tridge@samba.org
+Message-ID: <20070411045247.GB30727@jeremy2>
+References: <57a21f730704061851p3012d87aq4df515c9a16cc28a@mail.gmail.com>
+	<57a21f730704101828n5afac527xfb6a00225ae386ab@mail.gmail.com>
+	<17948.22781.299426.400462@samba.org>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="DocE+STaALJfprDB"
+Content-Disposition: inline
+In-Reply-To: <17948.22781.299426.400462@samba.org>
+User-Agent: Mutt/1.5.12-2006-07-14
+Cc: samba-technical@lists.samba.org, Volker.Lendecke@SerNet.DE
+Subject: Re: tdb_transaction_cancel
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: Jeremy Allison <jra@samba.org>
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 1567
+Lines: 52
+
+
+--DocE+STaALJfprDB
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+
+On Wed, Apr 11, 2007 at 01:41:49PM +1000, tridge@samba.org wrote:
+> Taj,
+> 
+>  > here's a contrived test case.  it aborts with the latest tdb in svn,
+>  > but works ok with the tdb in samba4-tp4.
+>  > 
+>  > could someone please confirm if this is a bug, or a
+>  > misunderstanding/misuse of the tdb api on my part?
+> 
+> you are absolutely right.
+> 
+> Volker, this seems to have been broken by r21303 in Samba3. Can you
+> remember why you removed the 
+>    tdb->locked[h].count = 0;
+> line in that commit? Without that line the tdb still thinks the tdb is
+> locked after a transaction cancel.
+> 
+> I know the code has to change, as lockrecs is now dynamic, but I think
+> we need something equivalent there. Perhaps we can just deleting the
+> list? You are not allowed to start a transaction when locks are held,
+> so we should be able to wipe the lock list when the transaction is
+> cancelled.
+
+I think you're correct. Here's a patch - let me know what
+you think.
+
+Jeremy.
+
+--DocE+STaALJfprDB
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: attachment; filename=look
+
+Index: tdb/common/transaction.c
+===================================================================
+--- tdb/common/transaction.c	(revision 22131)
++++ tdb/common/transaction.c	(working copy)
+@@ -523,6 +523,8 @@
+ 				   F_UNLCK,F_SETLKW, 0, 1);
+ 		}
+ 		tdb->num_locks = 0;
++		tdb->num_lockrecs = 0;
++		SAFE_FREE(tdb->lockrecs);
+ 	}
+ 
+ 	/* restore the normal io methods */
+
+--DocE+STaALJfprDB--
+

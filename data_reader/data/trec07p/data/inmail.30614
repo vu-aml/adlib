@@ -1,0 +1,240 @@
+From perl6-all-return-81153-ktwarwic=speedy.uwaterloo.ca@perl.org  Mon May  7 10:51:21 2007
+Return-Path: <perl6-all-return-81153-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l47EpKqD032418
+	for <ktwarwic@flax9.uwaterloo.ca>; Mon, 7 May 2007 10:51:20 -0400
+Received: (qmail 29813 invoked by uid 514); 7 May 2007 14:51:18 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 29808 invoked from network); 7 May 2007 14:51:18 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: moderator for perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: Mike Mattie (via RT) <parrotbug-followup@parrotcode.org>
+X-RT-NewTicket: yes
+To: bugs-bitbucket@netlabs.develooper.com
+Resent-To: perl6-internals@perl.org
+Mail-Followup-To: perl6-internals@perl.org
+Reply-To: perl6-internals@perl.org
+Date: Mon, 07 May 2007 04:28:23 -0700
+Subject: [perl #42898] [PATCH] src/library.c , honor PARROT_PREFER_SOURCE in extension guessing 
+In-Reply-To: <20070507042157.61eadd7b@reforged>
+References: <RT-Ticket-42898@perl.org> <20070507042157.61eadd7b@reforged>
+Message-ID: <rt-3.6.HEAD-12281-1178537304-773.42898-72-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #42898
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: codermattie@gmail.com
+MIME-Version: 1.0
+X-RT-Original-Encoding: utf-8
+Content-type: multipart/mixed; boundary="----------=_1178537304-12281-23"
+Resent-Message-Id: <20070507112825.5667B2AFD5@x3.develooper.com>
+Resent-Date: Mon,  7 May 2007 04:28:25 -0700 (PDT)
+Resent-From: rt-codermattie=gmail.com@netlabs.develooper.com
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+
+------------=_1178537304-12281-23
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+# New Ticket Created by  Mike Mattie 
+# Please include the string:  [perl #42898]
+# in the subject line of all future correspondence about this issue. 
+# <URL: http://rt.perl.org/rt3/Ticket/Display.html?id=42898 >
+
+
+hello,
+
+Building on commit #18446 this patch honors PARROT_PREFER_SOURCE.
+
+quick background:
+
+to get the install/working-copy to work the same extensions should
+not be used with .load_bytecode. Sometimes it will be compiled,
+sometimes not.
+
+The default behavior implemented in #18446 was to first preserve
+compatibility with the existing code-base by trying a path as
+it was given first. If that fails it will try appending extensions,
+from the lowest level compiled objects (.pbc) to the highest level source
+(.pir).
+
+This is the perl5 use behavior and what you would expect running out
+of a install target.
+
+Some developers did not like having to run a "make clean" to run the
+latest version of the source if there were stale objects lying around.
+
+This patch addresses that issue by honoring PARROT_PREFER_SOURCE. Currently
+the value is ignored. If it is set in the environment variable table it
+will reverse the normal extension guessing order, trying the highest
+level form of the code first. Developers who wish to avoid a make clean
+can now either avoid compiling files, or simply set this environment variable.
+
+As noted in the comments if the value of PARROT_PREFER_SOURCE is ever interpreted
+I think it should be a path spec for directories where source is preferred over
+compiled objects. Currently that is not implemented, but it can be if someone
+makes a more concrete case for it.
+
+This patch should be discussed, during which I will add the necessary tests
+and documentation changes. I have deferred this until now , when the behavior
+is complete enough to document.
+
+patch:
+
+This patch is based off rev 18446 with the spelling fixes from #42897 applied.
+
+harness:
+
+when I ran the test-suite I got a failure from t/perl/Parrot_Docs.t. A subsequent
+run of prove to double check it resulted in a pass. Strange. End result the
+test-suite passed unless someone can reproduce the failure with the harness.
+
+Cheers,
+Mike Mattie - codermattie@gmail.com
+
+------------=_1178537304-12281-23
+Content-Type: text/x-patch; charset="ascii"; name="enable-source-prefer.diff"
+Content-Disposition: inline; filename="enable-source-prefer.diff"
+Content-Transfer-Encoding: 7bit
+RT-Attachment: 42898/258873/112857
+
+--- BASE/src/library.c	2007-05-07 03:21:37.000000000 -0700
++++ rev-18446/src/library.c	2007-05-07 03:07:31.000000000 -0700
+@@ -24,6 +24,53 @@
+ #include "library.str"
+ 
+ /*
++  load_prefer is a toggle to prefer either the most low level form of a module
++  (compiled) or the highest level form of a module.
++
++  Users will typically want the compiled versions. This is also the perl5
++  behavior as well.
++
++  Developers who don't like to run a clean target imbetween changes can set the
++  environment variable PARROT_PREFER_SOURCE (value does not matter).
++
++  If a value for PARROT_PREFER_SOURCE is honored it should be a path spec of
++  directories for which source will be loaded over compiled objects.
++ */
++
++#define COMPILE_FIRST 0
++#define SOURCE_FIRST 1
++
++static int load_prefer = COMPILE_FIRST;
++
++static int
++query_load_prefer ( Interp* interp ) {
++    int free_it;
++    char *env;
++
++    env = Parrot_getenv("PARROT_PREFER_SOURCE", &free_it);
++
++    if (env) {
++        if (free_it)
++            free(env);
++
++        return 1;
++    }
++
++    return 0;
++}
++
++/*
++  extension guessing init to catch a ride with
++  parrot_init_library_paths on the init path.
++ */
++
++static void
++init_extension_guessing(Interp* interp) {
++    if( query_load_prefer(interp) )
++        load_prefer = SOURCE_FIRST;
++}
++
++/*
+ 
+ =item C<void parrot_init_library_paths(Interp *)>
+ 
+@@ -59,6 +106,8 @@
+     PMC *iglobals, *lib_paths, *paths;
+     STRING *entry;
+ 
++    init_extension_guessing(interp);
++
+     iglobals = interp->iglobals;
+     /* create the lib_paths array */
+     lib_paths = pmc_new(interp, enum_class_FixedPMCArray);
+@@ -312,18 +361,30 @@
+         return result;
+ 
+     /*
+-      start guessing now. this version tries to find the lowest form of the
+-      code, starting with bytecode and working up to PIR. note the atypical
+-      loop control. This is so the array can easily be processed in reverse.
++      start guessing now. with load_prefer defaulting to COMPILE_FIRST
++      it tries the most compiled form first. with load_prefer set to
++      SOURCE_FIRST it will try the highest level source first.
+      */
+ 
+-    for( guess = 0 ; guess <= LOAD_EXT_CODE_LAST ; guess++ ) {
+-        with_ext = string_copy(interp, path);
+-        with_ext = string_append(interp,
+-                                 with_ext, const_string(interp, load_ext_code[guess]));
++    if ( COMPILE_FIRST == load_prefer ) {
++        for( guess = 0 ; guess <= LOAD_EXT_CODE_LAST ; guess++ ) {
++            with_ext = string_copy(interp, path);
++            with_ext = string_append(interp,
++                                     with_ext, const_string(interp, load_ext_code[guess]));
++
++            if ( (result = try_load_path(interp, with_ext)) )
++                return result;
++        }
++    }
++    else {
++        for( guess = LOAD_EXT_CODE_LAST ; guess >= 0 ; guess-- ) {
++            with_ext = string_copy(interp, path);
++            with_ext = string_append(interp,
++                                     with_ext, const_string(interp, load_ext_code[guess]));
+ 
+-        if ( (result = try_load_path(interp, with_ext)) )
+-            return result;
++            if ( (result = try_load_path(interp, with_ext)) )
++                return result;
++        }
+     }
+ 
+     return NULL;
+
+------------=_1178537304-12281-23
+Content-Type: application/pgp-signature; name="signature.asc"
+Content-Disposition: inline; filename="signature.asc"
+Content-Transfer-Encoding: base64
+RT-Attachment: 42898/258873/112858
+
+LS0tLS1CRUdJTiBQR1AgU0lHTkFUVVJFLS0tLS0KVmVyc2lvbjogR251UEcg
+djEuNC42IChHTlUvTGludXgpCgppRDhEQlFGR1B3dlZkZlJjaHJrQklua1JB
+cG9OQUo5aDEraHNFcE1FS2ZReUJteEt0bGl5OFhSTXJ3Q2c3OVdOClczYjND
+a0RLWWlZNU5LUWFzWUJwRFJvPQo9M1VaegotLS0tLUVORCBQR1AgU0lHTkFU
+VVJFLS0tLS0K
+
+------------=_1178537304-12281-23--
+

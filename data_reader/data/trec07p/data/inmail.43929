@@ -1,0 +1,174 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri May 25 20:26:20 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4Q0QJqD001838
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 25 May 2007 20:26:19 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 7853B16386D
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 26 May 2007 00:26:15 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.8 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 501)
+	id 79AC3162BDA; Sat, 26 May 2007 00:25:24 +0000 (GMT)
+To: samba-cvs@samba.org
+From: abartlet@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070526002524.79AC3162BDA@lists.samba.org>
+Date: Sat, 26 May 2007 00:25:24 +0000 (GMT)
+Subject: svn commit: samba r23149 - in branches/SAMBA_4_0/source/winbind: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: abartlet
+Date: 2007-05-26 00:25:22 +0000 (Sat, 26 May 2007)
+New Revision: 23149
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23149
+
+Log:
+Fix up the trusted domain lookup code to use the new structures.
+
+Andrew Bartlett
+
+Modified:
+   branches/SAMBA_4_0/source/winbind/wb_dom_info_trusted.c
+   branches/SAMBA_4_0/source/winbind/wb_init_domain.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/winbind/wb_dom_info_trusted.c
+===================================================================
+--- branches/SAMBA_4_0/source/winbind/wb_dom_info_trusted.c	2007-05-25 23:50:35 UTC (rev 23148)
++++ branches/SAMBA_4_0/source/winbind/wb_dom_info_trusted.c	2007-05-26 00:25:22 UTC (rev 23149)
+@@ -27,6 +27,7 @@
+ #include "winbind/wb_server.h"
+ #include "smbd/service_task.h"
+ #include "librpc/gen_ndr/ndr_netlogon_c.h"
++#include "libcli/libcli.h"
+ 
+ struct trusted_dom_info_state {
+ 	struct composite_context *ctx;
+@@ -55,12 +56,6 @@
+ 	result = composite_create(mem_ctx, service->task->event_ctx);
+ 	if (result == NULL) goto failed;
+ 
+-composite_error(result, NT_STATUS_FOOBAR);
+-return result;
+-failed:
+-return NULL;
+-}
+-#if 0
+ 	state = talloc(result, struct trusted_dom_info_state);
+ 	if (state == NULL) goto failed;
+ 	state->ctx = result;
+@@ -101,14 +96,14 @@
+ 
+ 	state->d.in.server_unc =
+ 		talloc_asprintf(state, "\\\\%s",
+-				state->my_domain->info->dc_name);
++				dcerpc_server_name(state->my_domain->netlogon_pipe));
+ 	if (composite_nomem(state->d.in.server_unc,
+ 			    state->ctx)) return;
+ 
+ 	state->d.in.domain_name = state->info->name;
+ 	state->d.in.domain_guid = NULL;
+ 	state->d.in.site_guid = NULL;
+-	state->d.in.flags = 0x40000000;
++	state->d.in.flags = DS_RETURN_DNS_NAME;
+ 
+ 	req = dcerpc_netr_DsRGetDCName_send(state->my_domain->netlogon_pipe,
+ 					    state, &state->d);
+@@ -142,16 +137,17 @@
+ 	}
+ 
+ 	/* Hey, that was easy! */
+-
+-	state->info->dc_name = talloc_steal(state->info,
++	state->info->num_dcs = 1;
++	state->info->dcs = talloc(state->info, struct nbt_dc_name);
++	state->info->dcs[0].name = talloc_steal(state->info,
+ 					    state->d.out.info->dc_unc);
+-	if (*state->info->dc_name == '\\') state->info->dc_name++;
+-	if (*state->info->dc_name == '\\') state->info->dc_name++;
++	if (*state->info->dcs[0].name == '\\') state->info->dcs[0].name++;
++	if (*state->info->dcs[0].name == '\\') state->info->dcs[0].name++;
+ 
+-	state->info->dc_address = talloc_steal(state->info,
++	state->info->dcs[0].address = talloc_steal(state->info,
+ 					       state->d.out.info->dc_address);
+-	if (*state->info->dc_address == '\\') state->info->dc_address++;
+-	if (*state->info->dc_address == '\\') state->info->dc_address++;
++	if (*state->info->dcs[0].address == '\\') state->info->dcs[0].address++;
++	if (*state->info->dcs[0].address == '\\') state->info->dcs[0].address++;
+ 
+ 	state->info->dns_name = talloc_steal(state->info,
+ 					     state->d.out.info->domain_name);
+@@ -187,13 +183,15 @@
+ 	state->ctx->status = werror_to_ntstatus(state->g.out.result);
+ 	if (!composite_is_ok(state->ctx)) return;
+ 
+-	state->info->dc_name = talloc_steal(state->info,
++	/* Hey, that was easy! */
++	state->info->num_dcs = 1;
++	state->info->dcs = talloc(state->info, struct nbt_dc_name);
++	state->info->dcs[0].name = talloc_steal(state->info,
+ 					    state->g.out.dcname);
+-
+-	if (*state->info->dc_name == '\\') state->info->dc_name++;
+-	if (*state->info->dc_name == '\\') state->info->dc_name++;
++	if (*state->info->dcs[0].name == '\\') state->info->dcs[0].name++;
++	if (*state->info->dcs[0].name == '\\') state->info->dcs[0].name++;
+ 	
+-	make_nbt_name(&name, state->info->dc_name, 0x20);
++	make_nbt_name(&name, state->info->dcs[0].name, 0x20);
+ 	ctx = resolve_name_send(&name, state->service->task->event_ctx,
+ 				lp_name_resolve_order());
+ 
+@@ -208,12 +206,11 @@
+ 				struct trusted_dom_info_state);
+ 
+ 	state->ctx->status = resolve_name_recv(ctx, state->info,
+-					       &state->info->dc_address);
++					       &state->info->dcs[0].address);
+ 	if (!composite_is_ok(state->ctx)) return;
+ 
+ 	composite_done(state->ctx);
+ }
+-#endif
+ 
+ NTSTATUS wb_trusted_dom_info_recv(struct composite_context *ctx,
+ 				  TALLOC_CTX *mem_ctx,
+
+Modified: branches/SAMBA_4_0/source/winbind/wb_init_domain.c
+===================================================================
+--- branches/SAMBA_4_0/source/winbind/wb_init_domain.c	2007-05-25 23:50:35 UTC (rev 23148)
++++ branches/SAMBA_4_0/source/winbind/wb_init_domain.c	2007-05-26 00:25:22 UTC (rev 23149)
+@@ -303,8 +303,8 @@
+ 				struct init_domain_state);
+ 
+ 	state->ctx->status = dcerpc_ndr_request_recv(req);
+-	if (!(NT_STATUS_IS_OK(state->ctx->status)
+-	      && NT_STATUS_IS_OK(state->lsa_openpolicy.out.result))) {
++	if ((!NT_STATUS_IS_OK(state->ctx->status)
++	      || !NT_STATUS_IS_OK(state->lsa_openpolicy.out.result))) {
+ 		if (retry_with_schannel(state, state->domain->lsa_binding, 
+ 					init_domain_recv_lsa_pipe)) {
+ 			return;
+

@@ -1,0 +1,246 @@
+From perl6-all-return-82279-ktwarwic=speedy.uwaterloo.ca@perl.org  Fri Jun 22 18:42:17 2007
+Return-Path: <perl6-all-return-82279-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l5MMgFL9010040
+	for <ktwarwic@flax9.uwaterloo.ca>; Fri, 22 Jun 2007 18:42:15 -0400
+Received: (qmail 12633 invoked by uid 514); 22 Jun 2007 22:42:12 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 12628 invoked from network); 22 Jun 2007 22:42:12 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-language-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-language
+List-Id: <perl6-language.perl.org>
+Delivered-To: mailing list perl6-language@perl.org
+Delivered-To: perl6-language@perl.org
+Received-SPF: pass (x1.develooper.com: domain of dataweaver@gmail.com designates 64.233.162.238 as permitted sender)
+DKIM-Signature: a=rsa-sha1; c=relaxed/relaxed;
+        d=gmail.com; s=beta;
+        h=domainkey-signature:received:received:message-id:date:from:to:subject:cc:in-reply-to:mime-version:content-type:content-transfer-encoding:content-disposition:references;
+        b=oQgAxNDfZJiLVuX1h8IvK9ARJJdFvtnfmooCtO6MAgKZNUOkjtunFDwrFUV52FWgW59Pwf2Fp6p164VQP9kNzmkmk+acb14wYNLd8Ms1R3JdBwriAZH02xtvvV1GRiYjCrn4u/yHGmSNEj+M3uQZXa27FNf1Sr99C+Xz+88n01c=
+DomainKey-Signature: a=rsa-sha1; c=nofws;
+        d=gmail.com; s=beta;
+        h=received:message-id:date:from:to:subject:cc:in-reply-to:mime-version:content-type:content-transfer-encoding:content-disposition:references;
+        b=HgshiVFQ+oGCbbOq7AkUb2n908WVWwsZBBAQa2jgUwiwqaje95iCrrq4nSNRYzBEH26N0Y8IUnjB6pDRgneLvOFpMZ8ldRgWa3Qv/wQVvj43EJEFruJfSnlkIRDTdRg9FsB90SU3rGfXPK6DM0I3LM36mgoPj+3Hm7YqaxFKZ0s=
+Message-ID: <ef30550b0706221541v6b50ee03n214d2a03c4248161@mail.gmail.com>
+Date: Fri, 22 Jun 2007 15:41:47 -0700
+From: "Jonathan Lang" <dataweaver@gmail.com>
+To: damian@conway.org
+Subject: Re: Referring to source code within Perldoc: the new A<> code
+Cc: "Larry Wall" <larry@wall.org>,
+   "perl6-language@perl.org" <perl6-language@perl.org>
+In-Reply-To: <467B1457.2060207@conway.org>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8; format=flowed
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+References: <4678B887.8090303@conway.org> <20070621202113.GR6900@stripey.com>
+	 <20070621231752.GA4149@wall.org> <467B1457.2060207@conway.org>
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED,SPF_PASS
+
+OK.  After much thinking on the subject, here are my recommendations:
+
+First: give Pod the ability to delimit blocks of ambient text, e.g.:
+
+  =text
+  class Foo {
+    has $bar;
+  }
+  =stop
+
+'=text' and '=stop' would be considered to be separate but related
+single-line Pod Sections, so Pod-stripping utilities would remove them
+while leaving the lines between them intact.  (I'm not sold on the
+specific names for these tags; just the principles behind them.)
+
+By default, 'A<>' searches backward from its current position within
+the scope of the current ambient text block.  This helps you catch
+gotchas such as removing a piece of code and failing to remove the
+documentation that was referencing it.  Consider, for example,
+documenting the first attribute of a class that follows another class.
+ The coder removes the attribute, but fails to remove the
+documentation that references it.  Suddenly, that documentation is
+referencing the last attribute of the previous class.  If each class
+were encapsulated in a separate ambient text section, Pod would then
+know to complain that there is no attribute to reference anymore.
+
+--
+
+Allow ambient text blocks to be named, and allow 'A<>' to choose a
+named ambient text block to search.  When you do this, the position of
+the A<> tag relative to the ambient text block becomes irrelevant.
+Example:
+
+  =begin pod
+  A<Foo.has>
+  =end pod
+
+  =text Foo
+  class Foo {
+    has $bar;
+  }
+  =stop Foo
+
+You might also consider changing the rules when searching ambient text
+blocks in this way, so that it searches for the first instance of the
+prefix in the block instead of searching for the last one.
+
+--
+
+Let a pod section specify a default ambient code block, causing all
+ambient references within its scope to automatically reference that
+block:
+
+  =begin pod :A<Foo>
+  A<has>
+  =end pod
+
+  =text Foo
+  class Foo {
+    has $bar;
+  }
+  =stop Foo
+
+--
+
+Allow ambient text blocks to be nested:
+
+  =begin pod :A<Foo>
+    =ATTRIBUTE A<has>
+    =METHOD A<method> :A<baz>
+      =NAME A<name>
+      =RETURNS A<return>
+
+  =end pod
+
+  =text Foo
+  class Foo {
+    has $bar;
+
+  =text baz
+    method baz () returns Number { ... }
+  =stop baz
+  }
+  =stop Foo
+
+--
+
+Allow an optional "array index" for the prefix so that you can skip
+over a given number of matches, rather than being limited to the first
+one you find:
+
+  =begin pod :A<Foo>
+  A<has[0]>
+  A<has[1]>
+  =end pod
+
+  =text Foo
+  class Foo {
+    has $bar;
+    has $baz;
+  }
+  =stop Foo
+
+--
+
+Finally, there are cases where prefix handles won't be readily
+available.  Consider what happens when you try to document a C++
+function:
+
+  extern void swap(int*, int*);
+  =NAME A<void>
+  =RETURN A<extern>
+
+How do you reference the 'extern' in that function definition?
+
+Now let's say that the C++ programmer decides that he wants this
+function to return a success flag:
+
+  extern int swap(int*, int*);
+  =NAME A<int>
+  =RETURN A<extern>
+
+Note that he had to change 'void' to 'int' in two places: once in the
+code, and once in the documentation.  This, combined with the
+distinctly unintuitive prefixes being used in the ambient references,
+can lead to a real mess.
+
+In cases such as these, it might be best to have Pod punt to an
+'assistant parser' that returns the equivalent of a list of '=alias'
+tags.  I see this as being a case of "All's fair if you predeclare",
+and I was inspired by XML's Processor Instructions (conceptually) and
+namespaces (syntactically).  Using this, the above might be handled
+as:
+
+  =parser C++ uri
+
+  ...
+
+  =text swap :parsed<C++>
+  extern void swap(int*, int*);
+  =stop text
+  =for pod :A<swap>
+  =NAME A<name>
+  =RETURN A<return>
+
+The '=parser' line tells Pod that some later ambient text sections
+will be parsed using a C++ helper utility.  It's assumed that Pod will
+search for said helper utility, and will complain if it can't find it.
+
+I'm assuming that the helper utility would return the equivalent of:
+
+  =alias name swap
+  =alias return void
+
+when given the ambient text section in question.  I'm also figuring
+that these parser-generated aliases would take precedence over
+prefix-based referencing, but that explicit '=alias' tags would take
+precedence over them.
+
+--
+
+One ramification of Larry's earlier suggestion that Perl not handle
+Pod sections exactly the same way that Pod does is that it's possible
+for certain sections of Perl code to not register as ambient text in a
+Pod Parser:
+
+  say qq:to(END)
+  =begin pod
+  oops
+  =end pod
+  END
+  =for pod
+  A<=begin>
+
+To a Perl Parser, the code is as follows:
+
+  say qq:to(END)
+  =begin pod
+  oops
+  =end pod
+  END
+
+To the Pod Parser, the ambient text is this:
+
+  say qq:to(END)
+  END
+
+This wasn't a big deal when Pod was completely ignoring the ambient
+text.  But once it starts referencing ambient text, you're best off
+keeping Perl code and Pod ambient text in sync with each other.
+
+-- 
+Jonathan "Dataweaver" Lang
+

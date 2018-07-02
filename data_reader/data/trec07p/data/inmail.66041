@@ -1,0 +1,94 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Jun 26 02:04:49 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5Q64nL9006477
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 26 Jun 2007 02:04:49 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 335C1162C35
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 26 Jun 2007 06:04:46 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,UPPERCASE_25_50 autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1018)
+	id 9CA2E162AD7; Tue, 26 Jun 2007 06:04:15 +0000 (GMT)
+To: samba-cvs@samba.org
+From: kai@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070626060415.9CA2E162AD7@lists.samba.org>
+Date: Tue, 26 Jun 2007 06:04:15 +0000 (GMT)
+Subject: svn commit: samba r23605 - in branches/SAMBA_4_0/source/script: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: kai
+Date: 2007-06-26 06:04:14 +0000 (Tue, 26 Jun 2007)
+New Revision: 23605
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23605
+
+Log:
+Update mkversion.sh to support git and git-svn checkouts.
+Jerry, did I get you right that you'll merge this to 3_0 yourself?
+
+Kai
+
+Modified:
+   branches/SAMBA_4_0/source/script/mkversion.sh
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/script/mkversion.sh
+===================================================================
+--- branches/SAMBA_4_0/source/script/mkversion.sh	2007-06-26 05:08:50 UTC (rev 23604)
++++ branches/SAMBA_4_0/source/script/mkversion.sh	2007-06-26 06:04:14 UTC (rev 23605)
+@@ -104,6 +104,18 @@
+ 	TMP_CLEAN_TREE=`echo -e "${BZR_INFO}" | grep 'clean:' |sed -e 's/clean: \([a-zA-Z]*\).*/\1/'`
+     fi
+ 
++    if test x"${HAVEVER}" != x"yes";then
++	HAVEGIT=no
++        GIT_INFO=`git show --abbrev-commit HEAD 2>/dev/null`
++	TMP_REVISION=`echo -e "${GIT_INFO}" | grep 'commit ' |sed -e 's/commit \([0-9a-f]*\).*/\1/'`
++	if test -n "$TMP_REVISION";then
++	    HAVEGIT=yes
++            HAVEVER=yes
++	fi
++	TMP_MIRRORED_REVISION=`echo -e "${GIT_INFO}" | grep 'git-svn-id' |sed -e 's#^[ ^t]*git-svn-id: svn+ssh://svn.samba.org/data/svn/samba/branches/\(SAMBA_[34]_[0-9]\(_[0-9]\+\)\?@[0-9]*\).*#\1#'`
++    fi
++	
++
+     if test x"${HAVESVN}" = x"yes";then
+ 	SAMBA_VERSION_STRING="${SAMBA_VERSION_STRING}-SVN-build-${TMP_REVISION}"
+ 	echo "#define SAMBA_VERSION_SVN_REVISION ${TMP_REVISION}" >> $OUTPUT_FILE
+@@ -130,6 +142,14 @@
+ 	fi
+ 
+ 	SAMBA_VERSION_STRING="${SAMBA_VERSION_STRING}-BZR-${TMP_BZR_REVISION_STR}"
++    elif test x"${HAVEGIT}" = x"yes";then
++	TMP_GIT_REVISION_STR="${TMP_REVISION}"
++
++	if test -n "$TMP_MIRRORED_REVISION"; then
++	    TMP_GIT_REVISION_STR="${TMP_GIT_REVISION_STR}-[SVN-${TMP_MIRRORED_REVISION}]"
++	fi
++
++	SAMBA_VERSION_STRING="${SAMBA_VERSION_STRING}-GIT-${TMP_GIT_REVISION_STR}"
+     else
+ 	SAMBA_VERSION_STRING="${SAMBA_VERSION_STRING}-SVN-build-UNKNOWN"
+     fi
+

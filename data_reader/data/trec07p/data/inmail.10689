@@ -1,0 +1,177 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Apr 16 17:41:49 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3GLfn0I019327
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 16 Apr 2007 17:41:49 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 73943163946
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 16 Apr 2007 21:41:25 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.4 required=3.8 tests=AWL,BAYES_50,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 61AD2162AD5; Mon, 16 Apr 2007 21:41:06 +0000 (GMT)
+Date: Tue, 17 Apr 2007 07:41:27 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070416214106.61AD2162AD5@lists.samba.org>
+Subject: Rev 117: darn, forgot this in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 3750
+Lines: 137
+
+------------------------------------------------------------
+revno: 117
+revision-id: tridge@samba.org-20070416214127-25dea7f95ada8a59
+parent: tridge@samba.org-20070416141104-3c489b41c92932d3
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Tue 2007-04-17 07:41:27 +1000
+message:
+  darn, forgot this
+added:
+  common/ctdb_lockwait.c         ctdb_lockwait.c-20070416214118-n1aeonljj3vpdd9q-1
+modified:
+  tests/lockwait.c               lockwait.c-20070416055753-3ztnb4cxqgamfudx-1
+=== added file 'common/ctdb_lockwait.c'
+--- a/common/ctdb_lockwait.c	1970-01-01 00:00:00 +0000
++++ b/common/ctdb_lockwait.c	2007-04-16 21:41:27 +0000
+@@ -0,0 +1,108 @@
++/* 
++   wait for a tdb chain lock
++
++   Copyright (C) Andrew Tridgell  2006
++
++   This library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2 of the License, or (at your option) any later version.
++
++   This library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with this library; if not, write to the Free Software
++   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++*/
++
++#include "includes.h"
++#include "lib/events/events.h"
++#include "system/filesys.h"
++#include "system/wait.h"
++#include "popt.h"
++#include "../include/ctdb_private.h"
++#include "db_wrap.h"
++#include "lib/tdb/include/tdb.h"
++
++
++struct lockwait_handle {
++	struct fd_event *fde;
++	int fd[2];
++	pid_t child;
++	void *private_data;
++	void (*callback)(void *);
++};
++
++static void lockwait_handler(struct event_context *ev, struct fd_event *fde, 
++			     uint16_t flags, void *private_data)
++{
++	struct lockwait_handle *h = talloc_get_type(private_data, 
++						     struct lockwait_handle);
++	void (*callback)(void *) = h->callback;
++	void *p = h->private_data;
++	talloc_set_destructor(h, NULL);
++	close(h->fd[0]);
++	talloc_free(h);	
++	callback(p);
++	waitpid(h->child, NULL, 0);
++}
++
++static int lockwait_destructor(struct lockwait_handle *h)
++{
++	close(h->fd[0]);
++	kill(h->child, SIGKILL);
++	waitpid(h->child, NULL, 0);
++	return 0;
++}
++
++
++struct lockwait_handle *ctdb_lockwait(struct ctdb_db_context *ctdb_db,
++				      TDB_DATA key,
++				      void (*callback)(void *), void *private_data)
++{
++	struct lockwait_handle *h;
++	int ret;
++
++	h = talloc_zero(ctdb_db, struct lockwait_handle);
++	if (h == NULL) {
++		return NULL;
++	}
++
++	ret = pipe(h->fd);
++	if (ret != 0) {
++		talloc_free(h);
++		return NULL;
++	}
++
++	h->child = fork();
++	if (h->child == (pid_t)-1) {
++		close(h->fd[0]);
++		close(h->fd[1]);
++		talloc_free(h);
++		return NULL;
++	}
++
++	h->callback = callback;
++	h->private_data = private_data;
++
++	if (h->child == 0) {
++		struct tdb_context *tdb = ctdb_db->ltdb->tdb;
++		/* in child */
++		tdb_chainlock(tdb, key);
++		_exit(0);
++	}
++
++	close(h->fd[1]);
++	talloc_set_destructor(h, lockwait_destructor);
++
++	h->fde = event_add_fd(ctdb_db->ctdb->ev, h, h->fd[0], EVENT_FD_READ, lockwait_handler, h);
++	if (h->fde == NULL) {
++		talloc_free(h);
++		return NULL;
++	}
++
++	return h;
++}
+
+=== modified file 'tests/lockwait.c'
+--- a/tests/lockwait.c	2007-04-16 14:11:04 +0000
++++ b/tests/lockwait.c	2007-04-16 21:41:27 +0000
+@@ -41,7 +41,6 @@
+ 						     struct lockwait_handle);
+ 	void (*callback)(void *) = h->callback;
+ 	void *p = h->private_data;
+-	printf("%s\n", __location__);
+ 	talloc_set_destructor(h, NULL);
+ 	close(h->fd[0]);
+ 	talloc_free(h);	
+

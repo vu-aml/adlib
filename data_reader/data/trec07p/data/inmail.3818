@@ -1,0 +1,284 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Apr 12 08:28:49 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3CCSm0I029491
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 12 Apr 2007 08:28:48 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 727F8162BC9
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 12 Apr 2007 12:28:25 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.2 required=3.8 tests=AWL,BAYES_50,RCVD_IN_DSBL,
+	UNPARSEABLE_RELAY autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: from mail.SerNet.de (mail.SerNet.DE [193.175.80.2])
+	by lists.samba.org (Postfix) with ESMTP id 4AA18162ACF
+	for <samba-cvs@samba.org>; Thu, 12 Apr 2007 12:27:48 +0000 (GMT)
+Received: from intern.SerNet.DE by mail.SerNet.DE with esmtp (Exim 4.51 #1)
+	for samba-cvs@samba.org
+	id 1HbyOx-0001KY-Et; Thu, 12 Apr 2007 14:27:47 +0200
+Received: by intern.SerNet.DE
+	id 1HbyOx-0007pv-17; Thu, 12 Apr 2007 14:27:47 +0200
+Received: by intern.SerNet.DE
+	id 1HbyOw-0007oc-Oq; Thu, 12 Apr 2007 14:27:46 +0200
+Received: from mad by nirvana.sernet.private with local (Exim 4.63)
+	(envelope-from <ma@sernet.de>)
+	id 1HbyOw-0006Ff-Cg; Thu, 12 Apr 2007 14:27:46 +0200
+To: samba-cvs@samba.org
+From: Michael Adam <ma@sernet.de>
+Date: Thu, 12 Apr 2007 14:27:46 +0200
+Message-Id: <E1HbyOx-0007pv-17@intern.SerNet.DE>
+Organization: SerNet GmbH, Goettingen, Germany
+Subject: Rev 5351: create a fake user token consisting of builtin
+	administrators sid and in
+	http://samba.sernet.de/ma/bzr/SAMBA_3_0-registry.bzr/
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 7200
+Lines: 230
+
+At http://samba.sernet.de/ma/bzr/SAMBA_3_0-registry.bzr/
+
+------------------------------------------------------------
+revno: 5351
+revision-id: ma@sernet.de-20070412122743-d447faac65352b25
+parent: ma@sernet.de-20070411150619-9f3271e9d353c422
+committer: Michael Adam <ma@sernet.de>
+branch nick: SAMBA_3_0-registry.bzr
+timestamp: Thu 2007-04-12 14:27:43 +0200
+message:
+  create a fake user token consisting of builtin administrators sid and
+  se_disk_operators privilege by hand instead of using get_root_nt_token()
+  to minimize linker deps for bin/net.
+  
+  * new function registry_create_admin_token() in lib/util_reg.c
+  * move dup_nt_token from auth/token_util.c to new file lib/util_nttoken.c
+  * adapt net_conf.c and Makefile.in accordingly
+added:
+  source/lib/util_nttoken.c      util_nttoken.c-20070412121956-apjs5s3igy1ydc2e-1
+modified:
+  source/Makefile.in             Makefile.in-20060530022626-b16dac2328ebe703
+  source/auth/token_util.c       token_util.c-20070409110214-hxmlg8kreyeuci30-1
+  source/lib/util_reg.c          util_reg.c-20060711181331-c2d45d0e1f4a8648
+  source/utils/net_conf.c        net_conf.c-20070409110216-64p0zt0mes4j6yoe-1
+=== added file 'source/lib/util_nttoken.c'
+--- a/source/lib/util_nttoken.c	1970-01-01 00:00:00 +0000
++++ b/source/lib/util_nttoken.c	2007-04-12 12:27:43 +0000
+@@ -0,0 +1,70 @@
++/* 
++ *  Unix SMB/CIFS implementation.
++ *  Authentication utility functions
++ *  Copyright (C) Andrew Tridgell 1992-1998
++ *  Copyright (C) Andrew Bartlett 2001
++ *  Copyright (C) Jeremy Allison 2000-2001
++ *  Copyright (C) Rafal Szczesniak 2002
++ *  Copyright (C) Volker Lendecke 2006
++ *  Copyright (C) Michael Adam 2007
++ *
++ *  This program is free software; you can redistribute it and/or modify
++ *  it under the terms of the GNU General Public License as published by
++ *  the Free Software Foundation; either version 2 of the License, or
++ *  (at your option) any later version.
++ *  
++ *  This program is distributed in the hope that it will be useful,
++ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ *  GNU General Public License for more details.
++ *  
++ *  You should have received a copy of the GNU General Public License
++ *  along with this program; if not, write to the Free Software
++ *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
++ */
++
++/* function(s) moved from auth/auth_util.c to minimize linker deps */
++
++#include "includes.h"
++
++/****************************************************************************
++ Duplicate a SID token.
++****************************************************************************/
++
++NT_USER_TOKEN *dup_nt_token(TALLOC_CTX *mem_ctx, const NT_USER_TOKEN *ptoken)
++{
++	NT_USER_TOKEN *token;
++
++	if (!ptoken)
++		return NULL;
++
++	token = TALLOC_P(mem_ctx, NT_USER_TOKEN);
++	if (token == NULL) {
++		DEBUG(0, ("talloc failed\n"));
++		return NULL;
++	}
++
++	ZERO_STRUCTP(token);
++
++	if (ptoken->user_sids && ptoken->num_sids) {
++		token->user_sids = (DOM_SID *)talloc_memdup(
++			token, ptoken->user_sids, sizeof(DOM_SID) * ptoken->num_sids );
++
++		if (token->user_sids == NULL) {
++			DEBUG(0, ("talloc_memdup failed\n"));
++			TALLOC_FREE(token);
++			return NULL;
++		}
++		token->num_sids = ptoken->num_sids;
++	}
++	
++	/* copy the privileges; don't consider failure to be critical here */
++	
++	if ( !se_priv_copy( &token->privileges, &ptoken->privileges ) ) {
++		DEBUG(0,("dup_nt_token: Failure to copy SE_PRIV!.  "
++			 "Continuing with 0 privileges assigned.\n"));
++	}
++
++	return token;
++}
++
+
+=== modified file 'source/Makefile.in'
+--- a/source/Makefile.in	2007-04-10 10:34:43 +0000
++++ b/source/Makefile.in	2007-04-12 12:27:43 +0000
+@@ -464,6 +464,7 @@
+ AUTH_SCRIPT_OBJ = auth/auth_script.o
+ 
+ AUTH_OBJ = auth/auth.o @AUTH_STATIC@ auth/auth_util.o auth/token_util.o \
++	   lib/util_nttoken.o \
+ 	   auth/auth_compat.o auth/auth_ntlmssp.o \
+ 	   $(PLAINTEXT_AUTH_OBJ) $(SLCACHE_OBJ) $(DCUTIL_OBJ)
+ 
+@@ -654,7 +655,7 @@
+ 	      registry/reg_perfcount.o \
+ 	      registry/reg_dynamic.o \
+ 	      \
+-	      auth/token_util.o
++	      lib/util_nttoken.o
+   
+ NET_OBJ = $(NET_OBJ1) $(PARAM_OBJ) $(SECRETS_OBJ) $(LIBSMB_OBJ) \
+ 	  $(RPC_PARSE_OBJ) $(PASSDB_OBJ) $(GROUPDB_OBJ) \
+
+=== modified file 'source/auth/token_util.c'
+--- a/source/auth/token_util.c	2007-04-09 11:02:19 +0000
++++ b/source/auth/token_util.c	2007-04-12 12:27:43 +0000
+@@ -28,47 +28,6 @@
+ #include "includes.h"
+ 
+ /****************************************************************************
+- Duplicate a SID token.
+-****************************************************************************/
+-
+-NT_USER_TOKEN *dup_nt_token(TALLOC_CTX *mem_ctx, const NT_USER_TOKEN *ptoken)
+-{
+-	NT_USER_TOKEN *token;
+-
+-	if (!ptoken)
+-		return NULL;
+-
+-	token = TALLOC_P(mem_ctx, NT_USER_TOKEN);
+-	if (token == NULL) {
+-		DEBUG(0, ("talloc failed\n"));
+-		return NULL;
+-	}
+-
+-	ZERO_STRUCTP(token);
+-
+-	if (ptoken->user_sids && ptoken->num_sids) {
+-		token->user_sids = (DOM_SID *)talloc_memdup(
+-			token, ptoken->user_sids, sizeof(DOM_SID) * ptoken->num_sids );
+-
+-		if (token->user_sids == NULL) {
+-			DEBUG(0, ("talloc_memdup failed\n"));
+-			TALLOC_FREE(token);
+-			return NULL;
+-		}
+-		token->num_sids = ptoken->num_sids;
+-	}
+-	
+-	/* copy the privileges; don't consider failure to be critical here */
+-	
+-	if ( !se_priv_copy( &token->privileges, &ptoken->privileges ) ) {
+-		DEBUG(0,("dup_nt_token: Failure to copy SE_PRIV!.  "
+-			 "Continuing with 0 privileges assigned.\n"));
+-	}
+-
+-	return token;
+-}
+-
+-/****************************************************************************
+  Check for a SID in an NT_USER_TOKEN
+ ****************************************************************************/
+ 
+
+=== modified file 'source/lib/util_reg.c'
+--- a/source/lib/util_reg.c	2006-12-03 12:52:21 +0000
++++ b/source/lib/util_reg.c	2007-04-12 12:27:43 +0000
+@@ -223,3 +223,26 @@
+ 
+ 	return WERR_OK;
+ }
++
++NT_USER_TOKEN *registry_create_admin_token(TALLOC_CTX *mem_ctx)
++{
++	NT_USER_TOKEN *token = NULL;
++
++	/* fake a user token: builtin administrators sid and the
++	 * disk operators privilege is all we need to access the 
++	 * registry... */
++	if (!(token = TALLOC_ZERO_P(mem_ctx, NT_USER_TOKEN))) {
++		DEBUG(1, ("talloc failed\n"));
++		goto done;
++	}
++	token->privileges = se_disk_operators;
++	if (!add_sid_to_array(token, &global_sid_Builtin_Administrators,
++			 &token->user_sids, &token->num_sids)) {
++		DEBUG(1, ("Error adding builtin administrators sid "
++			  "to fake token.\n"));
++		goto done;
++	}
++done:
++	return token;
++}
++
+
+=== modified file 'source/utils/net_conf.c'
+--- a/source/utils/net_conf.c	2007-04-09 11:02:19 +0000
++++ b/source/utils/net_conf.c	2007-04-12 12:27:43 +0000
+@@ -198,6 +198,12 @@
+ {
+ 	WERROR werr = WERR_OK;
+ 	char *path = NULL;
++	NT_USER_TOKEN *token;
++
++	if (!(token = registry_create_admin_token(ctx))) {
++		DEBUG(1, ("Error creating admin token\n"));
++		goto done;
++	}
+ 
+ 	if (subkeyname == NULL) {
+ 		path = talloc_strdup(ctx, KEY_SMBCONF);
+@@ -207,8 +213,9 @@
+ 	}
+ 
+ 	werr = reg_open_path(ctx, path, desired_access,
+-			     get_root_nt_token(), key);
++			     token, key);
+ 
++done:
+ 	TALLOC_FREE(path);
+ 	return werr;
+ }
+

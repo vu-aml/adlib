@@ -1,0 +1,145 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 15 15:17:34 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4FJHYqD009139
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 15:17:34 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 87C8616383B
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 19:17:31 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1005)
+	id 89165162AC5; Tue, 15 May 2007 19:17:16 +0000 (GMT)
+To: samba-cvs@samba.org
+From: derrell@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070515191716.89165162AC5@lists.samba.org>
+Date: Tue, 15 May 2007 19:17:16 +0000 (GMT)
+Subject: svn commit: samba r22916 - in
+	branches/SAMBA_3_0_25/examples/libsmbclient: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: derrell
+Date: 2007-05-15 19:17:16 +0000 (Tue, 15 May 2007)
+New Revision: 22916
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22916
+
+Log:
+
+- Fixes bug 4599.  A missing <code>if</code> statement forced subseqeuent
+  attempts to set attributes to fail.
+
+- I also noticed that missing attributes were setting an invalid return string
+  by getxattr(), e.g. if there was not group, the return string had "GROUP:;"
+  instead of excluding the GROUP attribute entirely as it should.  The big
+  problem with the way it was, is that the string could not then be passed to
+  setxattr() and parsed.
+
+Added:
+   branches/SAMBA_3_0_25/examples/libsmbclient/testacl2.c
+
+
+Changeset:
+Added: branches/SAMBA_3_0_25/examples/libsmbclient/testacl2.c
+===================================================================
+--- branches/SAMBA_3_0_25/examples/libsmbclient/testacl2.c	2007-05-15 19:14:34 UTC (rev 22915)
++++ branches/SAMBA_3_0_25/examples/libsmbclient/testacl2.c	2007-05-15 19:17:16 UTC (rev 22916)
+@@ -0,0 +1,78 @@
++#include <stdlib.h>
++#include <string.h>
++#include <errno.h>
++#include <popt.h>
++#include "libsmbclient.h"
++#include "get_auth_data_fn.h"
++
++enum acl_mode
++{
++    SMB_ACL_GET,
++    SMB_ACL_SET,
++    SMB_ACL_DELETE,
++    SMB_ACL_MODIFY,
++    SMB_ACL_ADD,
++    SMB_ACL_CHOWN,
++    SMB_ACL_CHGRP
++};
++
++
++int main(int argc, const char *argv[])
++{
++    int i;
++    int opt;
++    int flags;
++    int debug = 0;
++    int numeric = 0;
++    int full_time_names = 0;
++    enum acl_mode mode = SMB_ACL_GET;
++    static char *the_acl = NULL;
++    int ret;
++    char *p;
++    char *debugstr;
++    char value[1024];
++
++    if (smbc_init(get_auth_data_fn, debug) != 0)
++    {
++        printf("Could not initialize smbc_ library\n");
++        return 1;
++    }
++
++    SMBCCTX *context = smbc_set_context(NULL);
++    smbc_option_set(context, "full_time_names", 1);
++    
++    the_acl = strdup("system.nt_sec_desc.*");
++    ret = smbc_getxattr(argv[1], the_acl, value, sizeof(value));
++    if (ret < 0)
++    {
++        printf("Could not get attributes for [%s] %d: %s\n",
++               argv[1], errno, strerror(errno));
++        return 1;
++    }
++    
++    printf("Attributes for [%s] are:\n%s\n", argv[1], value);
++
++    flags = 0;
++    debugstr = "set attributes (1st time)";
++        
++    ret = smbc_setxattr(argv[1], the_acl, value, strlen(value), flags);
++    if (ret < 0)
++    {
++        printf("Could not %s for [%s] %d: %s\n",
++               debugstr, argv[1], errno, strerror(errno));
++        return 1;
++    }
++    
++    flags = 0;
++    debugstr = "set attributes (2nd time)";
++        
++    ret = smbc_setxattr(argv[1], the_acl, value, strlen(value), flags);
++    if (ret < 0)
++    {
++        printf("Could not %s for [%s] %d: %s\n",
++               debugstr, argv[1], errno, strerror(errno));
++        return 1;
++    }
++    
++    return 0;
++}
+

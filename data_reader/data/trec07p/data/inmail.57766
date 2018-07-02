@@ -1,0 +1,187 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Jun 14 19:18:30 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5ENIUL9027535
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 14 Jun 2007 19:18:30 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 1CBCC16382C
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 14 Jun 2007 23:18:29 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.3 required=3.8 tests=AWL,BAYES_00,HOT_NASTY,
+	NO_REAL_NAME,NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 1539616385C; Thu, 14 Jun 2007 23:18:04 +0000 (GMT)
+Date: Fri, 15 Jun 2007 07:35:15 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070614231804.1539616385C@lists.samba.org>
+Subject: Rev 590: added option to call out to a script for ID mapping in
+	tdb2 idmapper in http://samba.org/~tridge/3_0-ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 590
+revision-id: tridge@samba.org-20070614213512-ie5pz1ac78fwlxw9
+parent: tridge@samba.org-20070604032449-86q3i3fvrqr5812n
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: s3-ctdb-tridge
+timestamp: Fri 2007-06-15 07:35:12 +1000
+message:
+  added option to call out to a script for ID mapping in tdb2 idmapper
+modified:
+  source/nsswitch/idmap_tdb2.c   idmap_tdb2.c-20070531053925-e5x7av5etjs83rk0-1
+=== modified file 'source/nsswitch/idmap_tdb2.c'
+--- a/source/nsswitch/idmap_tdb2.c	2007-05-31 06:31:34 +0000
++++ b/source/nsswitch/idmap_tdb2.c	2007-06-14 21:35:12 +0000
+@@ -45,6 +45,7 @@
+ 	/* User and group id pool */
+ 	uid_t low_uid, high_uid;               /* Range of uids to allocate */
+ 	gid_t low_gid, high_gid;               /* Range of gids to allocate */
++	const char *idmap_script;
+ } idmap_tdb2_state;
+ 
+ 
+@@ -132,6 +133,13 @@
+ 	idmap_tdb2_state.low_gid = 0;
+ 	idmap_tdb2_state.high_gid = 0;
+ 
++	/* see if a idmap script is configured */
++	idmap_tdb2_state.idmap_script = lp_parm_const_string(-1, "idmap", "script", NULL);
++
++	if (idmap_tdb2_state.idmap_script) {
++		DEBUG(1, ("using idmap script '%s'\n", idmap_tdb2_state.idmap_script));
++	}
++
+ 	range = lp_parm_const_string(-1, "idmap alloc config", "range", NULL);
+ 	if (range && range[0]) {
+ 		unsigned low_id, high_id;
+@@ -470,6 +478,76 @@
+ 	return ret;
+ }
+ 
++
++/*
++  run a script to perform a mapping
++
++  The script should the following command lines:
++
++      SIDTOID S-1-xxxx
++      IDTOSID UID xxxx
++      IDTOSID GID xxxx
++
++  and should return one of the following as a single line of text
++     UID:xxxx
++     GID:xxxx
++     SID:xxxx
++     ERR:xxxx
++ */
++static NTSTATUS idmap_tdb2_script(struct idmap_tdb2_context *ctx, struct id_map *map,
++				  const char *fmt, ...)
++{
++	va_list ap;
++	char *cmd;
++	FILE *p;
++	char line[64];
++	unsigned long v;
++
++	cmd = talloc_asprintf(ctx, "%s ", idmap_tdb2_state.idmap_script);
++	NT_STATUS_HAVE_NO_MEMORY(cmd);	
++
++	va_start(ap, fmt);
++	cmd = talloc_vasprintf_append(cmd, fmt, ap);
++	va_end(ap);
++	NT_STATUS_HAVE_NO_MEMORY(cmd);
++
++	p = popen(cmd, "r");
++	talloc_free(cmd);
++	if (p == NULL) {
++		return NT_STATUS_NONE_MAPPED;
++	}
++
++	if (fgets(line, sizeof(line)-1, p) == NULL) {
++		pclose(p);
++		return NT_STATUS_NONE_MAPPED;
++	}
++	pclose(p);
++
++	DEBUG(10,("idmap script gave: %s\n", line));
++
++	if (sscanf(line, "UID:%lu", &v) == 1) {
++		map->xid.id   = v;
++		map->xid.type = ID_TYPE_UID;
++	} else if (sscanf(line, "GID:%lu", &v) == 1) {
++		map->xid.id   = v;
++		map->xid.type = ID_TYPE_GID;		
++	} else if (strncmp(line, "SID:S-", 6) == 0) {
++		if (!string_to_sid(map->sid, &line[4])) {
++			DEBUG(0,("Bad SID in '%s' from idmap script %s\n",
++				 line, idmap_tdb2_state.idmap_script));
++			return NT_STATUS_NONE_MAPPED;			
++		}
++	} else {
++		DEBUG(0,("Bad reply '%s' from idmap script %s\n",
++			 line, idmap_tdb2_state.idmap_script));
++		return NT_STATUS_NONE_MAPPED;
++	}
++
++	return NT_STATUS_OK;
++}
++
++
++
+ /*
+   Single id to sid lookup function. 
+ */
+@@ -522,7 +600,11 @@
+ 
+ 	if (!data.dptr) {
+ 		DEBUG(10,("Record %s not found\n", keystr));
+-		ret = NT_STATUS_NONE_MAPPED;
++		if (idmap_tdb2_state.idmap_script) {
++			ret = idmap_tdb2_script(ctx, map, "IDTOSID %s", keystr);
++		} else {
++			ret = NT_STATUS_NONE_MAPPED;
++		}
+ 		goto done;
+ 	}
+ 		
+@@ -542,6 +624,7 @@
+ 	return ret;
+ }
+ 
++
+ /*
+  Single sid to id lookup function. 
+ */
+@@ -563,8 +646,12 @@
+ 	/* Check if sid is present in database */
+ 	data = tdb2_fetch_bystring(keystr);
+ 	if (!data.dptr) {
+-		DEBUG(10,("Record %s not found\n", keystr));
+-		ret = NT_STATUS_NONE_MAPPED;
++		DEBUG(10,(__location__ " Record %s not found\n", keystr));
++		if (idmap_tdb2_state.idmap_script) {
++			ret = idmap_tdb2_script(ctx, map, "SIDTOID %s", keystr);
++		} else {
++			ret = NT_STATUS_NONE_MAPPED;
++		}
+ 		goto done;
+ 	}
+ 
+

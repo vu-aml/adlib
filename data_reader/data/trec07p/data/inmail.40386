@@ -1,0 +1,202 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun May 20 15:44:17 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4KJiHqD022649
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 20 May 2007 15:44:17 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 9B169163828
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 20 May 2007 19:44:13 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id 2255B162AE9; Sun, 20 May 2007 19:43:50 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070520194350.2255B162AE9@lists.samba.org>
+Date: Sun, 20 May 2007 19:43:50 +0000 (GMT)
+Subject: svn commit: samba r23023 - in branches: SAMBA_3_0/source/lib
+	SAMBA_3_0/source/printing SAMBA_3_0_26/source/lib
+	SAMBA_3_0_26/source/printing
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-05-20 19:43:49 +0000 (Sun, 20 May 2007)
+New Revision: 23023
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23023
+
+Log:
+Get rid of the only caller of message_send_pid_with_timeout(). This replaces
+the timeouts on the individual message send calls with an overall timeout on
+all the calls.
+
+The timeout in message_send_pid_with_timeout() did not make much sense IMO
+anyway, because the tdb_fetch() for the messages_pending_for_pid was blocking
+in a readlock anyway, we "just" did the timeout for the write lock.
+
+This new code goes through the full wait for the write lock once and then
+breaks out of sending the notifies instead of running into the timeout per
+target.
+
+Jerry, please check this!
+
+Thanks,
+
+Volker
+
+
+Modified:
+   branches/SAMBA_3_0/source/lib/messages.c
+   branches/SAMBA_3_0/source/printing/notify.c
+   branches/SAMBA_3_0_26/source/lib/messages.c
+   branches/SAMBA_3_0_26/source/printing/notify.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/lib/messages.c
+===================================================================
+--- branches/SAMBA_3_0/source/lib/messages.c	2007-05-20 17:00:18 UTC (rev 23022)
++++ branches/SAMBA_3_0/source/lib/messages.c	2007-05-20 19:43:49 UTC (rev 23023)
+@@ -872,14 +872,4 @@
+ 	return messaging_send(msg_ctx, server, msg_type, &blob);
+ }
+ 
+-NTSTATUS messaging_send_buf_with_timeout(struct messaging_context *msg_ctx,
+-					 struct server_id server,
+-					 uint32_t msg_type,
+-					 const uint8 *buf, size_t len,
+-					 int timeout)
+-{
+-	return message_send_pid_internal(server, msg_type, buf, len,
+-					 True, timeout);
+-}
+-
+ /** @} **/
+
+Modified: branches/SAMBA_3_0/source/printing/notify.c
+===================================================================
+--- branches/SAMBA_3_0/source/printing/notify.c	2007-05-20 17:00:18 UTC (rev 23022)
++++ branches/SAMBA_3_0/source/printing/notify.c	2007-05-20 19:43:49 UTC (rev 23023)
+@@ -126,6 +126,7 @@
+ 	size_t num_pids = 0;
+ 	size_t i;
+ 	pid_t *pid_list = NULL;
++	struct timeval end_time = timeval_zero();
+ 
+ 	/* Count the space needed to send the messages. */
+ 	for (pq = notify_queue_head; pq; pq = pq->next) {
+@@ -177,6 +178,10 @@
+ 	if (!print_notify_pid_list(printer, send_ctx, &num_pids, &pid_list))
+ 		return;
+ 
++	if (timeout != 0) {
++		end_time = timeval_current_ofs(timeout, 0);
++	}
++
+ 	for (i = 0; i < num_pids; i++) {
+ 		unsigned int q_len = messages_pending_for_pid(pid_to_procid(pid_list[i]));
+ 		if (q_len > 1000) {
+@@ -184,11 +189,14 @@
+ 				printer, q_len ));
+ 			continue;
+ 		}
+-		messaging_send_buf_with_timeout(msg_ctx,
+-						pid_to_procid(pid_list[i]),
+-						MSG_PRINTER_NOTIFY2,
+-						(uint8 *)buf, offset,
+-						timeout);
++		messaging_send_buf(msg_ctx,
++				   pid_to_procid(pid_list[i]),
++				   MSG_PRINTER_NOTIFY2,
++				   (uint8 *)buf, offset);
++
++		if ((timeout != 0) && timeval_expired(&end_time)) {
++			break;
++		}
+ 	}
+ }
+ 
+
+Modified: branches/SAMBA_3_0_26/source/lib/messages.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/lib/messages.c	2007-05-20 17:00:18 UTC (rev 23022)
++++ branches/SAMBA_3_0_26/source/lib/messages.c	2007-05-20 19:43:49 UTC (rev 23023)
+@@ -872,14 +872,4 @@
+ 	return messaging_send(msg_ctx, server, msg_type, &blob);
+ }
+ 
+-NTSTATUS messaging_send_buf_with_timeout(struct messaging_context *msg_ctx,
+-					 struct server_id server,
+-					 uint32_t msg_type,
+-					 const uint8 *buf, size_t len,
+-					 int timeout)
+-{
+-	return message_send_pid_internal(server, msg_type, buf, len,
+-					 True, timeout);
+-}
+-
+ /** @} **/
+
+Modified: branches/SAMBA_3_0_26/source/printing/notify.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/printing/notify.c	2007-05-20 17:00:18 UTC (rev 23022)
++++ branches/SAMBA_3_0_26/source/printing/notify.c	2007-05-20 19:43:49 UTC (rev 23023)
+@@ -126,6 +126,7 @@
+ 	size_t num_pids = 0;
+ 	size_t i;
+ 	pid_t *pid_list = NULL;
++	struct timeval end_time = timeval_zero();
+ 
+ 	/* Count the space needed to send the messages. */
+ 	for (pq = notify_queue_head; pq; pq = pq->next) {
+@@ -177,6 +178,10 @@
+ 	if (!print_notify_pid_list(printer, send_ctx, &num_pids, &pid_list))
+ 		return;
+ 
++	if (timeout != 0) {
++		end_time = timeval_current_ofs(timeout, 0);
++	}
++
+ 	for (i = 0; i < num_pids; i++) {
+ 		unsigned int q_len = messages_pending_for_pid(pid_to_procid(pid_list[i]));
+ 		if (q_len > 1000) {
+@@ -184,11 +189,14 @@
+ 				printer, q_len ));
+ 			continue;
+ 		}
+-		messaging_send_buf_with_timeout(msg_ctx,
+-						pid_to_procid(pid_list[i]),
+-						MSG_PRINTER_NOTIFY2,
+-						(uint8 *)buf, offset,
+-						timeout);
++		messaging_send_buf(msg_ctx,
++				   pid_to_procid(pid_list[i]),
++				   MSG_PRINTER_NOTIFY2,
++				   (uint8 *)buf, offset);
++
++		if ((timeout != 0) && timeval_expired(&end_time)) {
++			break;
++		}
+ 	}
+ }
+ 
+

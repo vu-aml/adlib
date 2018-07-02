@@ -1,0 +1,338 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Jun  8 17:04:04 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l58L44L9001618
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 8 Jun 2007 17:04:04 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 42AB21639E8
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri,  8 Jun 2007 21:04:04 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.3 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1006)
+	id 8830A162AEB; Fri,  8 Jun 2007 21:03:19 +0000 (GMT)
+To: samba-cvs@samba.org
+From: lha@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070608210319.8830A162AEB@lists.samba.org>
+Date: Fri,  8 Jun 2007 21:03:19 +0000 (GMT)
+Subject: svn commit: lorikeet r722 - in trunk/heimdal: . kdc lib/asn1
+	lib/hdb lib/ntlm lib/sl
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: lha
+Date: 2007-06-08 21:03:18 +0000 (Fri, 08 Jun 2007)
+New Revision: 722
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=lorikeet&rev=722
+
+Log:
+Merged with Heimdal svn revision 21022
+Modified:
+   trunk/heimdal/configure.in
+   trunk/heimdal/heimdal-lorikeet.diff
+   trunk/heimdal/kdc/Makefile.am
+   trunk/heimdal/kdc/kerberos5.c
+   trunk/heimdal/lib/asn1/check-der.c
+   trunk/heimdal/lib/hdb/hdb.c
+   trunk/heimdal/lib/ntlm/ChangeLog
+   trunk/heimdal/lib/ntlm/Makefile.am
+   trunk/heimdal/lib/ntlm/Makefile.in
+   trunk/heimdal/lib/sl/parse.c
+   trunk/heimdal/lib/sl/slc-gram.c
+
+
+Changeset:
+Modified: trunk/heimdal/configure.in
+===================================================================
+--- trunk/heimdal/configure.in	2007-06-08 16:22:31 UTC (rev 721)
++++ trunk/heimdal/configure.in	2007-06-08 21:03:18 UTC (rev 722)
+@@ -2,7 +2,7 @@
+ AC_REVISION($Revision: 21004 $)
+ AC_PREREQ([2.59])
+ test -z "$CFLAGS" && CFLAGS="-g"
+-AC_INIT([Lorikeet-Heimdal, Modified for Samba4],[0.8pre-samba],[samba-technical@samba.org])
++AC_INIT([Heimdal],[0.9pre],[heimdal-bugs@h5l.se])
+ AC_CONFIG_SRCDIR([kuser/kinit.c])
+ AC_CONFIG_HEADERS(include/config.h)
+ 
+
+Modified: trunk/heimdal/heimdal-lorikeet.diff
+===================================================================
+--- trunk/heimdal/heimdal-lorikeet.diff	2007-06-08 16:22:31 UTC (rev 721)
++++ trunk/heimdal/heimdal-lorikeet.diff	2007-06-08 21:03:18 UTC (rev 722)
+@@ -1,24 +1,14 @@
+ --- clean-21018/kdc/kerberos5.c 2007-06-08 11:48:54.000000000 -0400
+ +++ kdc/kerberos5.c   2007-06-08 11:09:20.000000000 -0400
+-@@ -1194,8 +1194,6 @@
+-                        (unsigned)abs(kdc_time - p.patimestamp), 
+-                        context->max_skew,
+-                        client_name);
++@@ -1194,7 +1194,7 @@
++ 			(unsigned)abs(kdc_time - p.patimestamp), 
++ 			context->max_skew,
++ 			client_name);
+ -#if 0
+--               /* This code is from samba, needs testing */
+-                /* 
+-                 * the following is needed to make windows clients
+-                 * to retry using the timestamp in the error message
+-@@ -1204,9 +1202,6 @@
+-                 * is present...
+-                 */
+-                e_text = NULL;
+--#else
+--               e_text = "Too large time skew";
+--#endif
+-                goto out;
+-            }
+-            et.flags.pre_authent = 1;
+++#if 1
++ 		/* This code is from samba, needs testing */
++ 		/* 
++ 		 * the following is needed to make windows clients
+ --- clean-21018/lib/hdb/hdb.c   2007-06-08 11:48:37.000000000 -0400
+ +++ lib/hdb/hdb.c     2007-06-08 11:09:20.000000000 -0400
+ @@ -55,6 +55,9 @@
+
+Modified: trunk/heimdal/kdc/Makefile.am
+===================================================================
+--- trunk/heimdal/kdc/Makefile.am	2007-06-08 16:22:31 UTC (rev 721)
++++ trunk/heimdal/kdc/Makefile.am	2007-06-08 21:03:18 UTC (rev 722)
+@@ -1,4 +1,4 @@
+-# $Id: Makefile.am 20953 2007-06-07 03:20:22Z lha $
++# $Id: Makefile.am 21020 2007-06-08 15:35:50Z lha $
+ 
+ include $(top_srcdir)/Makefile.am.common
+ 
+@@ -120,4 +120,4 @@
+ 
+ build_HEADERZ = $(krb5_HEADERS) # XXX
+ 
+-EXTRA_DIST = $(man_MANS)
++EXTRA_DIST = $(man_MANS) version-script.map
+
+Modified: trunk/heimdal/kdc/kerberos5.c
+===================================================================
+--- trunk/heimdal/kdc/kerberos5.c	2007-06-08 16:22:31 UTC (rev 721)
++++ trunk/heimdal/kdc/kerberos5.c	2007-06-08 21:03:18 UTC (rev 722)
+@@ -1194,6 +1194,8 @@
+ 			(unsigned)abs(kdc_time - p.patimestamp), 
+ 			context->max_skew,
+ 			client_name);
++#if 1
++		/* This code is from samba, needs testing */
+ 		/* 
+ 		 * the following is needed to make windows clients
+ 		 * to retry using the timestamp in the error message
+@@ -1202,6 +1204,9 @@
+ 		 * is present...
+ 		 */
+ 		e_text = NULL;
++#else
++		e_text = "Too large time skew";
++#endif
+ 		goto out;
+ 	    }
+ 	    et.flags.pre_authent = 1;
+
+Modified: trunk/heimdal/lib/asn1/check-der.c
+===================================================================
+--- trunk/heimdal/lib/asn1/check-der.c	2007-06-08 16:22:31 UTC (rev 721)
++++ trunk/heimdal/lib/asn1/check-der.c	2007-06-08 21:03:18 UTC (rev 722)
+@@ -41,7 +41,7 @@
+ 
+ #include "check-common.h"
+ 
+-RCSID("$Id: check-der.c 20863 2007-06-03 20:27:34Z lha $");
++RCSID("$Id: check-der.c 21022 2007-06-08 17:02:42Z lha $");
+ 
+ static int
+ cmp_integer (void *a, void *b)
+@@ -830,7 +830,71 @@
+     return 0;
+ }
+ 
++static int
++test_misc_cmp(void)
++{
++    int ret;
+ 
++    /* diffrent lengths are diffrent */
++    {
++	const heim_octet_string os1 = { 1, "a" } , os2 = { 0, NULL };
++	ret = der_heim_octet_string_cmp(&os1, &os2);
++	if (ret == 0)
++	    return 1;
++    }
++    /* diffrent data are diffrent */
++    {
++	const heim_octet_string os1 = { 1, "a" } , os2 = { 1, "b" };
++	ret = der_heim_octet_string_cmp(&os1, &os2);
++	if (ret == 0)
++	    return 1;
++    }
++    /* diffrent lengths are diffrent */
++    {
++	const heim_bit_string bs1 = { 8, "a" } , bs2 = { 7, "a" };
++	ret = der_heim_bit_string_cmp(&bs1, &bs2);
++	if (ret == 0)
++	    return 1;
++    }
++    /* diffrent data are diffrent */
++    {
++	const heim_bit_string bs1 = { 7, "\x0f" } , bs2 = { 7, "\x02" };
++	ret = der_heim_bit_string_cmp(&bs1, &bs2);
++	if (ret == 0)
++	    return 1;
++    }
++    /* diffrent lengths are diffrent */
++    {
++	uint16_t data = 1;
++	heim_bmp_string bs1 = { 1, NULL } , bs2 = { 0, NULL };
++	bs1.data = &data;
++	ret = der_heim_bmp_string_cmp(&bs1, &bs2);
++	if (ret == 0)
++	    return 1;
++    }
++    /* diffrent lengths are diffrent */
++    {
++	uint32_t data;
++	heim_universal_string us1 = { 1, NULL } , us2 = { 0, NULL };
++	us1.data = &data;
++	ret = der_heim_universal_string_cmp(&us1, &us2);
++	if (ret == 0)
++	    return 1;
++    }
++    /* same */
++    {
++	uint32_t data;
++	heim_universal_string us1 = { 1, NULL } , us2 = { 1, NULL };
++	us1.data = &data;
++	us2.data = &data;
++	ret = der_heim_universal_string_cmp(&us1, &us2);
++	if (ret != 0)
++	    return 1;
++    }
++
++    return 0;
++}
++
+ int
+ main(int argc, char **argv)
+ {
+@@ -861,6 +925,7 @@
+     ret += test_heim_int_format();
+     ret += test_heim_oid_format();
+     ret += check_trailing_nul();
++    ret += test_misc_cmp();
+ 
+     return ret;
+ }
+
+Modified: trunk/heimdal/lib/hdb/hdb.c
+===================================================================
+--- trunk/heimdal/lib/hdb/hdb.c	2007-06-08 16:22:31 UTC (rev 721)
++++ trunk/heimdal/lib/hdb/hdb.c	2007-06-08 21:03:18 UTC (rev 722)
+@@ -56,7 +56,7 @@
+     {"ldapi:",	hdb_ldapi_create},
+ #endif
+ #ifdef _SAMBA_BUILD_
+-    {"ldb:",	hdb_ldb_create},
++    {"ldb:",   hdb_ldb_create},
+ #endif
+ #ifdef HAVE_LDB /* Used for integrated samba build */
+     {"ldb:",	hdb_ldb_create},
+
+Modified: trunk/heimdal/lib/ntlm/ChangeLog
+===================================================================
+--- trunk/heimdal/lib/ntlm/ChangeLog	2007-06-08 16:22:31 UTC (rev 721)
++++ trunk/heimdal/lib/ntlm/ChangeLog	2007-06-08 21:03:18 UTC (rev 722)
+@@ -1,3 +1,7 @@
++2007-06-08  Love Hörnquist Åstrand  <lha@it.su.se>
++
++	* Makefile.am: EXTRA_DIST += version-script.map.
++	
+ 2007-06-03  Love Hörnquist Åstrand  <lha@it.su.se>
+ 
+ 	* test_ntlm.c: Free memory diffrently.
+
+Modified: trunk/heimdal/lib/ntlm/Makefile.am
+===================================================================
+--- trunk/heimdal/lib/ntlm/Makefile.am	2007-06-08 16:22:31 UTC (rev 721)
++++ trunk/heimdal/lib/ntlm/Makefile.am	2007-06-08 21:03:18 UTC (rev 722)
+@@ -1,4 +1,4 @@
+-# $Id: Makefile.am 20522 2007-04-22 10:49:57Z lha $
++# $Id: Makefile.am 21019 2007-06-08 15:34:29Z lha $
+ 
+ include $(top_srcdir)/Makefile.am.common
+ 
+@@ -31,3 +31,4 @@
+ 
+ LDADD = libheimntlm.la $(LIB_roken)
+ 
++EXTRA_DIST = version-script.map
+
+Modified: trunk/heimdal/lib/ntlm/Makefile.in
+===================================================================
+--- trunk/heimdal/lib/ntlm/Makefile.in	2007-06-08 16:22:31 UTC (rev 721)
++++ trunk/heimdal/lib/ntlm/Makefile.in	2007-06-08 21:03:18 UTC (rev 722)
+@@ -14,7 +14,7 @@
+ 
+ @SET_MAKE@
+ 
+-# $Id: Makefile.am 20522 2007-04-22 10:49:57Z lha $
++# $Id: Makefile.am 21019 2007-06-08 15:34:29Z lha $
+ 
+ # $Id: Makefile.am.common 10998 2002-05-19 18:35:37Z joda $
+ 
+@@ -408,6 +408,7 @@
+ 
+ TESTS = test_ntlm
+ LDADD = libheimntlm.la $(LIB_roken)
++EXTRA_DIST = version-script.map
+ all: all-am
+ 
+ .SUFFIXES:
+
+Modified: trunk/heimdal/lib/sl/parse.c
+===================================================================
+--- trunk/heimdal/lib/sl/parse.c	2007-06-08 16:22:31 UTC (rev 721)
++++ trunk/heimdal/lib/sl/parse.c	2007-06-08 21:03:18 UTC (rev 722)
+@@ -1,5 +1,5 @@
+ 
+-/*  A Bison parser, made from /Users/lha/src/samba/heimdal/heimdal-import/lib/sl/parse.y
++/*  A Bison parser, made from /Users/lha/src/samba/merge/heimdal-import/lib/sl/parse.y
+     by GNU Bison version 1.28  */
+ 
+ #define YYBISON 1  /* Identify Bison output.  */
+
+Modified: trunk/heimdal/lib/sl/slc-gram.c
+===================================================================
+--- trunk/heimdal/lib/sl/slc-gram.c	2007-06-08 16:22:31 UTC (rev 721)
++++ trunk/heimdal/lib/sl/slc-gram.c	2007-06-08 21:03:18 UTC (rev 722)
+@@ -1,5 +1,5 @@
+ 
+-/*  A Bison parser, made from /Users/lha/src/samba/heimdal/heimdal-import/lib/sl/slc-gram.y
++/*  A Bison parser, made from /Users/lha/src/samba/merge/heimdal-import/lib/sl/slc-gram.y
+     by GNU Bison version 1.28  */
+ 
+ #define YYBISON 1  /* Identify Bison output.  */
+

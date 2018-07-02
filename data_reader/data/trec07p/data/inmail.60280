@@ -1,0 +1,74 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Jun 18 23:19:05 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5J3J5L9024697
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 18 Jun 2007 23:19:05 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 6D18C163864
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 19 Jun 2007 03:19:03 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.3 required=3.8 tests=BAYES_00,DATE_IN_PAST_03_06,
+	NO_REAL_NAME,NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id E47AA162BC1; Tue, 19 Jun 2007 03:18:33 +0000 (GMT)
+Date: Tue, 19 Jun 2007 09:30:04 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070619031833.E47AA162BC1@lists.samba.org>
+Subject: Rev 602: store both forward and reverse mappings when the script
+	gives us a result in http://samba.org/~tridge/3_0-ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 602
+revision-id: tridge@samba.org-20070618233003-z1g7kv5uce3qr0p2
+parent: tridge@samba.org-20070618231102-yosa0a9c5s1bna3r
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: s3-ctdb-tridge
+timestamp: Tue 2007-06-19 09:30:03 +1000
+message:
+  store both forward and reverse mappings when the script gives us a result
+modified:
+  source/nsswitch/idmap_tdb2.c   idmap_tdb2.c-20070531053925-e5x7av5etjs83rk0-1
+=== modified file 'source/nsswitch/idmap_tdb2.c'
+--- a/source/nsswitch/idmap_tdb2.c	2007-06-18 23:11:02 +0000
++++ b/source/nsswitch/idmap_tdb2.c	2007-06-18 23:30:03 +0000
+@@ -606,8 +606,11 @@
+ 			if (NT_STATUS_IS_OK(ret)) {
+ 				fstring sidstr;
+ 				if (sid_to_string(sidstr, map->sid)) {
++					/* both forward and reverse mappings */
+ 					tdb2_store_bystring(keystr, string_term_tdb_data(sidstr), 
+ 							    TDB_REPLACE);
++					tdb2_store_bystring(sidstr, string_term_tdb_data(keystr), 
++							    TDB_REPLACE);
+ 				}
+ 			}
+ 		} else {
+@@ -663,7 +666,9 @@
+ 				snprintf(idstr, sizeof(idstr), "%cID %lu", 
+ 					 map->xid.type == ID_TYPE_UID?'U':'G',
+ 					 (unsigned long)map->xid.id);
++				/* store both forward and reverse mappings */
+ 				tdb2_store_bystring(keystr, string_term_tdb_data(idstr), TDB_REPLACE);
++				tdb2_store_bystring(idstr, string_term_tdb_data(keystr), TDB_REPLACE);
+ 			}
+ 		} else {
+ 			ret = NT_STATUS_NONE_MAPPED;
+

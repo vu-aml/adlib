@@ -1,0 +1,242 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Jun 11 06:28:52 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5BASpL9012924
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 11 Jun 2007 06:28:52 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id C01FC163843
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 11 Jun 2007 10:28:50 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,UPPERCASE_25_50 autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1017)
+	id C189D162ADB; Mon, 11 Jun 2007 10:28:23 +0000 (GMT)
+To: samba-cvs@samba.org
+From: obnox@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070611102823.C189D162ADB@lists.samba.org>
+Date: Mon, 11 Jun 2007 10:28:23 +0000 (GMT)
+Subject: svn commit: samba r23414 - in branches/SAMBA_3_0_26/source: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: obnox
+Date: 2007-06-11 10:28:23 +0000 (Mon, 11 Jun 2007)
+New Revision: 23414
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23414
+
+Log:
+Merge r23387  and r23389 from 3_0:
+
+1. Unify Posix ACL detection (Linux, FreeBSD, ...)
+2. Turn ACL support detection on by default.
+3. Disable ACL support for darwin.
+
+This should finally fix Bug #4543.
+
+Michael
+
+
+Modified:
+   branches/SAMBA_3_0_26/source/configure.in
+
+
+Changeset:
+Modified: branches/SAMBA_3_0_26/source/configure.in
+===================================================================
+--- branches/SAMBA_3_0_26/source/configure.in	2007-06-11 09:50:18 UTC (rev 23413)
++++ branches/SAMBA_3_0_26/source/configure.in	2007-06-11 10:28:23 UTC (rev 23414)
+@@ -5247,55 +5247,71 @@
+ 
+ AC_MSG_CHECKING(whether to support ACLs)
+ AC_ARG_WITH(acl-support,
+-[  --with-acl-support      Include ACL support (default=no)],
++[  --with-acl-support      Include ACL support (default=auto)],
+ [ case "$withval" in
+-  yes)
++	yes|no)
++		with_acl_support="$withval"
++		;;
++  esac ])
+ 
++if test x"$with_acl_support" = x ; then
++	with_acl_support="auto"
++fi
++
++AC_MSG_RESULT($with_acl_support)
++
++if test x"$with_acl_support" = x"no"; then
++	AC_MSG_RESULT(Disabling ACL support)
++	AC_DEFINE(HAVE_NO_ACLS,1,[Whether no ACLs support should be built in])
++else
++	AC_MSG_NOTICE(checking whether ACL support is available:)
+ 	case "$host_os" in
+ 	*sysv5*)
+-		AC_MSG_RESULT(Using UnixWare ACLs)
++		AC_MSG_NOTICE(Using UnixWare ACLs)
+ 		AC_DEFINE(HAVE_UNIXWARE_ACLS,1,[Whether UnixWare ACLs are available])
+ 		default_static_modules="$default_static_modules vfs_solarisacl"
+ 		;;
+ 	*solaris*)
+-		AC_MSG_RESULT(Using solaris ACLs)
++		AC_MSG_NOTICE(Using solaris ACLs)
+ 		AC_DEFINE(HAVE_SOLARIS_ACLS,1,[Whether solaris ACLs are available])
+ 		ACL_LIBS="$ACL_LIBS -lsec"
+ 		default_static_modules="$default_static_modules vfs_solarisacl"
+ 		;;
+ 	*hpux*)
+-		AC_MSG_RESULT(Using HPUX ACLs)
++		AC_MSG_NOTICE(Using HPUX ACLs)
+ 		AC_DEFINE(HAVE_HPUX_ACLS,1,[Whether HPUX ACLs are available])
+ 		default_static_modules="$default_static_modules vfs_hpuxacl"
+ 		;;
+ 	*irix*)
+-		AC_MSG_RESULT(Using IRIX ACLs)
++		AC_MSG_NOTICE(Using IRIX ACLs)
+ 		AC_DEFINE(HAVE_IRIX_ACLS,1,[Whether IRIX ACLs are available])
+ 		default_static_modules="$default_static_modules vfs_irixacl"
+ 		;;
+ 	*aix*)
+-		AC_MSG_RESULT(Using AIX ACLs)
++		AC_MSG_NOTICE(Using AIX ACLs)
+ 		AC_DEFINE(HAVE_AIX_ACLS,1,[Whether AIX ACLs are available])
+ 		default_static_modules="$default_static_modules vfs_aixacl"
+ 		;;
+ 	*osf*)
+-		AC_MSG_RESULT(Using Tru64 ACLs)
++		AC_MSG_NOTICE(Using Tru64 ACLs)
+ 		AC_DEFINE(HAVE_TRU64_ACLS,1,[Whether Tru64 ACLs are available])
+ 		ACL_LIBS="$ACL_LIBS -lpacl"
+ 		default_static_modules="$default_static_modules vfs_tru64acl"
+ 		;;
+-	*freebsd[[5-9]]*)
+-		AC_MSG_RESULT(Using FreeBSD posix ACLs)
+-		AC_DEFINE(HAVE_POSIX_ACLS,1,[Whether FreeBSD POSIX ACLs are available])
+-		AC_DEFINE(HAVE_ACL_GET_PERM_NP,1,[Whether acl_get_perm_np() is available])
+-		default_static_modules="$default_static_modules vfs_posixacl"
++	*darwin*)
++		AC_MSG_NOTICE(ACLs on Darwin currently not supported)
++		AC_DEFINE(HAVE_NO_ACLS,1,[Whether no ACLs support is available])
+ 		;;
+-	*linux*)
+-		AC_CHECK_LIB(attr,getxattr,[ACL_LIBS="$ACL_LIBS -lattr"])
+-       		AC_CHECK_LIB(acl,acl_get_file,[ACL_LIBS="$ACL_LIBS -lacl"])
+-		AC_CACHE_CHECK([for ACL support],samba_cv_HAVE_POSIX_ACLS,[
++	*)
++		AC_CHECK_LIB(acl,acl_get_file,[ACL_LIBS="$ACL_LIBS -lacl"])
++		case "$host_os" in
++		*linux*)
++			AC_CHECK_LIB(attr,getxattr,[ACL_LIBS="$ACL_LIBS -lattr"])
++			;;
++		esac
++		AC_CACHE_CHECK([for POSIX ACL support],samba_cv_HAVE_POSIX_ACLS,[
+ 			acl_LIBS=$LIBS
+-			LIBS="$LIBS -lacl"
++			LIBS="$LIBS $ACL_LIBS"
+ 			AC_TRY_LINK([
+ 				#include <sys/types.h>
+ 				#include <sys/acl.h>
+@@ -5310,11 +5326,11 @@
+ 			LIBS=$acl_LIBS
+ 		])
+ 		if test x"$samba_cv_HAVE_POSIX_ACLS" = x"yes"; then
+-			AC_MSG_RESULT(Using posix ACLs)
++			AC_MSG_NOTICE(Using posix ACLs)
+ 			AC_DEFINE(HAVE_POSIX_ACLS,1,[Whether POSIX ACLs are available])
+ 			AC_CACHE_CHECK([for acl_get_perm_np],samba_cv_HAVE_ACL_GET_PERM_NP,[
+ 				acl_LIBS=$LIBS
+-				LIBS="$LIBS -lacl"
++				LIBS="$LIBS $ACL_LIBS"
+ 				AC_TRY_LINK([
+ 					#include <sys/types.h>
+ 					#include <sys/acl.h>
+@@ -5330,64 +5346,17 @@
+ 			if test x"$samba_cv_HAVE_ACL_GET_PERM_NP" = x"yes"; then
+ 				AC_DEFINE(HAVE_ACL_GET_PERM_NP,1,[Whether acl_get_perm_np() is available])
+ 			fi
++   			default_static_modules="$default_static_modules vfs_posixacl"
++		else
++			AC_MSG_NOTICE(ACL support is not avaliable)
++			AC_DEFINE(HAVE_NO_ACLS,1,[Whether no ACLs support is available])
+ 		fi
+-            ;;
+-         *)
+-		AC_CHECK_LIB(acl,acl_get_file,[ACL_LIBS="$ACL_LIBS -lacl"])
+-		AC_CACHE_CHECK([for ACL support],samba_cv_HAVE_POSIX_ACLS,[
+-			acl_LIBS=$LIBS
+-			LIBS="$LIBS -lacl"
+-			AC_TRY_LINK([
+-				#include <sys/types.h>
+-				#include <sys/acl.h>
+-			],[
+-				acl_t acl;
+-				int entry_id;
+-				acl_entry_t *entry_p;
+-				return acl_get_entry( acl, entry_id, entry_p);
+-			],
+-			[samba_cv_HAVE_POSIX_ACLS=yes],
+-			[samba_cv_HAVE_POSIX_ACLS=no])
+-			LIBS=$acl_LIBS
+-		])
+-		if test x"$samba_cv_HAVE_POSIX_ACLS" = x"yes"; then
+-			AC_MSG_RESULT(Using posix ACLs)
+-			AC_DEFINE(HAVE_POSIX_ACLS,1,[Whether POSIX ACLs are available])
+-			AC_CACHE_CHECK([for acl_get_perm_np],samba_cv_HAVE_ACL_GET_PERM_NP,[
+-				acl_LIBS=$LIBS
+-				LIBS="$LIBS -lacl"
+-				AC_TRY_LINK([
+-					#include <sys/types.h>
+-					#include <sys/acl.h>
+-				],[
+-					acl_permset_t permset_d;
+-					acl_perm_t perm;
+-					return acl_get_perm_np( permset_d, perm);
+-				],
+-				[samba_cv_HAVE_ACL_GET_PERM_NP=yes],
+-				[samba_cv_HAVE_ACL_GET_PERM_NP=no])
+-				LIBS=$acl_LIBS
+-			])
+-			if test x"$samba_cv_HAVE_ACL_GET_PERM_NP" = x"yes"; then
+-				AC_DEFINE(HAVE_ACL_GET_PERM_NP,1,[Whether acl_get_perm_np() is available])
+-			fi
+-		fi
+-            ;;
++		;;
+         esac
+-        ;;
+-  *)
+-    AC_MSG_RESULT(no)
+-    AC_DEFINE(HAVE_NO_ACLS,1,[Whether no ACLs support is available])
+-    ;;
+-  esac ],
+-  AC_DEFINE(HAVE_NO_ACLS,1,[Whether no ACLs support should be built in])
+-  AC_MSG_RESULT(no)
+-)
++fi # with_acl_support
+ 
+-if test x"$samba_cv_HAVE_POSIX_ACLS" = x"yes"; then
+-   default_static_modules="$default_static_modules vfs_posixacl"
+-fi
+ 
++
+ #################################################
+ # check for AIO support
+ 
+

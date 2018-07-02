@@ -1,0 +1,177 @@
+From r-help-bounces@stat.math.ethz.ch  Wed Jun 27 04:35:53 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5R8ZpL9024247
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 27 Jun 2007 04:35:52 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5R8XnsO028673;
+	Wed, 27 Jun 2007 10:34:02 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.8 required=5.0 tests=AWL, BAYES_50,
+	DKIM_POLICY_SIGNSOME, HTML_MESSAGE,
+	SARE_URI_EQUALS autolearn=no version=3.2.0
+Received: from py-out-1112.google.com (py-out-1112.google.com [64.233.166.182])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5R8XWxH028627
+	for <r-help@stat.math.ethz.ch>; Wed, 27 Jun 2007 10:33:33 +0200
+Received: by py-out-1112.google.com with SMTP id p76so185760pyb
+	for <r-help@stat.math.ethz.ch>; Wed, 27 Jun 2007 01:33:31 -0700 (PDT)
+Received: by 10.35.75.15 with SMTP id c15mr595839pyl.1182933211350;
+	Wed, 27 Jun 2007 01:33:31 -0700 (PDT)
+Received: by 10.35.34.12 with HTTP; Wed, 27 Jun 2007 01:33:30 -0700 (PDT)
+Message-ID: <dea6cb960706270133t3aaae487k4ae807a6a02a8c3c@mail.gmail.com>
+Date: Wed, 27 Jun 2007 10:33:30 +0200
+From: "Christophe Pallier" <christophe@pallier.org>
+To: "Robert Wilkins" <irishhacker@gmail.com>
+In-Reply-To: <874da0b40706261659r11bb2fc4y2c3a4a5266a2fc74@mail.gmail.com>
+MIME-Version: 1.0
+References: <874da0b40706261659r11bb2fc4y2c3a4a5266a2fc74@mail.gmail.com>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Content-Disposition: inline
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] A really simple data manipulation example
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+For merging, selecting and aggregating, R is not too bad:
+I believe the following code is more or less equivalent to your Vilno
+example, isn't?
+
+
+# to input data, replace the following two lline by 'read.table'
+labresults <- data.frame(patient.id=gl(10,5), visit.num=gl(5,10),
+sodium=rnorm(50))
+demo <- data.frame(patient.id=gl(10,1), gender=gl(2,5,labels=c('F','M')))
+
+data <- merge(labresults, demo)
+data <- subset(data, visit.num!=2)
+with(data,
+     aggregate(sodium, list(gender=gender), mean)
+     )
+
+
+If the data sets are very large, then doing merges/selection/aggregation
+outside of R can be a good idea.
+
+
+Christophe
+
+On 6/27/07, Robert Wilkins <irishhacker@gmail.com> wrote:
+>
+> In response to those who asked for a better explanation of what the
+> Vilno software does, here's a simple example that gives some idea of
+> what it does.
+>
+> LABRESULTS is a dataset with multiple rows per patient , with lab
+> sodium measurements. It has columns: PATIENT_ID, VISIT_NUM, and
+> SODIUM.
+>
+> DEMO is a dataset with one row per patient, with demographic data.
+> It has columns: PATIENT_ID, GENDER.
+>
+> Here's a simple example, the following paragraph of code is a
+> data processing function (dpf) :
+>
+>
+> inlist LABRESULTS DEMO ;
+> mergeby PATIENT_ID ;
+> if (SODIUM == -9) SODIUM = NULL ;
+> if (VISIT_NUM != 2) deleterow ;
+> select AVERAGE_SODIUM = avg(SODIUM) by GENDER ;
+> sendoff(RESULTS_DATASET)  GENDER AVERAGE_SODIUM ;
+> turnoff;     // just means end-of-paragraph , version 1.0 won't need this.
+>
+> Can you guess what it does? The lab result rows are merged with the
+> demographic rows, just to get the gender information merged in.
+> Obviously, they are merged by patient. The code -9 is used to denote
+> "missing", so convert that to NULL. I'm about to take a statistic for
+> visit 2, so rows with visit 0 or 1 must be deleted. I'm assuming, for
+> visit 2, each patient has at most one row. Now, for each sex group,
+> take the average sodium level. After the select statement, I have just
+> two rows, for male and female, with the average sodium level in the
+> AVERAGE_SODIUM column. Now the sendoff statement just stores the
+> current data table into a datafile, called RESULTS_DATASET.
+>
+> So you have a sequence of data tables, each calculation reading in the
+> current table , and leaving a new data table for the next calculation.
+>
+> So you have input datasets, a bunch of intermediate calculations, and
+> one or more output datasets. Pretty simple idea.
+>
+> *****************************************
+>
+> Some caveats:
+>
+> LABRESULTS and DEMO are binary datasets. The asciitobinary and
+> binarytoascii statements are used to convert between binary datasets
+> and comma-separated ascii data files. (You can use any delimiter:
+> comma, vertical bar , etc). An asciitobinary statement is typically
+> just two lines of code.
+>
+> The dpf begins with the inlist statement , and , for the moment ,
+> needs "turnoff ;" as the last line. Version 1.0 won't require the use
+> of "turnoff;", but version 0.85 does. It only means this paragraph of
+> code ends here ( a program can , of course , contain many paragraphs:
+> data processing functions, print statements, asciitobinary statements,
+> etc.).
+>
+> If you've worked with lab data, you know lab data does not look so
+> simplistic. I need a simple example.
+>
+> Vilno has a lot of functionality, many-to-many joins, adding columns,
+> firstrow() and lastrow() flags, and so forth. A fair amount of complex
+> data manipulations have already been tested with test programs ( in
+> the tarball ). Of course a simple example cannot show you that, it's
+> just a small taste.
+>
+> *********************************************
+>
+> If you've never used SPSS or SAS before, you won't care, but this
+> programming language falls in the same family as the SPSS and SAS
+> programming languages. All three programming languages have a fair
+> amount in common, but are quite different from the S programming
+> language. The vilno data processing function can replace the SAS
+> datastep. (It can also replace PROC TRANSPOSE and much of PROC MEANS,
+> except standard deviation calculations still need to be included in
+> the select statement).
+>
+> ********************************************
+>
+> I hope that helps.
+>
+> http://code.google.com/p/vilno
+>
+> ______________________________________________
+> R-help@stat.math.ethz.ch mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-help
+> PLEASE do read the posting guide
+> http://www.R-project.org/posting-guide.html
+> and provide commented, minimal, self-contained, reproducible code.
+>
+
+
+
+-- 
+Christophe Pallier (http://www.pallier.org)
+
+	[[alternative HTML version deleted]]
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

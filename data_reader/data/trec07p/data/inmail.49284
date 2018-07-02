@@ -1,0 +1,142 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat Jun  2 09:17:41 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l52DHfhB023414
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 2 Jun 2007 09:17:41 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 30F6B1639CD
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat,  2 Jun 2007 13:17:33 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-2.4 required=3.8 tests=ALL_TRUSTED,AWL,BAYES_00 
+	autolearn=ham version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from blackjack.home.nowhere-productions.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 61437162AC1
+	for <samba-technical@lists.samba.org>;
+	Sat,  2 Jun 2007 13:16:44 +0000 (GMT)
+From: Kai Blin <kai@samba.org>
+Organization: Samba Team
+To: samba-technical@lists.samba.org
+Date: Sat, 2 Jun 2007 15:16:38 +0200
+User-Agent: KMail/1.9.6
+References: <200706021154.33249.kai@samba.org> <4661483E.4080902@samba.org>
+In-Reply-To: <4661483E.4080902@samba.org>
+MIME-Version: 1.0
+Message-Id: <200706021516.39194.kai@samba.org>
+Content-Type: multipart/signed; boundary="nextPart3123249.Zlb2G807Zf";
+	protocol="application/pgp-signature"; micalg=pgp-sha1
+Content-Transfer-Encoding: 7bit
+Subject: Re: [Samba4][PATCH] Updating the winbind protocol used in Samba4
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+--nextPart3123249.Zlb2G807Zf
+Content-Type: text/plain;
+  charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+Content-Disposition: inline
+
+On Saturday 02 June 2007 12:36:46 Stefan (metze) Metzmacher wrote:
+> Kai Blin schrieb:
+> > Hi folks,
+> >
+> > attached is my go at updating the samba4 winbind protocol to version 18.
+> >
+> > nsswitch/winbindd_nss.h is just copied from SAMBA_3_0.
+> > nsswitch/winbind_nss_config.h is copied from SAMBA_3_0, too, but I had =
+to
+> > drop some of the defines to make things build again.
+> >
+> > Specifically, I had to drop the BOOL defines and I had to change the
+> > socklen_t ifdef.
+> >
+> > The other changes are pretty obvious adaptions to the new winbind_reque=
+st
+> > and winbind_response structures.
+>
+> Hi Kai,
+>
+> If this complies and passes make test, please commit it,
+> we can remove the remaining diff to samba3 as a next step....
+
+See r23311.
+
+The remaining diff is
+
+=2D-- -	2007-06-02 13:55:30.813194176 +0200
++++ /home/kai/samba/samba4/source/nsswitch/winbind_nss_config.h	2007-06-02=
+=20
+13:54:50.000000000 +0200
+@@ -53,6 +53,14 @@
+ typedef char fstring[FSTRING_LEN];
+ #endif
+=20
++#ifndef _UPPER_BOOL
++#define _UPPER_BOOL
++#define False (0)
++#define True (1)
++#define Auto (2)
++typedef int BOOL;
++#endif
++
+ #if !defined(uint32)
+ #if (SIZEOF_INT =3D=3D 4)
+ #define uint32 unsigned int
+
+This one can be fixed by changing _UPPER_BOOL to BOOL_DEFINED, but I'm
+not sure if that's a valid change.
+
+@@ -105,10 +113,9 @@
+ #define S_ISSOCK(mode)  ((mode & S_IFSOCK) =3D=3D S_IFSOCK)
+ #endif
+=20
+=2D#ifndef HAVE_SOCKLEN_T
+=2D#define HAVE_SOCKLEN_T
++#ifndef HAVE_SOCKLEN_T_TYPE
++#define HAVE_SOCKLEN_T_TYPE
+ typedef int socklen_t;
+ #endif
+
+How do I fix this one? HAVE_SOCKLEN_T seems like the more standard
+define for this, but samba3 uses HAVE_SOCKLEN_T_TYPE. Do I fix Samba3
+or Samba4? :)
+
+Cheers,
+Kai
+
+=2D-=20
+Kai Blin
+WorldForge developer  http://www.worldforge.org/
+Wine developer        http://wiki.winehq.org/KaiBlin
+Samba team member     http://us1.samba.org/samba/team/
+=2D-
+Will code for cotton.
+
+--nextPart3123249.Zlb2G807Zf
+Content-Type: application/pgp-signature
+
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.7 (GNU/Linux)
+
+iD8DBQBGYW23EKXX/bF2FpQRArN+AKCSg/Ucl60OvonAj8jSSUrFZbB34QCglCOJ
+RiqnChMml4HuBL7g+iZrEek=
+=2M0N
+-----END PGP SIGNATURE-----
+
+--nextPart3123249.Zlb2G807Zf--
+

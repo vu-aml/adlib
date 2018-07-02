@@ -1,0 +1,182 @@
+From r-help-bounces@stat.math.ethz.ch  Fri May  4 22:26:39 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l452QbqD022782
+	for <ktwarwic@flax9.uwaterloo.ca>; Fri, 4 May 2007 22:26:38 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l452PlBa007401;
+	Sat, 5 May 2007 04:26:13 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.7 required=5.0 tests=AWL,
+	BAYES_50 autolearn=no version=3.1.8
+Received: from fisher.stats.uwo.ca (fisher.stats.uwo.ca [129.100.76.201])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l452OwLQ007268
+	(version=TLSv1/SSLv3 cipher=DHE-RSA-AES256-SHA bits=256 verify=NO)
+	for <R-help@stat.math.ethz.ch>; Sat, 5 May 2007 04:24:59 +0200
+Received: from [127.0.0.1]
+	(IDENT:U2FsdGVkX1+cCAWYHMCVN/kK9h5TH4ii4b0660HFghI@localhost.localdomain
+	[127.0.0.1])
+	by fisher.stats.uwo.ca (8.13.1/8.13.1) with ESMTP id l452OooY005479;
+	Fri, 4 May 2007 22:24:51 -0400
+Message-ID: <463BEAE7.6090700@stats.uwo.ca>
+Date: Fri, 04 May 2007 22:24:39 -0400
+From: Duncan Murdoch <murdoch@stats.uwo.ca>
+User-Agent: Thunderbird 1.5.0.10 (Windows/20070221)
+MIME-Version: 1.0
+To: Alberto Vieira Ferreira Monteiro <albmont@centroin.com.br>
+References: <Pine.LNX.4.44.0705041628580.28218-100000@reclus.nhh.no>
+	<200705050100.18512.albmont@centroin.com.br>
+In-Reply-To: <200705050100.18512.albmont@centroin.com.br>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: R-help@stat.math.ethz.ch, Roger.Bivand@nhh.no
+Subject: Re: [R] Help with map
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+On 04/05/2007 9:00 PM, Alberto Vieira Ferreira Monteiro wrote:
+> [for those that worry about these things, this _is_ a homework
+> assignment. However, it's not an R homework, it's a Geography
+> and History homework... and I want to use R to create a pretty
+> map]
+> 
+> Roger Bivand wrote:
+>>> Is there any way to associate one color to each country?
+>> Try:
+>>
+>> map_poly_obj <- map("worldHires", c("Argentina", "Brazil"), plot=FALSE,
+>>   fill=TRUE)
+>> str(map_poly_obj)
+>>
+>> and you'll see that the component of interest is the named polygons, of
+>> which there are 28, namely
+>>
+> Ok, I guess I can see what you mean. It worked, but I don't think
+> this is a practical way to draw things.
+> 
+> For example, suppose [this would help homework mentioned above] I
+> want to draw a series of maps showing the evolution of Communism
+> in the XX century. I would like to start with a 1917 map, showing most
+> countries as in...
+> 
+> map("worldHires")
+> 
+> ... but with the Soviet Union in red. I don't see how I could mix the two 
+> maps (BTW, there's no Russia in worldHires, but there is a USSR...)
+> 
+> map("worldHires"); map("worldHires", "USSR", col="red", fill=T)
+> 
+>> map_poly_obj$names
+>>
+>> So you can build a matching colours vector, or:
+>>
+>> library(sp)
+>> library(maptools)
+>> IDs <- sapply(strsplit(map_poly_obj$names, ":"), function(x) x[1])
+>> SP_AB <- map2SpatialPolygons(map_poly_obj, IDs=IDs,
+>>   proj4string=CRS("+proj=longlat +datum=wgs84"))
+>>
+>> but
+>>
+>> plot(SP_AB, col=c("cyan", "green"))
+>>
+>> still misses, because some polygons have their rings of coordinates in
+>> counter-clockwise order, so:
+>>
+>> pl_new <- lapply(slot(SP_AB, "polygons"), checkPolygonsHoles)
+>> slot(SP_AB, "polygons") <- pl_new
+>> # please forget the assignment to the slot and do not do it unless you can
+>> # replace what was there before
+>>
+>> plot(SP_AB, col=c("cyan", "green"), axes=TRUE)
+>>
+>> now works. Moreover, SP_AB is a SpatialPolygons object, which can be
+>> promoted to a SpatialPolygonsDataFrame object, for a data slot holding a
+>> data.frame with row names matching the Polygons ID values:
+>>
+>> sapply(slot(SP_AB, "polygons"), function(x) slot(x, "ID"))
+>>
+>> So adding a suitable data frame gets you to the lattice graphics method
+>>
+>> spplot(SP_AB, "my_var")
+>>
+>> Hope this helps,
+>>
+> So, in the above mentioned case, I could do something like:
+> 
+> library(mapdata)
+> commies <- c("USSR", "Mongolia") 
+> # Mongolia was the 2nd communist country, in 1925
+> map_poly_obj <- map("worldHires", plot=FALSE)
+> map_poly_commies <- map("worldHires", commies,
+>   plot=FALSE, fill=TRUE)
+> plot(map_poly_obj, type="l")
+> polygon(map_poly_commies, col="red", border="black")
+> 
+> I guess I can keep going, unless there is a simpler solution.
+
+Here's the sloppy code I used to put together the map in the persp3d 
+example in rgl 0.71.  I've just made a few edits; I hope it still runs.
+The idea is to do a lot of calculations on a vector of colours, then
+plot them all at once.
+
+> library(mapdata)
+> 
+> names <- map("worldHires", plot=FALSE, namesonly=TRUE)
+
+> countries <- gsub(":.*", "", names)  # the first part of the name
+> lakes <- grep("Lake", names)
+> lakes <- lakes[-15]
+> lakes <- unique(c(lakes, grep("Ozero", names), 
+>                          grep("Vodokh", names),
+> 			   grep("Nuur", names),
+> 			   grep("Ostrov Ol'khon", names),
+> 			   grep("Hayk", names),
+> 			   grep("Lago", names)))  # The map doesn't distinguish these
+> 
+> seas <- grep("Sea", names) 
+> nfld <- grep("^Newfoundland$", names) # nfld should be coloured as Canada
+> canada <- grep("^Canada$", names)
+
+> svalbard <- grep("Svalbard", names)   # Svalbard coloured as Norway
+> norway <- grep("^Norway$", names)
+> 
+> nums <- as.numeric(factor(countries))
+> N <- max(nums)
+> set.seed(3)
+> col <-  hcl(h=sample((1:N)*360/N),
+>             c=sample(seq(35,45,len=N)),
+>             l=sample(seq(75,85,len=N)))[nums]  # random colours by country
+> col[c(lakes,seas)] <- "white" # with lakes and seas white
+> col[nfld] <- col[canada]
+> col[svalbard] <- col[norway]
+> 
+>  png(width=2200, height=2200, file='world.png')
+>  map('worldHires', fill = TRUE, col = col, ylim=c(-90,90))
+>  abline(h=c(-90, 90))
+>  abline(v=c(-180.05, 180.05))
+>  dev.off()
+
+I hope this gives you some ideas.
+
+Duncan Murdoch
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

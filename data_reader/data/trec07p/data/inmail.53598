@@ -1,0 +1,75 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Jun  7 23:56:16 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l583uGhB010417
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 7 Jun 2007 23:56:16 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 195D9162C4F
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri,  8 Jun 2007 03:56:10 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-2.0 required=3.8 tests=BAYES_00,SPF_PASS,
+	SUBJECT_FUZZY_TION autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from wx-out-0506.google.com (wx-out-0506.google.com [66.249.82.225])
+	by lists.samba.org (Postfix) with ESMTP id A1E0E162ACC
+	for <samba-technical@lists.samba.org>;
+	Fri,  8 Jun 2007 03:55:40 +0000 (GMT)
+Received: by wx-out-0506.google.com with SMTP id i30so583551wxd
+	for <samba-technical@lists.samba.org>;
+	Thu, 07 Jun 2007 20:55:38 -0700 (PDT)
+DKIM-Signature: a=rsa-sha1; c=relaxed/relaxed; d=gmail.com; s=beta;
+	h=domainkey-signature:received:received:message-id:date:from:user-agent:mime-version:to:subject:content-type:content-transfer-encoding;
+	b=TWndQTDmeIB2QXfMuI+ZyI7AWPzU5z+CtdqOEbTongZBjnWdxbQJHbFfLk3H7c1XMWKwaX/yqpjdUDSnrH3MQ7mxhDd1CGaVF6byuvF2LS+qFaw+uzQZTx3XQl6n++/I7Pod++1i0EXXZW64b9nPi+nyTuTB2wlm4IRrCROCwcY=
+DomainKey-Signature: a=rsa-sha1; c=nofws; d=gmail.com; s=beta;
+	h=received:message-id:date:from:user-agent:mime-version:to:subject:content-type:content-transfer-encoding;
+	b=E3rbwoS6Rfe/cD0TP8Y3fjdWd3CPyCFAoPRVTv9A8nKA6XGuhk8o72J4gSibRkST4nDA2gX0d7jylKLS3uWWfxjV6VhDJiL912hNVGy4VgeErSelWZTMtfzxQqb3sHjmzyl9wo9XDKzFvjVcwDMbo67AUec4fD9SuHaWawp0wg0=
+Received: by 10.70.60.7 with SMTP id i7mr3706571wxa.1181274937387;
+	Thu, 07 Jun 2007 20:55:37 -0700 (PDT)
+Received: from ?147.2.207.97? ( [61.14.130.209])
+	by mx.google.com with ESMTP id h35sm2188048wxd.2007.06.07.20.55.35
+	(version=TLSv1/SSLv3 cipher=RC4-MD5);
+	Thu, 07 Jun 2007 20:55:36 -0700 (PDT)
+Message-ID: <4668D382.9090007@gmail.com>
+Date: Fri, 08 Jun 2007 11:56:50 +0800
+From: boyang <yyyeer.bo@gmail.com>
+User-Agent: Thunderbird 1.5.0.8 (X11/20060911)
+MIME-Version: 1.0
+To: samba-technical@lists.samba.org
+Content-Type: text/plain; charset=ISO-8859-1
+Content-Transfer-Encoding: 7bit
+Subject: netlogon failure detection on samba-3.0.25a
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+problem: samba as domain member, and there are several NT4-style DCs, if
+netlogon service on PDC is disabled, domain users cannot login.
+
+proposed solution:
+1. add get_all_rpc_dc_name in source/libsmb/namequery_dc.c to get all
+NT4-style DCs whose node status response is NT_STAUS_OK. waste node
+status query RTTs. in source/auth/auth_domain.c:check_ntdomain_security,
+walk on the DCs' list and try to logon, if return is
+NT_STATUS_NETLOGON_NOT_STARTED, try next until failure or success.
+2. before call rpc_dc_name, pass the dcname & dcip
+that client try to logon, but failed with
+NT_STATUS_NETLOGON_NOT_STARTED, and rpc_dc_name
+search the domain DCs' list from position after that dcname, and returns
+one DC whose node status response is ok.
+
+doest it make sense?
+

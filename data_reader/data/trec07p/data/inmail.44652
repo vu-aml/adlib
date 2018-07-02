@@ -1,0 +1,117 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun May 27 05:22:41 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4R9MeqD032765
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 27 May 2007 05:22:40 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id D929D162C4D
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 27 May 2007 09:22:35 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.6 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id B0542162ACD; Sun, 27 May 2007 09:22:12 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070527092212.B0542162ACD@lists.samba.org>
+Date: Sun, 27 May 2007 09:22:12 +0000 (GMT)
+Subject: svn commit: samba r23161 - in branches:
+	SAMBA_3_0/source/lib/tdb/common SAMBA_3_0/source/lib/tdb/include
+	SAMBA_3_0_26/source/lib/tdb/common
+	SAMBA_3_0_26/source/lib/tdb/include
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-05-27 09:22:11 +0000 (Sun, 27 May 2007)
+New Revision: 23161
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23161
+
+Log:
+Add TDB_VOLATILE as open_flag to activate the per-hashchain dead record
+optimization.
+
+Modified:
+   branches/SAMBA_3_0/source/lib/tdb/common/open.c
+   branches/SAMBA_3_0/source/lib/tdb/include/tdb.h
+   branches/SAMBA_3_0_26/source/lib/tdb/common/open.c
+   branches/SAMBA_3_0_26/source/lib/tdb/include/tdb.h
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/lib/tdb/common/open.c
+===================================================================
+--- branches/SAMBA_3_0/source/lib/tdb/common/open.c	2007-05-26 16:57:53 UTC (rev 23160)
++++ branches/SAMBA_3_0/source/lib/tdb/common/open.c	2007-05-27 09:22:11 UTC (rev 23161)
+@@ -165,6 +165,10 @@
+ 		tdb->page_size = 0x2000;
+ 	}
+ 
++	if (open_flags & TDB_VOLATILE) {
++		tdb->max_dead_records = 5;
++	}
++
+ 	if ((open_flags & O_ACCMODE) == O_WRONLY) {
+ 		TDB_LOG((tdb, TDB_DEBUG_ERROR, "tdb_open_ex: can't open tdb %s write-only\n",
+ 			 name));
+
+Modified: branches/SAMBA_3_0/source/lib/tdb/include/tdb.h
+===================================================================
+--- branches/SAMBA_3_0/source/lib/tdb/include/tdb.h	2007-05-26 16:57:53 UTC (rev 23160)
++++ branches/SAMBA_3_0/source/lib/tdb/include/tdb.h	2007-05-27 09:22:11 UTC (rev 23161)
+@@ -47,6 +47,7 @@
+ #define TDB_BIGENDIAN 32 /* header is big-endian (internal use) */
+ #define TDB_NOSYNC   64 /* don't use synchronous transactions */
+ #define TDB_SEQNUM   128 /* maintain a sequence number */
++#define TDB_VOLATILE   256 /* Activate the per-hashchain freelist, default 5 */
+ 
+ #define TDB_ERRCODE(code, ret) ((tdb->ecode = (code)), ret)
+ 
+
+Modified: branches/SAMBA_3_0_26/source/lib/tdb/common/open.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/lib/tdb/common/open.c	2007-05-26 16:57:53 UTC (rev 23160)
++++ branches/SAMBA_3_0_26/source/lib/tdb/common/open.c	2007-05-27 09:22:11 UTC (rev 23161)
+@@ -165,6 +165,10 @@
+ 		tdb->page_size = 0x2000;
+ 	}
+ 
++	if (open_flags & TDB_VOLATILE) {
++		tdb->max_dead_records = 5;
++	}
++
+ 	if ((open_flags & O_ACCMODE) == O_WRONLY) {
+ 		TDB_LOG((tdb, TDB_DEBUG_ERROR, "tdb_open_ex: can't open tdb %s write-only\n",
+ 			 name));
+
+Modified: branches/SAMBA_3_0_26/source/lib/tdb/include/tdb.h
+===================================================================
+--- branches/SAMBA_3_0_26/source/lib/tdb/include/tdb.h	2007-05-26 16:57:53 UTC (rev 23160)
++++ branches/SAMBA_3_0_26/source/lib/tdb/include/tdb.h	2007-05-27 09:22:11 UTC (rev 23161)
+@@ -47,6 +47,7 @@
+ #define TDB_BIGENDIAN 32 /* header is big-endian (internal use) */
+ #define TDB_NOSYNC   64 /* don't use synchronous transactions */
+ #define TDB_SEQNUM   128 /* maintain a sequence number */
++#define TDB_VOLATILE   256 /* Activate the per-hashchain freelist, default 5 */
+ 
+ #define TDB_ERRCODE(code, ret) ((tdb->ecode = (code)), ret)
+ 
+

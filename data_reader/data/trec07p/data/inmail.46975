@@ -1,0 +1,92 @@
+From perl6-all-return-81669-ktwarwic=speedy.uwaterloo.ca@perl.org  Wed May 30 12:14:48 2007
+Return-Path: <perl6-all-return-81669-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4UGElhB015820
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 30 May 2007 12:14:47 -0400
+Received: (qmail 23774 invoked by uid 514); 30 May 2007 16:14:41 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 23769 invoked from network); 30 May 2007 16:14:41 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-0.6 required=8.0
+	tests=BAYES_00,DK_SIGNED,KARMA_CONNECT_NEGATIVE,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-compiler-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-compiler
+List-Id: <perl6-compiler.perl.org>
+Delivered-To: mailing list perl6-compiler@perl.org
+Delivered-To: moderator for perl6-compiler@perl.org
+Delivered-To: perl6-compiler@perl.org
+Received-SPF: pass (x1.develooper.com: domain of regardener@gmail.com designates 66.249.92.172 as permitted sender)
+DKIM-Signature: a=rsa-sha1; c=relaxed/relaxed;
+        d=gmail.com; s=beta;
+        h=domainkey-signature:received:received:message-id:date:from:sender:to:subject:cc:in-reply-to:mime-version:content-type:content-transfer-encoding:content-disposition:references:x-google-sender-auth;
+        b=hhZPMLU6jd82d6ZBkOLoZvD6JYPEW8gbSiecD19cgFshzEgJdOPJ5E3LTKo7nhcG9cQRwSvXyCgJvekn+q1ufwa8aVPqe1Fy6fgr9SxwWjGR/RJ0WsWOIqnz4qxZ5pHv1gx4AWUnSAc6QvAojgrwOXm13N7xBkhb+fbm1H+yrMs=
+DomainKey-Signature: a=rsa-sha1; c=nofws;
+        d=gmail.com; s=beta;
+        h=received:message-id:date:from:sender:to:subject:cc:in-reply-to:mime-version:content-type:content-transfer-encoding:content-disposition:references:x-google-sender-auth;
+        b=Q7kEnYovaFcGWui9SSUyorWwqhtDt86b0GruMEj4gtky7njVyok4ZQz7wnDE3pXUCryn0JVb+9KhX8f+Ddc7sEPwcqHg2hOv9zcsAIkBsn0NjqVEgy7k67dlxja2NVgzCBg9r3jwMw+E+LNaX2g8AX5okEXY0ZfUzyYydNZ9OKo=
+Message-ID: <26f54c860705292125j13ccd53ejf760015c0040ad3f@mail.gmail.com>
+Date: Wed, 30 May 2007 07:25:00 +0300
+From: "Gaal Yahas" <gaal@forum2.org>
+Sender: regardener@gmail.com
+To: "Chas Owens" <chas.owens@gmail.com>
+Subject: Re: How to die
+Cc: perl6-compiler@perl.org
+In-Reply-To: <58ce48dc0705291458p56b9c21at422213fc3c17dbeb@mail.gmail.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8; format=flowed
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+References: <58ce48dc0705291458p56b9c21at422213fc3c17dbeb@mail.gmail.com>
+X-Google-Sender-Auth: e66e1c15d716cb12
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED,SPF_PASS
+
+On 5/30/07, Chas Owens <chas.owens@gmail.com> wrote:
+> I have poked around a bit in the code and can't find a good way to
+> die.  I am currently using
+>
+> perlReplicate n a = if n == 1/0
+>     then error "Infinite replications would exhaust memory"
+>     else if n < 0
+>         then genericReplicate 0 a
+>         else genericReplicate (truncate n) a
+>
+> But that gives the following message
+>
+> pugs> "a" x Inf
+> Internal error while running expression:
+> Infinite replications would exhaust memory
+>
+> But this isn't an internal error; it is a user error, so I want a message like
+>
+> pugs> "a" x Inf
+> *** Infinite replications would exhaust memory
+>     at <interactive> line 1, column 1-9
+>
+
+I'm not near a compiling box right now, but the fix would be to lift
+perlReplicate into
+a monad (Eval, or just leave a Monad m context); then fail when the need arises.
+
+Somthing like (untested):
+perlReplicate :: VInt -> a -> Eval [a]
+perlReplicate (1/0) _ = fail "Infinite replications would exhaust memory"
+perlReplicate i a       = return $ flip genericReplicate a $ if i < 0
+then 0 else a
+
+You'll need to tweak the calling site to be monadic too.
+
+-- 
+Gaal Yahas <gaal@forum2.org>
+http://gaal.livejournal.com/
+

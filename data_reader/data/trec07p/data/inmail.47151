@@ -1,0 +1,258 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May 30 16:34:30 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4UKYThB018892
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 30 May 2007 16:34:29 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 844FE163A45
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 30 May 2007 20:34:24 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.4 required=3.8 tests=AWL,BAYES_00,
+	FORGED_RCVD_HELO,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from kheops.perrier.eu.org (coi78-1-88-169-112-155.fbx.proxad.net
+	[88.169.112.155])
+	by lists.samba.org (Postfix) with ESMTP id 9CCA0162BC1
+	for <samba-technical@lists.samba.org>;
+	Wed, 30 May 2007 20:34:01 +0000 (GMT)
+Received: from localhost (localhost [127.0.0.1])
+	by kheops.perrier.eu.org (Postfix) with ESMTP id 2120D4F997
+	for <samba-technical@lists.samba.org>;
+	Wed, 30 May 2007 22:34:01 +0200 (CEST)
+Received: from kheops.perrier.eu.org ([127.0.0.1])
+	by localhost (kheops.kheops.frmug.org [127.0.0.1]) (amavisd-new,
+	port 10024)
+	with ESMTP id 98XlGYcKDS3B for <samba-technical@lists.samba.org>;
+	Wed, 30 May 2007 22:34:00 +0200 (CEST)
+Received: from mykerinos.kheops.frmug.org (mykerinos.kheops.frmug.org
+	[192.168.1.3])
+	by kheops.perrier.eu.org (Postfix) with ESMTP id 9949E4F988
+	for <samba-technical@lists.samba.org>;
+	Wed, 30 May 2007 22:34:00 +0200 (CEST)
+Received: by mykerinos.kheops.frmug.org (Postfix, from userid 1000)
+	id 502A340A0BA; Wed, 30 May 2007 22:34:00 +0200 (CEST)
+Date: Wed, 30 May 2007 22:34:00 +0200
+From: Christian Perrier <bubulle@debian.org>
+To: samba-technical@lists.samba.org
+Message-ID: <20070530203400.GL5824@kheops.homeunix.org>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="NhBACjNc9vV+/oop"
+Content-Disposition: inline
+User-Agent: Mutt/1.5.13 (2006-08-11)
+Subject: [PATCH 4/10] Debian patch: add an option to not update mtab for
+	smbmount
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+
+--NhBACjNc9vV+/oop
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+
+The attached patch is currently used in Debian.
+
+It adds a "-n" option to smbmount so that it does not update
+/etc/mtab. I can't find a real evidence of why this was needed.
+
+Please note that the patch adds the option but does not update the
+manpage.
+
+
+
+
+
+
+
+--NhBACjNc9vV+/oop
+Content-Type: text/x-diff; charset=us-ascii
+Content-Disposition: attachment; filename="smbmount-nomtab.patch"
+
+Goal: Add an option to not update mtab
+
+Fixes: ?
+
+Status wrt upstream: Should be forwarded
+
+Note: Part of no-longer maintained smbfs stuff?
+      The manpages are not modified
+
+Index: samba-3.0.25a/source/client/smbmnt.c
+===================================================================
+--- samba-3.0.25a.orig/source/client/smbmnt.c	2007-05-26 07:46:33.492644419 +0200
++++ samba-3.0.25a/source/client/smbmnt.c	2007-05-26 07:46:33.848647257 +0200
+@@ -44,6 +44,7 @@
+ static uid_t mount_uid;
+ static gid_t mount_gid;
+ static int mount_ro;
++static int no_mtab;
+ static unsigned mount_fmask;
+ static unsigned mount_dmask;
+ static int user_mount;
+@@ -56,6 +57,7 @@
+         printf("Usage: smbmnt mount-point [options]\n");
+ 	printf("Version %s\n\n",SAMBA_VERSION_STRING);
+         printf("-s share       share name on server\n"
++               "-n             don't update /etc/mtab\n"
+                "-r             mount read-only\n"
+                "-u uid         mount as uid\n"
+                "-g gid         mount as gid\n"
+@@ -70,7 +72,7 @@
+ {
+         int opt;
+ 
+-        while ((opt = getopt (argc, argv, "s:u:g:rf:d:o:")) != EOF)
++        while ((opt = getopt (argc, argv, "s:u:g:nrf:d:o:")) != EOF)
+ 	{
+                 switch (opt)
+ 		{
+@@ -87,6 +89,9 @@
+ 				mount_gid = strtol(optarg, NULL, 0);
+ 			}
+                         break;
++		case 'n':
++			no_mtab = 1;
++			break;
+                 case 'r':
+                         mount_ro = 1;
+                         break;
+@@ -291,36 +296,38 @@
+ 		return -1;
+ 	}
+ 	
+-        if ((fd = open(MOUNTED"~", O_RDWR|O_CREAT|O_EXCL, 0600)) == -1)
+-        {
+-                fprintf(stderr, "Can't get "MOUNTED"~ lock file");
+-                return 1;
+-        }
+-        close(fd);
++	if (!no_mtab) {
++		if ((fd = open(MOUNTED"~", O_RDWR|O_CREAT|O_EXCL, 0600)) == -1)
++		{
++			fprintf(stderr, "Can't get "MOUNTED"~ lock file");
++			return 1;
++		}
++		close(fd);
+ 	
+-        if ((mtab = setmntent(MOUNTED, "a+")) == NULL)
+-        {
+-                fprintf(stderr, "Can't open " MOUNTED);
+-                return 1;
+-        }
++		if ((mtab = setmntent(MOUNTED, "a+")) == NULL)
++		{
++			fprintf(stderr, "Can't open " MOUNTED);
++			return 1;
++		}
+ 
+-        if (addmntent(mtab, &ment) == 1)
+-        {
+-                fprintf(stderr, "Can't write mount entry");
+-                return 1;
+-        }
+-        if (fchmod(fileno(mtab), 0644) == -1)
+-        {
+-                fprintf(stderr, "Can't set perms on "MOUNTED);
+-                return 1;
+-        }
+-        endmntent(mtab);
++		if (addmntent(mtab, &ment) == 1)
++		{
++			fprintf(stderr, "Can't write mount entry");
++			return 1;
++		}
++		if (fchmod(fileno(mtab), 0644) == -1)
++		{
++			fprintf(stderr, "Can't set perms on "MOUNTED);
++			return 1;
++		}
++		endmntent(mtab);
+ 
+-        if (unlink(MOUNTED"~") == -1)
+-        {
+-                fprintf(stderr, "Can't remove "MOUNTED"~");
+-                return 1;
+-        }
++		if (unlink(MOUNTED"~") == -1)
++		{
++			fprintf(stderr, "Can't remove "MOUNTED"~");
++			return 1;
++		}
++	}
+ 
+ 	return 0;
+ }	
+Index: samba-3.0.25a/source/client/smbmount.c
+===================================================================
+--- samba-3.0.25a.orig/source/client/smbmount.c	2007-05-26 07:46:32.692638041 +0200
++++ samba-3.0.25a/source/client/smbmount.c	2007-05-26 07:46:33.884647544 +0200
+@@ -48,6 +48,7 @@
+ static int mount_ro;
+ static unsigned mount_fmask;
+ static unsigned mount_dmask;
++static BOOL no_mtab = False;
+ static BOOL use_kerberos;
+ /* TODO: Add code to detect smbfs version in kernel */
+ static BOOL status32_smbfs = False;
+@@ -273,6 +274,9 @@
+                 return;
+         }
+ 
++	if (no_mtab)
++		return;
++
+         if ((fd = open(MOUNTED"~", O_RDWR|O_CREAT|O_EXCL, 0600)) == -1) {
+                 DEBUG(0,("%d: Can't get "MOUNTED"~ lock file", sys_getpid()));
+                 return;
+@@ -470,6 +474,9 @@
+ 	args[i++] = "-s";
+ 	args[i++] = svc2;
+ 
++	if (no_mtab) {
++		args[i++] = "-n";
++	}
+ 	if (mount_ro) {
+ 		args[i++] = "-r";
+ 	}
+@@ -665,7 +672,7 @@
+ ****************************************************************************/
+ static void usage(void)
+ {
+-	printf("Usage: mount.smbfs service mountpoint [-o options,...]\n");
++	printf("Usage: mount.smbfs service mountpoint [-n] [-o options,...]\n");
+ 
+ 	printf("Version %s\n\n",SAMBA_VERSION_STRING);
+ 
+@@ -742,8 +749,13 @@
+ 	argc -= 2;
+ 	argv += 2;
+ 
+-	opt = getopt(argc, argv, "o:");
+-	if(opt != 'o') {
++	opt = getopt(argc, argv, "no:");
++	if (opt == 'n') {
++		DEBUG(3,("No mtab!\n"));
++		no_mtab = True;
++		opt = getopt(argc, argv, "o:");
++	}
++	if (opt != 'o') {
+ 		return;
+ 	}
+ 
+
+--NhBACjNc9vV+/oop--
+

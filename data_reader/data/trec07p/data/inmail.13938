@@ -1,0 +1,123 @@
+From r-help-bounces@stat.math.ethz.ch  Thu Apr 19 12:21:58 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3JGLv0I026776
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 19 Apr 2007 12:21:58 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3JGK9Zn007360;
+	Thu, 19 Apr 2007 18:20:19 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.4 required=5.0 tests=AWL,
+	SPF_HELO_PASS autolearn=no version=3.1.8
+Received: from talk.nabble.com (www.nabble.com [72.21.53.35])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3JFeamD022192
+	(version=TLSv1/SSLv3 cipher=AES256-SHA bits=256 verify=NO)
+	for <r-help@stat.math.ethz.ch>; Thu, 19 Apr 2007 17:40:38 +0200
+Received: from [72.21.53.38] (helo=jubjub.nabble.com)
+	by talk.nabble.com with esmtp (Exim 4.50) id 1HeYkO-0001cD-7T
+	for r-help@stat.math.ethz.ch; Thu, 19 Apr 2007 08:40:36 -0700
+Message-ID: <10079648.post@talk.nabble.com>
+Date: Thu, 19 Apr 2007 08:40:36 -0700 (PDT)
+From: francogrex <francogrex@mail.com>
+To: r-help@stat.math.ethz.ch
+In-Reply-To: <10066991.post@talk.nabble.com>
+MIME-Version: 1.0
+X-Nabble-From: francogrex@mail.com
+References: <10066991.post@talk.nabble.com>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Subject: Re: [R] Conditional power, predictive power
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+Status: O
+Content-Length: 2253
+Lines: 74
+
+
+Ok I am replying to my own message! I wrote a "function", it works well but
+it's a bit twisted because you will have to edit the last file in excel or
+other.
+This is to analyze the bayesian predictive power in an analysis where
+treatment x is compared to treatment y. Example: Total final subject number
+is 100 (randomization 1:1, so 50 per group). We do an interim analysis when
+there are 25 subjects in group x and 25 subjects in group y. Number of
+successes in x=10; number of successes in y=16. Prior=beta(0.6,0.4).
+----------------------------------------------------------------------------------------------------------------
+
+##Predictive Probability Interim Analysis, John Cook, 2006
+
+prepower=function(a,b,s0,f0,s1,f1){
+factorial(s1+f1)/ (factorial(s1)*factorial(f1))*
+beta(s0+s1+a,f0+f1+b)/beta(s0+a,f0+b)}
+
+for(i in 0:25) {sink("pw.power1.txt",append=TRUE);
+v=prepower(0.6,0.4,10,15,i,25-i)
+dput(v)
+sink()
+}
+for(i in 0:25) {sink("pw.power2.txt",append=TRUE);
+v=prepower(0.6,0.4,16,9,i,25-i)
+dput(v)
+sink()
+}
+
+x=scan(file="pw.power1.txt")
+y=scan(file="pw.power2.txt")
+
+zth=function(xa,ya,na,xb,yb,nb){
+tha=(xa+ya)/na
+thb=(xb+yb)/nb
+th=(xa+xb+ya+yb)/(na+nb)
+z=(tha-thb)/sqrt(th*(1-th)*((1/na)+(1/na)))
+z
+}
+
+for(i in 0:25){sink("pw.zval.txt",append=TRUE)
+zval=(zth(10,i,50,16,0:25,50))
+cat(zval,sep="\n")
+sink()
+}
+z=scan(file="pw.zval.txt")
+
+for(i in 1:26){sink("pw.predict.txt",append=TRUE)
+pw=((x[i]*y[1:26]))
+cat(pw,sep="\n")
+sink()
+}
+p=scan(file="pw.predict.txt")
+
+mdf <- data.frame(z, p) 
+pw.bind=mdf[order(z,p),] 
+write.table(pw.bind,file="pw.bind.txt",sep="\t")
+
+##edit pw.bind file in excel for z>1.96, z<-1.96 or in between (or any other
+value); save as same file
+
+predictive=read.table(file="pw.bind.txt",header=TRUE)
+sum(predictive$p)
+
+## This gives the bayesian predictive power
+
+-- 
+View this message in context: http://www.nabble.com/Conditional-power%2C-predictive-power-tf3603396.html#a10079648
+Sent from the R help mailing list archive at Nabble.com.
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

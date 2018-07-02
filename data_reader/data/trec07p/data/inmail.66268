@@ -1,0 +1,250 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Jun 26 08:46:05 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5QCk5L9010880
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 26 Jun 2007 08:46:05 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id C0570163A70
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 26 Jun 2007 12:46:02 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.5 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1006)
+	id EE5AE163A31; Tue, 26 Jun 2007 12:45:44 +0000 (GMT)
+To: samba-cvs@samba.org
+From: lha@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070626124544.EE5AE163A31@lists.samba.org>
+Date: Tue, 26 Jun 2007 12:45:44 +0000 (GMT)
+Subject: svn commit: lorikeet r762 - in trunk/heimdal/lib/hx509: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: lha
+Date: 2007-06-26 12:45:44 +0000 (Tue, 26 Jun 2007)
+New Revision: 762
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=lorikeet&rev=762
+
+Log:
+Merged with Heimdal svn revision 21340
+Modified:
+   trunk/heimdal/lib/hx509/ChangeLog
+   trunk/heimdal/lib/hx509/hxtool.c
+   trunk/heimdal/lib/hx509/req.c
+   trunk/heimdal/lib/hx509/version-script.map
+
+
+Changeset:
+Modified: trunk/heimdal/lib/hx509/ChangeLog
+===================================================================
+--- trunk/heimdal/lib/hx509/ChangeLog	2007-06-26 12:12:22 UTC (rev 761)
++++ trunk/heimdal/lib/hx509/ChangeLog	2007-06-26 12:45:44 UTC (rev 762)
+@@ -1,5 +1,11 @@
+ 2007-06-26  Love Hörnquist Åstrand  <lha@it.su.se>
+ 
++	* version-script.map: Add initialize_hx_error_table_r.
++
++	* req.c: Move _hx509_request_print here.
++
++	* hxtool.c: use _hx509_request_print
++
+ 	* version-script.map: Export more crap^W semiprivate functions.
+ 
+ 	* hxtool.c: don't _hx509_abort
+
+Modified: trunk/heimdal/lib/hx509/hxtool.c
+===================================================================
+--- trunk/heimdal/lib/hx509/hxtool.c	2007-06-26 12:12:22 UTC (rev 761)
++++ trunk/heimdal/lib/hx509/hxtool.c	2007-06-26 12:45:44 UTC (rev 762)
+@@ -32,7 +32,7 @@
+  */
+ 
+ #include "hx_locl.h"
+-RCSID("$Id: hxtool.c 21330 2007-06-26 11:09:55Z lha $");
++RCSID("$Id: hxtool.c 21338 2007-06-26 12:40:56Z lha $");
+ 
+ #include <hxtool-commands.h>
+ #include <sl.h>
+@@ -1204,58 +1204,21 @@
+ int
+ pkcs10_print(struct pkcs10_print_options *opt, int argc, char **argv)
+ {
+-    size_t size, length;
++    size_t length;
+     int ret, i;
+     void *p;
+ 
+     printf("pkcs10 print\n");
+ 
+     for (i = 0; i < argc; i++) {
+-	CertificationRequest req;
+-	CertificationRequestInfo *rinfo;
+-
+ 	ret = _hx509_map_file(argv[i], &p, &length, NULL);
+ 	if (ret)
+ 	    err(1, "map_file: %s: %d", argv[i], ret);
+ 
+-	ret = decode_CertificationRequest(p, length, &req, &size);
++	ret = _hx509_request_print(context, stdout, p, length);
+ 	_hx509_unmap_file(p, length);
+ 	if (ret)
+-	    errx(1, "failed to parse file %s: %d", argv[i], ret);
+-
+-	rinfo = &req.certificationRequestInfo;
+-
+-	{
+-	    char *subject;
+-	    hx509_name n;
+-
+-	    ret = _hx509_name_from_Name(&rinfo->subject, &n);
+-	    if (ret)
+-		abort();
+-	    
+-	    ret = hx509_name_to_string(n, &subject);
+-	    hx509_name_free(&n);
+-	    if (ret)
+-		abort();
+-	    
+-	    printf("name: %s\n", subject);
+-	    free(subject);
+-	}
+-
+-	if (rinfo->attributes && rinfo->attributes->len) {
+-	    int j;
+-
+-	    printf("Attributes:\n");
+-
+-	    for (j = 0; j < rinfo->attributes->len; j++) {
+-		char *str;
+-		hx509_oid_sprint(&rinfo->attributes->val[j].type, &str);
+-		printf("\toid: %s\n", str);
+-		free(str);
+-	    }
+-	}
+-
+-	free_CertificationRequest(&req);
++	    hx509_err(context, 1, ret, "Failed to print file %s", argv[ i]);
+     }
+ 
+     return 0;
+
+Modified: trunk/heimdal/lib/hx509/req.c
+===================================================================
+--- trunk/heimdal/lib/hx509/req.c	2007-06-26 12:12:22 UTC (rev 761)
++++ trunk/heimdal/lib/hx509/req.c	2007-06-26 12:45:44 UTC (rev 762)
+@@ -33,7 +33,7 @@
+ 
+ #include "hx_locl.h"
+ #include <pkcs10_asn1.h>
+-RCSID("$Id: req.c 20934 2007-06-06 15:30:02Z lha $");
++RCSID("$Id: req.c 21335 2007-06-26 12:18:33Z lha $");
+ 
+ struct hx509_request_data {
+     hx509_name name;
+@@ -215,3 +215,58 @@
+ 
+     return ret;
+ }
++
++int
++_hx509_request_print(hx509_context context, FILE *f, const void *data, size_t len)
++{
++    CertificationRequest req;
++    CertificationRequestInfo *rinfo;
++    size_t size;
++    int ret;
++
++    ret = decode_CertificationRequest(data, len, &req, &size);
++    if (ret) {
++	hx509_set_error_string(context, 0, ret, "Failed to decode request");
++	return ret;
++    }
++
++    rinfo = &req.certificationRequestInfo;
++
++    {
++	char *subject;
++	hx509_name n;
++	
++	ret = _hx509_name_from_Name(&rinfo->subject, &n);
++	if (ret) {
++	    hx509_set_error_string(context, 0, ret, "Failed to extract name");
++	    free_CertificationRequest(&req);
++	    return ret;
++	}
++	ret = hx509_name_to_string(n, &subject);
++	hx509_name_free(&n);
++	if (ret) {
++	    hx509_set_error_string(context, 0, ret, "Failed to print name");
++	    free_CertificationRequest(&req);
++	    return ret;
++	}
++	
++	fprintf(f, "name: %s\n", subject);
++	free(subject);
++    }
++    
++    if (rinfo->attributes && rinfo->attributes->len) {
++	int j;
++
++	fprintf(f, "Attributes:\n");
++	
++	for (j = 0; j < rinfo->attributes->len; j++) {
++	    char *str;
++	    hx509_oid_sprint(&rinfo->attributes->val[j].type, &str);
++	    fprintf(f, "\toid: %s\n", str);
++	    free(str);
++	}
++    }
++    free_CertificationRequest(&req);
++    return 0;
++}
++
+
+Modified: trunk/heimdal/lib/hx509/version-script.map
+===================================================================
+--- trunk/heimdal/lib/hx509/version-script.map	2007-06-26 12:12:22 UTC (rev 761)
++++ trunk/heimdal/lib/hx509/version-script.map	2007-06-26 12:45:44 UTC (rev 762)
+@@ -2,6 +2,7 @@
+ 
+ HEIMDAL_X509_1.0 {
+ 	global:
++		initialize_hx_error_table_r;
+ 		hx509_bitstring_print;
+ 		hx509_ca_sign;
+ 		hx509_ca_sign_self;
+@@ -202,6 +203,7 @@
+ 		_hx509_request_to_pkcs10;
+ 		_hx509_request_to_pkcs10;
+ 		_hx509_request_free;
++		_hx509_request_print;
+ 		_hx509_private_key_ref;
+ 		_hx509_private_key_free;
+ 		_hx509_private_key2SPKI;
+@@ -213,8 +215,6 @@
+ 		_hx509_cert_assign_key;
+ 		_hx509_cert_private_key;
+ 		_hx509_name_from_Name;
+-		decode_CertificationRequest;
+-		free_CertificationRequest;
+ 	local:
+ 		*;
+ };
+

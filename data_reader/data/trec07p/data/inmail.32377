@@ -1,0 +1,109 @@
+From perl6-all-return-81229-ktwarwic=speedy.uwaterloo.ca@perl.org  Wed May  9 11:37:58 2007
+Return-Path: <perl6-all-return-81229-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l49FbvqD030626
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 9 May 2007 11:37:57 -0400
+Received: (qmail 30014 invoked by uid 514); 9 May 2007 15:37:55 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 30008 invoked from network); 9 May 2007 15:37:54 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Virus-Scanned: Debian amavisd-new at wet.ekstrom.org
+Message-ID: <4641E8D1.4040102@tewk.com>
+Date: Wed, 09 May 2007 09:29:21 -0600
+From: tewk <tewk@tewk.com>
+User-Agent: Thunderbird 1.5.0.10 (X11/20070403)
+MIME-Version: 1.0
+To: Allison Randal <allison@perl.org>, perl6-internals@perl.org
+Subject: Re: Initial patch for pdd15 testing.
+References: <4641604F.5000001@tewk.com> <464164DA.3080505@perl.org>
+In-Reply-To: <464164DA.3080505@perl.org>
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=3.0 required=8.0
+	tests=BAYES_05,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,RCVD_IN_CBL,RDNS_NONE,SPF_PASS
+
+
+Allison Randal wrote:
+> tewk wrote:
+>> Patch was to large to attach so: http://tewk.com/pdd15_testing.diff
+>>
+>> Tests currently fail because they use the "new" opcode to instantiate 
+>> objects.
+>
+> Fixing the 'new' opcode is the first change we need to make to get 
+> both object models working simultaneously. Pick one:
+>
+> - The 'new' opcode can no longer lookup string class names by type 
+> number (eventually true).
+>
+I'd really like to work on permanent solutions.  So how should we 
+implement option one?
+Should we have a pmc lookup resolution order of current namespace, hll 
+namespace,  parrot namespace, and finally root namespace.
+Then all current, non-hll pmcs should be placed in the parrot namespace.
+
+Nope that won't work, the parrot and root namespaces can't blead into 
+hll namespaces' visibility.
+
+We really need independent opcodes which segment the current namespace, 
+hll namespaces, and the root parrot namespace.
+
+I think we should have:
+new_cur  - resolves using the current namespace
+new_hll   - resolves pmcs and classes using the hll namespace
+new         - resolves using the parrot namespace.
+
+we probably need the same thing for newclass.
+
+newclass_cur
+newclass_hll
+newclass
+
+Second issue:
+
+PDD15 registers methods in the class.  So methods defined using :method 
+in the class namespace aren't found by the find_method.
+So:
+1: We force compiler writers to make add_method calls for every method 
+and drop :method
+2: After running :init and :load subs we auto-call add_method for 
+methods defined in pir with :method. (this has nasty corner cases)
+       What do we do about evaled :methods, repeat the same auto-call 
+technique after ever eval?
+3: We modify the Class PMC's find_method to look in the namespace for 
+method and lazily call add_method.
+
+Comments, corrections welcome,
+
+Kevin
+> - The PDD 15 object implementation needs to register a type number for 
+> its classes (as a temporary measure to smooth over integration).
+>
+> I recommend the second option for now.
+>
+>> $P0 = get_class "Classname"
+>> $P1 = $P0.'new'();
+>
+> This will also work, and will provide more syntactic sugar than the 
+> 'new' opcode (e.g. named parameters for the initializer).
+>
+> Allison
+

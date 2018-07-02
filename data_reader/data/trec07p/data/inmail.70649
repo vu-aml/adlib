@@ -1,0 +1,136 @@
+From r-help-bounces@stat.math.ethz.ch  Sat Jun 30 19:31:28 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5UNVQL9012965
+	for <ktwarwic@flax9.uwaterloo.ca>; Sat, 30 Jun 2007 19:31:27 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5UNUo8X022644;
+	Sun, 1 Jul 2007 01:30:59 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.0 required=5.0 tests=BAYES_50,
+	DKIM_POLICY_SIGNSOME autolearn=no version=3.2.0
+Received: from kurla.upf.edu (kurla.upf.edu [193.145.56.75])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5UNUeEA022280
+	(version=TLSv1/SSLv3 cipher=EDH-RSA-DES-CBC3-SHA bits=168 verify=NO)
+	for <r-help@stat.math.ethz.ch>; Sun, 1 Jul 2007 01:30:40 +0200
+Received: from kurla.upf.edu (localhost [127.0.0.1])
+	by kurla.upf.edu (8.13.5/8.14.0) with ESMTP id l5UNUcSF031615
+	for <r-help@stat.math.ethz.ch>; Sun, 1 Jul 2007 01:30:39 +0200
+Received: from [192.168.1.2] (108.206.217.87.dynamic.jazztel.es 
+	[87.217.206.108])(authenticated bits=0)by kurla.upf.edu (8.13.5/8.14.0)
+	with ESMTP id l5UNUcD5031601for <r-help@stat.math.ethz.ch>;
+	Sun, 1 Jul 2007 01:30:38 +0200
+Mime-Version: 1.0 (Apple Message framework v752.3)
+Message-Id: <937EA1A0-0513-4FCD-8036-68EB1503009A@upf.edu>
+To: r-help@stat.math.ethz.ch
+From: martin sikora <martin.sikora@upf.edu>
+Date: Sun, 1 Jul 2007 01:32:43 +0200
+X-Mailer: Apple Mail (2.752.3)
+X-Greylist: Sender succeeded SMTP AUTH authentication, not delayed by 
+	milter-greylist-3.0 (kurla.upf.edu [10.20.2.1]);
+	Sun, 01 Jul 2007 01:30:38 +0200 (CEST)
+X-imss-version: 2.047
+X-imss-result: Passed
+X-imss-approveListMatch: *@upf.edu
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Subject: [R] speed and looping issues; calculations on big datasets
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+dear r users,
+
+i'm a little stuck with the following problem(s), hopefully somebody  
+can offer some help:
+
+i have data organized in a binary matrix, which can become quite big  
+like 60 rows x 10^5 columns (they represent SNP genotypes, for some  
+background info). what i need to do is the following:
+
+let's suppose i have a matrix of size n x m. for each of the m  
+columns, i want to know the counts of unique rows extended one by one  
+from the "core" column, for both values at the "core" separately and  
+in both directions. maybe better explained with a little example.
+
+data:
+
+00 0 010
+10 1 001
+11 1 011
+10 0 011
+10 0 010
+
+so the extended unique rows & counts taking e.g. column 3 as "core" are:
+
+col 3 = 0:
+right:
+patterns / counts
+00 / 3
+001 / 3
+0010, 0011 / 2,1
+
+left:
+00 / 3
+000,001 / 1,2
+
+and that for the other subset ( col3 = 1) as well, then doing the  
+whole thing again for the next "core" column. the reason i need this  
+counts is that i want to calculate frequencies of the different  
+extended sequences to calculate the probability of drawing two  
+identical sequences from the core up to an extended position from the  
+whole set of sequences.
+
+my main problem is speed of the calculations. i tried different ways  
+suggested here in the list of getting the counts of the unique rows,  
+all of them using the "table" function. both a combination of table 
+( do.call( paste, c( as.data.frame( mymatrix) ) ) ) or table( apply 
+( mymatrix , 2 , paste , collapse ="" ) ) work fine, but are too slow  
+for bigger matrices that i want to calculate (at least in my not very  
+sophisticated function). then i found a great suggestion here to do a  
+matrix multiplication with a vector of 2^(0:ncol-1) to convert each  
+row into a decimal number, and do table on those. this speeds up  
+things quite nicely, although the problem is that it of course does  
+not work as soon as i extended for more than 60 columns, because the  
+decimal numbers get to large to accurately distinguish between a 0  
+and 1 at the smallest digit:
+
+ > 2^60+2 == 2^60
+[1] TRUE
+
+another thing is that so far i could not come up with an idea on how  
+or if it is possible to do this without the loops i am using, one  
+large loop for each column in turn as core, and then another loop  
+within that extends the rows by growing column numbers. since i am  
+not the best of programmers (and still quite new to R), i was hoping  
+that somebody has some advice on doing this calculations in a more  
+elegant and more importantly, fast way.
+just to get the idea, the approach with the matrix multiplication  
+takes 20s for a 60 x 220 matrix on my macbook pro, which is obviously  
+not perfect, considering i would like to use this function for  
+matrices of size 10^2 x 10^5 or even more.
+
+so i would be very thankful for any ideas, suggestions etc to improve  
+this
+
+cheers
+martin
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

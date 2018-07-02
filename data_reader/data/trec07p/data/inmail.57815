@@ -1,0 +1,126 @@
+From r-help-bounces@stat.math.ethz.ch  Thu Jun 14 21:43:18 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5F1hGL9028403
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 14 Jun 2007 21:43:17 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5F1fsMJ008011;
+	Fri, 15 Jun 2007 03:42:11 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.6 required=5.0 tests=AWL, BAYES_50,
+	DKIM_POLICY_SIGNSOME autolearn=no version=3.2.0
+Received: from mta1.srv.hcvlny.cv.net (mta1.srv.hcvlny.cv.net [167.206.4.196])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5F1fkDt007972
+	for <r-help@stat.math.ethz.ch>; Fri, 15 Jun 2007 03:41:46 +0200
+Received: from optonline.net (mstr2a.srv.hcvlny.cv.net [10.240.4.136])
+	by mta1.srv.hcvlny.cv.net
+	(Sun Java System Messaging Server 6.2-6.01 (built Apr  3 2006))
+	with ESMTP id <0JJN001F2M1H3K20@mta1.srv.hcvlny.cv.net> for
+	r-help@stat.math.ethz.ch; Thu, 14 Jun 2007 21:41:41 -0400 (EDT)
+Received: from [10.240.3.201] (Forwarded-For: 24.167.9.237, [10.240.3.201])
+	by mstr2.srv.hcvlny.cv.net (mshttpd);
+	Fri, 15 Jun 2007 01:41:41 +0000 (GMT)
+Date: Fri, 15 Jun 2007 01:41:41 +0000 (GMT)
+From: adschai@optonline.net
+To: r-help@stat.math.ethz.ch
+Message-id: <e426c8c0e6c1.4671ee55@optonline.net>
+MIME-version: 1.0
+X-Mailer: Sun Java(tm) System Messenger Express 6.2-6.01 (built Apr  3 2006)
+Content-language: en
+Content-disposition: inline
+X-Accept-Language: en
+Priority: normal
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Subject: [R] Question with nlm
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+Hi,
+
+I would really appreciate if I could get some help here. I'm using nlm to minimize my negative log likelihood function. What I did is as follows:
+
+My log likelihood function (it returns negative log likelihood) with 'gradient' attribute defined inside as follows:
+
+# ==========Method definition======================
+logLikFunc3 <- function(sigma, object, totalTime) {
+    y <- as.matrix(object@data$output[1:totalTime,1]);
+    x <- as.matrix(object@data$input[1:totalTime,]);
+    # compute necessary matrices
+    M <- as.matrix(object@model$M);
+    P <- diag(sigma*sigma);
+    A <- AMatrix(totalTime, M, object@data$input[1:totalTime,]);
+    Q <- IMatrix(totalTime)+A %*% outerM(IMatrix(totalTime-1),P) %*% t(A);
+    invQ <- solve(Q,IMatrix(dim(Q)[1]));
+    xM <- matrix(rep(0, dim(M)[2]*totalTime), ncol=dim(M)[2], nrow=totalTime);
+    for (i in 1:totalTime) {
+       xM[i,] <- x[i,] %*% powerM(M, -totalTime+i);
+    }
+    tmp <- solve((t(xM) %*% invQ %*% xM), IMatrix(dim(xM)[2]));
+    Bt <- (tmp %*% t(xM)) %*% (invQ %*% y);
+    N <- IMatrix(totalTime)-(xM %*% tmp %*% t(xM) %*% invQ);
+    
+    sigma2 <- (1/totalTime) * t(y- xM %*% Bt)%*% invQ %*% (y- xM %*% Bt);
+    # log likelihood function
+    loglik <- -0.5*log(abs(det(diag(rep(sigma2,totalTime)))))-0.5*log(abs(det(Q)))-
+       (0.5/sigma2)* (t(y- (xM%*% Bt)) %*% invQ %*% (y-(xM %*% Bt)));
+
+    sgm <- sigma;
+    # gradients eq. (4.16)
+    gr <- function(sgm) {
+       gradVecs <- c();
+       # sgm <- c(sigma1, sigma2);
+       sgm <- sgm*sgm;
+       for (i in 1:length(sgm)) {
+          Eij <- matrix(rep(0, length(sgm)^2), nrow=length(sgm), ncol=length(sgm));
+          Eij[i,i] <- 1.0;
+          # trace term
+          term1 <- -sum(diag((invQ %*% A) %*% outerM(IMatrix(totalTime-1),Eij) %*% t(A)));
+          # very long term
+          term2 <- (1/totalTime)*solve((t(y) %*% t(N) %*% invQ %*% y), IMatrix(dim(y)[2]));
+          term3 <- (t(y) %*% t(N) %*% invQ %*% A) %*% outerM(IMatrix(totalTime-1),Eij) %*% (t(A) %*% invQ %*% N %*% y);
+          gradVecs <- -1*c(gradVecs, term1+ (term2 %*% term3));
+       } # end for
+       print(paste("Gradient has length:", length(gradVecs)));
+       return(gradVecs);
+    }
+    res <- -loglik;
+    attr(res, "gradient") <-  gradVecs;
+    return(res);
+}
+#=========end method definition=====================================
+
+Then when I call the nlm on this function, i.e.
+
+nlm(f=logLikFunc3, p=as.numeric(c(1,1)), object=this, totalTime=200, print.level=2)
+
+It complains that my analytic gradient returns vector length different from number of my unknowns. In this case, I tried print the length of gradient vector that I returned (as you could see in the code). It has the same length as my input parameter vectors. Did I do anything wrong here?
+
+Also, I would like to be able to put some constraints on this optimization as well. I tried constrOptim with:
+
+ui <- diag(c(1,1));
+ci <- matrix(rep(0,2), ncol=1, nrow=2);
+
+using the same parameters passed to nlm above. constrOptim gives me an error that initial value is in infeasible region which I don't quite understand. As my constraints simply says that the two parameters must be greater than zero. My assigned initial values are both 1. So it should be ok. Any help would be really appreciated. Thank you.
+
+- adschai
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

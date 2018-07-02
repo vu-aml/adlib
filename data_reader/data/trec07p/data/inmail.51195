@@ -1,0 +1,122 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Jun  5 01:29:22 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l555TMhB004334
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 5 Jun 2007 01:29:22 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 75FB716387D
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue,  5 Jun 2007 05:29:15 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 69E08162AE8; Tue,  5 Jun 2007 05:28:45 +0000 (GMT)
+Date: Tue, 05 Jun 2007 15:18:38 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070605052845.69E08162AE8@lists.samba.org>
+Subject: Rev 468: set close on exec on pipe in event scripts,
+	so long running scripts don't hold the pipe in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 468
+revision-id: tridge@samba.org-20070605051837-j5h7se616o7a7zbz
+parent: tridge@samba.org-20070605051753-8zmbmalk19r44hqw
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Tue 2007-06-05 15:18:37 +1000
+message:
+  set close on exec on pipe in event scripts, so long running scripts don't hold the pipe
+modified:
+  config/ctdb.sysconfig          ctdb.sysconfig-20070527204758-biuh7znabuwan3zn-7
+  config/events.d/50.samba       samba-20070601105340-vlcvnp6euoj3zdwy-3
+  config/events.d/59.nfslock     nfslock-20070601105340-vlcvnp6euoj3zdwy-2
+  config/events.d/60.nfs         nfs-20070601141008-hy3h4qgbk1jd2jci-1
+  takeover/system.c              system.c-20070525071636-a5n1ihghjtppy08r-3
+=== modified file 'config/ctdb.sysconfig'
+--- a/config/ctdb.sysconfig	2007-06-04 12:13:59 +0000
++++ b/config/ctdb.sysconfig	2007-06-05 05:18:37 +0000
+@@ -20,6 +20,11 @@
+ # default is to not manage Samba
+ # CTDB_MANAGES_SAMBA=yes
+ 
++# you may wish to raise the file descriptor limit for ctdb
++# use a ulimit command here. ctdb needs one file descriptor per
++# connected client (ie. one per connected client in Samba)
++#  ulimit -n 10000
++
+ # the NODES file must be specified or ctdb won't start
+ # it should contain a list of IPs that ctdb will use
+ # it must be exactly the same on all cluster nodes
+
+=== modified file 'config/events.d/50.samba'
+--- a/config/events.d/50.samba	2007-06-04 05:09:03 +0000
++++ b/config/events.d/50.samba	2007-06-05 05:18:37 +0000
+@@ -17,6 +17,10 @@
+ 	smb_dirs=`testparm -st 2> /dev/null | egrep '^\s*path = '  | cut -d= -f2`
+ 	ctdb_wait_directories "Samba" $smb_dirs	
+ 
++	# make sure samba is not already started
++	service smb stop > /dev/null 2>&1
++	service winbind stop > /dev/null 2>&1
++
+ 	# start Samba service
+ 	service smb start
+ 	service winbind start
+
+=== modified file 'config/events.d/59.nfslock'
+--- a/config/events.d/59.nfslock	2007-06-04 05:09:03 +0000
++++ b/config/events.d/59.nfslock	2007-06-05 05:18:37 +0000
+@@ -16,6 +16,8 @@
+ 	/bin/mkdir -p /etc/ctdb/state/statd/ip
+ 	ctdb_wait_directories "nfslock" "$STATD_SHARED_DIRECTORY"
+ 
++	# make sure the service is stopped first
++	service nfslock stop > /dev/null 2>&1
+ 	service nfslock start
+ 	;;
+ 
+
+=== modified file 'config/events.d/60.nfs'
+--- a/config/events.d/60.nfs	2007-06-04 13:54:22 +0000
++++ b/config/events.d/60.nfs	2007-06-05 05:18:37 +0000
+@@ -17,6 +17,8 @@
+ 	nfs_dirs=`grep -v '^#' < /etc/exports | cut -d' ' -f1`
+ 	ctdb_wait_directories "NFS" $nfs_dirs
+ 
++	# make sure nfs is stopped before we start it, or it may get a bind error
++	service nfs stop > /dev/null 2>&1
+ 	service nfs start
+ 	;;
+ 
+
+=== modified file 'takeover/system.c'
+--- a/takeover/system.c	2007-06-04 13:52:12 +0000
++++ b/takeover/system.c	2007-06-05 05:18:37 +0000
+@@ -386,6 +386,7 @@
+ 	if (state->child == 0) {
+ 		close(state->fd[0]);
+ 		ctdb_set_realtime(false);
++		set_close_on_exec(state->fd[1]);
+ 		va_start(ap, fmt);
+ 		ret = ctdb_event_script_v(ctdb, fmt, ap);
+ 		va_end(ap);
+

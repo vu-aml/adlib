@@ -1,0 +1,207 @@
+From beginners-return-91381-ktwarwic=speedy.uwaterloo.ca@perl.org  Mon May  7 13:57:22 2007
+Return-Path: <beginners-return-91381-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l47HvKqD001662
+	for <ktwarwic@flax9.uwaterloo.ca>; Mon, 7 May 2007 13:57:21 -0400
+Received: (qmail 12041 invoked by uid 514); 7 May 2007 17:57:14 -0000
+Mailing-List: contact beginners-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:beginners@perl.org>
+List-Help: <mailto:beginners-help@perl.org>
+List-Unsubscribe: <mailto:beginners-unsubscribe@perl.org>
+List-Subscribe: <mailto:beginners-subscribe@perl.org>
+List-Id: <beginners.perl.org>
+Delivered-To: mailing list beginners@perl.org
+Received: (qmail 12032 invoked from network); 7 May 2007 17:57:13 -0000
+Received: from x1a.develooper.com (HELO x1.develooper.com) (216.52.237.111)
+  by lists.develooper.com with SMTP; 7 May 2007 17:57:13 -0000
+Received: (qmail 8572 invoked by uid 225); 7 May 2007 17:57:13 -0000
+Delivered-To: beginners@perl.org
+Received: (qmail 8566 invoked by alias); 7 May 2007 17:57:13 -0000
+X-Spam-Status: No, hits=2.0 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,KARMA_CONNECT_NEGATIVE,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: domain of krahnj@telus.net designates 204.209.205.55 as permitted sender)
+Received: from defout.telus.net (HELO defout.telus.net) (204.209.205.55)
+    by la.mx.develooper.com (qpsmtpd/0.28) with ESMTP; Mon, 07 May 2007 10:57:04 -0700
+Received: from priv-edmwaa05.telusplanet.net ([154.20.161.24])
+          by priv-edmwes50.telusplanet.net
+          (InterMail vM.7.08.02.00 201-2186-121-20061213) with ESMTP
+          id <20070507175659.UCGX14069.priv-edmwes50.telusplanet.net@priv-edmwaa05.telusplanet.net>
+          for <beginners@perl.org>; Mon, 7 May 2007 11:56:59 -0600
+Received: from [154.20.161.24] (d154-20-161-24.bchsia.telus.net [154.20.161.24])
+	by priv-edmwaa05.telusplanet.net (BorderWare MXtreme Infinity Mail Firewall) with ESMTP id F7LRVQ0V30
+	for <beginners@perl.org>; Mon,  7 May 2007 11:56:58 -0600 (MDT)
+Message-ID: <463F686D.1080509@telus.net>
+Date: Mon, 07 May 2007 10:57:01 -0700
+From: "John W. Krahn" <krahnj@telus.net>
+User-Agent: Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.7.13) Gecko/20060411
+X-Accept-Language: en-us, en
+MIME-Version: 1.0
+To: Perl Beginners <beginners@perl.org>
+Subject: Re: array and hash patter matching
+References: <8AB6E1A249644643AF0A32306C7F37D41E56@sktymail1.sktydev.com>
+In-Reply-To: <8AB6E1A249644643AF0A32306C7F37D41E56@sktymail1.sktydev.com>
+X-Enigmail-Version: 0.90.1.0
+X-Enigmail-Supports: pgp-inline, pgp-mime
+Content-Type: text/plain; charset=ISO-8859-1
+Content-Transfer-Encoding: 8bit
+
+Tim Wolak wrote:
+> Morning all,
+
+Hello,
+
+> I am working on a script that reads in /var/log/auth.log,, takes the ip
+> addresses puts them into a hash keeping track of how many times it finds
+> that address and compare it to addresses found in /etc/hosts.deny and
+> only write the addresses that are new in the file.  So far I can get the
+> addresses from the log file no problem and write them to the deny file,
+> however I am struggling on how to compare the hash with an array for any
+> duplicate addresses.  What is the best approach to take with this?
+
+
+[ Code reformatted to reflect the actual structure. ]
+
+use warnings;
+use strict;
+
+> open (LOGFILE, "/var/log/auth.log") or die "Can't open log file : $!\n";
+> open (DENY, "/etc/hosts.deny") or die "Can't open log file: $!\n";
+> 
+> while (<DENY>) {
+>     if ($_ =~ /Invalid user/ || /Failed password for/) {
+
+Why use "$_ =~" in front of the first match and not in front of the second
+match?  Either use it for both or use it for neither (be consistent.)  The
+file /etc/hosts.deny doesn't even contain those strings does it?
+
+man 5 hosts_access
+
+
+>         push @origDeny, $_;
+>     }
+>     foreach $orig (@origDeny) {
+
+Why are you using this foreach loop inside the while loop?  If the file
+contains five IP addresses then the first one will be pushed onto @hosts 5
+times and the second one 4 times and the third one 3 times, etc.
+
+>         if ($off =~ /((\d+)\.(\d+)\.(\d+)\.(\d+))/) {
+
+Why are you capturing five different strings when you are only using one?
+
+>             push @hosts, $1;
+>         }
+>     }
+> }
+
+The two arrays you just populated are not used again after the while loop ends
+so what was the point?
+
+
+> close DENY;
+> while (<LOGFILE>) {
+>     if ($_ =~ /Invalid user/ || /Failed password for/) {
+>         push @offenders, $_;
+>     }
+> }
+> foreach $off (@offenders) {
+>     if ($off =~ /((\d+)\.(\d+)\.(\d+)\.(\d+))/) {
+>         push @list, $1;
+>     }
+> }
+> foreach $number (@list) {
+>     if (exists $iplist{$number}) {
+>         $iplist{$number} ++;
+>     } else {
+>         $iplist{$number} = "1";
+>     }
+> }
+
+Why use three loops to do something that you only need one loop for?
+
+my %iplist;
+while ( <LOGFILE> ) {
+    if ( /Invalid user|Failed password for/ && /(\d+\.\d+\.\d+\.\d+)/ ) {
+        $iplist{ $1 }++;
+    }
+}
+
+
+> open (DENY, ">>/etc/hosts.deny") or die "Can't open log file: $!\n";
+> foreach $key (keys %iplist) {
+>     if ($iplist{$key} > 5) {
+
+Why 5?
+
+>         foreach $tim (@list) {
+>             if ($tim !~ /$iplist{$key}/) {
+
+Why are you trying to match the number in $iplist{$key} to the IP address in $tim?
+
+>                 print DENY "$key\n";
+
+According to hosts_access(5) the /etc/hosts.deny file needs more on the line
+than just the IP address.
+
+man 5 hosts_access
+
+[ snip ]
+
+ACCESS CONTROL RULES
+       Each access control file consists of zero or more lines of text.  These
+       lines are processed in order of appearance. The search terminates when
+       a match is found.
+
+       ·      A newline character is ignored when it is preceded by a
+              backslash character. This permits you to break up long lines so
+              that they are easier to edit.
+
+       ·      Blank lines or lines that begin with a `#´ character are
+              ignored.  This permits you to insert comments and whitespace so
+              that the tables are easier to  read.
+
+       ·      All other lines should satisfy the following format, things
+              between [] being optional:
+
+                 daemon_list : client_list [ : shell_command ]
+
+       daemon_list is a list of one or more daemon process names (argv[0]
+       values) or wildcards (see below).
+
+       client_list is a list of one or more host names, host addresses,
+       patterns or wildcards (see below) that will be matched against the
+       client host name or address.
+
+       The more complex forms daemon@host and user@host are explained in the
+       sections on server endpoint patterns and on client username lookups,
+       respectively.
+
+       List elements should be separated by blanks and/or commas.
+
+       With the exception of NIS (YP) netgroup lookups, all access control
+       checks are case insensitive.
+
+
+>             }
+>         }
+>     }
+> 
+> }
+> close LOGFILE;
+> close DENY;
+
+
+
+John
+-- 
+Perl isn't a toolbox, but a small machine shop where you can special-order
+certain sorts of tools at low cost and in short order.       -- Larry Wall
+
+-- 
+To unsubscribe, e-mail: beginners-unsubscribe@perl.org
+For additional commands, e-mail: beginners-help@perl.org
+http://learn.perl.org/
+
+

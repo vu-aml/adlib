@@ -1,0 +1,144 @@
+From perl6-all-return-81282-ktwarwic=speedy.uwaterloo.ca@perl.org  Sun May 13 12:20:55 2007
+Return-Path: <perl6-all-return-81282-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4DGKsqD009924
+	for <ktwarwic@flax9.uwaterloo.ca>; Sun, 13 May 2007 12:20:55 -0400
+Received: (qmail 32762 invoked by uid 514); 13 May 2007 16:20:51 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 32757 invoked from network); 13 May 2007 16:20:51 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-0.2 required=8.0
+	tests=BAYES_40,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS,WEIRD_PORT
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: neutral (x1.develooper.com: 63.251.223.186 is neither permitted nor denied by domain of jkeen@verizon.net)
+To: perl6-internals@perl.org, Allison Randal <allison@perl.org>
+Message-ID: <46473A56.4080708@verizon.net>
+Date: Sun, 13 May 2007 12:18:30 -0400
+From: James E Keenan <jkeen@verizon.net>
+User-Agent: Mozilla/5.0 (Macintosh; U; PPC Mac OS X Mach-O; en-US; rv:1.8.1.2) Gecko/20070221 SeaMonkey/1.1.1
+MIME-Version: 1.0
+CC: Andy Spieherty <spiehera@lafayette.edu>
+Subject: Re: Odd failure in t/postconfigure/02-revision_no_DEVELOPING.t
+References: <B69AD971-BC7A-4534-9140-F1F51FE6D83D@verizon.net> <46412B55.7010004@perl.org>
+In-Reply-To: <46412B55.7010004@perl.org>
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+X-Posted-By: 71.247.175.127
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=0.7 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_NEUTRAL,WEIRD_PORT
+
+Allison Randal wrote:
+> To answer the questions for 03-revision.t:
+> 
+> 
+> Could you take a step back and explain what you're testing? At first 
+> glance, I don't see why we would test the revision number. Just to be 
+> sure that Parrot::Revision got some value during the configure process?
+> 
+
+I.  The testing tactic:
+
+As I understand it, there are 4 possible cases for which it must be tested.
+
+1.  You've checked out trunk -- so file 'DEVELOPING' is present in the 
+top-level of your Parrot sandbox -- but you have not yet called 'perl 
+Configure.pl' -- so Parrot::Config has not yet been created.
+
+2.  Same as (1), except that you have run Configure.pl, so 
+Parrot::Config now exists.
+
+3.  You've checked out a release version of Parrot.  'DEVELOPING' is not 
+supposed to be included in release versions.  You have not yet 
+configured, so Parrot::Config has not yet been created.
+
+4.  Same as (3):  release version; no 'DEVELOPING' file -- but you have 
+run Configure.pl and Parrot::Config now exists.
+
+Among the following tests I was trying to test each of these 4 possible 
+cases:
+
+t/configure/17-revision_no_DEVELOPING.t
+t/configure/18-revision.t
+t/postconfigure/02-revision_no_DEVELOPING.t
+t/postconfigure/03-revision.t
+
+(The order in which these tests is run corresponds to Cases 3-1-4-2 
+above.  I selected that order to get Devel::Cover to consolidate results 
+properly.)
+
+
+II.  The testing strategy:
+
+Parrot::Revision is a piece of code that falls into the category of "I 
+Wouldn't Have Written It This Way Myself ... But Other People Rely on It 
+So I Must Not Break It If I Attempt to Refactor It."
+
+It is supposed to make available "parrot's current and configure time 
+revision."  These are only available as fully qualified variables:
+
+     print $Parrot::Revision::current;
+     print $Parrot::Revision::config;
+
+$current is (apparently) intended to hold the current revision number as 
+determined by a complicated search of your SVN or SVK file systems.  If 
+you've checked out a release version of Parrot (rather than working from 
+the repository), then presumably whatever is in your SVN or SVK systems 
+is irrelevant, so $current is immediately set to 0.  If you're a Parrot 
+developer, your SVN and SVK systems are searched and the revision number 
+is placed in $current.  Ah, but what if that search is unsuccessful? 
+Then $current is set to 0.
+
+Then, whatever value has been assigned to $current is assigned to 
+$config.  So, if at this point, $current is '18411', then $config's 
+value becomes '18411' as well.  More problematically, if $config's value 
+at this point is '0', then $config gets assigned a value of '0' as well.
+
+This is why I originally felt that, in certain of the cases described 
+above, it would be appropriate to test for the equality of $current and 
+$config.  But I can tell that if (a) you're working from the repository 
+but (b) the search of your SVN or SVK systems is unsuccessful and (as we 
+shall soon see) (c) you have not yet run Configure.PL, you can get a 
+meaningless value of '0' for $config at this point.
+
+But wait!  There's more!
+
+At this point, Parrot::Revision asks, "Have you run Configure.pl?"  If 
+the answer is "Yes," it then looks up the value of $PConfig{revision} 
+(which, under the hood, is 
+$Parrot::Config::Generated::PConfig{revision}).  It then assigns this 
+value to $Parrot::Revision::config, overwriting whatever was previously 
+assigned thereto.  But if you have *not* yet configured, then you are 
+stuck with whatever value of $config came as a result of the preceding 
+code, whether that value is meaningful or not.
+
+Clear as mud, right?
+
+My hunch is that while Parrot's *version* number (found in top-level 
+file 'VERSION' and reported by Parrot::BuildUtils::parrot_version()) is 
+important for building Parrot, Parrot's repository *revision* numbers 
+are less important.  But *how much* less important, I cannot yet say. 
+FWIW, here are locations where these $current and $config are used 
+(setting aside my 4 test files above).
+
+config/gen/revision.pm:30:    my $revision = $Parrot::Revision::current;
+t/distro/file_metadata.t:219:    unless ( $Parrot::Revision::current or 
+`svk ls .` ) {
+tools/build/revision_c.pl:46:    return ${Parrot::Revision::current};
+tools/build/revision_c.pl:51:    return ${Parrot::Revision::config};
+
+kid51
+

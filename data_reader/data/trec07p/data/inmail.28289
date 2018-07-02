@@ -1,0 +1,86 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri May  4 02:07:52 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4467qqD011865
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 4 May 2007 02:07:52 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 104DD1638A5
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri,  4 May 2007 06:07:52 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.8 required=3.8 tests=AWL,BAYES_20,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 48460162AF2; Fri,  4 May 2007 06:07:14 +0000 (GMT)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Transfer-Encoding: 7bit
+Message-ID: <17978.52679.102102.454519@samba.org>
+Date: Fri, 4 May 2007 16:08:07 +1000
+To: Volker.Lendecke@SerNet.DE
+In-Reply-To: <E1Hjqn0-0006ap-2l@intern.SerNet.DE>
+References: <17974.47767.529755.421304@samba.org>
+	<E1HjCyF-0008C9-6A@intern.SerNet.DE>
+	<E1HjdyY-0003Ix-9y@intern.SerNet.DE>
+	<17978.44852.38824.862678@samba.org>
+	<E1Hjqn0-0006ap-2l@intern.SerNet.DE>
+X-Mailer: VM 7.19 under Emacs 22.0.95.1
+From: tridge@samba.org
+Cc: samba-technical@samba.org
+Subject: Re: initial test version of CTDB clustered Samba available
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: tridge@samba.org
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Volker,
+
+ > Why did you remove the "return False;" after the first
+ > sys_read()? Now we do two reads when select indicated
+ > readability. Sure, it is very unlikely we block for a long
+ > time there, but the idea was that this routine would not
+ > block.
+
+that's why I asked you to look at my changes :-)
+
+The existing routine could not work on a socket that is expected to
+get EOF. The caller has no way to know if ctdbd_socket_readable()
+returning False means "no more data coming" or "no more just yet". So
+we would spin forever in a traverse.
+
+Taking out the return False was a workaround for this. To make it
+non-blocking again the function will have to change in some other
+way. I thought I'd let you choose what approach you want.
+
+> Just found a real bug: The while loop in line 1600 expects the data
+> portion of the message to come in one sys_read call,
+> ctdbd_socket_readable returns False if the second sys_read does not
+> return the full message. I could imagine that for large records and
+> under high load this is not always the case.
+>
+> Do you want me to fix it?
+
+sure, thanks!
+
+Also, I've now converted notify in s3 to use ctdb. I am still not
+propogating the seqnum between nodes, so it should only work fully on
+one node, but it isn't working. I also tested with clustering
+disabled, and it still fails, so I suspect something deeper is wrong
+with notify.
+
+Cheers, Tridge
+

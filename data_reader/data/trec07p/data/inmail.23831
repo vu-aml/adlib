@@ -1,0 +1,90 @@
+From bnis-return-66-ktwarwic=speedy.uwaterloo.ca@list.cr.yp.to  Sat Apr 28 15:27:18 2007
+Return-Path: <bnis-return-66-ktwarwic=speedy.uwaterloo.ca@list.cr.yp.to>
+Received: from stoneport.crypto.rites.uic.edu (stoneport.crypto.rites.uic.edu [131.193.36.27])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3SJRI6w011411
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 28 Apr 2007 15:27:18 -0400
+Received: (qmail 48371 invoked by uid 1004); 28 Apr 2007 19:27:40 -0000
+Mailing-List: contact bnis-help@list.cr.yp.to; run by ezmlm
+Delivered-To: mailing list bnis@list.cr.yp.to
+Received: (qmail 48361 invoked by uid 1016); 28 Apr 2007 19:27:40 -0000
+Date: 28 Apr 2007 19:27:40 -0000
+Message-ID: <20070428192740.48360.qmail@cr.yp.to>
+Mail-Followup-To: bnis@list.cr.yp.to
+Automatic-Legal-Notices: See http://cr.yp.to/mailcopyright.html.
+From: "D. J. Bernstein" <djb@cr.yp.to>
+To: bnis@list.cr.yp.to
+Subject: fuerer multiplication
+Mime-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+Status: O
+Content-Length: 3167
+Lines: 66
+
+The Schoenhage-Strassen O(n log n log log n) bound is obsolete: Martin
+Fuerer, in a paper "Faster integer multiplication" to appear at STOC
+2007, has proven a bound of n (log n) 2^(log* n), where log* is the
+number of log iterations required to reach 1.
+
+This was stated as a purely asymptotic result, and an improvement from
+log log n to 2^(log* n) might not sound noticeable for any reasonable
+value of n; but I think that Fuerer's idea is worth investigating for
+multiplications in practice.
+
+The core idea, which I'll choose some concrete parameters to illustrate,
+is to perform an FFT of size 1048576 over the ring \C[x]/(x^16 + 1),
+using a 32768th root of x in the ring as the 1048576th root of 1. This
+involves
+
+   10485760 additions in the ring (so 335544320 additions in \R),
+   10485760 subtractions in the ring, and
+   10485760 multiplications in the ring.
+
+You're supposed to know that---as in the split-radix FFT---you can
+arrange for most of the multiplications in an FFT to be by "easy" roots
+of 1. In this case, most of the multiplications are by powers of x, and
+are thus simple coefficient reshufflings, with negations absorbed into
+subsequent operations. A small fraction of the multiplications, only
+about 2 million, are general multiplications in \C[x]/(x^16+1), which
+asymptotically should be embedded into smaller integer multiplications,
+with precomputations on the constant inputs.
+
+Actually, \C is unnecessary. The ring \R[x]/(x^16 + 1) has
+
+   sum_{j = -15, -13, ..., 13, 15}
+     (-1/16) exp(32769pi ij/524288) (x^16+1)/(x-exp(pi ij/16))
+   = 0.00003071362986347767105... x^15
+   - 0.00001565791788919659759... x^14
+   + ...
+   + 0.00003071548037755724105... x
+   + 0.99999999847402000575938...
+
+as a 32768th root of x. You can also replace \R with \Z/p for primes p
+congruent to +-1 mod 1048576, eliminating roundoff error. If p has 56
+bits, for example, then additions mod p will simply be 64-bit machine
+additions, and multiplications in (\Z/p)/(x^16 + 1) can be embedded into
+multiplications mod 2^2048 + 1 with minimal overhead. The traditional
+problem with number-theoretic transforms, namely the serious slowdown in
+multiplications mod p, is nicely addressed by Fuerer's user-selectable
+reduction in the frequency of multiplications.
+
+For comparison, a normal size-16777216 FFT over \C with the tangent FFT
+(Van Buskirk) would take
+
+   521957832 additions in \R,
+   521957832 subtractions in \R, and
+   400167624 multiplications in \R,
+
+if I've counted correctly. (A traditional split-radix FFT would take
+466033784 multiplications and the same number of additions/subtractions,
+but would allow 113712244 multiplications to be replaced by additions;
+maybe a good tradeoff if multiplications are expensive.) A size-16777216
+FFT over \R is about half the cost. Maybe 184 operations in \R are less
+expensive than 1 multiplication in (\Z/p)/(x^16 + 1), but they also
+accomplish much less, since most of the bits are lost to roundoff error.
+Going beyond 64-bit precision in \R makes the multiplications much more
+expensive.
+
+---D. J. Bernstein, Professor, Mathematics, Statistics,
+and Computer Science, University of Illinois at Chicago
+

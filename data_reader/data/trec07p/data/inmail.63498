@@ -1,0 +1,137 @@
+From beginners-return-92686-ktwarwic=speedy.uwaterloo.ca@perl.org  Fri Jun 22 19:44:37 2007
+Return-Path: <beginners-return-92686-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l5MNiaL9011196
+	for <ktwarwic@flax9.uwaterloo.ca>; Fri, 22 Jun 2007 19:44:37 -0400
+Received: (qmail 30711 invoked by uid 514); 22 Jun 2007 23:44:15 -0000
+Mailing-List: contact beginners-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:beginners@perl.org>
+List-Help: <mailto:beginners-help@perl.org>
+List-Unsubscribe: <mailto:beginners-unsubscribe@perl.org>
+List-Subscribe: <mailto:beginners-subscribe@perl.org>
+List-Id: <beginners.perl.org>
+Delivered-To: mailing list beginners@perl.org
+Delivered-To: moderator for beginners@perl.org
+Received: (qmail 10563 invoked from network); 22 Jun 2007 17:39:37 -0000
+Delivered-To: beginners@perl.org
+X-Spam-Status: No, hits=-1.9 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_NEUTRAL
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: neutral (x1.develooper.com: 63.251.223.186 is neither permitted nor denied by domain of nobull67@gmail.com)
+To: beginners@perl.org
+MBOX-Line: From news@google.com Fri Jun 22 17:39:21 2007
+Delivered-To: colobus-nntpmod@lists.develooper.com
+Delivered-To: news-moderator-perl.beginners@perl.org
+Received-SPF: neutral (x1.develooper.com: 216.168.1.22 is neither permitted nor denied by domain of news@google.com)
+From: "nobull67@gmail.com" <nobull67@gmail.com>
+Subject: Re: Count co-occurrences
+Date: Fri, 22 Jun 2007 17:38:39 -0000
+Organization: http://groups.google.com
+Lines: 79
+Message-ID: <1182533919.155769.158390@m36g2000hse.googlegroups.com>
+References: <467BFD51.3000405@siol.net>
+NNTP-Posting-Host: 194.176.105.39
+Mime-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+X-Trace: posting.google.com 1182533919 8266 127.0.0.1 (22 Jun 2007 17:38:39 GMT)
+X-Complaints-To: groups-abuse@google.com
+NNTP-Posting-Date: Fri, 22 Jun 2007 17:38:39 +0000 (UTC)
+In-Reply-To: <467BFD51.3000405@siol.net>
+User-Agent: G2/1.0
+X-HTTP-UserAgent: Mozilla/5.0 (Windows; U; Windows NT 5.1; en-GB; rv:1.8.1.4) Gecko/20070515 Firefox/2.0.0.4,gzip(gfe),gzip(gfe)
+X-HTTP-Via: 1.1 UHBPROXY, 1.1 n3-ld-cache-inetgw-62
+Complaints-To: groups-abuse@google.com
+Injection-Info: m36g2000hse.googlegroups.com; posting-host=194.176.105.39;
+   posting-account=OHUTRQwAAAAO3UloDZ6NlCKiNTyTMOkq
+X-Posted-By: 63.251.223.186
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-1.9 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_NEUTRAL
+
+On Jun 22, 5:48 pm, andrej.kast...@siol.net (Andrej Kastrin) wrote:
+> Dear all,
+>
+> I wrote a simple sql querry to count co-occurrences between words but it
+> performs very very slow on large datasets. So, it's time to do it with
+> Perl. I need just a short tip to start out: which structure to use to
+> count all possible occurrences between letters (e.g. A, B and C) under
+> the particular document number. My dataset looks like following:
+>
+> 1 A
+> 1 B
+> 1 C
+> 1 B
+> 2 A
+> 2 A
+> 2 B
+> 2 C
+> etc. till doc. number 100.000
+>
+> The result file should than be similar to:
+> A B 4   ### 2 co-occurrences under doc. number 1 + 2 co-occurrences
+> under doc. number 2
+> A C 3   ### 1 co-occurrence under doc. number 1 + 2 co-occurrences under
+> doc. number 2
+> B C 3   ### 2 co-occurrences under doc. number 1 + 1 co-occurrence under
+> doc. number 2
+>
+> Thanks in advance for any pointers.
+>
+> Best, Andrej
+
+use strict;
+use warnings;
+my %pairs;
+
+{
+    my ($prev_doc_id,%word_count,$doc_id);
+
+    # I've written this inner-sub as anonymous even though in this
+    # simple example script there's no outer sub. In the general case
+    # there would be and outer sub and perl doesn't implement nested
+    # nonymous subs.
+
+    my $add_to_total = sub {
+	for my $first ( keys %word_count ) {
+	    for my $second ( keys %word_count ) {
+		unless ( $first eq $second ) {
+		    $pairs{"$first $second"} +=
+			$word_count{$first} * $word_count{$second};
+		}
+	    }
+	}
+	%word_count=();
+	$prev_doc_id = $doc_id;
+    };
+
+    while(<DATA>) {
+	( $doc_id, my $word) = /^(\d+) (\w+)$/ or die;
+	$add_to_total->()
+	    unless defined $prev_doc_id && $doc_id eq $prev_doc_id;
+	$word_count{$word}++;
+    }
+
+    $add_to_total->();
+}
+
+for ( sort keys %pairs ) {
+    print "$_ $pairs{$_}\n";
+}
+__DATA__
+1 A
+1 B
+1 C
+1 B
+2 A
+2 A
+2 B
+2 C
+
+
+-- 
+To unsubscribe, e-mail: beginners-unsubscribe@perl.org
+For additional commands, e-mail: beginners-help@perl.org
+http://learn.perl.org/
+
+

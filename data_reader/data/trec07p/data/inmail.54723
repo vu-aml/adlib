@@ -1,0 +1,182 @@
+From perl6-all-return-81885-ktwarwic=speedy.uwaterloo.ca@perl.org  Sat Jun  9 17:25:49 2007
+Return-Path: <perl6-all-return-81885-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l59LPmL9014260
+	for <ktwarwic@flax9.uwaterloo.ca>; Sat, 9 Jun 2007 17:25:48 -0400
+Received: (qmail 31218 invoked by uid 514); 9 Jun 2007 21:25:47 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 31213 invoked from network); 9 Jun 2007 21:25:46 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Delivered-To: parrotbug-followup@parrotcode.org
+Received-SPF: pass (x1.develooper.com: domain of bgeron@gmail.com designates 66.249.92.168 as permitted sender)
+Message-ID: <466A7587.4030205@gmail.com>
+Date: Sat, 09 Jun 2007 11:40:23 +0200
+From: Bram Geron <bgeron@gmail.com>
+User-Agent: Icedove 1.5.0.10 (X11/20070329)
+MIME-Version: 1.0
+To: parrotbug-followup@parrotcode.org
+Subject: Re: [perl #43006] Tail call force-frees current context
+References: <46507292.4040608@gmail.com> <4650A6CE.6060104@gmail.com> <200705202300.11782.lt@toetsch.at>
+In-Reply-To: <200705202300.11782.lt@toetsch.at>
+X-Enigmail-Version: 0.94.2.0
+OpenPGP: id=E7B9E65E
+Content-Type: multipart/mixed;
+ boundary="------------070604070805070109040801"
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+
+--------------070604070805070109040801
+Content-Type: text/plain; charset=ISO-8859-15
+Content-Transfer-Encoding: 7bit
+
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA1
+
+(sorry for the late reply)
+
+Leopold Toetsch wrote:
+> Am Sonntag, 20. Mai 2007 21:51 schrieb Bram Geron:
+>> Bram Geron wrote:
+>>> The patch in <parrot.solution1.patch> fixes the problem for me.
+>> I realized that contexts currently initially have a ref_count of 0, if
+>> they're not used as :outer targets for other subs. So in 'normal'
+>> situations, the caller's context's ref_count now drops from 0 to -1 in a
+>> tail call, and since -1 != 0 the caller's context will never be freed,
+>> resulting in a memory leak. Attached <parrot.solution1.updated.patch>
+>> should fix that.
+>
+> It's likely simpler to start all context refcounts equally with 1. This would
+> probably reduce the current special refcount handling. But it would need some
+> changes, which is easily greppable I presume.
+
+The patch I attached should solve that. In a freshly created context,
+the refcount is zero, and this increases it by one. I think incrementing
+it is slightly better than directly assigning it a refcount of 1,
+because that could cause bugs if we incremented the refcount before for
+some mysterious reason. (far-fetched, I admit.)
+
+With the patch, [perl #42790] "[BUG] Tailcall with slurpy argument
+passing causes a memory leak" is solved for me too.
+
+- --
+Bram Geron | GPG 0xE7B9E65E
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.6 (GNU/Linux)
+Comment: Using GnuPG with Mozilla - http://enigmail.mozdev.org
+
+iD8DBQFGanWHvquQbee55l4RApxAAJ9TAdA5Oc6vWpfhoCqLZPnD9+4rBwCeOg0T
+4vgdP53aR0FQJ0iPjsKR8v4=
+=NEBz
+-----END PGP SIGNATURE-----
+
+--------------070604070805070109040801
+Content-Type: text/x-patch;
+ name="solution.patch"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline;
+ filename="solution.patch"
+
+Index: src/pmc/sub.pmc
+===================================================================
+--- src/pmc/sub.pmc	(revision 18597)
++++ src/pmc/sub.pmc	(working copy)
+@@ -284,8 +284,9 @@
+         if (PObj_get_FLAGS(SELF) & SUB_FLAG_IS_OUTER) {
+             /* don't destroy context */
+             ccont->vtable = interp->vtables[enum_class_Continuation];
+-            context->ref_count++;
+         }
++        /* reference counting should work */
++        context->ref_count++;
+ 
+         if (!PMC_IS_NULL(INTERP->current_object)) {
+             context->current_object = INTERP->current_object;
+@@ -322,7 +323,7 @@
+                 PObj_get_FLAGS(ccont) &= ~SUB_FLAG_TAILCALL;
+                 context->caller_ctx    = caller_ctx->caller_ctx;
+ 
+-                Parrot_free_context(INTERP, caller_ctx, 1);
++                Parrot_free_context(INTERP, caller_ctx, 0);
+             }
+         }
+ 
+Index: t/op/calling.t
+===================================================================
+--- t/op/calling.t	(revision 18597)
++++ t/op/calling.t	(working copy)
+@@ -7,7 +7,7 @@
+ use lib qw( . lib ../lib ../../lib );
+ 
+ use Test::More;
+-use Parrot::Test tests => 94;
++use Parrot::Test tests => 95;
+ 
+ =head1 NAME
+ 
+@@ -2408,6 +2408,45 @@
+ Have bar: 2
+ OUTPUT
+ 
++pir_output_is( <<'CODE', <<'OUTPUT', "Tail call without arguments should not free the context when a closure depends on it" );
++.sub main :main
++    $P0 = create_closure_and_run_it()
++.end
++
++.sub create_closure_and_run_it
++    P0 = new "Integer"
++    P0 = 3
++    .lex "val", P0
++    P2 = get_global "myclosure"
++    P1 = newclosure P2
++    # There is a closure depending on our current context, so this shouldn't
++    # free it.
++    .return P1()
++.end
++
++.sub myclosure :outer(create_closure_and_run_it)
++    P1 = find_lex "val"
++    say P1
++    donothing()
++    P1 = find_lex "val"
++    say P1
++    .return ()
++.end
++
++.sub donothing
++    P0 = new "Integer"
++    P0 = 5
++    # This creates a new binding that is not accessible by the
++    # caller (myclosure)
++    .lex "val", P0
++    P2 = null
++    P1 = null
++.end
++CODE
++3
++3
++OUTPUT
++
+ # Local Variables:
+ #   mode: cperl
+ #   cperl-indent-level: 4
+
+
+--------------070604070805070109040801--
+

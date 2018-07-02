@@ -1,0 +1,126 @@
+From beginners-return-92827-ktwarwic=speedy.uwaterloo.ca@perl.org  Thu Jun 28 03:12:59 2007
+Return-Path: <beginners-return-92827-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l5S7CvL9006648
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 28 Jun 2007 03:12:59 -0400
+Received: (qmail 9969 invoked by uid 514); 28 Jun 2007 07:12:49 -0000
+Mailing-List: contact beginners-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:beginners@perl.org>
+List-Help: <mailto:beginners-help@perl.org>
+List-Unsubscribe: <mailto:beginners-unsubscribe@perl.org>
+List-Subscribe: <mailto:beginners-subscribe@perl.org>
+List-Id: <beginners.perl.org>
+Delivered-To: mailing list beginners@perl.org
+Received: (qmail 9959 invoked from network); 28 Jun 2007 07:12:48 -0000
+Received: from x1a.develooper.com (HELO x1.develooper.com) (216.52.237.111)
+  by lists.develooper.com with SMTP; 28 Jun 2007 07:12:48 -0000
+Received: (qmail 23101 invoked by uid 225); 28 Jun 2007 07:12:47 -0000
+Delivered-To: beginners@perl.org
+Received: (qmail 23087 invoked by alias); 28 Jun 2007 07:12:47 -0000
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: domain of krahnj@telus.net designates 204.209.205.52 as permitted sender)
+Received: from mx01.telus.net (HELO defout.telus.net) (204.209.205.52)
+    by la.mx.develooper.com (qpsmtpd/0.28) with ESMTP; Thu, 28 Jun 2007 00:12:43 -0700
+Received: from priv-edmwaa06.telusplanet.net ([154.20.131.28])
+          by priv-edmwes33.telusplanet.net
+          (InterMail vM.7.08.02.00 201-2186-121-20061213) with ESMTP
+          id <20070628071238.LPFO1761.priv-edmwes33.telusplanet.net@priv-edmwaa06.telusplanet.net>
+          for <beginners@perl.org>; Thu, 28 Jun 2007 01:12:38 -0600
+Received: from [154.20.131.28] (d154-20-131-28.bchsia.telus.net [154.20.131.28])
+	by priv-edmwaa06.telusplanet.net (BorderWare MXtreme Infinity Mail Firewall) with ESMTP id 0630K2DGM9
+	for <beginners@perl.org>; Thu, 28 Jun 2007 01:12:38 -0600 (MDT)
+Message-ID: <46835F64.8090100@telus.net>
+Date: Thu, 28 Jun 2007 00:12:36 -0700
+From: "John W. Krahn" <krahnj@telus.net>
+User-Agent: Thunderbird 1.5.0.12 (X11/20070604)
+MIME-Version: 1.0
+To: Perl beginners <beginners@perl.org>
+Subject: Re: problem printing contents of file in directory
+References: <931771.56487.qm@web53210.mail.re2.yahoo.com>
+In-Reply-To: <931771.56487.qm@web53210.mail.re2.yahoo.com>
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+
+alok nath wrote:
+> Hi,
+
+Hello,
+
+> Can anybody tell me why its not printing the contents of each
+> inside a particular folder ?
+
+Yes I can, and so can Perl's documentation:
+
+perldoc -f readdir
+
+
+> my $tstToRunDir = "C:\\perlScripts" ;
+> my $fileInTstToRunDir ;
+> 
+> opendir TST2RUN, $tstToRunDir || die "Failed to open $tstToRunDir $!\n" ;
+> open RESULTS_LOG, ">>ResultLog.log" || die "Failed to open log\n" ;
+
+The logical or operator '||' has relatively high precedence so neither opendir 
+nor open will die if an error is encountered.  You need to either use parentheses:
+
+opendir( TST2RUN, $tstToRunDir ) || die "Failed to open $tstToRunDir $!\n" ;
+open( RESULTS_LOG, ">>ResultLog.log" ) || die "Failed to open log\n" ;
+
+or use the low precedence 'or' operator:
+
+opendir TST2RUN, $tstToRunDir or die "Failed to open $tstToRunDir $!\n" ;
+open RESULTS_LOG, ">>ResultLog.log" or die "Failed to open log\n" ;
+
+
+> while ($fileInTstToRunDir = readdir (TST2RUN)){
+>  chomp $fileInTstToRunDir ;
+
+$fileInTstToRunDir comes directly from the file system so there is no reason 
+to use chomp.
+
+
+>  #open the file and get connection description and test description
+>  open FILE_2RUN, $fileInTstToRunDir || die " Failed to open $fileInTstToRunDir:$!\n" ;
+
+Again, there is a precedence problem with the '||' operator.  The file name in 
+$fileInTstToRunDir was obtained from the $tstToRunDir directory so you need to 
+include the directory name in order to access it:
+
+open FILE_2RUN, "$tstToRunDir/$fileInTstToRunDir"
+     or die " Failed to open $tstToRunDir/$fileInTstToRunDir:$!\n" ;
+
+
+>  print "File is : $fileInTstToRunDir\n" ;
+>  next if($fileInTstToRunDir =~ m/^./ ) ;
+> 
+>  while( <FILE_2RUN> ){
+>   print $_ ;
+>   if ($_ =~ m/<Test Description/ ){
+>    print $_ ;
+>   }
+>  } 
+>  
+>  print RESULTS_LOG "File is : $fileInTstToRunDir\n" ;
+>  #$count++  ;
+> # close FILE_2RUN ; 
+>  
+> }
+> close RESULTS_LOG ;
+> close TST2RUN ;
+
+
+John
+-- 
+Perl isn't a toolbox, but a small machine shop where you
+can special-order certain sorts of tools at low cost and
+in short order.                            -- Larry Wall
+
+-- 
+To unsubscribe, e-mail: beginners-unsubscribe@perl.org
+For additional commands, e-mail: beginners-help@perl.org
+http://learn.perl.org/
+
+

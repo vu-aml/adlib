@@ -1,0 +1,87 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Jun 27 12:59:11 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5RGx8L9029638
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 27 Jun 2007 12:59:09 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id D8B58163935
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 27 Jun 2007 16:59:05 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-2.2 required=3.8 tests=AWL,BAYES_00,RCVD_IN_DSBL,
+	SPF_PASS autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from mordor.cti.unav.es (mordor.cti.unav.es [159.237.12.105])
+	by lists.samba.org (Postfix) with ESMTP id 7D894162C22
+	for <samba-technical@lists.samba.org>;
+	Wed, 27 Jun 2007 16:58:27 +0000 (GMT)
+Received: from [159.237.12.187] (icb.cti.unav.es [159.237.12.187])
+	by mordor.cti.unav.es (8.14.1/8.14.1) with ESMTP id l5RGwQko008392
+	(version=TLSv1/SSLv3 cipher=DHE-RSA-AES256-SHA bits=256 verify=OK);
+	Wed, 27 Jun 2007 18:58:26 +0200
+Message-ID: <46829705.1060606@unav.es>
+Date: Wed, 27 Jun 2007 18:57:41 +0200
+From: Ignacio Coupeau <icoupeau@unav.es>
+User-Agent: Thunderbird 2.0.0.4 (Windows/20070604)
+MIME-Version: 1.0
+To: Volker.Lendecke@SerNet.DE
+References: <46636BD2.2080907@ubiqx.mn.org>	<1180928441.24923.240.camel@localhost.localdomain>	<46814AD2.6070600@unav.es>
+	<18049.33490.390117.662780@samba.org>	<468220AF.9040504@unav.es>
+	<E1I3TyW-0004zs-8O@intern.SerNet.DE>
+In-Reply-To: <E1I3TyW-0004zs-8O@intern.SerNet.DE>
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+Cc: samba-tech <samba-technical@lists.samba.org>
+Subject: Re: [CTDB and GFS] some troubles joining domain
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Volker Lendecke wrote:
+> On Wed, Jun 27, 2007 at 10:32:47AM +0200, Ignacio Coupeau wrote:
+>> I tested with all the netbios name to "piedra" and "use mmap = no" but 
+>> the results are the same... the "Segmentation fault" ended the join.
+> 
+> If you can't get the line number for the tdb_transaction
+> part of the backtrace, maybe you can get us a strace of the
+> join attempt with "use mmap = no".
+
+I added some debug lines to libsmb/trusts_util.c (see below), and the 
+problem comes in the call:
+
+if (!secrets_store_machine_password(new_trust_passwd, domain, 
+sec_channel_type)) {...
+
+then I think that tdb is not initialized and tdb-> points nothing:
+
+/*
+   start a tdb transaction. No token is returned, as only a single
+   transaction is allowed to be pending per tdb_context
+*/
+int tdb_transaction_start(struct tdb_context *tdb)
+{
+         /* some sanity checks */
+         if (tdb->read_only || (tdb->flags & TDB_INTERNAL) || 
+tdb->traverse_read) {...
+
+-- 
+________________________________________________________
+Dr. Ignacio Coupeau
+Systems and Network Services Director
+IT Services
+University of Navarra           http://www.unav.edu/
+Pamplona, SPAIN                 http://www.unav.es/SI/
+

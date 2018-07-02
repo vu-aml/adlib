@@ -1,0 +1,134 @@
+From perl6-all-return-81421-ktwarwic=speedy.uwaterloo.ca@perl.org  Wed May 16 09:46:14 2007
+Return-Path: <perl6-all-return-81421-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4GDkDqD019307
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 16 May 2007 09:46:14 -0400
+Received: (qmail 32757 invoked by uid 514); 16 May 2007 13:46:10 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 32723 invoked from network); 16 May 2007 13:46:09 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DKIM_SIGNED,DK_POLICY_SIGNSOME,DK_SIGNED,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: domain of parrotcode@gmail.com designates 64.233.162.239 as permitted sender)
+DKIM-Signature: a=rsa-sha1; c=relaxed/relaxed;
+        d=gmail.com; s=beta;
+        h=domainkey-signature:received:received:message-id:date:from:to:subject:mime-version:content-type;
+        b=NGDTs8sni7bv0sPfGBUcXEic4ZjF/NdQ13L8efUwo6Tm90QraTO+iTGrZzdTx7vkQog7Lqk3DGMPk1UB0JFpIOyoNFMTLii76acxQv0bKaprcpMDzaMT2znXEfJKLCe0fOhEQ1IqnXufiLg19IcYdT2Tg2Q3tnBcB93lQK98OcA=
+DomainKey-Signature: a=rsa-sha1; c=nofws;
+        d=gmail.com; s=beta;
+        h=received:message-id:date:from:to:subject:mime-version:content-type;
+        b=r6eDRFOZJ8xncRQm9yGWp03VtAgSeVbGzRA4f1oQCCJNmcEQjtftgUFlY7/kNGrgLb3R3aBM8DgaLPMz0KAPg+nSAfBHUVKBq12dhX/adVzq5N6VXb9ccH/u1QkWE1h/Cc2XlDFGgU07XC2pyoNajC/vNBlAVKWhSOw29v9BeGM=
+Message-ID: <7b0e52b40705160642t14b50eao973ccfc0792027e0@mail.gmail.com>
+Date: Wed, 16 May 2007 21:42:19 +0800
+From: "Klaas-Jan Stol" <parrotcode@gmail.com>
+To: perl6-internals@perl.org
+Subject: Comments on File of the Week: debug.c
+MIME-Version: 1.0
+Content-Type: multipart/alternative; 
+	boundary="----=_Part_23081_30900484.1179322939946"
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED,HTML_MESSAGE,SPF_PASS
+
+------=_Part_23081_30900484.1179322939946
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+
+hi,
+I've been studying the code in the fotw: debug.c and below are my comments,
+if they're of any interest. Feel free to neglect, I'm kinda picky.
+
+1.
+    while (*command && (isalnum((int) *command) || *command == ',' ||
+        *command == ']'))
+
+I'm not 100% sure, but:
+I've always been taught that this should not be written like this. The issue
+here is that you ASSUME that the compiler does expression short-cutting
+during evaluating the && expression. Suppose a c compiler does not implement
+this, and evaluate both "*command" and the rest "(isalnum((int)*command ....
+", and *command is NULL (well in this case I guess it will point to '\0'),
+then things go wrong.
+
+And I suppose we all know what ASSUME is an acronym for. :-)
+
+I have to admit, I'm not 100% sure this issue is valid, but it sure seems
+so. Relying on compilers' features is something I would not recommend.
+
+This kind of code occurs in multiple spots in this file.
+
+2. the define of "na". "na" stands for "next argument". Why not define it as
+"next_argument", for sake of readability?
+
+3. in the function 'parse_string', there's a variable called "string". I
+don't think that's a good idea w.r.t. C++, which has the "string" datatype.
+I think this var. is used to point to the first character in the string.
+Maybe rename it to string_start.
+Also, if I understand this code correctly, the double quoted string is
+parsed out of the parameter "str". Maybe renaming this param to c_string
+would be better?
+
+
+4. I added some clarifying comments to the next function. Some may seem a
+bit overkill, but try reading it in 4 weeks from now :-)
+(and maybe rename "str" to "key"?) btw, the comments are more like why the
+code is like this, and may help other people to improve it.
+
+static const char*
+parse_key(Interp *interp, const char* str, PMC** keyP)
+{
+    *keyP = NULL; /* clear output parameter */
+    if (*str != '[') /* if there is no key, return a NULL key pointer */
+        return NULL;
+    str++; /* Skip [ */
+    if (*str == '"') {
+        STRING* string;
+        str = parse_string(interp, str, &string); /* parse_string can return
+NULL. what happens then? */
+        *keyP = key_new_string(interp, string);
+    }
+    else if (isdigit((int) *str)) {
+        int value;
+        str = parse_int(str, &value);
+        *keyP = key_new_integer(interp, (INTVAL) value);
+    }
+    else { /* should this ever happen? The key was nor a string neither a
+number; maybe this indicates an error? */
+        return NULL;
+    }
+
+    if (*str != ']') /* can this ever happen? why? */
+        return NULL;
+    return ++str;
+}
+
+
+5. in function PDB_get_command there's a variable called "line". It's marked
+as a keyword, IIRC it's a directive of the C pre compiler?
+If so, consider renaming it.
+
+Ok, I see many more places to improve, but I'll leave it to this for now and
+see if this first part of the file can be improved.
+If desired, I'm willing to spend some more time on this, let me know.
+
+Best regards,
+kjs
+
+------=_Part_23081_30900484.1179322939946--
+

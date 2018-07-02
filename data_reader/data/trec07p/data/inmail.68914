@@ -1,0 +1,170 @@
+From r-help-bounces@stat.math.ethz.ch  Thu Jun 28 18:39:28 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5SMdPL9016541
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 28 Jun 2007 18:39:26 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5SMbv6O013162;
+	Fri, 29 Jun 2007 00:38:34 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.5 required=5.0 tests=AWL, BAYES_50,
+	DKIM_POLICY_SIGNSOME, MSGID_FROM_MTA_HEADER,
+	STOX_REPLY_TYPE autolearn=no version=3.2.0
+Received: from bay0-omc2-s14.bay0.hotmail.com (bay0-omc2-s14.bay0.hotmail.com
+	[65.54.246.150])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5SLehCP004210
+	for <r-help@stat.math.ethz.ch>; Thu, 28 Jun 2007 23:40:45 +0200
+Received: from hotmail.com ([64.4.38.88]) by bay0-omc2-s14.bay0.hotmail.com
+	with Microsoft SMTPSVC(6.0.3790.2668); 
+	Thu, 28 Jun 2007 14:40:43 -0700
+Received: from mail pickup service by hotmail.com with Microsoft SMTPSVC;
+	Thu, 28 Jun 2007 14:40:43 -0700
+Message-ID: <BAY116-DAV16327E3DF47A01B08BDE59CF090@phx.gbl>
+Received: from 205.141.66.16 by BAY116-DAV16.phx.gbl with DAV;
+	Thu, 28 Jun 2007 21:40:37 +0000
+X-Originating-IP: [205.141.66.16]
+X-Originating-Email: [jasoncbarnhart@msn.com]
+X-Sender: jasoncbarnhart@msn.com
+From: "Jason Barnhart" <jasoncbarnhart@msn.com>
+To: "John Kane" <jrkrideau@yahoo.ca>, "R R-help" <r-help@stat.math.ethz.ch>
+References: <935534.94598.qm@web32802.mail.mud.yahoo.com>
+Date: Thu, 28 Jun 2007 14:40:36 -0700
+MIME-Version: 1.0
+X-Priority: 3
+X-MSMail-Priority: Normal
+X-Mailer: Microsoft Outlook Express 6.00.2900.2670
+X-MimeOLE: Produced By Microsoft MimeOLE V6.00.2900.2962
+X-OriginalArrivalTime: 28 Jun 2007 21:40:43.0097 (UTC)
+	FILETIME=[FA870C90:01C7B9CC]
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Subject: Re: [R] Function call within a function.
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+The problem isn't the function call.
+
+First, list1 returned by lstfun does not name its elements so nts$cda 
+won't work. See code change in lstfun.
+
+Second, specifying nts$cda as the nam1 argument tells R to look for 
+the nts object in the environment in which ukn is called.  However, 
+the nts object is not created in the parent environment, it is created 
+in the ukn's environment.
+
+Third, nam1[,3] should be nam1[2] as there is no third element to this 
+list (although and this doesn't resolve the environment issue).
+
+I've modified your code below to work, but there are better ways to go 
+about this.  Thomas Lumley has a famous quote regarding parse.  See 
+http://tolstoy.newcastle.edu.au/R/e2/help/07/01/8059.html among 
+others.
+
+I was once referred to Patrick Burns' S Poetry to learn about the 
+"eval(parse(text=)))" paradigm which was very helpful. You may also 
+want to brush up on environments (see ?environment) to learn more 
+about lexical scoping.
+
+Hope this helps.
+-jason
+
+#MODIFIED CODE
+# create data.frame
+cata <- c( 1,1,6,1,1,4)
+catb <- c( 1,2,3,4,5,6)
+id <- c('a', 'b', 'b', 'a', 'a', 'b')
+dd1 <- data.frame(id, cata,catb)
+
+# function to create list from data.frame
+lstfun <- function(file, alpha , beta ) {
+cda <- subset(file, file[,1] == alpha)
+cdb <- subset (file, file[,1]== beta)
+### CODE ADDED HERE
+list1 <- list(cda=cda,cdb=cdb)
+}
+
+# funtion to operate on list
+ukn <- function(file, alpha, beta, nam1){
+aa <- alpha
+bb <- beta
+myfile <- file
+nts <- lstfun(myfile, aa, bb)
+### CODE ADDED HERE
+mysum <- eval(parse(text=nam1))
+#mysum <- nam1[,3]*5
+return(mysum)
+}
+
+results <- ukn(dd1, "a", "b", "nts$cda") ### modified how called.
+
+----- Original Message ----- 
+From: "John Kane" <jrkrideau@yahoo.ca>
+To: "R R-help" <r-help@stat.math.ethz.ch>
+Sent: Thursday, June 28, 2007 12:03 PM
+Subject: [R] Function call within a function.
+
+
+>I am trying to call a funtion within another function
+> and I clearly am misunderstanding what I should do.
+> Below is a simple example.
+> I know lstfun works on its own but I cannot seem to
+> figure out how to get it to work within ukn. Basically
+> I need to create the variable "nts". I have probably
+> missed something simple in the Intro or FAQ.
+>
+> Any help would be much appreciated.
+>
+> EXAMPLE
+> -------------------------------------------------------------------------------
+> # create data.frame
+> cata <- c( 1,1,6,1,1,4)
+> catb <- c( 1,2,3,4,5,6)
+> id <- c('a', 'b', 'b', 'a', 'a', 'b')
+> dd1  <-  data.frame(id, cata,catb)
+>
+> # function to create list from data.frame
+> lstfun  <- function(file, alpha , beta ) {
+> cda  <-  subset(file, file[,1] == alpha)
+> cdb  <-  subset (file, file[,1]== beta)
+> list1 <- list(cda,cdb)
+> }
+>
+> # funtion to operate on list
+> ukn  <-  function(file, alpha, beta, nam1){
+> aa  <- alpha
+> bb  <- beta
+> myfile  <- file
+> nts <- lstfun(myfile, aa, bb)
+> mysum <- nam1[,3]*5
+> return(mysum)
+> }
+>
+> results <- ukn(dd1, "a", "b", nts$cda)
+>
+> ______________________________________________
+> R-help@stat.math.ethz.ch mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-help
+> PLEASE do read the posting guide 
+> http://www.R-project.org/posting-guide.html
+> and provide commented, minimal, self-contained, reproducible code.
+>
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

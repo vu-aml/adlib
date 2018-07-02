@@ -1,0 +1,126 @@
+From beginners-return-91845-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue May 22 07:45:01 2007
+Return-Path: <beginners-return-91845-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4MBixqD011799
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 22 May 2007 07:45:00 -0400
+Received: (qmail 26194 invoked by uid 514); 22 May 2007 11:44:50 -0000
+Mailing-List: contact beginners-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:beginners@perl.org>
+List-Help: <mailto:beginners-help@perl.org>
+List-Unsubscribe: <mailto:beginners-unsubscribe@perl.org>
+List-Subscribe: <mailto:beginners-subscribe@perl.org>
+List-Id: <beginners.perl.org>
+Delivered-To: mailing list beginners@perl.org
+Received: (qmail 26184 invoked from network); 22 May 2007 11:44:49 -0000
+Received: from x1a.develooper.com (HELO x1.develooper.com) (216.52.237.111)
+  by lists.develooper.com with SMTP; 22 May 2007 11:44:49 -0000
+Received: (qmail 2241 invoked by uid 225); 22 May 2007 11:44:49 -0000
+Delivered-To: beginners@perl.org
+Received: (qmail 2233 invoked by alias); 22 May 2007 11:44:49 -0000
+X-Spam-Status: No, hits=-0.1 required=8.0
+	tests=BAYES_20,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_NEUTRAL
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: neutral (x1.develooper.com: 63.251.223.186 is neither permitted nor denied by domain of krahnj@telus.net)
+Received: from x6.develooper.com (HELO lists.develooper.com) (63.251.223.186)
+    by la.mx.develooper.com (qpsmtpd/0.28) with SMTP; Tue, 22 May 2007 04:44:41 -0700
+Received: (qmail 26178 invoked by uid 515); 22 May 2007 11:44:37 -0000
+Message-ID: <20070522114437.26177.qmail@lists.develooper.com>
+To: beginners@perl.org
+From: "John W. Krahn" <krahnj@telus.net>
+Subject: Re: Query an IP from file
+Date: Tue, 22 May 2007 04:46:05 -0700
+References: <4652BBC7.1020203@earthlink.net>
+Lines: 79
+User-Agent: KNode/0.10.4
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Transfer-Encoding: 7Bit
+X-Posted-By: 154.20.131.28
+
+Jeff Pang wrote:
+
+> Hello,
+
+Hello,
+
+> I have a text file which contains lots of IPs,like:
+> 
+> 58.253.0.0/16;
+> 58.254.0.0/16;
+> 58.255.0.0/16;
+> 60.0.0.0/16;
+> 60.1.0.0/16;
+> 60.10.0.0/16;
+> 60.16.0.0/16;
+> 60.17.0.0/16;
+> 60.18.0.0/16;
+> 60.19.0.0/16;
+> 60.2.0.0/16;
+> 60.20.0.0/16;
+> 60.21.0.0/16;
+> 60.22.0.0/16;
+> 60.23.0.0/16;
+> 60.3.0.0/16;
+> 
+> My question is,given an IP,ie 59.32.232.33,how can I know it exists in
+> this file or not?
+> Is there a module already?thanks.
+
+This may help:
+
+$ perl -le'
+use warnings;
+use strict;
+use Socket;
+
+my $file = <<FILE;
+58.253.0.0/16;
+58.254.0.0/16;
+58.255.0.0/16;
+60.0.0.0/16;
+60.1.0.0/16;
+60.10.0.0/16;
+60.16.0.0/16;
+60.17.0.0/16;
+60.18.0.0/16;
+60.19.0.0/16;
+60.2.0.0/16;
+60.20.0.0/16;
+60.21.0.0/16;
+60.22.0.0/16;
+60.23.0.0/16;
+60.3.0.0/16;
+FILE
+
+open my $fh, "<", \$file or die "Cannot open $file: $!";
+
+my @ips;
+while ( <$fh> ) {
+    next unless /^(\d+\.\d+\.\d+\.\d+)\/(\d+)/;
+    my $mask = "\0\0\0\0";
+    vec( $mask, $_, 1 ) = 1 for 0 .. ( 31 - $2 );
+    push @ips, { ip => inet_aton( $1 ), mask => $mask };
+    }
+
+for my $ip ( qw/ 59.32.232.33 60.19.232.33 / ) {
+    for my $cmp ( @ips ) {
+        if ( ( inet_aton( $ip ) & $cmp->{ mask } ) eq $cmp->{ ip } ) {
+            print "$ip exists in file."
+            }
+        }
+    }
+'
+60.19.232.33 exists in file.
+
+
+
+
+John
+
+-- 
+To unsubscribe, e-mail: beginners-unsubscribe@perl.org
+For additional commands, e-mail: beginners-help@perl.org
+http://learn.perl.org/
+
+

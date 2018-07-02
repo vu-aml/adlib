@@ -1,0 +1,95 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Apr 20 12:07:14 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3KG7D0I008346
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 20 Apr 2007 12:07:13 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 03BFE1638A1
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 20 Apr 2007 16:06:49 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.5 required=3.8 tests=AWL,BAYES_00,RCVD_IN_DSBL 
+	autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from mtagate3.uk.ibm.com (mtagate3.uk.ibm.com [195.212.29.136])
+	by lists.samba.org (Postfix) with ESMTP id 94FF0162ADE
+	for <samba-technical@lists.samba.org>;
+	Fri, 20 Apr 2007 16:06:16 +0000 (GMT)
+Received: from d06nrmr1407.portsmouth.uk.ibm.com
+	(d06nrmr1407.portsmouth.uk.ibm.com [9.149.38.185])
+	by mtagate3.uk.ibm.com (8.13.8/8.13.8) with ESMTP id l3KG6GlJ129474
+	for <samba-technical@lists.samba.org>; Fri, 20 Apr 2007 16:06:16 GMT
+Received: from d06av01.portsmouth.uk.ibm.com (d06av01.portsmouth.uk.ibm.com
+	[9.149.37.212])
+	by d06nrmr1407.portsmouth.uk.ibm.com (8.13.8/8.13.8/NCO v8.3) with
+	ESMTP id l3KG6F2Z2838612
+	for <samba-technical@lists.samba.org>; Fri, 20 Apr 2007 17:06:15 +0100
+Received: from d06av01.portsmouth.uk.ibm.com (loopback [127.0.0.1])
+	by d06av01.portsmouth.uk.ibm.com (8.12.11.20060308/8.13.3) with ESMTP
+	id l3KG6FYx013272
+	for <samba-technical@lists.samba.org>; Fri, 20 Apr 2007 17:06:15 +0100
+Received: from dyn-9-155-41-190.mainz.de.ibm.com
+	(dyn-9-155-41-190.mainz.de.ibm.com [9.155.41.190])
+	by d06av01.portsmouth.uk.ibm.com (8.12.11.20060308/8.12.11) with ESMTP
+	id l3KG6F5A013260; Fri, 20 Apr 2007 17:06:15 +0100
+From: Peter Somogyi <psomogyi@gamax.hu>
+Organization: Gamax Kft
+To: James Peach <jpeach@samba.org>
+Date: Fri, 20 Apr 2007 18:05:29 +0200
+User-Agent: KMail/1.9.5
+References: <200704201309.49712.psomogyi@gamax.hu>
+	<76E1E11B-67F4-49AF-A9B4-DD03FB1880D3@samba.org>
+In-Reply-To: <76E1E11B-67F4-49AF-A9B4-DD03FB1880D3@samba.org>
+MIME-Version: 1.0
+Content-Type: text/plain;
+  charset="iso-8859-1"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+Message-Id: <200704201805.29933.psomogyi@gamax.hu>
+Cc: tridge@samba.org, samba-technical@lists.samba.org, vlendec@sernet.de
+Subject: Re: ctdb debug vasprintf memory overwrite in ib
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: psomogyi@gamax.hu
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 662
+Lines: 23
+
+> >    ret = vsnprintf(NULL, 0, format, tmp_ap);
+>
+> Note that you can't rely on this returning the number of characters
+> that would have been output if the buffer were large enough until C99
+> or UNIX98 IIRC.
+
+I've just found another solution: I've just changed my bzr to use 
+talloc_vasprintf:
+
+void do_debug(const char *format, ...)
+...
+        va_start(ap, format);
+        s = talloc_vasprintf(NULL, format, ap);
+        va_end(ap);
+...
+        talloc_free(s);
+
+And now it seems to work fine, and I don't have to worry about va_copy 
+compatibility any more... (talloc does it...)
+
+[+ hopefully my bzr commits should be visible on samba-cvs soon...]
+
+Peter
+

@@ -1,0 +1,1339 @@
+From perl6-all-return-82517-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue Jul  3 02:50:29 2007
+Return-Path: <perl6-all-return-82517-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l636oPL9024839
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 3 Jul 2007 02:50:25 -0400
+Received: (qmail 22756 invoked by uid 514); 3 Jul 2007 06:50:20 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 22750 invoked from network); 3 Jul 2007 06:50:20 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.1 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS,URIBL_BULK_MPRHS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: chromatic (via RT) <parrotbug-followup@parrotcode.org>
+X-RT-NewTicket: yes
+To: bugs-bitbucket@netlabs.develooper.com
+Resent-To: perl6-internals@perl.org
+Mail-Followup-To: perl6-internals@perl.org
+Reply-To: perl6-internals@perl.org
+Date: Mon, 02 Jul 2007 23:49:33 -0700
+Subject: [perl #43485] Null Key Strings Make Hashes Cry 
+In-Reply-To: <200707022348.39738.chromatic@wgz.org>
+References: <RT-Ticket-43485@perl.org> <200707022348.39738.chromatic@wgz.org>
+Message-ID: <rt-3.6.HEAD-25329-1183445373-832.43485-72-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #43485
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: chromatic@wgz.org
+MIME-Version: 1.0
+X-RT-Original-Encoding: utf-8
+Content-type: multipart/mixed; boundary="----------=_1183445373-25329-0"
+Resent-Message-Id: <20070703064935.874632AFD7@x3.develooper.com>
+Resent-Date: Mon,  2 Jul 2007 23:49:35 -0700 (PDT)
+Resent-From: rt-chromatic=wgz.org@netlabs.develooper.com
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.1 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS,URIBL_BULK_MPRHS
+
+------------=_1183445373-25329-0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+# New Ticket Created by  chromatic 
+# Please include the string:  [perl #43485]
+# in the subject line of all future correspondence about this issue. 
+# <URL: http://rt.perl.org/rt3/Ticket/Display.html?id=43485 >
+
+
+I don't have a good test case for this, but I've triggered the problem with 
+some code that makes TGE sick.4
+
+Program received signal SIGSEGV, Segmentation fault.
+[Switching to Thread -1212335920 (LWP 8882)]
+0xb7dd7e4b in key_hash_STRING (interp=0x804e008, value=0x0, seed=3793)
+    at src/hash.c:110
+110         if (s->hashval) {
+(gdb) bt
+#0  0xb7dd7e4b in key_hash_STRING (interp=0x804e008, value=0x0, seed=3793)
+    at src/hash.c:110
+#1  0xb7dd8c3e in parrot_hash_get_bucket (interp=0x804e008, hash=0x82ff5b8, 
+    key=0x0) at src/hash.c:796
+#2  0xb7eb87d3 in Parrot_Hash_exists_keyed (interp=0x804e008, pmc=0x828b534, 
+    key=0x0) at ./src/pmc/hash.pmc:900
+#3  0xb7ce471b in Parrot_exists_i_p_kc (cur_opcode=0xb7be1230, 
+    interp=0x804e008) at src/ops/pmc.ops:327
+#4  0xb7dd2fbd in runops_slow_core (interp=0x804e008, pc=0xb7be1230)
+    at src/runops_cores.c:184
+#5  0xb7dbd580 in runops_int (interp=0x804e008, offset=58)
+    at src/interpreter.c:769
+
+Here's a patch; I'm not positive it's the right solution, but if you can 
+somehow pass in a Key that doesn't do the right thing, you can trigger the 
+problem.
+
+I hope this isn't too vague for someone to look over my shoulder.
+
+-- c
+
+
+------------=_1183445373-25329-0
+Content-Type: text/x-diff; charset="us-ascii"; name="hash_crash.patch"
+Content-Disposition: inline; filename="hash_crash.patch"
+Content-Transfer-Encoding: 7bit
+RT-Attachment: 43485/266715/116753
+
+=== languages/pheme/TODO
+==================================================================
+--- languages/pheme/TODO	(revision 4466)
++++ languages/pheme/TODO	(local)
+@@ -1,3 +1,8 @@
++Move __list_to_cons to __evaluate
++Reactivate special form rewriting (handle_specials should still work)
++- or maybe rewrite to special form at the atom level?
++    - may not work very well as they affect subsequent atoms...
++
+ http://schemers.org/Documents/Standards/R5RS/HTML/
+ 
+ Atom:
+=== languages/pheme/lib/PhemeSymbols.pir
+==================================================================
+--- languages/pheme/lib/PhemeSymbols.pir	(revision 4466)
++++ languages/pheme/lib/PhemeSymbols.pir	(local)
+@@ -1,19 +1,20 @@
+ .namespace [ 'PhemeCompiler' ]
+ 
+-.sub __onload :load
++.sub __onload :load :init
+ 	.local pmc symbols
+ 	symbols = new .Hash
+ 
+-	symbols['car']               = 1
+-	symbols['cdr']               = 1
+-	symbols['cons']              = 1
+-	symbols['cond']              = 1
+-	symbols['include_file']      = 1
+-	symbols['write']             = 1
+-	symbols['+']                 = 1
+-	symbols['-']                 = 1
+-	symbols['*']                 = 1
+-	symbols['/']                 = 1
++	symbols["'define'"]            = 1
++	symbols["'car'"]               = 1
++	symbols["'cdr'"]               = 1
++	symbols["'cons'"]              = 1
++	symbols["'cond'"]              = 1
++	symbols["'include_file'"]      = 1
++	symbols["'write'"]             = 1
++	symbols["'+'"]                 = 1
++	symbols["'-'"]                 = 1
++	symbols["'*'"]                 = 1
++	symbols["'/'"]                 = 1
+ 
+ 	store_global 'PhemeCompiler', 'symbols', symbols
+ 	.return()
+=== languages/pheme/lib/past2post.tg
+==================================================================
+--- languages/pheme/lib/past2post.tg	(revision 4466)
++++ languages/pheme/lib/past2post.tg	(local)
+@@ -1,6 +1,6 @@
+-grammar OSTGrammar is TGE::Grammar;
++grammar Pheme::OST::Grammar is TGE::Grammar;
+ 
+-transform result (ROOT) :language('PIR') {
++transform post (ROOT) :language('PIR') {
+ 	.local pmc result
+ 	result = new 'POST::Node'
+ 
+@@ -44,7 +44,7 @@
+ 	.return( symbols )
+ }
+ 
+-transform result (PAST::Sub) :language('PIR') {
++transform post (PAST::Sub) :language('PIR') {
+ 	.local pmc result
+ 	result = new 'POST::Sub'
+ 
+@@ -240,7 +240,7 @@
+ 	.return( name )
+ }
+ 
+-transform result (PAST::Stmts) :language('PIR') {
++transform post (PAST::Stmts) :language('PIR') {
+ 	.local pmc result
+ 	result = new 'POST::Ops'
+ 
+@@ -279,7 +279,7 @@
+ 	.return( resulty )
+ }
+ 
+-transform result (PAST::Exp) :language('PIR') {
++transform post (PAST::Exp) :language('PIR') {
+ 	.local pmc result
+ 	result   = new .ResizablePMCArray
+ 
+@@ -345,7 +345,7 @@
+ 	.return( result )
+ }
+ 
+-transform result (PAST::Op) :language('PIR') {
++transform post (PAST::Op) :language('PIR') {
+ 	.local pmc result
+ 
+ 	.local pmc symbols
+@@ -373,7 +373,7 @@
+ 	.return( result )
+ }
+ 
+-transform result (PAST::Val) :language('PIR') {
++transform post (PAST::Val) :language('PIR') {
+ 	.local pmc result
+ 
+ 	.local string value
+=== languages/pheme/lib/pge2past.tg
+==================================================================
+--- languages/pheme/lib/pge2past.tg	(revision 4466)
++++ languages/pheme/lib/pge2past.tg	(local)
+@@ -1,393 +1,526 @@
+-grammar ASTGrammar is TGE::Grammar;
++grammar Pheme::AST::Grammar is TGE::Grammar;
+ 
+-transform result (ROOT) :language('PIR') {
+-	# XXX: transform into a method on the TGE object, when it's possible
+-	.local pmc specials
+-	specials = new .Hash
+-	specials['define'] = 1
+-	specials['quote']  = 1
+-	specials['cond']   = 1
++transform past (ROOT) :language('PIR') {
++    .local pmc result
++    result = new 'PAST::Block'
++    result.'namespace'( 'Pheme' )
+ 
+-	store_global 'specials', specials
++    .local pmc load_op, lib_name
++    load_op  = new 'PAST::Op'
++    load_op.'init'( 'pasttype' => 'inline', 'inline' => "    load_bytecode 'lib/PhemeObjects.pir' #%r" )
+ 
+-	.local pmc result
+-	result = new 'Node'
++    result.'push'( load_op )
+ 
+-	.local pmc match
+-	match = node['list']
++    load_op  = new 'PAST::Op'
++    load_op.'init'( 'pasttype' => 'inline', 'inline' => "    load_bytecode 'lib/PhemeSymbols.pir' #%r" )
+ 
+-	.local pmc iter
+-	iter  = new Iterator, match # setup iterator for node
+-	set iter, 0                 # reset iterator, begin at start
++    result.'push'( load_op )
+ 
+-	.local pmc elem
+-	.local pmc ast_elem
++    .local pmc lists
++    lists = node['list']
+ 
+-	.local pmc main_sub
+-	main_sub = new 'PAST::Sub'
+-	main_sub.'name'( 'main' )
++    .local pmc iter
++    iter = new Iterator, lists
+ 
+-	.local pmc main_statements
+-	main_statements = new 'PAST::Stmts'
++    .local pmc elem
+ 
+-	main_sub.'add_child'( main_statements )
++  iter_loop:
++    unless iter goto iter_end
++    elem = shift iter
++    elem = tree.'get'( 'past', elem, 'list' )
+ 
+-	.local string elem_type
++    result.'push'( elem )
++    goto iter_loop
+ 
+-  iter_loop:
+-	unless iter, iter_end        # while (entries) ...
+-	shift elem, iter             # get key for next entry
+-	ast_elem  = tree.get('result', elem, 'list')
++  iter_end:
++    .return( result )
++}
+ 
+-	elem_type = typeof ast_elem
+-	if elem_type == 'PAST::Sub' goto save_elem
+-	main_statements.'add_child'( ast_elem )
+-	goto iter_loop
++transform past (list) :language('PIR') {
++    .local pmc iter
++    iter = new Iterator, node
+ 
+-  save_elem:
+-	result.'add_child'( ast_elem )
+-	goto iter_loop
++    .local string key_name
++    key_name = shift iter
+ 
+-  iter_end:
+-	result.'add_child'( main_sub )
++    .local pmc    elem
++    elem     = node[key_name]
+ 
+-	.return( result )
++    .local pmc result
++    result   = tree.'get'( 'past', elem, key_name )
++
++    .return( result )
+ }
+ 
+-transform result (list) :language('PIR') {
+-	.local pmc result
+-	result = new 'PAST::Exp'
++transform past (list_item) :language('PIR') {
++    .local pmc iter
++    iter = new Iterator, node
+ 
+-	.local pmc match
+-	match = node['list_item']
++    .local string key_name
++    key_name = shift iter
+ 
+-	.local pmc iter
+-	iter  = new Iterator, match # setup iterator for node
+-	set iter, 0                 # reset iterator, begin at start
++    .local pmc    elem
++    elem     = node[key_name]
+ 
+-	.local pmc children
+-	children = result.'children'()
++    .local pmc result
++    result   = tree.'get'( 'past', elem, key_name )
+ 
+-	.local pmc child
+-	child = shift iter
+-	child = tree.get( 'result', child, 'list_item' )
++    .return( result )
++}
+ 
+-	.local pmc op
+-	op    = tree.get( 'maybe_op', child )
+-	result.'add_child'( op )
++transform past (special_form) :language('PIR') {
++    .local pmc special
++    special = node['special']
+ 
+-  iter_loop:
+-	unless iter, iter_end        # while (entries) ...
+-	shift child, iter            # get key for next entry
+-	child = tree.get( 'result', child, 'list_item' )
+-	result.'add_child'( child )
+-	goto iter_loop
++    .local pmc iter
++    iter = new Iterator, special
+ 
+-  iter_end:
+-	.local string child_type
+-	child_type = typeof op
+-	unless child_type == 'PAST::Op' goto return_result
++    .local string key_name
++    key_name = shift iter
+ 
+-	result = tree.get( 'handle_specials', result )
++    .local pmc result
++    result   = tree.'get'( 'special_form', node, key_name )
+ 
+-  return_result:
+-	.return( result )
++    .return( result )
+ }
+ 
+-# XXX - don't know why I need this, but it prevents ambiguity errors
+-transform maybe_op (PAST::Exp) :language('PIR') {
+-	.return( node )
+-}
++transform past (application) :language('PIR') {
++    .local pmc op
++    op = new 'PAST::Op'
+ 
+-transform maybe_op (PAST::Val) :language('PIR') {
+-	.local string value
+-	.local string valtype
++    .local pmc atom
++    atom = node['atom']
++    atom = tree.'get'( 'past', atom, 'atom' )
+ 
+-	value   = node.'value'()
+-	valtype = node.'valtype'()
++    .local string atom_name
++    atom_name = atom.'name'()
+ 
+-	unless valtype goto treat_as_op
++    .local int name_length
++    name_length = length atom_name
+ 
+-	.local pmc val
+-	val = new 'PAST::Val'
+-	val.'value'( value )
+-	val.'valtype'( valtype )
++    # strip off the quotes from the atom name
++    name_length -= 2
++    atom_name    = substr atom_name, 1, name_length
+ 
+-	.return( val )
++    .local pmc atom_func
++    atom_func = find_global 'Pheme', atom_name
+ 
+-  treat_as_op:
+-	.local pmc op
+-	op = new 'PAST::Op'
+-	op.'op'( value )
++    .local int have_func
++    have_func = defined atom_func
+ 
+-	.return( op )
++    .local string rule_name
++    rule_name = 'evaluate_cons'
++
++    unless have_func goto get_result
++    rule_name = 'call_func'
++
++  get_result:
++    .local pmc result
++    result = tree.'get'( 'apply', node, rule_name )
++    .return( result )
+ }
+ 
+-transform handle_specials (PAST::Exp) :language('PIR') {
+-	.local pmc children
+-	children = node.'children'()
++transform apply (call_func) :language('PIR') {
++    .local pmc atom
++    atom = node['atom']
++    atom = tree.'get'( 'past', atom, 'atom' )
+ 
+-	.local pmc op
+-	op = children[0]
++    .local pmc op
++    op = new 'PAST::Op'
+ 
+-	.local string name
+-	name = op.'op'()
++    .local string name
++    name = atom.'name'()
++    op.'name'( name )
+ 
+-	.local pmc specials
+-	specials = find_global 'specials'
++    .local pmc list
++    list = node['list_item']
+ 
+-	.local int special_exists
+-	special_exists = exists specials[name]
++    .local pmc iter
++    iter = new Iterator, list
+ 
+-	unless special_exists goto not_a_special
++    .local pmc item
+ 
+-	node = tree.'get'( name, node )
++  iter_loop:
++    unless iter goto iter_end
++    item = shift iter
++    item = tree.'get'( 'past', item, 'list_item' )
++    op.'push'( item )
++    goto iter_loop
+ 
+-  not_a_special:
+-	.return( node )
++  iter_end:
++    .return( op )
+ }
+ 
+-transform define (PAST::Exp) :language('PIR') {
+-	.local pmc children
+-	children = node.'children'()
++transform apply (evaluate_cons) :language('PIR') {
++    .local pmc atom
++    atom = node['atom']
++    atom = tree.'get'( 'past', atom, 'atom' )
+ 
+-	.local pmc op
+-	op       = children[0]
++    .local pmc op
++    op = new 'PAST::Op'
++    op.'name'( '__list_to_cons' )
++    op.'push'( atom )
+ 
+-  return_sub:
+-	.local pmc sub_name
+-	sub_name = children[1]
++    .local pmc list
++    list = node['list_item']
+ 
+-	.local pmc exp
+-	exp      = children[2]
++    .local pmc iter
++    iter = new Iterator, list
+ 
+-	.local pmc sub_name_string
+-	sub_name_string = sub_name.'value'()
++    .local pmc item
+ 
+-	.local pmc result
+-	result = new 'PAST::Sub'
+-	result.'name'( sub_name_string )
++  iter_loop:
++    unless iter goto iter_end
++    item = shift iter
++    item = tree.'get'( 'past', item, 'list_item' )
++    op.'push'( item )
++    goto iter_loop
+ 
+-	.local pmc stmts
+-	stmts  = new 'PAST::Stmts'
+-	stmts.'add_child'( exp )
++  iter_end:
++    .local pmc result
++    result = new 'PAST::Op'
++    result.'name'( '__evaluate' )
++    result.'push'( op )
+ 
+-	result.'add_child'( stmts )
+-	.return( result )
++    .return( result )
+ }
+ 
+-transform quote (PAST::Exp) :language( 'PIR' ) {
+-	.local pmc children
+-	children = node.'children'()
++transform past (cons) :language('PIR') {
++    .local pmc list_item
++    list_item = node['list_item']
+ 
+-	# remove this Exp and promote the first sibling
+-	.local pmc sibling
+-	sibling  = children[1]
+-	children = sibling.'children'()
++    .local pmc op
++    op = new 'PAST::Op'
++    op.'name'( '__list_to_cons' )
+ 
+-	.local pmc first_child
+-	first_child = children[0]
++    .local pmc iter
++    iter = new Iterator, list_item
+ 
+-	.local string child_type
+-	child_type = typeof first_child
++    .local pmc item
+ 
+-	unless child_type == 'PAST::Op' goto rewrite_op
++  iter_loop:
++    unless iter goto iter_end
++    item = shift iter
++    item = tree.'get'( 'past', item, 'list_item' )
++    op.'push'( item )
++    goto iter_loop
+ 
+-	.local string op_name
+-	op_name = first_child.'op'()
++  iter_end:
++    .return( op )
++}
+ 
+-	# if it's an empty list, let it be an empty list
+-	unless op_name == '__make_empty_cons' goto rewrite_op
+-	.return( sibling )
+ 
+-  rewrite_op:
+-	.local pmc val_child
+-	val_child = new 'PAST::Val'
++# XXX - bad below here
++transform maybe_op (list) :language('PIR') {
++    .local pmc list_item
++    list_item = node['list_item']
+ 
+-	# XXX: this might fail unless the first kid is an op
+-	.local string value
+-	value   = first_child.'op'()
+-	val_child.'value'( value )
++    .local pmc atom
++    atom = list_item['atom']
+ 
+-	children[0] = val_child
+-	
+-	.local pmc cons_op
+-	cons_op = new 'PAST::Op'
+-	cons_op.'op'( '__list_to_cons' )
++    .local pmc symbols
++    symbols = find_global 'PhemeCompiler', 'symbols'
+ 
+-	unshift children, cons_op
++    .local string name
++    name = atom.'name'()
+ 
+-	.return( sibling )
+-}
++    .local int is_symbol
++    is_symbol = exists symbols[name]
+ 
+-transform cond (PAST::Exp) :language( 'PIR' ) {
+-	.local pmc result
+-	result = new 'PAST::Exp'
++    .local pmc result
+ 
+-	# cond takes a list of pairs
+-	# ( condition to evaluate ) result
+-	# rewrite so that there are no ops, only vals
++    if is_symbol goto handle_symbol
++    result = tree.'get'( 'make_cons', node )
++    .return( result )
+ 
+-	.local pmc iter
+-	iter = node.'child_iter'()
++  handle_symbol:
++    result = new 'PAST::Op'
++    result.'name'( name )
+ 
+-	.local pmc child
+-	.local pmc new_child
++    .local pmc iter
++    iter = node.'iterator'()
+ 
+-	# first node is the 'cond' node
+-	child   = shift iter
+-	result.'add_child'( child )
+-	$S0 = child.'op'()
++    # throw away the first kid
++    .local pmc child
++    child = shift iter
+ 
+   iter_loop:
+-	unless iter goto iter_end
+-	child     = shift iter
+-	new_child = tree.'get'( 'node_to_val', child )
+-	result.'add_child'( new_child )
+-	goto iter_loop
++    unless iter goto iter_end
++    child = shift iter
++    child = tree.'get'( 'past', child )
++    result.'push'( child )
++    goto iter_loop
++
+   iter_end:
+-
+-	.return( result )
++    .return( result )
+ }
+ 
+-transform node_to_val (PAST::Exp) :language('PIR') {
+-	.local pmc result
+-	result = new 'PAST::Exp'
++transform make_cons (list) :language('PIR') {
++    .local pmc iter
++    iter = new .Iterator, node
+ 
+-	.local pmc iter
+-	iter = node.'child_iter'()
++    .local pmc cons
++    cons = new 'PAST::Op'
++    cons.'name'( '__list_to_cons' )
+ 
+-	.local pmc child
+-	.local pmc new_child
++    .local pmc child
+ 
+   iter_loop:
+-	unless iter goto iter_end
+-	child     = shift iter
+-	new_child = tree.'get'( 'node_to_val', child )
+-	result.'add_child'( new_child )
+-	goto iter_loop
++    unless iter, iter_end
++    child = shift iter
++    child = tree.get( 'past', child, 'list_item' )
++    cons.'push'( child )
++    goto iter_loop
++
+   iter_end:
++    .local pmc eval
++    eval = new 'PAST::Op'
++    eval.'name'( '__evaluate' )
++    eval.'push'( cons )
+ 
+-	.return( result )
++    .return( eval )
+ }
+ 
+-transform node_to_val (PAST::Op) :language('PIR') {
+-	.local pmc    result
+-	.local string value
++transform rewrite_cons (PAST::Op) :language('PIR') {
++    .local pmc result
+ 
+-	result = new 'PAST::Val'
+-	value  = node.'op'()
++    .local pmc child
++    child = node[0]
+ 
+-	result.'value'( value )
+-	result.'valtype'( 'literal' )
++    .local string kid_type
++    kid_type = typeof child
+ 
+-	.return( result )
++    .local string value
++    value   = child.'name'()
++
++    .local pmc symbols
++    symbols = find_global 'Pheme', 'symbols'
++
++    .local int symbol_exists
++    symbol_exists = exists symbols[value]
++
++    if symbol_exists goto treat_as_op
++
++    result = new 'PAST::Op'
++    result.'name'( '__evaluate' )
++    result.'push'( node )
++    .return( result )
++
++  treat_as_op:
++    .local pmc op
++    op = new 'PAST::Op'
++    op.'name'( value )
++
++    .local pmc iter
++    iter = node.'iterator'()
++
++    .local pmc sibling
++    unless iter goto iter_end
++    sibling = shift iter
++
++  iter_loop:
++    unless iter goto iter_end
++    sibling = shift iter
++    op.'push'( sibling )
++    goto iter_loop
++
++  iter_end:
++    .return( op )
+ }
+ 
+-transform node_to_val (PAST::Val) :language('PIR') {
+-	.return( node )
++transform handle_specials (PAST::Val) :language('PIR') {
++    .local pmc iter
++    iter = node.'iterator'()
++
++    if iter goto check_kids
++    .return( node )
++
++  check_kids:
++    .local pmc op
++    op   = shift iter
++
++    .local string name
++    name = op.'name'()
++
++    .local pmc specials
++    specials = find_global 'specials'
++
++    .local int special_exists
++    special_exists = exists specials[name]
++
++    unless special_exists goto not_a_special
++
++    node = tree.'get'( name, node )
++
++  not_a_special:
++    .return( node )
+ }
+ 
+-# XXX: almost certainly wrong
+-transform result (empty_list) :language('PIR') {
+-	.local pmc result
+-	result = new 'PAST::Exp'
++transform define (PAST::Op) :language('PIR') {
++    .local pmc iter
++    iter   = node.'iterator'()
+ 
+-	.local pmc cons
+-	cons = new 'PAST::Op'
+-	cons.'op'( '__make_empty_cons' )
++    .local pmc op, name, lambda
++    op     = shift iter
++    name   = shift iter
++    lambda = shift iter
+ 
+-	result.'add_child'( cons )
+-	.return( result )
++    .local pmc name_str
++    name_str = name.'name'()
++
++    .local pmc result
++    result = new 'PAST::Block'
++
++    result.'name'( name_str )
++    result.'push'( lambda )
++
++    .return( result )
+ }
+ 
+-transform result (atom) :language('PIR') {
+-	.local pmc result
+-	result   = new 'PAST::Val'
++transform past (quote) :language( 'PIR' ) {
++    .local pmc children
++    children = node.'children'()
+ 
+-	.local string value
+-	value    = node
++    # remove this Op and promote the first sibling
++    .local pmc sibling
++    sibling  = children[1]
++    children = sibling.'children'()
+ 
+-	.local string valtype
+-	valtype  = ''
++    .local pmc first_child
++    first_child = children[0]
+ 
+-	.local int symbol
+-	symbol = exists node[ 'symbol' ]
+-	unless symbol goto check_quoted
+-	valtype = 'symbol'
++    .local string child_type
++    child_type = typeof first_child
+ 
+-  check_quoted:
+-	.local int quote
+-	.local int value_length
+-	value_length = length value
++    unless child_type == 'PAST::Op' goto rewrite_op
+ 
+-	quote = exists node['quote']
+-	unless quote goto check_double_quoted
++    .local string op_name
++    op_name = first_child.'name'()
+ 
+-	dec value_length
+-	value   = substr value, 1, value_length
+-	valtype = 'literal'
+-	goto unquoted
++    # if it's an empty list, let it be an empty list
++    unless op_name == '__make_empty_cons' goto rewrite_op
++    .return( sibling )
+ 
+-  check_double_quoted:
+-	quote = exists node['quoted_string']
+-	unless quote goto unquoted
++  rewrite_op:
++    .local pmc val_child
++    val_child = new 'PAST::Val'
+ 
+-	sub value_length, 2
+-	value   = substr value, 1, value_length
+-	valtype = 'literal'
+-	goto unquoted
++    # XXX: this might fail unless the first kid is an op
++    .local string value
++    value   = first_child.'name'()
++    val_child.'name'( value )
+ 
+-  unquoted:
+-	result.'value'( value )
+-	result.'valtype'( valtype )
+-	.return( result )
++    children[0] = val_child
++
++    .local pmc cons_op
++    cons_op = new 'PAST::Op'
++    cons_op.'name'( '__list_to_cons' )
++
++    unshift children, cons_op
++
++    .return( sibling )
+ }
+ 
+-transform result (quoted_string) :language('PIR') {
+-	.local pmc result
+-	result = new 'PAST::Val'
++transform cond (PAST::Op) :language( 'PIR' ) {
++    .local pmc result
++    result = new 'PAST::Op'
+ 
+-	.local string value
+-	value  = node
++    # cond takes a list of pairs
++    # ( condition to evaluate ) result
++    # rewrite so that there are no ops, only vals
+ 
+-	.local int string_length
+-	string_length = length value
+-	sub string_length, 2
++    .local pmc iter
++    iter = node.'child_iter'()
+ 
+-	.local string val_type
+-	val_type = substr value, 0, 1
+-	if val_type == '"' goto double_quoted
+-	result.'valtype'( 'single_quoted' )
+-	goto remove_quotes
++    .local pmc child
++    .local pmc new_child
+ 
+-  double_quoted:
+-	result.'valtype'( 'double_quoted' )
++    # first node is the 'cond' node
++    child   = shift iter
++    result.'push'( child )
++    $S0 = child.'name'()
+ 
+-  remove_quotes:
+-	value  = substr value, 1, string_length
++  iter_loop:
++    unless iter goto iter_end
++    child     = shift iter
++    new_child = tree.'get'( 'node_to_val', child )
++    result.'push'( new_child )
++    goto iter_loop
++  iter_end:
+ 
+-	result.'value'( value )
+-	
+-	.return( result )
++    .return( result )
+ }
+ 
+-transform result (list_item) :language('PIR') {
+-	.local pmc result
+-	.local pmc iter
++transform node_to_val (PAST::Op) :language('PIR') {
++    .local pmc    result
++    result = new 'PAST::Val'
+ 
+-	iter  = new .Iterator, node # setup iterator for node
+-	set iter, 0                 # reset iterator, begin at start
++    .local string value
++    value  = node.'name'()
+ 
+-	.local string key
+-	.local pmc    value
++    .local string quoted_value
++    quoted_value  = "'"
++    quoted_value .= value
++    quoted_value .= "'"
+ 
+-  iter_loop:
+-	unless iter, iter_end       # while (entries) ...
+-	shift key, iter             # get key for next entry
+-	value  = node[key]
+-	result = tree.get('result', value, key)
++    result.'name'( quoted_value )
++    result.'vtype'( '.Undef' )
+ 
+-  iter_end:
+-	.return( result )
++    .return( result )
+ }
++
++transform node_to_val (PAST::Val) :language('PIR') {
++    .local string value
++    value  = node.'name'()
++
++    .local string quoted_value
++    quoted_value  = "'"
++    quoted_value .= value
++    quoted_value .= "'"
++
++    node.'name'( quoted_value )
++    node.'vtype'( '.Undef' )
++
++    .return( node )
++}
++
++# XXX: almost certainly wrong
++transform past (empty_list) :language('PIR') {
++    .local pmc result
++
++    result = new 'PAST::Op'
++    result.'name'( '__make_empty_cons' )
++
++    .return( result )
++}
++
++transform past (atom) :language('PIR') {
++    .local pmc result
++    result   = new 'PAST::Val'
++
++    .local string value
++    value    = node
++
++    .local string quoted_value
++    quoted_value  = "'"
++    quoted_value .= value
++    quoted_value .= "'"
++
++    result.'name'( quoted_value )
++    result.'vtype'( '.Undef' )
++
++    .return( result )
++}
++
++transform past (quoted_string) :language('PIR') {
++    .local pmc result
++    result = new 'PAST::Val'
++
++    .local string value
++    value  = node
++
++    result.'name'( value )
++    result.'vtype'( '.Undef' )
++
++    .return( result )
++}
+=== languages/pheme/lib/pheme.g
+==================================================================
+--- languages/pheme/lib/pheme.g	(revision 4466)
++++ languages/pheme/lib/pheme.g	(local)
+@@ -1,9 +1,15 @@
+ grammar Pheme::Grammar;
+ 
+-rule prog { <list>+ }
++rule TOP { <list>+ }
+ 
+-rule list { \( <list_item>+ \) }
++rule list { \( [ <special_form> | <application> | <cons> ] \) }
+ 
++rule special_form { <special> <list_item>+ }
++
++rule application { <atom> <list_item>+ }
++
++rule cons { <list_item>+ }
++
+ # quoted_string has to come first
+ rule list_item { <quoted_string> | <atom> | <list> | <empty_list> }
+ 
+@@ -18,3 +24,5 @@
+ token symbol_tag { \# }
+ 
+ token ws { [ [ ; \N+ ]? \s+ ]* }
++
++token special { if | cond | define | lambda | quote }
+=== languages/pheme/lib/post2pir.tg
+==================================================================
+--- languages/pheme/lib/post2pir.tg	(revision 4466)
++++ languages/pheme/lib/post2pir.tg	(local)
+@@ -1,6 +1,6 @@
+-grammar PIRGrammar is TGE::Grammar;
++grammar Pheme::PIR::Grammar is TGE::Grammar;
+ 
+-transform result (ROOT) :language('PIR') {
++transform pir (ROOT) :language('PIR') {
+ 	.local string result
+ 	result = <<'EOT'
+ .namespace [ 'Pheme' ]
+=== languages/pheme/pheme.pir
+==================================================================
+--- languages/pheme/pheme.pir	(revision 4466)
++++ languages/pheme/pheme.pir	(local)
+@@ -1,87 +1,87 @@
+-.include 'errors.pasm'
++=head1 TITLE
+ 
+-.sub _main :main
+-	.param pmc args
++pheme.pir - A Pheme compiler.
+ 
+-	errorson .PARROT_ERRORS_PARAM_COUNT_FLAG
++=head2 Description
+ 
+-	load_bytecode 'languages/pheme/lib/PhemeCompiler.pbc'
+-	load_bytecode 'languages/pheme/lib/PhemeObjects.pir'
+-	load_bytecode 'languages/pheme/lib/PhemeSymbols.pbc'
+-	load_bytecode 'languages/pheme/lib/pheme_grammar_gen.pir'
+-	load_bytecode 'languages/pheme/lib/ASTGrammar.pbc'
+-	load_bytecode 'languages/pheme/lib/OSTGrammar.pbc'
+-	load_bytecode 'languages/pheme/lib/PIRGrammar.pbc'
++This is the base file for the Pheme compiler.
+ 
+-	.local string source
+-	source     = _get_source( args )
++This file includes the parsing and grammar rules from
++the src/ directory, loads the relevant PGE libraries,
++and registers the compiler under the name 'Pheme'.
+ 
+-	.local int compiler_type
+-	.local pmc compiler
++=head2 Functions
+ 
+-	compiler_type = find_type 'PhemeCompiler'
++=over 4
+ 
+-	.local pmc ast, ost, pir
+-	ast = new 'ASTGrammar'
+-	ost = new 'OSTGrammar'
+-	pir = new 'PIRGrammar'
++=item __onload()
+ 
+-	compiler = new compiler_type
+-	compiler.'init'( 'ast' => ast, 'ost' => ost, 'pir' => pir )
++Loads the PGE libraries needed for running the parser,
++and registers the Pheme compiler using a C<HLLCompiler>
++object.
+ 
+-	.local pmc ast
+-	ast = compiler.'compile'( source )
+-	end
++=cut
++
++.namespace [ 'Pheme::Compiler' ]
++
++.sub '__onload' :load :init
++    load_bytecode 'PGE.pbc'
++    load_bytecode 'PGE/Text.pbc'
++    load_bytecode 'PGE/Util.pbc'
++    load_bytecode 'Parrot/HLLCompiler.pir'
++    load_bytecode 'PAST-pm.pbc'
++
++    $P0 = subclass 'PGE::Match', 'Match'
++    $P0 = subclass 'Match',      'Grammar'
++    $P0 = subclass 'Grammar',    'Pheme::PGE::Grammar'
++
++    $P0 = new [ 'HLLCompiler' ]
++
++    $P0.'language'('Pheme')
++    $P0.'parsegrammar'( 'Pheme::Grammar' )
++    $P0.'astgrammar'(   'Pheme::AST::Grammar' )
+ .end
+ 
+-.sub _get_source
+-    .param pmc argv
+-    .local string filename
++=item main(args :slurpy)  :main
+ 
+-	.local int arg_count
++Start compilation by passing any command line C<args> to the Pheme compiler.
+ 
+-    arg_count = argv
+-    unless arg_count == 2 goto err_no_file
++=cut
+ 
+-    # Read in the source file
+-    filename = argv[1]
++.const int SEVERITY_SLOT = 2 # _severity
+ 
+-	.local string file_source
+-    file_source = _slurp_file(filename)
+-    .return( file_source )
++.sub 'main' :main
++    .param pmc args
+ 
+-  err_no_file:
+-    print "You must supply a Pheme file to parse.\n"
+-    end
+-.end
++    $P0 = compreg 'Pheme'
+ 
+-.sub _slurp_file
+-    .param string filename
+-    .local pmc filehandle
+-    filehandle = open filename, "<"
+-    unless filehandle goto err_no_file
+-    $S1 = read filehandle, 65535
+-    close filehandle
+-    .return ($S1)
++    # push_eh exit_handler
++      $P1 = $P0.'command_line'(args)
++    # clear_eh
++    goto done
+ 
+-  err_no_file:
+-    print "Unable to open file "
+-    print filename
+-    print "\n"
++  exit_handler:
++    .get_results($P0, $S0)
++    .include 'except_severity.pasm'
++    $I0 = $P0[SEVERITY_SLOT]
++    if $I0 != .EXCEPT_EXIT goto rethrow_error
++
++  done:
+     end
++
++  rethrow_error:
++    rethrow $P0
+ .end
+ 
+-=head1 LICENSE
++.include 'languages/pheme/lib/PhemeObjects.pir'
++.include 'languages/pheme/lib/PhemeSymbols.pir'
++.include 'languages/pheme/lib/pheme_grammar_gen.pir'
++.include 'languages/pheme/lib/ASTGrammar.pir'
++.include 'languages/pheme/lib/OSTGrammar.pir'
++.include 'languages/pheme/lib/PIRGrammar.pir'
+ 
+-Copyright (C) 2006, The Perl Foundation.
++=back
+ 
+-This is free software; you may redistribute it and/or modify it under the same
+-terms as Parrot.
+-
+-=head1 AUTHOR
+-
+-chromatic <chromatic@wgz.org>
+-
+ =cut
+ 
+ # Local Variables:
+=== languages/pheme/t/null.t
+==================================================================
+--- languages/pheme/t/null.t	(revision 4466)
++++ languages/pheme/t/null.t	(local)
+@@ -2,14 +2,4 @@
+ 
+ (plan 6)
+ 
+-(ok (null? '()) "null? should be true given an empty list")
+-
+ (ok (null? (quote ())) "... marked with quote")
+-
+-(ok (null? '()) "... or a single quote")
+-
+-(nok (null? (a list)) "null? should be false given a list with atoms")
+-
+-(nok (null? ((a list))) "... or a nested list")
+-
+-(nok (null? ( '() )) "... or even a list containing an empty list")
+=== src/pmc/class.pmc
+==================================================================
+--- src/pmc/class.pmc	(revision 4466)
++++ src/pmc/class.pmc	(local)
+@@ -212,7 +212,33 @@
+     return type;
+ }
+ 
++static void
++install_methods_from_ns(Parrot_Interp interp, PMC *self, PMC *_namespace)
++{
++    Parrot_Class *_class  = PARROT_CLASS(self);
++    PMC          *iter    = VTABLE_get_iter(interp, _namespace);
++    PMC          *vt_hash = _class->vtable_methods;
++    INTVAL        n       = VTABLE_elements(interp, _namespace);
++    INTVAL        i;
+ 
++    for (i = 0; i < n; ++i) {
++        STRING *name = VTABLE_shift_string(interp, iter);
++        PMC *sub;
++
++        Parrot_PCCINVOKE(interp, _namespace,
++            string_from_literal(interp, "find_sub"), "S->P", name, &sub);
++
++        if (!PMC_IS_NULL(sub))
++            if (PMC_sub(sub)->vtable_index != -1) {
++                VTABLE_set_pmc_keyed_int(interp, _class->vtable_methods,
++                    PMC_sub(sub)->vtable_index, sub);
++            }
++            else
++                VTABLE_add_method(interp, self, name, sub);
++    }
++}
++
++
+ /* Takes a hash and initializes the class based on it. */
+ static void
+ init_class_from_hash(Parrot_Interp interp, PMC *self, PMC *info) {
+@@ -280,11 +306,15 @@
+         Parrot_PCCINVOKE(interp, old_ns,
+             string_from_literal(interp, "set_class"), "P->", PMCNULL);
+ 
+-    /* Link namespace to this class, if there is one. */
+-    if (!PMC_IS_NULL(_class->_namespace))
++    if (!PMC_IS_NULL(_class->_namespace)) {
++        /* Link namespace to this class, if there is one. */
+         Parrot_PCCINVOKE(interp, _class->_namespace,
+             string_from_literal(interp, "set_class"), "P->", self);
+ 
++        /* slurp in methods from the namespace */
++        install_methods_from_ns(interp, self, _class->_namespace);
++    }
++
+     /* Initialize resolve_method. */
+     if (VTABLE_exists_keyed_str(interp, info,
+         string_from_literal(interp, "resolve_method"))) {
+@@ -1195,6 +1225,12 @@
+         PCCRETURN(PMC *PMCNULL);
+     }
+ 
++    PCCMETHOD void find_vtable_entry(INTVAL idx) {
++        Parrot_Class *_class = PARROT_CLASS(SELF);
++
++        return VTABLE_get_pmc_keyed_int(interp, _class->vtable_methods, idx);
++    }
++
+ /*
+ 
+ =item C<void parents()>
+=== src/pmc/hash.pmc
+==================================================================
+--- src/pmc/hash.pmc	(revision 4466)
++++ src/pmc/hash.pmc	(local)
+@@ -896,6 +896,9 @@
+         STRING * const sx = key_string(INTERP, key);
+         HashBucket *b;
+ 
++        if (!sx)
++            return 0;
++
+         key = key_next(INTERP, key);
+         b = parrot_hash_get_bucket(INTERP, h, sx);
+         if (b == NULL)
+=== src/pmc/namespace.pmc
+==================================================================
+--- src/pmc/namespace.pmc	(revision 4466)
++++ src/pmc/namespace.pmc	(local)
+@@ -508,19 +508,19 @@
+ 
+ */
+ 
+-    METHOD PMC* find_sub(STRING *key) {
++    PCCMETHOD void find_sub(STRING *key) {
+         STRING *s_sub = CONST_STRING(INTERP, "Sub");
+         PMC    *sub   = (PMC *)parrot_hash_get(INTERP,
+                             (Hash *)PMC_struct_val(SELF), key);
+ 
+         if (!sub)
+-            return PMCNULL;
++            PCCRETURN(PMC *PMCNULL);
+ 
+         /* it's a Sub */
+         if (VTABLE_isa(INTERP, sub, s_sub))
+-            return sub;
++            PCCRETURN(PMC *sub);
+ 
+-        return PMCNULL;
++        PCCRETURN(PMC *PMCNULL);
+     }
+ 
+ /*
+
+------------=_1183445373-25329-0--
+

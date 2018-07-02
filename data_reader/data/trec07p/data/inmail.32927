@@ -1,0 +1,180 @@
+From r-help-bounces@stat.math.ethz.ch  Thu May 10 05:37:17 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4A9bFqD007658
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 10 May 2007 05:37:16 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4A9aXFL013571;
+	Thu, 10 May 2007 11:36:49 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=1.0 required=5.0 tests=AWL, BAYES_50,
+	NO_REAL_NAME autolearn=no version=3.1.8
+Received: from gk.uu.epigenomics.net (gk.uu.epigenomics.net [195.127.125.226])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4A9aQa5013538
+	(version=TLSv1/SSLv3 cipher=DHE-RSA-AES256-SHA bits=256 verify=NO)
+	for <r-help@stat.math.ethz.ch>; Thu, 10 May 2007 11:36:26 +0200
+Received: (qmail 20699 invoked from network); 10 May 2007 09:36:26 -0000
+Received: from perl.epigenomics.epi (192.168.48.4)
+	by salam.epigenomics.epi with SMTP; 10 May 2007 09:36:26 -0000
+Received: (qmail 5822 invoked by uid 9); 10 May 2007 09:36:26 -0000
+From: ml-r-help@epigenomics.com
+X-Newsgroups: epi.ml.it.r-help
+Date: Thu, 10 May 2007 11:36:25 +0200
+Organization: Epigenomics AG
+Lines: 120
+Message-ID: <4642E799.9020904@epigenomics.com>
+References: <OFC7681214.637012DE-ONC12572D6.004E7C1E-C12572D6.004F5F33@ah.novartis.com>	<4641F581.7040400@epigenomics.com>
+	<6ph7irhq4fw.fsf@gopher4.fhcrc.org>
+	<6phzm4doo6k.fsf@gopher4.fhcrc.org>
+Mime-Version: 1.0
+X-Complaints-To: usenet@epigenomics.net
+To: Martin Morgan <mtmorgan@fhcrc.org>
+User-Agent: Icedove 1.5.0.8 (X11/20061208)
+In-Reply-To: <6phzm4doo6k.fsf@gopher4.fhcrc.org>
+To: r-help@stat.math.ethz.ch
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Subject: Re: [R] Unit Testing Frameworks: summary and brief discussion
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+Martin Morgan wrote:
+> Oops, taking a look at the unit tests in RUnit, I see that specifying
+> 'where=.GlobalEnv' is what I had been missing.
+> 
+> testCreateClass <- function() {
+>     setClass("A", contains="numeric", where=.GlobalEnv)
+>     a=new("A")
+>     checkTrue(validObject(a))
+>     removeClass("A", where=.GlobalEnv)
+>     checkException(new("A"))
+> }
+>
+this is necessary as the test code file is sourced and thus evaluated 
+from the test runner residing inside RUnits namespace. Thus the setClass 
+call is evaluated inside RUnits namespace which will fail unless you 
+specify the call to take place in .GlobalEnv.
+
+one comment to our example: it has paid off to use
+on.exit(removeClass("A", where=.GlobalEnv))
+and likewise for removeMethod
+to ensure a failing test case will leave no temporary class definition 
+around. Otherwise this could side effect on subsequent test cases and 
+you'd be looking for errors in the wrong place. Currently RUnit does try 
+to preserve the workspace as it is before each test case execution - but 
+this does not hold for S4 classes and methods defined in test cases.
+
+Regards,
+
+   Matthias
+
+> Executing test function testCreateClass  ...  done successfully.
+> 
+> RUNIT TEST PROTOCOL -- Wed May  9 11:11:27 2007 
+> *********************************************** 
+> Number of test functions: 1 
+> Number of errors: 0 
+> Number of failures: 0 
+> 
+> Sorry for the noise. Martin
+> 
+> Martin Morgan <mtmorgan@fhcrc.org> writes:
+> 
+>> ml-r-help@epigenomics.com writes:
+>>
+>>> anthony.rossini@novartis.com wrote:
+>>> [...]
+>>>> ============= From Seth Falcon:
+>>>>   1. At last check, you cannot create classes in unit test code and
+>>>>      this makes it difficult to test some types of functionality.  I'm
+>>>>      really not sure to what extent this is RUnit's fault as opposed
+>>>>      to limitation of the S4 implemenation in R.
+>>> I'd be very interested to hear what problems you experienced. If you 
+>>> have any example ready I'd be happy to take a look at it.
+>>> So far we have not observed (severe) problems to create S4 classes and 
+>>> test them in unit test code. We actually use RUnit mainly on S4 classes 
+>>> and methods. There are even some very simple checks in RUnits own test 
+>>> cases which create and use S4 classes. For example in tests/runitRunit.r
+>>> in the source package.
+>> RUnit has been great for me, helping to develop a more rigorous
+>> programming approach and gaining confidence that my refactoring
+>> doesn't (unintentionally) break the established contract.
+>>
+>> One of the strengths of unit tests -- reproducible and expressible in
+>> the way that language sometimes is not:
+>>
+>> testCreateClass <- function() {
+>>     setClass("A", contains="numeric")
+>>     checkTrue(TRUE)
+>> }
+>>
+>>
+>> RUNIT TEST PROTOCOL -- Wed May  9 10:36:53 2007 
+>> *********************************************** 
+>> Number of test functions: 1 
+>> Number of errors: 1 
+>> Number of failures: 0 
+>>
+>>  
+>> 1 Test Suite : 
+>> CreateClass_test - 1 test function, 1 error, 0 failures
+>> ERROR in testCreateClass: Error in assign(mname, def, where) : cannot add bindings to a locked environment
+>>
+>>> sessionInfo()
+>> R version 2.6.0 Under development (unstable) (2007-05-07 r41468) 
+>> x86_64-unknown-linux-gnu 
+>>
+>> locale:
+>> LC_CTYPE=en_US;LC_NUMERIC=C;LC_TIME=en_US;LC_COLLATE=en_US;LC_MONETARY=en_US;LC_MESSAGES=en_US;LC_PAPER=en_US;LC_NAME=C;LC_ADDRESS=C;LC_TELEPHONE=C;LC_MEASUREMENT=en_US;LC_IDENTIFICATION=C
+>>
+>> attached base packages:
+>> [1] "tools"     "stats"     "graphics"  "grDevices" "utils"     "datasets" 
+>> [7] "methods"   "base"     
+>>
+>> other attached packages:
+>>    RUnit
+>> "0.4.15"
+>>
+>> -- 
+>> Martin Morgan
+>> Bioconductor / Computational Biology
+>> http://bioconductor.org
+>>
+>> ______________________________________________
+>> R-help@stat.math.ethz.ch mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-help
+>> PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+>> and provide commented, minimal, self-contained, reproducible code.
+> 
+
+
+-- 
+Matthias Burger                     Project Manager/ Biostatistician
+Epigenomics AG    Kleine Praesidentenstr. 1    10178 Berlin, Germany
+phone:+49-30-24345-371                          fax:+49-30-24345-555
+http://www.epigenomics.com           matthias.burger@epigenomics.com
+--
+Epigenomics AG Berlin           Amtsgericht Charlottenburg HRB 75861
+Vorstand:   Geert Nygaard (CEO/Vorsitzender),  Dr. Kurt Berlin (CSO)
+               Oliver Schacht PhD (CFO),  Christian Piepenbrock (COO)
+Aufsichtsrat:   Prof. Dr. Dr. hc. Rolf Krebs (Chairman/Vorsitzender)
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

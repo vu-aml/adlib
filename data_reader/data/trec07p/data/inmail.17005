@@ -1,0 +1,116 @@
+From perl6-all-return-80791-ktwarwic=speedy.uwaterloo.ca@perl.org  Sun Apr 22 18:27:10 2007
+Return-Path: <perl6-all-return-80791-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3MMR80I024741
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 22 Apr 2007 18:27:09 -0400
+Received: (qmail 16236 invoked by uid 514); 22 Apr 2007 22:26:43 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 16231 invoked from network); 22 Apr 2007 22:26:42 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: domain of rutski89@gmail.com designates 209.85.132.247 as permitted sender)
+DKIM-Signature: a=rsa-sha1; c=relaxed/relaxed;
+        d=gmail.com; s=beta;
+        h=domainkey-signature:received:received:in-reply-to:references:mime-version:content-type:message-id:cc:content-transfer-encoding:from:subject:date:to:x-mailer;
+        b=r9xfnD+LJEeNmDUW6grN9GN6neaHX6y+3y4856i1gZApmhx5bJ7SKSpprLE3ZTyPpSuBiHo753TbCGfzbLPKgEvskeqfnNfrPAPe9o3lT3DPE0P4twucfqfgQQ6mL/+jGXX5QPo0NEDjWKPtiXCqBj9Z2g0kl2o5dCgwENRrlj8=
+DomainKey-Signature: a=rsa-sha1; c=nofws;
+        d=gmail.com; s=beta;
+        h=received:in-reply-to:references:mime-version:content-type:message-id:cc:content-transfer-encoding:from:subject:date:to:x-mailer;
+        b=DIrlN13Z80wLdJKPnkEv/RZIzhTP1f+G3uaQqTbGfHw0egewrSqTXdtpLiCNsY9aPJt5TAAM+h1e9FwzAEhzkY4e4qNiArbF4C54MuH3SFmAIFMIjn+5dw3KNNFRrfE3YS8ixlRg1kyVn6qO3utpoh++Iz4fr+yhf05RcyJwXgg=
+In-Reply-To: <200704222355.36096.lt@toetsch.at>
+References: <200704211824.18554.chromatic@wgz.org> <200704221414.34761.chromatic@wgz.org> <4E0B904A-2184-46B5-8054-D34193F323FE@gmail.com> <200704222355.36096.lt@toetsch.at>
+Mime-Version: 1.0 (Apple Message framework v752.2)
+Content-Type: text/plain; charset=US-ASCII; delsp=yes; format=flowed
+Message-Id: <788BE0AA-1D26-41AE-A330-C3858B8030B9@gmail.com>
+Cc: chromatic <chromatic@wgz.org>
+Content-Transfer-Encoding: 7bit
+From: Patrick Rutkowski <rutski89@gmail.com>
+Subject: Re: I Don't Understand The Context Allocation/Destruction Code
+Date: Sun, 22 Apr 2007 18:26:15 -0400
+To: perl6-internals@perl.org
+X-Mailer: Apple Mail (2.752.2)
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED,SPF_PASS
+Status: O
+Content-Length: 1795
+Lines: 62
+
+Well this is embarrassing.
+
+I tested it yes, but when I tested it I had:
+
+reg_alloc = ((reg_alloc + 7) >> 3) << 3
+const int slot = reg_alloc / 8;
+
+Then I remembered that some less friendly compilers
+won't like the the declaration being after a statement.
+So I pulled it out and changed it to:
+
+const int slot;
+reg_alloc = ((reg_alloc + 7) >> 3) << 3
+slot = reg_alloc / 8;
+
+And that I did not test.
+
+Just cut off the const keyword and it'll work.
+
+Apologies,
+Patrick
+
+Index: register.c
+===================================================================
+--- register.c	(revision 18296)
++++ register.c	(working copy)
+@@ -338,9 +338,16 @@
+      size_t reg_alloc = size_nip +
+          sizeof (STRING*) *  n_regs_used[REGNO_STR];
+-    const int slot = (reg_alloc + 7) >> 3;
+-    reg_alloc = slot << 3;
++    int slot;
++    /* round reg_alloc up to the nearest multiple of 8 */
++    reg_alloc = ((reg_alloc + 7) >> 3) << 3;
++
++    /* reg_alloc now divides evenly by 8 because of the previous
++       rounding. A granularity of 8 is arbitrary, it could have been
++       some bigger power of 2 */
++    slot = reg_alloc / 8;
++
+      if (slot >= interp->ctx_mem.n_free_slots) {
+          const int n = slot + 1;
+          int i;
+
+On Apr 22, 2007, at 5:55 PM, Leopold Toetsch wrote:
+
+> Am Sonntag, 22. April 2007 23:34 schrieb Patrick Rutkowski:
+>> +    const int slot;
+>> +    /* round reg_alloc up to the nearest multiple of 8 */
+>> +    reg_alloc = ((reg_alloc + 7) >> 3) << 3;
+>> +
+>> +    /* reg_alloc now divides evenly by 8 because of the previous
+>> +       rounding. A granualrity of 8 is arbitratly, it could have  
+>> been
+>> +       some bigger power of 2 */
+>> +    slot = reg_alloc / 8;
+>
+> Did you even compile & test this patch?
+>
+>  error: assignment of read-only variable 'slot'
+>
+> leo
+

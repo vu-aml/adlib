@@ -1,0 +1,327 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun May 13 20:58:36 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4E0waqD014279
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 13 May 2007 20:58:36 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 0B206163885
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 14 May 2007 00:58:34 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 35524162AD7; Mon, 14 May 2007 00:57:51 +0000 (GMT)
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070514005751.35524162AD7@lists.samba.org>
+Date: Mon, 14 May 2007 00:57:51 +0000 (GMT)
+Subject: svn commit: samba r22830 - in branches/SAMBA_4_0/source/lib/events:
+	.
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: tridge
+Date: 2007-05-14 00:57:48 +0000 (Mon, 14 May 2007)
+New Revision: 22830
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22830
+
+Log:
+
+merged the latest lib/events updates from ctdb to Samba4. This
+includes a new EVENT_FD_AUTOCLOSE flag that prevents race conditions
+where code using fd events might close a fd before releasing the
+struct fd_event. That causes headaches for epoll.
+
+Added:
+   branches/SAMBA_4_0/source/lib/events/libevents.m4
+Modified:
+   branches/SAMBA_4_0/source/lib/events/config.m4
+   branches/SAMBA_4_0/source/lib/events/events.c
+   branches/SAMBA_4_0/source/lib/events/events.h
+   branches/SAMBA_4_0/source/lib/events/events_aio.c
+   branches/SAMBA_4_0/source/lib/events/events_epoll.c
+   branches/SAMBA_4_0/source/lib/events/events_liboop.c
+   branches/SAMBA_4_0/source/lib/events/events_select.c
+   branches/SAMBA_4_0/source/lib/events/events_standard.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/lib/events/config.m4
+===================================================================
+--- branches/SAMBA_4_0/source/lib/events/config.m4	2007-05-14 00:31:04 UTC (rev 22829)
++++ branches/SAMBA_4_0/source/lib/events/config.m4	2007-05-14 00:57:48 UTC (rev 22830)
+@@ -5,6 +5,7 @@
+ AC_CHECK_FUNCS(epoll_create)
+ if test x"$ac_cv_header_sys_epoll_h" = x"yes" -a x"$ac_cv_func_epoll_create" = x"yes";then
+ 	SMB_ENABLE(EVENTS_EPOLL,YES)
++	AC_DEFINE(HAVE_EVENTS_EPOLL, 1, [Whether epoll is available])
+ 
+ 	# check for native Linux AIO interface
+ 	AC_CHECK_HEADERS(libaio.h)
+
+Modified: branches/SAMBA_4_0/source/lib/events/events.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/events/events.c	2007-05-14 00:31:04 UTC (rev 22829)
++++ branches/SAMBA_4_0/source/lib/events/events.c	2007-05-14 00:57:48 UTC (rev 22830)
+@@ -71,6 +71,8 @@
+ /* list of registered event backends */
+ static struct event_ops_list *event_backends;
+ 
++static char *event_default_backend = NULL;
++
+ /*
+   register an events backend
+ */
+@@ -86,6 +88,15 @@
+ }
+ 
+ /*
++  set the default event backend
++ */
++void event_set_default_backend(const char *backend)
++{
++	if (event_default_backend) free(event_default_backend);
++	event_default_backend = strdup(backend);
++}
++
++/*
+   initialise backends if not already done
+ */
+ static void event_backend_init(void)
+@@ -99,8 +110,16 @@
+ 	run_init_functions(shared_init);
+ #else
+ 	bool events_standard_init(void);
++	bool events_select_init(void);
++	events_select_init();
+ 	events_standard_init();
++#if HAVE_EVENTS_EPOLL
++	{
++		bool events_epoll_init(void);
++		events_epoll_init();
++	}
+ #endif
++#endif
+ }
+ 
+ /*
+@@ -170,6 +189,9 @@
+ 	}
+ #endif
+ 	if (name == NULL) {
++		name = event_default_backend;
++	}
++	if (name == NULL) {
+ 		name = "standard";
+ 	}
+ 
+@@ -195,6 +217,9 @@
+ /*
+   add a fd based event
+   return NULL on failure (memory allocation error)
++
++  if flags contains EVENT_FD_AUTOCLOSE then the fd will be closed when
++  the returned fd_event context is freed
+ */
+ struct fd_event *event_add_fd(struct event_context *ev, TALLOC_CTX *mem_ctx,
+ 			      int fd, uint16_t flags, event_fd_handler_t handler,
+
+Modified: branches/SAMBA_4_0/source/lib/events/events.h
+===================================================================
+--- branches/SAMBA_4_0/source/lib/events/events.h	2007-05-14 00:31:04 UTC (rev 22829)
++++ branches/SAMBA_4_0/source/lib/events/events.h	2007-05-14 00:57:48 UTC (rev 22830)
+@@ -46,6 +46,7 @@
+ struct event_context *event_context_init(TALLOC_CTX *mem_ctx);
+ struct event_context *event_context_init_byname(TALLOC_CTX *mem_ctx, const char *name);
+ const char **event_backend_list(TALLOC_CTX *mem_ctx);
++void event_set_default_backend(const char *backend);
+ 
+ struct fd_event *event_add_fd(struct event_context *ev, TALLOC_CTX *mem_ctx,
+ 			      int fd, uint16_t flags, event_fd_handler_t handler,
+@@ -79,6 +80,7 @@
+ /* bits for file descriptor event flags */
+ #define EVENT_FD_READ 1
+ #define EVENT_FD_WRITE 2
++#define EVENT_FD_AUTOCLOSE 4
+ 
+ #define EVENT_FD_WRITEABLE(fde) \
+ 	event_set_fd_flags(fde, event_get_fd_flags(fde) | EVENT_FD_WRITE)
+
+Modified: branches/SAMBA_4_0/source/lib/events/events_aio.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/events/events_aio.c	2007-05-14 00:31:04 UTC (rev 22829)
++++ branches/SAMBA_4_0/source/lib/events/events_aio.c	2007-05-14 00:57:48 UTC (rev 22830)
+@@ -361,6 +361,11 @@
+ 
+ 	epoll_del_event(aio_ev, fde);
+ 
++	if (fde->flags & EVENT_FD_AUTOCLOSE) {
++		close(fde->fd);
++		fde->fd = -1;
++	}
++
+ 	return 0;
+ }
+ 
+
+Modified: branches/SAMBA_4_0/source/lib/events/events_epoll.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/events/events_epoll.c	2007-05-14 00:31:04 UTC (rev 22829)
++++ branches/SAMBA_4_0/source/lib/events/events_epoll.c	2007-05-14 00:57:48 UTC (rev 22830)
+@@ -136,7 +136,9 @@
+ 	ZERO_STRUCT(event);
+ 	event.events = epoll_map_flags(fde->flags);
+ 	event.data.ptr = fde;
+-	epoll_ctl(epoll_ev->epoll_fd, EPOLL_CTL_DEL, fde->fd, &event);
++	if (epoll_ctl(epoll_ev->epoll_fd, EPOLL_CTL_DEL, fde->fd, &event) != 0) {
++		DEBUG(0,("epoll_del_event failed! probable early close bug (%s)\n", strerror(errno)));
++	}
+ 	fde->additional_flags &= ~EPOLL_ADDITIONAL_FD_FLAG_HAS_EVENT;
+ }
+ 
+@@ -202,7 +204,7 @@
+ static int epoll_event_loop(struct epoll_event_context *epoll_ev, struct timeval *tvalp)
+ {
+ 	int ret, i;
+-#define MAXEVENTS 8
++#define MAXEVENTS 32
+ 	struct epoll_event events[MAXEVENTS];
+ 	uint32_t destruction_count = ++epoll_ev->destruction_count;
+ 	int timeout = -1;
+@@ -306,6 +308,11 @@
+ 
+ 	epoll_del_event(epoll_ev, fde);
+ 
++	if (fde->flags & EVENT_FD_AUTOCLOSE) {
++		close(fde->fd);
++		fde->fd = -1;
++	}
++
+ 	return 0;
+ }
+ 
+
+Modified: branches/SAMBA_4_0/source/lib/events/events_liboop.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/events/events_liboop.c	2007-05-14 00:31:04 UTC (rev 22829)
++++ branches/SAMBA_4_0/source/lib/events/events_liboop.c	2007-05-14 00:57:48 UTC (rev 22830)
+@@ -101,6 +101,11 @@
+ 	if (fde->flags & EVENT_FD_WRITE)
+ 		oop->cancel_fd(oop, fde->fd, OOP_WRITE);
+ 
++	if (fde->flags & EVENT_FD_AUTOCLOSE) {
++		close(fde->fd);
++		fde->fd = -1;
++	}
++
+ 	return 0;
+ }
+ 
+
+Modified: branches/SAMBA_4_0/source/lib/events/events_select.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/events/events_select.c	2007-05-14 00:31:04 UTC (rev 22829)
++++ branches/SAMBA_4_0/source/lib/events/events_select.c	2007-05-14 00:57:48 UTC (rev 22830)
+@@ -104,6 +104,11 @@
+ 	DLIST_REMOVE(select_ev->fd_events, fde);
+ 	select_ev->destruction_count++;
+ 
++	if (fde->flags & EVENT_FD_AUTOCLOSE) {
++		close(fde->fd);
++		fde->fd = -1;
++	}
++
+ 	return 0;
+ }
+ 
+
+Modified: branches/SAMBA_4_0/source/lib/events/events_standard.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/events/events_standard.c	2007-05-14 00:31:04 UTC (rev 22829)
++++ branches/SAMBA_4_0/source/lib/events/events_standard.c	2007-05-14 00:57:48 UTC (rev 22830)
+@@ -30,7 +30,7 @@
+ 
+ #include "includes.h"
+ #include "system/filesys.h"
+-#include "system/select.h" /* needed for WITH_EPOLL */
++#include "system/select.h" /* needed for HAVE_EVENTS_EPOLL */
+ #include "lib/util/dlinklist.h"
+ #include "lib/events/events.h"
+ #include "lib/events/events_internal.h"
+@@ -61,7 +61,7 @@
+ };
+ 
+ /* use epoll if it is available */
+-#if WITH_EPOLL
++#if HAVE_EVENTS_EPOLL
+ /*
+   called when a epoll call fails, and we should fallback
+   to using select
+@@ -229,15 +229,15 @@
+ 		timeout = ((tvalp->tv_usec+999) / 1000) + (tvalp->tv_sec*1000);
+ 	}
+ 
+-	if (epoll_ev->ev->num_signal_handlers && 
+-	    common_event_check_signal(epoll_ev->ev)) {
++	if (std_ev->ev->num_signal_handlers && 
++	    common_event_check_signal(std_ev->ev)) {
+ 		return 0;
+ 	}
+ 
+ 	ret = epoll_wait(std_ev->epoll_fd, events, MAXEVENTS, timeout);
+ 
+-	if (ret == -1 && errno == EINTR && epoll_ev->ev->num_signal_handlers) {
+-		if (common_event_check_signal(epoll_ev->ev)) {
++	if (ret == -1 && errno == EINTR && std_ev->ev->num_signal_handlers) {
++		if (common_event_check_signal(std_ev->ev)) {
+ 			return 0;
+ 		}
+ 	}
+@@ -353,6 +353,11 @@
+ 
+ 	epoll_del_event(std_ev, fde);
+ 
++	if (fde->flags & EVENT_FD_AUTOCLOSE) {
++		close(fde->fd);
++		fde->fd = -1;
++	}
++
+ 	return 0;
+ }
+ 
+
+Added: branches/SAMBA_4_0/source/lib/events/libevents.m4
+===================================================================
+--- branches/SAMBA_4_0/source/lib/events/libevents.m4	2007-05-14 00:31:04 UTC (rev 22829)
++++ branches/SAMBA_4_0/source/lib/events/libevents.m4	2007-05-14 00:57:48 UTC (rev 22830)
+@@ -0,0 +1,11 @@
++EVENTS_OBJ="lib/events/events.o lib/events/events_select.o lib/events/events_signal.o lib/events/events_timed.o lib/events/events_standard.o"
++
++AC_CHECK_HEADERS(sys/epoll.h)
++AC_CHECK_FUNCS(epoll_create)
++
++if test x"$ac_cv_header_sys_epoll_h" = x"yes" -a x"$ac_cv_func_epoll_create" = x"yes"; then
++   EVENTS_OBJ="$EVENTS_OBJ lib/events/events_epoll.o"
++   AC_DEFINE(HAVE_EVENTS_EPOLL, 1, [Whether epoll available])
++fi
++
++AC_SUBST(EVENTS_OBJ)
+

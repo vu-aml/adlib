@@ -1,0 +1,227 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Jun 14 10:46:25 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5EEkPL9023016
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 14 Jun 2007 10:46:25 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 6908716386E
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 14 Jun 2007 14:46:24 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL,UPPERCASE_25_50 autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id DA981162ACB; Thu, 14 Jun 2007 14:45:44 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070614144544.DA981162ACB@lists.samba.org>
+Date: Thu, 14 Jun 2007 14:45:44 +0000 (GMT)
+Subject: svn commit: samba r23500 - in branches:
+	SAMBA_3_0/source/script/tests SAMBA_3_0/source/smbd
+	SAMBA_3_0_26/source/script/tests SAMBA_3_0_26/source/smbd
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-06-14 14:45:37 +0000 (Thu, 14 Jun 2007)
+New Revision: 23500
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23500
+
+Log:
+Two changes to survive the now activated test for rename_internals_fsp:
+With the target being open we have to return NT_STATUS_ACCESS_DENIED and
+root_fid != 0 leads to NT_STATUS_INVALID_PARAMETER
+
+Modified:
+   branches/SAMBA_3_0/source/script/tests/test_posix_s3.sh
+   branches/SAMBA_3_0/source/smbd/reply.c
+   branches/SAMBA_3_0/source/smbd/trans2.c
+   branches/SAMBA_3_0_26/source/script/tests/test_posix_s3.sh
+   branches/SAMBA_3_0_26/source/smbd/reply.c
+   branches/SAMBA_3_0_26/source/smbd/trans2.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/script/tests/test_posix_s3.sh
+===================================================================
+--- branches/SAMBA_3_0/source/script/tests/test_posix_s3.sh	2007-06-14 14:45:33 UTC (rev 23499)
++++ branches/SAMBA_3_0/source/script/tests/test_posix_s3.sh	2007-06-14 14:45:37 UTC (rev 23500)
+@@ -31,7 +31,7 @@
+ raw="$raw RAW-IOCTL RAW-LOCK RAW-MKDIR RAW-MUX RAW-NOTIFY RAW-OPEN RAW-OPLOCK"
+ raw="$raw RAW-QFILEINFO RAW-QFSINFO RAW-READ RAW-RENAME RAW-SEARCH RAW-SEEK"
+ raw="$raw RAW-SFILEINFO RAW-SFILEINFO-BUG RAW-STREAMS RAW-UNLINK RAW-WRITE"
+-raw="$raw RAW-SAMBA3HIDE RAW-SAMBA3BADPATH"
++raw="$raw RAW-SAMBA3HIDE RAW-SAMBA3BADPATH RAW-SFILEINFO-RENAME"
+ 
+ rpc="RPC-AUTHCONTEXT RPC-BINDSAMBA3 RPC-SAMBA3-SRVSVC RPC-SAMBA3-SHARESEC"
+ rpc="$rpc RPC-UNIXINFO RPC-SAMBA3-SPOOLSS RPC-SAMBA3-WKSSVC"
+
+Modified: branches/SAMBA_3_0/source/smbd/reply.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/reply.c	2007-06-14 14:45:33 UTC (rev 23499)
++++ branches/SAMBA_3_0/source/smbd/reply.c	2007-06-14 14:45:37 UTC (rev 23500)
+@@ -4236,10 +4236,11 @@
+ 
+ NTSTATUS rename_internals_fsp(connection_struct *conn, files_struct *fsp, pstring newname, uint32 attrs, BOOL replace_if_exists)
+ {
+-	SMB_STRUCT_STAT sbuf;
++	SMB_STRUCT_STAT sbuf, sbuf1;
+ 	pstring newname_last_component;
+ 	NTSTATUS status = NT_STATUS_OK;
+ 	struct share_mode_lock *lck = NULL;
++	BOOL dst_exists;
+ 
+ 	ZERO_STRUCT(sbuf);
+ 
+@@ -4307,12 +4308,22 @@
+ 		return NT_STATUS_OK;
+ 	}
+ 
+-	if(!replace_if_exists && vfs_object_exist(conn, newname, NULL)) {
++	/*
++	 * Have vfs_object_exist also fill sbuf1
++	 */
++	dst_exists = vfs_object_exist(conn, newname, &sbuf1);
++
++	if(!replace_if_exists && dst_exists) {
+ 		DEBUG(3,("rename_internals_fsp: dest exists doing rename %s -> %s\n",
+ 			fsp->fsp_name,newname));
+ 		return NT_STATUS_OBJECT_NAME_COLLISION;
+ 	}
+ 
++	if (file_find_di_first(file_id_sbuf(&sbuf1)) != NULL) {
++		DEBUG(3, ("rename_internals_fsp: Target file open\n"));
++		return NT_STATUS_ACCESS_DENIED;
++	}
++
+ 	/* Ensure we have a valid stat struct for the source. */
+ 	if (fsp->fh->fd != -1) {
+ 		if (SMB_VFS_FSTAT(fsp,fsp->fh->fd,&sbuf) == -1) {
+
+Modified: branches/SAMBA_3_0/source/smbd/trans2.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/trans2.c	2007-06-14 14:45:33 UTC (rev 23499)
++++ branches/SAMBA_3_0/source/smbd/trans2.c	2007-06-14 14:45:37 UTC (rev 23500)
+@@ -4611,7 +4611,7 @@
+ 				pstring fname)
+ {
+ 	BOOL overwrite;
+-	/* uint32 root_fid; */  /* Not used */
++	uint32 root_fid;
+ 	uint32 len;
+ 	pstring newname;
+ 	pstring base_name;
+@@ -4624,10 +4624,10 @@
+ 	}
+ 
+ 	overwrite = (CVAL(pdata,0) ? True : False);
+-	/* root_fid = IVAL(pdata,4); */
++	root_fid = IVAL(pdata,4);
+ 	len = IVAL(pdata,8);
+ 
+-	if (len > (total_data - 12) || (len == 0)) {
++	if (len > (total_data - 12) || (len == 0) || (root_fid != 0)) {
+ 		return NT_STATUS_INVALID_PARAMETER;
+ 	}
+ 
+
+Modified: branches/SAMBA_3_0_26/source/script/tests/test_posix_s3.sh
+===================================================================
+--- branches/SAMBA_3_0_26/source/script/tests/test_posix_s3.sh	2007-06-14 14:45:33 UTC (rev 23499)
++++ branches/SAMBA_3_0_26/source/script/tests/test_posix_s3.sh	2007-06-14 14:45:37 UTC (rev 23500)
+@@ -31,7 +31,7 @@
+ raw="$raw RAW-IOCTL RAW-LOCK RAW-MKDIR RAW-MUX RAW-NOTIFY RAW-OPEN RAW-OPLOCK"
+ raw="$raw RAW-QFILEINFO RAW-QFSINFO RAW-READ RAW-RENAME RAW-SEARCH RAW-SEEK"
+ raw="$raw RAW-SFILEINFO RAW-SFILEINFO-BUG RAW-STREAMS RAW-UNLINK RAW-WRITE"
+-raw="$raw RAW-SAMBA3HIDE RAW-SAMBA3BADPATH"
++raw="$raw RAW-SAMBA3HIDE RAW-SAMBA3BADPATH RAW-SFILEINFO-RENAME"
+ 
+ rpc="RPC-AUTHCONTEXT RPC-BINDSAMBA3 RPC-SAMBA3-SRVSVC RPC-SAMBA3-SHARESEC"
+ rpc="$rpc RPC-UNIXINFO RPC-SAMBA3-SPOOLSS RPC-SAMBA3-WKSSVC"
+
+Modified: branches/SAMBA_3_0_26/source/smbd/reply.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/smbd/reply.c	2007-06-14 14:45:33 UTC (rev 23499)
++++ branches/SAMBA_3_0_26/source/smbd/reply.c	2007-06-14 14:45:37 UTC (rev 23500)
+@@ -4234,10 +4234,11 @@
+ 
+ NTSTATUS rename_internals_fsp(connection_struct *conn, files_struct *fsp, pstring newname, uint32 attrs, BOOL replace_if_exists)
+ {
+-	SMB_STRUCT_STAT sbuf;
++	SMB_STRUCT_STAT sbuf, sbuf1;
+ 	pstring newname_last_component;
+ 	NTSTATUS status = NT_STATUS_OK;
+ 	struct share_mode_lock *lck = NULL;
++	BOOL dst_exists;
+ 
+ 	ZERO_STRUCT(sbuf);
+ 
+@@ -4305,12 +4306,22 @@
+ 		return NT_STATUS_OK;
+ 	}
+ 
+-	if(!replace_if_exists && vfs_object_exist(conn, newname, NULL)) {
++	/*
++	 * Have vfs_object_exist also fill sbuf1
++	 */
++	dst_exists = vfs_object_exist(conn, newname, &sbuf1);
++
++	if(!replace_if_exists && dst_exists) {
+ 		DEBUG(3,("rename_internals_fsp: dest exists doing rename %s -> %s\n",
+ 			fsp->fsp_name,newname));
+ 		return NT_STATUS_OBJECT_NAME_COLLISION;
+ 	}
+ 
++	if (file_find_di_first(file_id_sbuf(&sbuf1)) != NULL) {
++		DEBUG(3, ("rename_internals_fsp: Target file open\n"));
++		return NT_STATUS_ACCESS_DENIED;
++	}
++
+ 	/* Ensure we have a valid stat struct for the source. */
+ 	if (fsp->fh->fd != -1) {
+ 		if (SMB_VFS_FSTAT(fsp,fsp->fh->fd,&sbuf) == -1) {
+
+Modified: branches/SAMBA_3_0_26/source/smbd/trans2.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/smbd/trans2.c	2007-06-14 14:45:33 UTC (rev 23499)
++++ branches/SAMBA_3_0_26/source/smbd/trans2.c	2007-06-14 14:45:37 UTC (rev 23500)
+@@ -4557,7 +4557,7 @@
+ 				pstring fname)
+ {
+ 	BOOL overwrite;
+-	/* uint32 root_fid; */  /* Not used */
++	uint32 root_fid;
+ 	uint32 len;
+ 	pstring newname;
+ 	pstring base_name;
+@@ -4570,10 +4570,10 @@
+ 	}
+ 
+ 	overwrite = (CVAL(pdata,0) ? True : False);
+-	/* root_fid = IVAL(pdata,4); */
++	root_fid = IVAL(pdata,4);
+ 	len = IVAL(pdata,8);
+ 
+-	if (len > (total_data - 12) || (len == 0)) {
++	if (len > (total_data - 12) || (len == 0) || (root_fid != 0)) {
+ 		return NT_STATUS_INVALID_PARAMETER;
+ 	}
+ 
+

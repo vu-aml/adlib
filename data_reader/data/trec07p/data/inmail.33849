@@ -1,0 +1,508 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri May 11 09:34:09 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4BDY9qD023611
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 11 May 2007 09:34:09 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 83753162C4C
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 11 May 2007 13:34:07 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1004)
+	id 9D25C162AC3; Fri, 11 May 2007 13:33:37 +0000 (GMT)
+To: samba-cvs@samba.org
+From: gd@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070511133337.9D25C162AC3@lists.samba.org>
+Date: Fri, 11 May 2007 13:33:37 +0000 (GMT)
+Subject: svn commit: samba r22800 - in branches: SAMBA_3_0/source/include
+	SAMBA_3_0/source/libads SAMBA_3_0/source/libgpo
+	SAMBA_3_0_26/source/include SAMBA_3_0_26/source/libads
+	SAMBA_3_0_26/source/libgpo
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: gd
+Date: 2007-05-11 13:33:37 +0000 (Fri, 11 May 2007)
+New Revision: 22800
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22800
+
+Log:
+Add GPO_SID_TOKEN and an LDAP function to get tokensids from the tokenGroup attribute.
+
+Guenther
+
+Modified:
+   branches/SAMBA_3_0/source/include/ads_protos.h
+   branches/SAMBA_3_0/source/include/gpo.h
+   branches/SAMBA_3_0/source/libads/ldap.c
+   branches/SAMBA_3_0/source/libgpo/gpo_ldap.c
+   branches/SAMBA_3_0_26/source/include/ads_protos.h
+   branches/SAMBA_3_0_26/source/include/gpo.h
+   branches/SAMBA_3_0_26/source/libads/ldap.c
+   branches/SAMBA_3_0_26/source/libgpo/gpo_ldap.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/include/ads_protos.h
+===================================================================
+--- branches/SAMBA_3_0/source/include/ads_protos.h	2007-05-11 13:19:49 UTC (rev 22799)
++++ branches/SAMBA_3_0/source/include/ads_protos.h	2007-05-11 13:33:37 UTC (rev 22800)
+@@ -110,5 +110,10 @@
+ 				       int scope, const char *expr,
+ 				       const char **attrs, uint32 sd_flags, 
+ 				       LDAPMessage **res);
+-
+-
++ADS_STATUS ads_get_tokensids(ADS_STRUCT *ads,
++			      TALLOC_CTX *mem_ctx,
++			      const char *dn,
++			      DOM_SID *user_sid,
++			      DOM_SID *primary_group_sid,
++			      DOM_SID **sids,
++			      size_t *num_sids);
+
+Modified: branches/SAMBA_3_0/source/include/gpo.h
+===================================================================
+--- branches/SAMBA_3_0/source/include/gpo.h	2007-05-11 13:19:49 UTC (rev 22799)
++++ branches/SAMBA_3_0/source/include/gpo.h	2007-05-11 13:33:37 UTC (rev 22800)
+@@ -94,3 +94,10 @@
+ 
+ #define GPO_CACHE_DIR "gpo_cache"
+ #define GPT_INI "GPT.INI"
++
++struct GPO_SID_TOKEN {
++	DOM_SID object_sid;
++	DOM_SID primary_group_sid;
++	size_t num_token_sids;
++	DOM_SID *token_sids;
++};
+
+Modified: branches/SAMBA_3_0/source/libads/ldap.c
+===================================================================
+--- branches/SAMBA_3_0/source/libads/ldap.c	2007-05-11 13:19:49 UTC (rev 22799)
++++ branches/SAMBA_3_0/source/libads/ldap.c	2007-05-11 13:33:37 UTC (rev 22800)
+@@ -3196,4 +3196,108 @@
+ 	return status;
+ }
+ 
++/**
++ * pull all token-sids from an LDAP dn
++ * @param ads connection to ads server
++ * @param mem_ctx TALLOC_CTX for allocating sid array
++ * @param dn of LDAP object
++ * @param user_sid pointer to DOM_SID (objectSid)
++ * @param primary_group_sid pointer to DOM_SID (self composed)
++ * @param sids pointer to sid array to allocate
++ * @param num_sids counter of SIDs pulled
++ * @return status of token query
++ **/
++ ADS_STATUS ads_get_tokensids(ADS_STRUCT *ads,
++			      TALLOC_CTX *mem_ctx,
++			      const char *dn,
++			      DOM_SID *user_sid,
++			      DOM_SID *primary_group_sid,
++			      DOM_SID **sids,
++			      size_t *num_sids)
++{
++	ADS_STATUS status;
++	LDAPMessage *res = NULL;
++	int count = 0;
++	size_t tmp_num_sids;
++	DOM_SID *tmp_sids;
++	DOM_SID tmp_user_sid;
++	DOM_SID tmp_primary_group_sid;
++	uint32 pgid;
++	const char *attrs[] = {
++		"objectSid",
++		"tokenGroups",
++		"primaryGroupID",
++		NULL
++	};
++
++	status = ads_search_retry_dn(ads, &res, dn, attrs);
++	if (!ADS_ERR_OK(status)) {
++		return status;
++	}
++
++	count = ads_count_replies(ads, res);
++	if (count != 1) {
++		ads_msgfree(ads, res);
++		return ADS_ERROR_LDAP(LDAP_NO_SUCH_OBJECT);
++	}
++
++	if (!ads_pull_sid(ads, res, "objectSid", &tmp_user_sid)) {
++		ads_msgfree(ads, res);
++		return ADS_ERROR_LDAP(LDAP_NO_MEMORY);
++	}
++
++	if (!ads_pull_uint32(ads, res, "primaryGroupID", &pgid)) {
++		ads_msgfree(ads, res);
++		return ADS_ERROR_LDAP(LDAP_NO_MEMORY);
++	}
++
++	{
++		/* hack to compose the primary group sid without knowing the
++		 * domsid */
++
++		DOM_SID domsid;
++		uint32 dummy_rid;
++
++		sid_copy(&domsid, &tmp_user_sid);
++
++		if (!sid_split_rid(&domsid, &dummy_rid)) {
++			ads_msgfree(ads, res);
++			return ADS_ERROR_LDAP(LDAP_NO_MEMORY);
++		}
++
++		if (!sid_compose(&tmp_primary_group_sid, &domsid, pgid)) {
++			ads_msgfree(ads, res);
++			return ADS_ERROR_LDAP(LDAP_NO_MEMORY);
++		}
++	}
++
++	tmp_num_sids = ads_pull_sids(ads, mem_ctx, res, "tokenGroups", &tmp_sids);
++
++	if (tmp_num_sids == 0 || !tmp_sids) {
++		ads_msgfree(ads, res);
++		return ADS_ERROR_LDAP(LDAP_NO_MEMORY);
++	}
++
++	if (num_sids) {
++		*num_sids = tmp_num_sids;
++	}
++
++	if (sids) {
++		*sids = tmp_sids;
++	}
++
++	if (user_sid) {
++		*user_sid = tmp_user_sid;
++	}
++
++	if (primary_group_sid) {
++		*primary_group_sid = tmp_primary_group_sid;
++	}
++
++	DEBUG(10,("ads_get_tokensids: returned %d sids\n", (int)tmp_num_sids + 2));
++
++	ads_msgfree(ads, res);
++	return ADS_ERROR_LDAP(LDAP_SUCCESS);
++}
++
+ #endif
+
+Modified: branches/SAMBA_3_0/source/libgpo/gpo_ldap.c
+===================================================================
+--- branches/SAMBA_3_0/source/libgpo/gpo_ldap.c	2007-05-11 13:19:49 UTC (rev 22799)
++++ branches/SAMBA_3_0/source/libgpo/gpo_ldap.c	2007-05-11 13:33:37 UTC (rev 22800)
+@@ -571,6 +571,68 @@
+ }
+ 
+ /****************************************************************
++****************************************************************/
++
++ADS_STATUS ads_get_gpo_sid_token(ADS_STRUCT *ads,
++				TALLOC_CTX *mem_ctx,
++				const char *dn,
++				struct GPO_SID_TOKEN **token)
++{
++	ADS_STATUS status;
++	DOM_SID object_sid;
++	DOM_SID primary_group_sid;
++	DOM_SID *ad_token_sids;
++	size_t num_ad_token_sids = 0;
++	DOM_SID *token_sids;
++	size_t num_token_sids = 0;
++	struct GPO_SID_TOKEN *new_token = NULL;
++	int i;
++
++	new_token = TALLOC_ZERO_P(mem_ctx, struct GPO_SID_TOKEN);
++	ADS_ERROR_HAVE_NO_MEMORY(new_token);
++
++	status = ads_get_tokensids(ads, mem_ctx, dn, 
++				   &object_sid, &primary_group_sid,
++				   &ad_token_sids, &num_ad_token_sids);
++	if (!ADS_ERR_OK(status)) {
++		return status;
++	}
++
++	new_token->object_sid = object_sid;
++	new_token->primary_group_sid = primary_group_sid;
++
++	token_sids = TALLOC_ARRAY(mem_ctx, DOM_SID, 1);
++	ADS_ERROR_HAVE_NO_MEMORY(token_sids);
++
++	for (i = 0; i < num_ad_token_sids; i++) {
++		
++		if (sid_check_is_in_builtin(&ad_token_sids[i])) {
++			continue;
++		}
++
++		if (!add_sid_to_array_unique(mem_ctx, &ad_token_sids[i], 
++					     &token_sids, &num_token_sids)) {
++			return ADS_ERROR(LDAP_NO_MEMORY);
++		}
++	}
++
++	/* Add S-1-5-11 to token */
++	if (!add_sid_to_array_unique(mem_ctx, &global_sid_Authenticated_Users,
++				     &token_sids, &num_token_sids)) {
++		return ADS_ERROR(LDAP_NO_MEMORY);
++	}
++
++
++	new_token->token_sids = token_sids;
++	new_token->num_token_sids = num_token_sids;
++
++	*token = new_token;
++
++	return ADS_ERROR_LDAP(LDAP_SUCCESS);
++}
++
++
++/****************************************************************
+  get the full list of GROUP_POLICY_OBJECTs for a given dn
+ ****************************************************************/
+ 
+
+Modified: branches/SAMBA_3_0_26/source/include/ads_protos.h
+===================================================================
+--- branches/SAMBA_3_0_26/source/include/ads_protos.h	2007-05-11 13:19:49 UTC (rev 22799)
++++ branches/SAMBA_3_0_26/source/include/ads_protos.h	2007-05-11 13:33:37 UTC (rev 22800)
+@@ -101,5 +101,10 @@
+ 				       int scope, const char *expr,
+ 				       const char **attrs, uint32 sd_flags, 
+ 				       LDAPMessage **res);
+-
+-
++ADS_STATUS ads_get_tokensids(ADS_STRUCT *ads,
++			      TALLOC_CTX *mem_ctx,
++			      const char *dn,
++			      DOM_SID *user_sid,
++			      DOM_SID *primary_group_sid,
++			      DOM_SID **sids,
++			      size_t *num_sids);
+
+Modified: branches/SAMBA_3_0_26/source/include/gpo.h
+===================================================================
+--- branches/SAMBA_3_0_26/source/include/gpo.h	2007-05-11 13:19:49 UTC (rev 22799)
++++ branches/SAMBA_3_0_26/source/include/gpo.h	2007-05-11 13:33:37 UTC (rev 22800)
+@@ -94,3 +94,10 @@
+ 
+ #define GPO_CACHE_DIR "gpo_cache"
+ #define GPT_INI "GPT.INI"
++
++struct GPO_SID_TOKEN {
++	DOM_SID object_sid;
++	DOM_SID primary_group_sid;
++	size_t num_token_sids;
++	DOM_SID *token_sids;
++};
+
+Modified: branches/SAMBA_3_0_26/source/libads/ldap.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/libads/ldap.c	2007-05-11 13:19:49 UTC (rev 22799)
++++ branches/SAMBA_3_0_26/source/libads/ldap.c	2007-05-11 13:33:37 UTC (rev 22800)
+@@ -3162,4 +3162,108 @@
+ 	return status;
+ }
+ 
++/**
++ * pull all token-sids from an LDAP dn
++ * @param ads connection to ads server
++ * @param mem_ctx TALLOC_CTX for allocating sid array
++ * @param dn of LDAP object
++ * @param user_sid pointer to DOM_SID (objectSid)
++ * @param primary_group_sid pointer to DOM_SID (self composed)
++ * @param sids pointer to sid array to allocate
++ * @param num_sids counter of SIDs pulled
++ * @return status of token query
++ **/
++ ADS_STATUS ads_get_tokensids(ADS_STRUCT *ads,
++			      TALLOC_CTX *mem_ctx,
++			      const char *dn,
++			      DOM_SID *user_sid,
++			      DOM_SID *primary_group_sid,
++			      DOM_SID **sids,
++			      size_t *num_sids)
++{
++	ADS_STATUS status;
++	LDAPMessage *res = NULL;
++	int count = 0;
++	size_t tmp_num_sids;
++	DOM_SID *tmp_sids;
++	DOM_SID tmp_user_sid;
++	DOM_SID tmp_primary_group_sid;
++	uint32 pgid;
++	const char *attrs[] = {
++		"objectSid",
++		"tokenGroups",
++		"primaryGroupID",
++		NULL
++	};
++
++	status = ads_search_retry_dn(ads, &res, dn, attrs);
++	if (!ADS_ERR_OK(status)) {
++		return status;
++	}
++
++	count = ads_count_replies(ads, res);
++	if (count != 1) {
++		ads_msgfree(ads, res);
++		return ADS_ERROR_LDAP(LDAP_NO_SUCH_OBJECT);
++	}
++
++	if (!ads_pull_sid(ads, res, "objectSid", &tmp_user_sid)) {
++		ads_msgfree(ads, res);
++		return ADS_ERROR_LDAP(LDAP_NO_MEMORY);
++	}
++
++	if (!ads_pull_uint32(ads, res, "primaryGroupID", &pgid)) {
++		ads_msgfree(ads, res);
++		return ADS_ERROR_LDAP(LDAP_NO_MEMORY);
++	}
++
++	{
++		/* hack to compose the primary group sid without knowing the
++		 * domsid */
++
++		DOM_SID domsid;
++		uint32 dummy_rid;
++
++		sid_copy(&domsid, &tmp_user_sid);
++
++		if (!sid_split_rid(&domsid, &dummy_rid)) {
++			ads_msgfree(ads, res);
++			return ADS_ERROR_LDAP(LDAP_NO_MEMORY);
++		}
++
++		if (!sid_compose(&tmp_primary_group_sid, &domsid, pgid)) {
++			ads_msgfree(ads, res);
++			return ADS_ERROR_LDAP(LDAP_NO_MEMORY);
++		}
++	}
++
++	tmp_num_sids = ads_pull_sids(ads, mem_ctx, res, "tokenGroups", &tmp_sids);
++
++	if (tmp_num_sids == 0 || !tmp_sids) {
++		ads_msgfree(ads, res);
++		return ADS_ERROR_LDAP(LDAP_NO_MEMORY);
++	}
++
++	if (num_sids) {
++		*num_sids = tmp_num_sids;
++	}
++
++	if (sids) {
++		*sids = tmp_sids;
++	}
++
++	if (user_sid) {
++		*user_sid = tmp_user_sid;
++	}
++
++	if (primary_group_sid) {
++		*primary_group_sid = tmp_primary_group_sid;
++	}
++
++	DEBUG(10,("ads_get_tokensids: returned %d sids\n", (int)tmp_num_sids + 2));
++
++	ads_msgfree(ads, res);
++	return ADS_ERROR_LDAP(LDAP_SUCCESS);
++}
++
+ #endif
+
+Modified: branches/SAMBA_3_0_26/source/libgpo/gpo_ldap.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/libgpo/gpo_ldap.c	2007-05-11 13:19:49 UTC (rev 22799)
++++ branches/SAMBA_3_0_26/source/libgpo/gpo_ldap.c	2007-05-11 13:33:37 UTC (rev 22800)
+@@ -571,6 +571,68 @@
+ }
+ 
+ /****************************************************************
++****************************************************************/
++
++ADS_STATUS ads_get_gpo_sid_token(ADS_STRUCT *ads,
++				TALLOC_CTX *mem_ctx,
++				const char *dn,
++				struct GPO_SID_TOKEN **token)
++{
++	ADS_STATUS status;
++	DOM_SID object_sid;
++	DOM_SID primary_group_sid;
++	DOM_SID *ad_token_sids;
++	size_t num_ad_token_sids = 0;
++	DOM_SID *token_sids;
++	size_t num_token_sids = 0;
++	struct GPO_SID_TOKEN *new_token = NULL;
++	int i;
++
++	new_token = TALLOC_ZERO_P(mem_ctx, struct GPO_SID_TOKEN);
++	ADS_ERROR_HAVE_NO_MEMORY(new_token);
++
++	status = ads_get_tokensids(ads, mem_ctx, dn, 
++				   &object_sid, &primary_group_sid,
++				   &ad_token_sids, &num_ad_token_sids);
++	if (!ADS_ERR_OK(status)) {
++		return status;
++	}
++
++	new_token->object_sid = object_sid;
++	new_token->primary_group_sid = primary_group_sid;
++
++	token_sids = TALLOC_ARRAY(mem_ctx, DOM_SID, 1);
++	ADS_ERROR_HAVE_NO_MEMORY(token_sids);
++
++	for (i = 0; i < num_ad_token_sids; i++) {
++		
++		if (sid_check_is_in_builtin(&ad_token_sids[i])) {
++			continue;
++		}
++
++		if (!add_sid_to_array_unique(mem_ctx, &ad_token_sids[i], 
++					     &token_sids, &num_token_sids)) {
++			return ADS_ERROR(LDAP_NO_MEMORY);
++		}
++	}
++
++	/* Add S-1-5-11 to token */
++	if (!add_sid_to_array_unique(mem_ctx, &global_sid_Authenticated_Users,
++				     &token_sids, &num_token_sids)) {
++		return ADS_ERROR(LDAP_NO_MEMORY);
++	}
++
++
++	new_token->token_sids = token_sids;
++	new_token->num_token_sids = num_token_sids;
++
++	*token = new_token;
++
++	return ADS_ERROR_LDAP(LDAP_SUCCESS);
++}
++
++
++/****************************************************************
+  get the full list of GROUP_POLICY_OBJECTs for a given dn
+ ****************************************************************/
+ 
+

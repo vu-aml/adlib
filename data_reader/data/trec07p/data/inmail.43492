@@ -1,0 +1,160 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri May 25 06:43:03 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4PAh2qD027029
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 25 May 2007 06:43:02 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 33491162C3A
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 25 May 2007 10:42:58 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 3E4CF162AC1; Fri, 25 May 2007 10:42:30 +0000 (GMT)
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070525104230.3E4CF162AC1@lists.samba.org>
+Date: Fri, 25 May 2007 10:42:30 +0000 (GMT)
+Subject: svn commit: samba r23138 - in branches/SAMBA_4_0/source/libcli/raw:
+	.
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: tridge
+Date: 2007-05-25 10:42:29 +0000 (Fri, 25 May 2007)
+New Revision: 23138
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23138
+
+Log:
+
+added a raw interface for SMBecho operations
+
+Modified:
+   branches/SAMBA_4_0/source/libcli/raw/clitransport.c
+   branches/SAMBA_4_0/source/libcli/raw/interfaces.h
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/libcli/raw/clitransport.c
+===================================================================
+--- branches/SAMBA_4_0/source/libcli/raw/clitransport.c	2007-05-25 09:15:09 UTC (rev 23137)
++++ branches/SAMBA_4_0/source/libcli/raw/clitransport.c	2007-05-25 10:42:29 UTC (rev 23138)
+@@ -593,3 +593,71 @@
+ 
+ 	talloc_set_destructor(req, smbcli_request_destructor);
+ }
++
++
++/****************************************************************************
++ Send an SMBecho (async send)
++*****************************************************************************/
++struct smbcli_request *smb_raw_echo_send(struct smbcli_transport *transport,
++					 struct smb_echo *p)
++{
++	struct smbcli_request *req;
++
++	req = smbcli_request_setup_transport(transport, SMBecho, 1, p->in.size);
++	if (!req) return NULL;
++
++	SSVAL(req->out.vwv, VWV(0), p->in.repeat_count);
++
++	memcpy(req->out.data, p->in.data, p->in.size);
++
++	ZERO_STRUCT(p->out);
++
++	if (!smbcli_request_send(req)) {
++		smbcli_request_destroy(req);
++		return NULL;
++	}
++
++	return req;
++}
++
++/****************************************************************************
++ raw echo interface (async recv)
++****************************************************************************/
++NTSTATUS smb_raw_echo_recv(struct smbcli_request *req, TALLOC_CTX *mem_ctx,
++			   struct smb_echo *p)
++{
++	if (!smbcli_request_receive(req) ||
++	    smbcli_request_is_error(req)) {
++		goto failed;
++	}
++
++	SMBCLI_CHECK_WCT(req, 1);
++	p->out.count++;
++	p->out.sequence_number = SVAL(req->in.vwv, VWV(0));
++	p->out.size = req->in.data_size;
++	talloc_free(p->out.data);
++	p->out.data = talloc_size(mem_ctx, p->out.size);
++	NT_STATUS_HAVE_NO_MEMORY(p->out.data);
++
++	if (!smbcli_raw_pull_data(req, req->in.data, p->out.size, p->out.data)) {
++		req->status = NT_STATUS_BUFFER_TOO_SMALL;
++	}
++
++	if (p->out.count == p->in.repeat_count) {
++		return smbcli_request_destroy(req);
++	}
++
++	return NT_STATUS_OK;
++
++failed:
++	return smbcli_request_destroy(req);
++}
++
++/****************************************************************************
++ Send a echo (sync interface)
++*****************************************************************************/
++NTSTATUS smb_raw_echo(struct smbcli_transport *transport, struct smb_echo *p)
++{
++	struct smbcli_request *req = smb_raw_echo_send(transport, p);
++	return smbcli_request_simple_recv(req);
++}
+
+Modified: branches/SAMBA_4_0/source/libcli/raw/interfaces.h
+===================================================================
+--- branches/SAMBA_4_0/source/libcli/raw/interfaces.h	2007-05-25 09:15:09 UTC (rev 23137)
++++ branches/SAMBA_4_0/source/libcli/raw/interfaces.h	2007-05-25 10:42:29 UTC (rev 23138)
+@@ -2614,4 +2614,22 @@
+ 	} findclose;
+ };
+ 
++
++/*
++  struct for SMBecho call
++*/
++struct smb_echo {
++	struct {
++		uint16_t repeat_count;
++		uint16_t size;
++		uint8_t *data;
++	} in;
++	struct {
++		uint16_t count;
++		uint16_t sequence_number;
++		uint16_t size;
++		uint8_t *data;
++	} out;
++};
++
+ #endif /* __LIBCLI_RAW_INTERFACES_H__ */
+

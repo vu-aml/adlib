@@ -1,0 +1,111 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat Apr 21 03:23:13 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3L7NC0I024541
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 21 Apr 2007 03:23:12 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 1097F163918
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 21 Apr 2007 07:22:48 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id D14F6162AEC; Sat, 21 Apr 2007 07:22:16 +0000 (GMT)
+Date: Sat, 21 Apr 2007 09:22:46 +0200
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070421072216.D14F6162AEC@lists.samba.org>
+Subject: Rev 174: - prevent sending dmaster requests to ourselves in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2528
+Lines: 70
+
+------------------------------------------------------------
+revno: 174
+revision-id: tridge@samba.org-20070421072246-91c4db739a442283
+parent: tridge@samba.org-20070421030822-6af160dfe70a87e4
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Sat 2007-04-21 09:22:46 +0200
+message:
+  - prevent sending dmaster requests to ourselves
+  
+  - add some debug code
+modified:
+  common/ctdb_call.c             ctdb_call.c-20061128065342-to93h6eejj5kon81-1
+  common/ctdb_client.c           ctdb_client.c-20070411010216-3kd8v37k61steeya-1
+=== modified file 'common/ctdb_call.c'
+--- a/common/ctdb_call.c	2007-04-20 07:58:37 +0000
++++ b/common/ctdb_call.c	2007-04-21 07:22:46 +0000
+@@ -370,9 +370,10 @@
+ 	   then give them the record
+ 	   or if the node requested an immediate migration
+ 	*/
+-	if ( (header.laccessor == c->hdr.srcnode
+-	      && header.lacount >= ctdb->max_lacount)
+-	   || c->flags&CTDB_IMMEDIATE_MIGRATION ) {
++	if ( c->hdr.srcnode != ctdb->vnn &&
++	     ((header.laccessor == c->hdr.srcnode
++	       && header.lacount >= ctdb->max_lacount)
++	      || (c->flags&CTDB_IMMEDIATE_MIGRATION)) ) {
+ 		ctdb_call_send_dmaster(ctdb_db, c, &header, &call.key, &data);
+ 		talloc_free(data.dptr);
+ 		ctdb_ltdb_unlock(ctdb_db, call.key);
+@@ -419,7 +420,7 @@
+ 
+ 	state = idr_find_type(ctdb->idr, hdr->reqid, struct ctdb_call_state);
+ 	if (state == NULL) {
+-		DEBUG(0, ("reqid %d not found\n", hdr->reqid));
++		DEBUG(0, (__location__ " reqid %d not found\n", hdr->reqid));
+ 		return;
+ 	}
+ 
+@@ -562,6 +563,7 @@
+ 		       struct timeval t, void *private_data)
+ {
+ 	struct ctdb_call_state *state = talloc_get_type(private_data, struct ctdb_call_state);
++	DEBUG(0,(__location__ " call timeout for reqid %d\n", state->c->hdr.reqid));
+ 	state->state = CTDB_CALL_ERROR;
+ 	ctdb_set_error(state->node->ctdb, "ctdb_call %u timed out",
+ 		       state->c->hdr.reqid);
+
+=== modified file 'common/ctdb_client.c'
+--- a/common/ctdb_client.c	2007-04-20 10:07:47 +0000
++++ b/common/ctdb_client.c	2007-04-21 07:22:46 +0000
+@@ -71,7 +71,7 @@
+ 
+ 	state = idr_find_type(ctdb->idr, hdr->reqid, struct ctdb_client_call_state);
+ 	if (state == NULL) {
+-		DEBUG(0, ("reqid %d not found\n", hdr->reqid));
++		DEBUG(0,(__location__ " reqid %d not found\n", hdr->reqid));
+ 		return;
+ 	}
+ 
+@@ -628,7 +628,7 @@
+ 
+ 	state = idr_find_type(ctdb->idr, hdr->reqid, struct ctdb_status_state);
+ 	if (state == NULL) {
+-		DEBUG(0, ("reqid %d not found\n", hdr->reqid));
++		DEBUG(0,(__location__ " reqid %d not found\n", hdr->reqid));
+ 		return;
+ 	}
+ 
+

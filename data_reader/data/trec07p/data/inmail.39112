@@ -1,0 +1,187 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri May 18 09:49:05 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4IDn5qD014467
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 18 May 2007 09:49:05 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 919171638FC
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 18 May 2007 13:49:02 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 05AB9162AD4; Fri, 18 May 2007 13:48:33 +0000 (GMT)
+Date: Fri, 18 May 2007 23:48:29 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070518134834.05AB9162AD4@lists.samba.org>
+Subject: Rev 320: timeout pending controls immediately when a node becomes
+	disconnected in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 320
+revision-id: tridge@samba.org-20070518134829-y384ldoxc07qxxi5
+parent: tridge@samba.org-20070518132336-gjpdua5y9j3ydutx
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Fri 2007-05-18 23:48:29 +1000
+message:
+  timeout pending controls immediately when a node becomes disconnected
+modified:
+  common/ctdb.c                  ctdb.c-20061127094323-t50f58d65iaao5of-2
+  common/ctdb_daemon.c           ctdb_daemon.c-20070409200331-3el1kqgdb9m4ib0g-1
+  common/ctdb_monitor.c          ctdb_monitor.c-20070518100625-8jf4ft1mjzmb22ck-1
+  include/ctdb_private.h         ctdb_private.h-20061117234101-o3qt14umlg9en8z0-13
+=== modified file 'common/ctdb.c'
+--- a/common/ctdb.c	2007-05-18 13:23:36 +0000
++++ b/common/ctdb.c	2007-05-18 13:48:29 +0000
+@@ -379,6 +379,7 @@
+ 	node->flags &= ~NODE_FLAGS_CONNECTED;
+ 	DEBUG(1,("%s: node %s is dead: %d connected\n", 
+ 		 node->ctdb->name, node->name, node->ctdb->num_connected));
++	ctdb_daemon_cancel_controls(node->ctdb, node);
+ }
+ 
+ /*
+
+=== modified file 'common/ctdb_daemon.c'
+--- a/common/ctdb_daemon.c	2007-05-18 09:19:35 +0000
++++ b/common/ctdb_daemon.c	2007-05-18 13:48:29 +0000
+@@ -836,16 +836,18 @@
+ 
+ 
+ struct daemon_control_state {
++	struct daemon_control_state *next, *prev;
+ 	struct ctdb_client *client;
+ 	struct ctdb_req_control *c;
+ 	uint32_t reqid;
++	struct ctdb_node *node;
+ };
+ 
+ /*
+   callback when a control reply comes in
+  */
+ static void daemon_control_callback(struct ctdb_context *ctdb,
+-				    uint32_t status, TDB_DATA data, 
++				    int32_t status, TDB_DATA data, 
+ 				    const char *errormsg,
+ 				    void *private_data)
+ {
+@@ -880,6 +882,30 @@
+ }
+ 
+ /*
++  fail all pending controls to a disconnected node
++ */
++void ctdb_daemon_cancel_controls(struct ctdb_context *ctdb, struct ctdb_node *node)
++{
++	struct daemon_control_state *state;
++	while ((state = node->pending_controls)) {
++		DLIST_REMOVE(node->pending_controls, state);
++		daemon_control_callback(ctdb, (uint32_t)-1, tdb_null, 
++					"node is disconnected", state);
++	}
++}
++
++/*
++  destroy a daemon_control_state
++ */
++static int daemon_control_destructor(struct daemon_control_state *state)
++{
++	if (state->node) {
++		DLIST_REMOVE(state->node->pending_controls, state);
++	}
++	return 0;
++}
++
++/*
+   this is called when the ctdb daemon received a ctdb request control
+   from a local client over the unix domain socket
+  */
+@@ -900,6 +926,14 @@
+ 	state->client = client;
+ 	state->c = talloc_steal(state, c);
+ 	state->reqid = c->hdr.reqid;
++	if (ctdb_validate_vnn(client->ctdb, c->hdr.destnode)) {
++		state->node = client->ctdb->nodes[c->hdr.destnode];
++		DLIST_ADD(state->node->pending_controls, state);
++	} else {
++		state->node = NULL;
++	}
++
++	talloc_set_destructor(state, daemon_control_destructor);
+ 	
+ 	data.dptr = &c->data[0];
+ 	data.dsize = c->datalen;
+@@ -912,6 +946,10 @@
+ 		DEBUG(0,(__location__ " Failed to send control to remote node %u\n",
+ 			 c->hdr.destnode));
+ 	}
++
++	if (c->flags & CTDB_CTRL_FLAG_NOREPLY) {
++		talloc_free(state);
++	}
+ }
+ 
+ /*
+
+=== modified file 'common/ctdb_monitor.c'
+--- a/common/ctdb_monitor.c	2007-05-18 13:23:36 +0000
++++ b/common/ctdb_monitor.c	2007-05-18 13:48:29 +0000
+@@ -58,6 +58,7 @@
+ 		if (node->dead_count >= CTDB_MONITORING_DEAD_COUNT) {
+ 			DEBUG(0,("Node %u is dead - marking as not connected\n", node->vnn));
+ 			node->flags &= ~NODE_FLAGS_CONNECTED;
++			ctdb_daemon_cancel_controls(ctdb, node);
+ 			/* maybe tell the transport layer to kill the
+ 			   sockets as well?
+ 			*/
+
+=== modified file 'include/ctdb_private.h'
+--- a/include/ctdb_private.h	2007-05-18 13:23:36 +0000
++++ b/include/ctdb_private.h	2007-05-18 13:48:29 +0000
+@@ -74,7 +74,7 @@
+ 
+ /* used for callbacks in ctdb_control requests */
+ typedef void (*ctdb_control_callback_fn_t)(struct ctdb_context *,
+-					   uint32_t status, TDB_DATA data, 
++					   int32_t status, TDB_DATA data, 
+ 					   const char *errormsg,
+ 					   void *private_data);
+ 
+@@ -93,6 +93,10 @@
+ 	/* used by the dead node monitoring */
+ 	uint32_t dead_count;
+ 	uint32_t rx_cnt;
++
++	/* a list of controls pending to this node, so we can time them out quickly
++	   if the node becomes disconnected */
++	struct daemon_control_state *pending_controls;
+ };
+ 
+ /*
+@@ -823,4 +827,6 @@
+ int ctdb_start_monitoring(struct ctdb_context *ctdb);
+ void ctdb_send_keepalive(struct ctdb_context *ctdb, uint32_t destnode);
+ 
++void ctdb_daemon_cancel_controls(struct ctdb_context *ctdb, struct ctdb_node *node);
++
+ #endif
+

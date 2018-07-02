@@ -1,0 +1,95 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun Apr 22 06:11:22 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3MABM0I018690
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 22 Apr 2007 06:11:22 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 8CE34163A1F
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 22 Apr 2007 10:10:57 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 540)
+	id 4233D162AF2; Sun, 22 Apr 2007 10:10:34 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jerry@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070422101034.4233D162AF2@lists.samba.org>
+Date: Sun, 22 Apr 2007 10:10:34 +0000 (GMT)
+Subject: svn commit: samba r22448 - in branches/SAMBA_3_0_RELEASE: .
+	source/nsswitch
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 1682
+Lines: 52
+
+Author: jerry
+Date: 2007-04-22 10:10:29 +0000 (Sun, 22 Apr 2007)
+New Revision: 22448
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22448
+
+Log:
+grab idmap compat patch from 3.0.25 (will recur 3.0.25rc2 for this)
+Modified:
+   branches/SAMBA_3_0_RELEASE/WHATSNEW.txt
+   branches/SAMBA_3_0_RELEASE/source/nsswitch/idmap.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0_RELEASE/WHATSNEW.txt
+===================================================================
+--- branches/SAMBA_3_0_RELEASE/WHATSNEW.txt	2007-04-22 10:09:41 UTC (rev 22447)
++++ branches/SAMBA_3_0_RELEASE/WHATSNEW.txt	2007-04-22 10:10:29 UTC (rev 22448)
+@@ -163,6 +163,11 @@
+     * Allow profiling level to be set on startup.
+ 
+ 
++o   Ying Li <ying.li2@hp.com>
++    * Use the default tdb idmap plugin when neither idmap domains
++      nor idmap backend have been defined.
++
++
+ o   Jason Mader <jason@ncac.gwu.edu>
+     * Various compile warning fixes. 
+     * Initial patch set for strptime() in libreplace.
+
+Modified: branches/SAMBA_3_0_RELEASE/source/nsswitch/idmap.c
+===================================================================
+--- branches/SAMBA_3_0_RELEASE/source/nsswitch/idmap.c	2007-04-22 10:09:41 UTC (rev 22447)
++++ branches/SAMBA_3_0_RELEASE/source/nsswitch/idmap.c	2007-04-22 10:10:29 UTC (rev 22448)
+@@ -322,8 +322,16 @@
+ 			*p = '\0';			
+ 			compat_params = p + 1;
+ 		}
++	} else {
++		/* Back compatible: without idmap domains and explicit
++		   idmap backend.  Taking default idmap backend: tdb */
++		
++		compat = 1;
++		compat_backend = talloc_strdup( idmap_ctx, "tdb");
++		compat_params = compat_backend;
+ 	}
+ 
++
+ 	if ( ! dom_list) {
+ 		dom_list = idmap_default_domain;
+ 	}
+

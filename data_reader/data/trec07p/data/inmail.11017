@@ -1,0 +1,141 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Apr 17 02:54:36 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3H6sa0I024085
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 02:54:36 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 353D216391D
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 06:54:12 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.8 required=3.8 tests=AWL,BAYES_05,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 9EFC6162AC8; Tue, 17 Apr 2007 06:53:46 +0000 (GMT)
+Date: Tue, 17 Apr 2007 16:54:03 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070417065346.9EFC6162AC8@lists.samba.org>
+Subject: Rev 134: start using ctdb_ltdb_lock_fetch_requeue() in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 3376
+Lines: 100
+
+------------------------------------------------------------
+revno: 134
+revision-id: tridge@samba.org-20070417065403-79322cc42ed74b71
+parent: tridge@samba.org-20070417063528-1d3fb576e31269f0
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Tue 2007-04-17 16:54:03 +1000
+message:
+  start using ctdb_ltdb_lock_fetch_requeue()
+modified:
+  common/ctdb_call.c             ctdb_call.c-20061128065342-to93h6eejj5kon81-1
+  tests/fetch.sh                 fetch.sh-20070405031756-lomzqpjyqg3xd1kv-1
+=== modified file 'common/ctdb_call.c'
+--- a/common/ctdb_call.c	2007-04-17 06:35:28 +0000
++++ b/common/ctdb_call.c	2007-04-17 06:54:03 +0000
+@@ -270,11 +270,15 @@
+ 	   we don't need to update the record header now */
+ 	if (c->dmaster != ctdb->vnn) {
+ 		/* fetch the current record */
+-		ret = ctdb_ltdb_fetch(ctdb_db, key, &header, hdr, &data2);
+-		if (ret != 0) {
++		ret = ctdb_ltdb_lock_fetch_requeue(ctdb_db, key, &header, hdr, &data2);
++		if (ret == -1) {
+ 			ctdb_fatal(ctdb, "ctdb_req_dmaster failed to fetch record");
+ 			return;
+ 		}
++		if (ret == -2) {
++			printf("deferring ctdb_request_dmaster\n");
++			return;
++		}
+ 		
+ 		/* its a protocol error if the sending node is not the current dmaster */
+ 		if (header.dmaster != hdr->srcnode) {
+@@ -283,7 +287,9 @@
+ 		}
+ 
+ 		header.dmaster = c->dmaster;
+-		if (ctdb_ltdb_store(ctdb_db, key, &header, data) != 0) {
++		ret = ctdb_ltdb_store(ctdb_db, key, &header, data);
++		ctdb_ltdb_unlock(ctdb_db, key);
++		if (ret != 0) {
+ 			ctdb_fatal(ctdb, "ctdb_req_dmaster unable to update dmaster");
+ 			return;
+ 		}
+@@ -345,17 +351,22 @@
+ 	   fetches the record data (if any), thus avoiding a 2nd fetch of the data 
+ 	   if the call will be answered locally */
+ 
+-	ret = ctdb_ltdb_fetch(ctdb_db, call.key, &header, hdr, &data);
+-	if (ret != 0) {
++	ret = ctdb_ltdb_lock_fetch_requeue(ctdb_db, call.key, &header, hdr, &data);
++	if (ret == -1) {
+ 		ctdb_send_error(ctdb, hdr, ret, "ltdb fetch failed in ctdb_request_call");
+ 		return;
+ 	}
++	if (ret == -2) {
++		printf("deferred ctdb_request_call\n");
++		return;
++	}
+ 
+ 	/* if we are not the dmaster, then send a redirect to the
+ 	   requesting node */
+ 	if (header.dmaster != ctdb->vnn) {
+ 		ctdb_call_send_redirect(ctdb, c, &header);
+ 		talloc_free(data.dptr);
++		ctdb_ltdb_unlock(ctdb_db, call.key);
+ 		return;
+ 	}
+ 
+@@ -368,11 +379,14 @@
+ 	   || c->flags&CTDB_IMMEDIATE_MIGRATION ) {
+ 		ctdb_call_send_dmaster(ctdb_db, c, &header, &call.key, &data);
+ 		talloc_free(data.dptr);
++		ctdb_ltdb_unlock(ctdb_db, call.key);
+ 		return;
+ 	}
+ 
+ 	ctdb_call_local(ctdb_db, &call, &header, &data, c->hdr.srcnode);
+ 
++	ctdb_ltdb_unlock(ctdb_db, call.key);
++
+ 	len = offsetof(struct ctdb_reply_call, data) + call.reply_data.dsize;
+ 	r = ctdb->methods->allocate_pkt(ctdb, len);
+ 	CTDB_NO_MEMORY_FATAL(ctdb, r);
+
+=== modified file 'tests/fetch.sh'
+--- a/tests/fetch.sh	2007-04-12 06:49:37 +0000
++++ b/tests/fetch.sh	2007-04-17 06:54:03 +0000
+@@ -7,3 +7,11 @@
+ bin/ctdb_fetch --nlist tests/nodes.txt --listen 127.0.0.1:9001 $* 
+ 
+ killall -q ctdb_fetch
++
++echo "Trying 4 nodes"
++bin/ctdb_fetch --nlist tests/4nodes.txt --listen 127.0.0.4:9001 $* &
++bin/ctdb_fetch --nlist tests/4nodes.txt --listen 127.0.0.3:9001 $* &
++bin/ctdb_fetch --nlist tests/4nodes.txt --listen 127.0.0.2:9001 $* &
++bin/ctdb_fetch --nlist tests/4nodes.txt --listen 127.0.0.1:9001 $* 
++
++killall -q ctdb_fetch
+

@@ -1,0 +1,134 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Apr 11 01:24:26 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3B5OQ0I013070
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 11 Apr 2007 01:24:26 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 3C27A163828
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 11 Apr 2007 05:24:03 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.5 required=3.8 tests=AWL,BAYES_20,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 17986162ADE; Wed, 11 Apr 2007 05:23:38 +0000 (GMT)
+Date: Wed, 11 Apr 2007 15:23:50 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070411052338.17986162ADE@lists.samba.org>
+Subject: Rev 93: added --num-clients option to ctdb_messaging test in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2422
+Lines: 93
+
+------------------------------------------------------------
+revno: 93
+revision-id: tridge@samba.org-20070411052350-eb4fe86cc87ea5ed
+parent: tridge@samba.org-20070411050922-59469f0a8a24cf4b
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Wed 2007-04-11 15:23:50 +1000
+message:
+  added --num-clients option to ctdb_messaging test
+modified:
+  tests/ctdb_messaging.c         ctdb_messaging.c-20070411034205-6d6vne56pbih2x1p-1
+=== modified file 'tests/ctdb_messaging.c'
+--- a/tests/ctdb_messaging.c	2007-04-11 05:09:22 +0000
++++ b/tests/ctdb_messaging.c	2007-04-11 05:23:50 +0000
+@@ -27,6 +27,7 @@
+ static int num_records = 10;
+ static int num_msgs = 1;
+ static int num_repeats = 100;
++static int num_clients = 2;
+ 
+ 
+ /*
+@@ -36,6 +37,7 @@
+ 				 TDB_DATA data, void *private)
+ {
+ 	printf("client vnn:%d received a message to srvid:%d\n",ctdb_get_vnn(ctdb),srvid);
++	fflush(stdout);
+ }
+ 
+ /*
+@@ -61,16 +63,17 @@
+ 		{ "timelimit", 't', POPT_ARG_INT, &timelimit, 0, "timelimit", "integer" },
+ 		{ "num-records", 'r', POPT_ARG_INT, &num_records, 0, "num_records", "integer" },
+ 		{ "num-msgs", 'n', POPT_ARG_INT, &num_msgs, 0, "num_msgs", "integer" },
++		{ "num-clients", 0, POPT_ARG_INT, &num_clients, 0, "num_clients", "integer" },
+ 		POPT_TABLEEND
+ 	};
+ 	int opt;
+ 	const char **extra_argv;
+ 	int extra_argc = 0;
+-	int ret;
++	int ret, i, j;
+ 	poptContext pc;
+ 	struct event_context *ev;
+ 	pid_t pid;
+-	uint32_t srvid;
++	int srvid;
+ 	TDB_DATA data;
+ 
+ 	pc = poptGetContext(argv[0], argc, argv, popt_options, POPT_CONTEXT_KEEP_FIRST);
+@@ -142,11 +145,16 @@
+ 	/* start the protocol running */
+ 	ret = ctdb_start(ctdb);
+ 
+-	pid=fork();
+-	if (pid) {
+-		srvid=0;
+-	} else {
+-		srvid=1;
++	srvid = -1;
++	for (i=0;i<num_clients-1;i++) {
++		pid=fork();
++		if (pid) {
++			srvid = i;
++			break;
++		}
++	}
++	if (srvid == -1) {
++		srvid = num_clients-1;
+ 	}
+ 
+ 	/* wait until all nodes are connected (should not be needed
+@@ -157,12 +165,17 @@
+ 
+ 	ctdb_connect_wait(ctdb);
+ 
+-	sleep(2);
++	sleep(1);
+ 
+ 	printf("sending message from vnn:%d to vnn:%d/srvid:%d\n",ctdb_get_vnn(ctdb),ctdb_get_vnn(ctdb), 1-srvid);
+-	ctdb_send_message(ctdb, ctdb_get_vnn(ctdb), 1-srvid, data);
++	for (i=0;i<ctdb_get_num_nodes(ctdb);i++) {
++		for (j=0;j<num_clients;j++) {
++			printf("sending message to %d:%d\n", i, j);
++			ctdb_send_message(ctdb, i, j, data);
++		}
++	}
+ 
+-	while(1){
++	while (1) {
+ 		event_loop_once(ev);
+ 	}
+        
+

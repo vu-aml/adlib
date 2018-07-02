@@ -1,0 +1,94 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat May 12 19:32:11 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4CNWBqD021261
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 12 May 2007 19:32:11 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 1DEAA16381B
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 12 May 2007 23:32:09 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 3D2AE162AFE; Sat, 12 May 2007 23:31:34 +0000 (GMT)
+Date: Sun, 13 May 2007 09:20:17 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070512233134.3D2AE162AFE@lists.samba.org>
+Subject: Rev 294: make sure the ctdb control socket is secure in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 294
+revision-id: tridge@samba.org-20070512232016-fdj2opy995c536bs
+parent: tridge@samba.org-20070512112526-9t4ruf7033dstx0u
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Sun 2007-05-13 09:20:16 +1000
+message:
+  make sure the ctdb control socket is secure
+modified:
+  common/ctdb_daemon.c           ctdb_daemon.c-20070409200331-3el1kqgdb9m4ib0g-1
+=== modified file 'common/ctdb_daemon.c'
+--- a/common/ctdb_daemon.c	2007-05-12 11:25:26 +0000
++++ b/common/ctdb_daemon.c	2007-05-12 23:20:16 +0000
+@@ -600,10 +600,15 @@
+ 
+ 	ctdb->daemon.sd = socket(AF_UNIX, SOCK_STREAM, 0);
+ 	if (ctdb->daemon.sd == -1) {
+-		ctdb->daemon.sd = -1;
+ 		return -1;
+ 	}
+ 
++	if (fchown(ctdb->daemon.sd, geteuid(), getegid()) != 0 ||
++	    fchmod(ctdb->daemon.sd, 0700) != 0) {
++		DEBUG(0,("Unable to secure ctdb socket '%s', ctdb->daemon.name\n"));
++		goto failed;
++	}
++
+ 	set_non_blocking(ctdb->daemon.sd);
+ 
+ 	memset(&addr, 0, sizeof(addr));
+@@ -611,13 +616,20 @@
+ 	strncpy(addr.sun_path, ctdb->daemon.name, sizeof(addr.sun_path));
+ 
+ 	if (bind(ctdb->daemon.sd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
+-		close(ctdb->daemon.sd);
+-		ctdb->daemon.sd = -1;
+-		return -1;
++		DEBUG(0,("Unable to bind on ctdb socket '%s', ctdb->daemon.name\n"));
++		goto failed;
+ 	}	
+-	listen(ctdb->daemon.sd, 1);
++	if (listen(ctdb->daemon.sd, 10) != 0) {
++		DEBUG(0,("Unable to listen on ctdb socket '%s', ctdb->daemon.name\n"));
++		goto failed;
++	}
+ 
+ 	return 0;
++
++failed:
++	close(ctdb->daemon.sd);
++	ctdb->daemon.sd = -1;
++	return -1;	
+ }
+ 
+ /*
+

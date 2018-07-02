@@ -1,0 +1,613 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon May  7 21:39:33 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l481dWqD005536
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 7 May 2007 21:39:32 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 508EB162BDD
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue,  8 May 2007 01:39:31 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.7 required=3.8 tests=AWL,BAYES_50,
+	DNS_FROM_RFC_ABUSE,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from relay.sgi.com (netops-testserver-3-out.sgi.com [192.48.171.28])
+	by lists.samba.org (Postfix) with ESMTP id B357E162AD8
+	for <samba-technical@lists.samba.org>;
+	Tue,  8 May 2007 01:38:58 +0000 (GMT)
+Received: from larry.melbourne.sgi.com (larry.melbourne.sgi.com
+	[134.14.52.130])
+	by netops-testserver-3.corp.sgi.com (Postfix) with SMTP id 71F6D90890; 
+	Mon,  7 May 2007 18:38:49 -0700 (PDT)
+Received: from [134.14.55.78] (redback.melbourne.sgi.com [134.14.55.78]) by
+	larry.melbourne.sgi.com (950413.SGI.8.6.12/950213.SGI.AUTOCF)
+	via ESMTP id LAA19656; Tue, 8 May 2007 11:38:33 +1000
+Message-ID: <463FD49D.3080406@sgi.com>
+Date: Tue, 08 May 2007 11:38:37 +1000
+From: Alison Winters <alisonw@sgi.com>
+User-Agent: Thunderbird 1.5.0.10 (Windows/20070221)
+MIME-Version: 1.0
+To: Ed Plese <ed@edplese.com>
+References: <20070426174427.GE26520@orion.universe>
+In-Reply-To: <20070426174427.GE26520@orion.universe>
+Content-Type: text/plain; charset=ISO-8859-1
+Content-Transfer-Encoding: 7bit
+Cc: metze@samba.org, samba-technical@lists.samba.org
+Subject: Re: [PATCH] Shadow Copy Improvements
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Could someone take a look at this patch, metze perhaps?  I've been
+testing with this patch on SGI's XVM snapshot and Ed is pretty happy
+with it on ZFS.  I really think it adds a lot of value to the current
+snapshot module.
+
+Alison
+
+
+Ed Plese wrote:
+> Attached is a set of 3 patches that add fixes and improvements to the
+> existing shadow_copy VFS module.  I had previously sent a patch for a new
+> shadow_copy_zfs module with customizations specific to ZFS on Solaris but
+> these patches instead add generic improvements that should work with most
+> snapshot methods.
+> 
+> I'd like give a big thanks to Alison Winters for contributing many of the
+> ideas for this patch as well as code and testing.
+> 
+> The defaults for all of the new smb.conf parameters are set to values
+> that preserve backwards compatibility with the current module.
+> 
+> The patches are:
+> 
+> 1-dirent-fix.patch
+>   This fixes the module to work on systems that define struct dirent with
+>   d_name[1].  Solaris is an example of such a system and it causes the
+>   share to appear to be completely empty.
+> 
+> 2-sort.patch
+>   With the existing shadow_copy module the shadow copies are displayed in
+>   the Windows GUI in the order the server obtains them from readdir(3).
+>   On some systems and filesystems readdir(3) does not return files in any
+>   particular order which leads to the list in the GUI being unsorted and
+>   difficult to use.  This patch allows the list to be sorted based on
+>   a "sort" parameter specified for the module.  Allowed values are "asc"
+>   or "desc".  When not specified the current unsorted behavior is maintained.
+> 
+> 3-paths.patch
+>   This patch allows for various components of the snapshot paths to be
+>   easily customized.  Currently this must be done by creating scripts that
+>   will create the appropriate symbolic links every time a snapshot is taken
+>   and consequently clean up all of the symbolic links whenever a snapshot
+>   is deleted.  With this patch the path components are specified in the
+>   smb.conf file using the new parameters "path", "subpath", "format", and
+>   "localtime".  The defaults for all of the new parameters maintain the
+>   current behavior of the module.
+> 
+>   path - Specifies the path to the directory that contains the snapshots.
+> 
+>   format - This is the format of the snapshot names in str[fp]time notation
+>       except that $ characters are used in place of % characters.
+> 
+>   subpath - The subdirectory under the snapshot that contains all of the
+>       files for this shadow copy.
+> 
+>   localtime (boolean) - Treat the snapshot names as being in localtime
+>       instead of the default of GMT.
+> 
+>   These probably aren't the clearest explanations of the parameters but the
+>   examples below should help to clear up any confusion.
+> 
+> Some limitations include:
+> 
+> * shadow copy does not work correctly when mapping a drive to a
+>   subdirectory of a share
+> * snapshot names are limited to expressions that can be expressed with the
+>   str[fp]time(3) functions and variable substitutions in smb.conf
+> 
+> Example uses:
+> 
+> Use with @GMT- directories or symbolic links in the share:
+> 
+> [homes]
+>    public = no
+>    writable = yes
+>    printable = no
+>    vfs object = shadow_copy
+> 
+> 
+> A single large filesystem mounted at /home that contains all of the home
+> directories.  The snapshots reside in /snapshots/home.
+> 
+> [homes]
+>    path = /home/%U
+>    public = no
+>    writable = yes
+>    printable = no
+>    vfs object = shadow_copy
+>    shadow_copy: path = /snapshots/home
+>    shadow_copy: subpath = %U
+>    shadow_copy: format = $Y.$m.$d-$H.$M.$S
+>    shadow_copy: sort = desc
+>    shadow_copy: localtime = yes
+> 
+> 
+> A separate ZFS filesystem for each home directory.
+> 
+> [homes]
+>    path = /home/%U
+>    public = no
+>    writable = yes
+>    printable = no
+>    vfs object = shadow_copy
+>    shadow_copy: path = /home/%U/.zfs/snapshot
+>    shadow_copy: format = $Y.$m.$d-$H.$M.$S
+>    shadow_copy: sort = desc
+>    shadow_copy: localtime = yes
+> 
+> 
+> Comments and feedback are welcome!
+> 
+> Thanks,
+> 
+> Ed Plese
+> 
+> 
+> ------------------------------------------------------------------------
+> 
+> === modified file 'source/modules/vfs_shadow_copy.c'
+> --- source/modules/vfs_shadow_copy.c	2006-12-21 13:52:11 +0000
+> +++ source/modules/vfs_shadow_copy.c	2007-04-16 01:45:15 +0000
+> @@ -58,8 +58,8 @@
+>  
+>  typedef struct {
+>  	int pos;
+> -	int num;
+> -	SMB_STRUCT_DIRENT *dirs;
+> +	int length;
+> +	unsigned char *dirs;
+>  } shadow_copy_Dir;
+>  
+>  static BOOL shadow_copy_match_name(const char *name)
+> @@ -106,13 +106,14 @@
+>  
+>  		DEBUG(10,("shadow_copy_opendir: not hide [%s]\n",d->d_name));
+>  
+> -		dirp->dirs = SMB_REALLOC_ARRAY(dirp->dirs,SMB_STRUCT_DIRENT, dirp->num+1);
+> +		dirp->dirs = SMB_REALLOC(dirp->dirs, dirp->length + d->d_reclen);
+>  		if (!dirp->dirs) {
+>  			DEBUG(0,("shadow_copy_opendir: Out of memory\n"));
+>  			break;
+>  		}
+>  
+> -		dirp->dirs[dirp->num++] = *d;
+> +		memcpy(dirp->dirs + dirp->length, d, d->d_reclen);
+> +		dirp->length += d->d_reclen;
+>  	}
+>  
+>  	SMB_VFS_NEXT_CLOSEDIR(handle,p);
+> @@ -121,10 +122,13 @@
+>  
+>  static SMB_STRUCT_DIRENT *shadow_copy_readdir(vfs_handle_struct *handle, SMB_STRUCT_DIR *_dirp)
+>  {
+> +	SMB_STRUCT_DIRENT *d;
+>  	shadow_copy_Dir *dirp = (shadow_copy_Dir *)_dirp;
+>  
+> -	if (dirp->pos < dirp->num) {
+> -		return &(dirp->dirs[dirp->pos++]);
+> +	if (dirp->pos < dirp->length) {
+> +		d = (SMB_STRUCT_DIRENT *)(dirp->dirs + dirp->pos);
+> +		dirp->pos += d->d_reclen;
+> +		return d;
+>  	}
+>  
+>  	return NULL;
+> @@ -134,7 +138,7 @@
+>  {
+>  	shadow_copy_Dir *dirp = (shadow_copy_Dir *)_dirp;
+>  
+> -	if (offset < dirp->num) {
+> +	if (offset < dirp->length) {
+>  		dirp->pos = offset ;
+>  	}
+>  }
+> 
+> 
+> 
+> ------------------------------------------------------------------------
+> 
+> === modified file 'source/modules/vfs_shadow_copy.c'
+> --- source/modules/vfs_shadow_copy.c	2007-04-16 01:45:15 +0000
+> +++ source/modules/vfs_shadow_copy.c	2007-04-26 15:45:09 +0000
+> @@ -56,12 +56,50 @@
+>  #define SHADOW_COPY_PREFIX "@GMT-"
+>  #define SHADOW_COPY_SAMPLE "@GMT-2004.02.18-15.44.00"
+>  
+> +#define SHADOW_COPY_DEFAULT_SORT ""
+> +
+>  typedef struct {
+>  	int pos;
+>  	int length;
+>  	unsigned char *dirs;
+>  } shadow_copy_Dir;
+>  
+> +static int shadow_copy_label_cmp_asc(const void *x, const void *y)
+> +{
+> +	return strncmp((char *)x, (char *)y, sizeof(SHADOW_COPY_LABEL));
+> +}
+> +
+> +static int shadow_copy_label_cmp_desc(const void *x, const void *y)
+> +{
+> +	return -strncmp((char *)x, (char *)y, sizeof(SHADOW_COPY_LABEL));
+> +}
+> +
+> +static void shadow_copy_sort_data(vfs_handle_struct *handle, SHADOW_COPY_DATA *shadow_copy_data)
+> +{
+> +	const char *tmp_str = NULL;
+> +
+> +	if (shadow_copy_data && shadow_copy_data->num_volumes > 0 &&
+> +		shadow_copy_data->labels) {
+> +
+> +		tmp_str = lp_parm_const_string(SNUM(handle->conn), "shadow_copy", "sort",SHADOW_COPY_DEFAULT_SORT);
+> +
+> +		if (strcmp(tmp_str, "asc") == 0) {
+> +			qsort(shadow_copy_data->labels,
+> +				shadow_copy_data->num_volumes,
+> +				sizeof(SHADOW_COPY_LABEL),
+> +				shadow_copy_label_cmp_asc);
+> +
+> +		} else if (strcmp(tmp_str, "desc") == 0) {
+> +			qsort(shadow_copy_data->labels,
+> +				shadow_copy_data->num_volumes,
+> +				sizeof(SHADOW_COPY_LABEL),
+> +				shadow_copy_label_cmp_desc);
+> +		}
+> +	}
+> +
+> +	return;
+> +}
+> +
+>  static BOOL shadow_copy_match_name(const char *name)
+>  {
+>  	if (strncmp(SHADOW_COPY_PREFIX,name, sizeof(SHADOW_COPY_PREFIX)-1)==0 &&
+> @@ -213,6 +251,8 @@
+>  		shadow_copy_data->labels = tlabels;
+>  	}
+>  
+> +	shadow_copy_sort_data(handle, shadow_copy_data);
+> +
+>  	SMB_VFS_NEXT_CLOSEDIR(handle,p);
+>  	return 0;
+>  }
+> 
+> 
+> 
+> ------------------------------------------------------------------------
+> 
+> === modified file 'source/modules/vfs_shadow_copy.c'
+> --- source/modules/vfs_shadow_copy.c	2007-04-26 15:45:09 +0000
+> +++ source/modules/vfs_shadow_copy.c	2007-04-26 15:46:05 +0000
+> @@ -46,8 +46,52 @@
+>  
+>      Note: Files must differ to be displayed via Windows Explorer!
+>  	  Directories are always displayed...    
+> +
+> +    In addition it is possible to specify additional parameters
+> +	that eliminate the need to utilize the @GMT- directories
+> +	or symbolic links.
+> +
+> +    path
+> +      Specifies the path to the directory that contains the
+> +      snapshots.
+> +
+> +    format
+> +      Specifies the format of the snapshot names in str[fp]time
+> +      notation except that $ characters are used in place of %
+> +      characters.
+> +
+> +    subpath
+> +      Specifies the subdirectory under the snapshot that contains
+> +      all of the files for this shadow copy.
+> +
+> +    localtime (boolean)
+> +      Treat the snapshot names as being in localtime instead of
+> +      the default of GMT.
+> +
+> +    sort
+> +      Sorts the shadow copies, specified as "asc" or "desc".
+> +      The default is to leave them unsorted.
+> +
+> +    Below is example usage for a single large filesystem mounted
+> +    at /home that contains all of the home directories.  The
+> +    snapshots reside in /snapshots/home.
+> +
+> +    [homes]
+> +       path = /home/%U
+> +       public = no
+> +       writable = yes
+> +       printable = no
+> +       vfs object = shadow_copy
+> +       shadow_copy: path = /snapshots/home
+> +       shadow_copy: subpath = %U
+> +       shadow_copy: format = $Y.$m.$d-$H.$M.$S
+> +       shadow_copy: sort = desc
+> +       shadow_copy: localtime = yes
+> +
+>  */
+>  
+> +extern userdom_struct current_user_info;
+> +
+>  static int vfs_shadow_copy_debug_level = DBGC_VFS;
+>  
+>  #undef DBGC_CLASS
+> @@ -56,6 +100,11 @@
+>  #define SHADOW_COPY_PREFIX "@GMT-"
+>  #define SHADOW_COPY_SAMPLE "@GMT-2004.02.18-15.44.00"
+>  
+> +#define SHADOW_COPY_GMT_FORMAT "@GMT-%Y.%m.%d-%H.%M.%S"
+> +#define SHADOW_COPY_DEFAULT_FORMAT "@GMT-$Y.$m.$d-$H.$M.$S"
+> +#define SHADOW_COPY_DEFAULT_PATH "."
+> +#define SHADOW_COPY_DEFAULT_SUBPATH "."
+> +#define SHADOW_COPY_DEFAULT_LOCALTIME (False)
+>  #define SHADOW_COPY_DEFAULT_SORT ""
+>  
+>  typedef struct {
+> @@ -110,13 +159,146 @@
+>  	return False;
+>  }
+>  
+> +static BOOL shadow_copy_snapshot_to_gmt(vfs_handle_struct *handle, const char *name, char *converted, int converted_length)
+> +{
+> +	char *cstr = NULL;
+> +	struct tm timestamp;
+> +	time_t timestamp_t;
+> +
+> +	char *fmt = alloc_sub_basic(get_current_username(), current_user_info.domain,
+> +		lp_parm_const_string(SNUM(handle->conn),
+> +			"shadow_copy", "format", SHADOW_COPY_DEFAULT_FORMAT));
+> +	char *tmp;
+> +
+> +	if (fmt == NULL) {
+> +		DEBUG(0, ("shadow_copy_snapshot_to_gmt: alloc_sub_basic failed for format\n"));
+> +		return False;
+> +	}
+> +
+> +	/* replace $ in the parameter with % */
+> +	for (tmp = fmt; *tmp != '\0'; tmp++) {
+> +		if (*tmp == '$') {
+> +			*tmp = '%';
+> +		}
+> +	}
+> +
+> +	memset(&timestamp, 0, sizeof(timestamp));
+> +	cstr = strptime(name, fmt, &timestamp);
+> +
+> +	if (cstr == NULL) {
+> +		DEBUG(10, ("shadow_copy_snapshot_to_gmt: no match %s: %s\n", fmt, name));
+> +		SAFE_FREE(fmt);
+> +		return False;
+> +	}
+> +
+> +	DEBUG(10, ("shadow_copy_snapshot_to_gmt: match %s: %s\n", fmt, name));
+> +	if (lp_parm_bool(SNUM(handle->conn), "shadow_copy", "localtime", SHADOW_COPY_DEFAULT_LOCALTIME)) {
+> +		timestamp.tm_isdst = -1;
+> +		timestamp_t = mktime(&timestamp);
+> +		gmtime_r(&timestamp_t, &timestamp);
+> +	}
+> +	strftime(converted, converted_length, SHADOW_COPY_GMT_FORMAT, &timestamp);
+> +	SAFE_FREE(fmt);
+> +	return True;
+> +}
+> +
+> +static BOOL shadow_copy_file_to_snapshot_path(vfs_handle_struct *handle, const char *path, char *converted, int converted_length)
+> +{
+> +	/* all conversions start with the initial portion of the path matching
+> +	 * @GMT-xxxxxxx
+> +	 *	
+> +	 * take the full string and pass it along to strptime */
+> +
+> +	char *cstr = NULL;
+> +	struct tm timestamp;
+> +	time_t timestamp_t;
+> +	char snapname[MAXPATHLEN];
+> +	char *snappath = NULL;
+> +	char *subpath = NULL;
+> +
+> +	char *fmt = alloc_sub_basic(get_current_username(), current_user_info.domain,
+> +		lp_parm_const_string(SNUM(handle->conn),
+> +			"shadow_copy", "format", SHADOW_COPY_DEFAULT_FORMAT));
+> +	char *tmp;
+> +
+> +	if (fmt == NULL) {
+> +		DEBUG(0, ("shadow_copy_file_to_snapshot_path: alloc_sub_basic failed for format\n"));
+> +		return False;
+> +	}
+> +
+> +	/* replace $ in the parameter with % */
+> +	for (tmp = fmt; *tmp != '\0'; tmp++) {
+> +		if (*tmp == '$') {
+> +			*tmp = '%';
+> +		}
+> +	}
+> +
+> +	memset(&timestamp, 0, sizeof(timestamp));
+> +	cstr = strptime(path, SHADOW_COPY_GMT_FORMAT, &timestamp);
+> +
+> +	if (cstr == NULL) {
+> +		/* string doesn't match the required SHADOW_COPY_GMT_FORMAT so just
+> +		 * return the original path */
+> +
+> +		strncpy(converted, path, converted_length);
+> +		SAFE_FREE(fmt);
+> +		return False;
+> +	}
+> +
+> +	/* cstr is the remaining portion of the path after the @GMT-xxx */
+> +
+> +	if (lp_parm_bool(SNUM(handle->conn), "shadow_copy", "localtime", SHADOW_COPY_DEFAULT_LOCALTIME)) {
+> +		timestamp_t = timegm(&timestamp);
+> +		localtime_r(&timestamp_t, &timestamp);
+> +	}
+> +	strftime(snapname, MAXPATHLEN, fmt, &timestamp);
+> +
+> +	snappath = alloc_sub_basic(get_current_username(), current_user_info.domain,
+> +		lp_parm_const_string(SNUM(handle->conn),
+> +			"shadow_copy", "path", SHADOW_COPY_DEFAULT_PATH));
+> +	if (snappath == NULL) {
+> +		DEBUG(0, ("shadow_copy_file_to_snapshot_path: alloc_sub_basic failed for path\n"));
+> +		SAFE_FREE(fmt);
+> +		return False;
+> +	}
+> +
+> +	subpath = alloc_sub_basic(get_current_username(), current_user_info.domain,
+> +		lp_parm_const_string(SNUM(handle->conn),
+> +			"shadow_copy", "subpath", SHADOW_COPY_DEFAULT_SUBPATH));
+> +	if (subpath == NULL) {
+> +		DEBUG(0, ("shadow_copy_file_to_snapshot_path: alloc_sub_basic failed for subpath\n"));
+> +		SAFE_FREE(fmt);
+> +		SAFE_FREE(snappath);
+> +		return False;
+> +	}
+> +
+> +	/* path/snap/subpath/filepath */
+> +	snprintf(converted, converted_length, "%s/%s/%s/%s",
+> +		snappath,
+> +		snapname,
+> +		subpath,
+> +		cstr);
+> +
+> +	SAFE_FREE(fmt);
+> +	SAFE_FREE(snappath);
+> +	SAFE_FREE(subpath);
+> +	return True;
+> +}
+> +
+>  static SMB_STRUCT_DIR *shadow_copy_opendir(vfs_handle_struct *handle, const char *fname, const char *mask, uint32 attr)
+>  {
+>  	shadow_copy_Dir *dirp;
+> -	SMB_STRUCT_DIR *p = SMB_VFS_NEXT_OPENDIR(handle,fname,mask,attr);
+> +	SMB_STRUCT_DIR *p = NULL;
+> +	
+> +	char newpath[MAXPATHLEN];
+> +	shadow_copy_file_to_snapshot_path(handle, fname, newpath, MAXPATHLEN);
+> +
+> +	DEBUG(10,("shadow_copy_opendir: [%s] -> [%s]\n",fname,newpath));
+> +	
+> +	p = SMB_VFS_NEXT_OPENDIR(handle,newpath,mask,attr);
+>  
+>  	if (!p) {
+> -		DEBUG(0,("shadow_copy_opendir: SMB_VFS_NEXT_OPENDIR() failed for [%s]\n",fname));
+> +		DEBUG(0,("shadow_copy_opendir: SMB_VFS_NEXT_OPENDIR() failed for [%s]\n",newpath));
+>  		return NULL;
+>  	}
+>  
+> @@ -203,15 +385,49 @@
+>  	return 0;	
+>  }
+>  
+> +static int shadow_copy_stat(vfs_handle_struct *handle, const char *fname, SMB_STRUCT_STAT *sbuf)
+> +{
+> +	char newpath[MAXPATHLEN];
+> +
+> +	shadow_copy_file_to_snapshot_path(handle, fname, newpath, MAXPATHLEN);
+> +	DEBUG(10,("shadow_copy_stat: [%s] -> [%s]\n",fname,newpath));
+> +
+> +	return SMB_VFS_NEXT_STAT(handle, newpath, sbuf);
+> +}
+> +
+> +static int shadow_copy_open(vfs_handle_struct *handle, const char *fname, files_struct *fsp, int flags, mode_t mode)
+> +{
+> +	char newpath[MAXPATHLEN];
+> +
+> +	shadow_copy_file_to_snapshot_path(handle, fname, newpath, MAXPATHLEN);
+> +	DEBUG(10,("shadow_copy_open: [%s] -> [%s]\n",fname,newpath));
+> +
+> +	return SMB_VFS_NEXT_OPEN(handle, newpath, fsp, flags, mode);
+> +}
+> +
+>  static int shadow_copy_get_shadow_copy_data(vfs_handle_struct *handle, files_struct *fsp, SHADOW_COPY_DATA *shadow_copy_data, BOOL labels)
+>  {
+> -	SMB_STRUCT_DIR *p = SMB_VFS_NEXT_OPENDIR(handle,fsp->conn->connectpath,NULL,0);
+> +	SMB_STRUCT_DIR *p = NULL;
+> +	char snapname[MAXPATHLEN];
+> +	char *path = alloc_sub_basic(get_current_username(), current_user_info.domain,
+> +		lp_parm_const_string(SNUM(handle->conn),
+> +			"shadow_copy", "path", fsp->conn->connectpath));
+> +
+> +	if (path == NULL) {
+> +		DEBUG(0, ("shadow_copy_get_shadow_copy_data: alloc_sub_basic failed for path\n"));
+> +		return -1;
+> +	}
+> +
+> +	DEBUG(10,("shadow_copy_get_shadow_copy_data: [%s]\n",path));
+> +
+> +	p = SMB_VFS_NEXT_OPENDIR(handle,path,NULL,0);
+>  
+>  	shadow_copy_data->num_volumes = 0;
+>  	shadow_copy_data->labels = NULL;
+>  
+>  	if (!p) {
+> -		DEBUG(0,("shadow_copy_get_shadow_copy_data: SMB_VFS_NEXT_OPENDIR() failed for [%s]\n",fsp->conn->connectpath));
+> +		DEBUG(0,("shadow_copy_get_shadow_copy_data: SMB_VFS_NEXT_OPENDIR() failed for [%s]\n",path));
+> +		SAFE_FREE(path);
+>  		return -1;
+>  	}
+>  
+> @@ -225,8 +441,8 @@
+>  		}
+>  
+>  		/* */
+> -		if (!shadow_copy_match_name(d->d_name)) {
+> -			DEBUG(10,("shadow_copy_get_shadow_copy_data: ignore [%s]\n",d->d_name));
+> +		if (!shadow_copy_snapshot_to_gmt(handle, d->d_name, snapname, MAXPATHLEN)) {
+> +			DEBUG(6,("shadow_copy_get_shadow_copy_data: ignore [%s]\n",d->d_name));
+>  			continue;
+>  		}
+>  
+> @@ -243,10 +459,11 @@
+>  		if (tlabels == NULL) {
+>  			DEBUG(0,("shadow_copy_get_shadow_copy_data: Out of memory\n"));
+>  			SMB_VFS_NEXT_CLOSEDIR(handle,p);
+> +			SAFE_FREE(path);
+>  			return -1;
+>  		}
+>  
+> -		snprintf(tlabels[shadow_copy_data->num_volumes++], sizeof(*tlabels), "%s",d->d_name);
+> +		snprintf(tlabels[shadow_copy_data->num_volumes++], sizeof(*tlabels), "%s",snapname);
+>  
+>  		shadow_copy_data->labels = tlabels;
+>  	}
+> @@ -254,6 +471,7 @@
+>  	shadow_copy_sort_data(handle, shadow_copy_data);
+>  
+>  	SMB_VFS_NEXT_CLOSEDIR(handle,p);
+> +	SAFE_FREE(path);
+>  	return 0;
+>  }
+>  
+> @@ -267,6 +485,9 @@
+>  	{SMB_VFS_OP(shadow_copy_rewinddir),		SMB_VFS_OP_REWINDDIR,		SMB_VFS_LAYER_TRANSPARENT},
+>  	{SMB_VFS_OP(shadow_copy_closedir),		SMB_VFS_OP_CLOSEDIR,		SMB_VFS_LAYER_TRANSPARENT},
+>  
+> +	{SMB_VFS_OP(shadow_copy_stat),		SMB_VFS_OP_STAT,		SMB_VFS_LAYER_TRANSPARENT},
+> +	{SMB_VFS_OP(shadow_copy_open),		SMB_VFS_OP_OPEN,		SMB_VFS_LAYER_TRANSPARENT},
+> +
+>  	{SMB_VFS_OP(shadow_copy_get_shadow_copy_data),	SMB_VFS_OP_GET_SHADOW_COPY_DATA,SMB_VFS_LAYER_OPAQUE},
+>  
+>  	{SMB_VFS_OP(NULL),				SMB_VFS_OP_NOOP,		SMB_VFS_LAYER_NOOP}
+> 
+

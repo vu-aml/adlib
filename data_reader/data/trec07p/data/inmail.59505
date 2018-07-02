@@ -1,0 +1,91 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun Jun 17 17:54:47 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5HLskL9010876
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 17 Jun 2007 17:54:46 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 81E4916381F
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 17 Jun 2007 21:54:44 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.4 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 467C7162ABF; Sun, 17 Jun 2007 21:54:12 +0000 (GMT)
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070617215412.467C7162ABF@lists.samba.org>
+Date: Sun, 17 Jun 2007 21:54:12 +0000 (GMT)
+Subject: svn commit: samba r23535 - in
+	branches/SAMBA_4_0/source/torture/nbench: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: tridge
+Date: 2007-06-17 21:54:11 +0000 (Sun, 17 Jun 2007)
+New Revision: 23535
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23535
+
+Log:
+
+accept numeric ntstatus codes in nbench load files (ronnies wireshark
+script generates numeric codes)
+
+Modified:
+   branches/SAMBA_4_0/source/torture/nbench/nbench.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/torture/nbench/nbench.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/nbench/nbench.c	2007-06-17 20:04:57 UTC (rev 23534)
++++ branches/SAMBA_4_0/source/torture/nbench/nbench.c	2007-06-17 21:54:11 UTC (rev 23535)
+@@ -48,7 +48,7 @@
+ 	BOOL correct = True;
+ 	double target_rate = lp_parm_double(-1, "torture", "targetrate", 0);	
+ 
+-	if (target_rate != 0) {
++	if (target_rate != 0 && client == 0) {
+ 		printf("Targetting %.4f MByte/sec\n", target_rate);
+ 	}
+ 
+@@ -106,13 +106,19 @@
+ 			exit(1);
+ 		}
+ 
+-		if (strncmp(params[i-1], "NT_STATUS_", 10) != 0) {
++		if (strncmp(params[i-1], "NT_STATUS_", 10) != 0 &&
++		    strncmp(params[i-1], "0x", 2) != 0) {
+ 			printf("Badly formed status at line %d\n", nbench_line_count);
+ 			talloc_free(params);
+ 			continue;
+ 		}
+ 
+-		status = nt_status_string_to_code(params[i-1]);
++		/* accept numeric or string status codes */
++		if (strncmp(params[i-1], "0x", 2) == 0) {
++			status = NT_STATUS(strtoul(params[i-1], NULL, 16));
++		} else {
++			status = nt_status_string_to_code(params[i-1]);
++		}
+ 
+ 		DEBUG(9,("run_netbench(%d): %s %s\n", client, params[0], params[1]));
+ 
+

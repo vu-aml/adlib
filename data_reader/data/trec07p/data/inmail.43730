@@ -1,0 +1,421 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri May 25 14:18:12 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4PIIBqD031100
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 25 May 2007 14:18:11 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 739DF16396D
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 25 May 2007 18:18:07 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,
+	FORGED_RCVD_HELO,RCVD_IN_BLARS_RBL,RCVD_IN_SORBS_DUL,SPF_NEUTRAL 
+	autolearn=no version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: from mail.plainjoe.org (68-117-186-136.dhcp.mtgm.al.charter.com
+	[68.117.186.136])
+	by lists.samba.org (Postfix) with ESMTP id BCBC0162ACC
+	for <samba-technical@samba.org>; Fri, 25 May 2007 18:17:33 +0000 (GMT)
+Received: from [127.0.0.1] (drizzt.plainjoe.org [192.168.1.84])
+	by mail.plainjoe.org (Postfix) with ESMTP id 2FD032F1F2
+	for <samba-technical@samba.org>; Fri, 25 May 2007 13:17:33 -0500 (CDT)
+Message-ID: <46572839.6090006@samba.org>
+Date: Fri, 25 May 2007 13:17:29 -0500
+From: "Gerald (Jerry) Carter" <jerry@samba.org>
+User-Agent: Thunderbird 1.5.0.10 (X11/20070403)
+MIME-Version: 1.0
+To: samba-technical@samba.org
+X-Enigmail-Version: 0.94.2.0
+Content-Type: multipart/mixed; boundary="------------080301000002010209080902"
+Subject: [PATCH] LOOKUP_NAME_EXPLICIT to avoid lockups between winbindd and
+ nscd
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+This is a multi-part message in MIME format.
+--------------080301000002010209080902
+Content-Type: text/plain; charset=ISO-8859-1
+Content-Transfer-Encoding: 7bit
+
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA1
+
+Here's the problem I hit:
+
+getgrnam("foo") -> nscd -> NSS -> winbindd ->
+  winbindd_passdb.c:nam_to_sid() -> lookup_global_sam_name() ->
+  getgrnam("foo") -> nscd -> ....
+
+This is in the SAMBA_3_0 specifically but in theory could happen
+SAMBA_3_0_25 (or 26) for an unknown group.
+
+The attached patch passes down enough state for the
+name_to_sid() call to be able to determine the originating
+winbindd cmd that came into the parent.  So we can avoid
+making more NSS calls if the original call came in trough NSS
+so we don't deadlock ?  But you should still service
+lookupname() calls which are needed for example when
+doing the token access checks for a "valid groups" from
+smb.conf.
+
+I've got this in testing now.  The problem has shown up with the
+DsProvider on OS X and with nscd on SOlaris and Linux.
+
+Comments?
+
+
+
+cheers, jerry
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.6 (GNU/Linux)
+Comment: Using GnuPG with Mozilla - http://enigmail.mozdev.org
+
+iD8DBQFGVyg5IR7qMdg1EfYRAmUrAKDh1rysKgQLnhLRiLNHNl2pIBEmfwCfce/l
+5q7EJL8dxE/PZB/IxvvyUFE=
+=Aj2t
+-----END PGP SIGNATURE-----
+
+--------------080301000002010209080902
+Content-Type: text/plain;
+ name="look"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline;
+ filename="look"
+
+Index: nsswitch/winbindd_reconnect.c
+===================================================================
+--- nsswitch/winbindd_reconnect.c	(revision 15117)
++++ nsswitch/winbindd_reconnect.c	(revision 15166)
+@@ -84,6 +84,7 @@
+ /* convert a single name to a sid in a domain */
+ static NTSTATUS name_to_sid(struct winbindd_domain *domain,
+ 			    TALLOC_CTX *mem_ctx,
++			    enum winbindd_cmd orig_cmd,
+ 			    const char *domain_name,
+ 			    const char *name,
+ 			    DOM_SID *sid,
+@@ -91,12 +92,12 @@
+ {
+ 	NTSTATUS result;
+ 
+-	result = msrpc_methods.name_to_sid(domain, mem_ctx,
++	result = msrpc_methods.name_to_sid(domain, mem_ctx, orig_cmd,
+ 					   domain_name, name,
+ 					   sid, type);
+ 
+ 	if (NT_STATUS_EQUAL(result, NT_STATUS_UNSUCCESSFUL))
+-		result = msrpc_methods.name_to_sid(domain, mem_ctx,
++		result = msrpc_methods.name_to_sid(domain, mem_ctx, orig_cmd,
+ 						   domain_name, name,
+ 						   sid, type);
+ 
+Index: nsswitch/winbindd_nss.h
+===================================================================
+--- nsswitch/winbindd_nss.h	(revision 15117)
++++ nsswitch/winbindd_nss.h	(revision 15166)
+@@ -223,6 +223,8 @@
+ struct winbindd_request {
+ 	uint32 length;
+ 	enum winbindd_cmd cmd;   /* Winbindd command to execute */
++	enum winbindd_cmd original_cmd;   /* Original Winbindd command
++					     issued to parent process */
+ 	pid_t pid;               /* pid of calling process */
+ 	uint32 flags;            /* flags relavant to a given request */
+ 	fstring domain_name;	/* name of domain for which the request applies */
+Index: nsswitch/winbindd_async.c
+===================================================================
+--- nsswitch/winbindd_async.c	(revision 15117)
++++ nsswitch/winbindd_async.c	(revision 15166)
+@@ -952,6 +952,7 @@
+ 			       void (*cont)(void *private_data, BOOL success,
+ 					    const DOM_SID *sid,
+ 					    enum lsa_SidType type),
++			       enum winbindd_cmd orig_cmd,
+ 			       void *private_data)
+ {
+ 	struct winbindd_request request;
+@@ -966,6 +967,7 @@
+ 
+ 	ZERO_STRUCT(request);
+ 	request.cmd = WINBINDD_LOOKUPNAME;
++	request.original_cmd = orig_cmd;
+ 	fstrcpy(request.data.name.dom_name, dom_name);
+ 	fstrcpy(request.data.name.name, name);
+ 
+@@ -977,7 +979,7 @@
+ 
+ 	s->dom_name = talloc_strdup( s, dom_name );
+ 	s->name     = talloc_strdup( s, name );
+-	s->caller_private_data = private_data;	
++	s->caller_private_data = private_data;
+ 
+ 	do_async_domain(mem_ctx, domain, &request, lookupname_recv,
+ 			(void *)cont, s);
+@@ -1012,7 +1014,7 @@
+ 		  name_domain, lp_winbind_separator(), name_user));
+ 
+ 	/* Lookup name from DC using lsa_lookup_names() */
+-	if (!winbindd_lookup_sid_by_name(state->mem_ctx, domain, name_domain,
++	if (!winbindd_lookup_sid_by_name(state->mem_ctx, state->request.original_cmd, domain, name_domain,
+ 					 name_user, &sid, &type)) {
+ 		return WINBINDD_ERROR;
+ 	}
+Index: nsswitch/winbindd_util.c
+===================================================================
+--- nsswitch/winbindd_util.c	(revision 15117)
++++ nsswitch/winbindd_util.c	(revision 15166)
+@@ -942,6 +942,7 @@
+ /* Lookup a sid in a domain from a name */
+ 
+ BOOL winbindd_lookup_sid_by_name(TALLOC_CTX *mem_ctx,
++				 enum winbindd_cmd orig_cmd,
+ 				 struct winbindd_domain *domain, 
+ 				 const char *domain_name,
+ 				 const char *name, DOM_SID *sid, 
+@@ -951,7 +952,8 @@
+ 
+ 	/* Lookup name */
+ 
+-	result = domain->methods->name_to_sid(domain, mem_ctx, domain_name, name, sid, type);
++	result = domain->methods->name_to_sid(domain, mem_ctx, orig_cmd,
++					      domain_name, name, sid, type);
+ 
+ 	/* Return sid and type if lookup successful */
+ 	if (!NT_STATUS_IS_OK(result)) {
+Index: nsswitch/winbindd_user.c
+===================================================================
+--- nsswitch/winbindd_user.c	(revision 15117)
++++ nsswitch/winbindd_user.c	(revision 15166)
+@@ -423,7 +423,8 @@
+ 	/* Get rid and name type from name.  The following costs 1 packet */
+ 
+ 	winbindd_lookupname_async(state->mem_ctx, domname, username,
+-				  getpwnam_name2sid_recv, state);
++				  getpwnam_name2sid_recv, WINBINDD_GETPWNAM, 
++				  state);
+ }
+ 
+ static void getpwnam_name2sid_recv(void *private_data, BOOL success,
+Index: nsswitch/winbindd_rpc.c
+===================================================================
+--- nsswitch/winbindd_rpc.c	(revision 15117)
++++ nsswitch/winbindd_rpc.c	(revision 15166)
+@@ -255,11 +255,12 @@
+ 
+ /* convert a single name to a sid in a domain */
+ NTSTATUS msrpc_name_to_sid(struct winbindd_domain *domain,
+-			    TALLOC_CTX *mem_ctx,
+-			    const char *domain_name,
+-			    const char *name,
+-			    DOM_SID *sid,
+-			    enum lsa_SidType *type)
++			   TALLOC_CTX *mem_ctx,
++			   enum winbindd_cmd original_cmd,
++			   const char *domain_name,
++			   const char *name,
++			   DOM_SID *sid,
++			   enum lsa_SidType *type)
+ {
+ 	NTSTATUS result;
+ 	DOM_SID *sids = NULL;
+Index: nsswitch/winbindd.h
+===================================================================
+--- nsswitch/winbindd.h	(revision 15117)
++++ nsswitch/winbindd.h	(revision 15166)
+@@ -236,6 +236,7 @@
+ 	/* convert one user or group name to a sid */
+ 	NTSTATUS (*name_to_sid)(struct winbindd_domain *domain,
+ 				TALLOC_CTX *mem_ctx,
++				enum winbindd_cmd orig_cmd,
+ 				const char *domain_name,
+ 				const char *name,
+ 				DOM_SID *sid,
+Index: nsswitch/winbindd_group.c
+===================================================================
+--- nsswitch/winbindd_group.c	(revision 15117)
++++ nsswitch/winbindd_group.c	(revision 15166)
+@@ -532,7 +532,7 @@
+ 		fstrcpy( name_group, tmp );
+ 
+ 	winbindd_lookupname_async( state->mem_ctx, domain->name, name_group,
+-				   getgrnam_recv, state );
++				   getgrnam_recv, WINBINDD_GETGRNAM, state );
+ }
+ 
+ struct getgrsid_state {
+@@ -1329,7 +1329,7 @@
+ 	/* Get rid and name type from name.  The following costs 1 packet */
+ 
+ 	winbindd_lookupname_async(state->mem_ctx, s->domname, s->username,
+-				  getgroups_usersid_recv, s);
++				  getgroups_usersid_recv, WINBINDD_GETGROUPS, s);
+ }
+ 
+ static void getgroups_usersid_recv(void *private_data, BOOL success,
+Index: nsswitch/winbindd_cache.c
+===================================================================
+--- nsswitch/winbindd_cache.c	(revision 15117)
++++ nsswitch/winbindd_cache.c	(revision 15166)
+@@ -1354,6 +1354,7 @@
+ /* convert a single name to a sid in a domain */
+ static NTSTATUS name_to_sid(struct winbindd_domain *domain,
+ 			    TALLOC_CTX *mem_ctx,
++			    enum winbindd_cmd orig_cmd,
+ 			    const char *domain_name,
+ 			    const char *name,
+ 			    DOM_SID *sid,
+@@ -1401,7 +1402,8 @@
+ 	DEBUG(10,("name_to_sid: [Cached] - doing backend query for name for domain %s\n",
+ 		domain->name ));
+ 
+-	status = domain->backend->name_to_sid(domain, mem_ctx, domain_name, name, sid, type);
++	status = domain->backend->name_to_sid(domain, mem_ctx, orig_cmd, 
++					      domain_name, name, sid, type);
+ 
+ 	/* and save it */
+ 	refresh_sequence_number(domain, False);
+Index: nsswitch/winbindd_passdb.c
+===================================================================
+--- nsswitch/winbindd_passdb.c	(revision 15117)
++++ nsswitch/winbindd_passdb.c	(revision 15166)
+@@ -93,16 +93,28 @@
+ /* convert a single name to a sid in a domain */
+ static NTSTATUS name_to_sid(struct winbindd_domain *domain,
+ 			    TALLOC_CTX *mem_ctx,
++			    enum winbindd_cmd original_cmd,
+ 			    const char *domain_name,
+ 			    const char *name,
+ 			    DOM_SID *sid,
+ 			    enum lsa_SidType *type)
+ {
++	uint32 flags = LOOKUP_NAME_ALL;
++
++	switch ( original_cmd ) {
++	case WINBINDD_LOOKUPNAME:
++		/* This call is ok */
++		break;
++	default:
++		/* Avoid any NSS calls in the lookup_name by default */
++		flags |= LOOKUP_NAME_EXPLICIT;
++		DEBUG(10,("winbindd_passdb: limiting name_to_sid() to explicit mappings\n"));
++		break;
++	}
++	
+ 	DEBUG(10, ("Finding name %s\n", name));
+ 
+-	if ( !lookup_name( mem_ctx, name, LOOKUP_NAME_ALL, 
+-		NULL, NULL, sid, type ) )
+-	{
++	if ( !lookup_name( mem_ctx, name, flags, NULL, NULL, sid, type ) ) {
+ 		return NT_STATUS_NONE_MAPPED;
+ 	}
+ 
+Index: nsswitch/winbindd_sid.c
+===================================================================
+--- nsswitch/winbindd_sid.c	(revision 15117)
++++ nsswitch/winbindd_sid.c	(revision 15166)
+@@ -103,7 +103,8 @@
+ 		  name_domain, lp_winbind_separator(), name_user));
+ 
+ 	winbindd_lookupname_async(state->mem_ctx, name_domain, name_user,
+-				  lookupname_recv, state);
++				  lookupname_recv, WINBINDD_LOOKUPNAME, 
++				  state);
+ }
+ 
+ static void lookupname_recv(void *private_data, BOOL success,
+Index: passdb/lookup_sid.c
+===================================================================
+--- passdb/lookup_sid.c	(revision 15117)
++++ passdb/lookup_sid.c	(revision 15166)
+@@ -102,7 +102,7 @@
+ 			goto ok;
+ 	}
+ 
+-	if (strequal(domain, unix_users_domain_name())) {
++	if (!(flags & LOOKUP_NAME_EXPLICIT) && strequal(domain, unix_users_domain_name())) {
+ 		if (lookup_unix_user_name(name, &sid)) {
+ 			type = SID_NAME_USER;
+ 			goto ok;
+@@ -111,7 +111,7 @@
+ 		return False;
+ 	}
+ 
+-	if (strequal(domain, unix_groups_domain_name())) {
++	if (!(flags & LOOKUP_NAME_EXPLICIT) && strequal(domain, unix_groups_domain_name())) {
+ 		if (lookup_unix_group_name(name, &sid)) {
+ 			type = SID_NAME_DOM_GRP;
+ 			goto ok;
+@@ -262,13 +262,13 @@
+ 	/* 11. Ok, windows would end here. Samba has two more options:
+                Unmapped users and unmapped groups */
+ 
+-	if (lookup_unix_user_name(name, &sid)) {
++	if (!(flags & LOOKUP_NAME_EXPLICIT) && lookup_unix_user_name(name, &sid)) {
+ 		domain = talloc_strdup(tmp_ctx, unix_users_domain_name());
+ 		type = SID_NAME_USER;
+ 		goto ok;
+ 	}
+ 
+-	if (lookup_unix_group_name(name, &sid)) {
++	if (!(flags & LOOKUP_NAME_EXPLICIT) && lookup_unix_group_name(name, &sid)) {
+ 		domain = talloc_strdup(tmp_ctx, unix_groups_domain_name());
+ 		type = SID_NAME_DOM_GRP;
+ 		goto ok;
+Index: passdb/passdb.c
+===================================================================
+--- passdb/passdb.c	(revision 15117)
++++ passdb/passdb.c	(revision 15166)
+@@ -611,7 +611,7 @@
+ 	ret = pdb_getgrnam(&map, name);
+ 	unbecome_root();
+ 
+- 	if (!ret) {
++ 	if (!ret && !(flags & LOOKUP_NAME_EXPLICIT)) {
+ 		/* try to see if we can lookup a mapped
+ 		 * group with the unix group name */
+ 
+Index: include/smb.h
+===================================================================
+--- include/smb.h	(revision 15117)
++++ include/smb.h	(revision 15166)
+@@ -249,13 +249,16 @@
+ 
+ #define SID_MAX_SIZE ((size_t)(8+(MAXSUBAUTHS*4)))
+ 
+-#define LOOKUP_NAME_ISOLATED 1	/* Look up unqualified names */
+-#define LOOKUP_NAME_REMOTE   2  /* Ask others */
+-#define LOOKUP_NAME_ALL (LOOKUP_NAME_ISOLATED|LOOKUP_NAME_REMOTE)
++#define LOOKUP_NAME_ISOLATED             0x00000001  /* Look up unqualified names */
++#define LOOKUP_NAME_REMOTE               0x00000002  /* Ask others */
++#define LOOKUP_NAME_GROUP                0x00000004  /* (unused) This is a NASTY hack for 
++							valid users = @foo where foo also
++							exists in as user. */
++#define LOOKUP_NAME_EXPLICIT             0x00000008  /* Only include
++							explicitly mapped names and not 
++							the Unix {User,Group} domain */
++#define LOOKUP_NAME_ALL                  (LOOKUP_NAME_ISOLATED|LOOKUP_NAME_REMOTE)
+ 
+-#define LOOKUP_NAME_GROUP    4  /* (unused) This is a NASTY hack for valid users = @foo
+-				 * where foo also exists in as user. */
+-
+ /**
+  * @brief Security Identifier
+  *
+
+--------------080301000002010209080902--
+

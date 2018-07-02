@@ -1,0 +1,224 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 29 00:00:29 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4T40ShB026090
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 00:00:28 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id DF505163868
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 04:00:23 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 59E45162BC2; Tue, 29 May 2007 03:59:45 +0000 (GMT)
+Date: Tue, 29 May 2007 13:58:41 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070529035945.59E45162BC2@lists.samba.org>
+Subject: Rev 378: fixed more warnings on 64 bit boxes in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 378
+revision-id: tridge@samba.org-20070529035841-sdafwb84qcxmqt79
+parent: tridge@samba.org-20070529034830-j1dnavzkvremsri1
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Tue 2007-05-29 13:58:41 +1000
+message:
+  fixed more warnings on 64 bit boxes
+modified:
+  common/ctdb_client.c           ctdb_client.c-20070411010216-3kd8v37k61steeya-1
+  common/ctdb_daemon.c           ctdb_daemon.c-20070409200331-3el1kqgdb9m4ib0g-1
+  common/ctdb_io.c               ctdb_io.c-20070409200335-dzfc7f3rra5rcf60-1
+  common/ctdb_message.c          ctdb_message.c-20070208224107-9dnio7x7z33prrmt-1
+  common/ctdb_recoverd.c         recoverd.c-20070503213540-bvxuyd9jm1f7ig90-1
+  include/ctdb_private.h         ctdb_private.h-20061117234101-o3qt14umlg9en8z0-13
+  tcp/tcp_io.c                   tcp_io.c-20061128004937-x70q1cu5xzg5g2tm-3
+=== modified file 'common/ctdb_client.c'
+--- a/common/ctdb_client.c	2007-05-29 02:16:59 +0000
++++ b/common/ctdb_client.c	2007-05-29 03:58:41 +0000
+@@ -115,7 +115,7 @@
+ 	}
+ 
+ 	if (cnt < sizeof(*hdr)) {
+-		DEBUG(0,("Bad packet length %u in client\n", cnt));
++		DEBUG(0,("Bad packet length %u in client\n", (unsigned)cnt));
+ 		goto done;
+ 	}
+ 	if (cnt != hdr->length) {
+@@ -527,7 +527,7 @@
+ 	}
+ 	h->data    = data;
+ 
+-	DEBUG(3,("ctdb_fetch_lock: key=%*.*s\n", key.dsize, key.dsize, 
++	DEBUG(3,("ctdb_fetch_lock: key=%*.*s\n", (int)key.dsize, (int)key.dsize, 
+ 		 (const char *)key.dptr));
+ 
+ again:
+@@ -823,7 +823,7 @@
+ 
+ 	if (data.dsize != sizeof(struct ctdb_statistics)) {
+ 		DEBUG(0,(__location__ " Wrong statistics size %u - expected %u\n",
+-			 data.dsize, sizeof(struct ctdb_statistics)));
++			 (unsigned)data.dsize, (unsigned)sizeof(struct ctdb_statistics)));
+ 		      return -1;
+ 	}
+ 
+@@ -1330,7 +1330,7 @@
+ 	}
+ 	if (data.dsize != sizeof(uint32_t)) {
+ 		DEBUG(0,("Bad control reply size in ctdb_get_debuglevel (got %u)\n",
+-			      data.dsize));
++			 (unsigned)data.dsize));
+ 		return -1;
+ 	}
+ 	*level = *(uint32_t *)data.dptr;
+@@ -1518,7 +1518,7 @@
+ 
+ 	if (data.dsize < sizeof(uint32_t) ||
+ 	    d->length != data.dsize) {
+-		DEBUG(0,("Bad data size %u in traverse_handler\n", data.dsize));
++		DEBUG(0,("Bad data size %u in traverse_handler\n", (unsigned)data.dsize));
+ 		state->done = True;
+ 		return;
+ 	}
+
+=== modified file 'common/ctdb_daemon.c'
+--- a/common/ctdb_daemon.c	2007-05-29 03:48:30 +0000
++++ b/common/ctdb_daemon.c	2007-05-29 03:58:41 +0000
+@@ -142,9 +142,11 @@
+ 	}
+ 	res = ctdb_register_message_handler(ctdb, client, srvid, daemon_message_handler, client);
+ 	if (res != 0) {
+-		DEBUG(0,(__location__ " Failed to register handler %llu in daemon\n", srvid));
++		DEBUG(0,(__location__ " Failed to register handler %llu in daemon\n", 
++			 (unsigned long long)srvid));
+ 	} else {
+-		DEBUG(2,(__location__ " Registered message handler for srvid=%llu\n", srvid));
++		DEBUG(2,(__location__ " Registered message handler for srvid=%llu\n", 
++			 (unsigned long long)srvid));
+ 	}
+ 	return res;
+ }
+@@ -789,7 +791,7 @@
+ 	hdr = (struct ctdb_req_header *)talloc_size(mem_ctx, size);
+ 	if (hdr == NULL) {
+ 		DEBUG(0,("Unable to allocate packet for operation %u of length %u\n",
+-			 operation, length));
++			 operation, (unsigned)length));
+ 		return NULL;
+ 	}
+ 	talloc_set_name_const(hdr, type);
+@@ -825,7 +827,7 @@
+ 	hdr = (struct ctdb_req_header *)ctdb->methods->allocate_pkt(mem_ctx, size);
+ 	if (hdr == NULL) {
+ 		DEBUG(0,("Unable to allocate transport packet for operation %u of length %u\n",
+-			 operation, length));
++			 operation, (unsigned)length));
+ 		return NULL;
+ 	}
+ 	talloc_set_name_const(hdr, type);
+
+=== modified file 'common/ctdb_io.c'
+--- a/common/ctdb_io.c	2007-05-27 22:37:54 +0000
++++ b/common/ctdb_io.c	2007-05-29 03:58:41 +0000
+@@ -85,7 +85,7 @@
+ 
+ 	nread = read(queue->fd, queue->partial.data + queue->partial.length, num_ready);
+ 	if (nread <= 0) {
+-		DEBUG(0,("read error nread=%d\n", nread));
++		DEBUG(0,("read error nread=%d\n", (int)nread));
+ 		goto failed;
+ 	}
+ 
+@@ -135,7 +135,7 @@
+ 			queue->partial.data = talloc_memdup(queue, data, nread);
+ 			if (queue->partial.data == NULL) {
+ 				DEBUG(0,("read error memdup partial failed for %u\n", 
+-					 nread));
++					 (unsigned)nread));
+ 				goto failed;
+ 			}
+ 			queue->partial.length = nread;
+
+=== modified file 'common/ctdb_message.c'
+--- a/common/ctdb_message.c	2007-05-04 01:41:29 +0000
++++ b/common/ctdb_message.c	2007-05-29 03:58:41 +0000
+@@ -79,7 +79,8 @@
+ 
+ 	res = ctdb_dispatch_message(m->ctdb, m->srvid, m->data);
+ 	if (res != 0) {
+-		DEBUG(0, (__location__ " Failed to dispatch message for srvid=%llu\n", m->srvid));
++		DEBUG(0, (__location__ " Failed to dispatch message for srvid=%llu\n", 
++			  (unsigned long long)m->srvid));
+ 	}
+ 	talloc_free(m);
+ }
+
+=== modified file 'common/ctdb_recoverd.c'
+--- a/common/ctdb_recoverd.c	2007-05-29 03:48:30 +0000
++++ b/common/ctdb_recoverd.c	2007-05-29 03:58:41 +0000
+@@ -286,7 +286,7 @@
+ 						 db_id, max_rsn+1);
+ 		if (ret != 0) {
+ 			DEBUG(0,(__location__ " Failed to set rsn on node %u to %llu\n",
+-				 nodemap->nodes[i].vnn, max_rsn+1));
++				 nodemap->nodes[i].vnn, (unsigned long long)max_rsn+1));
+ 			return -1;
+ 		}
+ 	}
+@@ -300,7 +300,7 @@
+ 						 db_id, max_rsn+1);
+ 		if (ret != 0) {
+ 			DEBUG(0,(__location__ " Failed to delete records on node %u with rsn below %llu\n",
+-				 nodemap->nodes[i].vnn, max_rsn+1));
++				 nodemap->nodes[i].vnn, (unsigned long long)max_rsn+1));
+ 			return -1;
+ 		}
+ 	}
+
+=== modified file 'include/ctdb_private.h'
+--- a/include/ctdb_private.h	2007-05-29 03:48:30 +0000
++++ b/include/ctdb_private.h	2007-05-29 03:58:41 +0000
+@@ -821,7 +821,7 @@
+ #define CHECK_CONTROL_DATA_SIZE(size) do { \
+  if (indata.dsize != size) { \
+ 	 DEBUG(0,(__location__ " Invalid data size in opcode %u. Got %u expected %u\n", \
+-		  opcode, indata.dsize, size));				\
++		  opcode, (unsigned)indata.dsize, (unsigned)size));	\
+ 	 return -1; \
+  } \
+  } while (0)
+
+=== modified file 'tcp/tcp_io.c'
+--- a/tcp/tcp_io.c	2007-05-26 08:13:19 +0000
++++ b/tcp/tcp_io.c	2007-05-29 03:58:41 +0000
+@@ -47,7 +47,8 @@
+ 	}
+ 
+ 	if (cnt & (CTDB_TCP_ALIGNMENT-1)) {
+-		DEBUG(0,(__location__ " Length 0x%x not multiple of alignment\n", cnt));
++		DEBUG(0,(__location__ " Length 0x%x not multiple of alignment\n", 
++			 (unsigned)cnt));
+ 		goto failed;
+ 	}
+ 
+

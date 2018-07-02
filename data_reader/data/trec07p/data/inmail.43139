@@ -1,0 +1,237 @@
+From r-help-bounces@stat.math.ethz.ch  Thu May 24 15:55:44 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4OJthqD010106
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 24 May 2007 15:55:44 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4OJsXgI002760;
+	Thu, 24 May 2007 21:55:08 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.1 required=5.0 tests=AWL, BAYES_50,
+	SPF_HELO_PASS autolearn=no version=3.1.8
+Received: from mout.perfora.net (mout.perfora.net [74.208.4.194])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4OJbGTo029689
+	for <r-help@stat.math.ethz.ch>; Thu, 24 May 2007 21:37:16 +0200
+Received: from [71.39.177.44] (helo=[192.168.118.73])
+	by mrelay.perfora.net (node=mrus1) with ESMTP (Nemesis),
+	id 0MKpCa-1HrJ7Y0kr9-0001c7; Thu, 24 May 2007 15:37:15 -0400
+Message-ID: <4655E967.40106@acm.org>
+Date: Thu, 24 May 2007 13:37:11 -0600
+From: Tony Plate <tplate@acm.org>
+User-Agent: Thunderbird 1.5.0.10 (Windows/20070221)
+MIME-Version: 1.0
+To: =?windows-1252?Q?=3F=3F=3F?= <klijunjie@gmail.com>
+References: <dff718fc0705170402q35001f4fhe4260d95f6dfb6e6@mail.gmail.com>
+In-Reply-To: <dff718fc0705170402q35001f4fhe4260d95f6dfb6e6@mail.gmail.com>
+X-Provags-ID: V01U2FsdGVkX19ekGKhJjUotcaPza2wWpscL2IENLXKaDeMIKa
+	FlbPU17J2dwJKMX4BF9nZFYr6+557bMIO6KRuh5x+gI/0PTp3J
+	hooQ1BALwAN3fWGQ0jLug==
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] R2 always increases as variables are added?
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+The answer to your question three is that the calculation of r-squared 
+in summary.lm does depend on whether or not an intercept is included in 
+the model.  (Another part of the reason for you puzzlement is, I think, 
+that you are computing R-squared as SSR/SST, which is only valid when 
+when the model has an intercept).
+
+The code is in summary.lm, here are the relevant excerpts (assuming your 
+model does not have weights):
+
+     r <- z$residuals
+     f <- z$fitted
+     w <- z$weights
+     if (is.null(w)) {
+         mss <- if (attr(z$terms, "intercept"))
+             sum((f - mean(f))^2)
+         else sum(f^2)
+         rss <- sum(r^2)
+     }
+...
+     ans$r.squared <- mss/(mss + rss)
+
+If you want to compare models with and without an intercept based on 
+R^2, then I suspect it's most appropriate to use the version of R^2 that 
+does not use a mean.
+
+It's also worthwhile thinking about what you are actually doing.  I find 
+the most intuitive definition of R^2 
+(http://en.wikipedia.org/wiki/R_squared) is
+
+R2 = 1 - SSE / SST
+
+where SSE = sum_i (yhat_i - y_i)^2, (sum of errors in predictions for 
+you model)
+and SST = sum_i (y_i - mean(y))^2 (sum of errors in predictions for an 
+intercept-only model)
+
+This means that the standard definition of R2 effectively compares the 
+model with an intercept-only model.  As the error in predictions goes 
+down, R2 goes up, and the model that uses the mean(y) as a prediction 
+(i.e., the intercept-only model) provides a scale for these errors.
+
+If you think or know that the true mean of y is zero then it may be 
+appropriate to compare against a zero model rather than an 
+intercept-only model (in SST).  And if the sample mean of y is quite 
+different from zero, and you compare a no-intercept model against an 
+intercept-only model, then you're going to get results that are not 
+easily interpreted.
+
+Note that a common way of expressing and computing R^2 is as SSR/SST 
+(which you used).  (Where SSR = sum_i (yhat_i - mean(y))^2 ). However, 
+this is only valid when the model has an intercept (i.e., SSR/SST = 1 - 
+SSE/SST ONLY when the model has an intercept.)
+
+Here's some examples, based on your example:
+
+ > set.seed(1)
+ > data <- data.frame(x1=rnorm(10), x2=rnorm(10), y=rnorm(10), I=1)
+ >
+ > lm1 <- lm(y~1, data=data)
+ > summary(lm1)$r.squared
+[1] 0
+ > y.hat <- fitted(lm1)
+ > sum((y.hat-mean(data$y))^2)/sum((data$y-mean(data$y))^2)
+[1] 5.717795e-33
+ >
+ > # model with no intercept
+ > lm2 <- lm(y~x1+x2-1, data=data)
+ > summary(lm2)$r.squared
+[1] 0.6332317
+ > y.hat <- fitted(lm2)
+ > # no-intercept version of R^2 (2 ways to compute)
+ > 1-sum((y.hat-data$y)^2)/sum((data$y)^2)
+[1] 0.6332317
+ > sum((y.hat)^2)/sum((data$y)^2)
+[1] 0.6332317
+ > # standard (assuming model has intercept) computations for R^2:
+ > SSE <- sum((y.hat - data$y)^2)
+ > SST <- sum((data$y - mean(data$y))^2)
+ > SSR <- sum((y.hat - mean(data$y))^2)
+ > 1 - SSE/SST
+[1] 0.6252577
+ > # Note that SSR/SST != 1 - SSE/SST (because the model doesn't have an 
+intercept)
+ > SSR/SST
+[1] 0.6616612
+ >
+ > # model with intercept included in data
+ > lm3 <- lm(y~x1+x2+I-1, data=data)
+ > summary(lm3)$r.squared
+[1] 0.6503186
+ > y.hat <- fitted(lm3)
+ > # no-intercept version of R^2 (2 ways to compute)
+ > 1-sum((y.hat-data$y)^2)/sum((data$y)^2)
+[1] 0.6503186
+ > sum((y.hat)^2)/sum((data$y)^2)
+[1] 0.6503186
+ > # standard (assuming model has intercept) computations for R^2:
+ > SSE <- sum((y.hat - data$y)^2)
+ > SST <- sum((data$y - mean(data$y))^2)
+ > SSR <- sum((y.hat - mean(data$y))^2)
+ > 1 - SSE/SST
+[1] 0.6427161
+ > SSR/SST
+[1] 0.6427161
+ >
+ >
+
+hope this helps,
+
+Tony Plate
+
+Disclaimer: I too do not have any degrees in statistics, but I'm 95% 
+sure the above is mostly correct :-)  If there are any major mistakes, 
+I'm sure someone will point them out.
+
+??? wrote:
+> Hi, everybody,
+> 
+> 3 questions about R-square:
+> ---------(1)----------- Does R2 always increase as variables are added?
+> ---------(2)----------- Does R2 always greater than 1?
+> ---------(3)----------- How is R2 in summary(lm(y~x-1))$r.squared
+> calculated? It is different from (r.square=sum((y.hat-mean
+> (y))^2)/sum((y-mean(y))^2))
+> 
+> I will illustrate these problems by the following codes:
+> ---------(1)-----------  R2  doesn't always increase as variables are added
+> 
+>> x=matrix(rnorm(20),ncol=2)
+>> y=rnorm(10)
+>>
+>> lm=lm(y~1)
+>> y.hat=rep(1*lm$coefficients,length(y))
+>> (r.square=sum((y.hat-mean(y))^2)/sum((y-mean(y))^2))
+> [1] 2.646815e-33
+>> lm=lm(y~x-1)
+>> y.hat=x%*%lm$coefficients
+>> (r.square=sum((y.hat-mean(y))^2)/sum((y-mean(y))^2))
+> [1] 0.4443356
+>> ################ This is the biggest model, but its R2 is not the biggest,
+> why?
+>> lm=lm(y~x)
+>> y.hat=cbind(rep(1,length(y)),x)%*%lm$coefficients
+>> (r.square=sum((y.hat-mean(y))^2)/sum((y-mean(y))^2))
+> [1] 0.2704789
+> 
+> 
+> ---------(2)-----------  R2  can greater than 1
+> 
+>> x=rnorm(10)
+>> y=runif(10)
+>> lm=lm(y~x-1)
+>> y.hat=x*lm$coefficients
+>> (r.square=sum((y.hat-mean(y))^2)/sum((y-mean(y))^2))
+> [1] 3.513865
+> 
+> 
+>  ---------(3)----------- How is R2 in summary(lm(y~x-1))$r.squared
+> calculated? It is different from (r.square=sum((y.hat-mean
+> (y))^2)/sum((y-mean(y))^2))
+>> x=matrix(rnorm(20),ncol=2)
+>> xx=cbind(rep(1,10),x)
+>> y=x%*%c(1,2)+rnorm(10)
+>> ### r2 calculated by lm(y~x)
+>> lm=lm(y~x)
+>> summary(lm)$r.squared
+> [1] 0.9231062
+>> ### r2 calculated by lm(y~xx-1)
+>> lm=lm(y~xx-1)
+>> summary(lm)$r.squared
+> [1] 0.9365253
+>> ### r2 calculated by me
+>> y.hat=xx%*%lm$coefficients
+>> (r.square=sum((y.hat-mean(y))^2)/sum((y-mean(y))^2))
+> [1] 0.9231062
+> 
+> 
+> Thanks a lot for any cue:)
+> 
+> 
+> 
+>
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

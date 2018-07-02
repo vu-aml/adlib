@@ -1,0 +1,206 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Apr 11 20:45:15 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3C0jE0I023845
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 11 Apr 2007 20:45:14 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id BEB4A1638D3
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 12 Apr 2007 00:44:51 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.9 required=3.8 tests=AWL,BAYES_50,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 11D7A162BCF; Thu, 12 Apr 2007 00:44:12 +0000 (GMT)
+Date: Thu, 12 Apr 2007 10:44:18 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070412004413.11D7A162BCF@lists.samba.org>
+Subject: Rev 98: merge from ronnie in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 5405
+Lines: 166
+
+------------------------------------------------------------
+revno: 98
+revision-id: tridge@samba.org-20070412004418-85381cc96b73ebe8
+parent: tridge@samba.org-20070411122143-e0d0192ca901c6f9
+parent: ronniesahlberg@gmail.com-20070411230927-88foctkqh1hqr8ab
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Thu 2007-04-12 10:44:18 +1000
+message:
+  merge from ronnie
+modified:
+  direct/ctdbd.c                 ctdbd.c-20070411085044-dqmhr6mfeexnyt4m-1
+  direct/ctdbd_test.c            ctdbd_test.c-20070411085057-17kgjzfktsh28g99-1
+  tests/ctdb_messaging.c         ctdb_messaging.c-20070411034205-6d6vne56pbih2x1p-1
+    ------------------------------------------------------------
+    merged: ronniesahlberg@gmail.com-20070411230927-88foctkqh1hqr8ab
+    parent: ronniesahlberg@gmail.com-20070411224415-ix25hyi4thd8ydoe
+    committer: Ronnie sahlberg <ronniesahlberg@gmail.com>
+    branch nick: ctdb
+    timestamp: Thu 2007-04-12 09:09:27 +1000
+    message:
+      add an example on how to read a message from the domain socket
+    ------------------------------------------------------------
+    merged: ronniesahlberg@gmail.com-20070411224415-ix25hyi4thd8ydoe
+    parent: ronniesahlberg@gmail.com-20070411222854-5k8oj8f10kqzasro
+    committer: Ronnie sahlberg <ronniesahlberg@gmail.com>
+    branch nick: ctdb
+    timestamp: Thu 2007-04-12 08:44:15 +1000
+    message:
+      do an infinite loop calling event_loop_once() in the ctdbd parent process instead of event_loop_wait()  since the latter will return and thus take down the daemon
+    ------------------------------------------------------------
+    merged: ronniesahlberg@gmail.com-20070411222854-5k8oj8f10kqzasro
+    parent: ronniesahlberg@gmail.com-20070411214928-pizt3e0yiw8ehql2
+    committer: Ronnie sahlberg <ronniesahlberg@gmail.com>
+    branch nick: ctdb
+    timestamp: Thu 2007-04-12 08:28:54 +1000
+    message:
+      add a test message to the messaging test so we can see that the message data is also passed from originator to receiver
+    ------------------------------------------------------------
+    merged: ronniesahlberg@gmail.com-20070411214928-pizt3e0yiw8ehql2
+    parent: ronniesahlberg@gmail.com-20070411103224-hvqzewjcfhpxcgbg
+    parent: tridge@samba.org-20070411122143-e0d0192ca901c6f9
+    committer: Ronnie sahlberg <ronniesahlberg@gmail.com>
+    branch nick: ctdb
+    timestamp: Thu 2007-04-12 07:49:28 +1000
+    message:
+      merge from ridge and vl
+=== modified file 'direct/ctdbd.c'
+--- a/direct/ctdbd.c	2007-04-11 12:21:43 +0000
++++ b/direct/ctdbd.c	2007-04-11 22:44:15 +0000
+@@ -129,8 +129,11 @@
+ 	/* start the protocol running */
+ 	ret = ctdb_start(ctdb);
+ 
+-	event_loop_wait(ev);
+-       
++/*	event_loop_wait(ev);*/
++	while (1) {
++		event_loop_once(ev);
++	}
++
+ 	/* shut it down */
+ 	talloc_free(ev);
+ 	return 0;
+
+=== modified file 'direct/ctdbd_test.c'
+--- a/direct/ctdbd_test.c	2007-04-11 10:32:24 +0000
++++ b/direct/ctdbd_test.c	2007-04-11 23:09:27 +0000
+@@ -130,8 +130,38 @@
+ 	cnt=write(fd, &r, offsetof(struct ctdb_req_message, data));
+ 	/* write data */
+ 	if(data.dsize){
+-	    cnt=write(fd, data.dptr, data.dsize);
+-	}
++	    cnt+=write(fd, data.dptr, data.dsize);
++	}
++}
++
++void wait_for_a_message(int fd)
++{
++	int cnt, tot;
++	uint32_t len;
++	struct ctdb_req_message *msg;
++	
++	/* read the 4 bytes of length for the pdu */
++	cnt=0;
++	tot=4;
++	while(cnt!=tot){
++		int numread;
++		numread=read(fd, ((char *)&len)+cnt, tot-cnt);
++		if(numread>0){
++			cnt+=numread;
++		}
++	}
++	msg=malloc(len);
++	msg->hdr.length=len;
++	/* read the rest of the pdu */
++	tot=msg->hdr.length;
++	while(cnt!=tot){
++		int numread;
++		numread=read(fd, (char *)msg+cnt, tot-cnt);
++		if(numread>0){
++			cnt+=numread;
++		}
++	}
++	printf("got a message : %s\n",&msg->data[0]);
+ }
+ 
+ int main(int argc, const char *argv[])
+@@ -172,8 +202,10 @@
+ 	send_a_message(fd, vnn, dstvnn, dstpid, message);
+ 
+ 
+-	/* wait for the message to come back */
+-
++	/* wait for the message to come back.
++	   i.e. the one we just sent to ourself
++	 */
++	wait_for_a_message(fd);
+ 
+ 	return 0;
+ }
+
+=== modified file 'tests/ctdb_messaging.c'
+--- a/tests/ctdb_messaging.c	2007-04-11 05:23:50 +0000
++++ b/tests/ctdb_messaging.c	2007-04-11 22:28:54 +0000
+@@ -36,7 +36,7 @@
+ static void message_handler(struct ctdb_context *ctdb, uint32_t srvid, 
+ 				 TDB_DATA data, void *private)
+ {
+-	printf("client vnn:%d received a message to srvid:%d\n",ctdb_get_vnn(ctdb),srvid);
++	printf("client vnn:%d received a message to srvid:%d [%s]\n",ctdb_get_vnn(ctdb),srvid,data.dptr);
+ 	fflush(stdout);
+ }
+ 
+@@ -52,6 +52,7 @@
+ 	const char *myaddress = NULL;
+ 	int self_connect=0;
+ 	int daemon_mode=0;
++	char buf[256];
+ 
+ 	struct poptOption popt_options[] = {
+ 		POPT_AUTOHELP
+@@ -159,18 +160,19 @@
+ 
+ 	/* wait until all nodes are connected (should not be needed
+ 	   outside of test code) */
+-	data.dptr=NULL;
+-	data.dsize=0;
+ 	ctdb_set_message_handler(ctdb, srvid, message_handler, NULL);
+ 
+ 	ctdb_connect_wait(ctdb);
+ 
+-	sleep(1);
++	sleep(3);
+ 
+ 	printf("sending message from vnn:%d to vnn:%d/srvid:%d\n",ctdb_get_vnn(ctdb),ctdb_get_vnn(ctdb), 1-srvid);
+ 	for (i=0;i<ctdb_get_num_nodes(ctdb);i++) {
+ 		for (j=0;j<num_clients;j++) {
+ 			printf("sending message to %d:%d\n", i, j);
++			sprintf(buf,"Message from %d to vnn:%d srvid:%d",ctdb_get_vnn(ctdb),i,j);
++			data.dptr=buf;
++			data.dsize=strlen(buf)+1;
+ 			ctdb_send_message(ctdb, i, j, data);
+ 		}
+ 	}
+

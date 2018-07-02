@@ -1,0 +1,304 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat Jun 16 14:59:43 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5GIxhL9018509
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 16 Jun 2007 14:59:43 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id CD92B162BC5
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 16 Jun 2007 18:59:41 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 535)
+	id EAF8E162BC5; Sat, 16 Jun 2007 18:59:05 +0000 (GMT)
+To: samba-cvs@samba.org
+From: idra@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070616185905.EAF8E162BC5@lists.samba.org>
+Date: Sat, 16 Jun 2007 18:59:05 +0000 (GMT)
+Subject: svn commit: samba r23525 - in branches: SAMBA_3_0/source/nsswitch
+	SAMBA_3_0_25/source/nsswitch SAMBA_3_0_26/source/nsswitch
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: idra
+Date: 2007-06-16 18:59:02 +0000 (Sat, 16 Jun 2007)
+New Revision: 23525
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23525
+
+Log:
+
+I believe this patch is ok, got no reply of it being not ok.
+This closes #4624 for me.
+
+
+Modified:
+   branches/SAMBA_3_0/source/nsswitch/idmap_rid.c
+   branches/SAMBA_3_0_25/source/nsswitch/idmap_rid.c
+   branches/SAMBA_3_0_26/source/nsswitch/idmap_rid.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/nsswitch/idmap_rid.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/idmap_rid.c	2007-06-16 18:54:13 UTC (rev 23524)
++++ branches/SAMBA_3_0/source/nsswitch/idmap_rid.c	2007-06-16 18:59:02 UTC (rev 23525)
+@@ -43,6 +43,10 @@
+ 	struct idmap_rid_context *ctx;
+ 	char *config_option = NULL;
+ 	const char *range;
++	uid_t low_uid = 0;
++	uid_t high_uid = 0;
++	gid_t low_gid = 0;
++	gid_t high_gid = 0;
+ 
+ 	if ( (ctx = TALLOC_ZERO_P(dom, struct idmap_rid_context)) == NULL ) {
+ 		DEBUG(0, ("Out of memory!\n"));
+@@ -65,8 +69,25 @@
+ 		ctx->high_id = 0;
+ 	}
+ 
+-	if ( !ctx->low_id || !ctx->high_id ) {
+-		DEBUG(1, ("ERROR: Invalid configuration, ID range missing\n"));
++	/* lets see if the range is defined by the old idmap uid/idmap gid */
++	if (!ctx->low_id && !ctx->high_id) {
++		if (lp_idmap_uid(&low_uid, &high_uid)) {
++			ctx->low_id = low_uid;
++			ctx->high_id = high_uid;
++		}
++
++		if (lp_idmap_gid(&low_gid, &high_gid)) {
++			if ((ctx->low_id != low_gid) ||
++			    (ctx->high_id != high_uid)) {
++				DEBUG(1, ("ERROR: idmap uid irange must match idmap gid range\n"));
++				ret = NT_STATUS_UNSUCCESSFUL;
++				goto failed;
++			}
++		}
++	}
++
++	if (!ctx->low_id || !ctx->high_id) {
++		DEBUG(1, ("ERROR: Invalid configuration, ID range missing or invalid\n"));
+ 		ret = NT_STATUS_UNSUCCESSFUL;
+ 		goto failed;
+ 	}
+@@ -75,6 +96,7 @@
+ 	ctx->domain_name = talloc_strdup( ctx, dom->name );
+ 	
+ 	dom->private_data = ctx;
++	dom->initialized = True;
+ 
+ 	talloc_free(config_option);
+ 	return NT_STATUS_OK;
+@@ -150,6 +172,14 @@
+ 	NTSTATUS ret;
+ 	int i;
+ 
++	/* Initilization my have been deferred because of an error, retry or fail */
++	if ( ! dom->initialized) {
++		ret = idmap_rid_initialize(dom);
++		if ( ! NT_STATUS_IS_OK(ret)) {
++			return ret;
++		}
++	}
++
+ 	ridctx = talloc_get_type(dom->private_data, struct idmap_rid_context);
+ 
+ 	ctx = talloc_new(dom);
+@@ -184,6 +214,14 @@
+ 	NTSTATUS ret;
+ 	int i;
+ 
++	/* Initilization my have been deferred because of an error, retry or fail */
++	if ( ! dom->initialized) {
++		ret = idmap_rid_initialize(dom);
++		if ( ! NT_STATUS_IS_OK(ret)) {
++			return ret;
++		}
++	}
++
+ 	ridctx = talloc_get_type(dom->private_data, struct idmap_rid_context);
+ 
+ 	ctx = talloc_new(dom);
+
+Modified: branches/SAMBA_3_0_25/source/nsswitch/idmap_rid.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/nsswitch/idmap_rid.c	2007-06-16 18:54:13 UTC (rev 23524)
++++ branches/SAMBA_3_0_25/source/nsswitch/idmap_rid.c	2007-06-16 18:59:02 UTC (rev 23525)
+@@ -43,6 +43,10 @@
+ 	struct idmap_rid_context *ctx;
+ 	char *config_option = NULL;
+ 	const char *range;
++	uid_t low_uid = 0;
++	uid_t high_uid = 0;
++	gid_t low_gid = 0;
++	gid_t high_gid = 0;
+ 
+ 	if ( (ctx = TALLOC_ZERO_P(dom, struct idmap_rid_context)) == NULL ) {
+ 		DEBUG(0, ("Out of memory!\n"));
+@@ -65,8 +69,25 @@
+ 		ctx->high_id = 0;
+ 	}
+ 
+-	if ( !ctx->low_id || !ctx->high_id ) {
+-		DEBUG(1, ("ERROR: Invalid configuration, ID range missing\n"));
++	/* lets see if the range is defined by the old idmap uid/idmap gid */
++	if (!ctx->low_id && !ctx->high_id) {
++		if (lp_idmap_uid(&low_uid, &high_uid)) {
++			ctx->low_id = low_uid;
++			ctx->high_id = high_uid;
++		}
++
++		if (lp_idmap_gid(&low_gid, &high_gid)) {
++			if ((ctx->low_id != low_gid) ||
++			    (ctx->high_id != high_uid)) {
++				DEBUG(1, ("ERROR: idmap uid irange must match idmap gid range\n"));
++				ret = NT_STATUS_UNSUCCESSFUL;
++				goto failed;
++			}
++		}
++	}
++
++	if (!ctx->low_id || !ctx->high_id) {
++		DEBUG(1, ("ERROR: Invalid configuration, ID range missing or invalid\n"));
+ 		ret = NT_STATUS_UNSUCCESSFUL;
+ 		goto failed;
+ 	}
+@@ -75,6 +96,7 @@
+ 	ctx->domain_name = talloc_strdup( ctx, dom->name );
+ 	
+ 	dom->private_data = ctx;
++	dom->initialized = True;
+ 
+ 	talloc_free(config_option);
+ 	return NT_STATUS_OK;
+@@ -150,6 +172,14 @@
+ 	NTSTATUS ret;
+ 	int i;
+ 
++	/* Initilization my have been deferred because of an error, retry or fail */
++	if ( ! dom->initialized) {
++		ret = idmap_rid_initialize(dom);
++		if ( ! NT_STATUS_IS_OK(ret)) {
++			return ret;
++		}
++	}
++
+ 	ridctx = talloc_get_type(dom->private_data, struct idmap_rid_context);
+ 
+ 	ctx = talloc_new(dom);
+@@ -184,6 +214,14 @@
+ 	NTSTATUS ret;
+ 	int i;
+ 
++	/* Initilization my have been deferred because of an error, retry or fail */
++	if ( ! dom->initialized) {
++		ret = idmap_rid_initialize(dom);
++		if ( ! NT_STATUS_IS_OK(ret)) {
++			return ret;
++		}
++	}
++
+ 	ridctx = talloc_get_type(dom->private_data, struct idmap_rid_context);
+ 
+ 	ctx = talloc_new(dom);
+
+Modified: branches/SAMBA_3_0_26/source/nsswitch/idmap_rid.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/nsswitch/idmap_rid.c	2007-06-16 18:54:13 UTC (rev 23524)
++++ branches/SAMBA_3_0_26/source/nsswitch/idmap_rid.c	2007-06-16 18:59:02 UTC (rev 23525)
+@@ -43,6 +43,10 @@
+ 	struct idmap_rid_context *ctx;
+ 	char *config_option = NULL;
+ 	const char *range;
++	uid_t low_uid = 0;
++	uid_t high_uid = 0;
++	gid_t low_gid = 0;
++	gid_t high_gid = 0;
+ 
+ 	if ( (ctx = TALLOC_ZERO_P(dom, struct idmap_rid_context)) == NULL ) {
+ 		DEBUG(0, ("Out of memory!\n"));
+@@ -65,8 +69,25 @@
+ 		ctx->high_id = 0;
+ 	}
+ 
+-	if ( !ctx->low_id || !ctx->high_id ) {
+-		DEBUG(1, ("ERROR: Invalid configuration, ID range missing\n"));
++	/* lets see if the range is defined by the old idmap uid/idmap gid */
++	if (!ctx->low_id && !ctx->high_id) {
++		if (lp_idmap_uid(&low_uid, &high_uid)) {
++			ctx->low_id = low_uid;
++			ctx->high_id = high_uid;
++		}
++
++		if (lp_idmap_gid(&low_gid, &high_gid)) {
++			if ((ctx->low_id != low_gid) ||
++			    (ctx->high_id != high_uid)) {
++				DEBUG(1, ("ERROR: idmap uid irange must match idmap gid range\n"));
++				ret = NT_STATUS_UNSUCCESSFUL;
++				goto failed;
++			}
++		}
++	}
++
++	if (!ctx->low_id || !ctx->high_id) {
++		DEBUG(1, ("ERROR: Invalid configuration, ID range missing or invalid\n"));
+ 		ret = NT_STATUS_UNSUCCESSFUL;
+ 		goto failed;
+ 	}
+@@ -75,6 +96,7 @@
+ 	ctx->domain_name = talloc_strdup( ctx, dom->name );
+ 	
+ 	dom->private_data = ctx;
++	dom->initialized = True;
+ 
+ 	talloc_free(config_option);
+ 	return NT_STATUS_OK;
+@@ -150,6 +172,14 @@
+ 	NTSTATUS ret;
+ 	int i;
+ 
++	/* Initilization my have been deferred because of an error, retry or fail */
++	if ( ! dom->initialized) {
++		ret = idmap_rid_initialize(dom);
++		if ( ! NT_STATUS_IS_OK(ret)) {
++			return ret;
++		}
++	}
++
+ 	ridctx = talloc_get_type(dom->private_data, struct idmap_rid_context);
+ 
+ 	ctx = talloc_new(dom);
+@@ -184,6 +214,14 @@
+ 	NTSTATUS ret;
+ 	int i;
+ 
++	/* Initilization my have been deferred because of an error, retry or fail */
++	if ( ! dom->initialized) {
++		ret = idmap_rid_initialize(dom);
++		if ( ! NT_STATUS_IS_OK(ret)) {
++			return ret;
++		}
++	}
++
+ 	ridctx = talloc_get_type(dom->private_data, struct idmap_rid_context);
+ 
+ 	ctx = talloc_new(dom);
+

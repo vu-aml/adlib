@@ -1,0 +1,106 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 15 01:42:52 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4F5gqqD001171
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 01:42:52 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 4DAA0163883
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 05:42:48 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id DA19B162B74; Tue, 15 May 2007 05:42:16 +0000 (GMT)
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070515054216.DA19B162B74@lists.samba.org>
+Date: Tue, 15 May 2007 05:42:16 +0000 (GMT)
+Subject: svn commit: samba r22881 - in
+	branches/SAMBA_4_0/source/torture/raw: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: tridge
+Date: 2007-05-15 05:42:16 +0000 (Tue, 15 May 2007)
+New Revision: 22881
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22881
+
+Log:
+show number of connected clients
+Modified:
+   branches/SAMBA_4_0/source/torture/raw/lockbench.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/torture/raw/lockbench.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/raw/lockbench.c	2007-05-15 05:38:33 UTC (rev 22880)
++++ branches/SAMBA_4_0/source/torture/raw/lockbench.c	2007-05-15 05:42:16 UTC (rev 22881)
+@@ -44,6 +44,7 @@
+ 
+ static int nprocs;
+ static int lock_failed;
++static int num_connected;
+ 
+ struct benchlock_state {
+ 	struct event_context *ev;
+@@ -115,6 +116,11 @@
+ 	}
+ 	state->req->async.private = state;
+ 	state->req->async.fn      = lock_completion;
++
++	num_connected++;
++
++	DEBUG(0,("reconnect to %s finished (%u connected)\n", state->dest_host,
++		 num_connected));
+ }
+ 
+ /*
+@@ -168,8 +174,6 @@
+ 	io->in.fallback_to_anonymous = False;
+ 	io->in.workgroup    = lp_workgroup();
+ 
+-	DEBUG(0,("reopening connection to //%s/%s\n", host, share));
+-
+ 	/* kill off the remnants of the old connection */
+ 	talloc_free(state->tree);
+ 	state->tree = NULL;
+@@ -195,6 +199,10 @@
+ 	state->req = NULL;
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		if (NT_STATUS_EQUAL(status, NT_STATUS_END_OF_FILE)) {
++			talloc_free(state->tree);
++			state->tree = NULL;
++			num_connected--;	
++			DEBUG(0,("reopening connection to %s\n", state->dest_host));
+ 			event_add_timed(state->ev, state->mem_ctx, 
+ 					timeval_current_ofs(1,0), 
+ 					reopen_connection, state);
+@@ -247,6 +255,8 @@
+ 						      cli->tree->device);
+ 	}
+ 
++	num_connected = i;
++
+ 	if (!torture_setup_dir(cli, BASEDIR)) {
+ 		goto failed;
+ 	}
+

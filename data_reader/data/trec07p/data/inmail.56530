@@ -1,0 +1,257 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Jun 13 05:55:58 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5D9tvL9006198
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 13 Jun 2007 05:55:57 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id A9138162BCC
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 13 Jun 2007 09:55:56 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.8 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id E0DB7162ACB; Wed, 13 Jun 2007 09:55:13 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070613095513.E0DB7162ACB@lists.samba.org>
+Date: Wed, 13 Jun 2007 09:55:13 +0000 (GMT)
+Subject: svn commit: samba r23457 - in branches: SAMBA_3_0/source/smbd
+	SAMBA_3_0_26/source/smbd
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-06-13 09:55:13 +0000 (Wed, 13 Jun 2007)
+New Revision: 23457
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23457
+
+Log:
+After Jeremy's ack:
+
+The attached patch removes a little race condition for
+people with real kernel oplock support, and reduces some
+code paths. It changes reply_unlink to open_file_ntcreate,
+set_delete_on_close and close_file.
+
+The race condition happens if we break the oplock in
+can_delete via open_file_ntcreate, we close the file,
+someone else gets a batch oplock and we try to unlink.
+
+It reduces code paths by calling SMB_VFS_UNLINK in 2 fewer
+places.
+
+
+Modified:
+   branches/SAMBA_3_0/source/smbd/reply.c
+   branches/SAMBA_3_0_26/source/smbd/reply.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/smbd/reply.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/reply.c	2007-06-13 05:44:24 UTC (rev 23456)
++++ branches/SAMBA_3_0/source/smbd/reply.c	2007-06-13 09:55:13 UTC (rev 23457)
+@@ -1830,11 +1830,11 @@
+ }
+ 
+ /*******************************************************************
+- Check if a user is allowed to delete a file.
+-********************************************************************/
++ * unlink a file with all relevant access checks
++ *******************************************************************/
+ 
+-static NTSTATUS can_delete(connection_struct *conn, char *fname,
+-			   uint32 dirtype, BOOL can_defer)
++static NTSTATUS do_unlink(connection_struct *conn, char *fname,
++			  uint32 dirtype, BOOL can_defer)
+ {
+ 	SMB_STRUCT_STAT sbuf;
+ 	uint32 fattr;
+@@ -1935,10 +1935,19 @@
+ 				    can_defer ? 0 : INTERNAL_OPEN_ONLY,
+ 				    NULL, &fsp);
+ 
+-	if (NT_STATUS_IS_OK(status)) {
+-		close_file(fsp,NORMAL_CLOSE);
++	if (!NT_STATUS_IS_OK(status)) {
++		DEBUG(10, ("open_file_ntcreate failed: %s\n",
++			   nt_errstr(status)));
++		return status;
+ 	}
+-	return status;
++
++	/* The set is across all open files on this dev/inode pair. */
++	if (!set_delete_on_close(fsp, True, &current_user.ut)) {
++		close_file(fsp, NORMAL_CLOSE);
++		return NT_STATUS_ACCESS_DENIED;
++	}
++
++	return close_file(fsp,NORMAL_CLOSE);
+ }
+ 
+ /****************************************************************************
+@@ -1997,17 +2006,15 @@
+ 			return status;
+ 		}
+ 
+-		status = can_delete(conn,directory,dirtype,can_defer);
++		status = do_unlink(conn,directory,dirtype,can_defer);
+ 		if (!NT_STATUS_IS_OK(status)) {
+ 			return status;
+ 		}
+ 
+-		if (SMB_VFS_UNLINK(conn,directory) == 0) {
+-			count++;
+-			notify_fname(conn, NOTIFY_ACTION_REMOVED,
+-				     FILE_NOTIFY_CHANGE_FILE_NAME,
+-				     directory);
+-		}
++		count++;
++		notify_fname(conn, NOTIFY_ACTION_REMOVED,
++			     FILE_NOTIFY_CHANGE_FILE_NAME,
++			     directory);
+ 	} else {
+ 		struct smb_Dir *dir_hnd = NULL;
+ 		long offset = 0;
+@@ -2066,19 +2073,17 @@
+ 				return status;
+ 			}
+ 
+-			status = can_delete(conn, fname, dirtype, can_defer);
++			status = do_unlink(conn, fname, dirtype, can_defer);
+ 			if (!NT_STATUS_IS_OK(status)) {
+ 				continue;
+ 			}
+-			if (SMB_VFS_UNLINK(conn,fname) == 0) {
+-				count++;
+-				DEBUG(3,("unlink_internals: succesful unlink "
+-					 "[%s]\n",fname));
+-				notify_fname(conn, NOTIFY_ACTION_REMOVED,
+-					     FILE_NOTIFY_CHANGE_FILE_NAME,
+-					     fname);
+-			}
+-				
++
++			count++;
++			DEBUG(3,("unlink_internals: succesful unlink [%s]\n",
++				 fname));
++			notify_fname(conn, NOTIFY_ACTION_REMOVED,
++				     FILE_NOTIFY_CHANGE_FILE_NAME,
++				     fname);
+ 		}
+ 		CloseDir(dir_hnd);
+ 	}
+
+Modified: branches/SAMBA_3_0_26/source/smbd/reply.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/smbd/reply.c	2007-06-13 05:44:24 UTC (rev 23456)
++++ branches/SAMBA_3_0_26/source/smbd/reply.c	2007-06-13 09:55:13 UTC (rev 23457)
+@@ -1829,11 +1829,11 @@
+ }
+ 
+ /*******************************************************************
+- Check if a user is allowed to delete a file.
+-********************************************************************/
++ * unlink a file with all relevant access checks
++ *******************************************************************/
+ 
+-static NTSTATUS can_delete(connection_struct *conn, char *fname,
+-			   uint32 dirtype, BOOL can_defer)
++static NTSTATUS do_unlink(connection_struct *conn, char *fname,
++			  uint32 dirtype, BOOL can_defer)
+ {
+ 	SMB_STRUCT_STAT sbuf;
+ 	uint32 fattr;
+@@ -1934,10 +1934,19 @@
+ 				    can_defer ? 0 : INTERNAL_OPEN_ONLY,
+ 				    NULL, &fsp);
+ 
+-	if (NT_STATUS_IS_OK(status)) {
+-		close_file(fsp,NORMAL_CLOSE);
++	if (!NT_STATUS_IS_OK(status)) {
++		DEBUG(10, ("open_file_ntcreate failed: %s\n",
++			   nt_errstr(status)));
++		return status;
+ 	}
+-	return status;
++
++	/* The set is across all open files on this dev/inode pair. */
++	if (!set_delete_on_close(fsp, True, &current_user.ut)) {
++		close_file(fsp, NORMAL_CLOSE);
++		return NT_STATUS_ACCESS_DENIED;
++	}
++
++	return close_file(fsp,NORMAL_CLOSE);
+ }
+ 
+ /****************************************************************************
+@@ -1996,17 +2005,15 @@
+ 			return status;
+ 		}
+ 
+-		status = can_delete(conn,directory,dirtype,can_defer);
++		status = do_unlink(conn,directory,dirtype,can_defer);
+ 		if (!NT_STATUS_IS_OK(status)) {
+ 			return status;
+ 		}
+ 
+-		if (SMB_VFS_UNLINK(conn,directory) == 0) {
+-			count++;
+-			notify_fname(conn, NOTIFY_ACTION_REMOVED,
+-				     FILE_NOTIFY_CHANGE_FILE_NAME,
+-				     directory);
+-		}
++		count++;
++		notify_fname(conn, NOTIFY_ACTION_REMOVED,
++			     FILE_NOTIFY_CHANGE_FILE_NAME,
++			     directory);
+ 	} else {
+ 		struct smb_Dir *dir_hnd = NULL;
+ 		long offset = 0;
+@@ -2065,19 +2072,17 @@
+ 				return status;
+ 			}
+ 
+-			status = can_delete(conn, fname, dirtype, can_defer);
++			status = do_unlink(conn, fname, dirtype, can_defer);
+ 			if (!NT_STATUS_IS_OK(status)) {
+ 				continue;
+ 			}
+-			if (SMB_VFS_UNLINK(conn,fname) == 0) {
+-				count++;
+-				DEBUG(3,("unlink_internals: succesful unlink "
+-					 "[%s]\n",fname));
+-				notify_fname(conn, NOTIFY_ACTION_REMOVED,
+-					     FILE_NOTIFY_CHANGE_FILE_NAME,
+-					     fname);
+-			}
+-				
++
++			count++;
++			DEBUG(3,("unlink_internals: succesful unlink [%s]\n",
++				 fname));
++			notify_fname(conn, NOTIFY_ACTION_REMOVED,
++				     FILE_NOTIFY_CHANGE_FILE_NAME,
++				     fname);
+ 		}
+ 		CloseDir(dir_hnd);
+ 	}
+

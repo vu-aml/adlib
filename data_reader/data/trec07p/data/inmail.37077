@@ -1,0 +1,217 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 15 15:18:00 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4FJI0qD009154
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 15:18:00 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id BA39E163861
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 19:17:57 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1005)
+	id 8B48B16385C; Tue, 15 May 2007 19:17:30 +0000 (GMT)
+To: samba-cvs@samba.org
+From: derrell@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070515191730.8B48B16385C@lists.samba.org>
+Date: Tue, 15 May 2007 19:17:30 +0000 (GMT)
+Subject: svn commit: samba r22917 - in branches/SAMBA_3_0_26:
+	examples/libsmbclient source/libsmb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: derrell
+Date: 2007-05-15 19:17:29 +0000 (Tue, 15 May 2007)
+New Revision: 22917
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22917
+
+Log:
+
+- Fixes bug 4599.  A missing <code>if</code> statement forced subseqeuent
+  attempts to set attributes to fail.
+
+- I also noticed that missing attributes were setting an invalid return string
+  by getxattr(), e.g. if there was not group, the return string had "GROUP:;"
+  instead of excluding the GROUP attribute entirely as it should.  The big
+  problem with the way it was, is that the string could not then be passed to
+  setxattr() and parsed.
+
+Added:
+   branches/SAMBA_3_0_26/examples/libsmbclient/testacl2.c
+Modified:
+   branches/SAMBA_3_0_26/examples/libsmbclient/Makefile
+   branches/SAMBA_3_0_26/source/libsmb/libsmbclient.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0_26/examples/libsmbclient/Makefile
+===================================================================
+--- branches/SAMBA_3_0_26/examples/libsmbclient/Makefile	2007-05-15 19:17:16 UTC (rev 22916)
++++ branches/SAMBA_3_0_26/examples/libsmbclient/Makefile	2007-05-15 19:17:29 UTC (rev 22917)
+@@ -17,6 +17,7 @@
+ TESTS=	testsmbc \
+ 	tree \
+ 	testacl \
++	testacl2 \
+ 	testbrowse \
+ 	testbrowse2 \
+ 	teststat \
+@@ -39,6 +40,10 @@
+ 	@echo Linking testacl
+ 	$(CC) `gtk-config --cflags` $(CFLAGS) $(LDFLAGS) -o $@ $< `gtk-config --libs` $(LIBSMBCLIENT) -lpopt
+ 
++testacl2: testacl2.o
++	@echo Linking testacl2
++	$(CC) `gtk-config --cflags` $(CFLAGS) $(LDFLAGS) -o $@ $< `gtk-config --libs` $(LIBSMBCLIENT) -lpopt
++
+ testbrowse: testbrowse.o
+ 	@echo Linking testbrowse
+ 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $< $(LIBSMBCLIENT) -lpopt
+
+Added: branches/SAMBA_3_0_26/examples/libsmbclient/testacl2.c
+===================================================================
+--- branches/SAMBA_3_0_26/examples/libsmbclient/testacl2.c	2007-05-15 19:17:16 UTC (rev 22916)
++++ branches/SAMBA_3_0_26/examples/libsmbclient/testacl2.c	2007-05-15 19:17:29 UTC (rev 22917)
+@@ -0,0 +1,78 @@
++#include <stdlib.h>
++#include <string.h>
++#include <errno.h>
++#include <popt.h>
++#include "libsmbclient.h"
++#include "get_auth_data_fn.h"
++
++enum acl_mode
++{
++    SMB_ACL_GET,
++    SMB_ACL_SET,
++    SMB_ACL_DELETE,
++    SMB_ACL_MODIFY,
++    SMB_ACL_ADD,
++    SMB_ACL_CHOWN,
++    SMB_ACL_CHGRP
++};
++
++
++int main(int argc, const char *argv[])
++{
++    int i;
++    int opt;
++    int flags;
++    int debug = 0;
++    int numeric = 0;
++    int full_time_names = 0;
++    enum acl_mode mode = SMB_ACL_GET;
++    static char *the_acl = NULL;
++    int ret;
++    char *p;
++    char *debugstr;
++    char value[1024];
++
++    if (smbc_init(get_auth_data_fn, debug) != 0)
++    {
++        printf("Could not initialize smbc_ library\n");
++        return 1;
++    }
++
++    SMBCCTX *context = smbc_set_context(NULL);
++    smbc_option_set(context, "full_time_names", 1);
++    
++    the_acl = strdup("system.nt_sec_desc.*");
++    ret = smbc_getxattr(argv[1], the_acl, value, sizeof(value));
++    if (ret < 0)
++    {
++        printf("Could not get attributes for [%s] %d: %s\n",
++               argv[1], errno, strerror(errno));
++        return 1;
++    }
++    
++    printf("Attributes for [%s] are:\n%s\n", argv[1], value);
++
++    flags = 0;
++    debugstr = "set attributes (1st time)";
++        
++    ret = smbc_setxattr(argv[1], the_acl, value, strlen(value), flags);
++    if (ret < 0)
++    {
++        printf("Could not %s for [%s] %d: %s\n",
++               debugstr, argv[1], errno, strerror(errno));
++        return 1;
++    }
++    
++    flags = 0;
++    debugstr = "set attributes (2nd time)";
++        
++    ret = smbc_setxattr(argv[1], the_acl, value, strlen(value), flags);
++    if (ret < 0)
++    {
++        printf("Could not %s for [%s] %d: %s\n",
++               debugstr, argv[1], errno, strerror(errno));
++        return 1;
++    }
++    
++    return 0;
++}
+
+Modified: branches/SAMBA_3_0_26/source/libsmb/libsmbclient.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/libsmb/libsmbclient.c	2007-05-15 19:17:16 UTC (rev 22916)
++++ branches/SAMBA_3_0_26/source/libsmb/libsmbclient.c	2007-05-15 19:17:29 UTC (rev 22917)
+@@ -4556,7 +4556,7 @@
+                                                 return -1;
+                                         }
+                                         n = strlen(p);
+-                                } else {
++                                } else if (sidstr[0] != '\0') {
+                                         n = snprintf(buf, bufsize,
+                                                      ",OWNER:%s", sidstr);
+                                 }
+@@ -4601,7 +4601,7 @@
+                                                 return -1;
+                                         }
+                                         n = strlen(p);
+-                                } else {
++                                } else if (sidstr[0] != '\0') {
+                                         n = snprintf(buf, bufsize,
+                                                      ",GROUP:%s", sidstr);
+                                 }
+@@ -5327,7 +5327,9 @@
+                 ipc_srv = smbc_attr_server(context, server, share,
+                                            workgroup, user, password,
+                                            &pol);
+-                srv->no_nt_session = True;
++                if (! ipc_srv) {
++                        srv->no_nt_session = True;
++                }
+         } else {
+                 ipc_srv = NULL;
+         }
+@@ -5752,7 +5754,9 @@
+                 ipc_srv = smbc_attr_server(context, server, share,
+                                            workgroup, user, password,
+                                            &pol);
+-                srv->no_nt_session = True;
++                if (! ipc_srv) {
++                        srv->no_nt_session = True;
++                }
+         } else {
+                 ipc_srv = NULL;
+         }
+

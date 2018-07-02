@@ -1,0 +1,134 @@
+From perl6-all-return-81522-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue May 22 08:29:03 2007
+Return-Path: <perl6-all-return-81522-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4MCT1qD012174
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 22 May 2007 08:29:01 -0400
+Received: (qmail 6841 invoked by uid 514); 22 May 2007 12:28:56 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 6836 invoked from network); 22 May 2007 12:28:56 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=2.0 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,KARMA_CONNECT_NEGATIVE,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: neutral (x1.develooper.com: 63.251.223.186 is neither permitted nor denied by domain of nick@flirble.org)
+Delivered-To: perlmail-parrot-porters@onion.perl.org
+Delivered-To: parrot-porters@perl.org
+Received-SPF: pass (x1.develooper.com: domain of nick@flirble.org designates 194.70.3.20 as permitted sender)
+Date: Tue, 22 May 2007 13:25:33 +0100
+From: Nicholas Clark <nick@ccl4.org>
+To: Allison Randal <allison@perl.org>
+Cc: p2 <parrot-porters@perl.org>
+Subject: Re: PMC architecture discussion
+Message-ID: <20070522122533.GG20876@plum.flirble.org>
+Mail-Followup-To: Allison Randal <allison@perl.org>,
+	p2 <parrot-porters@perl.org>
+References: <46524BE9.7030808@perl.org>
+Mime-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+In-Reply-To: <46524BE9.7030808@perl.org>
+User-Agent: Mutt/1.4.2.1i
+X-Organisation: Tetrachloromethane
+Sender: Nicholas Clark <nick@flirble.org>
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=0.0 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_HELO_PASS,SPF_PASS
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=0.7 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_NEUTRAL
+
+On Mon, May 21, 2007 at 06:48:25PM -0700, Allison Randal wrote:
+
+> On variable-sized PMCs, I generally agree with the goals the proposal is 
+> trying to accomplish, but I want to tackle these goals in a simpler way. 
+> One of the goals mentioned for the proposal was to shrink down the size 
+> of PMCs, but it's hard to get much smaller than a struct containing 1 
+> struct, 1 pointer to a struct, and a pointer to the vtable, where both 
+> of the 2 contained structs can be null.
+
+Apart from
+
+struct PMC {
+    struct PMC_DATA *data;
+    struct VTABLE *vtable;
+};
+
+where the data pointer isn't allowed to be NULL, and what it points to is
+
+struct PMC_DATA {
+    ...			/* Fixed stuff */
+    char your_stuff[1];	/* Actually variable length. */
+}
+
+
+Or if it is allowed to be NULL, that NULL has one very well defined meaning, with
+assumed defaults for all the parts of "Fixed stuff"
+
+> So, rather than making the core PMC struct variable sized, I want to 
+> make one of its contained structs variable sized. This is already a 
+> common practice, storing a structure pointer in PMC_data. I also want to 
+> eliminate the union value from the pobj_t struct. The concept that a PMC 
+> contains either a buffer, 2 pointers, 2 ints, a float val, or a string 
+> val, and that these all must overlap in storage is shortsighted. One 
+> thing that would convince me otherwise is the argument that it's good to 
+> have some core PMC data accessible without a pointer dereference. 
+
+I believe that it was intended as a caching layer, precisely to avoid a pointer
+dereference. I can't remember far enough back offhand, but it would not surprise
+me if the original structure was cache line aligned on ILP32 systems.
+
+> Standing against that is the fact that we're currently allocating (a 
+> small piece of) memory for every PMC that may never be used.
+
+This sounds like it ends up with a very similar system to Perl 5's SVs, with
+fixed sized heads and variable sized bodies.
+
+IIRC Dan's reason for really not wanting variable sized bodies was the experience
+of 5005 threads - if the body can be reallocated, then you need take a lock to
+even read it, in a multi-threaded environment.
+
+
+> This is an alternate structure I'm considering:
+> 
+>     struct PMC {
+>         Parrot_UInt flags;
+>         DPOINTER *data;          /* Modifiable for each PMC */
+>         VTABLE *vtable;
+>         struct PMC_EXT *pmc_ext; /* auxiliary data */
+>     };
+> 
+
+Would it be better to have one pointer to data, and state that free-form data
+follows in memory immediately after this structure?
+
+>     struct PMC_EXT {
+>         PMC *_roles;                /* runtime roles */
+>         PMC *_metadata;             /* properties, replaced by a role */
+>         struct _Sync *_synchronize; /* [to be deprecated, see STM] */
+>         PMC *_next_for_GC;          /* [GC hack, may be replaced] */
+>     };
+
+I'm not sure if the design axioms behind Dan's desire to avoid locking for reading
+remain. In particular, is the assumption now that if a PMC becomes visible to more
+than one thread (by being shared) then its vtable is changed to an alternative
+vtable that performs locking?
+
+And how often does the type of a PMC change, such that its internal data layout
+changes? In Perl 5 this morphing happens everywhere, but in Parrot?
+
+
+Nicholas Clark
+

@@ -1,0 +1,138 @@
+From sugar-bounces@laptop.org  Sun Apr 22 02:28:51 2007
+Return-Path: <sugar-bounces@laptop.org>
+Received: from pedal.laptop.org (pedal.laptop.org [18.85.2.148])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3M6So0I003512
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 22 Apr 2007 02:28:50 -0400
+Received: from pedal.laptop.org (localhost [127.0.0.1])
+	by pedal.laptop.org (Postfix) with ESMTP id 494DA4F8F7;
+	Sun, 22 Apr 2007 02:27:49 -0400 (EDT)
+X-Original-To: sugar@laptop.org
+Delivered-To: sugar@laptop.org
+Received: from spam.laptop.org (spam.laptop.org [18.85.46.23])
+	by pedal.laptop.org (Postfix) with ESMTP id 7D8DC4F8F7
+	for <sugar@laptop.org>; Sun, 22 Apr 2007 02:27:48 -0400 (EDT)
+X-ASG-Debug-ID: 1177223303-5d7b00000000-3Xmyjt
+X-Barracuda-URL: http://18.85.46.23:8000/cgi-bin/mark.cgi
+X-Barracuda-Connect: smtp104.rog.mail.re2.yahoo.com[206.190.36.82]
+X-Barracuda-Start-Time: 1177223303
+Received: from smtp104.rog.mail.re2.yahoo.com (smtp104.rog.mail.re2.yahoo.com
+	[206.190.36.82])
+	by spam.laptop.org (Spam Firewall) with SMTP id C62CC4704
+	for <sugar@laptop.org>; Sun, 22 Apr 2007 02:28:23 -0400 (EDT)
+Received: (qmail 30383 invoked from network); 22 Apr 2007 06:28:23 -0000
+Received: from unknown (HELO ?192.168.2.22?) (mcfletch@rogers.com@74.100.56.78
+	with plain)
+	by smtp104.rog.mail.re2.yahoo.com with SMTP; 22 Apr 2007 06:28:23 -0000
+X-YMail-OSG: QwE7s9IVM1ntigHSJcK7xwBp5LLhBgM.hO5NWlhdTkVT1wQmMKZydLaXmpaj9DMdLw--
+Message-ID: <462B0088.6020503@vrplumber.com>
+Date: Sun, 22 Apr 2007 02:28:24 -0400
+From: "Mike C. Fletcher" <mcfletch@vrplumber.com>
+User-Agent: Thunderbird 1.5.0.10 (X11/20070221)
+MIME-Version: 1.0
+To: OLPC Sugar <sugar@laptop.org>
+X-ASG-Orig-Subj: A few small fixes for the GUI's PresenceService client
+X-Barracuda-Bayes: INNOCENT GLOBAL 0.0000 1.0000 -2.0210
+X-Barracuda-Virus-Scanned: by Barracuda Spam Firewall at laptop.org
+X-Barracuda-Spam-Score: -2.02
+X-Barracuda-Spam-Status: No, SCORE=-2.02 using global scores of TAG_LEVEL=3.5
+	QUARANTINE_LEVEL=1000.0 KILL_LEVEL=5.5 tests=
+X-Barracuda-Spam-Report: Code version 3.1, rules version 3.1.14910
+	Rule breakdown below
+	pts rule name              description
+	---- ----------------------
+	--------------------------------------------------
+Subject: [sugar] A few small fixes for the GUI's PresenceService client
+X-BeenThere: sugar@laptop.org
+X-Mailman-Version: 2.1.9
+Precedence: list
+Reply-To: mcfletch@vrplumber.com
+List-Id: "Discussion of OLPC design,
+	desktop platform and user experience" <sugar.laptop.org>
+List-Unsubscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=unsubscribe>
+List-Archive: <http://mailman.laptop.org/pipermail/sugar>
+List-Post: <mailto:sugar@laptop.org>
+List-Help: <mailto:sugar-request@laptop.org?subject=help>
+List-Subscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: sugar-bounces@laptop.org
+Errors-To: sugar-bounces@laptop.org
+Status: O
+Content-Length: 3043
+Lines: 72
+
+I've been trying to avoid modifications to code as we are focusing on 
+the documentation, but as I couldn't load or test Sugar due to whatever 
+it is that's broken on my install, I felt I needed to fix a few problems 
+this evening.  With the checked-in changes I can run a Sugar checkout in 
+my emulated environment again (though without the PresenceService and 
+with all theme-based icons missing).
+
+To answer any "whys?":
+
+    As a general rule, we should *not* be letting the Shell die/fail to
+    start just because it can't find a certain service.  The effect for
+    the user is to wind up staring at a blank Xephyr screen, with no
+    feedback on what went wrong and no way forward to try to solve the
+    problem other than a quick crash-course on how to manage and
+    configure a Unix machine from the command prompt.
+
+    Machines will get:
+
+        * borked configurations
+        * corrupted files
+        * messed up library versions
+        * conflicting service files
+        * disks or memory so full the system can't create a service
+        * aborted upgrade procedures
+        * <you name it here>
+
+    and we need the shell to be written to handle those situations as
+    much as possible.  The same changes also make it easier to develop
+    for the platform because the system can "go" even if some dependency
+    is malfunctioning at the moment.
+
+Changes:
+
+    * fix sugar.presence.presenceservice.PresenceService to deal with
+      failures to connect with the PresenceService (which is the
+      proximate error that has been preventing me from loading Sugar on
+      my emulator)
+          o uses a property object for the _ps member, catches dbus
+            exceptions on failure, caches on success
+          o adds an _OfflineInterface that provides a null
+            PresenceService API
+          o alters the unprotected interfaces on the class to watch for
+            dbus exceptions
+    * minor restructuring of sugar-emulator script
+          o avoid executing setup code at the top level of the script
+                + allows auto-documentation systems to process the
+                  module without side effects
+                + eventually allows for using automatic .egg "script"
+                  entry-points using the script as a module, should we
+                  decide to use .eggs for distribution at some point.
+          o adds console log messages  telling the developer what's
+            being done so they can tell what's failing
+
+One weird thing seems to be happening; the logging module doesn't seem 
+to be handling %s formatting for the logs I'm writing in presence 
+service.  I guess something's been wrapped around the standard logging 
+operations that's causing that.
+
+Have fun all,
+Mike
+
+-- 
+________________________________________________
+  Mike C. Fletcher
+  Designer, VR Plumber, Coder
+  http://www.vrplumber.com
+  http://blog.vrplumber.com
+
+_______________________________________________
+Sugar mailing list
+Sugar@laptop.org
+http://mailman.laptop.org/mailman/listinfo/sugar
+

@@ -1,0 +1,89 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon May 14 13:56:32 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4EHuWqD025385
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 14 May 2007 13:56:32 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 18293162AC8
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 14 May 2007 17:56:29 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 620)
+	id 3430F162AC3; Mon, 14 May 2007 17:56:01 +0000 (GMT)
+To: samba-cvs@samba.org
+From: metze@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070514175601.3430F162AC3@lists.samba.org>
+Date: Mon, 14 May 2007 17:56:01 +0000 (GMT)
+Subject: svn commit: samba r22864 - in
+	branches/SAMBA_4_0/source/ntvfs/posix: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: metze
+Date: 2007-05-14 17:56:00 +0000 (Mon, 14 May 2007)
+New Revision: 22864
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22864
+
+Log:
+in SMB2 mode we need to cancel an existing lock with a conflicting lock
+if they're on the same handle and the same range
+
+metze
+Modified:
+   branches/SAMBA_4_0/source/ntvfs/posix/pvfs_lock.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/ntvfs/posix/pvfs_lock.c
+===================================================================
+--- branches/SAMBA_4_0/source/ntvfs/posix/pvfs_lock.c	2007-05-14 17:51:19 UTC (rev 22863)
++++ branches/SAMBA_4_0/source/ntvfs/posix/pvfs_lock.c	2007-05-14 17:56:00 UTC (rev 22864)
+@@ -69,8 +69,13 @@
+ 				   int i,
+ 				   NTSTATUS status)
+ {
++	/* in SMB2 mode we also try to unlock failing lock */ 
++	if (req->ctx->protocol != PROTOCOL_SMB2) {
++		i--;
++	}
++
+ 	/* undo the locks we just did */
+-	for (i=i-1;i>=0;i--) {
++	for (;i>=0;i--) {
+ 		brl_unlock(pvfs->brl_context,
+ 			   f->brl_handle,
+ 			   locks[i].pid,
+@@ -377,8 +382,12 @@
+ 				DLIST_ADD(f->pending_list, pending);
+ 				return NT_STATUS_OK;
+ 			}
++			/* in SMB2 mode we also try to unlock failing lock */ 
++			if (req->ctx->protocol != PROTOCOL_SMB2) {
++				i--;
++			}
+ 			/* undo the locks we just did */
+-			for (i=i-1;i>=0;i--) {
++			for (;i>=0;i--) {
+ 				brl_unlock(pvfs->brl_context,
+ 					   f->brl_handle,
+ 					   locks[i].pid,
+

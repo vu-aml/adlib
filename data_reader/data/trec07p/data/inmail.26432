@@ -1,0 +1,78 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May  1 21:32:30 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l421WUb9015702
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 1 May 2007 21:32:30 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id E1EFC16394B
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue,  1 May 2007 23:28:37 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-2.5 required=3.8 tests=ALL_TRUSTED,AWL,BAYES_00,
+	RCVD_IN_DSBL autolearn=ham version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: from [IPv6:::1] (dp [66.70.73.150])
+	by lists.samba.org (Postfix) with ESMTP id D01FA162AF4
+	for <samba-technical@samba.org>; Tue,  1 May 2007 23:28:03 +0000 (GMT)
+Message-Id: <88CDDF0E-ACD7-4D02-A716-860FA5E70F38@samba.org>
+From: James Peach <jpeach@samba.org>
+To: Multiple recipients of list SAMBA-TECHNICAL <samba-technical@samba.org>
+Content-Type: text/plain; charset=US-ASCII; format=flowed; delsp=yes
+Content-Transfer-Encoding: 7bit
+Mime-Version: 1.0 (Apple Message framework v880)
+Date: Tue, 1 May 2007 16:27:58 -0700
+X-Mailer: Apple Mail (2.880)
+Subject: why is (gid_t)-1 treated as a group mapping failure?
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Hi all,
+
+There's a bunch of code sprinkled throughout the passdb layer(s) that  
+asserts that -1 cannot be a valid ID. While this is often true, there  
+is historical precedent for systems using -1 (and -2). Darwin still  
+uses -1 for the group "nogroup", which maps to the SID S-1-0-0.
+
+If I reference against the 3.0.10(!!) code, then -1 was still treated  
+as invalid, but that seems to have been because nametogid() had no way  
+to return an error. Is there a current justification for excluding -1?
+
+For example, in pdb_default_delete_dom_group():
+
+         if (!get_domain_group_from_sid(group_sid, &map)) {
+                 DEBUG(10, ("Could not find group for rid %d\n", rid));
+                 return NT_STATUS_NO_SUCH_GROUP;
+         }
+
+         /* We need the group name for the smb_delete_group later on */
+
+         if (map.gid == (gid_t)-1) {
+                 return NT_STATUS_NO_SUCH_GROUP;
+         }
+
+         grp = getgrgid(map.gid);
+         if (grp == NULL) {
+                 return NT_STATUS_NO_SUCH_GROUP;
+         }
+
+The check for -1 is superfluous because if get_domain_group_from_sid  
+failed, it should return False, and if map.gid is invalid, getgrgid  
+will fail.
+
+--
+James Peach | jpeach@samba.org
+

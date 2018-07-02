@@ -1,0 +1,87 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 15 11:58:38 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4FFwbqD006812
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 11:58:37 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 3E361163985
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 15:58:35 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-2.5 required=3.8 tests=AWL,BAYES_00,RCVD_IN_DSBL,
+	SPF_PASS autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+X-Greylist: delayed 443 seconds by postgrey-1.24 at dp.samba.org;
+	Tue, 15 May 2007 15:58:02 GMT
+Received: from elli.j3e.de (elli.j3e.de [193.175.80.161])
+	by lists.samba.org (Postfix) with ESMTP id 98831162AE4
+	for <samba-technical@lists.samba.org>;
+	Tue, 15 May 2007 15:58:02 +0000 (GMT)
+Received: from bjacke by elli.j3e.de with local (Exim 4.50) id 1HnzIM-0000dR-G2
+	for samba-technical@lists.samba.org; Tue, 15 May 2007 17:50:38 +0200
+Date: Tue, 15 May 2007 17:50:38 +0200
+From: Bjoern Jacke <bjoern@j3e.de>
+To: samba-technical@lists.samba.org
+Message-ID: <20070515155038.GA4665@j3e.de>
+Mime-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+User-Agent: Mutt/1.5.6+20040907i
+Subject: hunting "Unaligned Access" errors
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Hi all,
+
+while I was cleaning up and bringing my Tru64 build machine in a proper
+state I saw several warnings on the console about Unaligned memory accesses:
+
+Unaligned access pid=260838 <smbd> va=0x141b04d6c pc=0x120264c7c
+ra=0x120518f04 inst=0xa6940000
+
+Unaligned access is something RISC machines' memory controllers usually
+can't handle. CISC machines usually *can* handle it but it slows things
+down. In the case of Tru64/AXP this is automatically fixed by the
+operating system but the behaviour can be customized. I changed the
+settings on that machine for the build user so that not just a warning
+is printed on the console but that also a SIGBUS is produced (by putting
+the "uac p sigbus" command into build_test.settings.local). In the
+buildfarm you then see a PANIC for the SerNet-Tru64 machine:
+
+http://build.samba.org/?function=View+Build;host=SerNet-Tru64;tree=samba4;compiler=cc
+
+As metze wrote a customized error handling script using the ladebug
+debugger on Tru64 there is also a nice traceback which points to the
+place where is Unaligned Access is being done:
+
+...
+#5  0x120264e80 in pvfs_wait_dispatch() "ntvfs/posix/pvfs_wait.c":69
+...
+
+Here are a few links to documents describing how to prevent Unaligned
+Accesses and how to debug this:
+
+http://www.arm.com/support/faqdev/1469.html
+http://h21007.www2.hp.com/dspp/files/unprotected/tru64/tips.pdf
+http://www.hmi.de/it/software/tru64-faq.html#P7
+http://en.wikipedia.org/wiki/Data_structure_alignment
+
+I hope you find this usefull. Any feedback about this welcome.
+
+Cheers
+Bjoern
+

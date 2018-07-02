@@ -48,7 +48,7 @@ class EmailDataset(Dataset):
         binary (boolean, optional): Feature type, continuous (False) by default
     """
 
-    def __init__(self, path=None, raw=True, features=None, labels=None,
+    def __init__(self, path=None, raw=True, features=None, labels=None, norm = 'l1',
                  binary=False, strip_accents_=None, ngram_range_=(1, 1),
                  max_df_=1.0, min_df_=1, max_features_=1000, num_instances = 0, standardization= False):
         super(EmailDataset, self).__init__()
@@ -67,7 +67,7 @@ class EmailDataset(Dataset):
                                     ngram_range=ngram_range_, max_df=max_df_,
                                     min_df=min_df_, max_features=max_features_,
                                     binary=self.binary, stop_words='english',
-                                    use_idf=True, norm=None)
+                                    use_idf=True, norm=norm)
                 self.vectorizer = self.vectorizer.fit(self.corpus)
                 self.features = self.vectorizer.transform(self.corpus)
                 if standardization:
@@ -312,7 +312,7 @@ class EmailDataset(Dataset):
             raise AttributeError('The given load format is not currently \
                                  supported.')
 
-    def split(self, fraction=0.5, seed=None):
+    def split(self, fraction=0.5, seed=None, random = True):
         """Split the dataset into test and train sets using
             `sklearn.utils.shuffle()`.
 
@@ -328,15 +328,24 @@ class EmailDataset(Dataset):
         if fraction > 1.0:
             fraction /= 100
         pivot = int(self.__len__()*fraction)
-        if seed:
-            s_feats, s_labels = sklearn.utils.shuffle(self.features, self.labels, random_state=seed)
-        else:
-            s_feats, s_labels = sklearn.utils.shuffle(self.features, self.labels, random_state=scipy.random.seed())
+        if random:
+            if seed:
+                s_feats, s_labels = sklearn.utils.shuffle(self.features, self.labels, random_state=seed)
+            else:
+                s_feats, s_labels = sklearn.utils.shuffle(self.features, self.labels, random_state=scipy.random.seed())
 
-        return (self.__class__(raw=False, features=s_feats[:pivot, :],
-                               labels=s_labels[:pivot],num_instances=pivot,binary=self.binary),
-                self.__class__(raw=False, features=s_feats[pivot:, :],
-                               labels=s_labels[pivot:],num_instances=self.num_instances - pivot,binary=self.binary))
+            return (self.__class__(raw=False, features=s_feats[:pivot, :],
+                                   labels=s_labels[:pivot], num_instances=pivot, binary=self.binary),
+                    self.__class__(raw=False, features=s_feats[pivot:, :],
+                                   labels=s_labels[pivot:], num_instances=self.num_instances - pivot,
+                                   binary=self.binary))
+        else:
+            return (self.__class__(raw=False, features=self.features[:pivot, :],
+                                   labels=self.labels[:pivot], num_instances=pivot, binary=self.binary),
+                    self.__class__(raw=False, features=self.features[pivot:, :],
+                                   labels=self.labels[pivot:], num_instances=self.num_instances - pivot,
+                                   binary=self.binary))
+
 
     def report(self):
         """

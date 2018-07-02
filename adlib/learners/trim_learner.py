@@ -25,16 +25,17 @@ class TRIMLearner(Learner):
         :param n: the number of un-poisoned instances in training_instances
                   - the size of the original data set
         :param lda: lambda - for regularization term
+        :param alpha: the convergence criteria
         :param verbose: if True, the solver will be in verbose mode
         """
 
         Learner.__init__(self)
-        self.training_instances = training_instances
+        self.set_training_instances(training_instances)
         self.n = n
         self.lda = lda  # lambda
         self.alpha = alpha
         self.verbose = verbose
-        self.num_features = self.training_instances[0].get_feature_count()
+
         self.w = None
         self.b = None
 
@@ -150,15 +151,16 @@ class TRIMLearner(Learner):
         """
 
         if params['training_instances'] is not None:
-            self.training_instances = params['training_instances']
+            self.set_training_instances(params['training_instances'])
         if params['n'] is not None:
             self.n = params['n']
         if params['lda'] is not None:
             self.lda = params['lda']
+        if params['alpha'] is not None:
+            self.alpha = params['alpha']
         if params['verbose'] is not None:
             self.verbose = params['verbose']
 
-        self.num_features = self.training_instances[0].get_feature_count()
         self.w = None
         self.b = None
 

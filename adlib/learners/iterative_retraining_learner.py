@@ -3,7 +3,7 @@
 # Matthew Sedam
 
 from adlib.learners import Learner
-from adlib.learners import AlternatingTRIMLearner
+from adlib.learners import TRIMLearner
 from adlib.utils.common import logistic_loss
 from copy import deepcopy
 from data_reader.binary_input import Instance
@@ -26,8 +26,9 @@ class IterativeRetrainingLearner(Learner):
         self.set_training_instances(training_instances)
         self.verbose = verbose
 
-        self.learner = AlternatingTRIMLearner(self.training_instances,
-                                              verbose=True)
+        self.learner = TRIMLearner(self.training_instances,
+                                   int(0.75 * len(self.training_instances)),
+                                   verbose=True)
         self.loss = None
         self.loss_threshold = None
 
@@ -57,6 +58,7 @@ class IterativeRetrainingLearner(Learner):
                 self.training_instances = training_instances
                 continue
 
+            self.learner.n = len(self.training_instances)
             self.training_instances = training_instances
 
             loss = sum(self.loss)
@@ -113,8 +115,9 @@ class IterativeRetrainingLearner(Learner):
         if params['verbose'] is not None:
             self.verbose = params['verbose']
 
-        self.learner = AlternatingTRIMLearner(self.training_instances,
-                                              verbose=True)
+        self.learner = TRIMLearner(self.training_instances,
+                                   int(0.75 * len(self.training_instances)),
+                                   verbose=True)
         self.loss = None
         self.loss_threshold = None
 

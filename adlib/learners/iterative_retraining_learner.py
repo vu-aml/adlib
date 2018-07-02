@@ -3,7 +3,7 @@
 # Matthew Sedam
 
 from adlib.learners import Learner
-from adlib.learners import TRIMLearner
+from adlib.learners import AlternatingTRIMLearner
 from adlib.utils.common import logistic_loss
 from copy import deepcopy
 from data_reader.binary_input import Instance
@@ -16,20 +16,18 @@ class IterativeRetrainingLearner(Learner):
     A learner that iteratively retrains and removes outliers based on loss.
     """
 
-    def __init__(self, lnr: TRIMLearner, training_instances: List[Instance],
-                 verbose=False):
+    def __init__(self, training_instances: List[Instance], verbose=False):
         """
-        :param lnr: the base learner
         :param training_instances: the list of training instances
         :param verbose: if True, the learner will print progress
         """
 
         Learner.__init__(self)
-        self.learner = deepcopy(lnr)
-        self.learner.set_training_instances(training_instances)
         self.set_training_instances(training_instances)
         self.verbose = verbose
 
+        self.learner = AlternatingTRIMLearner(self.training_instances,
+                                              verbose=True)
         self.loss = None
         self.loss_threshold = None
 
@@ -44,6 +42,11 @@ class IterativeRetrainingLearner(Learner):
         best_learner = deepcopy(self.learner)
         best_loss = None
 
+        if self.verbose:
+            print('Minimum loss threshold:', best_loss_threshold,
+                  '\nMaximum loss threshold:', max_loss_threshold,
+                  '\nStep size:', step_size)
+
         self.loss_threshold = best_loss_threshold
 
         while self.loss_threshold < max_loss_threshold:
@@ -56,11 +59,11 @@ class IterativeRetrainingLearner(Learner):
 
             self.training_instances = training_instances
 
-            loss = sum(self.loss_threshold)
+            loss = sum(self.loss)
 
             if self.verbose:
-                print('\nLoss threshold:', self.loss_threshold, '- loss:',
-                      self.loss, '\n')
+                print('\nLoss threshold:', self.loss_threshold, '- loss:', loss,
+                      '\n')
 
             if not best_loss or loss < best_loss:
                 best_loss_threshold = self.loss_threshold
@@ -74,6 +77,10 @@ class IterativeRetrainingLearner(Learner):
         self.set_training_instances(self.learner.training_instances)
 
     def _train_helper(self):
+        """
+        Helper function for self.train()
+        """
+
         self.learner.set_training_instances(self.training_instances)
         self.learner.train()
         self.loss = logistic_loss(self.training_instances, self.learner)
@@ -101,15 +108,13 @@ class IterativeRetrainingLearner(Learner):
         return self.learner.predict(instances)
 
     def set_params(self, params: Dict):
-        if params['lnr'] is not None:
-            self.learner = deepcopy(params['lnr'])
         if params['training_instances'] is not None:
             self.set_training_instances(params['training_instances'])
-            self.learner.set_training_instances(params['training_instances'])
-            self.learner.train()
         if params['verbose'] is not None:
             self.verbose = params['verbose']
 
+        self.learner = AlternatingTRIMLearner(self.training_instances,
+                                              verbose=True)
         self.loss = None
         self.loss_threshold = None
 

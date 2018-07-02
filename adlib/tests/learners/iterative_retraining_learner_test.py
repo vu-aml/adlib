@@ -98,10 +98,8 @@ def test_iterative_retraining_learner():
     print('###################################################################')
     print('START Iterative Retraining learner.\n')
 
-    iterative_retraining_learner = IterativeRetrainingLearner(
-        TRIMLearner(training_data, int(0.4 * len(training_data)), verbose=True),
-        attack_data,
-        verbose=True)
+    iterative_retraining_learner = IterativeRetrainingLearner(attack_data,
+                                                              verbose=True)
 
     iterative_retraining_learner.train()
 

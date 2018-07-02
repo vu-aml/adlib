@@ -39,6 +39,7 @@ def single_run_list(y_pred, y_true):
 def run(par_map):
     dataset = EmailDataset(path='../data_reader/data/trec07p/full', binary=False, raw=True, norm='l2', max_features_=200)
     training, testing = dataset.split(0.5)
+    print("Data parsing successfully")
     training_data = load_dataset(training)
     testing_data = load_dataset(testing)
     test_true_label = [x.label for x in testing_data]
@@ -47,6 +48,7 @@ def run(par_map):
     # the parameter should be altered by process arguments
     l_start = timer()
     ls_learner = L_infSVM(training_data, params=par_map)
+    print("l-infinty-svm")
     ls_learner.train()
     l_end = timer()
 

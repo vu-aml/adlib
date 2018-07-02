@@ -81,4 +81,4 @@ class IterativeRetrainingLearner(Learner):
         raise NotImplementedError
 
     def decision_function(self, X):
-        return self.decision_function(X)
+        return self.learner.decision_function(X)

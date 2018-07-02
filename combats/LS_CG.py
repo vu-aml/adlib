@@ -48,7 +48,7 @@ def run(par_map):
     # the parameter should be altered by process arguments
     l_start = timer()
     ls_learner = L_infSVM(training_data, params=par_map)
-    print("l-infinty-svm")
+    print("l-infinty-svm established.")
     ls_learner.train()
     l_end = timer()
 

@@ -29,38 +29,73 @@ class IterativeRetrainingLearner(Learner):
         self.learner.set_training_instances(training_instances)
         self.set_training_instances(training_instances)
         self.verbose = verbose
+
+        self.loss = None
         self.loss_threshold = None
 
     def train(self):
         self.learner.set_training_instances(self.training_instances)
         self.learner.train()
-        loss = logistic_loss(self.training_instances, self.learner)
+        self.loss = logistic_loss(self.training_instances, self.learner)
 
-        self.loss_threshold = np.mean(loss) + 2 * np.std(loss)
+        step_size = np.min(self.loss[1:] - self.loss[:-1])
+        max_loss_threshold = np.max(self.loss)
+        best_loss_threshold = np.min(self.loss) + step_size
+        best_learner = deepcopy(self.learner)
+        best_loss = None
 
+        self.loss_threshold = best_loss_threshold
+
+        while self.loss_threshold < max_loss_threshold:
+            training_instances = self.training_instances[:]
+            try:
+                self._train_helper()
+            except:
+                self.training_instances = training_instances
+                continue
+
+            self.training_instances = training_instances
+
+            loss = sum(self.loss_threshold)
+
+            if self.verbose:
+                print('\nLoss threshold:', self.loss_threshold, '- loss:',
+                      self.loss, '\n')
+
+            if not best_loss or loss < best_loss:
+                best_loss_threshold = self.loss_threshold
+                best_loss = loss
+                best_learner = deepcopy(self.learner)
+
+            self.loss_threshold += step_size
+
+        self.loss_threshold = best_loss_threshold
+        self.learner = best_learner
+        self.set_training_instances(self.learner.training_instances)
+
+    def _train_helper(self):
+        self.learner.set_training_instances(self.training_instances)
+        self.learner.train()
+        self.loss = logistic_loss(self.training_instances, self.learner)
+
+        iteration = 0
         old_training_instances = []
         while set(old_training_instances) != set(self.training_instances):
             old_training_instances = self.training_instances[:]
             instances = []
             for i, inst in enumerate(self.training_instances):
-                if loss[i] < self.loss_threshold:
+                if self.loss[i] < self.loss_threshold:
                     instances.append(inst)
 
-            self.training_instances = instances
+            self.set_training_instances(instances)
 
             if self.verbose:
-                print('\nNumber of instances:', len(self.training_instances))
-                print('Loss threshold:', self.loss_threshold)
+                print('Iteration:', iteration, '- number of instances:',
+                      len(self.training_instances))
 
             self.learner.set_training_instances(self.training_instances)
             self.learner.train()
-            loss = logistic_loss(self.training_instances, self.learner)
-
-            if self.verbose:
-                print('Loss:\n', loss, '\n')
-
-        self.learner.set_training_instances(self.training_instances)
-        self.learner.train()
+            self.loss = logistic_loss(self.training_instances, self.learner)
 
     def predict(self, instances):
         return self.learner.predict(instances)
@@ -75,6 +110,7 @@ class IterativeRetrainingLearner(Learner):
         if params['verbose'] is not None:
             self.verbose = params['verbose']
 
+        self.loss = None
         self.loss_threshold = None
 
     def predict_proba(self, X):

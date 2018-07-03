@@ -33,6 +33,13 @@ class IterativeRetrainingLearner(Learner):
         self.loss_threshold = None
 
     def train(self):
+        """
+        Train on the set of training instances.
+        """
+
+        if len(self.training_instances) < 2:
+            raise ValueError('Must have at least 2 instances to train.')
+
         self.learner.set_training_instances(self.training_instances)
         self.learner.train()
         self.loss = logistic_loss(self.training_instances, self.learner)

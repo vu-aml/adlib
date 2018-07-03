@@ -44,6 +44,9 @@ class TRIMLearner(Learner):
         Train on the set of training instances.
         """
 
+        if len(self.training_instances) < 2:
+            raise ValueError('Must have at least 2 instances to train.')
+
         # Create random sample of size self.n
         inst_set = []
         while len(inst_set) < self.n:

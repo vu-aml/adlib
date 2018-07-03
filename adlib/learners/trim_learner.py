@@ -64,9 +64,11 @@ class TRIMLearner(Learner):
 
         old_loss = -1
         loss = 0
+        iteration = 0
         while abs(loss - old_loss) >= self.alpha:
             if self.verbose:
-                print('\nCurrent loss:', loss, '\n')
+                print('\nTRIM Iteration:', iteration, '- current loss:', loss,
+                      '\n')
 
             # Calculate minimal set
             loss_vector = fvs.dot(w) + b
@@ -86,6 +88,8 @@ class TRIMLearner(Learner):
 
             old_loss = loss
             loss = self._calc_loss(fvs, labels, w, b)
+
+            iteration += 1
 
         self.w = w
         self.b = b

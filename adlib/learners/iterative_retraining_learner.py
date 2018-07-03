@@ -28,7 +28,7 @@ class IterativeRetrainingLearner(Learner):
 
         self.learner = TRIMLearner(self.training_instances,
                                    int(0.75 * len(self.training_instances)),
-                                   verbose=True)
+                                   verbose=self.verbose)
         self.loss = None
         self.loss_threshold = None
 
@@ -116,6 +116,8 @@ class IterativeRetrainingLearner(Learner):
             self.learner.train()
             self.loss = logistic_loss(self.training_instances, self.learner)
 
+            iteration += 1
+
     def predict(self, instances):
         return self.learner.predict(instances)
 
@@ -127,7 +129,7 @@ class IterativeRetrainingLearner(Learner):
 
         self.learner = TRIMLearner(self.training_instances,
                                    int(0.75 * len(self.training_instances)),
-                                   verbose=True)
+                                   verbose=self.verbose)
         self.loss = None
         self.loss_threshold = None
 

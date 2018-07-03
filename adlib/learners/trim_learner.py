@@ -64,7 +64,7 @@ class TRIMLearner(Learner):
 
         old_loss = -1
         loss = 0
-        while abs(loss - old_loss) < self.alpha:
+        while abs(loss - old_loss) >= self.alpha:
             if self.verbose:
                 print('\nCurrent loss:', loss, '\n')
 

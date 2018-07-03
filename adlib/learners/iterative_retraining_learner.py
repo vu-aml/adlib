@@ -66,6 +66,10 @@ class IterativeRetrainingLearner(Learner):
                 self._train_helper()
             except:
                 self.training_instances = training_instances
+                if self.verbose:
+                    print('\nLoss threshold:', self.loss_threshold,
+                          '- FAILURE\n')
+                self.loss_threshold += step_size
                 continue
 
             self.learner.n = len(self.training_instances)

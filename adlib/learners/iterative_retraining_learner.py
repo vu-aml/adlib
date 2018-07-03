@@ -44,7 +44,9 @@ class IterativeRetrainingLearner(Learner):
         self.learner.train()
         self.loss = logistic_loss(self.training_instances, self.learner)
 
-        step_size = np.min(self.loss[1:] - self.loss[:-1])
+        sorted_loss = self.loss[:]
+        sorted_loss.sort()
+        step_size = np.min(sorted_loss[1:] - sorted_loss[:-1])
         max_loss_threshold = np.max(self.loss)
         best_loss_threshold = np.min(self.loss) + step_size
         best_learner = deepcopy(self.learner)

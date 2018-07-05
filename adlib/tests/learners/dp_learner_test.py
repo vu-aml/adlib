@@ -100,10 +100,11 @@ class TestDataPoisoningLearner:
             print('\nEND ', self.learner_name, ' test.', end='')
             print('###################################################################\n')
 
-        return (self.labels,
-                self.training_pred_labels + self.testing_pred_labels,
-                self.attack_training_pred_labels + self.attack_testing_pred_labels,
-                self.dp_learner_training_pred_labels + self.dp_learner_testing_pred_labels,
+        return (list(self.labels),
+                list(self.training_pred_labels) + list(self.testing_pred_labels),
+                list(self.attack_training_pred_labels) + list(self.attack_testing_pred_labels),
+                list(self.dp_learner_training_pred_labels) +
+                list(self.dp_learner_testing_pred_labels),
                 end - begin)
 
     def _setup(self):

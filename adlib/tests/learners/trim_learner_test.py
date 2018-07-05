@@ -27,22 +27,23 @@ def test_trim_learner():
     result = tester.test()
 
     true_labels = np.array(result[0])
-    before_SVM_labels = np.array(result[1])
-    after_SVM_labels = np.array(result[2])
+    before_svm_labels = np.array(result[1])
+    after_svm_labels = np.array(result[2])
     after_learner_labels = np.array(result[3])
     time = result[4]
 
-    before_SVM_incorrect = int((np.linalg.norm(true_labels - before_SVM_labels) ** 2) / 4)
-    after_SVM_incorrect = int((np.linalg.norm(true_labels - after_SVM_labels) ** 2) / 4)
+    before_svm_incorrect = int((np.linalg.norm(true_labels - before_svm_labels) ** 2) / 4)
+    after_svm_incorrect = int((np.linalg.norm(true_labels - after_svm_labels) ** 2) / 4)
     after_learner_incorrect = int((np.linalg.norm(true_labels - after_learner_labels) ** 2) / 4)
 
-    before_SVM_percent_correct = (len(true_labels) - before_SVM_incorrect) / len(true_labels)
-    after_SVM_percent_correct = (len(true_labels) - after_SVM_incorrect) / len(true_labels)
-    after_learner_percent_correct = (len(true_labels) - after_learner_incorrect) / len(true_labels)
+    before_svm_percent_correct = (len(true_labels) - before_svm_incorrect) * 100 / len(true_labels)
+    after_svm_percent_correct = (len(true_labels) - after_svm_incorrect) * 100 / len(true_labels)
+    after_learner_percent_correct = ((len(true_labels) - after_learner_incorrect) * 100 /
+                                     len(true_labels))
 
     print('\n###################################################################')
-    print('Before SVM correct percentage:', round(before_SVM_percent_correct, 4), '%')
-    print('After SVM correct percentage:', round(after_SVM_percent_correct, 4), '%')
+    print('Before svm correct percentage:', round(before_svm_percent_correct, 4), '%')
+    print('After svm correct percentage:', round(after_svm_percent_correct, 4), '%')
     print('After TRIM learner correct percentage:', round(after_learner_percent_correct, 4), '%')
     print('Elapsed TRIM learner time:', round(time, 4), 's')
     print('###################################################################\n')

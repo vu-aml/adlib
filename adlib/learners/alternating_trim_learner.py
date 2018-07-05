@@ -28,6 +28,13 @@ class AlternatingTRIMLearner(Learner):
         self.b = None
 
     def train(self):
+        """
+        Train on the set of training instances.
+        """
+
+        if len(self.training_instances) < 2:
+            raise ValueError('Must have at least 2 instances to train.')
+
         step_size = 1 / len(self.training_instances)
         best_poison_percentage = 0.05
         best_theta = None

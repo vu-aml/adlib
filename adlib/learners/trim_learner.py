@@ -19,22 +19,23 @@ class TRIMLearner(Learner):
     """
 
     def __init__(self, training_instances: List[Instance], n: int, lda=0.1,
-                 alpha=1e-10, verbose=False):
+                 alpha=1e-8, verbose=False):
         """
         :param training_instances: the instances on which to train
         :param n: the number of un-poisoned instances in training_instances
                   - the size of the original data set
         :param lda: lambda - for regularization term
+        :param alpha: the convergence criteria
         :param verbose: if True, the solver will be in verbose mode
         """
 
         Learner.__init__(self)
-        self.training_instances = training_instances
+        self.set_training_instances(training_instances)
         self.n = n
         self.lda = lda  # lambda
         self.alpha = alpha
         self.verbose = verbose
-        self.num_features = self.training_instances[0].get_feature_count()
+
         self.w = None
         self.b = None
 
@@ -42,6 +43,9 @@ class TRIMLearner(Learner):
         """
         Train on the set of training instances.
         """
+
+        if len(self.training_instances) < 2:
+            raise ValueError('Must have at least 2 instances to train.')
 
         # Create random sample of size self.n
         inst_set = []
@@ -60,9 +64,11 @@ class TRIMLearner(Learner):
 
         old_loss = -1
         loss = 0
-        while abs(loss - old_loss) < self.alpha:
+        iteration = 0
+        while abs(loss - old_loss) >= self.alpha:
             if self.verbose:
-                print('\nCurrent loss:', loss, '\n')
+                print('\nTRIM Iteration:', iteration, '- current loss:', loss,
+                      '\n')
 
             # Calculate minimal set
             loss_vector = fvs.dot(w) + b
@@ -82,6 +88,8 @@ class TRIMLearner(Learner):
 
             old_loss = loss
             loss = self._calc_loss(fvs, labels, w, b)
+
+            iteration += 1
 
         self.w = w
         self.b = b
@@ -150,15 +158,16 @@ class TRIMLearner(Learner):
         """
 
         if params['training_instances'] is not None:
-            self.training_instances = params['training_instances']
+            self.set_training_instances(params['training_instances'])
         if params['n'] is not None:
             self.n = params['n']
         if params['lda'] is not None:
             self.lda = params['lda']
+        if params['alpha'] is not None:
+            self.alpha = params['alpha']
         if params['verbose'] is not None:
             self.verbose = params['verbose']
 
-        self.num_features = self.training_instances[0].get_feature_count()
         self.w = None
         self.b = None
 

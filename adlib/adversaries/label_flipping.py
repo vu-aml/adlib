@@ -197,7 +197,7 @@ class LabelFlipping(Adversary):
         for i in range(half_n):
             constraints.append(q[i] + q[i + half_n] == 1)
             cost_for_q += cost[i + half_n] * q[i + half_n]
-        constraints += [cost_for_q <= self.total_cost]
+        constraints.append(cost_for_q <= self.total_cost)
 
         prob = cvx.Problem(cvx.Minimize(func), constraints)
         prob.solve(solver=cvx.ECOS, verbose=self.verbose, parallel=True)

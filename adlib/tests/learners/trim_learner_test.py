@@ -8,9 +8,6 @@ import numpy as np
 import sys
 
 
-# TODO: Interpret result
-
-
 def test_trim_learner():
     if len(sys.argv) == 2 and sys.argv[1] in ['label-flipping', 'k-insertion',
                                               'data-modification', 'dummy']:

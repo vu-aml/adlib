@@ -42,8 +42,8 @@ def test_trim_learner():
                                      len(true_labels))
 
     print('\n###################################################################')
-    print('Before svm correct percentage:', round(before_svm_percent_correct, 4), '%')
-    print('After svm correct percentage:', round(after_svm_percent_correct, 4), '%')
+    print('Before SVM correct percentage:', round(before_svm_percent_correct, 4), '%')
+    print('After SVM correct percentage:', round(after_svm_percent_correct, 4), '%')
     print('After TRIM learner correct percentage:', round(after_learner_percent_correct, 4), '%')
     print('Elapsed TRIM learner time:', round(time, 4), 's')
     print('###################################################################\n')

@@ -59,7 +59,7 @@ class TestDataPoisoningLearner:
         self.params = params
         self.verbose = verbose
 
-        training_data, testing_data = dataset.split({'train': 25, 'test': 75})
+        training_data, testing_data = dataset.split({'train': 50, 'test': 50})
         self.training_instances = load_dataset(training_data)
         self.testing_instances = load_dataset(testing_data)
 
@@ -86,7 +86,7 @@ class TestDataPoisoningLearner:
     def test(self):
         if self.verbose:
             print('\n###################################################################')
-            print('START ', self.learner_name, ' test.\n', sep='')
+            print('START', self.learner_name, 'test.\n')
 
         self._setup()
         self._attack()
@@ -97,7 +97,7 @@ class TestDataPoisoningLearner:
         end = time.time()
 
         if self.verbose:
-            print('\nEND ', self.learner_name, ' test.', end='')
+            print('\nEND', self.learner_name, 'test.')
             print('###################################################################\n')
 
         return (list(self.labels),
@@ -124,7 +124,7 @@ class TestDataPoisoningLearner:
         # Execute the attack
         if self.attacker_name == 'label-flipping':
             cost = list(np.random.binomial(2, 0.5, len(self.training_instances)))
-            total_cost = 80  # flip around 80 labels
+            total_cost = 40  # flip around 40 labels
             if self.params:
                 self.attacker = LabelFlipping(deepcopy(self.learner), **self.params)
             else:
@@ -133,7 +133,7 @@ class TestDataPoisoningLearner:
         elif self.attacker_name == 'k-insertion':
             self.attacker = KInsertion(deepcopy(self.learner),
                                        self.training_instances[0],
-                                       number_to_add=100,  # 100 / (400 + 100) = 20%
+                                       number_to_add=50,  # 50 / (200 + 50) = 20%
                                        verbose=self.verbose)
         elif self.attacker_name == 'data-modification':
             target_theta = calculate_target_theta(deepcopy(self.learner),
@@ -156,15 +156,13 @@ class TestDataPoisoningLearner:
 
         if self.verbose:
             print('\n###################################################################')
-            print('START ', self.attacker_name, ' attack.\n', sep='')
+            print('START', self.attacker_name, 'attack.\n')
 
         if self.attacker_name == 'data-modification':
-            self.attack_instances = self.attacker.attack(deepcopy(self.training_instances[:80]))
-            self.attack_instances += deepcopy(self.training_instances[:-20])
+            self.attack_instances = self.attacker.attack(deepcopy(self.training_instances[:40]))
+            self.attack_instances += deepcopy(self.training_instances[:-160])
         else:
             self.attack_instances = self.attacker.attack(deepcopy(self.training_instances))
-
-        self.attack_instances += deepcopy(self.testing_instances)
 
         if self.verbose:
             print('\nEND', self.attacker_name, 'attack.')

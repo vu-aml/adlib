@@ -3,6 +3,9 @@
 # Matthew Sedam. 2018.
 
 from adlib.learners import SimpleLearner
+from adlib.learners import TRIMLearner
+from adlib.learners import AlternatingTRIMLearner
+from adlib.learners import IterativeRetrainingLearner
 from adlib.adversaries.label_flipping import LabelFlipping
 from adlib.adversaries.k_insertion import KInsertion
 from adlib.adversaries.datamodification.data_modification import DataModification
@@ -30,6 +33,7 @@ class TestDataPoisoningLearner:
         :param learner_name: Either 'trim', 'atrim', or 'irl'
         :param attacker_name: Either 'label-flipping', 'k-insertion', 'data-modification', or
                               'dummy'
+        :param dataset: the dataset
         :param params: the params to pass to the learner - if None, defaults will be used
         :param verbose: if True, will print START and STOP and set learners and attackers to
                         verbose mode
@@ -59,36 +63,66 @@ class TestDataPoisoningLearner:
         self.training_instances = load_dataset(training_data)
         self.testing_instances = load_dataset(testing_data)
 
-        self.learner = None
-        self.attack_learner = None
-        self.attacker = None
-        self.attack_instances = None
-        self.training_pred_labels = None
-        self.testing_pred_labels = None
+        self.learner = None  # SVM with clean dataset
+        self.attack_learner = None  # SVM with attacked dataset
+        self.dp_learner = None  # Learner we are testing
+        self.attacker = None  # the attacker
+        self.attack_instances = None  # the attacked instances
+
+        # Before attack
+        self.training_pred_labels = None  # the predicted labels of the training set for the SVM
+        self.testing_pred_labels = None  # the predicted labels of the testing set for the SVM
+
+        # After attack
+        self.attack_training_pred_labels = None  # attacker predicted labels for training set SVM
+        self.attack_testing_pred_labels = None  # attacker predicted labels for the testing set SVM
+        self.dp_learner_training_pred_labels = None  # predicted labels for training set DP Learner
+        self.dp_learner_testing_pred_labels = None  # predicted labels for the training set DP L.
+
+        self.labels = []  # true labels
+        for inst in self.training_instances + self.testing_instances:
+            self.labels.append(inst.get_label())
 
     def test(self):
         if self.verbose:
-            print()
-            print('###################################################', end='')
-            print('################\nSTART ', self.learner_name, ' test.\n', sep='')
+            print('\n###################################################################')
+            print('START ', self.learner_name, ' test.\n', sep='')
+
+        self._setup()
+        self._attack()
+        self._retrain()
 
         begin = time.time()
+        self._run_learner()
+        end = time.time()
 
         if self.verbose:
-            print('Training sample size: ', len(self.training_data), '/400\n',
+            print('\nEND ', self.learner_name, ' test.', end='')
+            print('###################################################################\n')
+
+        return (self.labels,
+                self.training_pred_labels + self.testing_pred_labels,
+                self.attack_training_pred_labels + self.attack_testing_pred_labels,
+                self.dp_learner_training_pred_labels + self.dp_learner_testing_pred_labels,
+                end - begin)
+
+    def _setup(self):
+        if self.verbose:
+            print('Training sample size: ', len(self.training_instances), '/400\n',
                   sep='')
 
         # Setting the default learner
         learning_model = svm.SVC(probability=True, kernel='linear')
-        self.learner = SimpleLearner(learning_model, self.training_data)
+        self.learner = SimpleLearner(learning_model, self.training_instances)
         self.learner.train()
 
         self.training_pred_labels = self.learner.predict(self.training_instances)
         self.testing_pred_labels = self.learner.predict(self.testing_instances)
 
+    def _attack(self):
         # Execute the attack
         if self.attacker_name == 'label-flipping':
-            cost = list(np.random.binomial(2, 0.5, len(self.training_data)))
+            cost = list(np.random.binomial(2, 0.5, len(self.training_instances)))
             total_cost = 80  # flip around 80 labels
             if self.params:
                 self.attacker = LabelFlipping(deepcopy(self.learner), **self.params)
@@ -120,17 +154,51 @@ class TestDataPoisoningLearner:
             self.attacker = DummyAttacker()
 
         if self.verbose:
-            print('###################################################', end='')
-            print('################\nSTART ', self.attacker_name, ' attack.\n', sep='')
+            print('\n###################################################################')
+            print('START ', self.attacker_name, ' attack.\n', sep='')
 
+        if self.attacker_name == 'data-modification':
+            self.attack_instances = self.attacker.attack(deepcopy(self.training_instances[:80]))
+            self.attack_instances += deepcopy(self.training_instances[:-20])
+        else:
             self.attack_instances = self.attacker.attack(deepcopy(self.training_instances))
 
-            print('\nEND', self.attacker_name, 'attack.')
-            print('###################################################', end='')
-            print('################')
-            print()
+        self.attack_instances += deepcopy(self.testing_instances)
 
+        if self.verbose:
+            print('\nEND', self.attacker_name, 'attack.')
+            print('###################################################################\n')
+
+    def _retrain(self):
         # Retrain the model with poisoned data
         learning_model = svm.SVC(probability=True, kernel='linear')
         self.attack_learner = SimpleLearner(learning_model, self.attack_instances)
         self.attack_learner.train()
+
+        self.attack_training_pred_labels = self.attack_learner.predict(self.training_instances)
+        self.attack_testing_pred_labels = self.attack_learner.predict(self.testing_instances)
+
+    def _run_learner(self):
+        if self.verbose:
+            print('\n###################################################################')
+            print('START ', self.learner_name, '.\n', sep='')
+
+        if self.learner_name == 'TRIM Learner':
+            self.dp_learner = TRIMLearner(deepcopy(self.attack_instances),
+                                          int(len(self.attack_instances) * 0.8),
+                                          verbose=self.verbose)
+        elif self.learner_name == 'Alternating TRIM Learner':
+            self.dp_learner = AlternatingTRIMLearner(deepcopy(self.attack_instances),
+                                                     verbose=self.verbose)
+        else:  # self.learner_name == 'Iterative Retraining Learner'
+            self.dp_learner = IterativeRetrainingLearner(deepcopy(self.attack_instances),
+                                                         verbose=self.verbose)
+
+        self.dp_learner.train()
+
+        if self.verbose:
+            print('\nEND ', self.learner_name, '.', sep='')
+            print('###################################################################\n')
+
+        self.dp_learner_training_pred_labels = self.dp_learner.predict(self.training_instances)
+        self.dp_learner_testing_pred_labels = self.dp_learner.predict(self.testing_instances)

@@ -19,7 +19,7 @@ class TRIMLearner(Learner):
     """
 
     def __init__(self, training_instances: List[Instance], n: int, lda=0.1,
-                 alpha=1e-8, verbose=False):
+                 alpha=1e-12, verbose=False):
         """
         :param training_instances: the instances on which to train
         :param n: the number of un-poisoned instances in training_instances

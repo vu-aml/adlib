@@ -56,6 +56,22 @@ def calculate_correct_percentages(orig_labels, attack_labels, instances):
     return orig_precent_correct, attack_precent_correct, difference
 
 
+def calculate_percentages(instances, pred_labels):
+    """
+    Calculates the correct percentage
+    :param instances: the list of instances
+    :param pred_labels: the predicted labels
+    :return: the correct percentage
+    """
+
+    correct = 0
+    for i, inst in enumerate(instances):
+        if inst.get_label() == pred_labels[i]:
+            correct += 1
+
+    return correct / len(instances)
+
+
 def fuzz_matrix(matrix: np.ndarray):
     """
     Add to every entry of matrix some noise to make it non-singular.

@@ -146,7 +146,7 @@ class TestDataPoisoningLearner:
             class DummyAttacker:
                 def attack(self, instances):
                     attack_instances = deepcopy(instances)
-                    tmp = np.random.binomial(1, 0.8, 100)
+                    tmp = np.random.binomial(1, 0.2, 200)
                     for i, val in enumerate(tmp):
                         if val == 1:
                             attack_instances[i].set_label(attack_instances[i].get_label() * -1)

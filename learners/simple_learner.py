@@ -33,6 +33,18 @@ class SimpleLearner(learner):
             raise ValueError('Must set training instances before training')
         self.model.train(self.training_instances)
 
+    def get_params(self):
+        return self.model.get_params()
+
+
+    def get_attributes(self):
+        """
+        Acquire all the attributes from the sklearn svm class, if the model is not from svm,
+        get_attributes return None
+        :return:
+        """
+        return self.model.get_attributes()
+
     def predict(self, instances):
         """
 

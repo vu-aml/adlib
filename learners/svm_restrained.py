@@ -139,8 +139,8 @@ class SVMRestrained(learner):
     #decision_function should be the distance to the hyperplane
     def decision_function(self, instances):
         predict_instances = self.weight_vector.dot(instances.T) + self.bias
-        norm = np.linalg.norm(self.weight_vector)
-        return predict_instances / norm
+        #norm = np.linalg.norm(self.weight_vector)
+        return predict_instances
 
     def get_weight(self):
         print("weight vec shape returned from Restrained learner: {}".format(self.weight_vector.shape))

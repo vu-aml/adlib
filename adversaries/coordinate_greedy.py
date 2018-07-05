@@ -2,6 +2,8 @@ from adversaries.adversary import Adversary
 from data_reader.binary_input import Instance
 from data_reader.real_input import RealFeatureVector
 from typing import List, Dict
+from learners.simple_learner import SimpleLearner
+from sklearn.svm import SVC
 from random import shuffle
 import numpy as np
 import learners as learners
@@ -9,6 +11,7 @@ from copy import deepcopy
 #import matplotlib.pyplot as plt
 #for debuggin purposes, the Q values are printed
 from random import *
+from sklearn.metrics import pairwise
 
 DEBUG = False
 
@@ -45,10 +48,6 @@ class CoordinateGreedy(Adversary):
         self.cost_function = cost_function
         self.random_start = random_start
         self.convergence_time = convergence_time
-        if self.learn_model is not None:
-            self.weight_vector = self.learn_model.get_weight()
-        else:
-            self.weight_vector = None  # type: np.array
 
     def get_available_params(self) -> Dict:
         return {'max_iteration':self.max_iteration,
@@ -81,15 +80,15 @@ class CoordinateGreedy(Adversary):
         self.num_features = train_instances[0].get_feature_count()
 
     def attack(self, Instances) -> List[Instance]:
-        if self.weight_vector is None and self.learn_model is not None:
-            self.weight_vector = self.learn_model.get_weight()
-            self.bias = self.learn_model.get_constant()
+        #if self.weight_vector is None and self.learn_model is not None:
+          #  self.weight_vector = self.learn_model.get_weight()
+        #self.bias = self.learn_model.get_constant()
         if self.num_features == 0:
             self.num_features = Instances[0].get_feature_count()
 
-        if self.weight_vector is None:
-            raise ValueError('Must set learner_model and weight_vector before attack.')
-        print("weight vec before attack: {}".format(self.weight_vector.shape))
+       # if self.weight_vector is None:
+       #     raise ValueError('Must set learner_model and weight_vector before attack.')
+       # print("weight vec before attack: {}".format(self.weight_vector.shape))
 
         transformed_instances = []
         for instance in Instances:
@@ -195,6 +194,46 @@ class CoordinateGreedy(Adversary):
         return min(zip(instance_lst,q_value_lst),key=lambda x:x[1])[0]
 
 
+    def learner_predict(self,attack_instance):
+        if type(self.learn_model == SimpleLearner) and type(self.learn_model.model.learner) == SVC:
+            param_map = self.learn_model.get_params()
+            attribute_map = self.learn_model.get_attributes()
+            if param_map["kernel"] == "rbf":
+               return self.learn_model.model.learner.decision_function(attack_instance.reshape(1,-1))
+            if param_map["kernel"] == "linear":
+                return attribute_map["coef_"][0].dot(attack_instance) + attribute_map["intercept_"]
+        else:
+            return self.learn_model.get_weight().dot(attack_instance) + self.learn_model.get_constant()
+
+
+    def compute_gradient(self, attack_instance, index):
+        if type(self.learn_model == SimpleLearner) and type(self.learn_model.model.learner) == SVC:
+            param_map = self.learn_model.get_params()
+            attribute_map = self.learn_model.get_attributes()
+            if param_map["kernel"] == "rbf":
+                grad = []
+                dual_coef = attribute_map["dual_coef_"]
+                support = attribute_map["support_vectors_"]
+                gamma = param_map["gamma"]
+                kernel = pairwise.rbf_kernel(support, attack_instance.reshape(1,-1), gamma)
+                for element in range(0, len(support)):
+                    if grad == []:
+                        grad = (dual_coef[0][element] * kernel[0][element] * 2 * gamma * (support[element] -
+                                                                                          attack_instance))
+                    else:
+                        grad = grad + (
+                            dual_coef[0][element] * kernel[element][0] * 2 * gamma * (support[element] -
+                                                                                      attack_instance))
+                return (-grad)[index]
+            if param_map["kernel"] == "linear":
+                return attribute_map["coef_"][0][index]
+        else:
+            try:
+                grad = self.learn_model.get_weight()[index]
+                return grad
+            except:
+                print("Did not find the gradient for this classifier.")
+
 
     def minimize_transform(self, xi: np.array, x: np.array, i):
         xk = np.copy(xi)
@@ -209,9 +248,9 @@ class CoordinateGreedy(Adversary):
         if self.cost_function == "quadratic":
             #ADD val checking to make sure updated value is greater than 0
             #for email data, feature < 0 does not make sense
-            val = self.step_size * (self.weight_vector[i] + self.lambda_val * (xk[i] - x[i]))
+            val = self.step_size * (self.compute_gradient(xk,i) + self.lambda_val * (xk[i] - x[i]))
         elif self.cost_function == "exponential":
-            val = self.step_size * (self.weight_vector[i] +
+            val = self.step_size * (self.compute_gradient(xk,i) +
                                     self.lambda_val * self.exponential_cost(x, xi) *
                                     (1 / np.sqrt(np.sum((x - xi) **2) + 1)) * (xk[i] - x[i]))
         #print("the weight_vector[i] is {}".format(self.weight_vector[i]))
@@ -226,9 +265,9 @@ class CoordinateGreedy(Adversary):
 
     def transform_cost(self, x: np.array, xi: np.array):
         if self.cost_function == "quadratic":
-            return self.weight_vector.dot(x) + self.bias + self.quadratic_cost(x, xi)
+            return self.learner_predict(x) + self.quadratic_cost(x, xi)
         elif self.cost_function == "exponential":
-            return self.weight_vector.dot(x) + self.bias + self.exponential_cost(x,xi)
+            return self.learner_predict(x) + self.exponential_cost(x,xi)
 
 
     def quadratic_cost(self, x: np.array, xi: np.array):

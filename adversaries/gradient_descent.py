@@ -246,25 +246,26 @@ class GradientDescent(Adversary):
         support sklearn.svc rbr/linear and robust learner classes
         :return:
         """
-        if self.learn_model == SimpleLearner and self.learn_model.model == SVC \
-                and self.learn_model.model.kernel == 'rbf':
-            grad = []
-            dual_coef = self.learn_model.dual_coef_
-            support = self.learn_model.support_vectors_
-            gamma = self.learn_model.get_params()['gamma']
-            kernel = pairwise.rbf_kernel(support, attack_instance, gamma)
-            for element in range(0, len(support)):
-                if grad == []:
-                    grad = (dual_coef[0][element] * kernel[0][element] * 2 * gamma * (support[element] -
+        if type(self.learn_model) == SimpleLearner and type(self.learn_model.model.learner) == SVC:
+            param_map = self.learn_model.get_params()
+            attribute_map = self.learn_model.get_attributes()
+            if param_map["kernel"] == "rbf":
+                grad = []
+                dual_coef = attribute_map["dual_coef_"]
+                support = attribute_map["support_vectors_"]
+                gamma = param_map["gamma"]
+                kernel = pairwise.rbf_kernel(support, attack_instance, gamma)
+                for element in range(0, len(support)):
+                    if grad == []:
+                        grad = (dual_coef[0][element] * kernel[0][element] * 2 * gamma * (support[element] -
+                                                                                          attack_instance))
+                    else:
+                        grad = grad + (
+                            dual_coef[0][element] * kernel[element][0] * 2 * gamma * (support[element] -
                                                                                       attack_instance))
-                else:
-                    grad = grad + (
-                        dual_coef[0][element] * kernel[element][0] * 2 * gamma * (support[element] -
-                                                                                  attack_instance))
-            return -grad
-        if self.learn_model == SimpleLearner and self.learn_model.model == SVC \
-                and self.learn_model.model.kernel == 'linear':
-            return self.learn_model.coef_[0]
+                return -grad
+            if param_map["kernel"] == "linear":
+                return attribute_map["coef_"][0]
         else:
             try:
                 grad = self.learn_model.get_weight()

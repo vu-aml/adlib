@@ -114,8 +114,8 @@ class L_infSVM(learner):
         #print(instances.shape)
         #print(self.weight_vector.shape)
         predict_instances = instances.dot(self.weight_vector) + self.bias
-        norm = np.linalg.norm(self.weight_vector)
-        return predict_instances / norm
+        #norm = np.linalg.norm(self.weight_vector)
+        return predict_instances
 
     def get_weight(self):
         return np.asarray(self.weight_vector.T)[0]

@@ -56,6 +56,22 @@ def calculate_correct_percentages(orig_labels, attack_labels, instances):
     return orig_precent_correct, attack_precent_correct, difference
 
 
+def calculate_percentages(instances, pred_labels):
+    """
+    Calculates the correct percentage
+    :param instances: the list of instances
+    :param pred_labels: the predicted labels
+    :return: the correct percentage
+    """
+
+    correct = 0
+    for i, inst in enumerate(instances):
+        if inst.get_label() == pred_labels[i]:
+            correct += 1
+
+    return correct / len(instances)
+
+
 def fuzz_matrix(matrix: np.ndarray):
     """
     Add to every entry of matrix some noise to make it non-singular.
@@ -127,3 +143,33 @@ def logistic_loss(instances, lnr: Learner, labels=None):
     loss = np.log1p(np.nan_to_num(np.exp(loss)))
 
     return loss
+
+
+def report(result, name=''):
+    """
+    Takes a result tuple and parses it to provide an output
+    :param result: the result tuple - format as below
+    :param name: the name of the learner
+    """
+
+    true_labels = np.array(result[0])
+    before_svm_labels = np.array(result[1])
+    after_svm_labels = np.array(result[2])
+    after_learner_labels = np.array(result[3])
+    time = result[4]
+
+    before_svm_incorrect = int((np.linalg.norm(true_labels - before_svm_labels) ** 2) / 4)
+    after_svm_incorrect = int((np.linalg.norm(true_labels - after_svm_labels) ** 2) / 4)
+    after_learner_incorrect = int((np.linalg.norm(true_labels - after_learner_labels) ** 2) / 4)
+
+    before_svm_percent_correct = (len(true_labels) - before_svm_incorrect) * 100 / len(true_labels)
+    after_svm_percent_correct = (len(true_labels) - after_svm_incorrect) * 100 / len(true_labels)
+    after_learner_percent_correct = ((len(true_labels) - after_learner_incorrect) * 100 /
+                                     len(true_labels))
+
+    print('\n###################################################################')
+    print('Before attack SVM correct percentage:', round(before_svm_percent_correct, 4), '%')
+    print('After attack SVM correct percentage:', round(after_svm_percent_correct, 4), '%')
+    print('After attack learner correct percentage:', round(after_learner_percent_correct, 4), '%')
+    print('Elapsed', 'learner' if name == '' else name, 'time:', round(time, 4), 's')
+    print('###################################################################\n')

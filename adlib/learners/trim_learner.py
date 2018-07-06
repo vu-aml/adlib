@@ -18,14 +18,12 @@ class TRIMLearner(Learner):
     mentioned above.
     """
 
-    def __init__(self, training_instances: List[Instance], n: int, lda=0.1,
-                 alpha=1e-8, verbose=False):
+    def __init__(self, training_instances: List[Instance], n: int, lda=0.1, verbose=False):
         """
         :param training_instances: the instances on which to train
         :param n: the number of un-poisoned instances in training_instances
                   - the size of the original data set
         :param lda: lambda - for regularization term
-        :param alpha: the convergence criteria
         :param verbose: if True, the solver will be in verbose mode
         """
 
@@ -33,7 +31,6 @@ class TRIMLearner(Learner):
         self.set_training_instances(training_instances)
         self.n = n
         self.lda = lda  # lambda
-        self.alpha = alpha
         self.verbose = verbose
 
         self.w = None
@@ -65,7 +62,7 @@ class TRIMLearner(Learner):
         old_loss = -1
         loss = 0
         iteration = 0
-        while abs(loss - old_loss) >= self.alpha:
+        while loss != old_loss:
             if self.verbose:
                 print('\nTRIM Iteration:', iteration, '- current loss:', loss,
                       '\n')
@@ -163,8 +160,6 @@ class TRIMLearner(Learner):
             self.n = params['n']
         if params['lda'] is not None:
             self.lda = params['lda']
-        if params['alpha'] is not None:
-            self.alpha = params['alpha']
         if params['verbose'] is not None:
             self.verbose = params['verbose']
 

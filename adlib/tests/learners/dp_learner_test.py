@@ -10,9 +10,7 @@ from adlib.adversaries.label_flipping import LabelFlipping
 from adlib.adversaries.k_insertion import KInsertion
 from adlib.adversaries.datamodification.data_modification import DataModification
 from adlib.tests.adversaries.data_modification_test import calculate_target_theta
-from adlib.utils.common import calculate_correct_percentages
 from copy import deepcopy
-from data_reader.binary_input import Instance
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
 from sklearn import svm
@@ -23,14 +21,14 @@ import time
 
 class TestDataPoisoningLearner:
 
-    def __init__(self, learner_name: str,
+    def __init__(self, learner_names: List[str] or str,
                  attacker_name: str,
                  dataset: EmailDataset,
                  params: Dict = None,
                  verbose=True):
         """
         Test setup.
-        :param learner_name: Either 'trim', 'atrim', or 'irl'
+        :param learner_names: List of learner names or one string either 'trim', 'atrim', or 'irl'
         :param attacker_name: Either 'label-flipping', 'k-insertion', 'data-modification', or
                               'dummy'
         :param dataset: the dataset
@@ -39,7 +37,11 @@ class TestDataPoisoningLearner:
                         verbose mode
         """
 
-        if learner_name.lower() not in ['trim', 'atrim', 'irl']:
+        if isinstance(learner_names, str):
+            learner_names = [learner_names]
+        learner_names = list(map(lambda x: x.lower(), learner_names))
+
+        if set(learner_names) > {'trim', 'atrim', 'irl'}:
             raise ValueError('Learner name not trim, atrim, nor irl.')
 
         if attacker_name.lower() not in ['label-flipping', 'k-insertion',
@@ -47,13 +49,18 @@ class TestDataPoisoningLearner:
             raise ValueError('Attacker name not label-flipping, k-insertion, '
                              'data-modification, nor dummy.')
 
-        self.learner_name = learner_name.lower()
-        if self.learner_name == 'trim':
-            self.learner_name = 'TRIM Learner'
-        elif self.learner_name == 'atrim':
-            self.learner_name = 'Alternating TRIM Learner'
-        else:
-            self.learner_name = 'Iterative Retraining Learner'
+        self.learner_names = learner_names
+
+        def update_lnr_names(x):
+            if x == 'trim':
+                x = 'TRIM Learner'
+            elif x == 'atrim':
+                x = 'Alternating TRIM Learner'
+            else:
+                x = 'Iterative Retraining Learner'
+            return x
+
+        self.learner_names = list(map(update_lnr_names, self.learner_names))
 
         self.attacker_name = attacker_name.lower()
         self.params = params
@@ -83,29 +90,39 @@ class TestDataPoisoningLearner:
         for inst in self.training_instances + self.testing_instances:
             self.labels.append(inst.get_label())
 
+        self.results = []  # List of result tuples
+
     def test(self):
         if self.verbose:
             print('\n###################################################################')
-            print('START', self.learner_name, 'test.\n')
+            print('START', self.learner_names[0] if len(self.learner_names) == 1 else 'learner',
+                  'test.\n')
 
         self._setup()
         self._attack()
         self._retrain()
 
-        begin = time.time()
-        self._run_learner()
-        end = time.time()
+        for name in self.learner_names:
+            begin = time.time()
+            self._run_learner(name)
+            end = time.time()
+
+            result = (list(self.labels),
+                      list(self.training_pred_labels) + list(self.testing_pred_labels),
+                      list(self.attack_training_pred_labels) +
+                      list(self.attack_testing_pred_labels),
+                      list(self.dp_learner_training_pred_labels) +
+                      list(self.dp_learner_testing_pred_labels),
+                      end - begin)
+
+            self.results.append(result)
 
         if self.verbose:
-            print('\nEND', self.learner_name, 'test.')
+            print('\nEND', self.learner_names[0] if len(self.learner_names) == 1 else 'learner',
+                  'test.')
             print('###################################################################\n')
 
-        return (list(self.labels),
-                list(self.training_pred_labels) + list(self.testing_pred_labels),
-                list(self.attack_training_pred_labels) + list(self.attack_testing_pred_labels),
-                list(self.dp_learner_training_pred_labels) +
-                list(self.dp_learner_testing_pred_labels),
-                end - begin)
+        return self.results[0] if len(self.results) == 1 else self.results
 
     def _setup(self):
         if self.verbose:
@@ -177,26 +194,26 @@ class TestDataPoisoningLearner:
         self.attack_training_pred_labels = self.attack_learner.predict(self.training_instances)
         self.attack_testing_pred_labels = self.attack_learner.predict(self.testing_instances)
 
-    def _run_learner(self):
+    def _run_learner(self, name):
         if self.verbose:
             print('\n###################################################################')
-            print('START ', self.learner_name, '.\n', sep='')
+            print('START ', name, '.\n', sep='')
 
-        if self.learner_name == 'TRIM Learner':
+        if name == 'TRIM Learner':
             self.dp_learner = TRIMLearner(deepcopy(self.attack_instances),
                                           int(len(self.attack_instances) * 0.8),
                                           verbose=self.verbose)
-        elif self.learner_name == 'Alternating TRIM Learner':
+        elif name == 'Alternating TRIM Learner':
             self.dp_learner = AlternatingTRIMLearner(deepcopy(self.attack_instances),
                                                      verbose=self.verbose)
-        else:  # self.learner_name == 'Iterative Retraining Learner'
+        else:  # name == 'Iterative Retraining Learner'
             self.dp_learner = IterativeRetrainingLearner(deepcopy(self.attack_instances),
                                                          verbose=self.verbose)
 
         self.dp_learner.train()
 
         if self.verbose:
-            print('\nEND ', self.learner_name, '.', sep='')
+            print('\nEND ', name, '.', sep='')
             print('###################################################################\n')
 
         self.dp_learner_training_pred_labels = self.dp_learner.predict(self.training_instances)

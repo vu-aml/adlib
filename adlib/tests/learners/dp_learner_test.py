@@ -10,12 +10,14 @@ from adlib.adversaries.label_flipping import LabelFlipping
 from adlib.adversaries.k_insertion import KInsertion
 from adlib.adversaries.datamodification.data_modification import DataModification
 from adlib.tests.adversaries.data_modification_test import calculate_target_theta
+from adlib.utils.common import report
 from copy import deepcopy
 from data_reader.dataset import EmailDataset
 from data_reader.operations import load_dataset
 from sklearn import svm
 from typing import Dict, List
 import numpy as np
+import sys
 import time
 
 
@@ -218,3 +220,27 @@ class TestDataPoisoningLearner:
 
         self.dp_learner_training_pred_labels = self.dp_learner.predict(self.training_instances)
         self.dp_learner_testing_pred_labels = self.dp_learner.predict(self.testing_instances)
+
+
+def test_dp_learners():
+    if len(sys.argv) == 2 and sys.argv[1] in ['label-flipping', 'k-insertion',
+                                              'data-modification', 'dummy']:
+        attacker_name = sys.argv[1]
+    else:
+        attacker_name = 'dummy'
+
+    # Data processing unit
+    # The path is an index of 400 testing samples(raw email data).
+    dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400',
+                           binary=False, raw=True)
+
+    learners = ['trim', 'atrim', 'irl']
+    tester = TestDataPoisoningLearner(learners, attacker_name, dataset)
+    results = tester.test()
+
+    for i, tup in enumerate(results):
+        report(tup, learners[i].upper())
+
+
+if __name__ == '__main__':
+    test_dp_learners()

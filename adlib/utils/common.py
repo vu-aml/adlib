@@ -145,10 +145,11 @@ def logistic_loss(instances, lnr: Learner, labels=None):
     return loss
 
 
-def report(result):
+def report(result, name=''):
     """
     Takes a result tuple and parses it to provide an output
     :param result: the result tuple - format as below
+    :param name: the name of the learner
     """
 
     true_labels = np.array(result[0])
@@ -170,5 +171,5 @@ def report(result):
     print('Before attack SVM correct percentage:', round(before_svm_percent_correct, 4), '%')
     print('After attack SVM correct percentage:', round(after_svm_percent_correct, 4), '%')
     print('After attack learner correct percentage:', round(after_learner_percent_correct, 4), '%')
-    print('Elapsed learner time:', round(time, 4), 's')
+    print('Elapsed', 'learner' if name == '' else name, 'time:', round(time, 4), 's')
     print('###################################################################\n')

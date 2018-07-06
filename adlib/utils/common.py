@@ -146,6 +146,11 @@ def logistic_loss(instances, lnr: Learner, labels=None):
 
 
 def report(result):
+    """
+    Takes a result tuple and parses it to provide an output
+    :param result: the result tuple - format as below
+    """
+
     true_labels = np.array(result[0])
     before_svm_labels = np.array(result[1])
     after_svm_labels = np.array(result[2])

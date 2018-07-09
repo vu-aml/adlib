@@ -43,6 +43,16 @@ class OutlierRemovalLearner(Learner):
                 fv = fv.reshape((len(fv), 1))
                 matrix += fv @ fv.T
 
+            eigen_vals, eigen_vectors = np.linalg.eig(matrix)
+
+            for i, val in enumerate(eigen_vals):
+                eigen_vals[i] = np.linalg.norm(val)
+
+            eigen_vals = list(enumerate(eigen_vals))
+            eigen_vals.sort(key=lambda x: x[1])
+            largest_index = eigen_vals[-1][0]
+            v = eigen_vectors[largest_index]
+
     def predict(self, instances):
         raise NotImplementedError
 

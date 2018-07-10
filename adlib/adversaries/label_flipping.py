@@ -166,7 +166,7 @@ class LabelFlipping(Adversary):
         prob = cvx.Problem(cvx.Minimize(func), constraints)
 
         try:
-            prob.solve(solver=cvx.ECOS, verbose=self.verbose, parallel=True)
+            prob.solve(solver=cvx.ECOS, verbose=self.verbose, parallel=True, max_iters=50)
         except cvx.error.SolverError:
             prob.solve(solver=cvx.SCS, verbose=self.verbose, parallel=True)
 
@@ -206,7 +206,7 @@ class LabelFlipping(Adversary):
         prob = cvx.Problem(cvx.Minimize(func), constraints)
 
         try:
-            prob.solve(solver=cvx.ECOS, verbose=self.verbose, parallel=True)
+            prob.solve(solver=cvx.ECOS, verbose=self.verbose, parallel=True, max_iters=50)
         except cvx.error.SolverError:
             prob.solve(solver=cvx.SCS, verbose=self.verbose, parallel=True)
 

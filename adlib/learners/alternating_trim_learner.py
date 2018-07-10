@@ -24,7 +24,7 @@ class AlternatingTRIMLearner(Learner):
 
         self.poison_percentage = None
         self.n = None
-        self.theta = None
+        self.w = None
         self.b = None
 
     def train(self):
@@ -37,7 +37,7 @@ class AlternatingTRIMLearner(Learner):
 
         step_size = 1 / len(self.training_instances)
         best_poison_percentage = 0.05
-        best_theta = None
+        best_w = None
         best_b = None
         best_loss = None
 
@@ -54,7 +54,7 @@ class AlternatingTRIMLearner(Learner):
             if not best_loss or loss < best_loss:
                 best_poison_percentage = self.poison_percentage
                 best_loss = loss
-                best_theta = self.theta
+                best_w = self.w
                 best_b = self.b
 
             self.poison_percentage += step_size
@@ -64,7 +64,7 @@ class AlternatingTRIMLearner(Learner):
         self.poison_percentage = best_poison_percentage
         self.n = int((1 - self.poison_percentage) *
                      len(self.training_instances))
-        self.theta = best_theta
+        self.w = best_w
         self.b = best_b
 
     def _train_helper(self):
@@ -85,13 +85,13 @@ class AlternatingTRIMLearner(Learner):
                       sep='')
 
             # Setup variables
-            theta = cvx.Variable(fvs.shape[1])
+            w = cvx.Variable(fvs.shape[1])
             b = cvx.Variable()
 
             # Setup CVXPY problem
             f_vector = []
             for vector in fvs:
-                f_vector.append(sum(map(lambda x, y: x * y, vector, theta)) + b)
+                f_vector.append(sum(map(lambda x, y: x * y, vector, w)) + b)
 
             tmp = []
             for i, val in enumerate(tau):
@@ -103,7 +103,7 @@ class AlternatingTRIMLearner(Learner):
             problem = cvx.Problem(cvx.Minimize(func), [])
             problem.solve(solver=cvx.ECOS, verbose=self.verbose, parallel=True)
 
-            self.theta = np.array(theta.value).flatten()
+            self.w = np.array(w.value).flatten()
             self.b = b.value
 
             # Minimize based on loss
@@ -163,11 +163,11 @@ class AlternatingTRIMLearner(Learner):
 
         self.poison_percentage = None
         self.n = None
-        self.theta = None
+        self.w = None
         self.b = None
 
     def predict_proba(self, X):
         raise NotImplementedError
 
     def decision_function(self, X):
-        return X.dot(self.theta) + self.b
+        return X.dot(self.w) + self.b

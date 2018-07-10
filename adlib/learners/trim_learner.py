@@ -109,6 +109,9 @@ class TRIMLearner(Learner):
             loss = self._calc_loss()
             iteration += 1
 
+        if self.verbose:
+            print('\nTRIM Iteration: FINAL - current loss:', loss)
+
     def _calc_loss(self):
         """
         Calculates the loss function as specified in the paper.

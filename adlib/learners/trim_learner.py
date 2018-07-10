@@ -35,7 +35,6 @@ class TRIMLearner(Learner):
 
         self.fvs = None
         self.labels = None
-        self.prob = None
         self.tau = None
         self.w = None
         self.b = None
@@ -74,8 +73,8 @@ class TRIMLearner(Learner):
         loss += 0.5 * self.lda * (cvx.pnorm(w, 2) ** 2)
 
         # Solve problem
-        self.prob = cvx.Problem(cvx.Minimize(loss), [])
-        self.prob.solve(solver=cvx.ECOS, verbose=self.verbose, parallel=True, ignore_dcp=True)
+        prob = cvx.Problem(cvx.Minimize(loss), [])
+        prob.solve(solver=cvx.ECOS, verbose=self.verbose, parallel=True, ignore_dcp=True)
         self.w, self.b = np.array(w.value).flatten(), b.value
 
         old_loss = -1
@@ -102,8 +101,8 @@ class TRIMLearner(Learner):
 
             # Minimize loss
             tau.value = self.tau
-            self.prob.solve(solver=cvx.ECOS, verbose=self.verbose, parallel=True,
-                            warm_start=True, ignore_dcp=True)
+            prob.solve(solver=cvx.ECOS, verbose=self.verbose, parallel=True,
+                       warm_start=True, ignore_dcp=True)
             self.w, self.b = np.array(w.value).flatten(), b.value
 
             old_loss = loss
@@ -156,7 +155,6 @@ class TRIMLearner(Learner):
 
         self.fvs = None
         self.labels = None
-        self.prob = None
         self.tau = None
         self.w = None
         self.b = None
@@ -165,4 +163,7 @@ class TRIMLearner(Learner):
         raise NotImplementedError
 
     def decision_function(self, X):
+        if self.w is None or self.b is None:
+            raise ValueError('Must train learner before decision_function.')
+
         return X.dot(self.w) + self.b

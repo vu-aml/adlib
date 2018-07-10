@@ -6,6 +6,7 @@ from adlib.learners import SimpleLearner
 from adlib.learners import TRIMLearner
 from adlib.learners import AlternatingTRIMLearner
 from adlib.learners import IterativeRetrainingLearner
+from adlib.learners import OutlierRemovalLearner
 from adlib.adversaries.label_flipping import LabelFlipping
 from adlib.adversaries.k_insertion import KInsertion
 from adlib.adversaries.datamodification.data_modification import DataModification
@@ -30,7 +31,8 @@ class TestDataPoisoningLearner:
                  verbose=True):
         """
         Test setup.
-        :param learner_names: List of learner names or one string either 'trim', 'atrim', or 'irl'
+        :param learner_names: List of learner names or one string either 'trim', 'atrim', 'irl',
+                              or 'outlier-removal'
         :param attacker_name: Either 'label-flipping', 'k-insertion', 'data-modification', or
                               'dummy'
         :param dataset: the dataset
@@ -43,7 +45,7 @@ class TestDataPoisoningLearner:
             learner_names = [learner_names]
         learner_names = list(map(lambda x: x.lower(), learner_names))
 
-        if set(learner_names) > {'trim', 'atrim', 'irl'}:
+        if set(learner_names) > {'trim', 'atrim', 'irl', 'outlier-removal'}:
             raise ValueError('Learner name not trim, atrim, nor irl.')
 
         if attacker_name.lower() not in ['label-flipping', 'k-insertion',
@@ -58,8 +60,10 @@ class TestDataPoisoningLearner:
                 x = 'TRIM Learner'
             elif x == 'atrim':
                 x = 'Alternating TRIM Learner'
-            else:
+            elif x == 'irl':
                 x = 'Iterative Retraining Learner'
+            else:  # x == 'outlier-removal'
+                x = 'Outlier Removal Learner'
             return x
 
         self.learner_names = list(map(update_lnr_names, self.learner_names))
@@ -162,13 +166,20 @@ class TestDataPoisoningLearner:
             self.attacker = DataModification(deepcopy(self.learner), target_theta,
                                              verbose=self.verbose)
         else:  # self.attacker_name == 'dummy'
+            num_instances = len(self.training_instances)
+
             class DummyAttacker:
                 def attack(self, instances):
                     attack_instances = deepcopy(instances)
-                    tmp = np.random.binomial(1, 0.2, 200)
+                    tmp = np.random.binomial(1, 0.2, num_instances)
                     for i, val in enumerate(tmp):
                         if val == 1:
                             attack_instances[i].set_label(attack_instances[i].get_label() * -1)
+
+                    print('Poisoned instances: ', sum(tmp), '/', num_instances, sep='')
+                    print('Unpoisoned instances: ', num_instances - sum(tmp), '/', num_instances,
+                          sep='')
+
                     return attack_instances
 
             self.attacker = DummyAttacker()
@@ -208,9 +219,12 @@ class TestDataPoisoningLearner:
         elif name == 'Alternating TRIM Learner':
             self.dp_learner = AlternatingTRIMLearner(deepcopy(self.attack_instances),
                                                      verbose=self.verbose)
-        else:  # name == 'Iterative Retraining Learner'
+        elif name == 'Iterative Retraining Learner':
             self.dp_learner = IterativeRetrainingLearner(deepcopy(self.attack_instances),
                                                          verbose=self.verbose)
+        else:  # name == 'Outlier Removal Learner'
+            self.dp_learner = OutlierRemovalLearner(deepcopy(self.attack_instances),
+                                                    verbose=self.verbose)
 
         self.dp_learner.train()
 
@@ -234,7 +248,7 @@ def test_dp_learners():
     dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400',
                            binary=False, raw=True)
 
-    learners = ['trim', 'atrim', 'irl']
+    learners = ['trim', 'atrim', 'irl', 'outlier-removal']
     tester = TestDataPoisoningLearner(learners, attacker_name, dataset)
     results = tester.test()
 

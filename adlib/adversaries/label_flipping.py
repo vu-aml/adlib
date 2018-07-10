@@ -164,7 +164,11 @@ class LabelFlipping(Adversary):
             constraints.append(0 <= epsilon[i])
 
         prob = cvx.Problem(cvx.Minimize(func), constraints)
-        prob.solve(solver=cvx.ECOS, verbose=self.verbose, parallel=True)
+
+        try:
+            prob.solve(solver=cvx.ECOS, verbose=self.verbose, parallel=True)
+        except cvx.error.SolverError:
+            prob.solve(solver=cvx.SCS, verbose=self.verbose, parallel=True)
 
         self.epsilon = np.copy(np.array(epsilon.value).flatten())
         self.w = np.copy(np.array(w.value).flatten())
@@ -200,7 +204,11 @@ class LabelFlipping(Adversary):
         constraints.append(cost_for_q <= self.total_cost)
 
         prob = cvx.Problem(cvx.Minimize(func), constraints)
-        prob.solve(solver=cvx.ECOS, verbose=self.verbose, parallel=True)
+
+        try:
+            prob.solve(solver=cvx.ECOS, verbose=self.verbose, parallel=True)
+        except cvx.error.SolverError:
+            prob.solve(solver=cvx.SCS, verbose=self.verbose, parallel=True)
 
         q_value = np.array(q.value).flatten()
         self.q = q_value

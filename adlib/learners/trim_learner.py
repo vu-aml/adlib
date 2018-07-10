@@ -33,6 +33,10 @@ class TRIMLearner(Learner):
         self.lda = lda  # lambda
         self.verbose = verbose
 
+        self.fvs = None
+        self.labels = None
+        self.prob = None
+        self.tau = None
         self.w = None
         self.b = None
 
@@ -44,20 +48,35 @@ class TRIMLearner(Learner):
         if len(self.training_instances) < 2:
             raise ValueError('Must have at least 2 instances to train.')
 
+        self.fvs, self.labels = get_fvs_and_labels(self.training_instances)
+
         # Create random sample of size self.n
-        inst_set = []
-        while len(inst_set) < self.n:
-            for inst in self.training_instances:
-                if np.random.binomial(1, 0.5) == 1 and len(inst_set) < self.n:
-                    inst_set.append(inst)
-
-                if len(inst_set) == self.n:
-                    break
-
-        fvs, labels = get_fvs_and_labels(inst_set)
+        tmp = np.random.choice(self.fvs.shape[0], self.n, replace=False)
+        self.tau = np.full(self.fvs.shape[0], 0)
+        for val in tmp:
+            self.tau[val] = 1
 
         # Calculate initial theta
-        w, b = self._minimize_loss(fvs, labels)
+        # Setup variables and constants
+        w = cvx.Variable(self.fvs.shape[1])
+        b = cvx.Variable()
+        tau = cvx.Parameter(self.fvs.shape[0])
+        tau.value = self.tau
+
+        # Setup CVX problem
+        f_vector = []
+        for fv in self.fvs:
+            f_vector.append(sum(map(lambda x, y: x * y, w, fv)) + b)
+
+        loss = list(map(lambda x, y: (x - y) ** 2, f_vector, self.labels))
+        loss = sum(map(lambda x, y: x * y, tau, loss))
+        loss /= self.fvs.shape[0]
+        loss += 0.5 * self.lda * (cvx.pnorm(w, 2) ** 2)
+
+        # Solve problem
+        self.prob = cvx.Problem(cvx.Minimize(loss), [])
+        self.prob.solve(solver=cvx.ECOS, verbose=self.verbose, parallel=True, ignore_dcp=True)
+        self.w, self.b = np.array(w.value).flatten(), b.value
 
         old_loss = -1
         loss = 0
@@ -68,66 +87,38 @@ class TRIMLearner(Learner):
                       '\n')
 
             # Calculate minimal set
-            loss_vector = fvs.dot(w) + b
-            loss_vector -= labels
+            loss_vector = self.fvs.dot(self.w) + self.b
+            loss_vector -= self.labels
             loss_vector = loss_vector ** 2
 
-            loss_tuples = []
-            for i in range(len(loss_vector)):
-                loss_tuples.append((loss_vector[i], inst_set[i]))
-            loss_tuples.sort(key=lambda x: x[0])  # sort using only first elem
+            # Sort based on loss and take self.n instances
+            loss_tuples = list(enumerate(loss_vector))
+            loss_tuples.sort(key=lambda tup: tup[1])
+            loss_tuples = loss_tuples[:self.n]
 
-            inst_set = list(map(lambda tup: tup[1], loss_tuples[:self.n]))
+            self.tau = np.full(len(self.tau), 0)
+            for index, _ in loss_tuples:
+                self.tau[index] = 1
 
             # Minimize loss
-            fvs, labels = get_fvs_and_labels(inst_set)
-            w, b = self._minimize_loss(fvs, labels)
+            tau.value = self.tau
+            self.prob.solve(solver=cvx.ECOS, verbose=self.verbose, parallel=True,
+                            warm_start=True, ignore_dcp=True)
+            self.w, self.b = np.array(w.value).flatten(), b.value
 
             old_loss = loss
-            loss = self._calc_loss(fvs, labels, w, b)
-
+            loss = self._calc_loss()
             iteration += 1
 
-        self.w = w
-        self.b = b
-
-    def _minimize_loss(self, fvs, labels):
+    def _calc_loss(self):
         """
-        Use CVXPY to minimize the loss function.
-        :param fvs: the feature vectors (np.ndarray)
-        :param labels: the list of labels (np.ndarray or List[int])
-        :return: w (np.ndarray) and b (float)
-        """
-
-        # Setup variables and constants
-        w = cvx.Variable(fvs.shape[1])
-        b = cvx.Variable()
-
-        # Setup CVX problem
-        f_vector = []
-        for arr in fvs:
-            f_vector.append(sum(map(lambda x, y: x * y, w, arr)) + b)
-
-        loss = sum(map(lambda x, y: (x - y) ** 2, f_vector, labels))
-        loss /= fvs.shape[0]
-        loss += 0.5 * self.lda * (cvx.pnorm(w, 2) ** 2)
-
-        # Solve problem
-        prob = cvx.Problem(cvx.Minimize(loss), [])
-        prob.solve(solver=cvx.ECOS, verbose=self.verbose, parallel=True)
-
-        return np.array(w.value).flatten(), b.value
-
-    def _calc_loss(self, fvs, labels, w, b):
-        """
-        Calculates the loss function as specified in the paper
-        :param inst_set: the set of Instances
+        Calculates the loss function as specified in the paper.
         :return: the loss
         """
 
-        loss = 0.5 * self.lda * (np.linalg.norm(w) ** 2)
-        tmp = sum(map(lambda x, y: (x - y) ** 2, fvs.dot(w) + b, labels))
-        loss += tmp / fvs.shape[0]
+        loss = 0.5 * self.lda * (np.linalg.norm(self.w) ** 2)
+        tmp = sum(map(lambda x, y: (x - y) ** 2, self.fvs.dot(self.w) + self.b, self.labels))
+        loss += tmp / self.fvs.shape[0]
 
         return loss
 
@@ -163,6 +154,10 @@ class TRIMLearner(Learner):
         if params['verbose'] is not None:
             self.verbose = params['verbose']
 
+        self.fvs = None
+        self.labels = None
+        self.prob = None
+        self.tau = None
         self.w = None
         self.b = None
 

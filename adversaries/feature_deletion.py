@@ -3,6 +3,9 @@ from data_reader.binary_input import Instance
 from typing import List, Dict
 import numpy as np
 from copy import deepcopy
+from learners import SimpleLearner
+from sklearn.svm import SVC
+from sklearn.metrics import pairwise
 #import matplotlib.pyplot as plt
 
 """
@@ -14,7 +17,7 @@ from copy import deepcopy
 """
 
 class AdversaryFeatureDeletion(Adversary):
-    def __init__(self, learner=None, num_deletion=100, all_malicious=True):
+    def __init__(self, learner=None, num_deletion=100, all_malicious=False,random = False):
         """
         :param learner: Learner from learners
         :param num_deletion: the max number that will be deleted in the attack
@@ -27,6 +30,7 @@ class AdversaryFeatureDeletion(Adversary):
         self.malicious = all_malicious  # type: bool
         self.learn_model = learner
         self.del_index = None  # type: np.array
+        self.random = random
         if self.learn_model is not None:
             self.weight_vector = self.learn_model.get_weight()
         else:
@@ -42,31 +46,60 @@ class AdversaryFeatureDeletion(Adversary):
             self.weight_vector = self.learn_model.get_weight()
         if self.num_features == 0:
             self.num_features = instances[0].get_feature_count()
-        if self.weight_vector is None:
-            raise ValueError('Must set learner_model and weight_vector before attack.')
-        if self.malicious:
-            self.del_index = np.flipud(np.argsort(self.weight_vector))[:self.num_deletion]
-        else:
-            self.del_index = np.flipud(np.argsort(np.absolute(self.weight_vector)))[:self.num_deletion]
 
-        # print("checking feature deletion attacker:")
-        # print("printiing self.weight_vector.shape: {}".format(self.weight_vector.shape))
-        # print("printiing self.weight_vector: {}".format(self.weight_vector))
-        # print(self.del_index)
-        # for i in self.del_index:
-        #     print("the number {0} feature weight is {1}".format(i, self.weight_vector[i]))
-        return [self.change_instance(ins) for ins in instances]
+        rbf_flag = self.is_rbf()
+
+        if self.weight_vector is None and not rbf_flag:
+            print("Can not acquire weight vector from the learning model")
+            print("Set random = True: randomly delete features instead")
+            self.random = True
+
+        attacked_instances = []
+
+        #for rbf kernel,we can delete the features with the most gradient
+        if rbf_flag and not self.random:
+            for instance in instances:
+                if instance.label < 0:
+                    attacked_instances.append(instance)
+                else:
+                    gradient = self.rbf_kernel_gradient(instance)
+                    if self.malicious:
+                        self.del_index = np.flipud(np.argsort(gradient))[:self.num_deletion]
+                    else:
+                        self.del_index = np.flipud(np.argsort(np.absolute(gradient)))[:self.num_deletion]
+                    attacked_instances.append(self.change_instance(instance))
+            return attacked_instances
+        else:
+            if not self.random:
+                if self.malicious:
+                    self.del_index = np.flipud(np.argsort(self.weight_vector))[:self.num_deletion]
+                else:
+                    self.del_index = np.flipud(np.argsort(np.absolute(self.weight_vector)))[:self.num_deletion]
+            else:
+                random_seed = np.random.random_sample((self.num_features,))
+                self.del_index = np.argsort(random_seed)[:self.num_deletion]
+
+            for instance in instances:
+                if instance.label < 0:
+                    attacked_instances.append(instance)
+                else:
+                    attacked_instances.append(self.change_instance(instance))
+            return attacked_instances
+
+
 
     def set_params(self, params: Dict):
         if 'num_deletion' in params:
             self.num_deletion = params['num_deletion']
-
         if 'all_malicious' in params:
             self.malicious = params['all_malicious']
+        if 'random' in params:
+            self.random = params['random']
 
     def get_available_params(self) -> Dict:
         params = {'num_deletion': self.num_deletion,
-                  'all_malicious': self.malicious, }
+                  'all_malicious': self.malicious,
+                  'random':self.random}
         return params
 
     def change_instance(self, instance: Instance) -> Instance:
@@ -80,3 +113,32 @@ class AdversaryFeatureDeletion(Adversary):
         # the return value should not be 1 here, since benign instances can change as well?
         # indices = [i for i in range(0, self.num_features) if x[i] != 0 and i not in self.del_index]
         # return Instance(1, FeatureVector(self.num_features, indices))
+
+    #for RBF kernel
+    #can not obtain weight here, so we can just calculate the gradient for the rbf kernel
+    #based on the gradient, delete the features with the most weight
+
+    def is_rbf(self):
+        if type(self.learn_model) != SimpleLearner or type(self.learn_model.model.learner) != SVC:
+            return False
+        return True
+
+    def rbf_kernel_gradient(self,attack_instance):
+        param_map = self.learn_model.get_params()
+        attribute_map = self.learn_model.get_attributes()
+        if param_map["kernel"] == "rbf":
+            grad = []
+            dual_coef = attribute_map["dual_coef_"]
+            support = attribute_map["support_vectors_"]
+            gamma = param_map["gamma"]
+            kernel = pairwise.rbf_kernel(support, attack_instance, gamma)
+            for element in range(0, len(support)):
+                if grad == []:
+                    grad = (dual_coef[0][element] * kernel[0][element] * 2 * gamma * (support[element] -
+                                                                                      attack_instance))
+                else:
+                    grad = grad + (
+                        dual_coef[0][element] * kernel[element][0] * 2 * gamma * (support[element] -
+                                                                                  attack_instance))
+            return np.array(-grad)
+

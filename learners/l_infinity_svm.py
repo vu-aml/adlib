@@ -70,7 +70,7 @@ class L_infSVM(learner):
         slack_factor = self.coef
 
         # define optimization problem
-        prob = Problem(Minimize(slack_factor * loss_func + reg_term))
+        prob = Problem(Minimize(loss_func + slack_factor * reg_term))
         prob.solve()
         self.weight_vector = weights.value
         self.bias = bias.value

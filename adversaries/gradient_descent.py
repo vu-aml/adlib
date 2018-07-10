@@ -30,7 +30,7 @@ import operator
 class GradientDescent(Adversary):
     def __init__(self, learn_model=None, step_size=0.01, trade_off=10,
                  stp_constant=0.000000001, mimicry='euclidean',
-                 max_iter=1000, mimicry_params={}, bound = 0.1):
+                 max_iter=1000, mimicry_params={}, bound = 0.1, binary = False):
         """
         :param learner: Learner(from learners)
         :param max_change: max times allowed to change the feature
@@ -53,6 +53,7 @@ class GradientDescent(Adversary):
         self.max_iter = max_iter
         self.mimicry_params = mimicry_params
         self.bound = bound
+        self.binary = binary
 
     def get_available_params(self) -> Dict:
         return {'step_size': self.step_size,
@@ -62,7 +63,8 @@ class GradientDescent(Adversary):
                 'mimicry': self.minicry,
                 'max_iteration': self.max_iteration,
                 'mimicry_params': self.mimicry_params,
-                'bound' : self.bound}
+                'bound' : self.bound,
+                'binary':self.binary}
 
     def set_params(self, params: Dict):
         if 'step_size' in params.keys():
@@ -81,6 +83,8 @@ class GradientDescent(Adversary):
             self.mimicry_params = params['mimicry_params']
         if  'bound' in params.keys():
             self.bound = params['bound']
+        if 'binary' in params.keys():
+            self.binary = params['binary']
 
     def set_adversarial_params(self, learner, train_instances: List[Instance]):
         self.learn_model = learner

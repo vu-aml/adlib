@@ -12,17 +12,18 @@ from sklearn.metrics import pairwise
 from collections import deque
 from data_reader.operations import sparsify
 import operator
-#import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
 
 """ A simpler gradient descent based evasion attack.
+    Solve the problem: min g(x) s.t. |xi-x| <= dmax.
 """
 
 
 
 class SimpleGradientDescent(Adversary):
     def __init__(self, learn_model=None, step_size=0.01, trade_off=10,
-                 stp_constant=0.000000001,max_iter=1000, bound = 0.1):
+                 stp_constant=0.0000001,max_iter=1000, bound = 0.1, binary = False, all_malicious = False):
         """
         :param learner: Learner(from learners)
         :param max_change: max times allowed to change the feature
@@ -40,14 +41,17 @@ class SimpleGradientDescent(Adversary):
         self.epsilon = stp_constant
         self.max_iter = max_iter
         self.bound = bound
+        self.binary = binary
+        self.all_malicious = all_malicious
 
     def get_available_params(self) -> Dict:
         return {'step_size': self.step_size,
                 'trade_off': self.lambda_val,
                 'learn_model': self.learn_model,
                 'stp_constant': self.epsilon,
-                'max_iteration': self.max_iteration,
-                'bound' : self.bound}
+                'max_iter': self.max_iter,
+                'bound' : self.bound,
+                'binary':self.binary}
 
     def set_params(self, params: Dict):
         if 'step_size' in params.keys():
@@ -58,10 +62,12 @@ class SimpleGradientDescent(Adversary):
             self.epsilon = params['stp_constant']
         if 'learn_model' in params.keys():
             self.learn_model = params['learn_model']
-        if 'max_iteration' in params.keys():
-            self.max_iteration = params['max_iteration']
+        if 'max_iter' in params.keys():
+            self.max_iter = params['max_iter']
         if  'bound' in params.keys():
             self.bound = params['bound']
+        if 'binary' in params.keys():
+            self.binary = params['binary']
 
     def set_adversarial_params(self, learner, train_instances: List[Instance]):
         self.learn_model = learner
@@ -76,9 +82,36 @@ class SimpleGradientDescent(Adversary):
             if instance.label < 0:
                 transformed_instances.append(instance)
             else:
-                transformed_instances.append(self.gradient_descent(instance))
+                if self.binary:
+                    transformed_instances.append(self.binary_gradient_descent(instance))
+                else:
+                    transformed_instances.append(self.gradient_descent(instance))
+        #plt.show()
         return transformed_instances
 
+
+    def binary_gradient_descent(self, attack_instance:Instance):
+        #sparse attack with binary features
+        index_lst = []
+        iter_time = 0
+        attacker_score = self.get_score(attack_instance.get_csr_matrix().toarray())
+        while iter_time < self.max_iter:
+            grad = self.gradient(attack_instance.get_csr_matrix().toarray())
+            if index_lst is not []:
+               #eliminate the index we have already modified
+               for i in index_lst:
+                   grad[i] = 0
+            change_index = np.argmax(np.absolute(grad))
+            new_attack_instance = deepcopy(attack_instance)
+            new_attack_instance.get_feature_vector().flip_bit(change_index)
+            index_lst.append(change_index)
+
+            new_attacker_score = self.get_score(new_attack_instance.get_csr_matrix().toarray())
+            if new_attacker_score < attacker_score:
+                attack_instance = new_attack_instance
+                attacker_score = new_attacker_score
+                iter_time += 1
+        return attack_instance
 
 
     def gradient_descent(self, instance: Instance):
@@ -103,7 +136,7 @@ class SimpleGradientDescent(Adversary):
             # compute the obj_func_value of the last satisfied instance
             # append to the value list
             #iteration_lst.append(iter)
-            #objective_lst.append(obj_func_value)
+            #objective_lst.append(attacker_score)
 
             past_instance = candidate_attack_instances[-1]
             new_instance = self.update_within_boundary(past_instance,root_instance,grad)
@@ -120,7 +153,7 @@ class SimpleGradientDescent(Adversary):
             # check a small epsilon(difference is a small value after
             # several iterations)
             if self.check_convergence_info(new_attacker_score, obj_function_value_list):
-                #print("Goes to Convergence here.... Iteration: %d, Obj value %.4f" % (iter,obj_func_value))
+                print("Goes to Convergence here.... Iteration: %d, Obj value %.4f" % (iter,attacker_score))
                 mat_indices = [x for x in range(0, self.num_features) if new_instance[0][x] != 0]
                 mat_data = [new_instance[0][x] for x in range(0, self.num_features) if new_instance[0][x] != 0]
 
@@ -135,7 +168,7 @@ class SimpleGradientDescent(Adversary):
             if not (new_instance == candidate_attack_instances[-1]).all():
                 candidate_attack_instances.append(new_instance)
 
-        #print("Convergence has not been found..")
+        print("Convergence has not been found..")
         #plt.plot(iteration_lst, objective_lst)
         mat_indices = [x for x in range(0, self.num_features) if candidate_attack_instances[-1][0][x] != 0]
         mat_data = [candidate_attack_instances[-1][0][x] for x in range(0, self.num_features)
@@ -197,13 +230,13 @@ class SimpleGradientDescent(Adversary):
                         grad = grad + (
                             dual_coef[0][element] * kernel[element][0] * 2 * gamma * (support[element] -
                                                                                       attack_instance))
-                return -grad
+                return np.array(-grad)
             if param_map["kernel"] == "linear":
-                return attribute_map["coef_"][0]
+                return np.array(attribute_map["coef_"][0])
         else:
             try:
                 grad = self.learn_model.get_weight()
-                return grad
+                return np.array(grad)
             except:
                 print("Did not find the gradient for this classifier.")
 

@@ -48,6 +48,7 @@ class OutlierRemovalLearner(Learner):
         """
 
         cutoff = 10 * math.log(len(self.training_instances)) / fvs.shape[1]
+        cutoff *= 10
 
         if self.verbose:
             print('Cutoff:', cutoff)

@@ -166,13 +166,20 @@ class TestDataPoisoningLearner:
             self.attacker = DataModification(deepcopy(self.learner), target_theta,
                                              verbose=self.verbose)
         else:  # self.attacker_name == 'dummy'
+            num_instances = len(self.training_instances)
+
             class DummyAttacker:
                 def attack(self, instances):
                     attack_instances = deepcopy(instances)
-                    tmp = np.random.binomial(1, 0.2, 200)
+                    tmp = np.random.binomial(1, 0.2, num_instances)
                     for i, val in enumerate(tmp):
                         if val == 1:
                             attack_instances[i].set_label(attack_instances[i].get_label() * -1)
+
+                    print('Poisoned instances: ', sum(tmp), '/', num_instances, sep='')
+                    print('Unpoisoned instances: ', num_instances - sum(tmp), '/', num_instances,
+                          sep='')
+
                     return attack_instances
 
             self.attacker = DummyAttacker()

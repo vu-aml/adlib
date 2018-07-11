@@ -81,7 +81,7 @@ class IterativeRetrainingLearner(Learner):
                 print('\nLoss threshold:', self.loss_threshold, '- loss:', loss,
                       '\n')
 
-            if not best_loss or loss < best_loss:
+            if not best_loss or loss > best_loss:
                 best_loss_threshold = self.loss_threshold
                 best_loss = loss
                 best_learner = deepcopy(self.learner)

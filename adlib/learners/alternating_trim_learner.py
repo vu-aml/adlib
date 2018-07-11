@@ -50,7 +50,7 @@ class AlternatingTRIMLearner(Learner):
                 print('\nPoison Percentage:', self.poison_percentage, '- loss:',
                       loss, '\n')
 
-            if not best_loss or loss < best_loss:
+            if not best_loss or loss > best_loss:
                 best_poison_percentage = self.poison_percentage
                 best_loss = loss
                 best_lnr = deepcopy(self.lnr)

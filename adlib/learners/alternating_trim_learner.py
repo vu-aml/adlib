@@ -6,6 +6,7 @@ from adlib.learners import Learner, TRIMLearner
 from adlib.utils.common import logistic_loss
 from copy import deepcopy
 from typing import Dict
+import numpy as np
 
 
 class AlternatingTRIMLearner(Learner):
@@ -33,14 +34,15 @@ class AlternatingTRIMLearner(Learner):
             raise ValueError('Must have at least 2 instances to train.')
 
         step_size = 1 / len(self.training_instances)
-        best_poison_percentage = 0.05
-        best_lnr = None
-        best_loss = None
 
         self.poison_percentage = 0.05
         self.n = int((1 - self.poison_percentage) *
                      len(self.training_instances))
         self.lnr.n = self.n
+
+        poison_percentage_list = []
+        loss_list = []
+        learner_list = []
 
         while self.poison_percentage < 0.5:
             self.lnr.train()
@@ -50,20 +52,29 @@ class AlternatingTRIMLearner(Learner):
                 print('\nPoison Percentage:', self.poison_percentage, '- loss:',
                       loss, '\n')
 
-            if not best_loss or loss > best_loss:
-                best_poison_percentage = self.poison_percentage
-                best_loss = loss
-                best_lnr = deepcopy(self.lnr)
+            poison_percentage_list.append(self.poison_percentage)
+            loss_list.append(loss)
+            learner_list.append(deepcopy(self.lnr))
 
             self.poison_percentage += step_size
             self.n = int((1 - self.poison_percentage) *
                          len(self.training_instances))
             self.lnr.n = self.n
 
-        self.poison_percentage = best_poison_percentage
-        self.n = int((1 - self.poison_percentage) *
-                     len(self.training_instances))
-        self.lnr = best_lnr
+        # Find index of smallest change in loss
+        loss_list = np.array(loss_list)
+        loss_derivative = loss_list[1:] - loss_list[:-1]
+        loss_derivative /= step_size
+        loss_derivative = np.abs(loss_derivative)
+        loss_derivative = list(enumerate(loss_derivative))
+        loss_derivative.sort(key=lambda x: x[1])
+
+        index = loss_derivative[0][0]
+        index = index if loss_list[index] <= loss_list[index + 1] else index + 1
+
+        self.poison_percentage = poison_percentage_list[index]
+        self.n = int((1 - self.poison_percentage) * len(self.training_instances))
+        self.lnr = learner_list[index]
 
     def predict(self, instances):
         return self.lnr.predict(instances)

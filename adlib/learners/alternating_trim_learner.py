@@ -44,6 +44,8 @@ class AlternatingTRIMLearner(Learner):
 
         while self.poison_percentage < 0.5:
             self.lnr.train()
+            self.lnr.redo_problem_on_train = False
+
             loss = (sum(logistic_loss(self.training_instances, self.lnr)) /
                     len(self.training_instances))
 
@@ -54,7 +56,9 @@ class AlternatingTRIMLearner(Learner):
             if not best_loss or loss < best_loss:
                 best_poison_percentage = self.poison_percentage
                 best_loss = loss
-                best_lnr = deepcopy(self.lnr)
+                best_lnr = deepcopy((self.lnr.training_instances, self.lnr.n,
+                                     self.lnr.lda, self.lnr.verbose, self.lnr.w,
+                                     self.lnr.b))
 
             self.poison_percentage += step_size
             self.n = int((1 - self.poison_percentage) *
@@ -64,7 +68,8 @@ class AlternatingTRIMLearner(Learner):
         self.poison_percentage = best_poison_percentage
         self.n = int((1 - self.poison_percentage) *
                      len(self.training_instances))
-        self.lnr = best_lnr
+        self.lnr = TRIMLearner(best_lnr[0], best_lnr[1], best_lnr[2], best_lnr[3])
+        self.lnr.w, self.lnr.b = best_lnr[4], best_lnr[5]
 
     def predict(self, instances):
         return self.lnr.predict(instances)

@@ -52,6 +52,7 @@ class IterativeRetrainingLearner(Learner):
         best_loss_threshold = np.min(self.loss) + step_size
         best_learner = deepcopy(self.learner)
         best_loss = None
+        loss_list = []
 
         if self.verbose:
             print('Minimum loss threshold:', best_loss_threshold,
@@ -80,6 +81,12 @@ class IterativeRetrainingLearner(Learner):
             if self.verbose:
                 print('\nLoss threshold:', self.loss_threshold, '- loss:', loss,
                       '\n')
+
+            if len(loss_list) > 1 and loss_list[-2] == loss_list[-1] == loss:
+                print('\n---Exiting early as increasing threshold no longer changes loss.---\n')
+                break
+            else:
+                loss_list.append(loss)
 
             if not best_loss or loss < best_loss:
                 best_loss_threshold = self.loss_threshold

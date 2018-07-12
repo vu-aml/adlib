@@ -46,7 +46,7 @@ class IterativeRetrainingLearner(Learner):
 
         sorted_loss = self.loss[:]
         sorted_loss.sort()
-        step_size = 10 * np.mean(np.array(
+        step_size = 5 * np.mean(np.array(
             list(filter(lambda x: x > 0, sorted_loss[1:] - sorted_loss[:-1]))))
         max_loss_threshold = np.max(self.loss)
         best_loss_threshold = np.min(self.loss) + step_size

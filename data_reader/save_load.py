@@ -1,93 +1,101 @@
 import pickle, json
 from typing import List
 from data_reader.binary_input import Instance
+from scipy.sparse import csr_matrix, dok_matrix, find
+import os
+import csv
+import pickle
+import numpy as np
+from data_reader.operations import sparsify,csr_mat_to_instances
 
-
-def save_transformed_instances(battle_name: str, data: str, instances: List[Instance]):
-    """Save data from a specified file.
+def save(data, outfile='../data_reader/data/transformed/serialized.pkl', binary=False):
+    """User facing function for serializing an instance object.
 
     Args:
-        battle_name (str): User-specified name of battle.
-        data (str): Name of dataset that was transformed.
-        instances (List[Instance]): Transformed instances to save.
+        outfile (str, optional): The destination file.
+        binary(boolean, optional): If True, save as binary sparse
+            representation.
 
     """
-    path = './data_reader/data/transformed/' + data + '.' + battle_name
-    with open(path, 'w') as outfile:
-        for instance in instances:
-            label = instance.get_label()
-            indices = instance.get_feature_vector().indices
-            instance_str = str(label).strip('[]') + ': ' + str(indices).strip('[]')
-            outfile.write(instance_str + '\n')
+    format = os.path.splitext(outfile)[1][1:]
+    if format == 'csv':
+        _csv(outfile ,save = True,data= data,binary= binary)
+    elif format == 'pkl':
+        _pickle(outfile, save= True, data= data, binary= binary)
+    else:
+        raise AttributeError('The given save format is not currently \
+                               supported.')
 
 
-def save_data(category: str, name: str, instances: List[List[int]]):
-    """Save instances extracted from corpus.
+def load(path, binary=False):
+    """Load function called by `__init__()` if path is specified and
+        `raw = False`.
 
     Args:
-        category (str): Train or Test.
-        name (str): User-specified name of dataset.
-        instances (List[List[int]): Raw data to save.
+        path (str): Path to load serialized sparse dataset from.
+        format (str, optional): Either pkl or csv. Default: pkl
+
+    Returns:
+        labels (np.ndarray): The labels for loaded dataset.
+        features (scipy.sparse.csr_matrix): The sparse feature matrix of
+            loaded dataset.
 
     """
-    path = './data_reader/data/' + category + '/' + name
-    with open(path, 'w') as outfile:
-        for instance in instances:
-            instance_str = str(instance[0]).strip('[]') + ': ' + str(instance[1:]).strip('[],')
-            outfile.write(instance_str + '\n')
+    format = os.path.splitext(path)[1][1:]
+    if format == 'pkl':
+        return _pickle(path, save=False,binary=binary)
+    elif format == 'csv':
+        return _csv(path, save=False, binary=binary)
+    else:
+        raise AttributeError('The given load format is not currently \
+                                 supported.')
 
 
-def save_battle(battle, battle_name):
-    """Save battle at a given state of execution.
+def _csv(outfile, binary, save=True, data= None):
+    #data: instances
+    # load a .csv file where all the data in the file mark the relative postions,
+    # not values if save = true, save [[label, *features]] to standard csv file
+    if save:
+        label, sparse_data = sparsify(data)
+        with open(outfile, 'w+') as fileobj:
+            serialize = csv.writer(fileobj)
+            data = np.concatenate((np.array(label)[:, np.newaxis],
+                                   sparse_data.toarray()), axis=1)
+            for instance in data.tolist():
+                serialize.writerow(instance)
+    else:
+        # TODO: throw exception if FileNotFoundError
+        data = np.genfromtxt(outfile, delimiter=',')
+        num_instances = data.shape[0]
+        labels = data[:, :1]
+        feats = data[:, 1:]
+        features = csr_matrix(feats)
+        if binary:
+            return csr_mat_to_instances(features,np.squeeze(labels),binary=True)
+        else:
+            return csr_mat_to_instances(features, np.squeeze(labels), binary=False)
+
+
+def _pickle(outfile, binary, save=True, data= None):
+    """A fast method for saving and loading datasets as python objects.
 
     Args:
-        battle (Battle): Existing object containing learner and adversary in a given state.
-        battle_name (str): User-specified name of battle.
+        outfile (str): The destination file.
+        save (boolean, optional): If True, serialize, if False, load.
 
     """
-    path = './data_reader/data/battles/' + battle_name
-
-    with open(path, 'wb') as outfile:
-        pickle.dump(battle, outfile, -1)
-
-
-def save_predictions(battle_name: str, data: str, predictions: List):
-    """Save learner generated predictions.
-
-    Args:
-        battle_name (str): User-specified name of battle.
-        data (str): Name of dataset that was transformed.
-        predictions (List): Predictions for each instance.
-
-    """
-    path = './data_reader/data/predictions/' + data + '.' + battle_name
-    with open(path, 'w') as outfile:
-        for prediction in predictions:
-            outfile.write(str(prediction) + '\n')
-
-
-def open_battle(battle_name: str):
-    """Load in saved battle.
-
-    Args:
-            battle_name (str): User-specified name of battle.
-
-        """
-    path = './data_reader/data/battles/' + battle_name
-    with open(path, 'rb') as infile:
-        battle = pickle.load(infile)
-    return battle
-
-
-def open_predictions(battle_name: str, data: str) -> List:
-    """Load Learner predictions.
-
-    Args:
-            battle_name (str): User-specified name of battle.
-            data (str): dataset used to generate predictions.
-
-        """
-    path = './data_reader/data/predictions/' + data + '.' + battle_name
-    with open(path, 'r') as infile:
-        predictions = json.load(infile)
-    return predictions
+    if save:
+        label, sparse_data = sparsify(data)
+        with open(outfile, 'wb+') as fileobj:
+            pickle.dump({
+                'labels': label,
+                'features': sparse_data
+            }, fileobj, pickle.HIGHEST_PROTOCOL)
+    else:
+        # TODO: throw exception if FileNotFoundError
+        with open(outfile, 'rb') as fileobj:
+            data = pickle.load(fileobj)
+            if binary:
+                return csr_mat_to_instances(data['features'], data['labels'], binary=True)
+            else:
+                return csr_mat_to_instances(data['features'], data['labels'], binary=False)

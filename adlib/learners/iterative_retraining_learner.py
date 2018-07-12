@@ -42,7 +42,8 @@ class IterativeRetrainingLearner(Learner):
 
         self.learner.set_training_instances(self.training_instances)
         self.learner.train()
-        self.loss = logistic_loss(self.training_instances, self.learner)
+        self.loss = (logistic_loss(self.training_instances, self.learner) /
+                     len(self.training_instances))
 
         sorted_loss = self.loss[:]
         sorted_loss.sort()
@@ -106,7 +107,8 @@ class IterativeRetrainingLearner(Learner):
 
         self.learner.set_training_instances(self.training_instances)
         self.learner.train()
-        self.loss = logistic_loss(self.training_instances, self.learner)
+        self.loss = (logistic_loss(self.training_instances, self.learner) /
+                     len(self.training_instances))
 
         iteration = 0
         old_training_instances = []
@@ -125,7 +127,8 @@ class IterativeRetrainingLearner(Learner):
 
             self.learner.set_training_instances(self.training_instances)
             self.learner.train()
-            self.loss = logistic_loss(self.training_instances, self.learner)
+            self.loss = (logistic_loss(self.training_instances, self.learner) /
+                         len(self.training_instances))
 
             iteration += 1
 

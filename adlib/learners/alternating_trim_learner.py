@@ -44,7 +44,8 @@ class AlternatingTRIMLearner(Learner):
 
         while self.poison_percentage < 0.5:
             self.lnr.train()
-            loss = sum(logistic_loss(self.training_instances, self.lnr))
+            loss = (sum(logistic_loss(self.training_instances, self.lnr)) /
+                    len(self.training_instances))
 
             if self.verbose:
                 print('\nPoison Percentage:', self.poison_percentage, '- loss:',

@@ -18,13 +18,13 @@ class AlternatingTRIMLearner(Learner):
         Learner.__init__(self)
         self.set_training_instances(deepcopy(training_instances))
         self.max_iter = max_iter
-        self.verbose = verbose
+        self.verbose = False
 
         self.poison_percentage = None
         self.n = None
         self.lnr = TRIMLearner(self.training_instances, 0, verbose=self.verbose)
 
-    def train(self):
+    def train(self, correct_fvs, correct_labels):
         """
         Train on the set of training instances.
         """
@@ -48,6 +48,12 @@ class AlternatingTRIMLearner(Learner):
 
             loss = (sum(logistic_loss(self.training_instances, self.lnr)) /
                     len(self.training_instances))
+
+            import numpy as np
+            pl = np.array(self.lnr.predict(correct_fvs))
+            correct_labels = np.array(correct_labels)
+            diff = sum(pl - correct_labels) / 2
+            print(self.poison_percentage, '-', (len(correct_labels) - diff) / len(correct_labels))
 
             if self.verbose:
                 print('\nPoison Percentage:', self.poison_percentage, '- loss:',

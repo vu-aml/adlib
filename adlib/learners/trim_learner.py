@@ -147,7 +147,7 @@ class TRIMLearner(Learner):
         if self.w is None or self.b is None:
             raise ValueError('Must train learner before prediction.')
 
-        fvs, _ = get_fvs_and_labels(instances)
+        fvs, _ = get_fvs_and_labels(instances) if isinstance(instances, List) else instances, None
 
         labels = fvs.dot(self.w) + self.b
         labels = list(map(lambda x: 1 if x >= 0 else -1, labels))

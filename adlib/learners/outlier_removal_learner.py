@@ -3,7 +3,8 @@
 # Matthew Sedam
 
 from adlib.learners.learner import Learner
-from adlib.utils.common import get_fvs_and_labels
+from adlib.utils.common import get_fvs_and_labels, logistic_loss
+from copy import deepcopy
 from typing import Dict
 import math
 import numpy as np
@@ -32,23 +33,56 @@ class OutlierRemovalLearner(Learner):
             raise ValueError('Must have at least 2 instances to train.')
 
         fvs, labels = get_fvs_and_labels(self.training_instances)
-        fvs, labels = self._remove_outliers(fvs, labels)
+        orig_fvs, orig_labels = deepcopy(fvs), deepcopy(labels)
 
-        self.w = np.full(fvs.shape[1], 0.0)
-        for i, fv in enumerate(fvs):
-            self.w += labels[i] * fv
-        self.w /= fvs.shape[0]
+        cutoff = 10 * math.log(len(self.training_instances)) / fvs.shape[1]
+        cutoff /= 100
 
-    def _remove_outliers(self, fvs, labels):
+        base_cutoff = cutoff
+        factor = 1
+        max_cutoff = cutoff * 100
+
+        if self.verbose:
+            print('\nBase cutoff:', cutoff, '\nMax cutoff:', max_cutoff, '\n')
+
+        best_loss = None
+        best_w = None
+        iteration = 0
+
+        while cutoff < max_cutoff:
+            fvs, labels = self._remove_outliers(fvs, labels, cutoff)
+
+            self.w = np.full(fvs.shape[1], 0.0)
+            for i, fv in enumerate(fvs):
+                self.w += labels[i] * fv
+            self.w /= fvs.shape[0]
+
+            loss = logistic_loss(fvs, self, labels)
+            loss = sum(loss) / fvs.shape[0]
+
+            if self.verbose:
+                print('\nMAIN Iteration:', iteration, '- factor:', factor,
+                      '- cutoff:', cutoff, '- loss:', loss, '\n')
+
+            if not best_loss or loss < best_loss:
+                best_loss = loss
+                best_w = deepcopy(self.w)
+
+            factor += 1
+            cutoff = base_cutoff * factor
+            fvs, labels = deepcopy(orig_fvs), deepcopy(orig_labels)
+            iteration += 1
+
+        self.w = best_w
+
+    def _remove_outliers(self, fvs, labels, cutoff):
         """
         Removes outliers
         :param fvs: the feature vectors - np.ndarray
         :param labels: the labels
+        :param cutoff: the cutoff
         :return: feature vectors and labels
         """
-
-        cutoff = 10 * math.log(len(self.training_instances)) / fvs.shape[1]
-        cutoff *= 10
 
         if self.verbose:
             print('Cutoff:', cutoff)

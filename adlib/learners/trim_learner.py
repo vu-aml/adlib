@@ -39,6 +39,11 @@ class TRIMLearner(Learner):
         self.w = None
         self.b = None
 
+        # If true, setup problem on train - only use for learners that use
+        # the same instance of TRIM
+        self.redo_problem_on_train = True
+        self.temp_tuple = None
+
     def train(self):
         """
         Train on the set of training instances.
@@ -55,26 +60,34 @@ class TRIMLearner(Learner):
         for val in tmp:
             self.tau[val] = 1
 
-        # Calculate initial theta
-        # Setup variables and constants
-        w = cvx.Variable(self.fvs.shape[1])
-        b = cvx.Variable()
-        tau = cvx.Parameter(self.fvs.shape[0])
+        if self.redo_problem_on_train:
+            # Calculate initial theta
+            # Setup variables and constants
+            w = cvx.Variable(self.fvs.shape[1])
+            b = cvx.Variable()
+            tau = cvx.Parameter(self.fvs.shape[0])
+
+            # Setup CVX problem
+            f_vector = []
+            for fv in self.fvs:
+                f_vector.append(sum(map(lambda x, y: x * y, w, fv)) + b)
+
+            loss = list(map(lambda x, y: (x - y) ** 2, f_vector, self.labels))
+            loss = sum(map(lambda x, y: x * y, tau, loss))
+            loss /= self.fvs.shape[0]
+            loss += 0.5 * self.lda * (cvx.pnorm(w, 2) ** 2)
+
+            # Solve problem
+            prob = cvx.Problem(cvx.Minimize(loss), [])
+
+            # Save results
+            self.temp_tuple = (w, b, tau, prob)
+        else:
+            w, b, tau, prob = self.temp_tuple  # Use saved results
+
         tau.value = self.tau
-
-        # Setup CVX problem
-        f_vector = []
-        for fv in self.fvs:
-            f_vector.append(sum(map(lambda x, y: x * y, w, fv)) + b)
-
-        loss = list(map(lambda x, y: (x - y) ** 2, f_vector, self.labels))
-        loss = sum(map(lambda x, y: x * y, tau, loss))
-        loss /= self.fvs.shape[0]
-        loss += 0.5 * self.lda * (cvx.pnorm(w, 2) ** 2)
-
-        # Solve problem
-        prob = cvx.Problem(cvx.Minimize(loss), [])
-        prob.solve(solver=cvx.ECOS, verbose=self.verbose, parallel=True, ignore_dcp=True)
+        prob.solve(solver=cvx.ECOS, verbose=self.verbose, parallel=True,
+                   warm_start=True, ignore_dcp=True)
         self.w, self.b = np.array(w.value).flatten(), b.value
 
         old_loss = -1
@@ -161,6 +174,8 @@ class TRIMLearner(Learner):
         self.tau = None
         self.w = None
         self.b = None
+        self.redo_problem_on_train = True
+        self.temp_tuple = None
 
     def predict_proba(self, X):
         raise NotImplementedError

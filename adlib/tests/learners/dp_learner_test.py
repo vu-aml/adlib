@@ -95,6 +95,8 @@ class TestDataPoisoningLearner:
         self.labels = []  # true labels
         for inst in self.training_instances + self.testing_instances:
             self.labels.append(inst.get_label())
+        from adlib.utils.common import get_fvs_and_labels
+        self.fvs, self.labels = get_fvs_and_labels(self.training_instances + self.testing_instances)
 
         self.results = []  # List of result tuples
 
@@ -226,7 +228,7 @@ class TestDataPoisoningLearner:
             self.dp_learner = OutlierRemovalLearner(deepcopy(self.attack_instances),
                                                     verbose=self.verbose)
 
-        self.dp_learner.train()
+        self.dp_learner.train(deepcopy(self.fvs[:200]), deepcopy(self.labels[:200]))
 
         if self.verbose:
             print('\nEND ', name, '.', sep='')

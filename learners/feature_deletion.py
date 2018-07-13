@@ -58,8 +58,8 @@ class FeatureDeletion(learner):
         C = self.hinge_loss_multiplier
         print("current C value(hinge loss multipler): {}".format(C))
         print("current K(maximum feature deletion): {}".format(self.max_feature_deletion))
-        print(X.shape)
-        print(y.shape)
+        #print(X.shape)
+        #print(y.shape)
         K = self.max_feature_deletion
         w = Variable(self.num_features + 1)  # weight vector
         #b = Variable()  # bias term

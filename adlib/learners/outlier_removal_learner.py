@@ -61,7 +61,7 @@ class OutlierRemovalLearner(Learner):
             loss = sum(loss) / fvs.shape[0]
 
             if self.verbose:
-                print('\nMAIN Iteration:', iteration, '- factor:', factor,
+                print('\nORL Iteration:', iteration, '- factor:', factor,
                       '- cutoff:', cutoff, '- loss:', loss, '\n')
 
             if not best_loss or loss < best_loss:

@@ -26,11 +26,12 @@ class IterativeRetrainingLearner(Learner):
         self.set_training_instances(training_instances)
         self.verbose = verbose
 
-        self.learner = TRIMLearner(self.training_instances,
-                                   int(0.75 * len(self.training_instances)),
-                                   verbose=self.verbose)
+        self.lnr = TRIMLearner(self.training_instances,
+                               int(0.75 * len(self.training_instances)),
+                               verbose=self.verbose)
         self.loss = None
         self.loss_threshold = None
+        self.irl_selection = np.full(len(self.training_instances), 1)
 
     def train(self):
         """
@@ -40,18 +41,19 @@ class IterativeRetrainingLearner(Learner):
         if len(self.training_instances) < 2:
             raise ValueError('Must have at least 2 instances to train.')
 
-        self.learner.set_training_instances(self.training_instances)
-        self.learner.train()
-        self.loss = (logistic_loss(self.training_instances, self.learner) /
-                     len(self.training_instances))
+        self.lnr.set_training_instances(self.training_instances)
+        self.lnr.train()
+        self.lnr.redo_problem_on_train = False
+        self.loss = (logistic_loss(self.training_instances, self.lnr) /
+                     sum(self.irl_selection))
 
         sorted_loss = self.loss[:]
         sorted_loss.sort()
-        step_size = 5 * np.mean(np.array(
+        step_size = np.mean(np.array(
             list(filter(lambda x: x > 0, sorted_loss[1:] - sorted_loss[:-1]))))
         max_loss_threshold = np.max(self.loss)
-        best_loss_threshold = np.min(self.loss) + step_size
-        best_learner = deepcopy(self.learner)
+        best_loss_threshold = np.median(self.loss)
+        best_lnr = None
         best_loss = None
         loss_list = []
 
@@ -63,20 +65,17 @@ class IterativeRetrainingLearner(Learner):
         self.loss_threshold = best_loss_threshold
 
         while self.loss_threshold < max_loss_threshold:
-            training_instances = self.training_instances[:]
+            self.irl_selection = np.full(len(self.training_instances), 1)
             try:
                 self._train_helper()
             except:
-                self.training_instances = training_instances
                 if self.verbose:
                     print('\nLoss threshold:', self.loss_threshold,
                           '- FAILURE\n')
                 self.loss_threshold += step_size
                 continue
 
-            self.learner.n = len(self.training_instances)
-            self.training_instances = training_instances
-
+            self.lnr.n = sum(self.irl_selection)
             loss = sum(self.loss)
 
             if self.verbose:
@@ -84,7 +83,7 @@ class IterativeRetrainingLearner(Learner):
                       '\n')
 
             if len(loss_list) > 1 and loss_list[-2] == loss_list[-1] == loss:
-                print('\n---Exiting early as increasing threshold no longer changes loss.---\n')
+                print('\n---Exiting early as increasing threshold no longer changes loss---\n')
                 break
             else:
                 loss_list.append(loss)
@@ -92,48 +91,55 @@ class IterativeRetrainingLearner(Learner):
             if not best_loss or loss < best_loss:
                 best_loss_threshold = self.loss_threshold
                 best_loss = loss
-                best_learner = deepcopy(self.learner)
+                best_lnr = deepcopy((self.lnr.training_instances, self.lnr.n,
+                                     self.lnr.lda, self.lnr.verbose, self.lnr.w,
+                                     self.lnr.b, self.lnr.irl_selection))
 
             self.loss_threshold += step_size
 
         self.loss_threshold = best_loss_threshold
-        self.learner = best_learner
-        self.set_training_instances(self.learner.training_instances)
+        self.lnr = TRIMLearner(best_lnr[0], best_lnr[1], best_lnr[2], best_lnr[3])
+        self.lnr.w, self.lnr.b = best_lnr[4], best_lnr[5]
+        self.lnr.irl_selection = best_lnr[6]
 
     def _train_helper(self):
         """
         Helper function for self.train()
         """
 
-        self.learner.set_training_instances(self.training_instances)
-        self.learner.train()
-        self.loss = (logistic_loss(self.training_instances, self.learner) /
-                     len(self.training_instances))
+        self.lnr.irl_selection = self.irl_selection
+        self.lnr.train()
+        self.loss = (logistic_loss(self.training_instances, self.lnr) /
+                     sum(self.irl_selection))
 
         iteration = 0
-        old_training_instances = []
-        while set(old_training_instances) != set(self.training_instances):
-            old_training_instances = self.training_instances[:]
-            instances = []
-            for i, inst in enumerate(self.training_instances):
-                if self.loss[i] < self.loss_threshold:
-                    instances.append(inst)
+        old_irl_selection = np.full(len(self.irl_selection), -1)
+        while np.linalg.norm(self.irl_selection - old_irl_selection) != 0:
+            old_irl_selection = deepcopy(self.irl_selection)
 
-            self.set_training_instances(instances)
+            self.irl_selection = np.full(len(self.irl_selection), 0)
+            for i, loss in enumerate(self.loss):
+                if loss < self.loss_threshold:
+                    self.irl_selection[i] = 1
+
+            # Have to have at least 50% of the instances to train with as
+            # we assume at least 50% of the data is clean
+            if sum(self.irl_selection) < 0.5 * len(self.training_instances):
+                raise ValueError()
 
             if self.verbose:
-                print('Iteration:', iteration, '- number of instances:',
-                      len(self.training_instances))
+                print('IRL Iteration:', iteration, '- number of instances:',
+                      sum(self.irl_selection))
 
-            self.learner.set_training_instances(self.training_instances)
-            self.learner.train()
-            self.loss = (logistic_loss(self.training_instances, self.learner) /
-                         len(self.training_instances))
+            self.lnr.irl_selection = self.irl_selection
+            self.lnr.train()
+            self.loss = (logistic_loss(self.training_instances, self.lnr) /
+                         sum(self.irl_selection))
 
             iteration += 1
 
     def predict(self, instances):
-        return self.learner.predict(instances)
+        return self.lnr.predict(instances)
 
     def set_params(self, params: Dict):
         if params['training_instances'] is not None:
@@ -141,14 +147,15 @@ class IterativeRetrainingLearner(Learner):
         if params['verbose'] is not None:
             self.verbose = params['verbose']
 
-        self.learner = TRIMLearner(self.training_instances,
-                                   int(0.75 * len(self.training_instances)),
-                                   verbose=self.verbose)
+        self.lnr = TRIMLearner(self.training_instances,
+                               int(0.75 * len(self.training_instances)),
+                               verbose=self.verbose)
         self.loss = None
         self.loss_threshold = None
+        self.irl_selection = np.full(len(self.training_instances), 1)
 
     def predict_proba(self, X):
         raise NotImplementedError
 
     def decision_function(self, X):
-        return self.learner.decision_function(X)
+        return self.lnr.decision_function(X)

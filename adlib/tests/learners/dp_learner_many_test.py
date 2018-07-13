@@ -12,7 +12,7 @@ def dp_learner_many_test():
     Use like - python3 adlib/tests/learners/dp_learner_many_test.py 30 label-flipping
     to run 30 tests of label flipping, writing the results to the CWD.
     """
-    
+
     num_runs = int(sys.argv[1]) if len(sys.argv) >= 2 else 30
     attacker = sys.argv[2].lower() if len(sys.argv) == 3 else 'dummy'
 

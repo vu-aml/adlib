@@ -94,6 +94,9 @@ class TRIMLearner(Learner):
                    warm_start=True, ignore_dcp=True)
         self.w, self.b = np.array(w.value).flatten(), b.value
 
+        irl_sum = sum(self.irl_selection)
+        self.n = int(0.9 * irl_sum) if irl_sum < self.n else self.n
+
         old_loss = -1
         loss = 0
         iteration = 0
@@ -122,7 +125,6 @@ class TRIMLearner(Learner):
                 self.tau[index] = 1
 
             # Minimize loss
-            irl_selection_param.value = self.irl_selection
             tau.value = self.tau
             prob.solve(solver=cvx.ECOS, verbose=self.verbose, parallel=True,
                        warm_start=True, ignore_dcp=True)

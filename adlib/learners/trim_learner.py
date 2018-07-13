@@ -112,13 +112,14 @@ class TRIMLearner(Learner):
 
             # Sort based on loss and take self.n instances
             loss_tuples = list(enumerate(loss_vector))
-            loss_tuples.sort(key=lambda tup: tup[1])
 
             temp = []
             for i, tup in enumerate(loss_tuples):
                 if self.irl_selection[i] == 1:
                     temp.append(tup)
-            loss_tuples = temp[:self.n]
+            loss_tuples = temp
+            loss_tuples.sort(key=lambda tup: tup[1])
+            loss_tuples = loss_tuples[:self.n]
 
             self.tau = np.full(len(self.tau), 0)
             for index, _ in loss_tuples:

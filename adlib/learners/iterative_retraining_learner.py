@@ -45,7 +45,7 @@ class IterativeRetrainingLearner(Learner):
         self.lnr.train()
         self.lnr.redo_problem_on_train = False
         self.loss = (logistic_loss(self.training_instances, self.lnr) /
-                     len(self.training_instances))
+                     sum(self.irl_selection))
 
         sorted_loss = self.loss[:]
         sorted_loss.sort()
@@ -110,7 +110,7 @@ class IterativeRetrainingLearner(Learner):
         self.lnr.irl_selection = self.irl_selection
         self.lnr.train()
         self.loss = (logistic_loss(self.training_instances, self.lnr) /
-                     len(self.training_instances))
+                     sum(self.irl_selection))
 
         iteration = 0
         old_irl_selection = np.full(len(self.irl_selection), -1)
@@ -134,7 +134,7 @@ class IterativeRetrainingLearner(Learner):
             self.lnr.irl_selection = self.irl_selection
             self.lnr.train()
             self.loss = (logistic_loss(self.training_instances, self.lnr) /
-                         len(self.training_instances))
+                         sum(self.irl_selection))
 
             iteration += 1
 

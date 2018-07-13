@@ -43,6 +43,7 @@ class TRIMLearner(Learner):
         # the same instance of TRIM
         self.redo_problem_on_train = True
         self.temp_tuple = None
+        self.irl_selection = np.full(len(self.training_instances), 1)
 
     def train(self):
         """
@@ -66,6 +67,7 @@ class TRIMLearner(Learner):
             w = cvx.Variable(self.fvs.shape[1])
             b = cvx.Variable()
             tau = cvx.Parameter(self.fvs.shape[0])
+            irl_selection_param = cvx.Parameter(self.fvs.shape[0])
 
             # Setup CVX problem
             f_vector = []
@@ -73,7 +75,8 @@ class TRIMLearner(Learner):
                 f_vector.append(sum(map(lambda x, y: x * y, w, fv)) + b)
 
             loss = list(map(lambda x, y: (x - y) ** 2, f_vector, self.labels))
-            loss = sum(map(lambda x, y: x * y, tau, loss))
+            loss = list(map(lambda x, y: x * y, tau, loss))
+            loss = sum(map(lambda x, y: x * y, irl_selection_param, loss))
             loss /= self.fvs.shape[0]
             loss += 0.5 * self.lda * (cvx.pnorm(w, 2) ** 2)
 
@@ -81,10 +84,11 @@ class TRIMLearner(Learner):
             prob = cvx.Problem(cvx.Minimize(loss), [])
 
             # Save results
-            self.temp_tuple = (w, b, tau, prob)
+            self.temp_tuple = (w, b, tau, irl_selection_param, prob)
         else:
-            w, b, tau, prob = self.temp_tuple  # Use saved results
+            w, b, tau, irl_selection_param, prob = self.temp_tuple  # Use saved results
 
+        irl_selection_param.value = self.irl_selection
         tau.value = self.tau
         prob.solve(solver=cvx.ECOS, verbose=self.verbose, parallel=True,
                    warm_start=True, ignore_dcp=True)
@@ -106,13 +110,19 @@ class TRIMLearner(Learner):
             # Sort based on loss and take self.n instances
             loss_tuples = list(enumerate(loss_vector))
             loss_tuples.sort(key=lambda tup: tup[1])
-            loss_tuples = loss_tuples[:self.n]
+
+            temp = []
+            for i, tup in enumerate(loss_tuples):
+                if self.irl_selection[i] == 1:
+                    temp.append(tup)
+            loss_tuples = temp[:self.n]
 
             self.tau = np.full(len(self.tau), 0)
             for index, _ in loss_tuples:
                 self.tau[index] = 1
 
             # Minimize loss
+            irl_selection_param.value = self.irl_selection
             tau.value = self.tau
             prob.solve(solver=cvx.ECOS, verbose=self.verbose, parallel=True,
                        warm_start=True, ignore_dcp=True)
@@ -176,6 +186,7 @@ class TRIMLearner(Learner):
         self.b = None
         self.redo_problem_on_train = True
         self.temp_tuple = None
+        self.irl_selection = np.full(len(self.training_instances), 1)
 
     def predict_proba(self, X):
         raise NotImplementedError

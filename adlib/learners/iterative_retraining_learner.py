@@ -135,6 +135,7 @@ class IterativeRetrainingLearner(Learner):
             self.lnr.train()
             self.loss = (logistic_loss(self.training_instances, self.lnr) /
                          sum(self.irl_selection))
+            self.loss = np.array(list(map(lambda x, y: x * y, self.loss, self.irl_selection)))
 
             iteration += 1
 

@@ -76,7 +76,7 @@ class IterativeRetrainingLearner(Learner):
                 continue
 
             self.lnr.n = sum(self.irl_selection)
-            loss = sum(self.loss)
+            loss = sum(map(lambda x, y: x * y, self.loss, self.irl_selection))
 
             if self.verbose:
                 print('\nLoss threshold:', self.loss_threshold, '- loss:', loss,

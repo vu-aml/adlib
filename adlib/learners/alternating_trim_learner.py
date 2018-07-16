@@ -46,8 +46,9 @@ class AlternatingTRIMLearner(Learner):
             self.lnr.train()
             self.lnr.redo_problem_on_train = False
 
-            loss = (sum(logistic_loss(self.training_instances, self.lnr)) /
-                    len(self.training_instances))
+            loss = logistic_loss(self.training_instances, self.lnr) / self.n
+            loss.sort()
+            loss = sum(loss[:self.n])
 
             if self.verbose:
                 print('\nPoison Percentage:', self.poison_percentage, '- loss:',

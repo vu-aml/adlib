@@ -119,7 +119,8 @@ class AdversaryFeatureDeletion(Adversary):
     #based on the gradient, delete the features with the most weight
 
     def is_rbf(self):
-        if type(self.learn_model) != SimpleLearner or type(self.learn_model.model.learner) != SVC:
+        if type(self.learn_model) != SimpleLearner or type(self.learn_model.model.learner) != SVC\
+                or type(self.learn_model.model.learner.kernel != "rbf"):
             return False
         return True
 

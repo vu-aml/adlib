@@ -96,7 +96,7 @@ class OutlierRemovalLearner(Learner):
         original_num_instances = fvs.shape[0]
         while old_number_of_instances != len(labels):
             # Assume at least 50% are non-poisonous instances
-            if old_number_of_instances < 0.5 * original_num_instances:
+            if iteration > 0 and old_number_of_instances < 0.5 * original_num_instances:
                 break
 
             if self.verbose:

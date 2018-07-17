@@ -10,6 +10,7 @@ import csv
 import pickle
 from collections import namedtuple
 from copy import deepcopy
+from typing import Dict
 
 
 class Dataset(object):
@@ -330,6 +331,9 @@ class EmailDataset(Dataset):
                 share of shuffled data instances.
 
         """
+
+        if isinstance(fraction, Dict):
+            fraction = fraction['train'] / 100
         if fraction < 0:
             raise ValueError('Split percentages must be positive values')
         if fraction > 1.0:

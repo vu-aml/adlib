@@ -1,12 +1,12 @@
 from cvxpy import *
 import numpy as np
-from learners.learner import learner
+from adlib.learners.learner import Learner
 from data_reader.binary_input import Instance
 from data_reader.operations import sparsify
 from typing import List, Dict
 
 
-class L_infSVM(learner):
+class L_infSVM(Learner):
     """
     L-infinity Regularized Support Vector Machine with soft margin and linear kernel
 
@@ -21,7 +21,7 @@ class L_infSVM(learner):
 
     def __init__(self, training_instances=None, coef=0.25, params=None):
 
-        learner.__init__(self)
+        Learner.__init__(self)
         self.weight_vector = None  # type: np.array(shape=(1))
         self.num_features = 0  # type: int
         self.coef = coef  # type: float

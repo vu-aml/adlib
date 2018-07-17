@@ -1,31 +1,29 @@
-# AML
+# Adversarial Machine Learning Library (AML)
+### Computational Economics Research Lab at Vanderbilt University
 
-[![Build Status](https://travis-ci.com/vu-aml/adlib.svg?token=UQbyf6hz4VVL6qGppwSf&branch=master)](https://travis-ci.com/vu-aml/adlib)
+[![Travis CI](https://travis-ci.org/vu-aml/adlib.svg?branch=master)](https://travis-ci.org/vu-aml/adlib)
 
+Game-theoretic adversarial machine learning library providing a set of learner and adversary modules.
 
-data_reader/data is in .gitignore to speed up git. If you need to make a change from one of those
-files, use git add -f 
+### Installation
+To install the dependencies for `adlib` do `pip install -r requirements.txt`. See below for a list of dependencies.
+To install `adlib`, run `python3 setup.py install`. For development, do `python3 setup.py develop`.
 
-## Unit Testing
-We use py.test for unit testing. Install with `pip install -U pytest`.
-
-To run tests, run `python -m pytest tests/<path to test>` from the root directory.
-
-
-## Docs
-To serve the docs locally, you may have to install Sphinx with: `pip install Sphinx`
-- First, try to open index.html with your browser, if that doesn't work, you make have to 
- make the html. 
-  * In that case, navigate to `docs/` and run: `make html`.
-
-
-## Installation
-### Dependencies
+#### Dependencies
 * Python3 
 * SciPy
 * NumPy
 * Matplotlib
 * Scikit-learn
-* CVXPY
+* CVXPY (0.4-0.4.11 version)
+* Pathos
 * CVXOPT (optional as a CVXPY solver)
-* Jupyter Notebook (optional for notebook demo) 
+* Jupyter Notebook (optional for notebook demo)
+* Py.test (optional for testing)
+
+### License
+Copyright 2016-2018 Computational Economics Research Lab. Released under the MIT License. See `LICENSE` for details.
+
+### Note
+`data_reader/data` is in `.gitignore` to speed up `git`. If you need to make a change from one of those
+files, use `git add -f $FILE$`.

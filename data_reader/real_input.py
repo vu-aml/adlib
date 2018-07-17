@@ -1,5 +1,5 @@
-from typing import List, Dict
-from scipy.sparse import csr_matrix, dok_matrix
+from typing import List
+from scipy.sparse import csr_matrix
 
 """
 Created Binary FeatureVector and Instance data structures.
@@ -29,11 +29,9 @@ class RealFeatureVector(object):
         self.data = data
 
     def copy(self, feature_vector):
-        return RealFeatureVector(feature_vector.feature_count, feature_vector.indices,
+        return RealFeatureVector(feature_vector.feature_count,
+                                 feature_vector.indices,
                                  feature_vector.data)
-
-    def __iter__(self):
-        return iter(self.indices)
 
     def __iter__(self):
         return iter(self.indices)
@@ -91,7 +89,8 @@ class RealFeatureVector(object):
         data = self.data
         indices = self.indices
         indptr = [0, len(self.indices)]
-        return csr_matrix((data, indices, indptr), shape=(1, self.feature_count))
+        return csr_matrix((data, indices, indptr),
+                          shape=(1, self.feature_count))
 
     def feature_difference(self, xa):
         y_array = self.get_csr_matrix()

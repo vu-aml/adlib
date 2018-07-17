@@ -3,13 +3,13 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn import preprocessing
 import sklearn.utils
 import scipy
-from scipy.sparse import csr_matrix, dok_matrix, find
+from scipy.sparse import csr_matrix
 import sklearn
 import numpy as np
 import csv
 import pickle
 from collections import namedtuple
-from copy import copy, deepcopy
+from copy import deepcopy
 
 
 class Dataset(object):
@@ -28,6 +28,7 @@ class Dataset(object):
 
     def save(self):
         raise NotImplementedError
+
 
 class EmailDataset(Dataset):
     """Dataset which loads data from either raw email txt files, a serialized
@@ -56,14 +57,15 @@ class EmailDataset(Dataset):
         self.binary = binary
         if path is not None:
             self.base_path = os.path.dirname(path)
-        #: Number of instances within the current corpus
+            #: Number of instances within the current corpus
             if raw:
                 self.labels, self.corpus = self._create_corpus(path)
             # Sklearn module to fit/transform data and resulting feature matrix
             # Maybe optionally pass this in as a parameter instead.
             #stop words?
                 self.vectorizer = \
-                    TfidfVectorizer(analyzer='word', strip_accents=strip_accents_,
+                    TfidfVectorizer(analyzer='word',
+                                    strip_accents=strip_accents_,
                                     ngram_range=ngram_range_, max_df=max_df_,
                                     min_df=min_df_, max_features=max_features_,
                                     binary=self.binary, stop_words='english',
@@ -81,7 +83,8 @@ class EmailDataset(Dataset):
         elif path is None and features is not None and labels is not None:
             lbl = type(labels)
             if lbl != np.ndarray and lbl != np.float64 and lbl != int and lbl != float:
-                raise ValueError("Labels must be in the form of a numpy array, a float, or an int")
+                raise ValueError(
+                    "Labels must be in the form of a numpy array, a float, or an int")
             assert type(features) == scipy.sparse.csr.csr_matrix
 
             self.features = features
@@ -152,7 +155,8 @@ class EmailDataset(Dataset):
             else:
                 # maybe return emaildataset instance with corresponding label?
                 return self.features[index]
-        return self.Data(features=self.features[index], labels=self.labels[index])
+        return self.Data(features=self.features[index],
+                         labels=self.labels[index])
 
     def __setitem__(self, index, value):
         self.features[index] = value.features
@@ -194,7 +198,8 @@ class EmailDataset(Dataset):
 
     def __eq__(self, other):
         if isinstance(other, EmailDataset):
-            if self.features.shape == other.features.shape and self.features.dtype == other.features.dtype:
+            if (self.features.shape == other.features.shape and
+                    self.features.dtype == other.features.dtype):
                 if (self.features != other.features).nnz() == 0:
                     return self.labels == other.labels
         else:
@@ -217,7 +222,8 @@ class EmailDataset(Dataset):
     def clone(self):
         """Return a new copy of the dataset with same initial params."""
 
-        return self.Data(features=self.features.copy(), labels=self.labels.copy())
+        return self.Data(features=self.features.copy(),
+                         labels=self.labels.copy())
 
     def _csv(self, outfile, save=True):
         # load a .csv file where all the data in the file mark the relative postions,
@@ -263,9 +269,9 @@ class EmailDataset(Dataset):
         if save:
             with open(outfile, 'wb') as fileobj:
                 pickle.dump({
-                            'labels': self.labels,
-                            'features': self.features
-                            }, fileobj, pickle.HIGHEST_PROTOCOL)
+                    'labels': self.labels,
+                    'features': self.features
+                }, fileobj, pickle.HIGHEST_PROTOCOL)
         else:
             # TODO: throw exception if FileNotFoundError
             with open(outfile, 'rb') as fileobj:

@@ -18,16 +18,16 @@ import operator
 """
    Gradient Desecent Evasion Attack from Evasion Attacks Against Machine Learning at Test Time,
    written by Battista Biggio, Igino Corona, et. al.
-   Concept: The gradient descent based attack that modifies the malicious sample by minimizing its 
+   Concept: The gradient descent based attack that modifies the malicious sample by minimizing its
    classification function
-    (g(x)) result, subject to a bound on its distance. An extra mimicry component is added to avoid 
+    (g(x)) result, subject to a bound on its distance. An extra mimicry component is added to avoid
     descending to meaningless
     regions.
 
-    This algorithm is based on adversariaLib - Advanced library for the evaluation of machine 
-    learning algorithms and classifiers against adversarial attacks. Copyright (C) 2013, 
+    This algorithm is based on adversariaLib - Advanced library for the evaluation of machine
+    learning algorithms and classifiers against adversarial attacks. Copyright (C) 2013,
     Igino Corona,
-    Battista Biggio, Davide Maiorca, Dept. of Electrical and Electronic Engineering, 
+    Battista Biggio, Davide Maiorca, Dept. of Electrical and Electronic Engineering,
     University of Cagliari, Italy.
 """
 
@@ -270,14 +270,11 @@ class GradientDescent(Adversary):
                 kernel = pairwise.rbf_kernel(support, attack_instance, gamma)
                 for element in range(0, len(support)):
                     if grad == []:
-                        grad = (dual_coef[0][element] * kernel[0][element] * 2 * gamma * (
-                                support[element] -
-                                attack_instance))
+                        grad = (dual_coef[0][element] * kernel[0][element] * 2 * gamma *
+                                (support[element] - attack_instance))
                     else:
-                        grad = grad + (
-                                dual_coef[0][element] * kernel[element][0] * 2 * gamma * (
-                                support[element] -
-                                attack_instance))
+                        grad += (dual_coef[0][element] * kernel[element][0] * 2 * gamma *
+                                 (support[element] - attack_instance))
                 return -grad
             if param_map["kernel"] == "linear":
                 return attribute_map["coef_"][0]
@@ -320,9 +317,10 @@ class GradientDescent(Adversary):
     def gradient_euclidean(self, attack_instance, negative_instances, max_neg_instance=10,
                            weights=1):
         # compute the euclidean distance of the attack_instance to the negative instances.
-        dist = [(negative_instance, self.euclidean_dist(attack_instance, negative_instance
-                                                        , weights)) for negative_instance in
-                negative_instances]
+        dist = [(negative_instance, self.euclidean_dist(attack_instance,
+                                                        negative_instance,
+                                                        weights))
+                for negative_instance in negative_instances]
 
         # acquire the first max_neg_instance # of best fitted instances
         # sort the resulting dist list according to cmp(a,b).

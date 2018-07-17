@@ -218,14 +218,11 @@ class CoordinateGreedy(Adversary):
                 kernel = pairwise.rbf_kernel(support, attack_instance.reshape(1, -1), gamma)
                 for element in range(0, len(support)):
                     if grad == []:
-                        grad = (dual_coef[0][element] * kernel[0][element] * 2 * gamma * (
-                                support[element] -
-                                attack_instance))
+                        grad = (dual_coef[0][element] * kernel[0][element] * 2 * gamma *
+                                (support[element] - attack_instance))
                     else:
-                        grad = grad + (
-                                dual_coef[0][element] * kernel[element][0] * 2 * gamma * (
-                                support[element] -
-                                attack_instance))
+                        grad += (dual_coef[0][element] * kernel[element][0] * 2 * gamma *
+                                 (support[element] - attack_instance))
                 return (-grad)[index]
             if param_map["kernel"] == "linear":
                 return attribute_map["coef_"][0][index]

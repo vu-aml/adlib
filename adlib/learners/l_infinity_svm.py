@@ -5,6 +5,7 @@ from data_reader.binary_input import Instance
 from data_reader.operations import sparsify
 from typing import List, Dict
 
+
 class L_infSVM(learner):
     """
     L-infinity Regularized Support Vector Machine with soft margin and linear kernel
@@ -18,8 +19,7 @@ class L_infSVM(learner):
 
     """
 
-
-    def __init__(self, training_instances=None, coef=0.25, params= None):
+    def __init__(self, training_instances=None, coef=0.25, params=None):
 
         learner.__init__(self)
         self.weight_vector = None  # type: np.array(shape=(1))
@@ -32,16 +32,13 @@ class L_infSVM(learner):
         if params is not None:
             self.set_params(params)
 
-
     def set_params(self, params: Dict):
         if 'coef' in params:
             self.coef = params['coef']
 
-
     def get_available_params(self) -> Dict:
         params = {'coef': self.coef}
         return params
-
 
     def train(self):
         """
@@ -65,7 +62,7 @@ class L_infSVM(learner):
 
         weights = Variable(n)
         bias = Variable()
-        loss_func = sum_entries(pos(1 - mul_elemwise(y, X*weights + bias)))
+        loss_func = sum_entries(pos(1 - mul_elemwise(y, X * weights + bias)))
         reg_term = norm(weights, 'inf')
         slack_factor = self.coef
 
@@ -91,7 +88,7 @@ class L_infSVM(learner):
         # single instance
         elif type(instances) == Instance:
             predictions = self.predict_instance(
-                            instances.get_feature_vector().get_csr_matrix().toarray())
+                instances.get_feature_vector().get_csr_matrix().toarray())
         else:
             for i in range(0, instances.features.shape[0]):
                 instance = instances.features[i, :].toarray()
@@ -109,12 +106,12 @@ class L_infSVM(learner):
         '''
         return int(np.sign(np.asscalar(features.dot(self.weight_vector)) + self.bias))
 
-    #decision_function should be the distance to the hyperplane
+    # decision_function should be the distance to the hyperplane
     def decision_function(self, instances):
-        #print(instances.shape)
-        #print(self.weight_vector.shape)
+        # print(instances.shape)
+        # print(self.weight_vector.shape)
         predict_instances = instances.dot(self.weight_vector) + self.bias
-        #norm = np.linalg.norm(self.weight_vector)
+        # norm = np.linalg.norm(self.weight_vector)
         return predict_instances
 
     def get_weight(self):

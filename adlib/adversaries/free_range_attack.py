@@ -17,13 +17,14 @@ Concept: A generalized attacker algorithm that attempts to move the instances'
 
 
 class FreeRange(Adversary):
-    def __init__(self, f_attack=0.2, manual_bound=False, xj_min=0.0, xj_max=1.0, binary=False, learn_model=None,
-                 distribution = "uniform"):
+    def __init__(self, f_attack=0.2, manual_bound=False, xj_min=0.0, xj_max=1.0, binary=False,
+                 learn_model=None, distribution="uniform"):
         """
 
         :param f_attack:  float (between 0 and 1),determining the agressiveness
                           of the attack
-        :param manual_bound: bool, if manual_range is False, attacker will call set_boundaries to find x_min/x_max
+        :param manual_bound: bool, if manual_range is False, attacker will call set_boundaries to
+                             find x_min/x_max
         :param xj_min:    minimum xj that the feature can have
                           If not specified, it is calculated by going over all
                           training data.
@@ -36,6 +37,8 @@ class FreeRange(Adversary):
         :param distribution: determine distribution of the attack instance generation
 
         """
+
+        Adversary.__init__(self)
         self.xj_min = xj_min
         self.xj_max = xj_max
         self.manual = manual_bound
@@ -63,7 +66,7 @@ class FreeRange(Adversary):
             self.binary = params['binary']
         if 'manual_bound' in params.keys():
             self.manual = params['manual_bound']
-        if 'distribution'in params.keys():
+        if 'distribution' in params.keys():
             self.distribution = params['distribution']
 
     def get_available_params(self) -> Dict:
@@ -101,9 +104,8 @@ class FreeRange(Adversary):
         self.x_min = find_min(train_instances)
         self.x_max = find_max(train_instances)
 
-
     def transform(self, instance: Instance):
-        '''
+        """
         for the binary case, the f_attack value represents the percentage of
         features we change.
         If f_attack =1, then the result should be exactly the same as innocuous
@@ -114,7 +116,8 @@ class FreeRange(Adversary):
         This value will be added to the xij for the new instance
         :param instance:
         :return: instance
-        '''
+        """
+
         if self.binary:
             attack_times = int(self.f_attack * self.num_features)
             count = 0

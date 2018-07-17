@@ -21,7 +21,7 @@ class SimpleLearner(Learner):
         self.model = sklearner.Model(model)
 
     def set_params(self, params: Dict):
-        if 'model'  in params:
+        if 'model' in params:
             self.model = self.set_model(params['model'])
         self.model.set_params(params)
 
@@ -34,7 +34,6 @@ class SimpleLearner(Learner):
 
     def get_params(self):
         return self.model.get_params()
-
 
     def get_attributes(self):
         """
@@ -76,6 +75,6 @@ class SimpleLearner(Learner):
 
     def get_constant(self):
         return self.model.learner.intercept_
-    
+
     def decision_function(self, X):
         return self.model.learner.decision_function(X)

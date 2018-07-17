@@ -1,11 +1,11 @@
-from adversaries.adversary import Adversary
+from adlib.adversaries.adversary import Adversary
 from data_reader.binary_input import Instance
 from data_reader.real_input import RealFeatureVector
-from learners.simple_learner import SimpleLearner
+from adlib.learners.simple_learner import SimpleLearner
 from typing import List, Dict
 from random import shuffle
 import numpy as np
-import learners as learners
+import adlib.learners as learners
 from copy import deepcopy
 from sklearn.svm import SVC
 from sklearn.metrics import pairwise
@@ -14,20 +14,20 @@ from data_reader.operations import sparsify
 import operator
 import matplotlib.pyplot as plt
 
-
 """ A simpler gradient descent based evasion attack.
     Solve the problem: min g(x) s.t. |xi-x| <= dmax.
 """
 
 
-
 class SimpleGradientDescent(Adversary):
     def __init__(self, learn_model=None, step_size=0.01, trade_off=10,
-                 stp_constant=0.0000001,max_iter=1000, bound = 0.1, binary = False, all_malicious = False):
+                 stp_constant=0.0000001, max_iter=1000, bound=0.1, binary=False,
+                 all_malicious=False):
         """
         :param learner: Learner(from learners)
         :param max_change: max times allowed to change the feature
-        :param epsilon: the limit of difference between transform costs of ,xij+1, xij, and orginal x
+        :param epsilon: the limit of difference between transform costs of ,xij+1, xij, and
+                        orginal x
         :param step_size: weight for coordinate descent
         :param max_iter: maximum number of gradient descent iterations to be performed
                                set it to a large number by default.
@@ -50,8 +50,8 @@ class SimpleGradientDescent(Adversary):
                 'learn_model': self.learn_model,
                 'stp_constant': self.epsilon,
                 'max_iter': self.max_iter,
-                'bound' : self.bound,
-                'binary':self.binary}
+                'bound': self.bound,
+                'binary': self.binary}
 
     def set_params(self, params: Dict):
         if 'step_size' in params.keys():
@@ -64,7 +64,7 @@ class SimpleGradientDescent(Adversary):
             self.learn_model = params['learn_model']
         if 'max_iter' in params.keys():
             self.max_iter = params['max_iter']
-        if  'bound' in params.keys():
+        if 'bound' in params.keys():
             self.bound = params['bound']
         if 'binary' in params.keys():
             self.binary = params['binary']
@@ -86,21 +86,20 @@ class SimpleGradientDescent(Adversary):
                     transformed_instances.append(self.binary_gradient_descent(instance))
                 else:
                     transformed_instances.append(self.gradient_descent(instance))
-        #plt.show()
+        # plt.show()
         return transformed_instances
 
-
-    def binary_gradient_descent(self, attack_instance:Instance):
-        #sparse attack with binary features
+    def binary_gradient_descent(self, attack_instance: Instance):
+        # sparse attack with binary features
         index_lst = []
         iter_time = 0
         attacker_score = self.get_score(attack_instance.get_csr_matrix().toarray())
         while iter_time < self.max_iter:
             grad = self.gradient(attack_instance.get_csr_matrix().toarray())
             if index_lst is not []:
-               #eliminate the index we have already modified
-               for i in index_lst:
-                   grad[i] = 0
+                # eliminate the index we have already modified
+                for i in index_lst:
+                    grad[i] = 0
             change_index = np.argmax(np.absolute(grad))
             new_attack_instance = deepcopy(attack_instance)
             new_attack_instance.get_feature_vector().flip_bit(change_index)
@@ -113,11 +112,10 @@ class SimpleGradientDescent(Adversary):
                 iter_time += 1
         return attack_instance
 
-
     def gradient_descent(self, instance: Instance):
-        #store iteration and objective values for plotting....
-        #iteration_lst = []
-        #objective_lst = []
+        # store iteration and objective values for plotting....
+        # iteration_lst = []
+        # objective_lst = []
 
         # attack_intance-> np array
         attack_instance = instance.get_csr_matrix().toarray()
@@ -135,11 +133,11 @@ class SimpleGradientDescent(Adversary):
             # no d(x,x_prime) is set to limit the boundary of attacks
             # compute the obj_func_value of the last satisfied instance
             # append to the value list
-            #iteration_lst.append(iter)
-            #objective_lst.append(attacker_score)
+            # iteration_lst.append(iter)
+            # objective_lst.append(attacker_score)
 
             past_instance = candidate_attack_instances[-1]
-            new_instance = self.update_within_boundary(past_instance,root_instance,grad)
+            new_instance = self.update_within_boundary(past_instance, root_instance, grad)
             grad = self.gradient(new_instance)
             new_attacker_score = self.get_score(new_instance)
             # check convergence information
@@ -147,17 +145,20 @@ class SimpleGradientDescent(Adversary):
             # if obj_func_value == obj_function_value_list[-1]:
             #    print("Local min is reached. Iteration: %d, Obj value %d" %(iter,obj_func_value))
             #    mat_indices = [x for x in range(0, self.num_features) if new_instance[0][x] != 0]
-            #    mat_data = [new_instance[0][x] for x in range(0, self.num_features) if new_instance[0][x] != 0]
+            #    mat_data = [new_instance[0][x] for x in range(0, self.num_features)
+            #               if new_instance[0][x] != 0]
             #    return Instance(-1, RealFeatureVector(self.num_features, mat_indices, mat_data))
 
             # check a small epsilon(difference is a small value after
             # several iterations)
             if self.check_convergence_info(new_attacker_score, obj_function_value_list):
-                print("Goes to Convergence here.... Iteration: %d, Obj value %.4f" % (iter,attacker_score))
+                print("Goes to Convergence here.... Iteration: %d, Obj value %.4f" %
+                      (iter, attacker_score))
                 mat_indices = [x for x in range(0, self.num_features) if new_instance[0][x] != 0]
-                mat_data = [new_instance[0][x] for x in range(0, self.num_features) if new_instance[0][x] != 0]
+                mat_data = [new_instance[0][x] for x in range(0, self.num_features) if
+                            new_instance[0][x] != 0]
 
-                #plt.plot(iteration_lst,objective_lst)
+                # plt.plot(iteration_lst,objective_lst)
                 return Instance(-1, RealFeatureVector(self.num_features, mat_indices, mat_data))
 
             # does not satisfy convergence requirement
@@ -169,11 +170,11 @@ class SimpleGradientDescent(Adversary):
                 candidate_attack_instances.append(new_instance)
 
         print("Convergence has not been found..")
-        #plt.plot(iteration_lst, objective_lst)
-        mat_indices = [x for x in range(0, self.num_features) if candidate_attack_instances[-1][0][x] != 0]
+        # plt.plot(iteration_lst, objective_lst)
+        mat_indices = [x for x in range(0, self.num_features) if
+                       candidate_attack_instances[-1][0][x] != 0]
         mat_data = [candidate_attack_instances[-1][0][x] for x in range(0, self.num_features)
                     if candidate_attack_instances[-1][0][x] != 0]
-
 
         return Instance(-1, RealFeatureVector(self.num_features, mat_indices, mat_data))
 
@@ -184,23 +185,21 @@ class SimpleGradientDescent(Adversary):
                 return True
         return False
 
-
-
-    def update_within_boundary(self,attack_instance, root_instance, grad_update):
+    def update_within_boundary(self, attack_instance, root_instance, grad_update):
         # find a new instance from the gradient descent step
         # instance = instance - step_size * gradient
         new_instance = np.array(attack_instance - (self.step_size * grad_update))
         for i in range(len(new_instance[0])):
             if (new_instance[0][i] - root_instance[0][i]) > self.bound:
 
-                #print("feature {} in next_pattern: {}".format(i,new_instance[0][i]))
-                #print("feature {} in root_attack_instance: {}".format(i,root_instance[0][i]))
+                # print("feature {} in next_pattern: {}".format(i,new_instance[0][i]))
+                # print("feature {} in root_attack_instance: {}".format(i,root_instance[0][i]))
 
                 new_instance[0][i] = root_instance[0][i] + self.bound
             elif (new_instance[0][i] - root_instance[0][i]) < - self.bound:
 
-                #print("feature {} in next_pattern: {}".format(i,new_instance[0][i]))
-                #print("feature {} in root_attack_instance: {}".format(i,root_instance[0][i]))
+                # print("feature {} in next_pattern: {}".format(i,new_instance[0][i]))
+                # print("feature {} in root_attack_instance: {}".format(i,root_instance[0][i]))
 
                 new_instance[0][i] = root_instance[0][i] - self.bound
         return new_instance
@@ -224,12 +223,12 @@ class SimpleGradientDescent(Adversary):
                 kernel = pairwise.rbf_kernel(support, attack_instance, gamma)
                 for element in range(0, len(support)):
                     if grad == []:
-                        grad = (dual_coef[0][element] * kernel[0][element] * 2 * gamma * (support[element] -
-                                                                                          attack_instance))
+                        grad = (dual_coef[0][element] * kernel[0][element] * 2 * gamma *
+                                (support[element] - attack_instance))
                     else:
                         grad = grad + (
-                            dual_coef[0][element] * kernel[element][0] * 2 * gamma * (support[element] -
-                                                                                      attack_instance))
+                                dual_coef[0][element] * kernel[element][0] * 2 * gamma *
+                                (support[element] - attack_instance))
                 return np.array(-grad)
             if param_map["kernel"] == "linear":
                 return np.array(attribute_map["coef_"][0])
@@ -239,7 +238,6 @@ class SimpleGradientDescent(Adversary):
                 return np.array(grad)
             except:
                 print("Did not find the gradient for this classifier.")
-
 
     def get_score(self, pattern):
         score = self.learn_model.decision_function(pattern)

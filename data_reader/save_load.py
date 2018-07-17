@@ -6,9 +6,10 @@ import os
 import csv
 import pickle
 import numpy as np
-from data_reader.operations import sparsify,csr_mat_to_instances
+from data_reader.operations import sparsify, csr_mat_to_instances
 
-def save(data, outfile='../data_reader/data/transformed/serialized.pkl', binary=False):
+
+def save(data, outfile='./data_reader/data/transformed/serialized.pkl', binary=False):
     """User facing function for serializing an instance object.
 
     Args:
@@ -17,11 +18,12 @@ def save(data, outfile='../data_reader/data/transformed/serialized.pkl', binary=
             representation.
 
     """
+
     format = os.path.splitext(outfile)[1][1:]
     if format == 'csv':
-        _csv(outfile ,save = True,data= data,binary= binary)
+        _csv(outfile, save=True, data=data, binary=binary)
     elif format == 'pkl':
-        _pickle(outfile, save= True, data= data, binary= binary)
+        _pickle(outfile, save=True, data=data, binary=binary)
     else:
         raise AttributeError('The given save format is not currently \
                                supported.')
@@ -43,7 +45,7 @@ def load(path, binary=False):
     """
     format = os.path.splitext(path)[1][1:]
     if format == 'pkl':
-        return _pickle(path, save=False,binary=binary)
+        return _pickle(path, save=False, binary=binary)
     elif format == 'csv':
         return _csv(path, save=False, binary=binary)
     else:
@@ -51,8 +53,8 @@ def load(path, binary=False):
                                  supported.')
 
 
-def _csv(outfile, binary, save=True, data= None):
-    #data: instances
+def _csv(outfile, binary, save=True, data=None):
+    # data: instances
     # load a .csv file where all the data in the file mark the relative postions,
     # not values if save = true, save [[label, *features]] to standard csv file
     if save:
@@ -71,12 +73,12 @@ def _csv(outfile, binary, save=True, data= None):
         feats = data[:, 1:]
         features = csr_matrix(feats)
         if binary:
-            return csr_mat_to_instances(features,np.squeeze(labels),binary=True)
+            return csr_mat_to_instances(features, np.squeeze(labels), binary=True)
         else:
             return csr_mat_to_instances(features, np.squeeze(labels), binary=False)
 
 
-def _pickle(outfile, binary, save=True, data= None):
+def _pickle(outfile, binary, save=True, data=None):
     """A fast method for saving and loading datasets as python objects.
 
     Args:

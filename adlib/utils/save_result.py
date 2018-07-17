@@ -1,7 +1,8 @@
-#save experimental result to data type that is easier for future usage
-#pandas Dataframe -> csv file
+# save experimental result to data type that is easier for future usage
+# pandas Dataframe -> csv file
 
 import pandas as pd
+
 
 def save_result(result_arr, column_name):
     """
@@ -11,4 +12,3 @@ def save_result(result_arr, column_name):
     :return: csv file
     """
     df = pd.DataFrame(result_arr, column_name)
-    

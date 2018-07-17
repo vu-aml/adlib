@@ -98,7 +98,8 @@ class SVMRestrained(Learner):
             prob.solve()
 
         self.weight_vector = np.asarray(w.value.T)[0]
-        print("weight vec calculated in svm restrained learner: {}".format(self.weight_vector.shape))
+        print(
+            "weight vec calculated in svm restrained learner: {}".format(self.weight_vector.shape))
         self.bias = b.value
 
     def predict(self, instances):
@@ -110,18 +111,18 @@ class SVMRestrained(Learner):
 
             """
         predictions = []
-        #list of instances
+        # list of instances
         if isinstance(instances, List):
             for instance in instances:
                 features = instance.get_feature_vector().get_csr_matrix().toarray()
                 predictions.append((int)(np.sign(self.predict_instance(features))))
-        #single instance
+        # single instance
         elif type(instances) == Instance:
             predictions = (int)(np.sign(self.predict_instance(
-            instances.get_feature_vector().get_csr_matrix().toarray())))
+                instances.get_feature_vector().get_csr_matrix().toarray())))
         else:
-        #email data set
-        #return a num if there is a single instance
+            # email data set
+            # return a num if there is a single instance
             for i in range(0, instances.features.shape[0]):
                 instance = instances.features[i, :].toarray()
                 predictions.append((int)(np.sign(self.predict_instance(instance))))
@@ -136,14 +137,15 @@ class SVMRestrained(Learner):
     def predict_instance(self, instances: np.array):
         return self.weight_vector.dot(instances.T)[0] + self.bias
 
-    #decision_function should be the distance to the hyperplane
+    # decision_function should be the distance to the hyperplane
     def decision_function(self, instances):
         predict_instances = self.weight_vector.dot(instances.T) + self.bias
-        #norm = np.linalg.norm(self.weight_vector)
+        # norm = np.linalg.norm(self.weight_vector)
         return predict_instances
 
     def get_weight(self):
-        print("weight vec shape returned from Restrained learner: {}".format(self.weight_vector.shape))
+        print("weight vec shape returned from Restrained learner: {}".format(
+            self.weight_vector.shape))
         return self.weight_vector
 
     def get_constant(self):

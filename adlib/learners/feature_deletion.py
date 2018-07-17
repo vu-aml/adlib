@@ -32,7 +32,6 @@ class FeatureDeletion(Learner):
                   'max_feature_deletion': self.max_feature_deletion}
         return params
 
-
     def train(self):
         """
          Opitimize weight vector using FDROP algorithm
@@ -51,31 +50,32 @@ class FeatureDeletion(Learner):
             num_instances = len(y)
             y, X = y.reshape((num_instances, 1)), X
 
-        #append another column at X for bias
+        # append another column at X for bias
         bias_col = np.ones_like(y.T)
         X_prime = np.insert(X, X.shape[1], bias_col, axis=1)
 
         C = self.hinge_loss_multiplier
         print("current C value(hinge loss multipler): {}".format(C))
         print("current K(maximum feature deletion): {}".format(self.max_feature_deletion))
-        #print(X.shape)
-        #print(y.shape)
+        # print(X.shape)
+        # print(y.shape)
         K = self.max_feature_deletion
         w = Variable(self.num_features + 1)  # weight vector
-        #b = Variable()  # bias term
+        # b = Variable()  # bias term
         t = Variable(num_instances)
         z = Variable(num_instances)
         v = Variable(num_instances, (self.num_features + 1))
         loss_f = Variable(num_instances)
 
-        #bias is implemented as the last column of X(a extra feature vector of only 1)
-        #bias in the weight vector is not calculated in the regularization
+        # bias is implemented as the last column of X(a extra feature vector of only 1)
+        # bias in the weight vector is not calculated in the regularization
 
         constraints = [t >= K * z + sum_entries(v, axis=1), v >= 0]
         constraints.extend([z[i] + v[i, :] >=
                             y[i] * mul_elemwise(X_prime[i], w).T for i in range(num_instances)])
         constraints.extend([loss_f[i] >= 0 for i in range(num_instances)])
-        constraints.extend([loss_f[i] >= (1 - y[i] * (X_prime[i] * w) + t[i]) for i in range(num_instances)])
+        constraints.extend([loss_f[i] >= (1 - y[i] * (X_prime[i] * w) + t[i])
+                            for i in range(num_instances)])
         obj = Minimize(0.5 * (sum_squares(w[:-1])) + C * sum_entries(loss_f))
 
         #  constraints = [t >= K * z + sum_entries(v, axis=1),v >= 0]
@@ -83,7 +83,8 @@ class FeatureDeletion(Learner):
         #                      y[i] * mul_elemwise(X[i], w) for i in range(num_instances)])
         #  constraints.extend([])
         #  constraints.extend([loss_f[i] >= 0 for i in range(num_instances)])
-        #  constraints.extend([loss_f[i] >= (1 - y[i] * (X[i] * w + b) + t[i]) for i in range(num_instances)])
+        #  constraints.extend([loss_f[i] >= (1 - y[i] * (X[i] * w + b) + t[i])
+        #  for i in range(num_instances)])
         #  obj = Minimize(0.5 * (sum_squares(w)) + C * sum_entries(loss_f))
 
         prob = Problem(obj, constraints)
@@ -104,7 +105,6 @@ class FeatureDeletion(Learner):
         for i in top_idx:
             print("index No.{} with value {}".format(i, self.weight_vector[i]))
 
-
     def predict(self, instances):
         """
 
@@ -121,7 +121,7 @@ class FeatureDeletion(Learner):
         # single instance
         elif type(instances) == Instance:
             predictions = np.sign(self.predict_instance(
-                            instances.get_feature_vector().get_csr_matrix().toarray()))
+                instances.get_feature_vector().get_csr_matrix().toarray()))
         else:
             predictions = []
             for i in range(0, instances.features.shape[0]):
@@ -140,10 +140,10 @@ class FeatureDeletion(Learner):
         '''
         return self.weight_vector.dot(features.T)[0] + self.bias
 
-    #decision_function should be the distance to the hyperplane
+    # decision_function should be the distance to the hyperplane
     def decision_function(self, instances):
         predict_instances = self.weight_vector.dot(instances.T) + self.bias
-        #norm = np.linalg.norm(self.weight_vector)
+        # norm = np.linalg.norm(self.weight_vector)
         return predict_instances
 
     def get_weight(self):

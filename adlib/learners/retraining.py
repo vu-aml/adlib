@@ -43,8 +43,8 @@ class Retraining(Learner):
             self.iterations = params['iterations']
 
     def get_available_params(self) -> Dict:
-        params = {'attacker':self.attacker,
-                  'adv_params':self.adv_params,
+        params = {'attacker': self.attacker,
+                  'adv_params': self.adv_params,
                   'iterations': self.iterations}
         return params
 

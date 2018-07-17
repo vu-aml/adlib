@@ -147,12 +147,11 @@ class SVMFreeRange(Learner):
     def predict_instance(self, instances: np.array):
         return self.weight_vector.dot(instances.T)[0] + self.bias
 
-    #decision_function should be the distance to the hyperplane
+    # decision_function should be the distance to the hyperplane
     def decision_function(self, instances):
         predict_instances = self.weight_vector.dot(instances.T) + self.bias
-        #norm = np.linalg.norm(self.weight_vector)
+        # norm = np.linalg.norm(self.weight_vector)
         return predict_instances
-
 
     def get_weight(self):
         return self.weight_vector

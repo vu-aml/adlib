@@ -49,9 +49,10 @@ class EmailDataset(Dataset):
         binary (boolean, optional): Feature type, continuous (False) by default
     """
 
-    def __init__(self, path=None, raw=True, features=None, labels=None, norm = 'l1',
+    def __init__(self, path=None, raw=True, features=None, labels=None, norm='l1',
                  binary=False, strip_accents_=None, ngram_range_=(1, 1),
-                 max_df_=1.0, min_df_=1, max_features_=1000, num_instances = 0, standardization= False):
+                 max_df_=1.0, min_df_=1, max_features_=1000, num_instances=0,
+                 standardization=False):
         super(EmailDataset, self).__init__()
         self.num_instances = num_instances
         self.binary = binary
@@ -60,9 +61,9 @@ class EmailDataset(Dataset):
             #: Number of instances within the current corpus
             if raw:
                 self.labels, self.corpus = self._create_corpus(path)
-            # Sklearn module to fit/transform data and resulting feature matrix
-            # Maybe optionally pass this in as a parameter instead.
-            #stop words?
+                # Sklearn module to fit/transform data and resulting feature matrix
+                # Maybe optionally pass this in as a parameter instead.
+                # stop words?
                 self.vectorizer = \
                     TfidfVectorizer(analyzer='word',
                                     strip_accents=strip_accents_,
@@ -318,7 +319,7 @@ class EmailDataset(Dataset):
             raise AttributeError('The given load format is not currently \
                                  supported.')
 
-    def split(self, fraction=0.5, seed=None, random = True):
+    def split(self, fraction=0.5, seed=None, random=True):
         """Split the dataset into test and train sets using
             `sklearn.utils.shuffle()`.
 
@@ -333,25 +334,30 @@ class EmailDataset(Dataset):
             raise ValueError('Split percentages must be positive values')
         if fraction > 1.0:
             fraction /= 100
-        pivot = int(self.__len__()*fraction)
+        pivot = int(self.__len__() * fraction)
         if random:
             if seed:
-                s_feats, s_labels = sklearn.utils.shuffle(self.features, self.labels, random_state=seed)
+                s_feats, s_labels = sklearn.utils.shuffle(self.features, self.labels,
+                                                          random_state=seed)
             else:
-                s_feats, s_labels = sklearn.utils.shuffle(self.features, self.labels, random_state=scipy.random.seed())
+                s_feats, s_labels = sklearn.utils.shuffle(self.features, self.labels,
+                                                          random_state=scipy.random.seed())
 
             return (self.__class__(raw=False, features=s_feats[:pivot, :],
-                                   labels=s_labels[:pivot], num_instances=pivot, binary=self.binary),
+                                   labels=s_labels[:pivot], num_instances=pivot,
+                                   binary=self.binary),
                     self.__class__(raw=False, features=s_feats[pivot:, :],
-                                   labels=s_labels[pivot:], num_instances=self.num_instances - pivot,
+                                   labels=s_labels[pivot:],
+                                   num_instances=self.num_instances - pivot,
                                    binary=self.binary))
         else:
             return (self.__class__(raw=False, features=self.features[:pivot, :],
-                                   labels=self.labels[:pivot], num_instances=pivot, binary=self.binary),
+                                   labels=self.labels[:pivot], num_instances=pivot,
+                                   binary=self.binary),
                     self.__class__(raw=False, features=self.features[pivot:, :],
-                                   labels=self.labels[pivot:], num_instances=self.num_instances - pivot,
+                                   labels=self.labels[pivot:],
+                                   num_instances=self.num_instances - pivot,
                                    binary=self.binary))
-
 
     def report(self):
         """
@@ -362,6 +368,10 @@ class EmailDataset(Dataset):
         s += "instance feature length: {0}\n".format(self.shape[1])
         pos_cnt = self.labels.tolist().count(1)
         neg_cnt = self.labels.tolist().count(-1)
-        s += "positive instance count and percentage: {0}, {1}%\n".format(pos_cnt,100*pos_cnt/len(self.labels))
-        s += "negative instance count and percentage: {0}, {1}%\n".format(neg_cnt,100*neg_cnt/len(self.labels))
+        s += "positive instance count and percentage: {0}, {1}%\n".format(pos_cnt,
+                                                                          100 * pos_cnt / len(
+                                                                              self.labels))
+        s += "negative instance count and percentage: {0}, {1}%\n".format(neg_cnt,
+                                                                          100 * neg_cnt / len(
+                                                                              self.labels))
         return s

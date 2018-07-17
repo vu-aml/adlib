@@ -22,6 +22,7 @@ def get_evasion_set(x_test, y_pred):
     print("{0} malicious instances are being detected initially")
     return ls, [x.label for x in ls]
 
+
 dataset = EmailDataset(path='./data_reader/data/raw/trec05p-1/test-400', binary=True, raw=True)
 training_, testing_ = dataset.split({'train': 60, 'test': 40})
 training_data = load_dataset(training_)

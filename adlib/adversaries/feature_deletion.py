@@ -6,7 +6,8 @@ from copy import deepcopy
 from adlib.learners import SimpleLearner
 from sklearn.svm import SVC
 from sklearn.metrics import pairwise
-#import matplotlib.pyplot as plt
+
+# import matplotlib.pyplot as plt
 
 """
   Based on Nightmare at Test Time: Robust Learning by Feature Deletion by
@@ -19,7 +20,7 @@ from sklearn.metrics import pairwise
 
 
 class AdversaryFeatureDeletion(Adversary):
-    def __init__(self, learner=None, num_deletion=100, all_malicious=False,random = False):
+    def __init__(self, learner=None, num_deletion=100, all_malicious=False, random=False):
         """
         :param learner: Learner from adlib.learners
         :param num_deletion: the max number that will be deleted in the attack
@@ -57,7 +58,7 @@ class AdversaryFeatureDeletion(Adversary):
 
         attacked_instances = []
 
-        #for rbf kernel,we can delete the features with the most gradient
+        # for rbf kernel,we can delete the features with the most gradient
         if rbf_flag and not self.random:
             for instance in instances:
                 if instance.label < 0:
@@ -67,7 +68,8 @@ class AdversaryFeatureDeletion(Adversary):
                     if self.malicious:
                         self.del_index = np.flipud(np.argsort(gradient))[:self.num_deletion]
                     else:
-                        self.del_index = np.flipud(np.argsort(np.absolute(gradient)))[:self.num_deletion]
+                        self.del_index = np.flipud(np.argsort(np.absolute(gradient)))[
+                                         :self.num_deletion]
                     attacked_instances.append(self.change_instance(instance))
             return attacked_instances
         else:
@@ -75,7 +77,8 @@ class AdversaryFeatureDeletion(Adversary):
                 if self.malicious:
                     self.del_index = np.flipud(np.argsort(self.weight_vector))[:self.num_deletion]
                 else:
-                    self.del_index = np.flipud(np.argsort(np.absolute(self.weight_vector)))[:self.num_deletion]
+                    self.del_index = np.flipud(np.argsort(np.absolute(self.weight_vector)))[
+                                     :self.num_deletion]
             else:
                 random_seed = np.random.random_sample((self.num_features,))
                 self.del_index = np.argsort(random_seed)[:self.num_deletion]
@@ -86,8 +89,6 @@ class AdversaryFeatureDeletion(Adversary):
                 else:
                     attacked_instances.append(self.change_instance(instance))
             return attacked_instances
-
-
 
     def set_params(self, params: Dict):
         if 'num_deletion' in params:
@@ -100,7 +101,7 @@ class AdversaryFeatureDeletion(Adversary):
     def get_available_params(self) -> Dict:
         params = {'num_deletion': self.num_deletion,
                   'all_malicious': self.malicious,
-                  'random':self.random}
+                  'random': self.random}
         return params
 
     def change_instance(self, instance: Instance) -> Instance:
@@ -117,17 +118,16 @@ class AdversaryFeatureDeletion(Adversary):
         # i not in self.del_index]
         # return Instance(1, FeatureVector(self.num_features, indices))
 
-    #for RBF kernel
-    #can not obtain weight here, so we can just calculate the gradient for the rbf kernel
-    #based on the gradient, delete the features with the most weight
+    # for RBF kernel
+    # can not obtain weight here, so we can just calculate the gradient for the rbf kernel
+    # based on the gradient, delete the features with the most weight
 
     def is_rbf(self):
-        if type(self.learn_model) != SimpleLearner or type(self.learn_model.model.learner) != SVC\
-                or type(self.learn_model.model.learner.kernel != "rbf"):
-            return False
-        return True
+        return not (type(self.learn_model) != SimpleLearner or
+                    type(self.learn_model.model.learner) != SVC or
+                    type(self.learn_model.model.learner.kernel != "rbf"))
 
-    def rbf_kernel_gradient(self,attack_instance):
+    def rbf_kernel_gradient(self, attack_instance):
         param_map = self.learn_model.get_params()
         attribute_map = self.learn_model.get_attributes()
         if param_map["kernel"] == "rbf":
@@ -138,11 +138,9 @@ class AdversaryFeatureDeletion(Adversary):
             kernel = pairwise.rbf_kernel(support, attack_instance, gamma)
             for element in range(0, len(support)):
                 if grad == []:
-                    grad = (dual_coef[0][element] * kernel[0][element] * 2 * gamma * (support[element] -
-                                                                                      attack_instance))
+                    grad = (dual_coef[0][element] * kernel[0][element] * 2 * gamma *
+                            (support[element] - attack_instance))
                 else:
-                    grad = grad + (
-                        dual_coef[0][element] * kernel[element][0] * 2 * gamma * (support[element] -
-                                                                                  attack_instance))
+                    grad += (dual_coef[0][element] * kernel[element][0] * 2 * gamma *
+                             (support[element] - attack_instance))
             return np.array(-grad)
-

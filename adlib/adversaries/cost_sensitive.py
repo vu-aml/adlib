@@ -27,8 +27,8 @@ Concept:
 # the parameters can be set according to the experiments described in the paper
 # position: (-,-)= (0,0) (-,+) = (0,1) (+,-)= (1,0) (+,+)= (1,1)
 class CostSensitive(Adversary):
-    def __init__(self, Ua=None, Vi=None, Uc=None, Wi=None, learn_model=None, binary=False, scenario="synonym",
-                 Xdomain = None,training_instances = None,cost= None):
+    def __init__(self, Ua=None, Vi=None, Uc=None, Wi=None, learn_model=None, binary=False,
+                 scenario='synonym', Xdomain=None, training_instances=None, cost=None):
         """
         :param Ua: Utility accreued by Adversary when the classifier classifies
                    as yc an instance
@@ -37,7 +37,6 @@ class CostSensitive(Adversary):
         :param Uc: Utility of classifying yc an instance with true class y.
                    Uc(+,-) <- and Uc(-,+) <0, Uc(+,+) >0, Uc(-,-) >0
         :param Wi: Cost of changing the ith feature from xi to xi_prime
-        :param learner:
         :param scenario: can select three spam filtering scenarios: add_word, add_length, synonym
         """
 
@@ -55,7 +54,7 @@ class CostSensitive(Adversary):
             self.find_max_min()
             self.positive_instances = [x for x in training_instances if
                                        x.get_label() ==
-                                       learner.positive_classification]
+                                       Learner.positive_classification]
             self.num_features = training_instances[0].get_feature_count()
         if self.Ua is not None:
             self.delta_Ua = self.Ua[0][1] - self.Ua[1][1]
@@ -65,21 +64,20 @@ class CostSensitive(Adversary):
             if not self.binary:
                 print("Warning: add_word scenario requires Boolean features")
 
-
     def attack(self, instances) -> List[Instance]:
-        #print(self.domain)
+        # print(self.domain)
         transformed_instances = []
-        #asd = 0
+        # asd = 0
         for instance in instances:
-            #print(asd)
-            #asd += 1
+            # print(asd)
+            # asd += 1
             transform_instance = deepcopy(instance)
-            if instance.get_label() == learner.positive_classification:
-                #print("transform")
+            if instance.get_label() == Learner.positive_classification:
+                # print("transform")
                 transformed = self.a(transform_instance)
                 transformed_instances.append(transformed)
             else:
-                #print("intact")
+                # print("intact")
                 transformed_instances.append(transform_instance)
         return transformed_instances
 
@@ -137,7 +135,7 @@ class CostSensitive(Adversary):
         if self.Xdomain is not None:
             return self.Xdomain
         else:
-            return np.linspace(self.domain[0][i],self.domain[1][i],2)
+            return np.linspace(self.domain[0][i], self.domain[1][i], 2)
 
     def gap(self, x):
         """
@@ -178,30 +176,32 @@ class CostSensitive(Adversary):
         classifier
         Args: x (Instance)
         return: possible
-        '''
-        #W = self.gap(x)
+        """
+
+        # W = self.gap(x)
         W = int(self.gap(x))  # discretized
-        #this only changes the first half of the feature vectors
-        #it is possible that optimize the ordering finds better solution
-        minCost, minList = self.find_mcc(x.get_feature_count()/2, W, x)
+        # this only changes the first half of the feature vectors
+        # it is possible that optimize the ordering finds better solution
+        minCost, minList = self.find_mcc(x.get_feature_count() / 2, W, x)
         if minCost < self.delta_Ua:
             for i, xi_prime in minList:
                 x.flip(i, xi_prime)
         return x
 
-    def w_cost_function(self,x,x_prime):
-        '''
+    def w_cost_function(self, x, x_prime):
+        """
         Get the cost function when x is changed to x_prime
         for add_word and synonym scenario, it can be a constant cost
         for add_length scenario, it can be proportional to the feature changes
         :param x:
         :param x_prime:
         :return:
-        '''
+        """
+
         if self.scenario == "add_word" or self.scenario == "synonym":
-            if self.cost!= None:
+            if self.cost != None:
                 return self.cost
-        return 0.1 * self.w_feature_difference(x,x_prime)
+        return 0.1 * self.w_feature_difference(x, x_prime)
 
     def w_feature_difference(self, x, x_prime):
         """
@@ -228,9 +228,10 @@ class CostSensitive(Adversary):
         return: 1) minimum cost to transform the instance
                  2) a list of pairs of original feature indices and their
                  corresponding transformations
-         '''
+        """
+
         print("w={0}".format(w))
-        #print("Xdomain {0}".format(self.find_x_domain(i)))
+        # print("Xdomain {0}".format(self.find_x_domain(i)))
         print("i is {0}".format(i))
 
         if w <= 0:

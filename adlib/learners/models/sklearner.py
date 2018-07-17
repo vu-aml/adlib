@@ -132,38 +132,36 @@ class Model(BaseModel):
             params (Dict): set of available params with updated values
 
         """
-        param_map ={}
+        param_map = {}
         if type(self.learner) == svm.SVC:
-           if 'C' in params.keys():
-               param_map['C'] = params['C']
-           if 'kernel' in params.keys():
-               param_map['kernel'] = params['kernel']
-           if 'gamma' in params.keys():
-               param_map['gamma'] = params['gamma']
-           if 'coef0' in params.keys():
-               param_map['coef'] = params['coef0']
-           if 'probability' in params.keys():
-               param_map['probability'] = params['probability']
-           if 'class_weight' in params.keys():
-               param_map['class_weight'] = params['class_weight']
+            if 'C' in params.keys():
+                param_map['C'] = params['C']
+            if 'kernel' in params.keys():
+                param_map['kernel'] = params['kernel']
+            if 'gamma' in params.keys():
+                param_map['gamma'] = params['gamma']
+            if 'coef0' in params.keys():
+                param_map['coef'] = params['coef0']
+            if 'probability' in params.keys():
+                param_map['probability'] = params['probability']
+            if 'class_weight' in params.keys():
+                param_map['class_weight'] = params['class_weight']
         self.learner.set_params(**param_map)
 
     def get_params(self):
         return self.learner.get_params()
 
-
     def get_attributes(self):
         if type(self.learner) == svm.SVC:
             attribute_map = {"support_": self.learner.support_,
-                    "support_vectors_":self.learner.support_vectors_,
-                    "n_support_": self.learner.n_support_,
-                    "dual_coef_": self.learner.dual_coef_,
-                    "intercept_": self.learner.intercept_}
+                             "support_vectors_": self.learner.support_vectors_,
+                             "n_support_": self.learner.n_support_,
+                             "dual_coef_": self.learner.dual_coef_,
+                             "intercept_": self.learner.intercept_}
             if self.learner.kernel == "linear":
                 attribute_map["coef_"] = self.learner.coef_
             return attribute_map
         return None
-
 
     def get_available_params(self) -> Dict:
         """Get the set of params defined in the model usage.
@@ -192,4 +190,3 @@ class Model(BaseModel):
         """
         print("weight vec shape from sklearner: {}".format(self.learner.coef_[0]))
         return self.learner.coef_[0]
-

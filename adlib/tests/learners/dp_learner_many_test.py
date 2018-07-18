@@ -14,7 +14,7 @@ def dp_learner_many_test():
     to run 30 tests of label flipping, writing the results to the CWD.
     """
 
-    if 'win' in platform.system().lower():
+    if 'window' in platform.system().lower():
         print('Cannot use this script to automate testing on Windows.')
         exit(1)
 

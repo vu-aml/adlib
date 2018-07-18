@@ -2,6 +2,7 @@
 # Used to generate many tests of the dp learners
 # Matthew Sedam. 2018
 
+import platform
 import subprocess
 import sys
 
@@ -13,21 +14,26 @@ def dp_learner_many_test():
     to run 30 tests of label flipping, writing the results to the CWD.
     """
 
+    if 'win' in platform.system().lower():
+        print('Cannot use this script to automate testing on Windows.')
+        exit(1)
+
+    try:
+        subprocess.run(['unbuffer', 'echo'])
+    except:
+        print('Need command unbuffer - install expect package.')
+        exit(1)
+
     num_runs = int(sys.argv[1]) if len(sys.argv) >= 2 else 30
     attacker = sys.argv[2].lower() if len(sys.argv) == 3 else 'dummy'
 
     for i in range(num_runs):
         print('START run:', i + 1)
-
-        command = ['python3', 'adlib/tests/learners/dp_learner_test.py', attacker]
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        result = result.stdout.decode('utf-8')
-
-        file_name = './dp-' + attacker + '-' + str(i + 1) + '.txt'
-        with open(file_name, 'w+') as file:
-            file.write(result)
-            file.flush()
-
+        command = ['unbuffer', 'python3', 'adlib/tests/learners/dp_learner_test.py', attacker]
+        ps = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        subprocess.check_output(['tee', './dp-' + attacker + '-' + str(i + 1) + '.txt'],
+                                stdin=ps.stdout)
+        ps.wait()
         print('END run:', i + 1)
 
 

@@ -1,0 +1,448 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun May 20 16:12:10 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4KKC9qD023133
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 20 May 2007 16:12:10 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 5FEA5163826
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 20 May 2007 20:12:06 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.4 required=3.8 tests=AWL,BAYES_40,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id 8A119162AE9; Sun, 20 May 2007 20:11:26 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070520201126.8A119162AE9@lists.samba.org>
+Date: Sun, 20 May 2007 20:11:26 +0000 (GMT)
+Subject: svn commit: samba r23024 - in branches: SAMBA_3_0/source/lib
+	SAMBA_3_0_26/source/lib
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-05-20 20:11:23 +0000 (Sun, 20 May 2007)
+New Revision: 23024
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23024
+
+Log:
+Ok, neither the duplicates_allowed nor the timeout argument to
+message_send_pid is used anymore. Two users of duplicates_allowed: winbind and
+the printer notify system.
+
+I don't thing this really changes semantics: duplicates_allowed is hell racy
+anyway, we can't guarantee that we don't send the same message in sequence
+twice, and I think the only thing we can harm with the print notify is
+performance.
+
+For winbind I talked to G?\195?\188nther, and he did not seem too worried.
+
+Volker
+
+
+Modified:
+   branches/SAMBA_3_0/source/lib/messages.c
+   branches/SAMBA_3_0_26/source/lib/messages.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/lib/messages.c
+===================================================================
+--- branches/SAMBA_3_0/source/lib/messages.c	2007-05-20 19:43:49 UTC (rev 23023)
++++ branches/SAMBA_3_0/source/lib/messages.c	2007-05-20 20:11:23 UTC (rev 23024)
+@@ -4,6 +4,7 @@
+    Copyright (C) Andrew Tridgell 2000
+    Copyright (C) 2001 by Martin Pool
+    Copyright (C) 2002 by Jeremy Allison
++   Copyright (C) 2007 by Volker Lendecke
+    
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+@@ -106,8 +107,7 @@
+ }
+ 
+ static NTSTATUS message_send_pid(struct server_id pid, int msg_type,
+-				 const void *buf, size_t len,
+-				 BOOL duplicates_allowed);
++				 const void *buf, size_t len);
+ 
+ /****************************************************************************
+  A useful function for testing the message system.
+@@ -120,7 +120,7 @@
+ 
+ 	DEBUG(1,("INFO: Received PING message from PID %s [%s]\n",
+ 		 procid_str_static(&src), msg));
+-	message_send_pid(src, MSG_PONG, buf, len, True);
++	message_send_pid(src, MSG_PONG, buf, len);
+ }
+ 
+ /****************************************************************************
+@@ -240,17 +240,13 @@
+  Send a message to a particular pid.
+ ****************************************************************************/
+ 
+-static NTSTATUS message_send_pid_internal(struct server_id pid, int msg_type,
+-					  const void *buf, size_t len,
+-					  BOOL duplicates_allowed,
+-					  unsigned int timeout)
++static NTSTATUS message_send_pid(struct server_id pid, int msg_type,
++				 const void *buf, size_t len)
+ {
+ 	TDB_DATA kbuf;
+ 	TDB_DATA dbuf;
+-	TDB_DATA old_dbuf;
+ 	struct message_rec rec;
+-	uint8 *ptr;
+-	struct message_rec prec;
++	int ret;
+ 
+ 	/* NULL pointer means implicit length zero. */
+ 	if (!buf) {
+@@ -283,113 +279,19 @@
+ 
+ 	dbuf.dsize = len + sizeof(rec);
+ 
+-	if (duplicates_allowed) {
++	ret = tdb_append(tdb, kbuf, dbuf);
+ 
+-		/* If duplicates are allowed we can just append the message
+-		 * and return. */
++	SAFE_FREE(dbuf.dptr);
+ 
+-		/* lock the record for the destination */
+-		if (timeout) {
+-			if (tdb_chainlock_with_timeout(tdb, kbuf,
+-						       timeout) == -1) {
+-				DEBUG(0,("message_send_pid_internal: failed "
+-					 "to get chainlock with timeout "
+-					 "%ul.\n", timeout));
+-				return NT_STATUS_IO_TIMEOUT;
+-			}
+-		} else {
+-			if (tdb_chainlock(tdb, kbuf) == -1) {
+-				DEBUG(0,("message_send_pid_internal: failed "
+-					 "to get chainlock.\n"));
+-				return NT_STATUS_LOCK_NOT_GRANTED;
+-			}
+-		}	
+-		tdb_append(tdb, kbuf, dbuf);
+-		tdb_chainunlock(tdb, kbuf);
+-
+-		SAFE_FREE(dbuf.dptr);
+-		errno = 0;                    /* paranoia */
+-		return message_notify(pid);
++	if (ret == -1) {
++		return NT_STATUS_INTERNAL_ERROR;
+ 	}
+ 
+-	/* lock the record for the destination */
+-	if (timeout) {
+-		if (tdb_chainlock_with_timeout(tdb, kbuf, timeout) == -1) {
+-			DEBUG(0,("message_send_pid_internal: failed to get "
+-				 "chainlock with timeout %ul.\n", timeout));
+-			return NT_STATUS_IO_TIMEOUT;
+-		}
+-	} else {
+-		if (tdb_chainlock(tdb, kbuf) == -1) {
+-			DEBUG(0,("message_send_pid_internal: failed to get "
+-				 "chainlock.\n"));
+-			return NT_STATUS_LOCK_NOT_GRANTED;
+-		}
+-	}	
+-
+-	old_dbuf = tdb_fetch(tdb, kbuf);
+-
+-	if (!old_dbuf.dptr) {
+-		/* its a new record */
+-
+-		tdb_store(tdb, kbuf, dbuf, TDB_REPLACE);
+-		tdb_chainunlock(tdb, kbuf);
+-
+-		SAFE_FREE(dbuf.dptr);
+-		errno = 0;                    /* paranoia */
+-		return message_notify(pid);
+-	}
+-
+-	/* Not a new record. Check for duplicates. */
+-
+-	for(ptr = old_dbuf.dptr; ptr < old_dbuf.dptr + old_dbuf.dsize; ) {
+-		/*
+-		 * First check if the message header matches, then, if it's a
+-		 * non-zero sized message, check if the data matches. If so
+-		 * it's a duplicate and we can discard it. JRA.
+-		 */
+-
+-		if (!memcmp(ptr, &rec, sizeof(rec))) {
+-			if (!len
+-			    || (len
+-				&& !memcmp( ptr + sizeof(rec), buf, len))) {
+-				tdb_chainunlock(tdb, kbuf);
+-				DEBUG(10,("message_send_pid_internal: "
+-					  "discarding duplicate message.\n"));
+-				SAFE_FREE(dbuf.dptr);
+-				SAFE_FREE(old_dbuf.dptr);
+-				return NT_STATUS_OK;
+-			}
+-		}
+-		memcpy(&prec, ptr, sizeof(prec));
+-		ptr += sizeof(rec) + prec.len;
+-	}
+-
+-	/* we're adding to an existing entry */
+-
+-	tdb_append(tdb, kbuf, dbuf);
+-	tdb_chainunlock(tdb, kbuf);
+-
+-	SAFE_FREE(old_dbuf.dptr);
+-	SAFE_FREE(dbuf.dptr);
+-
+ 	errno = 0;                    /* paranoia */
+ 	return message_notify(pid);
+ }
+ 
+ /****************************************************************************
+- Send a message to a particular pid - no timeout.
+-****************************************************************************/
+-
+-static NTSTATUS message_send_pid(struct server_id pid, int msg_type,
+-				 const void *buf, size_t len,
+-				 BOOL duplicates_allowed)
+-{
+-	return message_send_pid_internal(pid, msg_type, buf, len,
+-					 duplicates_allowed, 0);
+-}
+-
+-/****************************************************************************
+  Count the messages pending for a particular pid. Expensive....
+ ****************************************************************************/
+ 
+@@ -646,8 +548,7 @@
+ 	 * the msg has already been deleted from the messages.tdb.*/
+ 
+ 	status = message_send_pid(crec.pid, msg_all->msg_type,
+-				  msg_all->buf, msg_all->len,
+-				  msg_all->duplicates);
++				  msg_all->buf, msg_all->len);
+ 
+ 	if (NT_STATUS_EQUAL(status, NT_STATUS_INVALID_HANDLE)) {
+ 		
+@@ -860,8 +761,7 @@
+ 			struct server_id server, 
+ 			uint32_t msg_type, const DATA_BLOB *data)
+ {
+-	return message_send_pid_internal(server, msg_type, data->data,
+-					 data->length, True, 0);
++	return message_send_pid(server, msg_type, data->data, data->length);
+ }
+ 
+ NTSTATUS messaging_send_buf(struct messaging_context *msg_ctx,
+
+Modified: branches/SAMBA_3_0_26/source/lib/messages.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/lib/messages.c	2007-05-20 19:43:49 UTC (rev 23023)
++++ branches/SAMBA_3_0_26/source/lib/messages.c	2007-05-20 20:11:23 UTC (rev 23024)
+@@ -4,6 +4,7 @@
+    Copyright (C) Andrew Tridgell 2000
+    Copyright (C) 2001 by Martin Pool
+    Copyright (C) 2002 by Jeremy Allison
++   Copyright (C) 2007 by Volker Lendecke
+    
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+@@ -106,8 +107,7 @@
+ }
+ 
+ static NTSTATUS message_send_pid(struct server_id pid, int msg_type,
+-				 const void *buf, size_t len,
+-				 BOOL duplicates_allowed);
++				 const void *buf, size_t len);
+ 
+ /****************************************************************************
+  A useful function for testing the message system.
+@@ -120,7 +120,7 @@
+ 
+ 	DEBUG(1,("INFO: Received PING message from PID %s [%s]\n",
+ 		 procid_str_static(&src), msg));
+-	message_send_pid(src, MSG_PONG, buf, len, True);
++	message_send_pid(src, MSG_PONG, buf, len);
+ }
+ 
+ /****************************************************************************
+@@ -240,17 +240,13 @@
+  Send a message to a particular pid.
+ ****************************************************************************/
+ 
+-static NTSTATUS message_send_pid_internal(struct server_id pid, int msg_type,
+-					  const void *buf, size_t len,
+-					  BOOL duplicates_allowed,
+-					  unsigned int timeout)
++static NTSTATUS message_send_pid(struct server_id pid, int msg_type,
++				 const void *buf, size_t len)
+ {
+ 	TDB_DATA kbuf;
+ 	TDB_DATA dbuf;
+-	TDB_DATA old_dbuf;
+ 	struct message_rec rec;
+-	uint8 *ptr;
+-	struct message_rec prec;
++	int ret;
+ 
+ 	/* NULL pointer means implicit length zero. */
+ 	if (!buf) {
+@@ -283,113 +279,19 @@
+ 
+ 	dbuf.dsize = len + sizeof(rec);
+ 
+-	if (duplicates_allowed) {
++	ret = tdb_append(tdb, kbuf, dbuf);
+ 
+-		/* If duplicates are allowed we can just append the message
+-		 * and return. */
++	SAFE_FREE(dbuf.dptr);
+ 
+-		/* lock the record for the destination */
+-		if (timeout) {
+-			if (tdb_chainlock_with_timeout(tdb, kbuf,
+-						       timeout) == -1) {
+-				DEBUG(0,("message_send_pid_internal: failed "
+-					 "to get chainlock with timeout "
+-					 "%ul.\n", timeout));
+-				return NT_STATUS_IO_TIMEOUT;
+-			}
+-		} else {
+-			if (tdb_chainlock(tdb, kbuf) == -1) {
+-				DEBUG(0,("message_send_pid_internal: failed "
+-					 "to get chainlock.\n"));
+-				return NT_STATUS_LOCK_NOT_GRANTED;
+-			}
+-		}	
+-		tdb_append(tdb, kbuf, dbuf);
+-		tdb_chainunlock(tdb, kbuf);
+-
+-		SAFE_FREE(dbuf.dptr);
+-		errno = 0;                    /* paranoia */
+-		return message_notify(pid);
++	if (ret == -1) {
++		return NT_STATUS_INTERNAL_ERROR;
+ 	}
+ 
+-	/* lock the record for the destination */
+-	if (timeout) {
+-		if (tdb_chainlock_with_timeout(tdb, kbuf, timeout) == -1) {
+-			DEBUG(0,("message_send_pid_internal: failed to get "
+-				 "chainlock with timeout %ul.\n", timeout));
+-			return NT_STATUS_IO_TIMEOUT;
+-		}
+-	} else {
+-		if (tdb_chainlock(tdb, kbuf) == -1) {
+-			DEBUG(0,("message_send_pid_internal: failed to get "
+-				 "chainlock.\n"));
+-			return NT_STATUS_LOCK_NOT_GRANTED;
+-		}
+-	}	
+-
+-	old_dbuf = tdb_fetch(tdb, kbuf);
+-
+-	if (!old_dbuf.dptr) {
+-		/* its a new record */
+-
+-		tdb_store(tdb, kbuf, dbuf, TDB_REPLACE);
+-		tdb_chainunlock(tdb, kbuf);
+-
+-		SAFE_FREE(dbuf.dptr);
+-		errno = 0;                    /* paranoia */
+-		return message_notify(pid);
+-	}
+-
+-	/* Not a new record. Check for duplicates. */
+-
+-	for(ptr = old_dbuf.dptr; ptr < old_dbuf.dptr + old_dbuf.dsize; ) {
+-		/*
+-		 * First check if the message header matches, then, if it's a
+-		 * non-zero sized message, check if the data matches. If so
+-		 * it's a duplicate and we can discard it. JRA.
+-		 */
+-
+-		if (!memcmp(ptr, &rec, sizeof(rec))) {
+-			if (!len
+-			    || (len
+-				&& !memcmp( ptr + sizeof(rec), buf, len))) {
+-				tdb_chainunlock(tdb, kbuf);
+-				DEBUG(10,("message_send_pid_internal: "
+-					  "discarding duplicate message.\n"));
+-				SAFE_FREE(dbuf.dptr);
+-				SAFE_FREE(old_dbuf.dptr);
+-				return NT_STATUS_OK;
+-			}
+-		}
+-		memcpy(&prec, ptr, sizeof(prec));
+-		ptr += sizeof(rec) + prec.len;
+-	}
+-
+-	/* we're adding to an existing entry */
+-
+-	tdb_append(tdb, kbuf, dbuf);
+-	tdb_chainunlock(tdb, kbuf);
+-
+-	SAFE_FREE(old_dbuf.dptr);
+-	SAFE_FREE(dbuf.dptr);
+-
+ 	errno = 0;                    /* paranoia */
+ 	return message_notify(pid);
+ }
+ 
+ /****************************************************************************
+- Send a message to a particular pid - no timeout.
+-****************************************************************************/
+-
+-static NTSTATUS message_send_pid(struct server_id pid, int msg_type,
+-				 const void *buf, size_t len,
+-				 BOOL duplicates_allowed)
+-{
+-	return message_send_pid_internal(pid, msg_type, buf, len,
+-					 duplicates_allowed, 0);
+-}
+-
+-/****************************************************************************
+  Count the messages pending for a particular pid. Expensive....
+ ****************************************************************************/
+ 
+@@ -646,8 +548,7 @@
+ 	 * the msg has already been deleted from the messages.tdb.*/
+ 
+ 	status = message_send_pid(crec.pid, msg_all->msg_type,
+-				  msg_all->buf, msg_all->len,
+-				  msg_all->duplicates);
++				  msg_all->buf, msg_all->len);
+ 
+ 	if (NT_STATUS_EQUAL(status, NT_STATUS_INVALID_HANDLE)) {
+ 		
+@@ -860,8 +761,7 @@
+ 			struct server_id server, 
+ 			uint32_t msg_type, const DATA_BLOB *data)
+ {
+-	return message_send_pid_internal(server, msg_type, data->data,
+-					 data->length, True, 0);
++	return message_send_pid(server, msg_type, data->data, data->length);
+ }
+ 
+ NTSTATUS messaging_send_buf(struct messaging_context *msg_ctx,
+

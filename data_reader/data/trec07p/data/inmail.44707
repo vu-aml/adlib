@@ -1,0 +1,193 @@
+From r-help-bounces@stat.math.ethz.ch  Sun May 27 07:30:09 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4RBU7qD001407
+	for <ktwarwic@flax9.uwaterloo.ca>; Sun, 27 May 2007 07:30:08 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4RBSghW005364;
+	Sun, 27 May 2007 13:28:56 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.1 required=5.0 tests=AWL, HTML_50_60,
+	HTML_MESSAGE autolearn=no version=3.1.8
+Received: from ug-out-1314.google.com (ug-out-1314.google.com [66.249.92.170])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4RBSUQ5005285
+	for <r-help@stat.math.ethz.ch>; Sun, 27 May 2007 13:28:31 +0200
+Received: by ug-out-1314.google.com with SMTP id 36so1092338uga
+	for <r-help@stat.math.ethz.ch>; Sun, 27 May 2007 04:28:30 -0700 (PDT)
+Received: by 10.67.28.9 with SMTP id f9mr4414406ugj.1180265310684;
+	Sun, 27 May 2007 04:28:30 -0700 (PDT)
+Received: by 10.66.237.1 with HTTP; Sun, 27 May 2007 04:28:30 -0700 (PDT)
+Message-ID: <644e1f320705270428x3e63a26atf2732b437dfc5de8@mail.gmail.com>
+Date: Sun, 27 May 2007 07:28:30 -0400
+From: "jim holtman" <jholtman@gmail.com>
+To: "Albert Pang" <albert.pang@mac.com>
+In-Reply-To: <4FB4B5E2-57E2-4C08-BC54-CA481064D045@mac.com>
+MIME-Version: 1.0
+References: <4FB4B5E2-57E2-4C08-BC54-CA481064D045@mac.com>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Content-Disposition: inline
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] Looking for the first observation within the month
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+Here is one way of doing it:
+
+> x <- "Date                    Observation
++ 2007-05-23              20
++ 2007-05-22              30
++ 2007-05-21              10
++ 2007-04-10              50
++ 2007-04-09              40
++ 2007-04-07              30
++ 2007-03-05              10"
+> x <- read.table(textConnection(x), header=TRUE,
++     colClasses=c("POSIXct", "integer"))
+> # split the data by year-month and find the minimum day
+> minDay <- lapply(split(x, cut(x$Date, breaks='month')), function(month){
++     month[which.min(month$Date),]   # minimum date in the month
++ })
+> do.call('rbind', minDay)  # put it back together in a dataframe
+                 Date Observation
+2007-03-01 2007-03-05          10
+2007-04-01 2007-04-07          30
+2007-05-01 2007-05-21          10
+>
+
+
+
+On 5/27/07, Albert Pang <albert.pang@mac.com> wrote:
+>
+> Hi all, I have a simple data frame, first list is a list of dates (in
+> "%Y-%m-%d" format) and second list an observation on that particular
+> date.  There might not be observations everyday.  Let's just say
+> there are no observations on saturdays and sundays.  Now I want to
+> select the first observation of every month into a list.  Is there an
+> easy way to do that?
+>
+> Date                    Observation
+> ----                    -----------
+> 2007-05-23              20
+> 2007-05-22              30
+> 2007-05-21              10
+>
+> 2007-04-10              50
+> 2007-04-09              40
+> 2007-04-07              30
+>
+> 2007-03-05              10
+>
+> The result I need is the data frame
+>
+> 2007-05-21              10
+> 2007-04-07              30
+> 2007-03-05              10
+>
+> or I am equally happy with just the vector c(10, 30, 10)
+>
+> I am new to R and after going through the manuals and the
+> documentation I can gather, I have come up with a convoluted way of
+> doing it
+>
+> 1)  I first get the Date into a vector.  (I am articificially
+> reproducing this vector below and call it A)
+>
+> > A<-c( as.Date("2007-05-23"), as.Date("2007-05-22"), as.Date
+> ("2007-05-21"), as.Date("2007-04-10"), as.Date("2007-04-09"), as.Date
+> ("2007-04-07"), as.Date("2007-03-05"))
+> > A
+> [1] "2007-05-23" "2007-05-22" "2007-05-21" "2007-04-10" "2007-04-09"
+> [6] "2007-04-07" "2007-03-05"
+>
+>
+> 2)  use cut with breaks falling on the months
+>
+> > B<-cut(A, breaks="month")
+> > B
+> [1] 2007-05-01 2007-05-01 2007-05-01 2007-04-01 2007-04-01 2007-04-01
+> [7] 2007-03-01
+> Levels: 2007-03-01 2007-04-01 2007-05-01
+>
+>
+> 3)  then split to get a list of vectors group by the boundary of the
+> date
+>
+> > C<-split(A, B)
+> > C
+> $`2007-03-01`
+> [1] "2007-03-05"
+>
+> $`2007-04-01`
+> [1] "2007-04-10" "2007-04-09" "2007-04-07"
+>
+> $`2007-05-01`
+> [1] "2007-05-23" "2007-05-22" "2007-05-21"
+>
+>
+> 4)  in a for loop I loop through the elements within the list (the
+> elements are vectors of dates) with each vector I find the minimum
+> and concatentate it to a final vector D
+>
+> > D<-numeric()
+> > for ( i in 1:length(C)){ D <- c( D, min(C[[i]]))}
+> > class(D)<-"Date"
+> > D
+> [1] "2007-03-05" "2007-04-07" "2007-05-21"
+>
+> Next with D, I then go back and find out the positions of the
+> elements in D within A.  And then use the result as an index vector
+> into the vector of observations (which is not shown here)  I feel
+> sure I am doing it the stupid way (or the procedural way)
+>
+> Is there a more declarative way of doing it?  Any pointers will be
+> greatly appreciated!
+>
+> Thanks a lot in advance,
+>
+> Albert Pang
+>
+>
+>
+>
+>
+>        [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-help@stat.math.ethz.ch mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-help
+> PLEASE do read the posting guide
+> http://www.R-project.org/posting-guide.html
+> and provide commented, minimal, self-contained, reproducible code.
+>
+
+
+
+-- 
+Jim Holtman
+Cincinnati, OH
++1 513 646 9390
+
+What is the problem you are trying to solve?
+
+	[[alternative HTML version deleted]]
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

@@ -1,0 +1,192 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Jun  8 17:48:49 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l58LmnL9002012
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 8 Jun 2007 17:48:49 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 6F6B1163ACC
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri,  8 Jun 2007 21:48:49 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1017)
+	id 566E516384E; Fri,  8 Jun 2007 21:48:11 +0000 (GMT)
+To: samba-cvs@samba.org
+From: obnox@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070608214811.566E516384E@lists.samba.org>
+Date: Fri,  8 Jun 2007 21:48:11 +0000 (GMT)
+Subject: svn commit: samba r23392 - in
+	branches/SAMBA_3_0_26/source/registry: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: obnox
+Date: 2007-06-08 21:48:09 +0000 (Fri, 08 Jun 2007)
+New Revision: 23392
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23392
+
+Log:
+Merge r19841 from SAMBA_3_0.
+(Adapted to the later change in r22935.)
+
+wrap regdb_store_keys and regdb_store_values in tdb transactions
+
+Michael
+
+
+Modified:
+   branches/SAMBA_3_0_26/source/registry/reg_db.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0_26/source/registry/reg_db.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/registry/reg_db.c	2007-06-08 19:58:32 UTC (rev 23391)
++++ branches/SAMBA_3_0_26/source/registry/reg_db.c	2007-06-08 21:48:09 UTC (rev 23392)
+@@ -393,15 +393,20 @@
+ {
+ 	int num_subkeys, i;
+ 	pstring path;
+-	REGSUBKEY_CTR *subkeys, *old_subkeys;
++	REGSUBKEY_CTR *subkeys = NULL, *old_subkeys = NULL;
+ 	char *oldkeyname;
+ 	
++	if ( tdb_transaction_start( tdb_reg ) == -1 ) {
++		DEBUG(0, ("regdb_store_keys: tdb_transaction_start failed\n"));
++		return False;
++	}
++
+ 	/* fetch a list of the old subkeys so we can determine if any were
+ 	 * deleted */
+ 	
+ 	if ( !(old_subkeys = TALLOC_ZERO_P( ctr, REGSUBKEY_CTR )) ) {
+ 		DEBUG(0,("regdb_store_keys: talloc() failure!\n"));
+-		return False;
++		goto fail;
+ 	}
+ 
+ 	regdb_fetch_keys( key, old_subkeys );
+@@ -411,7 +416,7 @@
+ 	if ( !regdb_store_keys_internal( key, ctr ) ) {
+ 		DEBUG(0,("regdb_store_keys: Failed to store new subkey list "
+ 			 "for parent [%s]\n", key ));
+-		return False;
++		goto fail;
+ 	}
+ 	
+ 	/* now delete removed keys */
+@@ -419,15 +424,30 @@
+ 	num_subkeys = regsubkey_ctr_numkeys( old_subkeys );
+ 	for ( i=0; i<num_subkeys; i++ ) {
+ 		oldkeyname = regsubkey_ctr_specific_key( old_subkeys, i );
+-		if ( !regsubkey_ctr_key_exists( ctr, oldkeyname ) ) {
+-			pstr_sprintf( path, "%s%c%s", key, '/', oldkeyname );
+-			normalize_reg_path( path );
+-			tdb_delete_bystring( tdb_reg, path );
+-			pstr_sprintf( path, "%s/%s/%s", VALUE_PREFIX, key,
+-				      oldkeyname );
+-			normalize_reg_path( path );
+-			tdb_delete_bystring( tdb_reg, path );
++
++		if ( regsubkey_ctr_key_exists( ctr, oldkeyname ) ) {
++			/*
++			 * It's still around, don't delete
++			 */
++
++			continue;
+ 		}
++
++		pstr_sprintf( path, "%s/%s", key, oldkeyname );
++		normalize_reg_path( path );
++		if (tdb_delete_bystring( tdb_reg, path ) == -1) {
++			DEBUG(1, ("Deleting %s failed\n", path));
++			goto fail;
++		}
++		
++		pstr_sprintf( path, "%s/%s/%s", VALUE_PREFIX, key,
++			      oldkeyname );
++		normalize_reg_path( path );
++
++		/*
++		 * Ignore errors here, we might have no values around
++		 */
++		tdb_delete_bystring( tdb_reg, path );
+ 	}
+ 
+ 	TALLOC_FREE( old_subkeys );
+@@ -436,12 +456,12 @@
+ 	
+ 	num_subkeys = regsubkey_ctr_numkeys( ctr );
+ 	for ( i=0; i<num_subkeys; i++ ) {
+-		pstr_sprintf( path, "%s%c%s", key, '/',
++		pstr_sprintf( path, "%s/%s", key,
+ 			      regsubkey_ctr_specific_key( ctr, i ) );
+ 
+ 		if ( !(subkeys = TALLOC_ZERO_P( ctr, REGSUBKEY_CTR )) ) {
+ 			DEBUG(0,("regdb_store_keys: talloc() failure!\n"));
+-			return False;
++			goto fail;
+ 		}
+ 
+ 		if ( regdb_fetch_keys( path, subkeys ) == -1 ) {
+@@ -449,15 +469,29 @@
+ 			if ( !regdb_store_keys_internal( path, subkeys ) ) {
+ 				DEBUG(0,("regdb_store_keys: Failed to store "
+ 					 "new record for key [%s]\n", path ));
+-				TALLOC_FREE( subkeys );
+-				return False;
++				goto fail;
+ 			}
+ 		}
+ 
+ 		TALLOC_FREE( subkeys );
+ 	}
+-	
++
++	if (tdb_transaction_commit( tdb_reg ) == -1) {
++		DEBUG(0, ("regdb_store_keys: Could not commit transaction\n"));
++		return False;
++	}
++
+ 	return True;
++
++ fail:
++	TALLOC_FREE( old_subkeys );
++	TALLOC_FREE( subkeys );
++
++	if (tdb_transaction_cancel( tdb_reg ) == -1) {
++		smb_panic("regdb_store_keys: tdb_transaction_cancel failed\n");
++	}
++
++	return False;
+ }
+ 
+ 
+@@ -647,7 +681,7 @@
+ 	pstr_sprintf( keystr, "%s/%s", VALUE_PREFIX, key );
+ 	normalize_reg_path( keystr );
+ 	
+-	ret = tdb_store_bystring(tdb_reg, keystr, data, TDB_REPLACE);
++	ret = tdb_trans_store_bystring(tdb_reg, keystr, data, TDB_REPLACE);
+ 	
+ 	SAFE_FREE( data.dptr );
+ 	
+

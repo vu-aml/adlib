@@ -1,0 +1,2013 @@
+From perl6-all-return-80896-ktwarwic=speedy.uwaterloo.ca@perl.org  Thu Apr 26 11:04:47 2007
+Return-Path: <perl6-all-return-80896-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3QF4c6w013694
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 26 Apr 2007 11:04:39 -0400
+Received: (qmail 30757 invoked by uid 514); 26 Apr 2007 15:04:37 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 30752 invoked from network); 26 Apr 2007 15:04:37 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: Steve Peters (via RT) <parrotbug-followup@parrotcode.org>
+X-RT-NewTicket: yes
+To: bugs-bitbucket@netlabs.develooper.com
+Resent-To: perl6-internals@perl.org
+Mail-Followup-To: perl6-internals@perl.org
+Reply-To: perl6-internals@perl.org
+Date: Thu, 26 Apr 2007 07:43:49 -0700
+Subject: [perl #42746] [PATCH] Continuing Parrot/C++ cleanups 
+In-Reply-To: <20070426144301.GA28589@kirk.peters.homeunix.org>
+References: <RT-Ticket-42746@perl.org> <20070426144301.GA28589@kirk.peters.homeunix.org>
+Message-ID: <rt-3.6.HEAD-1687-1177598630-1339.42746-72-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #42746
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: steve@fisharerojo.org
+MIME-Version: 1.0
+X-RT-Original-Encoding: utf-8
+Content-type: multipart/mixed; boundary="----------=_1177598630-1687-192"
+Resent-Message-Id: <20070426144351.33C122AFD8@x3.develooper.com>
+Resent-Date: Thu, 26 Apr 2007 07:43:51 -0700 (PDT)
+Resent-From: rt-steve=fisharerojo.org@netlabs.develooper.com
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-4.4 required=8.0
+	tests=ALL_TRUSTED,BAYES_00,DK_POLICY_SIGNSOME
+Status: O
+Content-Length: 69013
+Lines: 1956
+
+------------=_1177598630-1687-192
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+# New Ticket Created by  Steve Peters 
+# Please include the string:  [perl #42746]
+# in the subject line of all future correspondence about this issue. 
+# <URL: http://rt.perl.org/rt3/Ticket/Display.html?id=42746 >
+
+
+This patch continues with the void pointer cleanups needed for compiling
+Parrot with a C++ compiler.  This patch finishes up most of the code outside
+of src/pmc, but includes a bit in there as well.  Next step is to take on 
+src/pmc, then work on some platform specific cleanups as well.
+
+Steve Peters
+steve@fisharerojo.org
+
+------------=_1177598630-1687-192
+Content-Type: text/plain; charset="us-ascii"; name="cleanup.diff"
+Content-Disposition: inline; filename="cleanup.diff"
+Content-Transfer-Encoding: 7bit
+RT-Attachment: 42746/252952/111857
+
+Index: src/trace.c
+===================================================================
+--- src/trace.c	(revision 18338)
++++ src/trace.c	(working copy)
+@@ -42,7 +42,7 @@
+ {
+     STRING *class_name;
+     if (PObj_is_class_TEST(pmc)) {
+-        SLOTTYPE * const class_array = PMC_data(pmc);
++        SLOTTYPE * const class_array = (SLOTTYPE *)PMC_data(pmc);
+         PMC * const class_name_pmc = get_attrib_num(class_array,
+                                                     PCD_CLASS_NAME);
+         class_name = PMC_str_val(class_name_pmc);
+@@ -200,7 +200,7 @@
+         }
+ 
+         if (key) {
+-            key = PMC_data(key);
++            key = (PMC *)PMC_data(key);
+             if (key)
+                 len += PIO_eprintf(debugger, ";");
+         }
+Index: src/utils.c
+===================================================================
+--- src/utils.c	(revision 18338)
++++ src/utils.c	(working copy)
+@@ -475,7 +475,7 @@
+        to actually have an array, even if the inbound array is
+        completely empty
+     */
+-    long * const out_array = mem_sys_allocate((sizeof (long)) * (arraylen + 1));
++    long * const out_array = (long *)mem_sys_allocate((sizeof (long)) * (arraylen + 1));
+     out_array[arraylen] = 0;
+     /*    printf("Long array has %i elements\n", arraylen);*/
+     for (cur = 0; cur < arraylen; cur++) {
+@@ -528,7 +528,7 @@
+        to actually have an array, even if the inbound array is
+        completely empty
+     */
+-    char ** const out_array = mem_sys_allocate((sizeof (char *))
++    char ** const out_array = (char **)mem_sys_allocate((sizeof (char *))
+                                                * (arraylen + 1));
+     out_array[arraylen] = 0;
+ 
+Index: src/tsq.c
+===================================================================
+--- src/tsq.c	(revision 18338)
++++ src/tsq.c	(working copy)
+@@ -362,7 +362,7 @@
+ QUEUE*
+ queue_init(UINTVAL prio)
+ {
+-    QUEUE * const queue = mem_sys_allocate(sizeof (QUEUE));
++    QUEUE * const queue = mem_allocate_typed(QUEUE);
+     queue->head = queue->tail = NULL;
+     queue->max_prio = prio;
+     COND_INIT(queue->queue_condition);
+Index: src/hll.c
+===================================================================
+--- src/hll.c	(revision 18338)
++++ src/hll.c	(working copy)
+@@ -267,7 +267,7 @@
+     assert(!PMC_IS_NULL(entry));
+     type_hash = VTABLE_get_pmc_keyed_int(interp, entry, e_HLL_typemap);
+     assert(!PMC_IS_NULL(type_hash));
+-    hash = PMC_struct_val(type_hash);
++    hash = (Hash *)PMC_struct_val(type_hash);
+     parrot_hash_put(interp, hash, (void*)core_type, (void*)hll_type);
+     END_WRITE_HLL_INFO(interp, hll_info);
+ }
+@@ -298,7 +298,7 @@
+     type_hash = VTABLE_get_pmc_keyed_int(interp, entry, e_HLL_typemap);
+     if (PMC_IS_NULL(type_hash))
+         return core_type;
+-    hash = PMC_struct_val(type_hash);
++    hash = (Hash *)PMC_struct_val(type_hash);
+     if (!hash->entries)
+         return core_type;
+     b = parrot_hash_get_bucket(interp, hash, (void*)core_type);
+Index: src/hash.c
+===================================================================
+--- src/hash.c	(revision 18338)
++++ src/hash.c	(working copy)
+@@ -51,7 +51,7 @@
+ /* see also string.c */
+ 
+ static size_t
+-key_hash_STRING(Interp *interp, void *value, size_t seed)
++key_hash_STRING(Interp *interp, STRING *value, size_t seed)
+ {
+     STRING *s = value;
+ 
+@@ -144,7 +144,7 @@
+ */
+ 
+ static int
+-cstring_compare(Parrot_Interp interp, void *a, void *b)
++cstring_compare(Parrot_Interp interp, const char *a, const char *b)
+ {
+     UNUSED(interp);
+     return strcmp(a, b);
+@@ -313,7 +313,7 @@
+         while (b) {
+             switch (hash->key_type) {
+                 case Hash_key_type_STRING:
+-                    io->vtable->push_string(interp, io, b->key);
++                    io->vtable->push_string(interp, io, (STRING *)b->key);
+                     break;
+                 case Hash_key_type_int:
+                     io->vtable->push_integer(interp, io, (INTVAL)b->key);
+@@ -325,7 +325,7 @@
+             }
+             switch (hash->entry_type) {
+                 case enum_hash_pmc:
+-                    (info->visit_pmc_now)(interp, b->value, info);
++                    (info->visit_pmc_now)(interp, (PMC *)b->value, info);
+                     break;
+                 case enum_hash_int:
+                     io->vtable->push_integer(interp, io, (INTVAL)b->value);
+@@ -399,7 +399,7 @@
+     HashBucket **old_bi, **new_bi;
+     HashBucket  *bs, *b, **next_p;
+     void *old_mem;
+-    void *new_mem;
++    HashBucket *new_mem;
+     size_t offset, i, new_loc;
+ 
+     /*
+@@ -417,7 +417,7 @@
+     /*
+      * resize mem
+      */
+-    new_mem = mem_sys_realloc(old_mem, HASH_ALLOC_SIZE(new_size));
++    new_mem = (HashBucket *)mem_sys_realloc(old_mem, HASH_ALLOC_SIZE(new_size));
+     /*
+          +---+---+---+---+---+---+-+-+-+-+-+-+-+-+
+          |  bs       | old_bi    |  new_bi       |
+@@ -507,7 +507,7 @@
+             enum_type_PMC,
+             Hash_key_type_STRING,
+             STRING_compare,     /* STRING compare */
+-            key_hash_STRING);    /*        hash */
++            (hash_hash_key_fn)key_hash_STRING);    /*        hash */
+ }
+ 
+ void
+@@ -517,7 +517,7 @@
+             enum_type_PMC,
+             Hash_key_type_STRING,
+             STRING_compare,     /* STRING compare */
+-            key_hash_STRING);    /*        hash */
++            (hash_hash_key_fn)key_hash_STRING);    /*        hash */
+ }
+ /*
+ 
+@@ -536,8 +536,8 @@
+     parrot_new_hash_x(interp, hptr,
+             enum_type_PMC,
+             Hash_key_type_cstring,
+-            cstring_compare,     /* cstring compare */
+-            key_hash_cstring);    /*        hash */
++            (hash_comp_fn)cstring_compare,     /* cstring compare */
++            (hash_hash_key_fn)key_hash_cstring);    /*        hash */
+ }
+ 
+ /*
+@@ -600,7 +600,7 @@
+      * - use the bucket store and bi inside this structure
+      * - when reallocate copy this part
+      */
+-    bp = mem_sys_allocate(HASH_ALLOC_SIZE(INITIAL_BUCKETS));
++    bp = (HashBucket *)mem_sys_allocate(HASH_ALLOC_SIZE(INITIAL_BUCKETS));
+     hash->free_list = NULL;
+     /* fill free_list from hi addresses so that we can use
+      * buckets[i] directly in an OrderedHash, *if* nothing
+@@ -632,7 +632,7 @@
+         Hash_key_type hkey_type,
+         hash_comp_fn compare, hash_hash_key_fn keyhash)
+ {
+-    Hash *hash = mem_sys_allocate(sizeof (Hash));
++    Hash *hash = mem_allocate_typed(Hash);
+     hash->container = NULL;
+     *hptr = hash;
+     init_hash(interp, hash, val_type, hkey_type,
+@@ -645,7 +645,7 @@
+         Hash_key_type hkey_type,
+         hash_comp_fn compare, hash_hash_key_fn keyhash)
+ {
+-    Hash *hash = mem_sys_allocate(sizeof (Hash));
++    Hash *hash = mem_allocate_typed(Hash);
+     PMC_struct_val(container) = hash;
+     hash->container = container;
+     init_hash(interp, hash, val_type, hkey_type,
+@@ -950,7 +950,7 @@
+                 break;
+ 
+             case enum_type_STRING:
+-                valtmp = string_copy(interp, b->value);
++                valtmp = string_copy(interp, (STRING *)b->value);
+                 break;
+ 
+             case enum_type_PMC:
+Index: src/debug.c
+===================================================================
+--- src/debug.c	(revision 18338)
++++ src/debug.c	(working copy)
+@@ -1545,7 +1545,7 @@
+                     dest[size++] = '?';
+                     break;
+                 }
+-                k = PMC_data(k);
++                k = (PMC *)PMC_data(k);
+                 if (k) dest[size++] = ';';
+             }
+             dest[size++] = ']';
+@@ -1624,7 +1624,7 @@
+         if (space < default_size) {
+             alloced += default_size;
+             space += default_size;
+-            pfile->source = mem_sys_realloc(pfile->source, alloced);
++            pfile->source = (char *)mem_sys_realloc(pfile->source, alloced);
+         }
+ 
+         size = PDB_disassemble_op(interp, pfile->source + pfile->size,
+@@ -1810,7 +1810,7 @@
+     while ((c = fgetc(file)) != EOF) {
+         /* Grow it */
+         if (++size == 1024) {
+-            pfile->source = mem_sys_realloc(pfile->source,
++            pfile->source = (char *)mem_sys_realloc(pfile->source,
+                                             (size_t)pfile->size + 1024);
+             size = 0;
+         }
+@@ -2053,12 +2053,12 @@
+     k = ++interp->code->const_table->const_count;
+     if (interp->code->const_table->constants) {
+         interp->code->const_table->constants =
+-            mem_sys_realloc(interp->code->const_table->constants,
++            (PackFile_Constant **)mem_sys_realloc(interp->code->const_table->constants,
+                             k * sizeof (PackFile_Constant *));
+     }
+     else {
+         interp->code->const_table->constants =
+-            mem_sys_allocate(k * sizeof (PackFile_Constant *));
++            (PackFile_Constant **)mem_sys_allocate(k * sizeof (PackFile_Constant *));
+     }
+ 
+     /* Allocate a new constant */
+@@ -2491,7 +2491,7 @@
+ 
+         if (!gdb_bps) {
+             nr = 0;
+-            newbreak = mem_sys_allocate(sizeof (PDB_breakpoint_t));
++            newbreak = mem_allocate_typed(PDB_breakpoint_t);
+             newbreak->prev = NULL;
+             newbreak->next = NULL;
+             gdb_bps = newbreak;
+@@ -2505,7 +2505,7 @@
+                     break;
+             }
+             ++nr;
+-            newbreak = mem_sys_allocate(sizeof (PDB_breakpoint_t));
++            newbreak = mem_allocate_typed(PDB_breakpoint_t);
+             newbreak->prev = bp;
+             newbreak->next = NULL;
+             bp->next = newbreak;
+Index: src/global.c
+===================================================================
+--- src/global.c	(revision 18338)
++++ src/global.c	(working copy)
+@@ -228,7 +228,7 @@
+     if (PMC_IS_NULL(ns))
+         return PMCNULL;
+ 
+-    return VTABLE_get_pointer_keyed_str(interp, ns, globalname);
++    return (PMC *)VTABLE_get_pointer_keyed_str(interp, ns, globalname);
+ }
+ 
+ void
+@@ -293,7 +293,7 @@
+          * distinguishes 'get_pmc_keyed' from 'get_pointer_keyed';
+          * the former is for NS and the latter is for non-NS.
+          */
+-        res = VTABLE_get_pointer_keyed_str(interp, ns, globalname);
++        res = (PMC *)VTABLE_get_pointer_keyed_str(interp, ns, globalname);
+     }
+ 
+     return PMC_IS_NULL(res) ? NULL : res;
+Index: src/events.c
+===================================================================
+--- src/events.c	(revision 18338)
++++ src/events.c	(working copy)
+@@ -335,7 +335,7 @@
+ void
+ Parrot_schedule_event(Parrot_Interp interp, parrot_event* ev)
+ {
+-    QUEUE_ENTRY* entry = mem_sys_allocate(sizeof (QUEUE_ENTRY));
++    QUEUE_ENTRY* entry = mem_allocate_typed(QUEUE_ENTRY);
+     entry->next = NULL;
+     ev->interp = interp;
+     entry->data = ev;
+@@ -364,10 +364,10 @@
+ static void
+ schedule_signal_event(int signum)
+ {
+-    parrot_event* ev = mem_sys_allocate(sizeof (parrot_event));
++    parrot_event* ev = mem_allocate_typed(parrot_event);
+     QUEUE_ENTRY *entry;
+ 
+-    entry = mem_sys_allocate(sizeof (QUEUE_ENTRY));
++    entry = mem_allocate_typed(QUEUE_ENTRY);
+     entry->next = NULL;
+     entry->type = QUEUE_ENTRY_TYPE_EVENT;
+     ev->type = EVENT_TYPE_SIGNAL;
+@@ -396,7 +396,7 @@
+ Parrot_new_timer_event(Parrot_Interp interp, PMC* timer, FLOATVAL diff,
+         FLOATVAL interval, int repeat, PMC* sub, parrot_event_type_enum typ)
+ {
+-    parrot_event* ev = mem_sys_allocate(sizeof (parrot_event));
++    parrot_event* ev = mem_allocate_typed(parrot_event);
+     FLOATVAL now = Parrot_floatval_time();
+     ev->type = typ;
+     ev->u.timer_event.timer = timer;
+@@ -421,10 +421,10 @@
+ */
+ 
+ void
+-Parrot_new_cb_event(Parrot_Interp interp, PMC* cbi, void* ext)
++Parrot_new_cb_event(Parrot_Interp interp, PMC* cbi, char* ext)
+ {
+-    parrot_event* ev = mem_sys_allocate(sizeof (parrot_event));
+-    QUEUE_ENTRY* entry = mem_sys_allocate(sizeof (QUEUE_ENTRY));
++    parrot_event* ev = mem_allocate_typed(parrot_event);
++    QUEUE_ENTRY* entry = mem_allocate_typed(QUEUE_ENTRY);
+     entry->next = NULL;
+     entry->data = ev;
+     ev->interp = interp;
+@@ -480,7 +480,7 @@
+ void
+ Parrot_new_terminate_event(Parrot_Interp interp)
+ {
+-    parrot_event* ev = mem_sys_allocate(sizeof (parrot_event));
++    parrot_event* ev = mem_allocate_typed(parrot_event);
+     ev->type = EVENT_TYPE_TERMINATE;
+     Parrot_schedule_event(interp, ev);
+ }
+@@ -499,9 +499,9 @@
+ void
+ Parrot_new_suspend_for_gc_event(Parrot_Interp interp) {
+     QUEUE_ENTRY *qe;
+-    parrot_event* ev = mem_sys_allocate(sizeof (parrot_event));
++    parrot_event* ev = mem_allocate_typed(parrot_event);
+     ev->type = EVENT_TYPE_SUSPEND_FOR_GC;
+-    qe = mem_sys_allocate(sizeof (QUEUE_ENTRY));
++    qe = mem_allocate_typed(QUEUE_ENTRY);
+     qe->next = NULL;
+     qe->data = ev;
+     qe->type = QUEUE_ENTRY_TYPE_EVENT;
+@@ -524,7 +524,7 @@
+ void
+ Parrot_kill_event_loop(void)
+ {
+-    parrot_event* ev = mem_sys_allocate(sizeof (parrot_event));
++    parrot_event* ev = mem_allocate_typed(parrot_event);
+     ev->type = EVENT_TYPE_EVENT_TERMINATE;
+     Parrot_schedule_event(NULL, ev);
+ }
+@@ -667,12 +667,12 @@
+ store_io_event(pending_io_events *ios, parrot_event *ev)
+ {
+     if (!ios->alloced) {
+-        ios->events = mem_sys_allocate(16 * sizeof (ev));
++        ios->events = (parrot_event **)mem_sys_allocate(16 * sizeof (ev));
+         ios->alloced = 16;
+     }
+     else if (ios->n == ios->alloced - 1) {
+         ios->alloced <<= 1;
+-        ios->events = mem_sys_realloc(ios->events, (ios->alloced * sizeof (ev)));
++        ios->events = (parrot_event **)mem_sys_realloc(ios->events, (ios->alloced * sizeof (ev)));
+     }
+     ios->events[ios->n++] = ev;
+ }
+@@ -847,7 +847,7 @@
+     parrot_event *event;
+     io_thread_msg buf;
+ 
+-    event = mem_sys_allocate(sizeof (parrot_event));
++    event = mem_allocate_typed(parrot_event);
+     event->type        = EVENT_TYPE_IO;
+     event->interp      = interp;
+     /*
+@@ -891,10 +891,10 @@
+     parrot_event *event;
+     QUEUE_ENTRY *new_entry;
+ 
+-    new_entry = mem_sys_allocate(sizeof (QUEUE_ENTRY));
++    new_entry = mem_allocate_typed(QUEUE_ENTRY);
+     new_entry->next = NULL;
+     new_entry->type = entry->type;
+-    event = new_entry->data = mem_sys_allocate(sizeof (parrot_event));
++    event = new_entry->data = mem_allocate_typed(parrot_event);
+     mem_sys_memcopy(event, entry->data, sizeof (parrot_event));
+     return new_entry;
+ }
+Index: src/packout.c
+===================================================================
+--- src/packout.c	(revision 18338)
++++ src/packout.c	(working copy)
+@@ -243,12 +243,12 @@
+         break;
+ 
+     case PFC_KEY:
+-        for (i = 0, key = self->u.key; key; key = PMC_data(key), i++)
++        for (i = 0, key = self->u.key; key; key = (PMC *)PMC_data(key), i++)
+             ;
+         /* number of key components */
+         *cursor++ = i;
+         /* and now type / value per component */
+-        for (key = self->u.key; key; key = PMC_data(key)) {
++        for (key = self->u.key; key; key = (PMC *)PMC_data(key)) {
+             opcode_t type = PObj_get_FLAGS(key);
+             slice_bits = 0;
+             if ((type & (KEY_start_slice_FLAG|KEY_inf_slice_FLAG)) ==
+Index: src/pic.c
+===================================================================
+--- src/pic.c	(revision 18338)
++++ src/pic.c	(working copy)
+@@ -137,7 +137,7 @@
+         poly = 2 * sizeof (Parrot_PIC);
+     size = n * sizeof (Parrot_MIC) + poly + sizeof (Parrot_PIC_store);
+ 
+-    store = mem_sys_allocate_zeroed(size);
++    store = (Parrot_PIC_store *)mem_sys_allocate_zeroed(size);
+     SET_NULL_P(store->prev, Parrot_PIC_store*);
+     cs->pic_store = store;
+ 
+@@ -212,7 +212,7 @@
+             (size_t)(store->n_mics * POLYMORPHIC) * sizeof (Parrot_PIC);
+         if (size == 0)
+             size = 2 * sizeof (Parrot_PIC);
+-        new_store = mem_sys_allocate_zeroed(size + sizeof (Parrot_PIC_store));
++        new_store = (Parrot_PIC_store *)mem_sys_allocate_zeroed(size + sizeof (Parrot_PIC_store));
+         new_store->prev = store;
+         interp->code->pic_store = new_store;
+ 
+Index: src/pmc.c
+===================================================================
+--- src/pmc.c	(revision 18338)
++++ src/pmc.c	(working copy)
+@@ -191,7 +191,7 @@
+          *
+          * - singletons are created in the constant pmc pool
+          */
+-        pmc = (vtable->get_pointer)(interp, NULL);
++        pmc = (PMC *)(vtable->get_pointer)(interp, NULL);
+         /* LOCK */
+         if (!pmc) {
+             pmc = new_pmc_header(interp, PObj_constant_FLAG);
+@@ -404,7 +404,7 @@
+     PMC * const classname_hash = interp->class_hash;
+     PMC *item;
+ 
+-    item = VTABLE_get_pointer_keyed_str(interp, classname_hash, name);
++    item = (PMC *)VTABLE_get_pointer_keyed_str(interp, classname_hash, name);
+     /* nested namespace with same name */
+     if (item->vtable->base_type == enum_class_NameSpace)
+         return 0;
+@@ -419,7 +419,7 @@
+     PMC * const classname_hash = interp->class_hash;
+     PMC *item;
+ 
+-    item = VTABLE_get_pointer_keyed(interp, classname_hash, name);
++    item = (PMC *)VTABLE_get_pointer_keyed(interp, classname_hash, name);
+     if (!PMC_IS_NULL(item))
+         return PMC_int_val((PMC*) item);
+     return 0;
+@@ -458,7 +458,7 @@
+     }
+     _class->pmc_ext = NULL;
+     DOD_flag_CLEAR(is_special_PMC, _class);
+-    PMC_pmc_val(_class)   = (void*)0xdeadbeef;
++    PMC_pmc_val(_class)   = (PMC *)0xdeadbeef;
+     PMC_struct_val(_class)= (void*)0xdeadbeef;
+ 
+     PObj_is_PMC_shared_CLEAR(_class);
+Index: src/key.c
+===================================================================
+--- src/key.c	(revision 18338)
++++ src/key.c	(working copy)
+@@ -414,7 +414,7 @@
+ {
+     if (!key->pmc_ext)
+         return NULL;
+-    return PMC_data(key);
++    return (PMC *)PMC_data(key);
+ }
+ 
+ /*
+@@ -439,7 +439,7 @@
+     PMC *tail = key1;
+ 
+     while (PMC_data(tail)) {
+-        tail = PMC_data(tail);
++        tail = (PMC *)PMC_data(tail);
+     }
+ 
+     PMC_data(tail) = key2;
+@@ -496,7 +496,7 @@
+     STRING *quote = string_from_cstring(interp, "'", 1);
+     STRING *value = string_from_cstring(interp, "[ ", 2);
+ 
+-    for (; key; key = PMC_data(key)) {
++    for (; key; key = (PMC *)PMC_data(key)) {
+         switch (PObj_get_FLAGS(key) & KEY_type_FLAGS) {
+             case KEY_integer_FLAG:
+                 string_append(interp, value, string_from_int(interp, PMC_int_val(key)));
+Index: src/inter_run.c
+===================================================================
+--- src/inter_run.c	(revision 18338)
++++ src/inter_run.c	(working copy)
+@@ -223,7 +223,7 @@
+ 
+ /*
+ 
+-=item C<void *
++=item C<PMC *
+ Parrot_runops_fromc_args(Parrot_Interp interp, PMC *sub,
+         const char *sig, ...)>
+ 
+@@ -293,7 +293,7 @@
+     return set_retval(interp, 0, ctx);
+ }
+ 
+-void *
++PMC *
+ Parrot_runops_fromc_args(Parrot_Interp interp, PMC *sub,
+         const char *sig, ...)
+ {
+@@ -303,7 +303,7 @@
+     va_start(args, sig);
+     ctx = runops_args(interp, sub, PMCNULL, NULL, sig, args);
+     va_end(args);
+-    return set_retval(interp, *sig, ctx);
++    return (PMC *)set_retval(interp, *sig, ctx);
+ }
+ 
+ void *
+Index: src/string.c
+===================================================================
+--- src/string.c	(revision 18338)
++++ src/string.c	(working copy)
+@@ -253,7 +253,7 @@
+             interp->parent_interpreter->const_cstring_table;
+         return;
+     }
+-    interp->const_cstring_table = mem_sys_allocate(sizeof (STRING*) *
++    interp->const_cstring_table = (STRING**)mem_sys_allocate(sizeof (STRING*) *
+         sizeof (parrot_cstrings)/sizeof (parrot_cstrings[0]));
+     for (i = 0; i < sizeof (parrot_cstrings)/sizeof (parrot_cstrings[0]); ++i) {
+         interp->const_cstring_table[i] =
+@@ -477,7 +477,7 @@
+ 
+ STRING *
+ string_from_cstring(Interp *interp,
+-    const void *buffer, UINTVAL len)
++    const char *buffer, UINTVAL len)
+ {
+     return string_make_direct(interp, buffer, len ? len :
+             buffer ? strlen(buffer) : 0,
+@@ -495,7 +495,7 @@
+ 
+ STRING *
+ string_from_const_cstring(Interp *interp,
+-    const void *buffer, UINTVAL len)
++    const char *buffer, UINTVAL len)
+ {
+     return string_make_direct(interp, buffer, len ? len :
+             buffer ? strlen(buffer) : 0,
+@@ -574,7 +574,7 @@
+ */
+ 
+ STRING *
+-string_make(Interp *interp, const void *buffer,
++string_make(Interp *interp, const char *buffer,
+     UINTVAL len, const char *charset_name, UINTVAL flags)
+ {
+     ENCODING *encoding;
+@@ -595,7 +595,7 @@
+ }
+ 
+ STRING *
+-string_make_direct(Interp *interp, const void *buffer,
++string_make_direct(Interp *interp, const char *buffer,
+         UINTVAL len, ENCODING *encoding, CHARSET *charset, UINTVAL flags)
+ {
+     STRING * const s = new_string_header(interp, flags);
+@@ -614,7 +614,7 @@
+            it was safe by setting PObj_external_FLAG.
+            (The cast is necessary to pacify TenDRA's tcc.)
+            */
+-        PObj_bufstart(s) = s->strstart = const_cast(buffer);
++        PObj_bufstart(s) = s->strstart = (char *)const_cast(buffer);
+         PObj_buflen(s)   = s->bufused = len;
+         if (encoding == Parrot_fixed_8_encoding_ptr)
+             s->strlen = len;
+@@ -726,8 +726,8 @@
+ 
+     saneify_string(s);
+     saneify_string(s2);
+-    src = const_cast(s);
+-    search = const_cast(s2);
++    src = (STRING *)const_cast(s);
++    search = (STRING *)const_cast(s2);
+ 
+     return CHARSET_INDEX(interp, src, search, start);
+ }
+@@ -1792,7 +1792,7 @@
+          * XXX C99 atof interpreters 0x prefix
+          * XXX would strtod() be better for detecting malformed input?
+          */
+-        char * const cstr = string_to_cstring(interp, const_cast(s));
++        char * const cstr = string_to_cstring(interp, (STRING *)const_cast(s));
+         const char *p = cstr;
+         while (isspace(*p))
+             p++;
+@@ -1863,7 +1863,7 @@
+     if (s == NULL) {
+         return NULL;
+     }
+-    p = mem_sys_allocate(s->bufused + 1);
++    p = (char *)mem_sys_allocate(s->bufused + 1);
+     memcpy(p, s->strstart, s->bufused);
+     p[s->bufused] = 0;
+     return p;
+@@ -1896,7 +1896,7 @@
+ void
+ string_pin(Interp *interp, STRING * s)
+ {
+-    void *memory;
++    char *memory;
+     INTVAL size;
+ 
+     /* XXX -lt: COW strings have the external_FLAG set, so this will
+@@ -1905,7 +1905,7 @@
+      */
+     Parrot_unmake_COW(interp, s);
+     size = PObj_buflen(s);
+-    memory = mem_sys_allocate(size);
++    memory = (char *)mem_sys_allocate(size);
+     mem_sys_memcopy(memory, PObj_bufstart(s), size);
+     PObj_bufstart(s) = memory;
+     s->strstart = memory;
+@@ -2215,7 +2215,7 @@
+ string_upcase(Interp *interp, const STRING *s)
+ {
+     DECL_CONST_CAST;
+-    STRING * const dest = string_copy(interp, const_cast(s));
++    STRING * const dest = string_copy(interp, (STRING *)const_cast(s));
+     string_upcase_inplace(interp, dest);
+     return dest;
+ }
+@@ -2248,7 +2248,7 @@
+ string_downcase(Interp *interp, const STRING *s)
+ {
+     DECL_CONST_CAST;
+-    STRING * const dest = string_copy(interp, const_cast(s));
++    STRING * const dest = string_copy(interp, (STRING *)const_cast(s));
+     string_downcase_inplace(interp, dest);
+     return dest;
+ }
+@@ -2287,7 +2287,7 @@
+ string_titlecase(Interp *interp, const STRING *s)
+ {
+     DECL_CONST_CAST;
+-    STRING * const dest = string_copy(interp, const_cast(s));
++    STRING * const dest = string_copy(interp, (STRING *)const_cast(s));
+     string_titlecase_inplace(interp, dest);
+     return dest;
+ }
+Index: src/headers.c
+===================================================================
+--- src/headers.c	(revision 18338)
++++ src/headers.c	(working copy)
+@@ -48,7 +48,7 @@
+ static void *
+ get_free_buffer(Interp *interp, Small_Object_Pool *pool)
+ {
+-    PObj *buffer = pool->get_free_object(interp, pool);
++    PObj *buffer = (PObj *)pool->get_free_object(interp, pool);
+ 
+     /* don't mess around with flags */
+     PObj_bufstart(buffer) = NULL;
+@@ -180,7 +180,7 @@
+     /* Expand the array of sized resource pools, if necessary */
+     if (num_old <= idx) {
+         UINTVAL num_new = idx + 1;
+-        sized_pools = mem_internal_realloc(sized_pools,
++        sized_pools = (Small_Object_Pool **)mem_internal_realloc(sized_pools,
+                                            num_new * sizeof (void *));
+         memset(sized_pools + num_old, 0, sizeof (void *) * (num_new - num_old));
+ 
+@@ -237,7 +237,7 @@
+     pool = flags & PObj_constant_FLAG ?
+         interp->arena_base->constant_pmc_pool :
+         interp->arena_base->pmc_pool;
+-    pmc = pool->get_free_object(interp, pool);
++    pmc = (PMC *)pool->get_free_object(interp, pool);
+     /* clear flags, set is_PMC_FLAG */
+     if (flags & PObj_is_PMC_EXT_FLAG) {
+         flags |= PObj_is_special_PMC_FLAG;
+@@ -271,14 +271,14 @@
+ new_pmc_ext(Interp *interp)
+ {
+     Small_Object_Pool *pool = interp->arena_base->pmc_ext_pool;
+-    void *ptr;
++    PMC_EXT *ptr;
+     /*
+      * can't use normal get_free_object--PMC_EXT doesn't have flags
+      * it isn't a Buffer
+      */
+     if (!pool->free_list)
+         (*pool->more_objects) (interp, pool);
+-    ptr = pool->free_list;
++    ptr = (PMC_EXT *)pool->free_list;
+     pool->free_list = *(void **)ptr;
+     memset(ptr, 0, sizeof (PMC_EXT));
+     return ptr;
+@@ -328,7 +328,7 @@
+     if (!PObj_is_PMC_EXT_TEST(pmc)) {
+         add_pmc_ext(interp, pmc);
+     }
+-    PMC_sync(pmc) = mem_internal_allocate(sizeof (*PMC_sync(pmc)));
++    PMC_sync(pmc) = (struct _Sync *)mem_internal_allocate(sizeof (*PMC_sync(pmc)));
+     PMC_sync(pmc)->owner = interp;
+     MUTEX_INIT(PMC_sync(pmc)->pmc_lock);
+ }
+@@ -347,8 +347,7 @@
+ STRING *
+ new_string_header(Interp *interp, UINTVAL flags)
+ {
+-    STRING *string;
+-    string = get_free_buffer(interp, (flags & PObj_constant_FLAG)
++    STRING *string = (STRING *)get_free_buffer(interp, (flags & PObj_constant_FLAG)
+             ? interp->arena_base->constant_string_header_pool :
+             interp->arena_base->string_header_pool);
+     PObj_get_FLAGS(string) |= flags | PObj_is_string_FLAG|PObj_is_COWable_FLAG;
+@@ -370,7 +369,7 @@
+ Buffer *
+ new_buffer_header(Interp *interp)
+ {
+-    return get_free_buffer(interp,
++    return (Buffer *)get_free_buffer(interp,
+             interp->arena_base->buffer_header_pool);
+ }
+ 
+@@ -765,7 +764,7 @@
+     size_t nm;
+     for (cur_arena = pool->last_Arena;
+             NULL != cur_arena; cur_arena = cur_arena->prev) {
+-        Buffer *b = cur_arena->start_objects;
++        Buffer *b = (Buffer *)cur_arena->start_objects;
+ 
+         for (i = nm = 0; i < cur_arena->used; i++) {
+             if (PObj_on_free_list_TEST(b))
+Index: src/stack_common.c
+===================================================================
+--- src/stack_common.c	(revision 18338)
++++ src/stack_common.c	(working copy)
+@@ -63,7 +63,7 @@
+     item_size &= ~7;    /* round up to 8 so that the chunk is aligned at
+                            the same size - the aligned MMX memcpy needs it */
+     make_bufferlike_pool(interp, item_size);
+-    chunk = new_bufferlike_header(interp, item_size);
++    chunk = (Stack_Chunk_t *)new_bufferlike_header(interp, item_size);
+     chunk->prev = chunk;        /* mark the top of the stack */
+     chunk->name = name;
+     chunk->size = item_size;    /* TODO store the pool instead the size */
+@@ -86,7 +86,7 @@
+ {
+     Small_Object_Pool * const pool =
+         get_bufferlike_pool(interp, chunk->size);
+-    Stack_Chunk_t * const new_chunk = pool->get_free_object(interp, pool);
++    Stack_Chunk_t * const new_chunk = (Stack_Chunk_t *)pool->get_free_object(interp, pool);
+ 
+     PObj_bufstart(new_chunk) = NULL;
+     PObj_buflen(new_chunk) = 0;
+Index: src/global_setup.c
+===================================================================
+--- src/global_setup.c	(revision 18338)
++++ src/global_setup.c	(working copy)
+@@ -76,7 +76,7 @@
+     {
+         STRING *config_string =
+             string_make_direct(interp,
+-                               parrot_config_stored, parrot_config_size_stored,
++                               (const char *)parrot_config_stored, parrot_config_size_stored,
+                                PARROT_DEFAULT_ENCODING, PARROT_DEFAULT_CHARSET,
+                                PObj_external_FLAG|PObj_constant_FLAG);
+ 
+Index: src/inter_cb.c
+===================================================================
+--- src/inter_cb.c	(revision 18338)
++++ src/inter_cb.c	(working copy)
+@@ -119,7 +119,7 @@
+ 
+ /*
+ 
+-=item C<static void verify_CD(void *external_data, PMC *user_data)>
++=item C<static void verify_CD(char *external_data, PMC *user_data)>
+ 
+ Verify user_data PMC then continue with callback_CD
+ 
+@@ -127,10 +127,10 @@
+ 
+ */
+ 
+-static void callback_CD(Parrot_Interp, void *, PMC *user_data);
++static void callback_CD(Parrot_Interp, char *, PMC *user_data);
+ 
+ static void
+-verify_CD(void *external_data, PMC *user_data)
++verify_CD(char *external_data, PMC *user_data)
+ {
+     Parrot_Interp interp = NULL;
+     size_t i;
+@@ -194,7 +194,7 @@
+ */
+ 
+ static void
+-callback_CD(Parrot_Interp interp, void *external_data, PMC *user_data)
++callback_CD(Parrot_Interp interp, char *external_data, PMC *user_data)
+ {
+ 
+     PMC *passed_interp;       /* the interp that originated the CB */
+@@ -257,7 +257,7 @@
+ 
+ void
+ Parrot_run_callback(Parrot_Interp interp,
+-                    PMC* user_data, void* external_data)
++                    PMC* user_data, char* external_data)
+ {
+     PMC *    signature;
+     PMC *    sub;
+@@ -351,13 +351,13 @@
+ */
+ 
+ void
+-Parrot_callback_C(void *external_data, PMC *user_data)
++Parrot_callback_C(char *external_data, PMC *user_data)
+ {
+     verify_CD(external_data, user_data);
+ }
+ 
+ void
+-Parrot_callback_D(PMC *user_data, void *external_data)
++Parrot_callback_D(PMC *user_data, char *external_data)
+ {
+     verify_CD(external_data, user_data);
+ }
+Index: src/objects.c
+===================================================================
+--- src/objects.c	(revision 18338)
++++ src/objects.c	(working copy)
+@@ -72,7 +72,7 @@
+     int j;
+ 
+     for (j = 0; j < k; ++j) {
+-        STRING *ns_key = parrot_hash_get_idx(interp, PMC_struct_val(ns), key);
++        STRING *ns_key = (STRING *)parrot_hash_get_idx(interp, (Hash *)PMC_struct_val(ns), key);
+         PMC    *res    = VTABLE_get_pmc_keyed_str(interp, ns, ns_key);
+ 
+         /* success if matching vtable index or double-underscored name */
+@@ -314,7 +314,7 @@
+             continue;
+ 
+         /* strip underscores from method name */
+-        meth_str.strstart = const_cast(meth + 2);
++        meth_str.strstart = (char *)const_cast(meth + 2);
+         meth_str.strlen   = meth_str.bufused = strlen(meth) - 2;
+         meth_str.hashval  = 0;
+ 
+Index: src/packfile/pf_items.c
+===================================================================
+--- src/packfile/pf_items.c	(revision 18338)
++++ src/packfile/pf_items.c	(working copy)
+@@ -521,7 +521,7 @@
+ 
+ 
+     charset_name = Parrot_charset_c_name(interp, charset_nr);
+-    s = string_make(interp, *cursor, size, charset_name, flags);
++    s = string_make(interp, (char *)*cursor, size, charset_name, flags);
+ 
+ #if TRACE_PACKFILE
+     PIO_eprintf(NULL, "PF_fetch_string(): string is: ");
+@@ -634,7 +634,7 @@
+ PF_fetch_cstring(PackFile *pf, opcode_t **cursor)
+ {
+     size_t str_len = strlen ((char *)(*cursor)) + 1;
+-    char *p = mem_sys_allocate(str_len);
++    char *p = (char *)mem_sys_allocate(str_len);
+ 
+     if (p) {
+         int wordsize = pf->header->wordsize;
+Index: src/pmc/string.pmc
+===================================================================
+--- src/pmc/string.pmc	(revision 18338)
++++ src/pmc/string.pmc	(working copy)
+@@ -845,7 +845,7 @@
+         if (src->charset != Parrot_ascii_charset_ptr)
+             real_exception(interp, NULL, INVALID_ENCODING,
+                 "Can't translate non-ascii");
+-        p = src->strstart;
++        p = (unsigned char *)src->strstart;
+         /* TODO verify trans table */
+         tr_data = PMC_data(table);    /* XXX */
+         for (i = 0; i < len; ++i, ++p) {
+@@ -876,7 +876,7 @@
+         if (src->charset != Parrot_ascii_charset_ptr)
+             real_exception(interp, NULL, INVALID_ENCODING,
+                 "Can't reverse non-ascii");
+-        p = src->strstart;
++        p = (unsigned char *)src->strstart;
+         for (i = 0, --len; i < len; ++i, --len) {
+             ch = p[len];
+             p[len] = p[i];
+@@ -908,7 +908,7 @@
+                 "Can't is_integer non-ascii");
+ 
+         i = 0;
+-        p = src->strstart;
++        p = (unsigned char *)src->strstart;
+ 
+         if (p[i] == '-' || p[i] == '+' ||
+             (p[i] >= '0' && p[i] <= '9')) {
+Index: src/pmc/coroutine.pmc
+===================================================================
+--- src/pmc/coroutine.pmc	(revision 18338)
++++ src/pmc/coroutine.pmc	(working copy)
+@@ -146,7 +146,7 @@
+              */
+             ccont = INTERP->current_cont;
+             if (ccont == NEED_CONTINUATION) {
+-                ccont = new_ret_continuation_pmc(interp, next);
++                ccont = (PMC *)new_ret_continuation_pmc(interp, next);
+             }
+             if (PObj_get_FLAGS(ccont) & SUB_FLAG_TAILCALL) {
+                 real_exception(INTERP, NULL, E_Exception,
+@@ -226,7 +226,7 @@
+ 
+         /* toggle address */
+         dest = co->address;
+-        co->address = next;
++        co->address = (opcode_t *)next;
+         if (INTERP->code != wanted_seg) {
+             Parrot_switch_to_cs(INTERP, wanted_seg, 1);
+         }
+Index: src/pmc/tqueue.pmc
+===================================================================
+--- src/pmc/tqueue.pmc	(revision 18338)
++++ src/pmc/tqueue.pmc	(working copy)
+@@ -176,7 +176,7 @@
+ */
+ 
+     void push_pmc(PMC *item) {
+-        QUEUE_ENTRY* entry = mem_sys_allocate(sizeof (QUEUE_ENTRY));
++        QUEUE_ENTRY* entry = mem_allocate_typed(QUEUE_ENTRY);
+         QUEUE *queue = PMC_data(SELF);
+ 
+         /*
+Index: src/pmc/nci.pmc
+===================================================================
+--- src/pmc/nci.pmc	(revision 18338)
++++ src/pmc/nci.pmc	(working copy)
+@@ -174,7 +174,7 @@
+             cont = CONTEXT(interp->ctx)->current_cont;
+             next = VTABLE_invoke(INTERP, cont, next);
+         }
+-        return next;
++        return (opcode_t *)next;
+     }
+ 
+ /*
+Index: src/pmc/parrotio.pmc
+===================================================================
+--- src/pmc/parrotio.pmc	(revision 18338)
++++ src/pmc/parrotio.pmc	(working copy)
+@@ -61,7 +61,7 @@
+ 
+     METHOD PMC* open(STRING* file, STRING *mode, STRING* layer) {
+         ParrotIOLayer *l;
+-        const char *c_file, *c_mode, *c_layer;
++        char *c_file, *c_mode, *c_layer;
+         PMC *pio;
+ 
+         c_file  = string_to_cstring(INTERP, file);
+@@ -77,7 +77,7 @@
+         if (!pio || !PMC_struct_val(pio))
+             return pmc_new(INTERP, enum_class_Undef);
+         if (l) {
+-            ParrotIO *io = PMC_data(pio);
++            ParrotIO *io = (ParrotIO *)PMC_data(pio);
+             int is_mmap = strcmp(c_layer, "mmap") == 0;
+             /*
+              * XXX move this into the layer
+@@ -152,7 +152,7 @@
+ */
+ 
+     METHOD INTVAL set_readline_interactive(INTVAL on) {
+-        ParrotIO *io = PMC_data(SELF);
++        ParrotIO *io = (ParrotIO *)PMC_data(SELF);
+ #ifdef PARROT_HAS_READLINE
+         INTVAL flag;
+ #endif
+@@ -175,7 +175,7 @@
+     }
+ 
+     METHOD PMC* readline(STRING* prompt) {
+-        ParrotIO *io = PMC_data(SELF);
++        ParrotIO *io = (ParrotIO *)PMC_data(SELF);
+         PMC *pmc_res = NULL;
+         STRING *res = NULL;
+         UINTVAL len;
+@@ -344,7 +344,7 @@
+ */
+ 
+     void destroy() {
+-        ParrotIO *io = PMC_data(SELF);
++        ParrotIO *io = (ParrotIO *)PMC_data(SELF);
+         if (io) {
+             /* shared filehandles will only get flushed */
+             if (io->flags & PIO_F_SHARED) {
+@@ -404,7 +404,7 @@
+ */
+ 
+     STRING* get_string_keyed_int(INTVAL n) {
+-        ParrotIO *io = PMC_data(SELF);
++        ParrotIO *io = (ParrotIO *)PMC_data(SELF);
+         ParrotIOLayer *layer;
+         if (!io)
+             return const_string(INTERP, "");
+Index: src/vtables.c
+===================================================================
+--- src/vtables.c	(revision 18338)
++++ src/vtables.c	(working copy)
+@@ -32,7 +32,7 @@
+ VTABLE *
+ Parrot_new_vtable(Parrot_Interp interp)
+ {
+-    return mem_sys_allocate_zeroed(sizeof (VTABLE));
++    return mem_allocate_zeroed_typed(VTABLE);
+ }
+ 
+ /*
+@@ -53,7 +53,7 @@
+ VTABLE *
+ Parrot_clone_vtable(Parrot_Interp interp, const VTABLE *base_vtable)
+ {
+-    VTABLE * const new_vtable = mem_sys_allocate(sizeof (VTABLE));
++    VTABLE * const new_vtable = mem_allocate_typed(VTABLE);
+     if (new_vtable) {
+         memcpy(new_vtable, base_vtable, sizeof (VTABLE));
+     }
+@@ -78,7 +78,7 @@
+ parrot_alloc_vtables(Interp *interp)
+ {
+     interp->vtables =
+-        mem_sys_allocate_zeroed(sizeof (VTABLE *) * PARROT_MAX_CLASSES);
++        (VTABLE **)mem_sys_allocate_zeroed(sizeof (VTABLE *) * PARROT_MAX_CLASSES);
+     interp->n_vtable_max = enum_class_core_max;
+     interp->n_vtable_alloced = PARROT_MAX_CLASSES;
+ }
+@@ -92,7 +92,7 @@
+     const INTVAL new_max = interp->n_vtable_alloced + 16;
+     const INTVAL new_size = new_max * sizeof (VTABLE *);
+     INTVAL i;
+-    interp->vtables = mem_sys_realloc(interp->vtables, new_size);
++    interp->vtables = (VTABLE **)mem_sys_realloc(interp->vtables, new_size);
+     /* Should set all the empty slots to the null PMC's
+        vtable pointer */
+     for (i = interp->n_vtable_max; i < new_max; ++i)
+Index: src/library.c
+===================================================================
+--- src/library.c	(revision 18338)
++++ src/library.c	(working copy)
+@@ -387,7 +387,7 @@
+             *prefix_str = const_string(interp, pwd);
+             return NULL;
+         }
+-        ret = mem_sys_allocate(3);
++        ret = (char *)mem_sys_allocate(3);
+         strcpy(ret, pwd);
+         return ret;
+     }
+Index: src/thread.c
+===================================================================
+--- src/thread.c	(revision 18338)
++++ src/thread.c	(working copy)
+@@ -353,14 +353,14 @@
+     PMC             *sub_arg;
+     PMC * const      self    = (PMC*) arg;
+     PMC             *ret_val = NULL;
+-    Parrot_Interp    interp  = PMC_data(self);
++    Parrot_Interp    interp  = (Parrot_Interp)PMC_data(self);
+ 
+     Parrot_block_DOD(interp);
+     Parrot_block_GC(interp);
+ 
+     /* need to set it here because argument passing can trigger GC */
+     interp->lo_var_ptr = &lo_var_ptr;
+-    sub                = PMC_struct_val(self);
++    sub                = (PMC *)PMC_struct_val(self);
+     sub_arg            = PMC_pmc_val(self);
+ 
+     if (setjmp(exp.destination)) {
+@@ -551,7 +551,7 @@
+ {
+     PMC *old_dest_interp;
+     PMC *parent;
+-    Parrot_Interp interpreter = PMC_data(dest_interp);
++    Parrot_Interp interpreter = (Parrot_Interp)PMC_data(dest_interp);
+ 
+     Parrot_block_GC(interpreter);
+     Parrot_block_DOD(interpreter);
+@@ -583,7 +583,7 @@
+      * TODO check if thread flags are consistent
+      */
+     if (interp->flags & PARROT_THR_COPY_INTERP)
+-        clone_interpreter(interpreter, PMC_data(parent), PARROT_CLONE_DEFAULT);
++        clone_interpreter(interpreter, (Parrot_Interp)PMC_data(parent), PARROT_CLONE_DEFAULT);
+     /*
+      * TODO thread pools
+      */
+@@ -1070,7 +1070,7 @@
+          !(interp->thread_data->state & THREAD_STATE_NOT_STARTED)) ||
+             interp->thread_data->state == THREAD_STATE_FINISHED) {
+         void *raw_retval = NULL;
+-        PMC  *retval;
++        PMC *retval;
+ 
+         interp->thread_data->state |= THREAD_STATE_JOINED;
+ 
+@@ -1082,7 +1082,7 @@
+         UNLOCK(interpreter_array_mutex);
+         JOIN(interp->thread_data->thread, raw_retval);
+ 
+-        retval = raw_retval;
++        retval = (PMC *)raw_retval;
+         /*
+          * we need to push a cleanup handler here: if cloning
+          * of the retval fails (e.g. it's a NULLPMC) this lock
+@@ -1320,7 +1320,7 @@
+         interpreter_array[0] = interp;
+         n_interpreters       = 1;
+ 
+-        shared_gc_info       = mem_sys_allocate_zeroed(sizeof(*shared_gc_info));
++        shared_gc_info = (Shared_gc_info *)mem_sys_allocate_zeroed(sizeof(*shared_gc_info));
+         COND_INIT(shared_gc_info->gc_cond);
+         PARROT_ATOMIC_INT_INIT(shared_gc_info->gc_block_level);
+         PARROT_ATOMIC_INT_SET(shared_gc_info->gc_block_level, 0);
+@@ -1335,7 +1335,7 @@
+     }
+ 
+ 
+-    new_interp->thread_data = mem_sys_allocate_zeroed(sizeof (Thread_data));
++    new_interp->thread_data = mem_allocate_zeroed_typed(Thread_data);
+     INTERPRETER_LOCK_INIT(new_interp);
+     running_threads++;
+     if (Interp_debug_TEST(interp, PARROT_THREAD_DEBUG_FLAG))
+@@ -1353,7 +1353,7 @@
+     }
+ 
+     /* need to resize */
+-    interpreter_array = mem_sys_realloc(interpreter_array,
++    interpreter_array = (Interp **)mem_sys_realloc(interpreter_array,
+             (n_interpreters + 1) * sizeof (Interp *));
+ 
+     interpreter_array[n_interpreters] = new_interp;
+Index: src/mmd.c
+===================================================================
+--- src/mmd.c	(revision 18338)
++++ src/mmd.c	(working copy)
+@@ -539,12 +539,12 @@
+     if (func_nr >= (INTVAL)interp->n_binop_mmd_funcs) {
+         if (interp->binop_mmd_funcs) {
+             interp->binop_mmd_funcs =
+-                mem_sys_realloc(interp->binop_mmd_funcs,
++                (MMD_table *)mem_sys_realloc(interp->binop_mmd_funcs,
+                                 (func_nr + 1) * sizeof (MMD_table));
+         }
+         else {
+             interp->binop_mmd_funcs =
+-                mem_sys_allocate((func_nr + 1) * sizeof (MMD_table));
++                (MMD_table *)mem_sys_allocate((func_nr + 1) * sizeof (MMD_table));
+         }
+ 
+         for (i = interp->n_binop_mmd_funcs; i <= func_nr; ++i)  {
+@@ -594,7 +594,7 @@
+ 
+     /* First, fill in the whole new table with the default function
+        pointer. We only really need to do the new part, but... */
+-    new_table = mem_sys_allocate(sizeof (funcptr_t) * y * new_x);
++    new_table = (funcptr_t *)mem_sys_allocate(sizeof (funcptr_t) * y * new_x);
+     for (i = 0; i < y * new_x; i++) {
+         new_table[i] = NULL;
+     }
+@@ -644,7 +644,7 @@
+ 
+     /* First, fill in the whole new table with the default function
+        pointer. We only really need to do the new part, but... */
+-    new_table = mem_sys_allocate(sizeof (funcptr_t) * x * new_y);
++    new_table = (funcptr_t *)mem_sys_allocate(sizeof (funcptr_t) * x * new_y);
+     for (i = 0; i < x * new_y; i++) {
+         new_table[i] = NULL;
+     }
+@@ -1345,7 +1345,7 @@
+      */
+     sort = pmc_new(interp, enum_class_FixedIntegerArray);
+     VTABLE_set_integer_native(interp, sort, n);
+-    helper = PMC_data(sort);
++    helper = (INTVAL *)PMC_data(sort);
+     for (i = 0; i < n; ++i) {
+         pmc = VTABLE_get_pmc_keyed_int(interp, cl, i);
+         d = mmd_distance(interp, pmc, arg_tuple);
+@@ -1364,7 +1364,7 @@
+      * now helper has a sorted list of indices in the upper 16 bits
+      * fill helper with sorted candidates
+      */
+-    data = PMC_data(cl);
++    data = (PMC **)PMC_data(cl);
+     for (i = 0; i < n; ++i) {
+         INTVAL idx = helper[i] >> 16;
+         /*
+Index: src/pmc_freeze.c
+===================================================================
+--- src/pmc_freeze.c	(revision 18338)
++++ src/pmc_freeze.c	(working copy)
+@@ -165,7 +165,7 @@
+ push_ascii_string(Parrot_Interp interp, IMAGE_IO *io, STRING *s)
+ {
+     const UINTVAL length = string_length(interp, s);
+-    char * const buffer = malloc(4*length);
++    char * const buffer = (char *)malloc(4*length);
+     char *cursor = buffer;
+     UINTVAL idx = 0;
+ 
+@@ -589,7 +589,7 @@
+     Small_Object_Arena *arena;
+ 
+     for (arena = pool->last_Arena; arena; arena = arena->prev) {
+-        PMC *p = arena->start_objects;
++        PMC *p = (PMC *)arena->start_objects;
+         UINTVAL i;
+ 
+         for (i = 0; i < arena->used; i++) {
+@@ -669,7 +669,7 @@
+     STRING *s = info->image;
+     PackFile *pf;
+ 
+-    info->image_io = mem_sys_allocate(sizeof (IMAGE_IO));
++    info->image_io = mem_allocate_typed(IMAGE_IO);
+     info->image_io->image = s = info->image;
+ #if FREEZE_ASCII
+     info->image_io->vtable = &ascii_funcs;
+@@ -931,7 +931,7 @@
+         return;
+     }
+ 
+-    pos = list_get(interp, PMC_data(info->id_list), id, enum_type_PMC);
++    pos = (PMC **)list_get(interp, (List *)PMC_data(info->id_list), id, enum_type_PMC);
+     if (pos == (void*)-1)
+         pos = NULL;
+     else if (pos) {
+@@ -974,7 +974,7 @@
+ 
+     VTABLE_thaw(interp, pmc, info);
+     if (info->extra_flags == EXTRA_CLASS_EXISTS) {
+-        pmc = info->extra;
++        pmc = (PMC *)info->extra;
+         info->extra = NULL;
+         info->extra_flags = 0;
+     }
+@@ -986,10 +986,10 @@
+         }
+         *info->thaw_ptr = pmc;
+     }
+-    list_assign(interp, PMC_data(info->id_list), id, pmc, enum_type_PMC);
++    list_assign(interp, (List *)PMC_data(info->id_list), id, pmc, enum_type_PMC);
+     /* remember nested aggregates depth first */
+     if (pmc->pmc_ext)
+-        list_unshift(interp, PMC_data(info->todo), pmc, enum_type_PMC);
++        list_unshift(interp, (List *)PMC_data(info->todo), pmc, enum_type_PMC);
+ }
+ 
+ 
+@@ -1108,7 +1108,7 @@
+ static void
+ add_pmc_todo_list(Parrot_Interp interp, PMC *pmc, visit_info *info)
+ {
+-    list_push(interp, PMC_data(info->todo), pmc, enum_type_PMC);
++    list_push(interp, (List *)PMC_data(info->todo), pmc, enum_type_PMC);
+ }
+ 
+ /*
+@@ -1130,7 +1130,7 @@
+         UINTVAL *id)
+ {
+     HashBucket * const b =
+-        parrot_hash_get_bucket(interp, PMC_struct_val(info->seen), pmc);
++        parrot_hash_get_bucket(interp, (Hash *)PMC_struct_val(info->seen), pmc);
+ 
+     if (b) {
+         *id = (UINTVAL) b->value;
+@@ -1139,10 +1139,10 @@
+ 
+     info->id += 4;      /* next id to freeze */
+     *id = info->id;
+-    parrot_hash_put(interp, PMC_struct_val(info->seen), pmc, (void*)*id);
++    parrot_hash_put(interp, (Hash *)PMC_struct_val(info->seen), pmc, (void*)*id);
+     /* remember containers */
+     if (pmc->pmc_ext)
+-        list_unshift(interp, PMC_data(info->todo), pmc, enum_type_PMC);
++        list_unshift(interp, (List *)PMC_data(info->todo), pmc, enum_type_PMC);
+     return 0;
+ }
+ 
+@@ -1274,7 +1274,7 @@
+ visit_loop_todo_list(Parrot_Interp interp, PMC *current,
+         visit_info *info)
+ {
+-    List *todo = PMC_data(info->todo);
++    List *todo = (List *)PMC_data(info->todo);
+     PMC *finish_list_pmc;
+     int i, n;
+     List *finish_list = NULL;   /* gcc -O3 warning */
+@@ -1287,7 +1287,7 @@
+          * create a list that contains PMCs that need thawfinish
+          */
+         finish_list_pmc = pmc_new(interp, enum_class_Array);
+-        finish_list = PMC_data(finish_list_pmc);
++        finish_list = (List *)PMC_data(finish_list_pmc);
+     }
+ 
+     (info->visit_pmc_now)(interp, current, info);
+Index: src/io/io_mmap.c
+===================================================================
+--- src/io/io_mmap.c	(revision 18338)
++++ src/io/io_mmap.c	(working copy)
+@@ -82,7 +82,7 @@
+         status = fstat(io->fd, &statbuf);
+         file_size = statbuf.st_size;
+         /* TODO verify flags */
+-        io->b.startb = mmap(0, file_size, PROT_READ, MAP_SHARED, io->fd, 0);
++        io->b.startb = (unsigned char *)mmap(0, file_size, PROT_READ, MAP_SHARED, io->fd, 0);
+         io->b.size = (size_t)file_size;  /* XXX */
+         io->b.endb = io->b.startb + io->b.size;
+         io->b.flags |= PIO_BF_MMAP;
+Index: src/io/io.c
+===================================================================
+--- src/io/io.c	(revision 18338)
++++ src/io/io.c	(working copy)
+@@ -209,7 +209,7 @@
+ void
+ PIO_destroy(Interp *interp, PMC *pmc)
+ {
+-    ParrotIO * const io = PMC_data0(pmc);
++    ParrotIO * const io = (ParrotIO *)PMC_data0(pmc);
+     UNUSED(interp);
+ 
+     if (!io)
+@@ -293,7 +293,7 @@
+     }
+ 
+ 
+-    interp->piodata = mem_sys_allocate(sizeof (ParrotIOData));
++    interp->piodata = mem_allocate_typed(ParrotIOData);
+     if (interp->piodata == NULL)
+         internal_exception(PIO_ERROR, "PIO alloc piodata failure.");
+     interp->piodata->default_stack = NULL;
+@@ -409,7 +409,7 @@
+     fill = 0;
+     if (!pio_registered_layers) {
+         n = 5;  /* 2 default layers for now + utf8, mmap, string */
+-        pio_registered_layers = mem_sys_allocate(
++        pio_registered_layers = (ParrotIOLayer **)mem_sys_allocate(
+                 sizeof (ParrotIOLayer *) * (n + 1));
+         fill = 1;
+     }
+@@ -577,8 +577,8 @@
+ INTVAL
+ PIO_peek(Interp *interp, PMC *pmc, STRING **buffer)
+ {
+-    ParrotIOLayer * const l = PMC_struct_val(pmc);
+-    ParrotIO * const io = PMC_data0(pmc);
++    ParrotIOLayer * const l = (ParrotIOLayer *)PMC_struct_val(pmc);
++    ParrotIO * const io = (ParrotIO *)PMC_data0(pmc);
+     if (!io)
+         return -1;
+     return PIO_peek_down(interp, l, io, buffer);
+@@ -608,7 +608,7 @@
+ PIO_pioctl(Interp *interp, PMC *pmc, INTVAL cmd, INTVAL arg)
+ {
+ 
+-    ParrotIO * const io = PMC_data0(pmc);
++    ParrotIO * const io = (ParrotIO *)PMC_data0(pmc);
+     ParrotIOBuf * b;
+     if (!io) return -1;
+     b = &io->b;
+@@ -659,8 +659,8 @@
+ INTVAL
+ PIO_setbuf(Interp *interp, PMC *pmc, size_t bufsize)
+ {
+-    ParrotIOLayer * const layer = PMC_struct_val(pmc);
+-    ParrotIO * const io = PMC_data0(pmc);
++    ParrotIOLayer * const layer = (ParrotIOLayer *)PMC_struct_val(pmc);
++    ParrotIO * const io = (ParrotIO *)PMC_data0(pmc);
+     if (!io)
+         return -1;
+     PIO_flush(interp, pmc);
+@@ -682,8 +682,8 @@
+ INTVAL
+ PIO_setlinebuf(Interp *interp, PMC *pmc)
+ {
+-    ParrotIOLayer * const l = PMC_struct_val(pmc);
+-    ParrotIO * const io = PMC_data0(pmc);
++    ParrotIOLayer * const l = (ParrotIOLayer *)PMC_struct_val(pmc);
++    ParrotIO * const io = (ParrotIO *)PMC_data0(pmc);
+     if (!io)
+         return -1;
+ 
+@@ -780,8 +780,8 @@
+ PIO_close(Interp *interp, PMC *pmc)
+ {
+     INTVAL res;
+-    ParrotIOLayer * const l = PMC_struct_val(pmc);
+-    ParrotIO * const io = PMC_data0(pmc);
++    ParrotIOLayer * const l = (ParrotIOLayer *)PMC_struct_val(pmc);
++    ParrotIO * const io = (ParrotIO *)PMC_data0(pmc);
+     if (!io)
+         return -1;
+     PIO_flush(interp, pmc); /* XXX boe: is this neccessary here? */
+@@ -805,8 +805,8 @@
+ void
+ PIO_flush(Interp *interp, PMC *pmc)
+ {
+-    ParrotIOLayer * const l = PMC_struct_val(pmc);
+-    ParrotIO * const io = PMC_data0(pmc);
++    ParrotIOLayer * const l = (ParrotIOLayer *)PMC_struct_val(pmc);
++    ParrotIO * const io = (ParrotIO *)PMC_data0(pmc);
+     if (!io)
+         return;
+ 
+@@ -834,8 +834,8 @@
+ PIO_reads(Interp *interp, PMC *pmc, size_t len)
+ {
+     STRING *res = NULL;
+-    ParrotIOLayer * const l = PMC_struct_val(pmc);
+-    ParrotIO * const io = PMC_data0(pmc);
++    ParrotIOLayer * const l = (ParrotIOLayer *)PMC_struct_val(pmc);
++    ParrotIO * const io = (ParrotIO *)PMC_data0(pmc);
+ 
+     if (!io)
+         return new_string_header(interp, 0);
+@@ -855,10 +855,10 @@
+ }
+ 
+ INTVAL
+-PIO_read(Interp *interp, PMC *pmc, void *buffer, size_t len)
++PIO_read(Interp *interp, PMC *pmc, char *buffer, size_t len)
+ {
+-    ParrotIOLayer * const l = PMC_struct_val(pmc);
+-    ParrotIO * const io = PMC_data0(pmc);
++    ParrotIOLayer * const l = (ParrotIOLayer *)PMC_struct_val(pmc);
++    ParrotIO * const io = (ParrotIO *)PMC_data0(pmc);
+     STRING *res = new_string_header(interp, 0);
+     if (!io)
+         return -1;
+@@ -882,8 +882,8 @@
+ INTVAL
+ PIO_write(Interp *interp, PMC *pmc, const void *buffer, size_t len)
+ {
+-    ParrotIOLayer * const l = PMC_struct_val(pmc);
+-    ParrotIO * const io = PMC_data0(pmc);
++    ParrotIOLayer * const l = (ParrotIOLayer *)PMC_struct_val(pmc);
++    ParrotIO * const io = (ParrotIO *)PMC_data0(pmc);
+     DECL_CONST_CAST;
+ 
+     if (!io)
+@@ -892,7 +892,7 @@
+     if (io->flags & PIO_F_WRITE) {
+         STRING fake;
+         /* TODO skip utf8 translation layers if any */
+-        fake.strstart = const_cast(buffer);
++        fake.strstart = (char *)const_cast(buffer);
+         fake.strlen = fake.bufused = len;
+         fake.charset = Parrot_default_charset_ptr;
+         fake.encoding = Parrot_default_encoding_ptr;
+@@ -918,8 +918,8 @@
+ PIOOFF_T
+ PIO_seek(Interp *interp, PMC *pmc, PIOOFF_T offset, INTVAL w)
+ {
+-    ParrotIOLayer * const l = PMC_struct_val(pmc);
+-    ParrotIO * const io = PMC_data0(pmc);
++    ParrotIOLayer * const l = (ParrotIOLayer *)PMC_struct_val(pmc);
++    ParrotIO * const io = (ParrotIO *)PMC_data0(pmc);
+     if (!io)
+         return -1;
+ 
+@@ -940,8 +940,8 @@
+ PIOOFF_T
+ PIO_tell(Interp *interp, PMC *pmc)
+ {
+-    ParrotIOLayer * const l = PMC_struct_val(pmc);
+-    ParrotIO * const io = PMC_data0(pmc);
++    ParrotIOLayer * const l = (ParrotIOLayer *)PMC_struct_val(pmc);
++    ParrotIO * const io = (ParrotIO *)PMC_data0(pmc);
+     if (!io)
+         return -1;
+ 
+@@ -963,7 +963,7 @@
+ INTVAL
+ PIO_eof(Interp *interp, PMC *pmc)
+ {
+-    ParrotIO * const io = PMC_data0(pmc);
++    ParrotIO * const io = (ParrotIO *)PMC_data0(pmc);
+ 
+     UNUSED(interp);
+ 
+@@ -1007,8 +1007,8 @@
+ INTVAL
+ PIO_putps(Interp *interp, PMC *pmc, STRING *s)
+ {
+-    ParrotIOLayer * const l = PMC_struct_val(pmc);
+-    ParrotIO * const io = PMC_data0(pmc);
++    ParrotIOLayer * const l = (ParrotIOLayer *)PMC_struct_val(pmc);
++    ParrotIO * const io = (ParrotIO *)PMC_data0(pmc);
+     assert((unsigned long)l != 0xdeadbeefUL);
+     assert(io != 0);
+ 
+@@ -1131,7 +1131,7 @@
+ PIOHANDLE
+ PIO_getfd(Interp *interp, PMC *pmc)
+ {
+-    ParrotIO *io = PMC_data0(pmc);
++    ParrotIO *io = (ParrotIO *)PMC_data0(pmc);
+ 
+     UNUSED(interp);
+ 
+@@ -1283,7 +1283,7 @@
+ PIOOFF_T
+ PIO_make_offset32(INTVAL hi, INTVAL lo)
+ {
+-    return ((PIOOFF_T)hi << 32) | lo;
++    return ((PIOOFF_T)hi << 31) | lo;
+ }
+ 
+ /*
+@@ -1332,8 +1332,8 @@
+         real_exception(interp, NULL, E_ValueError, "Can't poll NULL pmc");
+     }
+ 
+-    l = PMC_struct_val(pmc);
+-    io = PMC_data0(pmc);
++    l = (ParrotIOLayer *)PMC_struct_val(pmc);
++    io = (ParrotIO *)PMC_data0(pmc);
+     return PIO_poll_down(interp, l, io, which, sec, usec);
+ }
+ 
+@@ -1378,8 +1378,8 @@
+ INTVAL
+ PIO_recv(Interp *interp, PMC *pmc, STRING **buf)
+ {
+-    ParrotIOLayer * const l = PMC_struct_val(pmc);
+-    ParrotIO * const io = PMC_data(pmc);
++    ParrotIOLayer * const l = (ParrotIOLayer *)PMC_struct_val(pmc);
++    ParrotIO * const io = (ParrotIO *)PMC_data(pmc);
+     if (!io)
+         return -1;
+ 
+@@ -1401,8 +1401,8 @@
+ INTVAL
+ PIO_send(Interp *interp, PMC *pmc, STRING *buf)
+ {
+-    ParrotIOLayer * const l = PMC_struct_val(pmc);
+-    ParrotIO * const io = PMC_data(pmc);
++    ParrotIOLayer * const l = (ParrotIOLayer *)PMC_struct_val(pmc);
++    ParrotIO * const io = (ParrotIO *)PMC_data(pmc);
+     if (!io)
+         return -1;
+ 
+@@ -1423,8 +1423,8 @@
+ INTVAL
+ PIO_connect(Interp *interp, PMC *pmc, STRING *address)
+ {
+-    ParrotIOLayer * const l = PMC_struct_val(pmc);
+-    ParrotIO * const io = PMC_data(pmc);
++    ParrotIOLayer * const l = (ParrotIOLayer *)PMC_struct_val(pmc);
++    ParrotIO * const io = (ParrotIO *)PMC_data(pmc);
+     if (!io)
+         return -1;
+ 
+@@ -1446,8 +1446,8 @@
+ INTVAL
+ PIO_bind(Interp *interp, PMC *pmc, STRING *address)
+ {
+-    ParrotIOLayer * const l = PMC_struct_val(pmc);
+-    ParrotIO * const io = PMC_data(pmc);
++    ParrotIOLayer * const l = (ParrotIOLayer *)PMC_struct_val(pmc);
++    ParrotIO * const io = (ParrotIO *)PMC_data(pmc);
+     if (!io)
+         return -1;
+ 
+@@ -1468,8 +1468,8 @@
+ INTVAL
+ PIO_listen(Interp *interp, PMC *pmc, INTVAL backlog)
+ {
+-    ParrotIOLayer * const l = PMC_struct_val(pmc);
+-    ParrotIO * const io = PMC_data(pmc);
++    ParrotIOLayer * const l = (ParrotIOLayer *)PMC_struct_val(pmc);
++    ParrotIO * const io = (ParrotIO *)PMC_data(pmc);
+     if (!io)
+         return -1;
+ 
+@@ -1492,8 +1492,8 @@
+ PIO_accept(Interp *interp, PMC *pmc)
+ {
+     ParrotIO *io2;
+-    ParrotIOLayer * const l = PMC_struct_val(pmc);
+-    ParrotIO * const io = PMC_data(pmc);
++    ParrotIOLayer * const l = (ParrotIOLayer *)PMC_struct_val(pmc);
++    ParrotIO * const io = (ParrotIO *)PMC_data(pmc);
+ 
+     /* XXX - return NULL or -1 -- c (02 July 2006) */
+     if (!io)
+@@ -1517,7 +1517,7 @@
+ INTVAL
+ PIO_isatty(Interp *interp, PMC *pmc)
+ {
+-    ParrotIO * const io = PMC_data(pmc);
++    ParrotIO * const io = (ParrotIO *)PMC_data(pmc);
+ 
+     UNUSED(interp);
+ 
+Index: src/io/io_unix.c
+===================================================================
+--- src/io/io_unix.c	(revision 18338)
++++ src/io/io_unix.c	(working copy)
+@@ -519,7 +519,7 @@
+     size_t bytes;
+     size_t to_write;
+     const char *ptr;
+-    void *buffer = s->strstart;
++    char *buffer = s->strstart;
+     size_t len = s->bufused;
+ 
+     UNUSED(interp);
+@@ -675,7 +675,7 @@
+     sa.sin_family = family;
+     sa.sin_port = htons(port);
+ 
+-    return string_make(interp, &sa, sizeof (struct sockaddr_in),
++    return string_make(interp, (char *)&sa, sizeof (struct sockaddr_in),
+             "binary", 0);
+ }
+ 
+Index: src/jit.c
+===================================================================
+--- src/jit.c	(revision 18338)
++++ src/jit.c	(working copy)
+@@ -1375,7 +1375,7 @@
+     int needs_fs;       /* fetch/store */
+ 
+     jit_info = interp->code->jit_info =
+-            mem_sys_allocate(sizeof (Parrot_jit_info_t));
++            mem_allocate_typed(Parrot_jit_info_t);
+ 
+     jit_info->flags     = jit_type & JIT_CODE_RECURSIVE;
+     jit_type &= ~ JIT_CODE_RECURSIVE;
+@@ -1451,8 +1451,8 @@
+      */
+     if ((size_t)jit_info->arena.map_size * 10 > (size_t)jit_info->arena.size)
+         jit_info->arena.size = jit_info->arena.map_size * 10;
+-    jit_info->native_ptr = jit_info->arena.start =
+-        mem_alloc_executable((size_t)jit_info->arena.size);
++    jit_info->native_ptr = jit_info->arena.start = 
++        (char *)mem_alloc_executable((size_t)jit_info->arena.size);
+ #  if EXEC_CAPABLE
+     if (obj)
+         jit_info->objfile->text.code = jit_info->arena.start;
+@@ -1527,7 +1527,7 @@
+ #if REQUIRES_CONSTANT_POOL
+                 Parrot_jit_extend_arena(jit_info);
+ #else
+-                new_arena = mem_realloc_executable(jit_info->arena.start,
++                new_arena = (char *)mem_realloc_executable(jit_info->arena.start,
+                         (size_t)jit_info->arena.size * 2);
+                 jit_info->arena.size *= 2;
+                 jit_info->native_ptr = new_arena +
+@@ -1728,7 +1728,7 @@
+ {
+     Parrot_jit_fixup_t *fixup;
+ 
+-    fixup = mem_sys_allocate_zeroed(sizeof (*fixup));
++    fixup = mem_allocate_zeroed_typed(Parrot_jit_fixup_t);
+ 
+     /* Insert fixup at the head of the list */
+     fixup->next = jit_info->arena.fixups;
+Index: src/stacks.c
+===================================================================
+--- src/stacks.c	(revision 18338)
++++ src/stacks.c	(working copy)
+@@ -246,7 +246,7 @@
+ stack_push(Interp *interp, Stack_Chunk_t **stack_p /*NN*/,
+            void *thing, Stack_entry_type type, Stack_cleanup_method cleanup)
+ {
+-    Stack_Entry_t *entry = stack_prepare_push(interp, stack_p);
++    Stack_Entry_t *entry = (Stack_Entry_t *)stack_prepare_push(interp, stack_p);
+ 
+     /* Remember the type */
+     entry->entry_type = type;
+@@ -295,7 +295,7 @@
+ stack_pop(Interp *interp, Stack_Chunk_t **stack_p /*NN*/,
+           void *where, Stack_entry_type type)
+ {
+-    Stack_Entry_t * const entry = stack_prepare_pop(interp, stack_p);
++    Stack_Entry_t * const entry = (Stack_Entry_t *)stack_prepare_pop(interp, stack_p);
+ 
+     /* Types of 0 mean we don't care */
+     if (type && entry->entry_type != type) {
+Index: src/sub.c
+===================================================================
+--- src/sub.c	(revision 18338)
++++ src/sub.c	(working copy)
+@@ -91,7 +91,7 @@
+ {
+     /* Using system memory until I figure out GC issues */
+     struct Parrot_sub * const newsub =
+-        mem_sys_allocate_zeroed(sizeof (struct Parrot_sub));
++        mem_allocate_zeroed_typed(struct Parrot_sub);
+     newsub->seg = interp->code;
+     return newsub;
+ }
+@@ -133,7 +133,7 @@
+ new_continuation(Interp *interp, struct Parrot_cont *to)
+ {
+     struct Parrot_cont * const cc =
+-        mem_sys_allocate(sizeof (struct Parrot_cont));
++        mem_allocate_typed(struct Parrot_cont);
+     struct Parrot_Context * const to_ctx =
+         to ? to->to_ctx : CONTEXT(interp->ctx);
+ 
+@@ -169,7 +169,7 @@
+ new_ret_continuation(Interp *interp)
+ {
+     struct Parrot_cont * const cc =
+-        mem_sys_allocate(sizeof (struct Parrot_cont));
++        mem_allocate_typed(struct Parrot_cont);
+     cc->to_ctx = CONTEXT(interp->ctx);
+     cc->from_ctx = NULL;    /* filled in during a call */
+     cc->dynamic_state = NULL;
+@@ -197,7 +197,7 @@
+ new_coroutine(Interp *interp)
+ {
+     struct Parrot_coro * const co =
+-        mem_sys_allocate_zeroed(sizeof (struct Parrot_coro));
++        mem_allocate_zeroed_typed(struct Parrot_coro);
+ 
+     co->seg = interp->code;
+     co->ctx = NULL;
+@@ -310,7 +310,7 @@
+     struct Parrot_sub *sub;
+ 
+     /* set file/line/pc defaults */
+-    info->file = "(unknown file)";
++    info->file = (const char *) "(unknown file)";
+     info->line = -1;
+     info->pc = -1;
+     info->nsname = NULL;
+@@ -391,7 +391,7 @@
+ 
+     Parrot_block_DOD(interp);
+     if (Parrot_Context_info(interp, ctx, &info)) {
+-        char *file = (char *)info.file;
++        char *file = info.file;
+         res        = Parrot_sprintf_c(interp,
+             "%s '%Ss' pc %d (%s:%d)", msg,
+             info.fullname, info.pc, file, info.line);
+Index: lib/Parrot/Pmc2c/PCCMETHOD.pm
+===================================================================
+--- lib/Parrot/Pmc2c/PCCMETHOD.pm	(revision 18338)
++++ lib/Parrot/Pmc2c/PCCMETHOD.pm	(working copy)
+@@ -480,7 +480,7 @@
+ 
+         my $n_regs_used = find_max_regs( [ $result_n_regs_used, $args_n_regs_used ] );
+ 
+-        $method_name = "string_from_const_cstring(interp, $method_name, 0)"
++        $method_name = "string_from_const_cstring(interp, (const char *) $method_name, 0)"
+             if isquoted($method_name);
+ 
+         my $file   = '"' . __FILE__ . '"';
+Index: include/parrot/sub.h
+===================================================================
+--- include/parrot/sub.h	(revision 18338)
++++ include/parrot/sub.h	(working copy)
+@@ -200,7 +200,7 @@
+     STRING* nsname;
+     STRING* fullname;
+     int pc;
+-    const char *file;
++    char *file;
+     int line;
+     opcode_t *address;
+ };
+Index: include/parrot/string_funcs.h
+===================================================================
+--- include/parrot/string_funcs.h	(revision 18338)
++++ include/parrot/string_funcs.h	(working copy)
+@@ -58,9 +58,9 @@
+ PARROT_API STRING *string_grow(Interp *, STRING *s, INTVAL addlen);
+ PARROT_API const char* string_primary_encoding_for_representation(Interp *,
+         parrot_string_representation_t representation);
+-PARROT_API STRING *string_make(Interp *interp, const void *buffer,
++PARROT_API STRING *string_make(Interp *interp, const char *buffer,
+         UINTVAL len, const char *charset_name, UINTVAL flags);
+-PARROT_API STRING *string_make_direct(Interp *interp, const void *buffer,
++PARROT_API STRING *string_make_direct(Interp *interp, const char *buffer,
+         UINTVAL len, ENCODING *encoding, CHARSET *charset, UINTVAL flags);
+ PARROT_API STRING * string_make_empty(Interp *interp,
+         parrot_string_representation_t representation,
+@@ -78,8 +78,8 @@
+ PARROT_API INTVAL string_index(Interp *, const STRING *, UINTVAL idx);
+ PARROT_API INTVAL string_str_index(Interp *interp, const STRING *s,
+         const STRING *s2, INTVAL start);
+-PARROT_API STRING *string_from_cstring(Interp *, const void *, UINTVAL);
+-PARROT_API STRING *string_from_const_cstring(Interp *, const void *, UINTVAL);
++PARROT_API STRING *string_from_cstring(Interp *, const char *, UINTVAL);
++PARROT_API STRING *string_from_const_cstring(Interp *, const char *, UINTVAL);
+ PARROT_API STRING *const_string(Interp *, const char *buffer)
+         __attribute__nonnull__(2);
+ PARROT_API char *string_to_cstring(Interp *, STRING *);
+Index: include/parrot/events.h
+===================================================================
+--- include/parrot/events.h	(revision 18338)
++++ include/parrot/events.h	(working copy)
+@@ -57,7 +57,7 @@
+ 
+ typedef struct _call_back_info {
+     PMC*                        cbi;    /* callback info */
+-    void*                       external_data;
++    char*                       external_data;
+ } _call_back_info;
+ 
+ typedef struct parrot_event {
+@@ -94,8 +94,8 @@
+ PARROT_API void disable_event_checking(Parrot_Interp);
+ PARROT_API void enable_event_checking(Parrot_Interp);
+ 
+-PARROT_API void Parrot_new_cb_event(Parrot_Interp, PMC* cbi, void*ext);
+-PARROT_API void Parrot_run_callback(Parrot_Interp, PMC* cbi, void*ext);
++PARROT_API void Parrot_new_cb_event(Parrot_Interp, PMC* cbi, char *ext);
++PARROT_API void Parrot_run_callback(Parrot_Interp, PMC* cbi, char *ext);
+ 
+ PARROT_API void Parrot_kill_event_loop(void);
+ PARROT_API void* Parrot_sleep_on_event(Parrot_Interp, FLOATVAL t, void* next);
+Index: include/parrot/pobj.h
+===================================================================
+--- include/parrot/pobj.h	(revision 18338)
++++ include/parrot/pobj.h	(working copy)
+@@ -81,10 +81,8 @@
+     char *strstart;
+     UINTVAL strlen;
+     /*    parrot_string_representation_t representation;*/
+-    void *encoding; /* These should be of type ENCODING * and CHARSET *
+-                     * respectively, but I'm not sure how to get them
+-                     * to do that without a whole lotta work right now */
+-    void *charset;
++    struct _encoding *encoding;
++    struct _charset *charset;
+     UINTVAL hashval; /* cached hash value computation; not yet used */
+ };
+ 
+Index: include/parrot/io.h
+===================================================================
+--- include/parrot/io.h	(revision 18338)
++++ include/parrot/io.h	(working copy)
+@@ -170,7 +170,7 @@
+ PARROT_API extern INTVAL PIO_close(Interp *, PMC *);
+ PARROT_API extern void PIO_flush(Interp *, PMC *);
+ PARROT_API extern STRING *PIO_reads(Interp *, PMC *, size_t);
+-PARROT_API extern INTVAL PIO_read(Interp *, PMC *, void *, size_t);
++PARROT_API extern INTVAL PIO_read(Interp *, PMC *, char *, size_t);
+ PARROT_API extern INTVAL PIO_write(Interp *, PMC *, const void *, size_t);
+ PARROT_API extern INTVAL PIO_setbuf(Interp *, PMC *, size_t);
+ PARROT_API extern INTVAL PIO_setlinebuf(Interp *, PMC *);
+Index: include/parrot/interpreter.h
+===================================================================
+--- include/parrot/interpreter.h	(revision 18338)
++++ include/parrot/interpreter.h	(working copy)
+@@ -472,7 +472,7 @@
+ void runops(Interp *, size_t offset);
+ void runops_int(Interp *, size_t offset);
+ PARROT_API parrot_context_t* Parrot_runops_fromc(Interp *, PMC *sub);
+-PARROT_API void* Parrot_runops_fromc_args(Interp *, PMC *sub, const char *sig, ...);
++PARROT_API PMC* Parrot_runops_fromc_args(Interp *, PMC *sub, const char *sig, ...);
+ PARROT_API void* Parrot_runops_fromc_args_event(Interp *, PMC *sub, const char *sig, ...);
+ PARROT_API INTVAL Parrot_runops_fromc_args_reti(Interp *, PMC *, const char *, ...);
+ PARROT_API FLOATVAL Parrot_runops_fromc_args_retf(Interp *, PMC *, const char *, ...);
+@@ -497,8 +497,8 @@
+ PARROT_API FLOATVAL Parrot_run_meth_fromc_arglist_retf(Interp *, PMC *sub,
+         PMC* obj, STRING *meth, const char *signature, va_list);
+ 
+-PARROT_API void Parrot_callback_C(void *external_data, PMC *callback_info);
+-PARROT_API void Parrot_callback_D(PMC *callback_info, void *external_data);
++PARROT_API void Parrot_callback_C(char *external_data, PMC *callback_info);
++PARROT_API void Parrot_callback_D(PMC *callback_info, char *external_data);
+ PARROT_API PMC* Parrot_make_cb(Interp *interp, PMC* sub, PMC* user_data,
+         STRING* cb_signature);
+ 
+Index: include/parrot/packfile.h
+===================================================================
+--- include/parrot/packfile.h	(revision 18338)
++++ include/parrot/packfile.h	(working copy)
+@@ -178,7 +178,7 @@
+ typedef struct PackFile_ByteCode {
+     PackFile_Segment       base;
+     Prederef               prederef;    /* The predereferenced code and info */
+-    void                  *jit_info;    /* JITs data */
++    struct Parrot_jit_info_t     *jit_info;    /* JITs data */
+     Parrot_PIC_store      *pic_store;   /* PIC storage */
+     PackFile_Segment      *pic_index;   /* segment of indices into store */
+     struct PackFile_Debug *debugs;
+
+------------=_1177598630-1687-192--
+

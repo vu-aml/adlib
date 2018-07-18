@@ -1,0 +1,155 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat Jun 30 19:52:57 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5UNquL9013121
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 30 Jun 2007 19:52:57 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 7A4AA162BD8
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 30 Jun 2007 23:52:52 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.4 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1017)
+	id 17FF3162BD8; Sat, 30 Jun 2007 23:52:24 +0000 (GMT)
+To: samba-cvs@samba.org
+From: obnox@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070630235224.17FF3162BD8@lists.samba.org>
+Date: Sat, 30 Jun 2007 23:52:24 +0000 (GMT)
+Subject: svn commit: samba r23668 - in branches: SAMBA_3_0/source/lib
+	SAMBA_3_0_26/source/lib
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: obnox
+Date: 2007-06-30 23:52:23 +0000 (Sat, 30 Jun 2007)
+New Revision: 23668
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23668
+
+Log:
+When creating a new string value, win2k regedit delivers
+one byte of data despite characters being two-byte.
+
+This modifies registry_pull_value, to change the data
+to the correct two-byte version of the empty string,
+(as delivered by winxp), when only one byte of data is
+received.
+
+Michael
+
+
+Modified:
+   branches/SAMBA_3_0/source/lib/util_reg_api.c
+   branches/SAMBA_3_0_26/source/lib/util_reg_api.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/lib/util_reg_api.c
+===================================================================
+--- branches/SAMBA_3_0/source/lib/util_reg_api.c	2007-06-30 22:31:13 UTC (rev 23667)
++++ branches/SAMBA_3_0/source/lib/util_reg_api.c	2007-06-30 23:52:23 UTC (rev 23668)
+@@ -53,19 +53,33 @@
+ 		smb_ucs2_t *tmp;
+ 		uint32 num_ucs2 = length / 2;
+ 
+-		if ((length % 2) != 0) {
++		if (length == 1) {
++			/* win2k regedit gives us a string of 1 byte when
++			 * creating a new value of type REG_SZ. this workaround
++			 * replaces the input by using the same string as
++			 * winxp delivers. */
++			length = 2;
++			if (!(tmp = SMB_MALLOC_ARRAY(smb_ucs2_t, 2))) {
++				err = WERR_NOMEM;
++				goto error;
++			}
++			tmp[0] = 2;
++			tmp[1] = 0;
++		}
++		else if ((length % 2) != 0) {
+ 			err = WERR_INVALID_PARAM;
+ 			goto error;
+ 		}
++		else {
++			if (!(tmp = SMB_MALLOC_ARRAY(smb_ucs2_t, num_ucs2+1))) {
++				err = WERR_NOMEM;
++				goto error;
++			}
+ 
+-		if (!(tmp = SMB_MALLOC_ARRAY(smb_ucs2_t, num_ucs2+1))) {
+-			err = WERR_NOMEM;
+-			goto error;
++			memcpy((void *)tmp, (const void *)data, length);
++			tmp[num_ucs2] = 0;
+ 		}
+ 
+-		memcpy((void *)tmp, (const void *)data, length);
+-		tmp[num_ucs2] = 0;
+-
+ 		value->v.sz.len = convert_string_talloc(
+ 			value, CH_UTF16LE, CH_UNIX, tmp, length+2,
+ 			&value->v.sz.str, False);
+
+Modified: branches/SAMBA_3_0_26/source/lib/util_reg_api.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/lib/util_reg_api.c	2007-06-30 22:31:13 UTC (rev 23667)
++++ branches/SAMBA_3_0_26/source/lib/util_reg_api.c	2007-06-30 23:52:23 UTC (rev 23668)
+@@ -53,19 +53,33 @@
+ 		smb_ucs2_t *tmp;
+ 		uint32 num_ucs2 = length / 2;
+ 
+-		if ((length % 2) != 0) {
++		if (length == 1) {
++			/* win2k regedit gives us a string of 1 byte when
++			 * creating a new value of type REG_SZ. this workaround
++			 * replaces the input by using the same string as
++			 * winxp delivers. */
++			length = 2;
++			if (!(tmp = SMB_MALLOC_ARRAY(smb_ucs2_t, 2))) {
++				err = WERR_NOMEM;
++				goto error;
++			}
++			tmp[0] = 2;
++			tmp[1] = 0;
++		}
++		else if ((length % 2) != 0) {
+ 			err = WERR_INVALID_PARAM;
+ 			goto error;
+ 		}
++		else {
++			if (!(tmp = SMB_MALLOC_ARRAY(smb_ucs2_t, num_ucs2+1))) {
++				err = WERR_NOMEM;
++				goto error;
++			}
+ 
+-		if (!(tmp = SMB_MALLOC_ARRAY(smb_ucs2_t, num_ucs2+1))) {
+-			err = WERR_NOMEM;
+-			goto error;
++			memcpy((void *)tmp, (const void *)data, length);
++			tmp[num_ucs2] = 0;
+ 		}
+ 
+-		memcpy((void *)tmp, (const void *)data, length);
+-		tmp[num_ucs2] = 0;
+-
+ 		value->v.sz.len = convert_string_talloc(
+ 			value, CH_UTF16LE, CH_UNIX, tmp, length+2,
+ 			&value->v.sz.str, False);
+

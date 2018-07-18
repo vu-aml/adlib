@@ -1,0 +1,174 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Apr 17 04:04:17 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3H84G0I025016
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 04:04:16 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 63554163948
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 08:03:52 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 620)
+	id EC95D162AEC; Tue, 17 Apr 2007 08:03:30 +0000 (GMT)
+To: samba-cvs@samba.org
+From: metze@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070417080330.EC95D162AEC@lists.samba.org>
+Date: Tue, 17 Apr 2007 08:03:30 +0000 (GMT)
+Subject: svn commit: samba r22298 - in branches/SAMBA_3_0/source: include
+	lib/replace nsswitch
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 4171
+Lines: 131
+
+Author: metze
+Date: 2007-04-17 08:03:29 +0000 (Tue, 17 Apr 2007)
+New Revision: 22298
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22298
+
+Log:
+move ZERO_*, ARRAY_SIZE and PTR_DIFF macros into libreplace
+
+metze
+Modified:
+   branches/SAMBA_3_0/source/include/smb_macros.h
+   branches/SAMBA_3_0/source/lib/replace/README
+   branches/SAMBA_3_0/source/lib/replace/replace.h
+   branches/SAMBA_3_0/source/nsswitch/winbind_nss_config.h
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/include/smb_macros.h
+===================================================================
+--- branches/SAMBA_3_0/source/include/smb_macros.h	2007-04-17 08:03:01 UTC (rev 22297)
++++ branches/SAMBA_3_0/source/include/smb_macros.h	2007-04-17 08:03:29 UTC (rev 22298)
+@@ -46,25 +46,6 @@
+ #define SAFE_FREE(x) do { if ((x) != NULL) {free(x); x=NULL;} } while(0)
+ #endif
+ 
+-/* zero a structure */
+-#define ZERO_STRUCT(x) memset((char *)&(x), 0, sizeof(x))
+-
+-/* zero a structure given a pointer to the structure */
+-#define ZERO_STRUCTP(x) do { if ((x) != NULL) memset((char *)(x), 0, sizeof(*(x))); } while(0)
+-
+-/* zero a structure given a pointer to the structure - no zero check */
+-#define ZERO_STRUCTPN(x) memset((char *)(x), 0, sizeof(*(x)))
+-
+-/* zero an array - note that sizeof(array) must work - ie. it must not be a 
+-   pointer */
+-#define ZERO_ARRAY(x) memset((char *)(x), 0, sizeof(x))
+-
+-/* pointer difference macro */
+-#define PTR_DIFF(p1,p2) ((ptrdiff_t)(((const char *)(p1)) - (const char *)(p2)))
+-
+-/* work out how many elements there are in a static array */
+-#define ARRAY_SIZE(a) (sizeof(a)/sizeof(a[0]))
+-
+ /* assert macros */
+ #ifdef DEVELOPER
+ #define SMB_ASSERT(b) ( (b) ? (void)0 : \
+
+Modified: branches/SAMBA_3_0/source/lib/replace/README
+===================================================================
+--- branches/SAMBA_3_0/source/lib/replace/README	2007-04-17 08:03:01 UTC (rev 22297)
++++ branches/SAMBA_3_0/source/lib/replace/README	2007-04-17 08:03:29 UTC (rev 22298)
+@@ -86,6 +86,12 @@
+ MIN
+ MAX
+ QSORT_CAST
++ZERO_STRUCT
++ZERO_STRUCTP
++ZERO_STRUCTPN
++ZERO_ARRAY
++ARRAY_SIZE
++PTR_DIFF
+ 
+ Headers:
+ stdint.h
+
+Modified: branches/SAMBA_3_0/source/lib/replace/replace.h
+===================================================================
+--- branches/SAMBA_3_0/source/lib/replace/replace.h	2007-04-17 08:03:01 UTC (rev 22297)
++++ branches/SAMBA_3_0/source/lib/replace/replace.h	2007-04-17 08:03:29 UTC (rev 22298)
+@@ -451,6 +451,35 @@
+ #define __location__ __FILE__ ":" __LINESTR__
+ #endif
+ 
++/** 
++ * zero a structure 
++ */
++#define ZERO_STRUCT(x) memset((char *)&(x), 0, sizeof(x))
++
++/** 
++ * zero a structure given a pointer to the structure 
++ */
++#define ZERO_STRUCTP(x) do { if ((x) != NULL) memset((char *)(x), 0, sizeof(*(x))); } while(0)
++
++/** 
++ * zero a structure given a pointer to the structure - no zero check 
++ */
++#define ZERO_STRUCTPN(x) memset((char *)(x), 0, sizeof(*(x)))
++
++/* zero an array - note that sizeof(array) must work - ie. it must not be a
++   pointer */
++#define ZERO_ARRAY(x) memset((char *)(x), 0, sizeof(x))
++
++/**
++ * work out how many elements there are in a static array 
++ */
++#define ARRAY_SIZE(a) (sizeof(a)/sizeof(a[0]))
++
++/** 
++ * pointer difference macro 
++ */
++#define PTR_DIFF(p1,p2) ((ptrdiff_t)(((const char *)(p1)) - (const char *)(p2)))
++
+ #if MMAP_BLACKLIST
+ #undef HAVE_MMAP
+ #endif
+
+Modified: branches/SAMBA_3_0/source/nsswitch/winbind_nss_config.h
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/winbind_nss_config.h	2007-04-17 08:03:01 UTC (rev 22297)
++++ branches/SAMBA_3_0/source/nsswitch/winbind_nss_config.h	2007-04-17 08:03:29 UTC (rev 22298)
+@@ -103,18 +103,6 @@
+ #endif  /* don't lie.  If we don't have it, then don't use it */
+ #endif
+ 
+-
+-
+-/* zero a structure */
+-#ifndef ZERO_STRUCT
+-#define ZERO_STRUCT(x) memset((char *)&(x), 0, sizeof(x))
+-#endif
+-
+-/* zero a structure given a pointer to the structure */
+-#ifndef ZERO_STRUCTP
+-#define ZERO_STRUCTP(x) { if ((x) != NULL) memset((char *)(x), 0, sizeof(*(x))); }
+-#endif
+-
+ /* Some systems (SCO) treat UNIX domain sockets as FIFOs */
+ 
+ #ifndef S_IFSOCK
+

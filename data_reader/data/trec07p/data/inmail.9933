@@ -1,0 +1,80 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Apr 16 02:02:18 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3G62I0I002012
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 16 Apr 2007 02:02:18 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 6EF6F16384C
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 16 Apr 2007 06:01:54 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.6 required=3.8 tests=AWL,BAYES_50,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 097D0162AC4; Mon, 16 Apr 2007 06:01:23 +0000 (GMT)
+Date: Mon, 16 Apr 2007 16:01:37 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070416060123.097D0162AC4@lists.samba.org>
+Subject: Rev 111: this is a demonstration of an idea for handling locks in
+	ctdb. in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 1749
+Lines: 39
+
+------------------------------------------------------------
+revno: 111
+revision-id: tridge@samba.org-20070416060137-6d90f720fec05ba5
+parent: tridge@samba.org-20070416041310-3f6200073a57aeff
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Mon 2007-04-16 16:01:37 +1000
+message:
+  this is a demonstration of an idea for handling locks in ctdb.
+  
+  The problem we have is this:
+  
+    - we want the client smbd processes to be able to 'shortcut' access
+      to the ltdb, by directly accessing the ltdb, and if the header of
+      the record shows we are the dmaster then process immediately, with
+      no overhead of talking across the unix domain socket
+  
+    - a client doing a shortcut will use tdb_chainlock() to lock the
+      record while processing
+  
+    - we want the main ctdb daemon to be able to set locks on the
+      record, and when those locks collide with a 'shortcut' fcntl lock,
+      we want the ctdb daemon to keep processing other operations
+  
+    - we don't want to have to send a message from a smbd client to the
+      ctdbd each time it releases a lock
+  
+  The solution is shown in this example. Note that the expensive fork()
+  and blocking lock is only paid in case of contention, so in the median
+  case I think this is zero cost.
+added:
+  tests/lockwait.c               lockwait.c-20070416055753-3ztnb4cxqgamfudx-1
+modified:
+  Makefile.in                    makefile.in-20061117234101-o3qt14umlg9en8z0-1
+  common/util.c                  util.c-20061117234101-o3qt14umlg9en8z0-20
+  config.mk                      config.mk-20070416041303-xql6zaaq90w8kovl-1
+  include/includes.h             includes.h-20061117234101-o3qt14umlg9en8z0-17
+
+Diff too large for email (315, the limit is 200).
+

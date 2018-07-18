@@ -1,0 +1,172 @@
+From sugar-bounces@laptop.org  Tue May 22 11:50:10 2007
+Return-Path: <sugar-bounces@laptop.org>
+Received: from pedal.laptop.org (pedal.laptop.org [18.85.2.148])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4MFoAqD014037
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 22 May 2007 11:50:10 -0400
+Received: from pedal.laptop.org (localhost [127.0.0.1])
+	by pedal.laptop.org (Postfix) with ESMTP id CA8F74EF09;
+	Tue, 22 May 2007 11:49:28 -0400 (EDT)
+X-Original-To: sugar@laptop.org
+Delivered-To: sugar@laptop.org
+Received: from spam.laptop.org (spam.laptop.org [18.85.46.23])
+	by pedal.laptop.org (Postfix) with ESMTP id 122664EF40
+	for <sugar@laptop.org>; Tue, 22 May 2007 11:49:28 -0400 (EDT)
+X-ASG-Debug-ID: 1179849003-7c2800190000-3Xmyjt
+X-Barracuda-URL: http://18.85.46.23:8000/cgi-bin/mark.cgi
+X-Barracuda-Connect: dhansak.collabora.co.uk[195.10.223.134]
+X-Barracuda-Start-Time: 1179849003
+X-Barracuda-Encrypted: DHE-RSA-AES256-SHA
+Received: from dhansak.collabora.co.uk (dhansak.collabora.co.uk
+	[195.10.223.134])
+	(using TLSv1 with cipher DHE-RSA-AES256-SHA (256/256 bits))
+	(No client certificate requested)
+	by spam.laptop.org (Spam Firewall) with ESMTP id 3CC9BE1BB
+	for <sugar@laptop.org>; Tue, 22 May 2007 11:50:04 -0400 (EDT)
+Received: by dhansak.collabora.co.uk (Postfix, from userid 1014)
+	id 5FF89308DF9B; Tue, 22 May 2007 16:50:03 +0100 (BST)
+Date: Tue, 22 May 2007 16:49:57 +0100
+From: Simon McVittie <simon.mcvittie@collabora.co.uk>
+To: sugar@laptop.org
+X-ASG-Orig-Subj: [PATCH] services/presence/server_plugin: When creating a room,
+	make it non-anonymous.
+Message-ID: <20070522154957.GA18273@celebrin.pseudorandom.co.uk>
+Mail-Followup-To: sugar@laptop.org
+MIME-Version: 1.0
+Content-Disposition: inline
+User-Agent: Mutt/1.5.13 (2006-08-11)
+X-Barracuda-Bayes: INNOCENT GLOBAL 0.0000 1.0000 -2.0210
+X-Barracuda-Virus-Scanned: by Barracuda Spam Firewall at laptop.org
+X-Barracuda-Spam-Score: -2.02
+X-Barracuda-Spam-Status: No, SCORE=-2.02 using global scores of TAG_LEVEL=3.5
+	QUARANTINE_LEVEL=1000.0 KILL_LEVEL=5.5 tests=
+X-Barracuda-Spam-Report: Code version 3.1, rules version 3.1.17700
+	Rule breakdown below
+	pts rule name              description
+	---- ----------------------
+	--------------------------------------------------
+Subject: [sugar] [PATCH] services/presence/server_plugin: When creating a
+	room, make it non-anonymous.
+X-BeenThere: sugar@laptop.org
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Discussion of OLPC design,
+	desktop platform and user experience" <sugar.laptop.org>
+List-Unsubscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=unsubscribe>
+List-Archive: <http://mailman.laptop.org/pipermail/sugar>
+List-Post: <mailto:sugar@laptop.org>
+List-Help: <mailto:sugar-request@laptop.org?subject=help>
+List-Subscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: sugar-bounces@laptop.org
+Errors-To: sugar-bounces@laptop.org
+
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA1
+
+Otherwise clients joining the room won't be able to convert other clients'
+channel-specific handles into global handles in order to make Buddy objects,
+because they're not the moderator of the room.
+- ---
+ services/presence/server_plugin.py |   47 ++++++++++++++++++++++++++++++-----
+ 1 files changed, 40 insertions(+), 7 deletions(-)
+
+diff --git a/services/presence/server_plugin.py b/services/presence/server_plugin.py
+index 6b21888..18b4776 100644
+- --- a/services/presence/server_plugin.py
++++ b/services/presence/server_plugin.py
+@@ -30,12 +30,14 @@ import psutils
+ from telepathy.client import ConnectionManager, ManagerRegistry, Connection, Channel
+ from telepathy.interfaces import (
+     CONN_MGR_INTERFACE, CONN_INTERFACE, CHANNEL_TYPE_CONTACT_LIST, CHANNEL_INTERFACE_GROUP, CONN_INTERFACE_ALIASING,
+- -    CONN_INTERFACE_AVATARS, CONN_INTERFACE_PRESENCE, CHANNEL_TYPE_TEXT, CHANNEL_TYPE_STREAMED_MEDIA)
++    CONN_INTERFACE_AVATARS, CONN_INTERFACE_PRESENCE, CHANNEL_TYPE_TEXT, CHANNEL_TYPE_STREAMED_MEDIA,
++    PROPERTIES_INTERFACE)
+ from telepathy.constants import (
+     CONNECTION_HANDLE_TYPE_NONE, CONNECTION_HANDLE_TYPE_CONTACT,
+     CONNECTION_STATUS_CONNECTED, CONNECTION_STATUS_DISCONNECTED, CONNECTION_STATUS_CONNECTING,
+     CONNECTION_HANDLE_TYPE_LIST, CONNECTION_HANDLE_TYPE_CONTACT, CONNECTION_HANDLE_TYPE_ROOM,
+- -    CONNECTION_STATUS_REASON_AUTHENTICATION_FAILED)
++    CONNECTION_STATUS_REASON_AUTHENTICATION_FAILED,
++    PROPERTY_FLAG_WRITE)
+ 
+ CONN_INTERFACE_BUDDY_INFO = 'org.laptop.Telepathy.BuddyInfo'
+ CONN_INTERFACE_ACTIVITY_PROPERTIES = 'org.laptop.Telepathy.ActivityProperties'
+@@ -422,12 +424,43 @@ class ServerPlugin(gobject.GObject):
+                 reply_handler=self._set_self_avatar_cb,
+                 error_handler=lambda *args: self._log_error_cb("setting avatar", *args))
+ 
+- -    def _join_activity_create_channel_cb(self, activity_id, signal, handle, userdata, chan_path):
+- -        channel = Channel(self._conn._dbus_object._named_service, chan_path)
++    def _join_activity_channel_props_set_cb(self, activity_id, signal, handle, channel, userdata):
+         self._joined_activities.append((activity_id, handle))
+         self._set_self_activities()
+         self.emit(signal, activity_id, channel, None, userdata)
+ 
++    def _join_activity_channel_props_listed_cb(self, activity_id, signal, handle, channel, userdata, props, prop_specs):
++
++        props_to_set = []
++        for ident, name, sig, flags in prop_specs:
++            value = props.pop(name, None)
++            if value is not None:
++                if flags & PROPERTY_FLAG_WRITE:
++                    props_to_set.append((ident, value))
++                # FIXME: else error, but only if we're creating the room?
++        # FIXME: if props is nonempty, then we want to set props that aren't
++        # supported here - raise an error?
++
++        if props_to_set:
++            channel[PROPERTIES_INTERFACE].SetProperties(props_to_set,
++                reply_handler=lambda: self._join_activity_channel_props_set_cb(activity_id, signal, handle, channel, userdata),
++                error_handler=lambda e: self._join_error_cb(activity_id, signal, userdata, 'SetProperties(%r)' % props_to_set, e))
++        else:
++            self._join_activity_channel_props_set_cb(activity_id, signal, handle, channel, userdata)
++
++    def _join_activity_create_channel_cb(self, activity_id, signal, handle, userdata, chan_path):
++        channel = Channel(self._conn._dbus_object._named_service, chan_path)
++        props = {
++            'anonymous': False,         # otherwise buddy resolution breaks
++            'invite-only': False,       # XXX: should be True in future
++            #'name': ...                # XXX: set from activity name?
++            'persistent': False,        # vanish when there are no members
++            'private': False,           # XXX: should be True unless public
++        }
++        channel[PROPERTIES_INTERFACE].ListProperties(
++            reply_handler=lambda prop_specs: self._join_activity_channel_props_listed_cb(activity_id, signal, handle, channel, userdata, props, prop_specs),
++            error_handler=lambda e: self._join_error_cb(activity_id, signal, userdata, 'ListProperties', e))
++
+     def _join_activity_get_channel_cb(self, activity_id, signal, userdata, handles):
+         if not self._activities.has_key(activity_id):
+             self._activities[activity_id] = handles[0]
+@@ -441,10 +474,10 @@ class ServerPlugin(gobject.GObject):
+         self._conn[CONN_INTERFACE].RequestChannel(CHANNEL_TYPE_TEXT,
+             CONNECTION_HANDLE_TYPE_ROOM, handles[0], True,
+             reply_handler=lambda *args: self._join_activity_create_channel_cb(activity_id, signal, handles[0], userdata, *args),
+- -            error_handler=lambda *args: self._join_error_cb(activity_id, signal, userdata, *args))
++            error_handler=lambda e: self._join_error_cb(activity_id, signal, userdata, 'RequestChannel(TEXT, ROOM, %r, True)' % handles[0], e))
+ 
+- -    def _join_error_cb(self, activity_id, signal, userdata, err):
+- -        e = Exception("Error joining/sharing activity %s: %s" % (activity_id, err))
++    def _join_error_cb(self, activity_id, signal, userdata, where, err):
++        e = Exception("Error joining/sharing activity %s: (%s): %s" % (activity_id, err))
+         _logger.debug(str(e))
+         self.emit(signal, activity_id, None, e, userdata)
+ 
+- -- 
+1.5.2-rc3.GIT
+
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.6 (GNU/Linux)
+Comment: OpenPGP key: http://www.pseudorandom.co.uk/2003/contact/ or pgp.net
+
+iD8DBQFGUxElWSc8zVUw7HYRApw4AJwO+/ndtybiTFPQEI35meJuyPzN5wCfUQWo
+EafNRdOl/ITBL5VY7N34abk=
+=piEB
+-----END PGP SIGNATURE-----
+_______________________________________________
+Sugar mailing list
+Sugar@laptop.org
+http://mailman.laptop.org/mailman/listinfo/sugar
+

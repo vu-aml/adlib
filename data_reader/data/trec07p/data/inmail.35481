@@ -1,0 +1,131 @@
+From perl6-all-return-81286-ktwarwic=speedy.uwaterloo.ca@perl.org  Sun May 13 19:01:37 2007
+Return-Path: <perl6-all-return-81286-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4DN1aqD013339
+	for <ktwarwic@flax9.uwaterloo.ca>; Sun, 13 May 2007 19:01:36 -0400
+Received: (qmail 2414 invoked by uid 514); 13 May 2007 23:01:33 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 2409 invoked from network); 13 May 2007 23:01:33 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-0.2 required=8.0
+	tests=BAYES_40,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS,WEIRD_PORT
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: neutral (x1.develooper.com: 63.251.223.186 is neither permitted nor denied by domain of jkeen@verizon.net)
+To: perl6-internals@perl.org, Allison Randal <allison@perl.org>
+Message-ID: <46479854.6030600@verizon.net>
+Date: Sun, 13 May 2007 18:59:32 -0400
+From: James E Keenan <jkeen@verizon.net>
+User-Agent: Mozilla/5.0 (Macintosh; U; PPC Mac OS X Mach-O; en-US; rv:1.8.1.2) Gecko/20070221 SeaMonkey/1.1.1
+MIME-Version: 1.0
+CC: Andy Spieherty <spiehera@lafayette.edu>
+Subject: Re: Odd failure in t/postconfigure/02-revision_no_DEVELOPING.t
+References: <B69AD971-BC7A-4534-9140-F1F51FE6D83D@verizon.net> <46412B55.7010004@perl.org> <46473A56.4080708@verizon.net>
+In-Reply-To: <46473A56.4080708@verizon.net>
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+X-Posted-By: 72.43.153.126
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=0.7 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_NEUTRAL,WEIRD_PORT
+
+> 
+> My hunch is that while Parrot's *version* number (found in top-level 
+> file 'VERSION' and reported by Parrot::BuildUtils::parrot_version()) is 
+> important for building Parrot, Parrot's repository *revision* numbers 
+> are less important.  But *how much* less important, I cannot yet say. 
+> FWIW, here are locations where these $current and $config are used 
+> (setting aside my 4 test files above).
+> 
+> config/gen/revision.pm:30:    my $revision = $Parrot::Revision::current;
+> t/distro/file_metadata.t:219:    unless ( $Parrot::Revision::current or 
+> `svk ls .` ) {
+> tools/build/revision_c.pl:46:    return ${Parrot::Revision::current};
+> tools/build/revision_c.pl:51:    return ${Parrot::Revision::config};
+> 
+
+Further research into $Parrot::Revision::current and 
+$Parrot::Revision::config:
+
+1.  Relevant code from tools/build/revision_c.pl:
+
+/* also in "parrot/embed.h" */
+PARROT_API int Parrot_revision(void);
+/* also in "parrot/misc.h" */
+PARROT_API int Parrot_config_revision(void);
+
+int Parrot_revision(void)
+{
+     return ${Parrot::Revision::current};
+}
+
+int Parrot_config_revision(void)
+{
+     return ${Parrot::Revision::config};
+}
+
+
+2.  [reconf] 501 $ ack --nohtml --nophp Parrot_revision
+compilers/imcc/main.c
+120:    rev = Parrot_revision();
+
+include/parrot/embed.h
+73:int Parrot_revision(void);
+
+tools/build/revision_c.pl
+40:PARROT_API int Parrot_revision(void);
+44:int Parrot_revision(void)
+
+
+3.  [reconf] 503 $ ack --nohtml --nophp Parrot_config_revision
+compilers/imcc/main.c
+124:    rev = Parrot_config_revision();
+
+include/parrot/misc.h
+190:PARROT_API int Parrot_config_revision(void);
+
+tools/build/revision_c.pl
+42:PARROT_API int Parrot_config_revision(void);
+49:int Parrot_config_revision(void)
+
+
+4.  Relevant code from config/gen/revision.pm:
+
+     my $revision = $Parrot::Revision::current;
+
+     $conf->data->set(
+         revision    => $revision,
+     );
+
+     if ( $revision >= 1 ) {
+         $self->set_result("r$revision");
+
+
+
+Commentary:  Why, in items (2) and (3) above, $current should be used as 
+the basis of the C variable in one case and $config should be used as 
+the basis of a different C variable in the other case it not something 
+apparent to me.
+
+Whether Parrot::Revision needs to be as complex as it is is increasingly 
+less obvious to me.  If you're working from the repository and have not 
+yet configured, then what use in $config?  Conversely, if you're working 
+from the repository and *have* configured, then do you have any further 
+need for $current?  And if you're working from a release version, 
+$current is entirely irrelevant because $config is all you've got and 
+all you're going to get.
+
+kid51
+

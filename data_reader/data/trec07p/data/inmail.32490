@@ -1,0 +1,141 @@
+From beginners-return-91470-ktwarwic=speedy.uwaterloo.ca@perl.org  Wed May  9 14:19:09 2007
+Return-Path: <beginners-return-91470-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l49IJ7qD032155
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 9 May 2007 14:19:08 -0400
+Received: (qmail 25556 invoked by uid 514); 9 May 2007 18:19:01 -0000
+Mailing-List: contact beginners-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:beginners@perl.org>
+List-Help: <mailto:beginners-help@perl.org>
+List-Unsubscribe: <mailto:beginners-unsubscribe@perl.org>
+List-Subscribe: <mailto:beginners-subscribe@perl.org>
+List-Id: <beginners.perl.org>
+Delivered-To: mailing list beginners@perl.org
+Received: (qmail 25547 invoked from network); 9 May 2007 18:19:01 -0000
+Received: from x1a.develooper.com (HELO x1.develooper.com) (216.52.237.111)
+  by lists.develooper.com with SMTP; 9 May 2007 18:19:01 -0000
+Received: (qmail 11964 invoked by uid 225); 9 May 2007 18:19:01 -0000
+Delivered-To: beginners@perl.org
+Received: (qmail 11956 invoked by alias); 9 May 2007 18:18:59 -0000
+X-Spam-Status: No, hits=2.5 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,KARMA_CONNECT_NEGATIVE,KARMA_CONTENT_NEGATIVE,MIME_QP_LONG_LINE,SPF_NEUTRAL
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: neutral (x1.develooper.com: local policy)
+Received: from ms-smtp-01.ohiordc.rr.com (HELO ms-smtp-01.ohiordc.rr.com) (65.24.5.135)
+    by la.mx.develooper.com (qpsmtpd/0.28) with ESMTP; Wed, 09 May 2007 11:18:45 -0700
+Received: from janus.tacocat.net (cpe-65-29-101-30.twmi.res.rr.com [65.29.101.30])
+	by ms-smtp-01.ohiordc.rr.com (8.13.6/8.13.6) with ESMTP id l49IIcLK026641;
+	Wed, 9 May 2007 14:18:38 -0400 (EDT)
+Received: by janus.tacocat.net (Postfix, from userid 33)
+	id C2ED34C069; Wed,  9 May 2007 14:18:37 -0400 (EDT)
+To: pangj@earthlink.net, chas.owens@gmail.com
+Subject: Re: forking problem with dbd::mysql
+Received: from 198.208.159.20 (auth. user tom@tacocat.net@localhost)
+          by www.tacocat.net with HTTP; Wed, 09 May 2007 13:18:37 -0500
+To: "Jeff Pang" <pangj@earthlink.net>, "Chas Owens" <chas.owens@gmail.com>
+Subject: Re: forking problem with dbd::mysql
+Date: Wed, 09 May 2007 13:18:37 -0500
+X-Mailer: IlohaMail/0.8.14 (On: www.tacocat.net)
+Message-ID: <SiV6GusX.1178734717.5941940.tom@tacocat.net>
+In-Reply-To: <29172822.1178726953247.JavaMail.root@elwamui-wigeon.atl.sa.earthlink.net>
+From: <tom@tacocat.net>
+Bounce-To:  <tom@tacocat.net>
+Errors-To: <tom@tacocat.net>
+CC: "beginners-list" <beginners@perl.org>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=ISO-8859-1
+X-Virus-Scanned: Symantec AntiVirus Scan Engine
+Content-Transfer-Encoding: 8bit
+X-MIME-Autoconverted: from quoted-printable to 8bit by flax9.uwaterloo.ca id l49IJ7qD032155
+
+
+This is an interesting point, but I think a database might be more
+similar to a network socket than a file handle.
+
+I have this same observed behaviour under Oracle and PostgreSQL, so it's
+not limited to mysql (and shouldn't be fixed with mysql specific flags).
+
+On 5/9/2007, "Jeff Pang" <pangj@earthlink.net> wrote:
+
+>
+>
+>-----Original Message-----
+>>From: Chas Owens <chas.owens@gmail.com>
+>>Sent: May 10, 2007 12:02 AM
+>>To: Jeff Pang <pangj@earthlink.net>
+>>Cc: beginners-list <beginners@perl.org>
+>>Subject: Re: forking problem with dbd::mysql
+>>
+>>On 5/9/07, Jeff Pang <pangj@earthlink.net> wrote:
+>>snip
+>>> But still has a question for me.We may see this similiar destroy method on DBI class,
+>>>
+>>> sub DESTROY
+>>> {
+>>>     my $self = shift;
+>>>     my $dbh = $self->{'dbh'};
+>>>     if ($dbh) {
+>>>         local $SIG{'__WARN__'} = sub {};
+>>>         $dbh->disconnect();
+>>>     }
+>>> }
+>>>
+>>> Ok where in child when going out of scope the $dbh should get disconnected.
+>>> But why this would affect the $dbh in parent?As we know,when forking child get a
+>>> full copy of $dbh from parent and it's separate to parent's $dbh.
+>>snip
+>>
+>>But the connection information in the $dbh is the same, so when the
+>>child disconnects it tells the MySQL server to destroy the connection.
+>> This means that the parent loses its connection unexpectedly.
+>
+>
+>Yes but I think is this maybe a bug in DBI class?For example,open a file handle and after forking child close that handle,this would not affect parent's handle.
+>The codes below show the case,
+>
+>use strict;
+>use warnings;
+>
+>open HDW,">","test.txt" or die;
+>select HDW;$|++;select STDOUT;
+>my $pid = fork;
+>die "can't fork" unless defined $pid;
+>
+>unless ($pid) {
+>    for (1..10) {
+>        print HDW "child $_\n";
+>        sleep 1;
+>     }
+>    exit 0;
+>
+>} else {
+>    for (1..100) {
+>        print HDW "parent $_\n";
+>        sleep 1;
+>     }
+>}
+>
+>__END__
+>
+>parent would continue to write till end at 100.
+>
+>
+>--
+>mailto:pangj@earthlink.net
+>http://home.arcor.de/jeffpang/
+>
+>--
+>To unsubscribe, e-mail: beginners-unsubscribe@perl.org
+>For additional commands, e-mail: beginners-help@perl.org
+>http://learn.perl.org/
+>
+>
+
+-- 
+To unsubscribe, e-mail: beginners-unsubscribe@perl.org
+For additional commands, e-mail: beginners-help@perl.org
+http://learn.perl.org/
+
+
+

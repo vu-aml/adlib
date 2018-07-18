@@ -1,0 +1,93 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun May 20 06:21:47 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4KALlqD017969
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 20 May 2007 06:21:47 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id AFA32162AF2
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 20 May 2007 10:21:43 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 29D07162AC5; Sun, 20 May 2007 10:21:15 +0000 (GMT)
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070520102115.29D07162AC5@lists.samba.org>
+Date: Sun, 20 May 2007 10:21:15 +0000 (GMT)
+Subject: svn commit: samba r23021 - in
+	branches/SAMBA_4_0/source/lib/util/tests: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: tridge
+Date: 2007-05-20 10:21:14 +0000 (Sun, 20 May 2007)
+New Revision: 23021
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23021
+
+Log:
+
+test some boundary conditions for idtree, after I saw some suspicious
+behaviour
+
+Modified:
+   branches/SAMBA_4_0/source/lib/util/tests/idtree.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/lib/util/tests/idtree.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/util/tests/idtree.c	2007-05-20 09:44:03 UTC (rev 23020)
++++ branches/SAMBA_4_0/source/lib/util/tests/idtree.c	2007-05-20 10:21:14 UTC (rev 23021)
+@@ -26,7 +26,7 @@
+ static bool torture_local_idtree_simple(struct torture_context *tctx)
+ {
+ 	struct idr_context *idr;
+-	int i;
++	int i, ret;
+ 	int *ids;
+ 	int *present;
+ 	extern int torture_numops;
+@@ -92,6 +92,23 @@
+ 		}
+ 	}
+ 
++	/* now test some limits */
++	for (i=0;i<25000;i++) {
++		ret = idr_get_new_above(idr, &ids[0], random() % 25000, 0x10000-3);
++		torture_assert(tctx, ret != -1, "idr_get_new_above failed");
++	}
++
++	ret = idr_get_new_above(idr, &ids[0], 0x10000-2, 0x10000);
++	torture_assert_int_equal(tctx, ret, 0x10000-2, "idr_get_new_above failed");
++	ret = idr_get_new_above(idr, &ids[0], 0x10000-1, 0x10000);
++	torture_assert_int_equal(tctx, ret, 0x10000-1, "idr_get_new_above failed");
++	ret = idr_get_new_above(idr, &ids[0], 0x10000, 0x10000);
++	torture_assert_int_equal(tctx, ret, 0x10000, "idr_get_new_above failed");
++	ret = idr_get_new_above(idr, &ids[0], 0x10000+1, 0x10000);
++	torture_assert_int_equal(tctx, ret, -1, "idr_get_new_above succeeded above limit");
++	ret = idr_get_new_above(idr, &ids[0], 0x10000+2, 0x10000);
++	torture_assert_int_equal(tctx, ret, -1, "idr_get_new_above succeeded above limit");
++
+ 	torture_comment(tctx, "cleaned up\n");
+ 	return true;
+ }
+

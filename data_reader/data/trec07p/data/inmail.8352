@@ -1,0 +1,118 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat Apr 14 02:41:59 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3E6fw0I031328
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 14 Apr 2007 02:41:59 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 80D06162C3A
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 14 Apr 2007 06:41:35 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.3 required=3.8 tests=AWL,BAYES_05,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id 729AE162BC1; Sat, 14 Apr 2007 06:40:47 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070414064047.729AE162BC1@lists.samba.org>
+Date: Sat, 14 Apr 2007 06:40:47 +0000 (GMT)
+Subject: svn commit: samba r22213 - in branches/SAMBA_3_0/source: lib smbd
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 1923
+Lines: 76
+
+Author: vlendec
+Date: 2007-04-14 06:40:47 +0000 (Sat, 14 Apr 2007)
+New Revision: 22213
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22213
+
+Log:
+We can't use become_root() here, as it does DEBUG()
+itself. become_root_uid_only did not :-)
+
+Revert 21868, we need to find a better way.
+
+Volker
+
+Modified:
+   branches/SAMBA_3_0/source/lib/debug.c
+   branches/SAMBA_3_0/source/smbd/process.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/lib/debug.c
+===================================================================
+--- branches/SAMBA_3_0/source/lib/debug.c	2007-04-14 00:53:38 UTC (rev 22212)
++++ branches/SAMBA_3_0/source/lib/debug.c	2007-04-14 06:40:47 UTC (rev 22213)
+@@ -688,15 +688,20 @@
+ 	int         maxlog;
+ 	SMB_STRUCT_STAT st;
+ 
++	/*
++	 *  We need to be root to check/change log-file, skip this and let the main
++	 *  loop check do a new check as root.
++	 */
++
++	if( geteuid() != 0 )
++		return;
++
+ 	if(log_overflow || !need_to_check_log_size() )
+ 		return;
+ 
+ 	maxlog = lp_max_log_size() * 1024;
+ 
+ 	if( sys_fstat( x_fileno( dbf ), &st ) == 0 && st.st_size > maxlog ) {
+-
+-		become_root();
+-
+ 		(void)reopen_logs();
+ 		if( dbf && get_file_size( debugf ) > maxlog ) {
+ 			pstring name;
+@@ -709,8 +714,6 @@
+ 				(void)rename(name, debugf);
+ 			}
+ 		}
+-
+-		unbecome_root();
+ 	}
+ 
+ 	/*
+
+Modified: branches/SAMBA_3_0/source/smbd/process.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/process.c	2007-04-14 00:53:38 UTC (rev 22212)
++++ branches/SAMBA_3_0/source/smbd/process.c	2007-04-14 06:40:47 UTC (rev 22213)
+@@ -1406,6 +1406,13 @@
+   
+ 	update_monitored_printq_cache();
+   
++	/*
++	 * Now we are root, check if the log files need pruning.
++	 * Force a log file check.
++	 */
++	force_check_log_size();
++	check_log_size();
++
+ 	/* Send any queued printer notify message to interested smbd's. */
+ 
+ 	print_notify_send_messages(0);
+

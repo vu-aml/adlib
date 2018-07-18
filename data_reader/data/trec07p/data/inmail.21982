@@ -1,0 +1,181 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Apr 27 01:46:07 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3R5k66w021493
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 27 Apr 2007 01:46:06 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 0436A163946
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 27 Apr 2007 05:46:06 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 620)
+	id 9E48D162ADB; Fri, 27 Apr 2007 05:45:53 +0000 (GMT)
+To: samba-cvs@samba.org
+From: metze@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070427054553.9E48D162ADB@lists.samba.org>
+Date: Fri, 27 Apr 2007 05:45:53 +0000 (GMT)
+Subject: svn commit: samba r22528 - in branches/SAMBA_4_0/source/librpc/rpc:
+	.
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 3350
+Lines: 138
+
+Author: metze
+Date: 2007-04-27 05:45:53 +0000 (Fri, 27 Apr 2007)
+New Revision: 22528
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22528
+
+Log:
+remember that the connection was marked dead and don't
+allow sending packet over the broken connection,
+as we would segfault...
+
+metze
+Modified:
+   branches/SAMBA_4_0/source/librpc/rpc/dcerpc_smb.c
+   branches/SAMBA_4_0/source/librpc/rpc/dcerpc_smb2.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/librpc/rpc/dcerpc_smb.c
+===================================================================
+--- branches/SAMBA_4_0/source/librpc/rpc/dcerpc_smb.c	2007-04-26 17:36:19 UTC (rev 22527)
++++ branches/SAMBA_4_0/source/librpc/rpc/dcerpc_smb.c	2007-04-27 05:45:53 UTC (rev 22528)
+@@ -31,6 +31,7 @@
+ 	uint16_t fnum;
+ 	struct smbcli_tree *tree;
+ 	const char *server_name;
++	bool dead;
+ };
+ 
+ 
+@@ -39,6 +40,14 @@
+ */
+ static void pipe_dead(struct dcerpc_connection *c, NTSTATUS status)
+ {
++	struct smb_private *smb = c->transport.private;
++
++	smb->dead = true;
++
++	if (smb->dead) {
++		return;
++	}
++
+ 	if (NT_STATUS_EQUAL(NT_STATUS_UNSUCCESSFUL, status)) {
+ 		status = NT_STATUS_UNEXPECTED_NETWORK_ERROR;
+ 	}
+@@ -189,6 +198,12 @@
+ */
+ static NTSTATUS send_read_request(struct dcerpc_connection *c)
+ {
++	struct smb_private *smb = c->transport.private;
++
++	if (smb->dead) {
++		return NT_STATUS_CONNECTION_DISCONNECTED;
++	}
++
+ 	return send_read_request_continue(c, NULL);
+ }
+ 
+@@ -302,6 +317,10 @@
+ 	union smb_write io;
+ 	struct smbcli_request *req;
+ 
++	if (smb->dead) {
++		return NT_STATUS_CONNECTION_DISCONNECTED;
++	}
++
+ 	if (trigger_read) {
+ 		return smb_send_trans_request(c, blob);
+ 	}
+@@ -505,6 +524,8 @@
+ 	smb->server_name= strupper_talloc(smb,
+ 			  state->tree->session->transport->called.name);
+ 	if (composite_nomem(smb->server_name, ctx)) return;
++	smb->dead	= false;
++
+ 	c->transport.private = smb;
+ 
+ 	composite_done(ctx);
+
+Modified: branches/SAMBA_4_0/source/librpc/rpc/dcerpc_smb2.c
+===================================================================
+--- branches/SAMBA_4_0/source/librpc/rpc/dcerpc_smb2.c	2007-04-26 17:36:19 UTC (rev 22527)
++++ branches/SAMBA_4_0/source/librpc/rpc/dcerpc_smb2.c	2007-04-27 05:45:53 UTC (rev 22528)
+@@ -33,6 +33,7 @@
+ 	struct smb2_handle handle;
+ 	struct smb2_tree *tree;
+ 	const char *server_name;
++	bool dead;
+ };
+ 
+ 
+@@ -41,6 +42,14 @@
+ */
+ static void pipe_dead(struct dcerpc_connection *c, NTSTATUS status)
+ {
++	struct smb2_private *smb = c->transport.private;
++
++	smb->dead = true;
++
++	if (smb->dead) {
++		return;
++	}
++
+ 	if (NT_STATUS_EQUAL(NT_STATUS_UNSUCCESSFUL, status)) {
+ 		status = NT_STATUS_UNEXPECTED_NETWORK_ERROR;
+ 	}
+@@ -183,6 +192,12 @@
+ */
+ static NTSTATUS send_read_request(struct dcerpc_connection *c)
+ {
++	struct smb2_private *smb = c->transport.private;
++
++	if (smb->dead) {
++		return NT_STATUS_CONNECTION_DISCONNECTED;
++	}
++
+ 	return send_read_request_continue(c, NULL);
+ }
+ 
+@@ -287,6 +302,10 @@
+ 	struct smb2_write io;
+ 	struct smb2_request *req;
+ 
++	if (smb->dead) {
++		return NT_STATUS_CONNECTION_DISCONNECTED;
++	}
++
+ 	if (trigger_read) {
+ 		return smb2_send_trans_request(c, blob);
+ 	}
+@@ -461,6 +480,7 @@
+ 	smb->server_name= strupper_talloc(smb, 
+ 					  tree->session->transport->socket->hostname);
+ 	if (composite_nomem(smb->server_name, ctx)) return;
++	smb->dead	= false;
+ 
+ 	c->transport.private = smb;
+ 
+

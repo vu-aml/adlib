@@ -1,0 +1,226 @@
+From beginners-return-91230-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue May  1 13:39:00 2007
+Return-Path: <beginners-return-91230-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l41Hcxb9010190
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 1 May 2007 13:39:00 -0400
+Received: (qmail 15923 invoked by uid 514); 30 Apr 2007 20:47:43 -0000
+Mailing-List: contact beginners-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:beginners@perl.org>
+List-Help: <mailto:beginners-help@perl.org>
+List-Unsubscribe: <mailto:beginners-unsubscribe@perl.org>
+List-Subscribe: <mailto:beginners-subscribe@perl.org>
+List-Id: <beginners.perl.org>
+Delivered-To: mailing list beginners@perl.org
+Received: (qmail 15865 invoked from network); 30 Apr 2007 20:47:43 -0000
+Received: from x1a.develooper.com (HELO x1.develooper.com) (216.52.237.111)
+  by lists.develooper.com with SMTP; 30 Apr 2007 20:47:43 -0000
+Received: (qmail 1326 invoked by uid 225); 30 Apr 2007 20:47:42 -0000
+Delivered-To: beginners@perl.org
+Received: (qmail 1322 invoked by alias); 30 Apr 2007 20:47:42 -0000
+X-Spam-Status: No, hits=-4.4 required=8.0
+	tests=ALL_TRUSTED,BAYES_00,DK_POLICY_SIGNSOME
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: neutral (x1.develooper.com: local policy)
+Received: from x6.develooper.com (HELO lists.develooper.com) (63.251.223.186)
+    by la.mx.develooper.com (qpsmtpd/0.28) with SMTP; Mon, 30 Apr 2007 13:47:39 -0700
+Received: (qmail 15819 invoked by uid 515); 30 Apr 2007 20:47:35 -0000
+To: beginners@perl.org
+From: zentara <zentara@highstream.net>
+Subject: Re: Encryption
+Date: Mon, 30 Apr 2007 16:46:24 -0400
+Sender: Linux@lists.develooper.com
+Message-ID: <f8lc331om5bon5i52lff9jo4j79i9m772s@4ax.com>
+References: <f0sg34$mtu$1@sea.gmane.org> <sn043319u1rbjlun3bp1jcdbbjv4f5mp15@4ax.com> <f14hib$ej9$1@sea.gmane.org>
+X-Newsreader:  :  :/Li.nux English (American)
+X-No-Archive: yes
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Transfer-Encoding: 7bit
+X-Posted-By: 68.79.101.228
+X-Virus-Checked: Checked
+Status: O
+Content-Length: 5447
+Lines: 180
+
+On Mon, 30 Apr 2007 12:48:57 +0200, andreas.moroder@sb-brixen.it
+(Andreas Moroder) wrote:
+
+ 
+>> To be honest, I would assume that the Oracle designers have made this
+>> quite tricky to avoid hacking their passwords.
+>According to the document this is not true.
+>I will try your code later.
+>Thank you
+>Andreas
+
+Hi, there seems to be some discrepancies between the 2 explanations of
+the steps to take. Maybe I'm misunderstanding it all. (probably)
+
+Anyways, here is a quick try I made. It dosn't work right I'm sure, but
+there are some routines in there that may speed up your attempts at
+a script.  I would ask this on perlmonks.org where the REAL perl brains
+are.... I'm just an amateur.
+
+I'm still unclear about the stripping the 8th bit thing. 
+Also when they say to convert the string to utf16, maybe they mean
+char-by-char, instead of a whole string conversion?
+
+This is blowin my mind. :-)
+Good Luck.
+
+#!/usr/bin/perl
+use warnings;
+use strict;
+use Crypt::CBC;
+use Encode;
+
+=head1
+I have to calculate a hash of username and password in perl.
+The calculation should be done this way:
+
+1. Concatenate the username and the password to produce a plaintext
+string;
+2. Convert the plaintext string to uppercase characters;
+3. Convert the plaintext string to multi-byte storage format; ASCII 
+characters have the
+high byte set to 0x00;
+4. Encrypt the plaintext string (padded with 0s if necessary to the next
+even block length)
+using the DES algorithm in cipher block chaining (CBC) mode with a fixed
+key value of
+0x0090687678ABCDEF;
+5. Encrypt the plaintext string again with DES-CBC, but using the last 
+block of the output
+of the previous step (ignoring parity bits) as the encryption key. The 
+last block of the
+output is converted into a printable string to produce the password hash
+value.
+
+Is it possible to implement this in perl ?
+Is the Crypt-DES Module on CPAN the right module and how can I convert 
+standard string to Multibyte storage ( UTF-16 ? )
+An example ist
+
+User: example
+password: test
+hash: BDA63848A8C31752
+
+
+# more detailed explanation
+
+Dave Trahan wants to know the Oracle password algorithm so
+he can check for weak passwords.  When I was the project
+lead for Trusted Oracle I designed the new password algorithm
+that is used in versions 6, 7, and later.  I presented the
+details at a Bay Area Trusted System Symposium so I am not
+revealing any information that is not already in the puiblic
+domain.  Here are some of the details as I remember them.
+
+Design Goals:
+1. Must work with all terminals.
+   ===> Some terminals do not have lowercase letters, so
+        the password algorithm ignores differences between
+        upper and lower case!!!  The passwords "Tiger"
+        and "tiger" map to the same value.
+
+2. Must support usernames and passwords that include non-ascii
+   characters.
+        The username and password are converted to
+        16 bit per character representation before any processing
+        is done.  Ascii characters have the high byte zeroed.
+
+3. If different users have the same password, then the one-way
+   hash value (encrypted value) for the passwords will be different.
+
+4. Long passwords are supported.
+        I believe that usernames and passwords can both be 40 chars.
+
+Implementation:
+1.  Upshift password, convert to 16bits per character, and place
+    result left justified in an 80 byte array of zeros.
+
+2.  Using DES in cipher block feedback mode compute the CBC checksum for
+    the 80 byte password array using a fixed secret password (you can
+find
+    it in the code if you look hard enough).  The result is used as the
+    key for the next step ignoring parity bits to produce the a 56 bit
+    key from the CBC.
+
+3.  Upshift password, and convert to 16bits per character, and place
+    result left justified in an 80 byte array of zeros.
+
+4.  Using DES in cipher block feedback mode compute the CBC checksum
+    for the 80 byte username array using the key generate in step 2.
+
+5.  Convert the CBC checksum from step 4 into a printable string with
+    the obvious algorithm.
+
+                --Bob Baldwin
+Director of Development                 We provide the best solutions
+Los Altos Technologies, Inc.            to our customers key security
+bald...
+=cut
+
+# start test script #################################
+
+my $key = pack("H16", "0090687678ABCDEF");
+my $user = 'example';
+my $password = 'test';
+
+my $plaintext = uc($user.$password);
+print("$plaintext\n");
+
+#converted it to bytes via utf-16 (take a look at "perldoc perlunicode")
+my  $octets = encode("utf-16", $plaintext);
+print "utf16->  $octets\n";
+
+my $cipher = Crypt::CBC->new(
+   -key    => $key,
+   -cipher => 'DES',
+   -salt   => 1,
+);
+
+my $ciphertext = $cipher->encrypt($octets);
+print("$ciphertext\n");
+
+
+my( $hex ) = unpack( 'H*', $ciphertext );
+print $hex,"\n";
+my $temp = uc(substr($hex,length($hex)-16,16));
+print "\n$temp\n";
+
+my $key1 = pack("H16", $temp);
+
+my $cipher1 = Crypt::CBC->new(
+   -key    => $key1,
+   -cipher => 'DES',
+   -salt   => 1,
+);
+
+
+my $ciphertext1 = $cipher1->encrypt($octets);
+print("$ciphertext1\n");
+my( $hex1 ) = unpack( 'H*', $ciphertext1 );
+print $hex1,"\n";
+
+my $temp1 = uc(substr($hex1,length($hex1)-16,16));
+print "\n$temp1\n";
+
+__END__
+
+
+zentara
+
+
+
+-- 
+I'm not really a human, but I play one on earth.
+http://zentara.net/japh.html
+
+-- 
+To unsubscribe, e-mail: beginners-unsubscribe@perl.org
+For additional commands, e-mail: beginners-help@perl.org
+http://learn.perl.org/
+
+

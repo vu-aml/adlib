@@ -1,0 +1,135 @@
+From sugar-bounces@lists.laptop.org  Thu Jun 14 08:49:53 2007
+Return-Path: <sugar-bounces@lists.laptop.org>
+Received: from mail.laptop.org (pedal.laptop.org [18.85.2.148])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5ECnqL9021682
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 14 Jun 2007 08:49:53 -0400
+Received: from [127.0.1.1] (localhost [127.0.0.1])
+	by mail.laptop.org (Postfix) with ESMTP id 957A558BC7BE;
+	Thu, 14 Jun 2007 08:49:21 -0400 (EDT)
+Received: from develer.com (unknown [81.174.33.43])
+	by mail.laptop.org (Postfix) with ESMTP id 205C858BC7BE
+	for <sugar@lists.laptop.org>; Thu, 14 Jun 2007 08:49:19 -0400 (EDT)
+Received: (qmail 28969 invoked from network); 14 Jun 2007 12:49:47 -0000
+Received: from 1cc-dhcp-121.media.mit.edu (HELO ?18.85.46.121?)
+	(bernie@18.85.46.121)
+	by trinity.develer.com with ESMTPA; 14 Jun 2007 12:49:47 -0000
+Message-ID: <4671395A.4020308@codewiz.org>
+Date: Thu, 14 Jun 2007 08:49:30 -0400
+From: Bernardo Innocenti <bernie@codewiz.org>
+Organization: http://www.codewiz.org/
+User-Agent: Thunderbird 2.0.0.4 (X11/20070607)
+MIME-Version: 1.0
+To: Marco Pesenti Gritti <mpg@redhat.com>
+References: <11817791483526-git-send-email-bernie@codewiz.org>
+	<4670FD42.6010704@redhat.com>
+In-Reply-To: <4670FD42.6010704@redhat.com>
+Cc: sugar@lists.laptop.org
+Subject: Re: [sugar] [PATCH] unfreeze DCON when Sugar UI is (almost) ready
+ to	show
+X-BeenThere: sugar@lists.laptop.org
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Discussion of OLPC design,
+	desktop platform and user experience" <sugar.lists.laptop.org>
+List-Unsubscribe: <http://lists.laptop.org/listinfo/sugar>,
+	<mailto:sugar-request@lists.laptop.org?subject=unsubscribe>
+List-Archive: <http://lists.laptop.org/pipermail/sugar>
+List-Post: <mailto:sugar@lists.laptop.org>
+List-Help: <mailto:sugar-request@lists.laptop.org?subject=help>
+List-Subscribe: <http://lists.laptop.org/listinfo/sugar>,
+	<mailto:sugar-request@lists.laptop.org?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: sugar-bounces@lists.laptop.org
+Errors-To: sugar-bounces@lists.laptop.org
+
+Marco Pesenti Gritti wrote:
+
+> we need to get the hardware-manager part of this in before, otherwise we 
+> will traceback on startup.
+
+Sorry, I sent the patches in reverse order.  Did you get
+the next one?
+
+
+>> +        # Unfreeze the display when it's stable
+>> +        get_hardware_manager().set_dcon_freeze(0)
+>> +
+> 
+> Is this actually working? You need something like:
+> 
+> from hardware import hardwaremanager
+> ....
+
+Oh, and actually I had that part too, but I've lost this hunk
+while copying them to the sandbox.  That's what you get for
+editing code right on the target.
+
+Updated patch attached.
+
+
+>From b7bfbb7cc628afe29734557f56d92044d2d336d4 Mon Sep 17 00:00:00 2001
+From: Bernardo Innocenti <bernie@codewiz.org>
+Date: Wed, 13 Jun 2007 19:56:22 -0400
+Subject: [PATCH] unfreeze DCON when Sugar UI is (almost) ready to show
+Organization: One Laptop Per Child
+
+This is part of a masterplan to implement #621 .
+---
+ shell/hardware/hardwaremanager.py |    6 ++++++
+ shell/view/Shell.py               |    5 +++++
+ 2 files changed, 11 insertions(+), 0 deletions(-)
+
+diff --git a/shell/hardware/hardwaremanager.py b/shell/hardware/hardwaremanager.py
+index f23af25..c962b28 100644
+--- a/shell/hardware/hardwaremanager.py
++++ b/shell/hardware/hardwaremanager.py
+@@ -69,6 +69,12 @@ class HardwareManager(object):
+             logging.error('Cannot mute the audio channel')
+         self._mixer.set_mute(self._master, mute)
+ 
++    def set_dcon_freeze(self, frozen):
++        if not self._service:
++            return
++
++        self._service.set_dcon_freeze(frozen)
++
+     def set_display_mode(self, mode):
+         if not self._service:
+             return
+diff --git a/shell/view/Shell.py b/shell/view/Shell.py
+index 892123c..d73fe10 100644
+--- a/shell/view/Shell.py
++++ b/shell/view/Shell.py
+@@ -38,6 +38,8 @@ from view.keyhandler import KeyHandler
+ from view.home.HomeWindow import HomeWindow
+ from model import bundleregistry
+ 
++from hardware.hardwaremanager import get_hardware_manager
++
+ class Shell(gobject.GObject):
+     def __init__(self, model):
+         gobject.GObject.__init__(self)
+@@ -68,6 +70,9 @@ class Shell(gobject.GObject):
+ 
+         self.start_activity('org.laptop.JournalActivity')
+ 
++        # Unfreeze the display when it's stable
++        get_hardware_manager().set_dcon_freeze(0)
++
+     def _activity_started_cb(self, home_model, home_activity):
+         activity_host = ActivityHost(home_activity)
+         self._hosts[activity_host.get_xid()] = activity_host
+-- 
+1.5.2
+
+
+
+-- 
+   // Bernardo Innocenti
+ \X/  http://www.codewiz.org/
+_______________________________________________
+Sugar mailing list
+Sugar@lists.laptop.org
+http://lists.laptop.org/listinfo/sugar
+

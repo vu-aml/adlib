@@ -1,0 +1,160 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Jun  6 09:02:44 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l56D2ihB021720
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 6 Jun 2007 09:02:44 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 29C37163858
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed,  6 Jun 2007 13:02:38 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.3 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 2949D162AE9; Wed,  6 Jun 2007 13:02:16 +0000 (GMT)
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070606130216.2949D162AE9@lists.samba.org>
+Date: Wed,  6 Jun 2007 13:02:16 +0000 (GMT)
+Subject: svn commit: samba r23367 - in branches: SAMBA_3_0/source/groupdb
+	SAMBA_3_0/source/lib/ldb/include
+	SAMBA_3_0/source/lib/ldb/ldb_tdb SAMBA_3_0_26/source/groupdb
+	SAMBA_3_0_26/source/lib/ldb/include
+	SAMBA_3_0_26/source/lib/ldb/ldb_tdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: tridge
+Date: 2007-06-06 13:02:14 +0000 (Wed, 06 Jun 2007)
+New Revision: 23367
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23367
+
+Log:
+check the "use mmap" option for ldb too
+Modified:
+   branches/SAMBA_3_0/source/groupdb/mapping_ldb.c
+   branches/SAMBA_3_0/source/lib/ldb/include/ldb.h
+   branches/SAMBA_3_0/source/lib/ldb/ldb_tdb/ldb_tdb.c
+   branches/SAMBA_3_0_26/source/groupdb/mapping_ldb.c
+   branches/SAMBA_3_0_26/source/lib/ldb/include/ldb.h
+   branches/SAMBA_3_0_26/source/lib/ldb/ldb_tdb/ldb_tdb.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/groupdb/mapping_ldb.c
+===================================================================
+--- branches/SAMBA_3_0/source/groupdb/mapping_ldb.c	2007-06-06 12:52:48 UTC (rev 23366)
++++ branches/SAMBA_3_0/source/groupdb/mapping_ldb.c	2007-06-06 13:02:14 UTC (rev 23367)
+@@ -67,6 +67,10 @@
+ 		flags |= LDB_FLG_NOSYNC;
+ 	}
+ 
++	if (!lp_use_mmap()) {
++		flags |= LDB_FLG_NOMMAP;
++	}
++
+ 	ret = ldb_connect(ldb, db_path, flags, NULL);
+ 	if (ret != LDB_SUCCESS) {
+ 		goto failed;
+
+Modified: branches/SAMBA_3_0/source/lib/ldb/include/ldb.h
+===================================================================
+--- branches/SAMBA_3_0/source/lib/ldb/include/ldb.h	2007-06-06 12:52:48 UTC (rev 23366)
++++ branches/SAMBA_3_0/source/lib/ldb/include/ldb.h	2007-06-06 13:02:14 UTC (rev 23367)
+@@ -233,6 +233,11 @@
+ */
+ #define LDB_FLG_RECONNECT 4
+ 
++/**
++   Flag to tell backends not to use mmap
++*/
++#define LDB_FLG_NOMMAP 8
++
+ /*
+    structures for ldb_parse_tree handling code
+ */
+
+Modified: branches/SAMBA_3_0/source/lib/ldb/ldb_tdb/ldb_tdb.c
+===================================================================
+--- branches/SAMBA_3_0/source/lib/ldb/ldb_tdb/ldb_tdb.c	2007-06-06 12:52:48 UTC (rev 23366)
++++ branches/SAMBA_3_0/source/lib/ldb/ldb_tdb/ldb_tdb.c	2007-06-06 13:02:14 UTC (rev 23367)
+@@ -1029,6 +1029,11 @@
+ 		tdb_flags |= TDB_NOSYNC;
+ 	}
+ 
++	/* and nommap option */
++	if (flags & LDB_FLG_NOMMAP) {
++		tdb_flags |= TDB_NOMMAP;
++	}
++
+ 	if (flags & LDB_FLG_RDONLY) {
+ 		open_flags = O_RDONLY;
+ 	} else {
+
+Modified: branches/SAMBA_3_0_26/source/groupdb/mapping_ldb.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/groupdb/mapping_ldb.c	2007-06-06 12:52:48 UTC (rev 23366)
++++ branches/SAMBA_3_0_26/source/groupdb/mapping_ldb.c	2007-06-06 13:02:14 UTC (rev 23367)
+@@ -67,6 +67,10 @@
+ 		flags |= LDB_FLG_NOSYNC;
+ 	}
+ 
++	if (!lp_use_mmap()) {
++		flags |= LDB_FLG_NOMMAP;
++	}
++
+ 	ret = ldb_connect(ldb, db_path, flags, NULL);
+ 	if (ret != LDB_SUCCESS) {
+ 		goto failed;
+
+Modified: branches/SAMBA_3_0_26/source/lib/ldb/include/ldb.h
+===================================================================
+--- branches/SAMBA_3_0_26/source/lib/ldb/include/ldb.h	2007-06-06 12:52:48 UTC (rev 23366)
++++ branches/SAMBA_3_0_26/source/lib/ldb/include/ldb.h	2007-06-06 13:02:14 UTC (rev 23367)
+@@ -233,6 +233,11 @@
+ */
+ #define LDB_FLG_RECONNECT 4
+ 
++/**
++   Flag to tell backends not to use mmap
++*/
++#define LDB_FLG_NOMMAP 8
++
+ /*
+    structures for ldb_parse_tree handling code
+ */
+
+Modified: branches/SAMBA_3_0_26/source/lib/ldb/ldb_tdb/ldb_tdb.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/lib/ldb/ldb_tdb/ldb_tdb.c	2007-06-06 12:52:48 UTC (rev 23366)
++++ branches/SAMBA_3_0_26/source/lib/ldb/ldb_tdb/ldb_tdb.c	2007-06-06 13:02:14 UTC (rev 23367)
+@@ -1029,6 +1029,11 @@
+ 		tdb_flags |= TDB_NOSYNC;
+ 	}
+ 
++	/* and nommap option */
++	if (flags & LDB_FLG_NOMMAP) {
++		tdb_flags |= TDB_NOMMAP;
++	}
++
+ 	if (flags & LDB_FLG_RDONLY) {
+ 		open_flags = O_RDONLY;
+ 	} else {
+

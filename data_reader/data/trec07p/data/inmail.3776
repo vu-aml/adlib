@@ -1,0 +1,116 @@
+From perl6-all-return-80503-ktwarwic=speedy.uwaterloo.ca@perl.org  Thu Apr 12 07:38:35 2007
+Return-Path: <perl6-all-return-80503-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3CBcX0I029039
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 12 Apr 2007 07:38:34 -0400
+Received: (qmail 12142 invoked by uid 514); 12 Apr 2007 11:38:09 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 12132 invoked from network); 12 Apr 2007 11:38:09 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+Message-ID: <461E19F4.1080205@rblasch.org>
+Date: Thu, 12 Apr 2007 13:37:24 +0200
+From: Ron Blaschke <mailing-lists@rblasch.org>
+Reply-To: ron@rblasch.org
+User-Agent: Thunderbird 2.0.0.0 (Windows/20070326)
+MIME-Version: 1.0
+To: perl6-internals@perl.org
+Subject: Limiting Exported Symbols on GCC
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+Status: O
+Content-Length: 3403
+Lines: 72
+
+While poking the GCC documentation I found that there's a feature 
+available to limit the exported symbols (with GCC >= 3.3).  Maybe worth 
+considering?
+It's probably a design decision.  If there's an option to limit the 
+exported symbols or make all available, which one should be taken?
+
+http://gcc.gnu.org/wiki/Visibility
+http://gcc.gnu.org/onlinedocs/gcc-3.3.6/gcc/Function-Attributes.html#Function-Attributes
+
+This can be done by adding C<-fvisibility=hidden> to CFLAGS and setting 
+PARROT_API to C<__attribute__ ((visibility("default")))>.
+
+
+If you're trying this, prepare to kill io_4 quickly while t/src/io.t is 
+running, as it would print "16777215:" for a very, very long time 
+(there's already a ticket for this).  The following is r18140 on Ubuntu, 
+using GCC 4.1.2.
+
+ >prove t/src/io.t
+...
+t/src/io....ok 15/20# 'cc  -L/usr/local/lib -Wl,-E  t/src/io_16.o 
+src/parrot_config.o -o t/src/io_16 -Wl,-rpath=/home/rb
+lasch/src/parrot/trunk/blib/lib -Lblib/lib -lparrot -lpthread -lm 
+-L/usr/lib  -licuuc -licudata -lpthread -lm -ldl -lm -
+lpthread -lcrypt -lrt -lgmp -lreadline -lncurses' failed with exit code 1
+# Failed to build 't/src/io_16': t/src/io_16.o: In function `the_test':
+# t/src/io_16.c:31: undefined reference to `PIO_make_offset'
+# collect2: ld returned 1 exit status
+
+#     Failed test (t/src/io.t at line 506)
+t/src/io....NOK 16# 'cc  -L/usr/local/lib -Wl,-E  t/src/io_17.o 
+src/parrot_config.o -o t/src/io_17 -Wl,-rpath=/home/rbla
+sch/src/parrot/trunk/blib/lib -Lblib/lib -lparrot -lpthread -lm 
+-L/usr/lib  -licuuc -licudata -lpthread -lm -ldl -lm -lp
+thread -lcrypt -lrt -lgmp -lreadline -lncurses' failed with exit code 1
+# Failed to build 't/src/io_17': t/src/io_17.o: In function `the_test':
+# t/src/io_17.c:46: undefined reference to `PIO_make_offset'
+# collect2: ld returned 1 exit status
+
+#     Failed test (t/src/io.t at line 538)
+t/src/io....NOK 17# 'cc  -L/usr/local/lib -Wl,-E  t/src/io_18.o 
+src/parrot_config.o -o t/src/io_18 -Wl,-rpath=/home/rbla
+sch/src/parrot/trunk/blib/lib -Lblib/lib -lparrot -lpthread -lm 
+-L/usr/lib  -licuuc -licudata -lpthread -lm -ldl -lm -lp
+thread -lcrypt -lrt -lgmp -lreadline -lncurses' failed with exit code 1
+# Failed to build 't/src/io_18': t/src/io_18.o: In function `the_test':
+# t/src/io_18.c:33: undefined reference to `PIO_STDOUT'
+# collect2: ld returned 1 exit status
+
+#     Failed test (t/src/io.t at line 593)
+t/src/io....NOK 18# 'cc  -L/usr/local/lib -Wl,-E  t/src/io_19.o 
+src/parrot_config.o -o t/src/io_19 -Wl,-rpath=/home/rbla
+sch/src/parrot/trunk/blib/lib -Lblib/lib -lparrot -lpthread -lm 
+-L/usr/lib  -licuuc -licudata -lpthread -lm -ldl -lm -lp
+thread -lcrypt -lrt -lgmp -lreadline -lncurses' failed with exit code 1
+# Failed to build 't/src/io_19': t/src/io_19.o: In function `the_test':
+# t/src/io_19.c:29: undefined reference to `pio_stdio_layer'
+# collect2: ld returned 1 exit status
+
+#     Failed test (t/src/io.t at line 628)
+t/src/io....ok 20/20# Looks like you failed 9 tests of 20.
+t/src/io....dubious
+         Test returned status 9 (wstat 2304, 0x900)
+DIED. FAILED tests 2-4, 6-7, 16-19
+         Failed 9/20 tests, 55.00% okay
+Failed Test Stat Wstat Total Fail  Failed  List of Failed
+-------------------------------------------------------------------------------
+t/src/io.t     9  2304    20    9  45.00%  2-4 6-7 16-19
+Failed 1/1 test scripts, 0.00% okay. 9/20 subtests failed, 55.00% okay.
+
+
+Ron
+

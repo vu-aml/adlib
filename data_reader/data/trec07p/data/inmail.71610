@@ -1,0 +1,228 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Jul  2 04:43:19 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l628hIL9011461
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 2 Jul 2007 04:43:19 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 1B107163887
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon,  2 Jul 2007 08:43:15 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.3 required=3.8 tests=AWL,BAYES_50,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id E143F162AED; Mon,  2 Jul 2007 08:42:47 +0000 (GMT)
+Date: Mon, 02 Jul 2007 18:30:17 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070702084247.E143F162AED@lists.samba.org>
+Subject: Rev 552: merge from ronnie in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 552
+revision-id: tridge@samba.org-20070702083017-obd2fxlx88u5osxu
+parent: tridge@samba.org-20070702082443-xbtuhcorf1cjw1hb
+parent: sahlberg@ronnie-20070702082513-8gpdtqa1cmupxy0j
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Mon 2007-07-02 18:30:17 +1000
+message:
+  merge from ronnie
+modified:
+  scsi/scsi_io.c                 scsi_io.c-20070702055133-iclxpxa82pdb3ue6-2
+    ------------------------------------------------------------
+    revno: 432.1.90
+    merged: sahlberg@ronnie-20070702082513-8gpdtqa1cmupxy0j
+    parent: sahlberg@ronnie-20070702075257-iqnu4jf7kduwq2eg
+    committer: Ronnie Sahlberg <sahlberg@ronnie>
+    branch nick: ctdb
+    timestamp: Mon 2007-07-02 18:25:13 +1000
+    message:
+      add GPL comment to scsi_io.c
+    ------------------------------------------------------------
+    revno: 432.1.89
+    merged: sahlberg@ronnie-20070702075257-iqnu4jf7kduwq2eg
+    parent: sahlberg@ronnie-20070702061331-x7tthejqu86xju08
+    committer: Ronnie Sahlberg <sahlberg@ronnie>
+    branch nick: ctdb
+    timestamp: Mon 2007-07-02 17:52:57 +1000
+    message:
+      start implementing command line parsing to scsi_io to make it take
+      parameters that control what operations to perform
+=== modified file 'scsi/scsi_io.c'
+--- a/scsi/scsi_io.c	2007-07-02 06:13:31 +0000
++++ b/scsi/scsi_io.c	2007-07-02 08:25:13 +0000
+@@ -3,6 +3,20 @@
+    functions
+ 
+    Copyright   ronnie sahlberg 2007
++
++   This program is free software; you can redistribute it and/or modify
++   it under the terms of the GNU General Public License as published by
++   the Free Software Foundation; either version 2 of the License, or
++   (at your option) any later version.
++   
++   This program is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++   GNU General Public License for more details.
++   
++   You should have received a copy of the GNU General Public License
++   along with this program; if not, write to the Free Software
++   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ */
+ 
+ /* very incomplete and needs to be enhanced with noice command line options
+@@ -26,6 +40,7 @@
+ #include <errno.h>
+ #include <sys/ioctl.h>
+ #include <scsi/sg.h>
++#include "popt.h"
+ 
+ 
+ #define SCSI_TIMEOUT 5000 /* ms */
+@@ -123,11 +138,6 @@
+ 	return 0;
+ }
+ 
+-void usage(void)
+-{
+-	printf("Usage:  scsi <device>\n");
+-}
+-
+ typedef struct _value_string_t {
+ 	int	value;
+ 	const char	*string;
+@@ -877,28 +887,95 @@
+ 	return fd;
+ }
+ 
+-int main(int argc, char *argv[])
+-{
+-	int fd;
+-
+-	if(argc!=2){
+-		usage();
+-		_exit(10);
+-	}
+-	fd=open_scsi_device(argv[1]);
++typedef int (*scsi_func_t)(int fd);
++typedef struct _cmds_t {
++	const char *cmd;
++	scsi_func_t func;
++	const char *comment;
++} cmds_t;
++cmds_t cmds[] = {
++	{"inq",		scsi_inquiry,	"Standard INQUIRY output"},
++	{"vpd",		scsi_inquiry_supported_vpd_pages,	"Supported VPD Pages"},
++	{"usn",		scsi_inquiry_unit_serial_number,	"Unit serial number"},
++	{"readkeys",	scsi_persistent_reserve_in_read_keys,	"Read SCSI Reservation Keys"},
++	{"readrsvr",	scsi_persistent_reserve_in_read_reservation, "Read SCSI Reservation Data"},
++	{"reportcap",	scsi_persistent_reserve_in_report_capabilities, "Report reservation Capabilities"},
++};
++
++void usage(void)
++{
++	int i;
++	printf("Usage:  scsi_io --command <command> --device <device>\n");
++	printf("Commands:\n");
++	for (i=0;i<sizeof(cmds)/sizeof(cmds[0]);i++){
++		printf("	%s	%s\n", cmds[i].cmd, cmds[i].comment);
++	}	
++}
++
++
++int main(int argc, const char *argv[])
++{
++	int i, fd;
++	int opt;
++	char *command = NULL;
++	char *device = NULL;
++	scsi_func_t func=NULL;
++	struct poptOption popt_options[] = {
++		POPT_AUTOHELP
++//		{ "timelimit", 't', POPT_ARG_INT, &options.timelimit, 0, "timelimit", "integer" },
++		{ "command",      'n', POPT_ARG_STRING, &command, 0, "command", "command" },
++		{ "device",      'n', POPT_ARG_STRING, &device, 0, "device", "device" },
++//		{ "machinereadable", 'Y', POPT_ARG_NONE, &options.machinereadable, 0, "enable machinereadable output", NULL },
++		POPT_TABLEEND
++	};
++	poptContext pc;
++
++	pc = poptGetContext(argv[0], argc, argv, popt_options, POPT_CONTEXT_KEEP_FIRST);
++
++	while ((opt = poptGetNextOpt(pc)) != -1) {
++		switch (opt) {
++		default:
++			fprintf(stderr, "Invalid option %s: %s\n", 
++				poptBadOption(pc, 0), poptStrerror(opt));
++			_exit(1);
++		}
++	}
++
++	if (!command) {
++		printf("Must specify the command\n");
++		usage();
++		_exit(10);
++	}
++
++	if (!device) {
++		printf("Must specify the device\n");
++		usage();
++		_exit(10);
++	}
++
++	fd=open_scsi_device(device);
+ 	if(fd<0){
+-		printf("Could not open SCSI device %s\n",argv[1]);
+-		_exit(10);
+-	}
+-
+-	scsi_inquiry(fd);
+-	scsi_inquiry_supported_vpd_pages(fd);
+-	scsi_inquiry_unit_serial_number(fd);
+-	scsi_persistent_reserve_in_read_keys(fd);
+-	scsi_persistent_reserve_in_read_reservation(fd);
+-	scsi_persistent_reserve_in_report_capabilities(fd);
++		printf("Could not open SCSI device %s\n",device);
++		usage();
++		_exit(10);
++	}
++
++	for (i=0;i<sizeof(cmds)/sizeof(cmds[0]);i++){
++		if(!strcmp(cmds[i].cmd, command)) {
++			func = cmds[i].func;
++			break;
++		}		
++	}
++	if (!func) {
++		printf("Unrecognized command : %s\n", command);
++		usage();
++		_exit(10);
++	}
++
++	func(fd);
++
++#if 0
+ 	scsi_persistent_reserve_in_read_full_status(fd);
+-#if 0
+ 	scsi_persistent_reserve_out_register_and_ignore_existing_key(fd);
+ 	scsi_persistent_reserve_in_read_keys(fd);
+ 
+

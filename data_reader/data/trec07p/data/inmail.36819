@@ -1,0 +1,340 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 15 09:44:57 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4FDivqD005589
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 09:44:57 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 136EE16389A
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 13:44:55 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id DE0D6163845; Tue, 15 May 2007 13:44:11 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070515134411.DE0D6163845@lists.samba.org>
+Date: Tue, 15 May 2007 13:44:11 +0000 (GMT)
+Subject: svn commit: samba r22902 - in branches: SAMBA_3_0/source/nmbd
+	SAMBA_3_0_26/source/nmbd
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-05-15 13:44:11 +0000 (Tue, 15 May 2007)
+New Revision: 22902
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22902
+
+Log:
+Add an event_context and a messaging_context to nmbd. Not used yet.
+
+Modified:
+   branches/SAMBA_3_0/source/nmbd/nmbd.c
+   branches/SAMBA_3_0/source/nmbd/nmbd_packets.c
+   branches/SAMBA_3_0_26/source/nmbd/nmbd.c
+   branches/SAMBA_3_0_26/source/nmbd/nmbd_packets.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/nmbd/nmbd.c
+===================================================================
+--- branches/SAMBA_3_0/source/nmbd/nmbd.c	2007-05-15 13:42:53 UTC (rev 22901)
++++ branches/SAMBA_3_0/source/nmbd/nmbd.c	2007-05-15 13:44:11 UTC (rev 22902)
+@@ -40,6 +40,27 @@
+ 
+ time_t StartupTime = 0;
+ 
++struct event_context *nmbd_event_context(void)
++{
++	static struct event_context *ctx;
++
++	if (!ctx && !(ctx = event_context_init(NULL))) {
++		smb_panic("Could not init nmbd event context\n");
++	}
++	return ctx;
++}
++
++struct messaging_context *nmbd_messaging_context(void)
++{
++	static struct messaging_context *ctx;
++
++	if (!ctx && !(ctx = messaging_init(NULL, server_id_self(),
++					   nmbd_event_context()))) {
++		smb_panic("Could not init nmbd messaging context\n");
++	}
++	return ctx;
++}
++
+ /**************************************************************************** **
+  Handle a SIGTERM in band.
+  **************************************************************************** */
+@@ -732,6 +753,11 @@
+ 		setpgid( (pid_t)0, (pid_t)0 );
+ #endif
+ 
++	message_init();
++	if (nmbd_messaging_context() == NULL) {
++		return 1;
++	}
++
+ #ifndef SYNC_DNS
+ 	/* Setup the async dns. We do it here so it doesn't have all the other
+ 		stuff initialised and thus chewing memory and sockets */
+@@ -745,7 +771,6 @@
+ 	}
+ 
+ 	pidfile_create("nmbd");
+-	message_init();
+ 	message_register(MSG_FORCE_ELECTION, nmbd_message_election, NULL);
+ #if 0
+ 	/* Until winsrepl is done. */
+
+Modified: branches/SAMBA_3_0/source/nmbd/nmbd_packets.c
+===================================================================
+--- branches/SAMBA_3_0/source/nmbd/nmbd_packets.c	2007-05-15 13:42:53 UTC (rev 22901)
++++ branches/SAMBA_3_0/source/nmbd/nmbd_packets.c	2007-05-15 13:44:11 UTC (rev 22902)
+@@ -1730,7 +1730,8 @@
+ 	int i;
+ 	static int maxfd = 0;
+ 
+-	fd_set fds;
++	fd_set r_fds;
++	fd_set w_fds;
+ 	int selrtn;
+ 	struct timeval timeout;
+ #ifndef SYNC_DNS
+@@ -1745,12 +1746,13 @@
+ 		rescan_listen_set = False;
+ 	}
+ 
+-	memcpy((char *)&fds, (char *)listen_set, sizeof(fd_set));
++	memcpy((char *)&r_fds, (char *)listen_set, sizeof(fd_set));
++	FD_ZERO(&w_fds);
+ 
+ #ifndef SYNC_DNS
+ 	dns_fd = asyncdns_fd();
+ 	if (dns_fd != -1) {
+-		FD_SET(dns_fd, &fds);
++		FD_SET(dns_fd, &r_fds);
+ 		maxfd = MAX( maxfd, dns_fd);
+ 	}
+ #endif
+@@ -1765,11 +1767,24 @@
+ 	timeout.tv_sec = (run_election||num_response_packets) ? 1 : NMBD_SELECT_LOOP;
+ 	timeout.tv_usec = 0;
+ 
++	{
++		struct timeval now = timeval_current();
++		event_add_to_select_args(nmbd_event_context(), &now,
++					 &r_fds, &w_fds, &timeout, &maxfd);
++	}
++
++	if (timeval_is_zero(&timeout)) {
++		/* Process a timed event now... */
++		if (run_events(nmbd_event_context(), 0, NULL, NULL)) {
++			return False;
++		}
++	}
++	
+ 	/* Prepare for the select - allow certain signals. */
+ 
+ 	BlockSignals(False, SIGTERM);
+ 
+-	selrtn = sys_select(maxfd+1,&fds,NULL,NULL,&timeout);
++	selrtn = sys_select(maxfd+1,&r_fds,&w_fds,NULL,&timeout);
+ 
+ 	/* We can only take signals when we are in the select - block them again here. */
+ 
+@@ -1779,8 +1794,12 @@
+ 		return False;
+ 	}
+ 
++	if (run_events(nmbd_event_context(), selrtn, &r_fds, &w_fds)) {
++		return False;
++	}
++
+ #ifndef SYNC_DNS
+-	if (dns_fd != -1 && FD_ISSET(dns_fd,&fds)) {
++	if (dns_fd != -1 && FD_ISSET(dns_fd,&r_fds)) {
+ 		run_dns_queue();
+ 	}
+ #endif
+@@ -1788,7 +1807,7 @@
+ 	for(i = 0; i < listen_number; i++) {
+ 		if (i < (listen_number/2)) {
+ 			/* Processing a 137 socket. */
+-			if (FD_ISSET(sock_array[i],&fds)) {
++			if (FD_ISSET(sock_array[i],&r_fds)) {
+ 				struct packet_struct *packet = read_packet(sock_array[i], NMB_PACKET);
+ 				if (packet) {
+ 					/*
+@@ -1815,7 +1834,7 @@
+ 			}
+ 		} else {
+ 			/* Processing a 138 socket. */
+-				if (FD_ISSET(sock_array[i],&fds)) {
++				if (FD_ISSET(sock_array[i],&r_fds)) {
+ 				struct packet_struct *packet = read_packet(sock_array[i], DGRAM_PACKET);
+ 				if (packet) {
+ 					/*
+
+Modified: branches/SAMBA_3_0_26/source/nmbd/nmbd.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/nmbd/nmbd.c	2007-05-15 13:42:53 UTC (rev 22901)
++++ branches/SAMBA_3_0_26/source/nmbd/nmbd.c	2007-05-15 13:44:11 UTC (rev 22902)
+@@ -49,6 +49,27 @@
+ 
+ time_t StartupTime = 0;
+ 
++struct event_context *nmbd_event_context(void)
++{
++	static struct event_context *ctx;
++
++	if (!ctx && !(ctx = event_context_init(NULL))) {
++		smb_panic("Could not init nmbd event context\n");
++	}
++	return ctx;
++}
++
++struct messaging_context *nmbd_messaging_context(void)
++{
++	static struct messaging_context *ctx;
++
++	if (!ctx && !(ctx = messaging_init(NULL, server_id_self(),
++					   nmbd_event_context()))) {
++		smb_panic("Could not init nmbd messaging context\n");
++	}
++	return ctx;
++}
++
+ /**************************************************************************** **
+  Handle a SIGTERM in band.
+  **************************************************************************** */
+@@ -731,6 +752,11 @@
+ 		setpgid( (pid_t)0, (pid_t)0 );
+ #endif
+ 
++	message_init();
++	if (nmbd_messaging_context() == NULL) {
++		return 1;
++	}
++
+ #ifndef SYNC_DNS
+ 	/* Setup the async dns. We do it here so it doesn't have all the other
+ 		stuff initialised and thus chewing memory and sockets */
+@@ -744,7 +770,6 @@
+ 	}
+ 
+ 	pidfile_create("nmbd");
+-	message_init();
+ 	message_register(MSG_FORCE_ELECTION, nmbd_message_election, NULL);
+ #if 0
+ 	/* Until winsrepl is done. */
+
+Modified: branches/SAMBA_3_0_26/source/nmbd/nmbd_packets.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/nmbd/nmbd_packets.c	2007-05-15 13:42:53 UTC (rev 22901)
++++ branches/SAMBA_3_0_26/source/nmbd/nmbd_packets.c	2007-05-15 13:44:11 UTC (rev 22902)
+@@ -1730,7 +1730,8 @@
+ 	int i;
+ 	static int maxfd = 0;
+ 
+-	fd_set fds;
++	fd_set r_fds;
++	fd_set w_fds;
+ 	int selrtn;
+ 	struct timeval timeout;
+ #ifndef SYNC_DNS
+@@ -1745,12 +1746,13 @@
+ 		rescan_listen_set = False;
+ 	}
+ 
+-	memcpy((char *)&fds, (char *)listen_set, sizeof(fd_set));
++	memcpy((char *)&r_fds, (char *)listen_set, sizeof(fd_set));
++	FD_ZERO(&w_fds);
+ 
+ #ifndef SYNC_DNS
+ 	dns_fd = asyncdns_fd();
+ 	if (dns_fd != -1) {
+-		FD_SET(dns_fd, &fds);
++		FD_SET(dns_fd, &r_fds);
+ 		maxfd = MAX( maxfd, dns_fd);
+ 	}
+ #endif
+@@ -1765,11 +1767,24 @@
+ 	timeout.tv_sec = (run_election||num_response_packets) ? 1 : NMBD_SELECT_LOOP;
+ 	timeout.tv_usec = 0;
+ 
++	{
++		struct timeval now = timeval_current();
++		event_add_to_select_args(nmbd_event_context(), &now,
++					 &r_fds, &w_fds, &timeout, &maxfd);
++	}
++
++	if (timeval_is_zero(&timeout)) {
++		/* Process a timed event now... */
++		if (run_events(nmbd_event_context(), 0, NULL, NULL)) {
++			return False;
++		}
++	}
++	
+ 	/* Prepare for the select - allow certain signals. */
+ 
+ 	BlockSignals(False, SIGTERM);
+ 
+-	selrtn = sys_select(maxfd+1,&fds,NULL,NULL,&timeout);
++	selrtn = sys_select(maxfd+1,&r_fds,&w_fds,NULL,&timeout);
+ 
+ 	/* We can only take signals when we are in the select - block them again here. */
+ 
+@@ -1779,8 +1794,12 @@
+ 		return False;
+ 	}
+ 
++	if (run_events(nmbd_event_context(), selrtn, &r_fds, &w_fds)) {
++		return False;
++	}
++
+ #ifndef SYNC_DNS
+-	if (dns_fd != -1 && FD_ISSET(dns_fd,&fds)) {
++	if (dns_fd != -1 && FD_ISSET(dns_fd,&r_fds)) {
+ 		run_dns_queue();
+ 	}
+ #endif
+@@ -1788,7 +1807,7 @@
+ 	for(i = 0; i < listen_number; i++) {
+ 		if (i < (listen_number/2)) {
+ 			/* Processing a 137 socket. */
+-			if (FD_ISSET(sock_array[i],&fds)) {
++			if (FD_ISSET(sock_array[i],&r_fds)) {
+ 				struct packet_struct *packet = read_packet(sock_array[i], NMB_PACKET);
+ 				if (packet) {
+ 					/*
+@@ -1815,7 +1834,7 @@
+ 			}
+ 		} else {
+ 			/* Processing a 138 socket. */
+-				if (FD_ISSET(sock_array[i],&fds)) {
++				if (FD_ISSET(sock_array[i],&r_fds)) {
+ 				struct packet_struct *packet = read_packet(sock_array[i], DGRAM_PACKET);
+ 				if (packet) {
+ 					/*
+

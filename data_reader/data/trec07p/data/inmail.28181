@@ -1,0 +1,825 @@
+From perl6-all-return-81084-ktwarwic=speedy.uwaterloo.ca@perl.org  Thu May  3 22:12:03 2007
+Return-Path: <perl6-all-return-81084-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l442BxqD010060
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 3 May 2007 22:12:00 -0400
+Received: (qmail 3950 invoked by uid 514); 4 May 2007 02:11:55 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 3945 invoked from network); 4 May 2007 02:11:55 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: James Keenan (via RT) <parrotbug-followup@parrotcode.org>
+X-RT-NewTicket: yes
+To: bugs-bitbucket@netlabs.develooper.com
+Resent-To: perl6-internals@perl.org
+Mail-Followup-To: perl6-internals@perl.org
+Reply-To: perl6-internals@perl.org
+Date: Thu, 03 May 2007 19:09:34 -0700
+Subject: [perl #42872] [PATCH] Parrot::BuildUtils:  refactoring and additional tests 
+In-Reply-To: <87483745-936A-419E-9E35-2BECEBA3EC06@verizon.net>
+References: <RT-Ticket-42872@perl.org> <87483745-936A-419E-9E35-2BECEBA3EC06@verizon.net>
+Message-ID: <rt-3.6.HEAD-5461-1178244575-125.42872-72-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #42872
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: jkeen@verizon.net
+MIME-Version: 1.0
+X-RT-Original-Encoding: utf-8
+Content-type: multipart/mixed; boundary="----------=_1178244575-5461-4"
+Resent-Message-Id: <20070504020935.E2FF42AFD4@x3.develooper.com>
+Resent-Date: Thu,  3 May 2007 19:09:35 -0700 (PDT)
+Resent-From: rt-jkeen=verizon.net@netlabs.develooper.com
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+
+------------=_1178244575-5461-4
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+# New Ticket Created by  James Keenan 
+# Please include the string:  [perl #42872]
+# in the subject line of all future correspondence about this issue. 
+# <URL: http://rt.perl.org/rt3/Ticket/Display.html?id=42872 >
+
+
+1.  Refactored Parrot::BuildUtils::parrot_version() to eliminate  
+unreachable code.
+2.  Added additional POD to lib/Parrot/BuildUtils.pm.
+3.  Added 6 test files in t/configure (plus one module exporting a  
+subroutine used during tests).  Tests now provide 100% coverage of code.
+4.  New files added to MANIFEST.
+
+Will be applied to trunk in approximately 3 days if no one screams.
+
+kid51
+
+------------=_1178244575-5461-4
+Content-Type: text/plain; charset="ascii"; name="version.patch.txt"
+Content-Disposition: inline; filename="version.patch.txt"
+Content-Transfer-Encoding: 7bit
+RT-Attachment: 42872/258482/112612
+
+Index: lib/Parrot/BuildUtil.pm
+===================================================================
+--- lib/Parrot/BuildUtil.pm	(revision 18414)
++++ lib/Parrot/BuildUtil.pm	(working copy)
+@@ -7,28 +7,36 @@
+ 
+ =head1 DESCRIPTION
+ 
+-For now only a sub for getting the current version.
++For now, this package contains only one subroutine:  C<parrot_version()>.
++This subroutine is not exported and so must be requested with a fully
++qualified path.
+ 
+-=head2 Functions
+-
+-=over 4
+-
+ =cut
+ 
+ package Parrot::BuildUtil;
+-
+ use strict;
+ use warnings;
+ 
++=head2 SUBROUTINES
++
++=over 4
++
+ =item C<parrot_version()>
+ 
+-Determine the current version number for Parrot from the VERSION file
+-and return it.
++Determines the current version number for Parrot from the VERSION file
++and returns it in a context-appropriate manner.
+ 
++    $parrot_version = Parrot::BuildUtil::parrot_version();
++    # $parrot_version is '0.4.11'
++
++    @parrot_version = Parrot::BuildUtil::parrot_version();
++    # @parrot_version is (0, 4, 11)
++
++=back
++
+ =cut
+ 
+ # cache for repeated calls
+-# XXX this could be in BEGIN block
+ my ( $parrot_version, @parrot_version );
+ 
+ sub parrot_version {
+@@ -38,10 +46,9 @@
+ 
+     # Obtain the official version number from the VERSION file.
+     open my $VERSION, '<', 'VERSION' or die "Could not open VERSION file!";
+-    $parrot_version = <$VERSION>;
++    chomp( $parrot_version = <$VERSION> );
+     close $VERSION;
+ 
+-    chomp $parrot_version;
+     $parrot_version =~ s/\s+//g;
+     @parrot_version = split( /\./, $parrot_version );
+ 
+@@ -53,30 +60,23 @@
+         die "Too many components to VERSION file contents: '$parrot_version' (should be 3 or 4)!";
+     }
+ 
+-    foreach (@parrot_version) {
+-        die "Illegal version component: '$_' in VERSION file!" unless m/^[1-9]*\w*$/;
++    foreach my $component (@parrot_version) {
++        die "Illegal version component: '$component' in VERSION file!"
++            unless $component =~ m/^\d+$/;
+     }
+ 
+-    if ( @parrot_version == 4 ) {
+-
+-        #    $parrot_version[2] = $parrot_version[2] . "_" . $parrot_version[3];
+-        $#parrot_version = 3;
+-    }
+     $parrot_version = join( '.', @parrot_version );
+-
+     return wantarray ? @parrot_version : $parrot_version;
+ }
+ 
+-=back
++1;
+ 
+ =head1 AUTHOR
+ 
+-Gregor N. Purdy
++Gregor N. Purdy.  Revised by James E Keenan.
+ 
+ =cut
+ 
+-1;
+-
+ # Local Variables:
+ #   mode: cperl
+ #   cperl-indent-level: 4
+Index: MANIFEST
+===================================================================
+--- MANIFEST	(revision 18414)
++++ MANIFEST	(working copy)
+@@ -1,7 +1,7 @@
+ # ex: set ro:
+ # $Id$
+ #
+-# generated by tools/dev/mk_manifest_and_skip.pl Wed May  2 05:53:44 2007 UT
++# generated by tools/dev/mk_manifest_and_skip.pl Fri May  4 01:19:45 2007 UT
+ #
+ # See tools/dev/install_files.pl for documentation on the
+ # format of this file.
+@@ -2805,10 +2805,17 @@
+ t/configure/14-params.t                                     []
+ t/configure/15-no_return.t                                  []
+ t/configure/16-no_return_but_result.t                       []
++t/configure/19-version.t                                    []
++t/configure/20-version.t                                    []
++t/configure/21-version.t                                    []
++t/configure/22-version.t                                    []
++t/configure/23-version.t                                    []
++t/configure/24-version.t                                    []
+ t/configure/base.t                                          []
+ t/configure/config_steps.t                                  []
+ t/configure/data.t                                          []
+ t/configure/step.t                                          []
++t/configure/testlib/Make_VERSION_File.pm                    []
+ t/configure/testlib/init/alpha.pm                           []
+ t/configure/testlib/init/beta.pm                            []
+ t/configure/testlib/init/delta.pm                           []
+@@ -2816,7 +2823,6 @@
+ t/configure/testlib/init/foobar.pm                          []
+ t/configure/testlib/init/gamma.pm                           []
+ t/configure/testlib/init/zeta.pm                            []
+-t/postconfigure/01-data_slurp.t                             []
+ t/distro/file_metadata.t                                    []
+ t/distro/manifest.t                                         []
+ t/distro/manifest_skip.t                                    []
+@@ -3024,6 +3030,7 @@
+ t/pmc/unmanagedstruct.t                                     []
+ t/pmc/version.t                                             []
+ t/pmc/vtablecache.t                                         []
++t/postconfigure/01-data_slurp.t                             []
+ t/run/README                                                []
+ t/run/exit.t                                                []
+ t/run/options.t                                             []
+Index: MANIFEST.SKIP
+===================================================================
+--- MANIFEST.SKIP	(revision 18414)
++++ MANIFEST.SKIP	(working copy)
+@@ -1,6 +1,6 @@
+ # ex: set ro:
+ # $Id$
+-# generated by tools/dev/mk_manifest_and_skip.pl Tue May  1 14:25:10 2007 UT
++# generated by tools/dev/mk_manifest_and_skip.pl Fri May  4 01:19:45 2007 UT
+ #
+ # This file should contain a transcript of the svn:ignore properties
+ # of the directories in the Parrot subversion repository. (Needed for
+Index: t/configure/20-version.t
+===================================================================
+--- t/configure/20-version.t	(revision 0)
++++ t/configure/20-version.t	(revision 0)
+@@ -0,0 +1,74 @@
++#! perl
++# Copyright (C) 2007, The Perl Foundation.
++# $Id: 20-version.t 18406 2007-05-03 02:15:18Z jkeenan $
++# 20-version.t
++
++use strict;
++use warnings;
++
++use Test::More tests => 11;
++use Carp;
++use_ok( 'Cwd' );
++use_ok( 'File::Copy' );
++use_ok( 'File::Temp', qw| tempdir | );
++use lib qw( . lib ../lib ../../lib t/configure/testlib );
++use_ok( 'Make_VERSION_File', qw| make_VERSION_file |);
++
++my $cwd = cwd();
++my $errstr;
++{
++    my $tdir = tempdir();
++    ok(chdir $tdir, "Changed to temporary directory for testing");
++    ok((mkdir "lib"), "Able to make directory lib");
++    ok((mkdir "lib/Parrot"), "Able to make directory lib/Parrot");
++    ok(copy ("$cwd/lib/Parrot/BuildUtil.pm", "lib/Parrot/"),
++        "Able to copy Parrot::BuildUtil for testing");
++    unshift(@INC, "lib");
++
++    require Parrot::BuildUtil;
++
++    # Case 2:  VERSION file with <3-element version number
++    make_VERSION_file(q{0.4});
++    eval {
++        my $pv = Parrot::BuildUtil::parrot_version();
++    };
++    like($@, qr/Too few components to VERSION file contents/,
++        "Correctly detected too few components in version number");
++    
++    ok(chdir $cwd, "Able to change back to directory after testing");
++}
++pass("Completed all tests in $0");
++
++################### DOCUMENTATION ###################
++
++=head1 NAME
++
++20-version.t - test C<Parrot::BuildUtil::parrot_version()>
++
++=head1 SYNOPSIS
++
++    % prove t/configure/20-version.t
++
++=head1 DESCRIPTION
++
++The files in this directory test functionality used by F<Configure.pl>.
++
++The tests in this file test Parrot::BuildUtil (F<lib/Parrot/BuildUtil.pm>).
++
++=head1 AUTHOR
++
++James E Keenan
++
++=head1 SEE ALSO
++
++Parrot::BuildUtil, F<Configure.pl>.
++
++=cut
++
++# Local Variables:
++#   mode: cperl
++#   cperl-indent-level: 4
++#   fill-column: 100
++# End:
++# vim: expandtab shiftwidth=4:
++
+
+Property changes on: t/configure/20-version.t
+___________________________________________________________________
+Name: svn:mime-type
+   + text/plain
+Name: svn:keywords
+   + Author Date Id Revision
+Name: svn:eol-style
+   + native
+
+Index: t/configure/testlib/Make_VERSION_File.pm
+===================================================================
+--- t/configure/testlib/Make_VERSION_File.pm	(revision 0)
++++ t/configure/testlib/Make_VERSION_File.pm	(revision 0)
+@@ -0,0 +1,31 @@
++# Copyright (C) 2001-2003, The Perl Foundation.
++# $Id: alpha.pm 18226 2007-04-15 17:23:44Z jkeenan $
++package Make_VERSION_File;
++use strict;
++use vars qw(@ISA @EXPORT_OK);
++@ISA       = qw( Exporter );
++@EXPORT_OK = qw( make_VERSION_file );
++
++sub make_VERSION_file {
++    my $v = shift;
++    my $vfile = 'VERSION';
++    open my $FH, ">", $vfile
++        or die "Unable to open $vfile for writing: $!";
++    print $FH $v;
++    close $FH or die "Unable to close $vfile after writing: $!";
++}
++
++1;
++
++=head1 NAME
++
++t/configure/testlib/Make_VERSION_File.pm - Subroutines used in testing C<Parrot::Build::Util::parrot_version()>
++
++=head1 SYNOPSIS
++
++=head1 AUTHOR
++
++James E Keenan
++
++=cut
++
+
+Property changes on: t/configure/testlib/Make_VERSION_File.pm
+___________________________________________________________________
+Name: svn:keywords
+   + Author Date Id Revision
+Name: svn:eol-style
+   + native
+
+Index: t/configure/21-version.t
+===================================================================
+--- t/configure/21-version.t	(revision 0)
++++ t/configure/21-version.t	(revision 0)
+@@ -0,0 +1,74 @@
++#! perl
++# Copyright (C) 2007, The Perl Foundation.
++# $Id: 21-version.t 18406 2007-05-03 02:15:18Z jkeenan $
++# 21-version.t
++
++use strict;
++use warnings;
++
++use Test::More tests => 11;
++use Carp;
++use_ok( 'Cwd' );
++use_ok( 'File::Copy' );
++use_ok( 'File::Temp', qw| tempdir | );
++use lib qw( . lib ../lib ../../lib t/configure/testlib );
++use_ok( 'Make_VERSION_File', qw| make_VERSION_file |);
++
++my $cwd = cwd();
++my $errstr;
++{
++    my $tdir = tempdir();
++    ok(chdir $tdir, "Changed to temporary directory for testing");
++    ok((mkdir "lib"), "Able to make directory lib");
++    ok((mkdir "lib/Parrot"), "Able to make directory lib/Parrot");
++    ok(copy ("$cwd/lib/Parrot/BuildUtil.pm", "lib/Parrot/"),
++        "Able to copy Parrot::BuildUtil for testing");
++    unshift(@INC, "lib");
++
++    require Parrot::BuildUtil;
++
++    # Case 3:  VERSION file with >4-element version number
++    make_VERSION_file(q{0.4.11.7.5});
++    eval {
++        my $pv = Parrot::BuildUtil::parrot_version();
++    };
++    like($@, qr/Too many components to VERSION file contents/,
++        "Correctly detected too many components in version number");
++    
++    ok(chdir $cwd, "Able to change back to directory after testing");
++}
++pass("Completed all tests in $0");
++
++################### DOCUMENTATION ###################
++
++=head1 NAME
++
++21-version.t - test C<Parrot::BuildUtil::parrot_version()>
++
++=head1 SYNOPSIS
++
++    % prove t/configure/21-version.t
++
++=head1 DESCRIPTION
++
++The files in this directory test functionality used by F<Configure.pl>.
++
++The tests in this file test Parrot::BuildUtil (F<lib/Parrot/BuildUtil.pm>).
++
++=head1 AUTHOR
++
++James E Keenan
++
++=head1 SEE ALSO
++
++Parrot::BuildUtil, F<Configure.pl>.
++
++=cut
++
++# Local Variables:
++#   mode: cperl
++#   cperl-indent-level: 4
++#   fill-column: 100
++# End:
++# vim: expandtab shiftwidth=4:
++
+
+Property changes on: t/configure/21-version.t
+___________________________________________________________________
+Name: svn:mime-type
+   + text/plain
+Name: svn:keywords
+   + Author Date Id Revision
+Name: svn:eol-style
+   + native
+
+Index: t/configure/22-version.t
+===================================================================
+--- t/configure/22-version.t	(revision 0)
++++ t/configure/22-version.t	(revision 0)
+@@ -0,0 +1,75 @@
++#! perl
++# Copyright (C) 2007, The Perl Foundation.
++# $Id: 22-version.t 18406 2007-05-03 02:15:18Z jkeenan $
++# 22-version.t
++
++use strict;
++use warnings;
++
++use Test::More tests => 11;
++use Carp;
++use_ok( 'Cwd' );
++use_ok( 'File::Copy' );
++use_ok( 'File::Temp', qw| tempdir | );
++use lib qw( . lib ../lib ../../lib t/configure/testlib );
++use_ok( 'Make_VERSION_File', qw| make_VERSION_file |);
++
++my $cwd = cwd();
++my $errstr;
++{
++    my $tdir = tempdir();
++    ok(chdir $tdir, "Changed to temporary directory for testing");
++    ok((mkdir "lib"), "Able to make directory lib");
++    ok((mkdir "lib/Parrot"), "Able to make directory lib/Parrot");
++    ok(copy ("$cwd/lib/Parrot/BuildUtil.pm", "lib/Parrot/"),
++        "Able to copy Parrot::BuildUtil for testing");
++    unshift(@INC, "lib");
++
++    require Parrot::BuildUtil;
++
++    # Case 4:  VERSION file with non-numeric component in version number
++    make_VERSION_file(q{0.tomboy.11});
++    eval {
++        my $pv = Parrot::BuildUtil::parrot_version();
++    };
++    like($@, qr/Illegal version component: 'tomboy'/,
++        "Correctly detected non-numeric component in version number");
++    
++    ok(chdir $cwd, "Able to change back to directory after testing");
++}
++
++pass("Completed all tests in $0");
++
++################### DOCUMENTATION ###################
++
++=head1 NAME
++
++22-version.t - test C<Parrot::BuildUtil::parrot_version()>
++
++=head1 SYNOPSIS
++
++    % prove t/configure/22-version.t
++
++=head1 DESCRIPTION
++
++The files in this directory test functionality used by F<Configure.pl>.
++
++The tests in this file test Parrot::BuildUtil (F<lib/Parrot/BuildUtil.pm>).
++
++=head1 AUTHOR
++
++James E Keenan
++
++=head1 SEE ALSO
++
++Parrot::BuildUtil, F<Configure.pl>.
++
++=cut
++
++# Local Variables:
++#   mode: cperl
++#   cperl-indent-level: 4
++#   fill-column: 100
++# End:
++# vim: expandtab shiftwidth=4:
++
+
+Property changes on: t/configure/22-version.t
+___________________________________________________________________
+Name: svn:mime-type
+   + text/plain
+Name: svn:keywords
+   + Author Date Id Revision
+Name: svn:eol-style
+   + native
+
+Index: t/configure/23-version.t
+===================================================================
+--- t/configure/23-version.t	(revision 0)
++++ t/configure/23-version.t	(revision 0)
+@@ -0,0 +1,81 @@
++#! perl
++# Copyright (C) 2007, The Perl Foundation.
++# $Id: 23-version.t 18406 2007-05-03 02:15:18Z jkeenan $
++# 23-version.t
++
++use strict;
++use warnings;
++
++use Test::More tests => 14;
++use Carp;
++use_ok( 'Cwd' );
++use_ok( 'File::Copy' );
++use_ok( 'File::Temp', qw| tempdir | );
++use lib qw( . lib ../lib ../../lib t/configure/testlib );
++use_ok( 'Make_VERSION_File', qw| make_VERSION_file |);
++
++my $cwd = cwd();
++my $errstr;
++{
++    my $tdir = tempdir();
++    ok(chdir $tdir, "Changed to temporary directory for testing");
++    ok((mkdir "lib"), "Able to make directory lib");
++    ok((mkdir "lib/Parrot"), "Able to make directory lib/Parrot");
++    ok(copy ("$cwd/lib/Parrot/BuildUtil.pm", "lib/Parrot/"),
++        "Able to copy Parrot::BuildUtil for testing");
++    unshift(@INC, "lib");
++
++    require Parrot::BuildUtil;
++
++    # Case 5:  Valid version number
++    make_VERSION_file(q{0.4.11});
++    my ($pv, @pv);
++    $pv = Parrot::BuildUtil::parrot_version();
++    @pv = Parrot::BuildUtil::parrot_version();
++    is($pv, q{0.4.11}, "Correct version number returned in scalar context");
++    is_deeply(\@pv, [ 0, 4, 11 ],
++        "Correct version number returned in scalar context");
++    
++    $pv = Parrot::BuildUtil::parrot_version();
++    @pv = Parrot::BuildUtil::parrot_version();
++    is($pv, q{0.4.11}, "Correct version number returned in scalar context");
++    is_deeply(\@pv, [ 0, 4, 11 ],
++        "Correct version number returned in scalar context");
++    ok(chdir $cwd, "Able to change back to directory after testing");
++}
++
++pass("Completed all tests in $0");
++
++################### DOCUMENTATION ###################
++
++=head1 NAME
++
++23-version.t - test C<Parrot::BuildUtil::parrot_version()>
++
++=head1 SYNOPSIS
++
++    % prove t/configure/23-version.t
++
++=head1 DESCRIPTION
++
++The files in this directory test functionality used by F<Configure.pl>.
++
++The tests in this file test Parrot::BuildUtil (F<lib/Parrot/BuildUtil.pm>).
++
++=head1 AUTHOR
++
++James E Keenan
++
++=head1 SEE ALSO
++
++Parrot::BuildUtil, F<Configure.pl>.
++
++=cut
++
++# Local Variables:
++#   mode: cperl
++#   cperl-indent-level: 4
++#   fill-column: 100
++# End:
++# vim: expandtab shiftwidth=4:
++
+
+Property changes on: t/configure/23-version.t
+___________________________________________________________________
+Name: svn:mime-type
+   + text/plain
+Name: svn:keywords
+   + Author Date Id Revision
+Name: svn:eol-style
+   + native
+
+Index: t/configure/24-version.t
+===================================================================
+--- t/configure/24-version.t	(revision 0)
++++ t/configure/24-version.t	(revision 0)
+@@ -0,0 +1,76 @@
++#! perl
++# Copyright (C) 2007, The Perl Foundation.
++# $Id: 24-version.t 18406 2007-05-03 02:15:18Z jkeenan $
++# 24-version.t
++
++use strict;
++use warnings;
++
++use Test::More tests => 12;
++use Carp;
++use_ok( 'Cwd' );
++use_ok( 'File::Copy' );
++use_ok( 'File::Temp', qw| tempdir | );
++use lib qw( . lib ../lib ../../lib t/configure/testlib );
++use_ok( 'Make_VERSION_File', qw| make_VERSION_file |);
++
++my $cwd = cwd();
++my $errstr;
++{
++    my $tdir = tempdir();
++    ok(chdir $tdir, "Changed to temporary directory for testing");
++    ok((mkdir "lib"), "Able to make directory lib");
++    ok((mkdir "lib/Parrot"), "Able to make directory lib/Parrot");
++    ok(copy ("$cwd/lib/Parrot/BuildUtil.pm", "lib/Parrot/"),
++        "Able to copy Parrot::BuildUtil for testing");
++    unshift(@INC, "lib");
++
++    require Parrot::BuildUtil;
++
++    # Case 5:  Valid version number
++    make_VERSION_file(q{0.4.11});
++    my ($pv, @pv);
++    @pv = Parrot::BuildUtil::parrot_version();
++    $pv = Parrot::BuildUtil::parrot_version();
++    is_deeply(\@pv, [ 0, 4, 11 ],
++        "Correct version number returned in scalar context");
++    is($pv, q{0.4.11}, "Correct version number returned in scalar context");
++    
++    ok(chdir $cwd, "Able to change back to directory after testing");
++}
++
++pass("Completed all tests in $0");
++
++################### DOCUMENTATION ###################
++
++=head1 NAME
++
++24-version.t - test C<Parrot::BuildUtil::parrot_version()>
++
++=head1 SYNOPSIS
++
++    % prove t/configure/24-version.t
++
++=head1 DESCRIPTION
++
++The files in this directory test functionality used by F<Configure.pl>.
++
++The tests in this file test Parrot::BuildUtil (F<lib/Parrot/BuildUtil.pm>).
++
++=head1 AUTHOR
++
++James E Keenan
++
++=head1 SEE ALSO
++
++Parrot::BuildUtil, F<Configure.pl>.
++
++=cut
++
++# Local Variables:
++#   mode: cperl
++#   cperl-indent-level: 4
++#   fill-column: 100
++# End:
++# vim: expandtab shiftwidth=4:
++
+
+Property changes on: t/configure/24-version.t
+___________________________________________________________________
+Name: svn:mime-type
+   + text/plain
+Name: svn:keywords
+   + Author Date Id Revision
+Name: svn:eol-style
+   + native
+
+Index: t/configure/19-version.t
+===================================================================
+--- t/configure/19-version.t	(revision 0)
++++ t/configure/19-version.t	(revision 0)
+@@ -0,0 +1,71 @@
++#! perl
++# Copyright (C) 2007, The Perl Foundation.
++# $Id: 19-version.t 18406 2007-05-03 02:15:18Z jkeenan $
++# 19-version.t
++
++use strict;
++use warnings;
++
++use Test::More tests => 10;
++use Carp;
++use_ok( 'Cwd' );
++use_ok( 'File::Copy' );
++use_ok( 'File::Temp', qw| tempdir | );
++use lib qw( . lib ../lib ../../lib );
++
++my $cwd = cwd();
++my $errstr;
++{
++    my $tdir = tempdir();
++    ok(chdir $tdir, "Changed to temporary directory for testing");
++    ok((mkdir "lib"), "Able to make directory lib");
++    ok((mkdir "lib/Parrot"), "Able to make directory lib/Parrot");
++    ok(copy ("$cwd/lib/Parrot/BuildUtil.pm", "lib/Parrot/"),
++        "Able to copy Parrot::BuildUtil for testing");
++    unshift(@INC, "lib");
++
++    require Parrot::BuildUtil;
++
++    # Case 1:  No VERSION file
++    eval { my $pv = Parrot::BuildUtil::parrot_version(); };
++    like($@, qr/Could not open VERSION file!/,
++        "Absence of VERSION file correctly detected");
++
++    ok(chdir $cwd, "Able to change back to directory after testing");
++}
++
++pass("Completed all tests in $0");
++
++################### DOCUMENTATION ###################
++
++=head1 NAME
++
++19-version.t - test C<Parrot::BuildUtil::parrot_version()>
++
++=head1 SYNOPSIS
++
++    % prove t/configure/19-version.t
++
++=head1 DESCRIPTION
++
++The files in this directory test functionality used by F<Configure.pl>.
++
++The tests in this file test Parrot::BuildUtil (F<lib/Parrot/BuildUtil.pm>).
++
++=head1 AUTHOR
++
++James E Keenan
++
++=head1 SEE ALSO
++
++Parrot::BuildUtil, F<Configure.pl>.
++
++=cut
++
++# Local Variables:
++#   mode: cperl
++#   cperl-indent-level: 4
++#   fill-column: 100
++# End:
++# vim: expandtab shiftwidth=4:
++
+
+Property changes on: t/configure/19-version.t
+___________________________________________________________________
+Name: svn:mime-type
+   + text/plain
+Name: svn:keywords
+   + Author Date Id Revision
+Name: svn:eol-style
+   + native
+
+
+------------=_1178244575-5461-4--
+

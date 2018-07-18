@@ -1,0 +1,141 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Apr 18 20:52:20 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3J0qK0I018207
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 18 Apr 2007 20:52:20 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id C04CA16389E
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 19 Apr 2007 00:51:55 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 549)
+	id EF2E3162AF2; Thu, 19 Apr 2007 00:51:21 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jra@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070419005121.EF2E3162AF2@lists.samba.org>
+Date: Thu, 19 Apr 2007 00:51:21 +0000 (GMT)
+Subject: svn commit: samba r22354 - in branches/SAMBA_3_0/source: client
+	libsmb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2629
+Lines: 98
+
+Author: jra
+Date: 2007-04-19 00:51:18 +0000 (Thu, 19 Apr 2007)
+New Revision: 22354
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22354
+
+Log:
+Make client select krb5 encrpyt if krb5 already on.
+Jeremy.
+
+Modified:
+   branches/SAMBA_3_0/source/client/client.c
+   branches/SAMBA_3_0/source/libsmb/clifsinfo.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/client/client.c
+===================================================================
+--- branches/SAMBA_3_0/source/client/client.c	2007-04-19 00:45:01 UTC (rev 22353)
++++ branches/SAMBA_3_0/source/client/client.c	2007-04-19 00:51:18 UTC (rev 22354)
+@@ -1789,34 +1789,39 @@
+ 
+ static int cmd_posix_encrypt(void)
+ {
+-	fstring buf;
+-	fstring domain;
+-	fstring user;
+-	fstring password;
+ 	NTSTATUS status;
+ 
+-	if (!next_token_nr(NULL,buf,NULL,sizeof(buf))) {
+-		d_printf("posix_encrypt domain user password\n");
+-		return 1;
+-	}
+-	fstrcpy(domain,buf);
++	if (cli->use_kerberos) {
++		status = cli_gss_smb_encryption_start(cli);
++	} else {	
++		fstring buf;
++		fstring domain;
++		fstring user;
++		fstring password;
+ 
+-	if (!next_token_nr(NULL,buf,NULL,sizeof(buf))) {
+-		d_printf("posix_encrypt domain user password\n");
+-		return 1;
+-	}
+-	fstrcpy(user,buf);
++		if (!next_token_nr(NULL,buf,NULL,sizeof(buf))) {
++			d_printf("posix_encrypt domain user password\n");
++			return 1;
++		}
++		fstrcpy(domain,buf);
+ 
+-	if (!next_token_nr(NULL,buf,NULL,sizeof(buf))) {
+-		d_printf("posix_encrypt domain user password\n");
+-		return 1;
++		if (!next_token_nr(NULL,buf,NULL,sizeof(buf))) {
++			d_printf("posix_encrypt domain user password\n");
++			return 1;
++		}
++		fstrcpy(user,buf);
++
++		if (!next_token_nr(NULL,buf,NULL,sizeof(buf))) {
++			d_printf("posix_encrypt domain user password\n");
++			return 1;
++		}
++		fstrcpy(password,buf);
++
++		status = cli_raw_ntlm_smb_encryption_start(cli,
++							user,
++							password,
++							domain);
+ 	}
+-	fstrcpy(password,buf);
+-
+-	status = cli_raw_ntlm_smb_encryption_start(cli,
+-						user,
+-						password,
+-						domain);
+ 	
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		d_printf("posix_encrypt failed with error %s\n", nt_errstr(status));
+
+Modified: branches/SAMBA_3_0/source/libsmb/clifsinfo.c
+===================================================================
+--- branches/SAMBA_3_0/source/libsmb/clifsinfo.c	2007-04-19 00:45:01 UTC (rev 22353)
++++ branches/SAMBA_3_0/source/libsmb/clifsinfo.c	2007-04-19 00:51:18 UTC (rev 22354)
+@@ -614,4 +614,9 @@
+ 	common_free_encryption_state(&es);
+ 	return status;
+ }
++#else
++NTSTATUS cli_gss_smb_encryption_start(struct cli_state *cli)
++{
++	return NT_STATUS_NOT_SUPPORTED;
++}
+ #endif
+

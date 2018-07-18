@@ -1,0 +1,147 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu May 24 17:51:58 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4OLpwqD011181
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 24 May 2007 17:51:58 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 1513716381C
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 24 May 2007 21:51:54 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 615)
+	id E2350162ACF; Thu, 24 May 2007 21:51:25 +0000 (GMT)
+To: samba-cvs@samba.org
+From: mimir@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070524215125.E2350162ACF@lists.samba.org>
+Date: Thu, 24 May 2007 21:51:25 +0000 (GMT)
+Subject: svn commit: samba r23126 - in
+	branches/SAMBA_4_0/source/scripting/ejs/ejsnet: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: mimir
+Date: 2007-05-24 21:51:25 +0000 (Thu, 24 May 2007)
+New Revision: 23126
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23126
+
+Log:
+this was sitting on my laptop for a while...
+
+change the way the ejs object is being created and return listing
+context (with status) rather than collecting all entries gathered
+from libnet call.
+
+
+rafal
+
+
+Modified:
+   branches/SAMBA_4_0/source/scripting/ejs/ejsnet/mpr_user.c
+   branches/SAMBA_4_0/source/scripting/ejs/ejsnet/net_user.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/scripting/ejs/ejsnet/mpr_user.c
+===================================================================
+--- branches/SAMBA_4_0/source/scripting/ejs/ejsnet/mpr_user.c	2007-05-24 21:45:29 UTC (rev 23125)
++++ branches/SAMBA_4_0/source/scripting/ejs/ejsnet/mpr_user.c	2007-05-24 21:51:25 UTC (rev 23126)
+@@ -101,6 +101,7 @@
+   UserListCtx.ResumeIndex
+   UserListCtx.Count
+   UserListCtx.EndOfList
++  UserListCtx.Status
+  */
+ struct MprVar mprUserListCtx(TALLOC_CTX *mem_ctx, struct libnet_UserList *list, NTSTATUS result)
+ {
+@@ -144,6 +145,8 @@
+ 	status = mprSetVar(&mprListCtx, "ResumeIndex", mprCreateIntegerVar((int)list->out.resume_index));
+ 	if (!NT_STATUS_IS_OK(status)) goto done;
+ 	status = mprSetVar(&mprListCtx, "EndOfList", mprCreateBoolVar(endOfList));
++	if (!NT_STATUS_IS_OK(status)) goto done;
++	status = mprSetVar(&mprListCtx, "Status", mprNTSTATUS(result));
+ 
+ done:
+ 	return mprListCtx;
+
+Modified: branches/SAMBA_4_0/source/scripting/ejs/ejsnet/net_user.c
+===================================================================
+--- branches/SAMBA_4_0/source/scripting/ejs/ejsnet/net_user.c	2007-05-24 21:45:29 UTC (rev 23125)
++++ branches/SAMBA_4_0/source/scripting/ejs/ejsnet/net_user.c	2007-05-24 21:51:25 UTC (rev 23126)
+@@ -43,7 +43,7 @@
+ {
+ 	struct libnet_context *ctx;
+ 	const char *userman_domain = NULL;
+-	struct MprVar *obj = NULL;
++	struct MprVar obj;
+ 
+ 	/* libnet context */
+ 	ctx = mprGetThisPtr(eid, "ctx");
+@@ -74,21 +74,24 @@
+ 	}
+ 
+ 	/* create 'net user' subcontext */
+-	obj = mprInitObject(eid, "NetUsrCtx", argc, argv);
++	obj = mprObject("NetUsrCtx");
+ 
+ 	/* we need to make a copy of the string for this object */
+ 	userman_domain = talloc_strdup(ctx, userman_domain);
+ 
+ 	/* add properties */
+-	mprSetPtrChild(obj, "ctx", ctx);
+-	mprSetPtrChild(obj, "domain", userman_domain);
++	mprSetPtrChild(&obj, "ctx", ctx);
++	mprSetPtrChild(&obj, "domain", userman_domain);
+ 
+ 	/* add methods */
+-	mprSetStringCFunction(obj, "Create", ejs_net_createuser);
+-	mprSetStringCFunction(obj, "Delete", ejs_net_deleteuser);
+-	mprSetStringCFunction(obj, "Info", ejs_net_userinfo);
+-	mprSetCFunction(obj, "List", ejs_net_userlist);
++	mprSetStringCFunction(&obj, "Create", ejs_net_createuser);
++	mprSetStringCFunction(&obj, "Delete", ejs_net_deleteuser);
++	mprSetStringCFunction(&obj, "Info", ejs_net_userinfo);
++	mprSetCFunction(&obj, "List", ejs_net_userlist);
+ 
++	/* set the object returned by this function */
++	mpr_Return(eid, obj);
++
+ 	return 0;
+ }
+ 
+@@ -347,16 +350,6 @@
+ 	req.in.page_size     = page_size;
+ 	
+ 	status = libnet_UserList(ctx, mem_ctx, &req);
+-	if (!NT_STATUS_IS_OK(status) &&
+-	    !NT_STATUS_EQUAL(status, STATUS_MORE_ENTRIES) &&
+-	    !NT_STATUS_EQUAL(status, NT_STATUS_NO_MORE_ENTRIES)) {
+-
+-		ejsSetErrorMsg(eid, "%s", req.out.error_string);
+-		
+-		mprListCtx = mprCreateNullVar();
+-		goto done;
+-	}
+-
+ 	mprListCtx = mprUserListCtx(mem_ctx, &req, status);
+ 
+ done:
+

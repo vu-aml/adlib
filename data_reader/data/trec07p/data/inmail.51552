@@ -1,0 +1,139 @@
+From r-help-bounces@stat.math.ethz.ch  Tue Jun  5 11:10:19 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l55FAHhB010359
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 5 Jun 2007 11:10:18 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l55F9Q8v016830;
+	Tue, 5 Jun 2007 17:09:35 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=5.0 tests=AWL, DKIM_SIGNED,
+	DKIM_VERIFIED autolearn=no version=3.2.0
+Received: from nz-out-0506.google.com (nz-out-0506.google.com [64.233.162.236])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l55F9Iea016767
+	for <r-help@stat.math.ethz.ch>; Tue, 5 Jun 2007 17:09:18 +0200
+Received: by nz-out-0506.google.com with SMTP id o37so1181769nzf
+	for <r-help@stat.math.ethz.ch>; Tue, 05 Jun 2007 08:09:17 -0700 (PDT)
+Received: by 10.114.184.16 with SMTP id h16mr6097124waf.1181056157078;
+	Tue, 05 Jun 2007 08:09:17 -0700 (PDT)
+Received: by 10.114.15.8 with HTTP; Tue, 5 Jun 2007 08:09:17 -0700 (PDT)
+Message-ID: <efb536d50706050809h3caca688ob437d90e01324fed@mail.gmail.com>
+Date: Tue, 5 Jun 2007 11:09:17 -0400
+From: "Sarah Goslee" <sarah.goslee@gmail.com>
+To: "Laurence Amilhat" <Laurence.Amilhat@toulouse.inra.fr>
+In-Reply-To: <46657111.4060908@toulouse.inra.fr>
+MIME-Version: 1.0
+Content-Disposition: inline
+References: <46657111.4060908@toulouse.inra.fr>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] odfTable
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+Hi,
+
+There are a couple of steps, and it requires use of the newest version of
+odfWeave.
+
+First, you need to set up the table styles in R _before_ you run odfWeave.
+
+Here's an example:
+
+	# Now to specify the styles themselves
+	# The default list has 10 styles in it right now.
+	existingStyles <- getStyleDefs()
+
+	# Use one of the cell styles as a template for the new cell style
+	# The style definition contains information on background
+	# color, alignment, and borders.
+	# For style 1, I want a background color.
+	# Colors can be specified in hex format, or as "transparent".
+	newStyle1 <- existingStyles$noBorder
+	newStyle1$backgroundColor <- "#cccccc"
+
+	# Finally, the new styles need to be set.
+	existingStyles <- c(existingStyles, newStyle1=list(newStyle1))
+	setStyleDefs(existingStyles)
+
+After that, you can use the new style when defining your table in an
+odfWeave document:
+
+<<Table1,echo=FALSE,results=xml>>=
+	### Conditional formatting based on the value of the table cell
+	x <- data.frame(Var1=1:3, Var2=4:6, Var3=7:9, row.names=c("A", "B", "C"))
+
+	# Here's a matrix specifying the desired styles for each cell in the table.
+	# This could be p-values for the correlations in x, for example. For
+	# this example, I'm just making it up.
+	# The style matrix must have an additional column for the row names.
+	y <- matrix(c(0, 0, 0, 1,0,0,3,0,1,2,0,2), byrow=FALSE, nrow=3, ncol=4)
+	y <- data.frame(y)
+	colnames(y) <- c("rownames", "Var1", "Var2", "Var3")
+
+	# Now, to specify when to use these new styles.
+	# tableStyles() will provide the default styles for each
+	# element of x
+	# note that I'm creating the styles for x based on y,
+	# which already has the extra column for row names.
+	x.styles <- tableStyles(y, header=colnames(y))
+
+	# every element of x has two associated styles
+	# for the cells, text style is in text and cell style is in cell
+	# for headers, it is in header and headerCell
+	
+	# newStyle1 and newStyle2 are cell styles, so they are set here:
+	x.styles$cell[y == 1] <- "newStyle1"
+
+	odfTable(x, useRowNames = TRUE, styles = x.styles)
+@
+
+I have a more detailed explanation that I can send off-list if you are
+interested. For your specific problem, you'd need to set the headerCell
+style.
+
+Sarah
+
+
+On 6/5/07, Laurence Amilhat <Laurence.Amilhat@toulouse.inra.fr> wrote:
+> Hello,
+>
+> I am using the odfWeave packages;
+> I draw a table using the function odfTable:
+>
+> partCols <- gsub("\\.", " ", names(partenaires))
+> odfTable(partenaires, useRowNames = FALSE, colnames=partCols)
+>
+>
+> it's working as I have a table in my output file.
+> I would like to know how to change the background color for the header
+> cells.
+> I assuming i have to use tableStyles, but I don't understand how.
+>
+> Does someone have an idea to help me?
+>
+
+-- 
+Sarah Goslee
+http://www.functionaldiversity.org
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

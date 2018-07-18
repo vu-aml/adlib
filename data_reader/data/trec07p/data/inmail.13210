@@ -1,0 +1,175 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Apr 18 19:14:56 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3INEt0I017256
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 18 Apr 2007 19:14:55 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 97608163853
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 18 Apr 2007 23:14:29 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id A254F162AC1; Wed, 18 Apr 2007 23:14:05 +0000 (GMT)
+Date: Thu, 19 Apr 2007 09:14:27 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070418231405.A254F162AC1@lists.samba.org>
+Subject: Rev 155: merged the db_dir changes from volker. Changed them
+	slightly, in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 4332
+Lines: 134
+
+------------------------------------------------------------
+revno: 155
+revision-id: tridge@samba.org-20070418231425-4902f5acfc663227
+parent: tridge@samba.org-20070418091229-02a734be8c7a9e5f
+parent: vl@samba.org-20070418143622-v1bwf47yj5whztz0
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Thu 2007-04-19 09:14:25 +1000
+message:
+  merged the db_dir changes from volker. Changed them slightly,
+  to make the --dbdir option available to all ctdb tools, not just
+  the daemon
+modified:
+  common/cmdline.c               cmdline.c-20070416041216-w1zvz91bkdsgjckw-1
+  common/ctdb.c                  ctdb.c-20061127094323-t50f58d65iaao5of-2
+  common/ctdb_ltdb.c             ctdb_ltdb.c-20061128065342-to93h6eejj5kon81-2
+  include/ctdb.h                 ctdb.h-20061117234101-o3qt14umlg9en8z0-11
+  include/ctdb_private.h         ctdb_private.h-20061117234101-o3qt14umlg9en8z0-13
+    ------------------------------------------------------------
+    merged: vl@samba.org-20070418143622-v1bwf47yj5whztz0
+    parent: tridge@samba.org-20070418091229-02a734be8c7a9e5f
+    committer: Volker Lendecke <vl@samba.org>
+    branch nick: vl-ctdb
+    timestamp: Wed 2007-04-18 16:36:22 +0200
+    message:
+      Add --dbdir to ctdbd. Necessary for shared operation between ctdbd and smbd.
+=== modified file 'common/cmdline.c'
+--- a/common/cmdline.c	2007-04-17 12:16:50 +0000
++++ b/common/cmdline.c	2007-04-18 23:14:25 +0000
+@@ -31,11 +31,13 @@
+ 	const char *transport;
+ 	const char *myaddress;
+ 	int self_connect;
++	const char *db_dir;
+ } ctdb_cmdline = {
+ 	.nlist = NULL,
+ 	.transport = "tcp",
+ 	.myaddress = NULL,
+ 	.self_connect = 0,
++	.db_dir = "."
+ };
+ 
+ 
+@@ -45,6 +47,7 @@
+ 	{ "transport", 0, POPT_ARG_STRING, &ctdb_cmdline.transport, 0, "protocol transport", NULL },
+ 	{ "self-connect", 0, POPT_ARG_NONE, &ctdb_cmdline.self_connect, 0, "enable self connect", "boolean" },
+ 	{ "debug", 'd', POPT_ARG_INT, &LogLevel, 0, "debug level"},
++	{ "dbdir", 0, POPT_ARG_STRING, &ctdb_cmdline.db_dir, 0, "directory for the tdb files", NULL },
+ 	{ NULL }
+ };
+ 
+@@ -93,5 +96,11 @@
+ 		exit(1);
+ 	}
+ 
++	ret = ctdb_set_tdb_dir(ctdb, ctdb_cmdline.db_dir);
++	if (ret == -1) {
++		printf("ctdb_set_tdb_dir failed - %s\n", ctdb_errstr(ctdb));
++		exit(1);
++	}
++
+ 	return ctdb;
+ }
+
+=== modified file 'common/ctdb.c'
+--- a/common/ctdb.c	2007-04-18 02:39:03 +0000
++++ b/common/ctdb.c	2007-04-18 23:14:25 +0000
+@@ -74,6 +74,18 @@
+ }
+ 
+ /*
++  set the directory for the local databases
++*/
++int ctdb_set_tdb_dir(struct ctdb_context *ctdb, const char *dir)
++{
++	ctdb->db_directory = talloc_strdup(ctdb, dir);
++	if (ctdb->db_directory == NULL) {
++		return -1;
++	}
++	return 0;
++}
++
++/*
+   add a node to the list of active nodes
+ */
+ static int ctdb_add_node(struct ctdb_context *ctdb, char *nstr)
+
+=== modified file 'common/ctdb_ltdb.c'
+--- a/common/ctdb_ltdb.c	2007-04-18 05:27:26 +0000
++++ b/common/ctdb_ltdb.c	2007-04-18 14:36:22 +0000
+@@ -84,7 +84,7 @@
+ 
+ 	/* add the node id to the database name, so when we run on loopback
+ 	   we don't conflict in the local filesystem */
+-	name = talloc_asprintf(ctdb_db, "%s.%u", name, ctdb_get_vnn(ctdb));
++	name = talloc_asprintf(ctdb_db, "%s/%s", ctdb->db_directory, name);
+ 
+ 	/* when we have a separate daemon this will need to be a real
+ 	   file, not a TDB_INTERNAL, so the parent can access it to
+
+=== modified file 'include/ctdb.h'
+--- a/include/ctdb.h	2007-04-18 02:39:03 +0000
++++ b/include/ctdb.h	2007-04-18 23:14:25 +0000
+@@ -72,6 +72,11 @@
+ int ctdb_set_transport(struct ctdb_context *ctdb, const char *transport);
+ 
+ /*
++  set the directory for the local databases
++*/
++int ctdb_set_tdb_dir(struct ctdb_context *ctdb, const char *dir);
++
++/*
+   set some flags
+ */
+ void ctdb_set_flags(struct ctdb_context *ctdb, unsigned flags);
+
+=== modified file 'include/ctdb_private.h'
+--- a/include/ctdb_private.h	2007-04-18 08:43:34 +0000
++++ b/include/ctdb_private.h	2007-04-18 23:14:25 +0000
+@@ -119,6 +119,7 @@
+ 	struct event_context *ev;
+ 	struct ctdb_address address;
+ 	const char *name;
++	const char *db_directory;
+ 	uint32_t vnn; /* our own vnn */
+ 	uint32_t num_nodes;
+ 	uint32_t num_connected;
+@@ -460,4 +461,6 @@
+ 						     struct ctdb_call *call, 
+ 						     struct ctdb_ltdb_header *header);
+ 
++void ctdb_request_finished(struct ctdb_context *ctdb, struct ctdb_req_header *hdr);
++
+ #endif
+

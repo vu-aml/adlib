@@ -1,0 +1,170 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Jun 26 13:47:13 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5QHlCL9014235
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 26 Jun 2007 13:47:12 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id AF462163ACC
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 26 Jun 2007 17:47:09 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.3 required=3.8 tests=AWL,BAYES_00,RCVD_IN_DSBL,
+	SPF_PASS autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+X-Greylist: delayed 1683 seconds by postgrey-1.24 at dp.samba.org;
+	Tue, 26 Jun 2007 17:46:21 GMT
+Received: from mordor.cti.unav.es (mordor.cti.unav.es [159.237.12.105])
+	by lists.samba.org (Postfix) with ESMTP id 83C1D162BCA
+	for <samba-technical@lists.samba.org>;
+	Tue, 26 Jun 2007 17:46:21 +0000 (GMT)
+Received: from [159.237.12.187] (icb.cti.unav.es [159.237.12.187])
+	by mordor.cti.unav.es (8.14.1/8.14.1) with ESMTP id l5QHIGfB023297
+	(version=TLSv1/SSLv3 cipher=DHE-RSA-AES256-SHA bits=256 verify=OK)
+	for <samba-technical@lists.samba.org>; Tue, 26 Jun 2007 19:18:17 +0200
+Message-ID: <46814AD2.6070600@unav.es>
+Date: Tue, 26 Jun 2007 19:20:18 +0200
+From: Ignacio Coupeau <icoupeau@unav.es>
+User-Agent: Thunderbird 2.0.0.4 (Windows/20070604)
+MIME-Version: 1.0
+To: samba-tech <samba-technical@lists.samba.org>
+References: <46636BD2.2080907@ubiqx.mn.org>
+	<1180928441.24923.240.camel@localhost.localdomain>
+In-Reply-To: <1180928441.24923.240.camel@localhost.localdomain>
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+Subject: [CTDB and GFS] some troubles joining domain
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+I'm building a cluster with CTDB and GFS/SAN/LB with three RH5 IBM 
+xSeries ~346
+	cman-2.0.64-1.el5
+	2.6.18-8.1.6.el5
+	kmod-gfs-0.1.16-5.2.6.18_8.el5
+
+The filesystems are gfs1 because we encountered some troubles with the 
+gfs2 in our scenario.
+
+The installation was fine (from Jun 26 10:45 CEST)
+	rsync -avz samba.org::ftp/unpacked/samba_3_0_ctdb .
+	rsync -avz samba.org::ftp/unpacked/ctdb .
+	
+Our plan is test the shares with users in the domain, so the smb.conf:
+	...
+	netbios name = [piedra|papel|tijera]
+	workgroup = UNAV-PDC-01
+	...
+	security = domain
+	password server = pdc10
+	...
+	clustering = yes
+	idmap backend = tdb2
+	private dir = /usr/local/etc/users_1/clu
+	...
+
+The three nodes have an new freshly account in the PDC (as matter of 
+fact, we have about 3500 machines in the domain with LDAP so, this not 
+the point).
+
+The problem is that:
+	bin/net rpc join
+returns always, in all three machines: "Segmentation fault".
+However, I think the account in the LDAP/PDC side are wrote well 
+(sambaSamAccount, sambaNTPassword, sambaPwdLastSet, sambaSID et al).
+
+Some help/idea/point/track?
+Thanks in advance,
+
+Ignacio
+
+--------------------------------------------
+a tail (sorry, long) of the --debug=4 output:
+--------------------------------------------
+[2007/06/26 19:03:18, 4] libsmb/nmblib.c:debug_nmb_packet(112)
+   nmb packet from 159.237.12.52(137) header: id=9373 opcode=Query(0) 
+response=Yes
+       header: flags: bcast=No rec_avail=Yes rec_des=Yes trunc=No auth=Yes
+       header: rcode=0 qdcount=0 ancount=1 nscount=0 arcount=0
+       answers: nmb_name=UNAV-PDC-01<1b> rr_type=32 rr_class=1 ttl=0
+       answers   0 char `.....   hex 60009FED0C8C
+[2007/06/26 19:03:18, 2] libsmb/namequery.c:name_query(604)
+   Got a positive name query response from 159.237.12.52 ( 159.237.12.140 )
+[2007/06/26 19:03:18, 4] libsmb/nmblib.c:debug_nmb_packet(112)
+   nmb packet from 159.237.12.140(137) header: id=26280 opcode=Query(0) 
+response=Yes
+       header: flags: bcast=No rec_avail=No rec_des=No trunc=No auth=Yes
+       header: rcode=0 qdcount=0 ancount=1 nscount=0 arcount=0
+       answers: nmb_name=UNAV-PDC-01<1b> rr_type=33 rr_class=1 ttl=0
+       answers   0 char .PDC10             hex 
+09504443313020202020202020202020
+       answers  10 char .d.PDC10           hex 
+00640050444331302020202020202020
+       answers  20 char   .d.PDC10         hex 
+20200364005044433130202020202020
+       answers  30 char      d...__MSBRO   hex 
+2020202020640001025F5F4D5342524F
+       answers  40 char WSE__....UNAV-PD   hex 
+5753455F5F0201E400554E41562D5044
+       answers  50 char C-01    .d.UNAV-   hex 
+432D3031202020201D6400554E41562D
+       answers  60 char PDC-01    .d.UNA   hex 
+5044432D3031202020201B6400554E41
+       answers  70 char V-PDC-01    ...U   hex 
+562D5044432D3031202020201CE40055
+       answers  80 char NAV-PDC-01    ..   hex 
+4E41562D5044432D3031202020201EE4
+       answers  90 char .UNAV-PDC-01       hex 
+00554E41562D5044432D303120202020
+       answers  a0 char ................   hex 
+00E40000000000000000000000000000
+       answers  b0 char ................   hex 
+00000000000000000000000000000000
+       answers  c0 char ................   hex 
+00000000000000000000000000000000
+       answers  d0 char .   hex 00
+[2007/06/26 19:03:18, 3] libsmb/cliconnect.c:cli_start_connection(1502)
+   Connecting to host=PDC10
+[2007/06/26 19:03:18, 3] lib/util_sock.c:open_socket_out(920)
+   Connecting to 159.237.12.140 at port 445
+[2007/06/26 19:03:18, 3] rpc_client/cli_pipe.c:rpc_pipe_bind(2081)
+   rpc_pipe_bind: Remote machine PDC10 pipe \lsarpc fnum 0x75f6 bind 
+request returned ok.
+[2007/06/26 19:03:18, 3] rpc_client/cli_pipe.c:rpc_pipe_bind(2081)
+   rpc_pipe_bind: Remote machine PDC10 pipe \NETLOGON fnum 0x75f7 bind 
+request returned ok.
+[2007/06/26 19:03:18, 4] rpc_client/cli_netlogon.c:rpccli_net_req_chal(46)
+   cli_net_req_chal: LSA Request Challenge from PIEDRA to \\PDC10
+[2007/06/26 19:03:18, 4] rpc_client/cli_netlogon.c:rpccli_net_auth2(170)
+   cli_net_auth2: srv:\\PDC10 acct:PIEDRA$ sc:2 mc: PIEDRA neg: 701ff
+[2007/06/26 19:03:18, 4] 
+rpc_client/cli_netlogon.c:rpccli_net_srv_pwset(1059)
+   cli_net_srv_pwset: srv:\\PDC10 acct:PIEDRA$ sc: 2 mc: PIEDRA
+[2007/06/26 19:03:18, 3] 
+libsmb/trusts_util.c:trust_pw_change_and_store_it(102)
+   2007/06/26 19:03:18 : trust_pw_change_and_store_it: Changed password.
+Segmentation fault
+
+
+
+-- 
+________________________________________________________
+Dr. Ignacio Coupeau
+Systems and Network Services Director
+IT Services
+University of Navarra           http://www.unav.edu/
+Pamplona, SPAIN                 http://www.unav.es/SI/
+

@@ -1,0 +1,106 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Apr 17 13:18:10 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3HHIA0I030752
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 13:18:10 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 08C5F163A54
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 17:17:46 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.3 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1007)
+	id AA5F6162AC5; Tue, 17 Apr 2007 17:17:20 +0000 (GMT)
+To: samba-cvs@samba.org
+From: lmuelle@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070417171720.AA5F6162AC5@lists.samba.org>
+Date: Tue, 17 Apr 2007 17:17:20 +0000 (GMT)
+Subject: svn commit: samba r22318 - in branches: SAMBA_3_0/source/lib
+	SAMBA_3_0_25/source/lib
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2035
+Lines: 63
+
+Author: lmuelle
+Date: 2007-04-17 17:17:19 +0000 (Tue, 17 Apr 2007)
+New Revision: 22318
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22318
+
+Log:
+If we're running as non root we might not be able to dump the core file
+to the corepath.
+
+Even the chdir() will fail if the LOGFILEBASE path is set 0700.
+
+If the currrent user doesn't have the permission to create the core file
+we end with:
+   unable to change to <LOGFILEBASE>
+   refusing to dump core
+
+The alternative would be to change the permissions of the directory.
+But taht would not ensure core dumps are working out of the box.
+
+Modified:
+   branches/SAMBA_3_0/source/lib/fault.c
+   branches/SAMBA_3_0_25/source/lib/fault.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/lib/fault.c
+===================================================================
+--- branches/SAMBA_3_0/source/lib/fault.c	2007-04-17 17:07:14 UTC (rev 22317)
++++ branches/SAMBA_3_0/source/lib/fault.c	2007-04-17 17:17:19 UTC (rev 22318)
+@@ -161,6 +161,13 @@
+ 	}
+ 
+ #if DUMP_CORE
++	/* If we're running as non root we might not be able to dump the core
++	 * file to the corepath.  There must not be an unbecome_root() before
++	 * we call abort(). */
++	if (getuid() != 0) {
++		become_root();
++	}
++
+ 	if (*corepath != '\0') {
+ 		/* The chdir might fail if we dump core before we finish
+ 		 * processing the config file.
+
+Modified: branches/SAMBA_3_0_25/source/lib/fault.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/lib/fault.c	2007-04-17 17:07:14 UTC (rev 22317)
++++ branches/SAMBA_3_0_25/source/lib/fault.c	2007-04-17 17:17:19 UTC (rev 22318)
+@@ -161,6 +161,13 @@
+ 	}
+ 
+ #if DUMP_CORE
++	/* If we're running as non root we might not be able to dump the core
++	 * file to the corepath.  There must not be an unbecome_root() before
++	 * we call abort(). */
++	if (getuid() != 0) {
++		become_root();
++	}
++
+ 	if (*corepath != '\0') {
+ 		/* The chdir might fail if we dump core before we finish
+ 		 * processing the config file.
+

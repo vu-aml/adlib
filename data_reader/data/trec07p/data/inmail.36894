@@ -1,0 +1,396 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 15 11:42:07 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4FFg7qD006666
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 11:42:07 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 70D7D16388B
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 15:42:04 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id 8863E163817; Tue, 15 May 2007 15:41:38 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070515154138.8863E163817@lists.samba.org>
+Date: Tue, 15 May 2007 15:41:38 +0000 (GMT)
+Subject: svn commit: samba r22910 - in branches: SAMBA_3_0/source/lib
+	SAMBA_3_0_26/source/lib
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-05-15 15:41:37 +0000 (Tue, 15 May 2007)
+New Revision: 22910
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22910
+
+Log:
+Make message_send_pid static to messages.c
+
+Modified:
+   branches/SAMBA_3_0/source/lib/debug.c
+   branches/SAMBA_3_0/source/lib/messages.c
+   branches/SAMBA_3_0/source/lib/tallocmsg.c
+   branches/SAMBA_3_0_26/source/lib/debug.c
+   branches/SAMBA_3_0_26/source/lib/messages.c
+   branches/SAMBA_3_0_26/source/lib/tallocmsg.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/lib/debug.c
+===================================================================
+--- branches/SAMBA_3_0/source/lib/debug.c	2007-05-15 15:15:52 UTC (rev 22909)
++++ branches/SAMBA_3_0/source/lib/debug.c	2007-05-15 15:41:37 UTC (rev 22910)
+@@ -471,13 +471,16 @@
+  Receive a "set debug level" message.
+ ****************************************************************************/
+ 
+-static void debug_message(int msg_type, struct server_id src,
+-			  void *buf, size_t len, void *private_data)
++static void debug_message(struct messaging_context *msg_ctx,
++			  void *private_data, 
++			  uint32_t msg_type, 
++			  struct server_id src,
++			  DATA_BLOB *data)
+ {
+-	const char *params_str = (const char *)buf;
++	const char *params_str = (const char *)data->data;
+ 
+ 	/* Check, it's a proper string! */
+-	if (params_str[len-1] != '\0') {
++	if (params_str[(data->length)-1] != '\0') {
+ 		DEBUG(1, ("Invalid debug message from pid %u to pid %u\n",
+ 			  (unsigned int)procid_to_pid(&src),
+ 			  (unsigned int)getpid()));
+@@ -495,8 +498,11 @@
+  Return current debug level.
+ ****************************************************************************/
+ 
+-static void debuglevel_message(int msg_type, struct server_id src,
+-			       void *buf, size_t len, void *private_data)
++static void debuglevel_message(struct messaging_context *msg_ctx,
++			       void *private_data, 
++			       uint32_t msg_type, 
++			       struct server_id src,
++			       DATA_BLOB *data)
+ {
+ 	char *message = debug_list_class_names_and_levels();
+ 
+@@ -505,9 +511,10 @@
+ 		return;
+ 	}
+ 
+-	DEBUG(1,("INFO: Received REQ_DEBUGLEVEL message from PID %u\n",
+-		 (unsigned int)procid_to_pid(&src)));
+-	message_send_pid(src, MSG_DEBUGLEVEL, message, strlen(message) + 1, True);
++	DEBUG(1,("INFO: Received REQ_DEBUGLEVEL message from PID %s\n",
++		 procid_str_static(&src)));
++	messaging_send_buf(msg_ctx, src, MSG_DEBUGLEVEL,
++			   (uint8 *)message, strlen(message) + 1);
+ 
+ 	SAFE_FREE(message);
+ }
+@@ -531,10 +538,11 @@
+ 	}
+ }
+ 
+-void debug_register_msgs(void)
++void debug_register_msgs(struct messaging_context *msg_ctx)
+ {
+-	message_register(MSG_DEBUG, debug_message, NULL);
+-	message_register(MSG_REQ_DEBUGLEVEL, debuglevel_message, NULL);
++	messaging_register(msg_ctx, NULL, MSG_DEBUG, debug_message);
++	messaging_register(msg_ctx, NULL, MSG_REQ_DEBUGLEVEL,
++			   debuglevel_message);
+ }
+ 
+ /***************************************************************************
+
+Modified: branches/SAMBA_3_0/source/lib/messages.c
+===================================================================
+--- branches/SAMBA_3_0/source/lib/messages.c	2007-05-15 15:15:52 UTC (rev 22909)
++++ branches/SAMBA_3_0/source/lib/messages.c	2007-05-15 15:41:37 UTC (rev 22910)
+@@ -99,6 +99,10 @@
+ 	sys_select_signal(SIGUSR1);
+ }
+ 
++static NTSTATUS message_send_pid(struct server_id pid, int msg_type,
++				 const void *buf, size_t len,
++				 BOOL duplicates_allowed);
++
+ /****************************************************************************
+  A useful function for testing the message system.
+ ****************************************************************************/
+@@ -142,9 +146,9 @@
+ 
+ 	/* Register some debugging related messages */
+ 
+-	register_msg_pool_usage();
++	register_msg_pool_usage(msg_ctx);
+ 	register_dmalloc_msgs();
+-	debug_register_msgs();
++	debug_register_msgs(msg_ctx);
+ 
+ 	return True;
+ }
+@@ -366,26 +370,15 @@
+  Send a message to a particular pid - no timeout.
+ ****************************************************************************/
+ 
+-NTSTATUS message_send_pid(struct server_id pid, int msg_type, const void *buf,
+-			  size_t len, BOOL duplicates_allowed)
++static NTSTATUS message_send_pid(struct server_id pid, int msg_type,
++				 const void *buf, size_t len,
++				 BOOL duplicates_allowed)
+ {
+ 	return message_send_pid_internal(pid, msg_type, buf, len,
+ 					 duplicates_allowed, 0);
+ }
+ 
+ /****************************************************************************
+- Send a message to a particular pid, with timeout in seconds.
+-****************************************************************************/
+-
+-NTSTATUS message_send_pid_with_timeout(struct server_id pid, int msg_type,
+-				       const void *buf, size_t len,
+-				       BOOL duplicates_allowed, unsigned int timeout)
+-{
+-	return message_send_pid_internal(pid, msg_type, buf, len, duplicates_allowed,
+-					 timeout);
+-}
+-
+-/****************************************************************************
+  Count the messages pending for a particular pid. Expensive....
+ ****************************************************************************/
+ 
+
+Modified: branches/SAMBA_3_0/source/lib/tallocmsg.c
+===================================================================
+--- branches/SAMBA_3_0/source/lib/tallocmsg.c	2007-05-15 15:15:52 UTC (rev 22909)
++++ branches/SAMBA_3_0/source/lib/tallocmsg.c	2007-05-15 15:41:37 UTC (rev 22910)
+@@ -65,9 +65,11 @@
+  * Respond to a POOL_USAGE message by sending back string form of memory
+  * usage stats.
+  **/
+-void msg_pool_usage(int msg_type, struct server_id src_pid,
+-		    void *UNUSED(buf), size_t UNUSED(len),
+-		    void *private_data)
++static void msg_pool_usage(struct messaging_context *msg_ctx,
++			   void *private_data, 
++			   uint32_t msg_type, 
++			   struct server_id src,
++			   DATA_BLOB *data)
+ {
+ 	struct msg_pool_usage_state state;
+ 
+@@ -90,8 +92,8 @@
+ 		return;
+ 	}
+ 	
+-	message_send_pid(src_pid, MSG_POOL_USAGE,
+-			 state.s, strlen(state.s)+1, True);
++	messaging_send_buf(msg_ctx, src, MSG_POOL_USAGE,
++			   (uint8 *)state.s, strlen(state.s)+1);
+ 
+ 	talloc_destroy(state.mem_ctx);
+ }
+@@ -99,8 +101,8 @@
+ /**
+  * Register handler for MSG_REQ_POOL_USAGE
+  **/
+-void register_msg_pool_usage(void)
++void register_msg_pool_usage(struct messaging_context *msg_ctx)
+ {
+-	message_register(MSG_REQ_POOL_USAGE, msg_pool_usage, NULL);
++	messaging_register(msg_ctx, NULL, MSG_REQ_POOL_USAGE, msg_pool_usage);
+ 	DEBUG(2, ("Registered MSG_REQ_POOL_USAGE\n"));
+ }	
+
+Modified: branches/SAMBA_3_0_26/source/lib/debug.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/lib/debug.c	2007-05-15 15:15:52 UTC (rev 22909)
++++ branches/SAMBA_3_0_26/source/lib/debug.c	2007-05-15 15:41:37 UTC (rev 22910)
+@@ -471,13 +471,16 @@
+  Receive a "set debug level" message.
+ ****************************************************************************/
+ 
+-static void debug_message(int msg_type, struct server_id src,
+-			  void *buf, size_t len, void *private_data)
++static void debug_message(struct messaging_context *msg_ctx,
++			  void *private_data, 
++			  uint32_t msg_type, 
++			  struct server_id src,
++			  DATA_BLOB *data)
+ {
+-	const char *params_str = (const char *)buf;
++	const char *params_str = (const char *)data->data;
+ 
+ 	/* Check, it's a proper string! */
+-	if (params_str[len-1] != '\0') {
++	if (params_str[(data->length)-1] != '\0') {
+ 		DEBUG(1, ("Invalid debug message from pid %u to pid %u\n",
+ 			  (unsigned int)procid_to_pid(&src),
+ 			  (unsigned int)getpid()));
+@@ -495,8 +498,11 @@
+  Return current debug level.
+ ****************************************************************************/
+ 
+-static void debuglevel_message(int msg_type, struct server_id src,
+-			       void *buf, size_t len, void *private_data)
++static void debuglevel_message(struct messaging_context *msg_ctx,
++			       void *private_data, 
++			       uint32_t msg_type, 
++			       struct server_id src,
++			       DATA_BLOB *data)
+ {
+ 	char *message = debug_list_class_names_and_levels();
+ 
+@@ -505,9 +511,10 @@
+ 		return;
+ 	}
+ 
+-	DEBUG(1,("INFO: Received REQ_DEBUGLEVEL message from PID %u\n",
+-		 (unsigned int)procid_to_pid(&src)));
+-	message_send_pid(src, MSG_DEBUGLEVEL, message, strlen(message) + 1, True);
++	DEBUG(1,("INFO: Received REQ_DEBUGLEVEL message from PID %s\n",
++		 procid_str_static(&src)));
++	messaging_send_buf(msg_ctx, src, MSG_DEBUGLEVEL,
++			   (uint8 *)message, strlen(message) + 1);
+ 
+ 	SAFE_FREE(message);
+ }
+@@ -531,10 +538,11 @@
+ 	}
+ }
+ 
+-void debug_register_msgs(void)
++void debug_register_msgs(struct messaging_context *msg_ctx)
+ {
+-	message_register(MSG_DEBUG, debug_message, NULL);
+-	message_register(MSG_REQ_DEBUGLEVEL, debuglevel_message, NULL);
++	messaging_register(msg_ctx, NULL, MSG_DEBUG, debug_message);
++	messaging_register(msg_ctx, NULL, MSG_REQ_DEBUGLEVEL,
++			   debuglevel_message);
+ }
+ 
+ /***************************************************************************
+
+Modified: branches/SAMBA_3_0_26/source/lib/messages.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/lib/messages.c	2007-05-15 15:15:52 UTC (rev 22909)
++++ branches/SAMBA_3_0_26/source/lib/messages.c	2007-05-15 15:41:37 UTC (rev 22910)
+@@ -99,6 +99,10 @@
+ 	sys_select_signal(SIGUSR1);
+ }
+ 
++static NTSTATUS message_send_pid(struct server_id pid, int msg_type,
++				 const void *buf, size_t len,
++				 BOOL duplicates_allowed);
++
+ /****************************************************************************
+  A useful function for testing the message system.
+ ****************************************************************************/
+@@ -142,9 +146,9 @@
+ 
+ 	/* Register some debugging related messages */
+ 
+-	register_msg_pool_usage();
++	register_msg_pool_usage(msg_ctx);
+ 	register_dmalloc_msgs();
+-	debug_register_msgs();
++	debug_register_msgs(msg_ctx);
+ 
+ 	return True;
+ }
+@@ -366,26 +370,15 @@
+  Send a message to a particular pid - no timeout.
+ ****************************************************************************/
+ 
+-NTSTATUS message_send_pid(struct server_id pid, int msg_type, const void *buf,
+-			  size_t len, BOOL duplicates_allowed)
++static NTSTATUS message_send_pid(struct server_id pid, int msg_type,
++				 const void *buf, size_t len,
++				 BOOL duplicates_allowed)
+ {
+ 	return message_send_pid_internal(pid, msg_type, buf, len,
+ 					 duplicates_allowed, 0);
+ }
+ 
+ /****************************************************************************
+- Send a message to a particular pid, with timeout in seconds.
+-****************************************************************************/
+-
+-NTSTATUS message_send_pid_with_timeout(struct server_id pid, int msg_type,
+-				       const void *buf, size_t len,
+-				       BOOL duplicates_allowed, unsigned int timeout)
+-{
+-	return message_send_pid_internal(pid, msg_type, buf, len, duplicates_allowed,
+-					 timeout);
+-}
+-
+-/****************************************************************************
+  Count the messages pending for a particular pid. Expensive....
+ ****************************************************************************/
+ 
+
+Modified: branches/SAMBA_3_0_26/source/lib/tallocmsg.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/lib/tallocmsg.c	2007-05-15 15:15:52 UTC (rev 22909)
++++ branches/SAMBA_3_0_26/source/lib/tallocmsg.c	2007-05-15 15:41:37 UTC (rev 22910)
+@@ -65,9 +65,11 @@
+  * Respond to a POOL_USAGE message by sending back string form of memory
+  * usage stats.
+  **/
+-void msg_pool_usage(int msg_type, struct server_id src_pid,
+-		    void *UNUSED(buf), size_t UNUSED(len),
+-		    void *private_data)
++static void msg_pool_usage(struct messaging_context *msg_ctx,
++			   void *private_data, 
++			   uint32_t msg_type, 
++			   struct server_id src,
++			   DATA_BLOB *data)
+ {
+ 	struct msg_pool_usage_state state;
+ 
+@@ -90,8 +92,8 @@
+ 		return;
+ 	}
+ 	
+-	message_send_pid(src_pid, MSG_POOL_USAGE,
+-			 state.s, strlen(state.s)+1, True);
++	messaging_send_buf(msg_ctx, src, MSG_POOL_USAGE,
++			   (uint8 *)state.s, strlen(state.s)+1);
+ 
+ 	talloc_destroy(state.mem_ctx);
+ }
+@@ -99,8 +101,8 @@
+ /**
+  * Register handler for MSG_REQ_POOL_USAGE
+  **/
+-void register_msg_pool_usage(void)
++void register_msg_pool_usage(struct messaging_context *msg_ctx)
+ {
+-	message_register(MSG_REQ_POOL_USAGE, msg_pool_usage, NULL);
++	messaging_register(msg_ctx, NULL, MSG_REQ_POOL_USAGE, msg_pool_usage);
+ 	DEBUG(2, ("Registered MSG_REQ_POOL_USAGE\n"));
+ }	
+

@@ -1,0 +1,536 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 15 06:51:40 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4FApeqD003974
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 06:51:40 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 0D4C2162C1F
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 10:51:38 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id 5EC9E162AD4; Tue, 15 May 2007 10:50:48 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070515105048.5EC9E162AD4@lists.samba.org>
+Date: Tue, 15 May 2007 10:50:48 +0000 (GMT)
+Subject: svn commit: samba r22895 - in branches: SAMBA_3_0/source/nsswitch
+	SAMBA_3_0/source/printing SAMBA_3_0/source/rpc_server
+	SAMBA_3_0_26/source/nsswitch SAMBA_3_0_26/source/printing
+	SAMBA_3_0_26/source/rpc_server
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-05-15 10:50:44 +0000 (Tue, 15 May 2007)
+New Revision: 22895
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22895
+
+Log:
+Convert some more calls from message_send_buf to messaging_send_buf
+
+Modified:
+   branches/SAMBA_3_0/source/nsswitch/winbindd.c
+   branches/SAMBA_3_0/source/nsswitch/winbindd_cm.c
+   branches/SAMBA_3_0/source/nsswitch/winbindd_dual.c
+   branches/SAMBA_3_0/source/printing/printing.c
+   branches/SAMBA_3_0/source/rpc_server/srv_spoolss_nt.c
+   branches/SAMBA_3_0/source/rpc_server/srv_srvsvc_nt.c
+   branches/SAMBA_3_0_26/source/nsswitch/winbindd.c
+   branches/SAMBA_3_0_26/source/nsswitch/winbindd_cm.c
+   branches/SAMBA_3_0_26/source/nsswitch/winbindd_dual.c
+   branches/SAMBA_3_0_26/source/printing/printing.c
+   branches/SAMBA_3_0_26/source/rpc_server/srv_spoolss_nt.c
+   branches/SAMBA_3_0_26/source/rpc_server/srv_srvsvc_nt.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/nsswitch/winbindd.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/winbindd.c	2007-05-15 10:50:25 UTC (rev 22894)
++++ branches/SAMBA_3_0/source/nsswitch/winbindd.c	2007-05-15 10:50:44 UTC (rev 22895)
+@@ -44,6 +44,17 @@
+ 	return ctx;
+ }
+ 
++struct messaging_context *winbind_messaging_context(void)
++{
++	static struct messaging_context *ctx;
++
++	if (!ctx && !(ctx = messaging_init(NULL, server_id_self(),
++					   winbind_event_context()))) {
++		smb_panic("Could not init winbind messaging context\n");
++	}
++	return ctx;
++}
++
+ /* Reload configuration */
+ 
+ static BOOL reload_services_file(void)
+
+Modified: branches/SAMBA_3_0/source/nsswitch/winbindd_cm.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/winbindd_cm.c	2007-05-15 10:50:25 UTC (rev 22894)
++++ branches/SAMBA_3_0/source/nsswitch/winbindd_cm.c	2007-05-15 10:50:44 UTC (rev 22895)
+@@ -219,18 +219,22 @@
+ 
+ 	if ((!get_dcs(mem_ctx, domain, &dcs, &num_dcs)) || (num_dcs == 0)) {
+ 		/* Still offline ? Can't find DC's. */
+-		message_send_pid(pid_to_procid(parent_pid), MSG_WINBIND_FAILED_TO_GO_ONLINE,
+-				domain->name,
+-				strlen(domain->name)+1, False);
++		messaging_send_buf(winbind_messaging_context(),
++				   pid_to_procid(parent_pid),
++				   MSG_WINBIND_FAILED_TO_GO_ONLINE,
++				   (uint8 *)domain->name,
++				   strlen(domain->name)+1);
+ 		_exit(0);
+ 	}
+ 
+ 	/* We got a DC. Send a message to our parent to get it to
+ 	   try and do the same. */
+ 
+-	message_send_pid(pid_to_procid(parent_pid), MSG_WINBIND_TRY_TO_GO_ONLINE,
+-				domain->name,
+-				strlen(domain->name)+1, False);
++	messaging_send_buf(winbind_messaging_context(),
++			   pid_to_procid(parent_pid),
++			   MSG_WINBIND_TRY_TO_GO_ONLINE,
++			   (uint8 *)domain->name,
++			   strlen(domain->name)+1);
+ 	_exit(0);
+ }
+ 
+@@ -358,11 +362,11 @@
+ 		struct winbindd_child *idmap = idmap_child();
+ 		
+ 		if ( idmap->pid != 0 ) {
+-			message_send_pid(pid_to_procid(idmap->pid), 
+-					 MSG_WINBIND_OFFLINE, 
+-					 domain->name, 
+-					 strlen(domain->name)+1, 
+-					 False);
++			messaging_send_buf(winbind_messaging_context(),
++					   pid_to_procid(idmap->pid), 
++					   MSG_WINBIND_OFFLINE, 
++					   (uint8 *)domain->name, 
++					   strlen(domain->name)+1);
+ 		}			
+ 	}
+ 
+@@ -435,11 +439,11 @@
+ 		struct winbindd_child *idmap = idmap_child();
+ 		
+ 		if ( idmap->pid != 0 ) {
+-			message_send_pid(pid_to_procid(idmap->pid), 
+-					 MSG_WINBIND_ONLINE, 
+-					 domain->name, 
+-					 strlen(domain->name)+1, 
+-					 False);
++			messaging_send_buf(winbind_messaging_context(),
++					   pid_to_procid(idmap->pid), 
++					   MSG_WINBIND_ONLINE, 
++					   (uint8 *)domain->name, 
++					   strlen(domain->name)+1);
+ 		}			
+ 	}
+ 
+
+Modified: branches/SAMBA_3_0/source/nsswitch/winbindd_dual.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/winbindd_dual.c	2007-05-15 10:50:25 UTC (rev 22894)
++++ branches/SAMBA_3_0/source/nsswitch/winbindd_dual.c	2007-05-15 10:50:44 UTC (rev 22895)
+@@ -524,8 +524,11 @@
+ 		DEBUG(10,("winbind_msg_offline: sending message to pid %u for domain %s.\n",
+ 			(unsigned int)child->pid, domain->name ));
+ 
+-		message_send_pid(pid_to_procid(child->pid), MSG_WINBIND_OFFLINE, child->domain->name,
+-			strlen(child->domain->name)+1, False);
++		messaging_send_buf(winbind_messaging_context(),
++				   pid_to_procid(child->pid),
++				   MSG_WINBIND_OFFLINE,
++				   (uint8 *)child->domain->name,
++				   strlen(child->domain->name)+1);
+ 	}
+ }
+ 
+@@ -567,11 +570,11 @@
+ 			struct winbindd_child *idmap = idmap_child();
+ 			
+ 			if ( idmap->pid != 0 ) {
+-				message_send_pid(pid_to_procid(idmap->pid), 
+-						 MSG_WINBIND_ONLINE,
+-						 domain->name,
+-						 strlen(domain->name)+1, 
+-						 False);
++				messaging_send_buf(winbind_messaging_context(),
++						   pid_to_procid(idmap->pid), 
++						   MSG_WINBIND_ONLINE,
++						   (uint8 *)domain->name,
++						   strlen(domain->name)+1);
+ 			}
+ 			
+ 		}
+@@ -594,8 +597,11 @@
+ 		DEBUG(10,("winbind_msg_online: sending message to pid %u for domain %s.\n",
+ 			(unsigned int)child->pid, child->domain->name ));
+ 
+-		message_send_pid(pid_to_procid(child->pid), MSG_WINBIND_ONLINE, child->domain->name,
+-			strlen(child->domain->name)+1, False);
++		messaging_send_buf(winbind_messaging_context(),
++				   pid_to_procid(child->pid),
++				   MSG_WINBIND_ONLINE,
++				   (uint8 *)child->domain->name,
++				   strlen(child->domain->name)+1);
+ 	}
+ }
+ 
+@@ -612,8 +618,10 @@
+ 			DEBUG(10,("winbind_msg_onlinestatus: "
+ 				  "sending message to pid %u of primary domain.\n",
+ 				  (unsigned int)child->pid));
+-			message_send_pid(pid_to_procid(child->pid), 
+-					 MSG_WINBIND_ONLINESTATUS, buf, len, False);
++			messaging_send_buf(winbind_messaging_context(),
++					   pid_to_procid(child->pid), 
++					   MSG_WINBIND_ONLINESTATUS,
++					   (uint8 *)buf, len);
+ 			break;
+ 		}
+ 	}
+@@ -791,8 +799,9 @@
+ 		return;
+ 	}
+ 
+-	message_send_pid(*sender, MSG_WINBIND_ONLINESTATUS, 
+-			 message, strlen(message) + 1, True);
++	messaging_send_buf(winbind_messaging_context(),
++			   *sender, MSG_WINBIND_ONLINESTATUS, 
++			   (uint8 *)message, strlen(message) + 1);
+ 
+ 	talloc_destroy(mem_ctx);
+ }
+
+Modified: branches/SAMBA_3_0/source/printing/printing.c
+===================================================================
+--- branches/SAMBA_3_0/source/printing/printing.c	2007-05-15 10:50:25 UTC (rev 22894)
++++ branches/SAMBA_3_0/source/printing/printing.c	2007-05-15 10:50:44 UTC (rev 22895)
+@@ -1535,8 +1535,9 @@
+ 
+ 	/* finally send the message */
+ 	
+-	message_send_pid(pid_to_procid(background_lpq_updater_pid),
+-		 MSG_PRINTER_UPDATE, buffer, len, False);
++	messaging_send_buf(smbd_messaging_context(),
++			   pid_to_procid(background_lpq_updater_pid),
++			   MSG_PRINTER_UPDATE, (uint8 *)buffer, len);
+ 
+ 	SAFE_FREE( buffer );
+ 
+
+Modified: branches/SAMBA_3_0/source/rpc_server/srv_spoolss_nt.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpc_server/srv_spoolss_nt.c	2007-05-15 10:50:25 UTC (rev 22894)
++++ branches/SAMBA_3_0/source/rpc_server/srv_spoolss_nt.c	2007-05-15 10:50:44 UTC (rev 22895)
+@@ -1212,8 +1212,9 @@
+ 	DEBUG(10,("srv_spoolss_drv_upgrade_printer: Sending message about driver upgrade [%s]\n",
+ 		drivername));
+ 		
+-	message_send_pid(pid_to_procid(sys_getpid()),
+-			 MSG_PRINTER_DRVUPGRADE, drivername, len+1, False);
++	messaging_send_buf(smbd_messaging_context(), procid_self(),
++			   MSG_PRINTER_DRVUPGRADE,
++			   (uint8 *)drivername, len+1);
+ 
+ 	return True;
+ }
+@@ -1310,8 +1311,9 @@
+ 	DEBUG(10,("srv_spoolss_reset_printerdata: Sending message about resetting printerdata [%s]\n",
+ 		drivername));
+ 		
+-	message_send_pid(pid_to_procid(sys_getpid()),
+-			 MSG_PRINTERDATA_INIT_RESET, drivername, len+1, False);
++	messaging_send_buf(smbd_messaging_context(), procid_self(),
++			   MSG_PRINTERDATA_INIT_RESET,
++			   (uint8 *)drivername, len+1);
+ 
+ 	return True;
+ }
+
+Modified: branches/SAMBA_3_0/source/rpc_server/srv_srvsvc_nt.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpc_server/srv_srvsvc_nt.c	2007-05-15 10:50:25 UTC (rev 22894)
++++ branches/SAMBA_3_0/source/rpc_server/srv_srvsvc_nt.c	2007-05-15 10:50:44 UTC (rev 22895)
+@@ -1231,8 +1231,13 @@
+ 
+ 		if ((strequal(session_list[snum].username, r->in.user) || r->in.user[0] == '\0' ) &&
+ 		     strequal(session_list[snum].remote_machine, machine)) {
++			NTSTATUS ntstat;
++
++			ntstat = messaging_send(smbd_messaging_context(),
++						session_list[snum].pid,
++						MSG_SHUTDOWN, &data_blob_null);
+ 		
+-			if (NT_STATUS_IS_OK(message_send_pid(session_list[snum].pid, MSG_SHUTDOWN, NULL, 0, False)))
++			if (NT_STATUS_IS_OK(ntstat))
+ 				status = WERR_OK;
+ 		}
+ 	}
+
+Modified: branches/SAMBA_3_0_26/source/nsswitch/winbindd.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/nsswitch/winbindd.c	2007-05-15 10:50:25 UTC (rev 22894)
++++ branches/SAMBA_3_0_26/source/nsswitch/winbindd.c	2007-05-15 10:50:44 UTC (rev 22895)
+@@ -44,6 +44,17 @@
+ 	return ctx;
+ }
+ 
++struct messaging_context *winbind_messaging_context(void)
++{
++	static struct messaging_context *ctx;
++
++	if (!ctx && !(ctx = messaging_init(NULL, server_id_self(),
++					   winbind_event_context()))) {
++		smb_panic("Could not init winbind messaging context\n");
++	}
++	return ctx;
++}
++
+ /* Reload configuration */
+ 
+ static BOOL reload_services_file(void)
+
+Modified: branches/SAMBA_3_0_26/source/nsswitch/winbindd_cm.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/nsswitch/winbindd_cm.c	2007-05-15 10:50:25 UTC (rev 22894)
++++ branches/SAMBA_3_0_26/source/nsswitch/winbindd_cm.c	2007-05-15 10:50:44 UTC (rev 22895)
+@@ -219,18 +219,22 @@
+ 
+ 	if ((!get_dcs(mem_ctx, domain, &dcs, &num_dcs)) || (num_dcs == 0)) {
+ 		/* Still offline ? Can't find DC's. */
+-		message_send_pid(pid_to_procid(parent_pid), MSG_WINBIND_FAILED_TO_GO_ONLINE,
+-				domain->name,
+-				strlen(domain->name)+1, False);
++		messaging_send_buf(winbind_messaging_context(),
++				   pid_to_procid(parent_pid),
++				   MSG_WINBIND_FAILED_TO_GO_ONLINE,
++				   (uint8 *)domain->name,
++				   strlen(domain->name)+1);
+ 		_exit(0);
+ 	}
+ 
+ 	/* We got a DC. Send a message to our parent to get it to
+ 	   try and do the same. */
+ 
+-	message_send_pid(pid_to_procid(parent_pid), MSG_WINBIND_TRY_TO_GO_ONLINE,
+-				domain->name,
+-				strlen(domain->name)+1, False);
++	messaging_send_buf(winbind_messaging_context(),
++			   pid_to_procid(parent_pid),
++			   MSG_WINBIND_TRY_TO_GO_ONLINE,
++			   (uint8 *)domain->name,
++			   strlen(domain->name)+1);
+ 	_exit(0);
+ }
+ 
+@@ -358,11 +362,11 @@
+ 		struct winbindd_child *idmap = idmap_child();
+ 		
+ 		if ( idmap->pid != 0 ) {
+-			message_send_pid(pid_to_procid(idmap->pid), 
+-					 MSG_WINBIND_OFFLINE, 
+-					 domain->name, 
+-					 strlen(domain->name)+1, 
+-					 False);
++			messaging_send_buf(winbind_messaging_context(),
++					   pid_to_procid(idmap->pid), 
++					   MSG_WINBIND_OFFLINE, 
++					   (uint8 *)domain->name, 
++					   strlen(domain->name)+1);
+ 		}			
+ 	}
+ 
+@@ -435,11 +439,11 @@
+ 		struct winbindd_child *idmap = idmap_child();
+ 		
+ 		if ( idmap->pid != 0 ) {
+-			message_send_pid(pid_to_procid(idmap->pid), 
+-					 MSG_WINBIND_ONLINE, 
+-					 domain->name, 
+-					 strlen(domain->name)+1, 
+-					 False);
++			messaging_send_buf(winbind_messaging_context(),
++					   pid_to_procid(idmap->pid), 
++					   MSG_WINBIND_ONLINE, 
++					   (uint8 *)domain->name, 
++					   strlen(domain->name)+1);
+ 		}			
+ 	}
+ 
+
+Modified: branches/SAMBA_3_0_26/source/nsswitch/winbindd_dual.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/nsswitch/winbindd_dual.c	2007-05-15 10:50:25 UTC (rev 22894)
++++ branches/SAMBA_3_0_26/source/nsswitch/winbindd_dual.c	2007-05-15 10:50:44 UTC (rev 22895)
+@@ -524,8 +524,11 @@
+ 		DEBUG(10,("winbind_msg_offline: sending message to pid %u for domain %s.\n",
+ 			(unsigned int)child->pid, domain->name ));
+ 
+-		message_send_pid(pid_to_procid(child->pid), MSG_WINBIND_OFFLINE, child->domain->name,
+-			strlen(child->domain->name)+1, False);
++		messaging_send_buf(winbind_messaging_context(),
++				   pid_to_procid(child->pid),
++				   MSG_WINBIND_OFFLINE,
++				   (uint8 *)child->domain->name,
++				   strlen(child->domain->name)+1);
+ 	}
+ }
+ 
+@@ -567,11 +570,11 @@
+ 			struct winbindd_child *idmap = idmap_child();
+ 			
+ 			if ( idmap->pid != 0 ) {
+-				message_send_pid(pid_to_procid(idmap->pid), 
+-						 MSG_WINBIND_ONLINE,
+-						 domain->name,
+-						 strlen(domain->name)+1, 
+-						 False);
++				messaging_send_buf(winbind_messaging_context(),
++						   pid_to_procid(idmap->pid), 
++						   MSG_WINBIND_ONLINE,
++						   (uint8 *)domain->name,
++						   strlen(domain->name)+1);
+ 			}
+ 			
+ 		}
+@@ -594,8 +597,11 @@
+ 		DEBUG(10,("winbind_msg_online: sending message to pid %u for domain %s.\n",
+ 			(unsigned int)child->pid, child->domain->name ));
+ 
+-		message_send_pid(pid_to_procid(child->pid), MSG_WINBIND_ONLINE, child->domain->name,
+-			strlen(child->domain->name)+1, False);
++		messaging_send_buf(winbind_messaging_context(),
++				   pid_to_procid(child->pid),
++				   MSG_WINBIND_ONLINE,
++				   (uint8 *)child->domain->name,
++				   strlen(child->domain->name)+1);
+ 	}
+ }
+ 
+@@ -612,8 +618,10 @@
+ 			DEBUG(10,("winbind_msg_onlinestatus: "
+ 				  "sending message to pid %u of primary domain.\n",
+ 				  (unsigned int)child->pid));
+-			message_send_pid(pid_to_procid(child->pid), 
+-					 MSG_WINBIND_ONLINESTATUS, buf, len, False);
++			messaging_send_buf(winbind_messaging_context(),
++					   pid_to_procid(child->pid), 
++					   MSG_WINBIND_ONLINESTATUS,
++					   (uint8 *)buf, len);
+ 			break;
+ 		}
+ 	}
+@@ -791,8 +799,9 @@
+ 		return;
+ 	}
+ 
+-	message_send_pid(*sender, MSG_WINBIND_ONLINESTATUS, 
+-			 message, strlen(message) + 1, True);
++	messaging_send_buf(winbind_messaging_context(),
++			   *sender, MSG_WINBIND_ONLINESTATUS, 
++			   (uint8 *)message, strlen(message) + 1);
+ 
+ 	talloc_destroy(mem_ctx);
+ }
+
+Modified: branches/SAMBA_3_0_26/source/printing/printing.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/printing/printing.c	2007-05-15 10:50:25 UTC (rev 22894)
++++ branches/SAMBA_3_0_26/source/printing/printing.c	2007-05-15 10:50:44 UTC (rev 22895)
+@@ -1538,8 +1538,9 @@
+ 
+ 	/* finally send the message */
+ 	
+-	message_send_pid(pid_to_procid(background_lpq_updater_pid),
+-		 MSG_PRINTER_UPDATE, buffer, len, False);
++	messaging_send_buf(smbd_messaging_context(),
++			   pid_to_procid(background_lpq_updater_pid),
++			   MSG_PRINTER_UPDATE, (uint8 *)buffer, len);
+ 
+ 	SAFE_FREE( buffer );
+ 
+
+Modified: branches/SAMBA_3_0_26/source/rpc_server/srv_spoolss_nt.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/rpc_server/srv_spoolss_nt.c	2007-05-15 10:50:25 UTC (rev 22894)
++++ branches/SAMBA_3_0_26/source/rpc_server/srv_spoolss_nt.c	2007-05-15 10:50:44 UTC (rev 22895)
+@@ -1204,8 +1204,9 @@
+ 	DEBUG(10,("srv_spoolss_drv_upgrade_printer: Sending message about driver upgrade [%s]\n",
+ 		drivername));
+ 		
+-	message_send_pid(pid_to_procid(sys_getpid()),
+-			 MSG_PRINTER_DRVUPGRADE, drivername, len+1, False);
++	messaging_send_buf(smbd_messaging_context(), procid_self(),
++			   MSG_PRINTER_DRVUPGRADE,
++			   (uint8 *)drivername, len+1);
+ 
+ 	return True;
+ }
+@@ -1302,8 +1303,9 @@
+ 	DEBUG(10,("srv_spoolss_reset_printerdata: Sending message about resetting printerdata [%s]\n",
+ 		drivername));
+ 		
+-	message_send_pid(pid_to_procid(sys_getpid()),
+-			 MSG_PRINTERDATA_INIT_RESET, drivername, len+1, False);
++	messaging_send_buf(smbd_messaging_context(), procid_self(),
++			   MSG_PRINTERDATA_INIT_RESET,
++			   (uint8 *)drivername, len+1);
+ 
+ 	return True;
+ }
+
+Modified: branches/SAMBA_3_0_26/source/rpc_server/srv_srvsvc_nt.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/rpc_server/srv_srvsvc_nt.c	2007-05-15 10:50:25 UTC (rev 22894)
++++ branches/SAMBA_3_0_26/source/rpc_server/srv_srvsvc_nt.c	2007-05-15 10:50:44 UTC (rev 22895)
+@@ -1339,13 +1339,19 @@
+ 
+ 		if ((strequal(session_list[snum].username, username) || username[0] == '\0' ) &&
+ 		    strequal(session_list[snum].remote_machine, machine)) {
++
++			NTSTATUS ntstat;
+ 		
+ 			if (user.ut.uid != sec_initial_uid()) {
+ 				not_root = True;
+ 				become_root();
+ 			}
+ 
+-			if (NT_STATUS_IS_OK(message_send_pid(session_list[snum].pid, MSG_SHUTDOWN, NULL, 0, False)))
++			ntstat = messaging_send(smbd_messaging_context(),
++						session_list[snum].pid,
++						MSG_SHUTDOWN, &data_blob_null);
++			
++			if (NT_STATUS_IS_OK(ntstat))
+ 				r_u->status = WERR_OK;
+ 
+ 			if (not_root) 
+

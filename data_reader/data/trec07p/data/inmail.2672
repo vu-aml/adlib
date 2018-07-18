@@ -1,0 +1,135 @@
+From perl6-all-return-80484-ktwarwic=speedy.uwaterloo.ca@perl.org  Wed Apr 11 04:21:06 2007
+Return-Path: <perl6-all-return-80484-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3B8L50I014762
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 11 Apr 2007 04:21:05 -0400
+Received: (qmail 2720 invoked by uid 514); 11 Apr 2007 08:20:41 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 2714 invoked from network); 11 Apr 2007 08:20:41 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+Delivered-To: perlmail-parrot-porters@onion.perl.org
+Delivered-To: parrot-porters@perl.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+Message-ID: <461C9889.5010800@perl.org>
+Date: Wed, 11 Apr 2007 01:12:57 -0700
+From: Allison Randal <allison@perl.org>
+User-Agent: Thunderbird 1.5.0.10 (Macintosh/20070221)
+MIME-Version: 1.0
+To: Alek Storm <alek.storm@gmail.com>
+Cc: Bob Rogers <rogers-perl6@rgrjr.dyndns.org>, p2 <parrot-porters@perl.org>
+Subject: Re: modifying classes after they're instantiated
+References: <461C0EEF.1010107@perl.org>	 <189adbd0704101702g34d86254t75708dd9035094f2@mail.gmail.com>	 <17948.15469.601953.730369@rgrjr.dyndns.org> <189adbd0704101917j758f43afj5fe0d800f684e891@mail.gmail.com>
+In-Reply-To: <189adbd0704101917j758f43afj5fe0d800f684e891@mail.gmail.com>
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+X-Virus-Scanned: by amavisd-new at wgz.org
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,FORGED_RCVD_HELO
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,FORGED_RCVD_HELO
+Status: O
+Content-Length: 4016
+Lines: 82
+
+Alek Storm wrote:
+> On 4/11/07, Bob Rogers <rogers-perl6@rgrjr.dyndns.org> wrote:
+>>    I like this one, but I also have another alternative.  First, make all
+>>    class-modification code (add_method, remove_attribute, etc) return a
+>>    PMC*.  Whenever one of these methods is called on a class, the class
+>>    is cloned . . .
+
+Yeah, this one came up on IRC too. Two problems, first is the 
+non-obviousness of having a method like 'add_attribute' return a 
+modified version of the class. The disadvantage of the interface 
+outweighs the advantage of the DWIM. Second is that the most sensible 
+return value is some form of error reporting (if exceptions are turned off).
+
+>> What does "find_class" return after one of these?  If it returns the new
+>> class, then there is no need for the class-mutating ops to do so, except
+>> possibly for convenience.
+> 
+> "find_class" returns whatever is currently registered as the class.
+
+Yes. Always true if we were to do automatic cloning. Also true in some 
+cases of explicit cloning (as a optional feature of 'clone').
+
+>> Surely you are not suggesting that any random "add_method" should
+>> require creating a new class?  Did you mean "add_attribute" (or
+>> whatever)?
+
+I did mean that, but only if the class has already been instantiated. 
+('add_method' can add an additional multi, for example, so it can modify 
+existing behavior.)
+
+>> This is not necessary; you only need to clone the class after the first
+>> time it is instantiated.  So you can put an "instantiated_p" flag in the
+>> class to keep track, and keep mutating the same new class until the next
+>> instantiation.
+
+A flag for 'instantiated' is in the new PDD 15 and prototype implementation.
+
+>> The remove_* operations could stay, they would just
+>> throw errors on instantiated classes.
+
+They could, but how often are people going to add a bunch of attributes 
+and methods and then remove them immediately before they ever 
+instantiate the class? The remove_* ops made sense as a feature when 
+they could be used at any time, but when they only work in a narrow 
+window it's not worth having them. Especially since we already have to 
+implement another way (explicit cloning) to dynamically remove 
+attributes and methods after the class has been instantiated.
+
+> Not all languages want to clone their classes on modification.  These
+> languages would use their own class PMCs that don't clone themselves.
+
+They might not clone their classes from the user perspective, but 
+internally it's the only truly safe way to modify a class that already 
+has objects instantiated (especially when you're talking about remove 
+operations). Otherwise, you have objects referencing attributes that 
+don't exist any longer in the class, or methods referencing attributes 
+that were never initialized in the object. The closest they can come is 
+the option 1) I listed.
+
+> If one of their classes is passed to and cloned by a different HLL,
+> their class system will be screwed up/inconsistent.  I'm not sure how
+> requiring HLLs to deal with explicit cloning would be simpler than
+> having it abstracted away.  This system is much more flexible.
+
+The point about abstraction is a good one. It can also be satisfied by 
+the 'clone' method/vtable. If a class has a different way of handling 
+modifications, it can return a modified version of itself instead of 
+returning a new clone (in those cases where the cloning operation was 
+flagged as a modification of an existing class).
+
+>> Error recovery would also be easier for explicit cloning; what happens
+>> if one of the class-mutating methods throws an error?
+> 
+> I'm afraid you lost me.  How would this be different?  Could you
+> provide some more information?
+
+Essentially, what if you call 'add_method', it automatically clones the 
+class, and the automatic cloning fails for some reason? Then you get a 
+mysterious exception about "failed to clone class", leaving the average 
+user wondering why it was trying to clone a class in the first place.
+
+Allison
+

@@ -1,0 +1,101 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu May 10 02:44:14 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4A6iEqD006002
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 10 May 2007 02:44:14 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id D02E8163843
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 10 May 2007 06:44:12 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.1 required=3.8 tests=AWL,BAYES_00,
+	DATE_IN_PAST_03_06,NO_REAL_NAME,NO_RELAYS,RCVD_IN_DSBL autolearn=no 
+	version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 98B08162AE4; Thu, 10 May 2007 06:43:52 +0000 (GMT)
+Date: Thu, 10 May 2007 13:10:24 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070510064352.98B08162AE4@lists.samba.org>
+Subject: Rev 271: setup the random number generator a bit better in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 271
+revision-id: tridge@samba.org-20070510031023-yhipc23awqwfed3s
+parent: tridge@samba.org-20070509224957-9l3bc1ay2rluro28
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Thu 2007-05-10 13:10:23 +1000
+message:
+  setup the random number generator a bit better
+modified:
+  direct/ctdb_recoverd.c         recoverd.c-20070503213540-bvxuyd9jm1f7ig90-1
+=== modified file 'direct/ctdb_recoverd.c'
+--- a/direct/ctdb_recoverd.c	2007-05-09 22:49:57 +0000
++++ b/direct/ctdb_recoverd.c	2007-05-10 03:10:23 +0000
+@@ -508,12 +508,11 @@
+ 	struct election_message *em = (struct election_message *)data.dptr;
+ 	TALLOC_CTX *mem_ctx;
+ 
+-	mem_ctx = talloc_new(ctdb);
+-
+ 	if (em->vnn==ctdb_get_vnn(ctdb)) {
+-		talloc_free(mem_ctx);
+ 		return;
+ 	}
++
++	mem_ctx = talloc_new(ctdb);
+ 		
+ 	/* someone called an election. check their election data
+ 	   and if we disagree and we would rather be the elected node, 
+@@ -628,13 +627,12 @@
+ 		goto again;
+ 	}
+ 	
+-
+ 	/* verify that the recmaster node is still active */
+ 	for (j=0; j<nodemap->num; j++) {
+ 		if (nodemap->nodes[j].vnn==recmaster) {
+ 			break;
+ 		}
+-	}	
++	}
+ 	if (!(nodemap->nodes[j].flags&NODE_FLAGS_CONNECTED)) {
+ 		DEBUG(0, ("Recmaster node %u no longer available. Force reelection\n", nodemap->nodes[j].vnn));
+ 		force_election(ctdb, mem_ctx, vnn, nodemap);
+@@ -736,7 +734,7 @@
+ 
+ 
+ 	/* there better be the same number of lmasters in the vnn map
+-	   as there are active nodes or well have to do a recovery
++	   as there are active nodes or we will have to do a recovery
+ 	 */
+ 	if (vnnmap->size != num_active) {
+ 		DEBUG(0, (__location__ "The vnnmap count is different from the number of active nodes. %d vs %d\n", vnnmap->size, num_active));
+@@ -856,6 +854,8 @@
+ 	}
+ #endif
+ 
++	srandom(getpid() ^ time(NULL));
++
+ 	ev = event_context_init(NULL);
+ 
+ 	/* initialise ctdb */
+

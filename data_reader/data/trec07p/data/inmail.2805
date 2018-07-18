@@ -1,0 +1,136 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Apr 11 08:11:26 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3BCBP0I016442
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 11 Apr 2007 08:11:25 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id D29AE163AE5
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 11 Apr 2007 12:11:02 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.5 required=3.8 tests=AWL,BAYES_50,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 501)
+	id 84807163AF8; Wed, 11 Apr 2007 12:10:42 +0000 (GMT)
+To: samba-cvs@samba.org
+From: abartlet@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070411121042.84807163AF8@lists.samba.org>
+Date: Wed, 11 Apr 2007 12:10:42 +0000 (GMT)
+Subject: svn commit: samba r22170 - in branches/SAMBA_4_0:
+	source/script/tests testprogs/blackbox
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2853
+Lines: 93
+
+Author: abartlet
+Date: 2007-04-11 12:10:40 +0000 (Wed, 11 Apr 2007)
+New Revision: 22170
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22170
+
+Log:
+To get the smbclient blackbox test to pass again, we need to get the
+private dir to contain a valid machine account.
+
+It isn't really valid it use the DC's account any more, so extend this
+script to also join the domain.  This nicely tests out some previously
+untested code too!
+
+Andrew Bartlett
+
+Modified:
+   branches/SAMBA_4_0/source/script/tests/selftest.pl
+   branches/SAMBA_4_0/testprogs/blackbox/test_smbclient.sh
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/script/tests/selftest.pl
+===================================================================
+--- branches/SAMBA_4_0/source/script/tests/selftest.pl	2007-04-11 11:43:07 UTC (rev 22169)
++++ branches/SAMBA_4_0/source/script/tests/selftest.pl	2007-04-11 12:10:40 UTC (rev 22170)
+@@ -448,6 +448,14 @@
+ 
+ 	my $abs_srcdir = cwd();
+ 
++	mkdir "$prefix/client" unless -d "$prefix/client";
++	
++	if ( -d "$prefix/client/private" ) {
++	        unlink <$prefix/client/private/*>;
++	} else {
++	        mkdir("$prefix/client/private");
++	}
++
+ 	open(CF, ">$conffile");
+ 	print CF "[global]\n";
+ 	if (defined($ENV{VALGRIND})) {
+@@ -456,8 +464,7 @@
+ 		print CF "\ticonv:native = false\n";
+ 	}
+ 	print CF 
+-"	netbios name = localtest
+-	netbios aliases = localhost
++"	netbios name = client
+ ";
+ 	if (defined($vars->{DOMAIN})) {
+ 		print CF "\tworkgroup = $vars->{DOMAIN}\n";
+@@ -465,9 +472,6 @@
+ 	if (defined($vars->{REALM})) {
+ 		print CF "\trealm = $vars->{REALM}\n";
+ 	}
+-	if (defined($vars->{PIDDIR})) {
+-		print CF "\tpid directory = $vars->{PIDDIR}\n";
+-	}
+ 	if (defined($vars->{NCALRPCDIR})) {
+ 		print CF "\tncalrpc dir = $vars->{NCALRPCDIR}\n";
+ 	}
+@@ -475,6 +479,7 @@
+ 		print CF "\twinbindd socket directory = $vars->{WINBINDD_SOCKET_DIR}\n";
+ 	}
+ 	print CF "
++        private dir = $abs_srcdir/$prefix/client/private
+ 	js include = $abs_srcdir/scripting/libjs
+ 	name resolve order = bcast
+ 	interfaces = $interfaces
+@@ -483,8 +488,8 @@
+ 	notify:inotify = false
+ 	ldb:nosync = true
+ 	system:anonymous = true
++	torture:basedir = ./st
+ #We don't want to pass our self-tests if the PAC code is wrong
+-	torture:basedir = ./st
+ 	gensec:require_pac = true
+ ";
+ 	close(CF);
+
+Modified: branches/SAMBA_4_0/testprogs/blackbox/test_smbclient.sh
+===================================================================
+--- branches/SAMBA_4_0/testprogs/blackbox/test_smbclient.sh	2007-04-11 11:43:07 UTC (rev 22169)
++++ branches/SAMBA_4_0/testprogs/blackbox/test_smbclient.sh	2007-04-11 12:10:40 UTC (rev 22170)
+@@ -37,6 +37,8 @@
+ 	return $?
+ }
+ 
++testit "domain join" $VALGRIND bin/net join $DOMAIN $CONFIGURATION  -W "$DOMAIN" -U"$USERNAME%$PASSWORD" $@ || failed=`expr $failed + 1`
++
+ # Generate random file
+ cat >tmpfile<<EOF
+ foo
+

@@ -1,0 +1,101 @@
+From perl6-all-return-80707-ktwarwic=speedy.uwaterloo.ca@perl.org  Wed Apr 18 18:18:14 2007
+Return-Path: <perl6-all-return-80707-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3IMID0I016695
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 18 Apr 2007 18:18:13 -0400
+Received: (qmail 25667 invoked by uid 514); 18 Apr 2007 22:17:48 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 25662 invoked from network); 18 Apr 2007 22:17:48 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+X-Virus-Scanned: by both ClamAV and Kaspersky at http://aliencamel.com/
+Message-ID: <462698F4.1060500@perl.org>
+Date: Wed, 18 Apr 2007 15:17:24 -0700
+From: Allison Randal <allison@perl.org>
+User-Agent: Thunderbird 1.5.0.10 (Macintosh/20070221)
+MIME-Version: 1.0
+To: Alek Storm <alek.storm@gmail.com>
+CC: chromatic <chromatic@wgz.org>, perl6-internals@perl.org
+Subject: Re: [perl #42430] [PATCH] make :vtable imply :method
+References: <RT-Ticket-42430@perl.org> <461C9495.1070109@perl.org>	 <189adbd0704110540p680a576dje9e0592f6b0db2d5@mail.gmail.com>	 <200704111113.07499.chromatic@wgz.org>	 <189adbd0704142149k2c1b7ff4ubf75e4abf5fb4e38@mail.gmail.com>	 <4622BE38.2070806@perl.org> <189adbd0704180804q3119863w434a5cd868a7a02d@mail.gmail.com>
+In-Reply-To: <189adbd0704180804q3119863w434a5cd868a7a02d@mail.gmail.com>
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME
+Status: O
+Content-Length: 2255
+Lines: 54
+
+Alek Storm wrote:
+> 
+> This seems perfectly fine to me.  The only change I think should be
+> made is that :vtable automatically sets :method to true.  Using :anon
+> to exclude it from the namespace is what you originally proposed, so
+> I'm curious why you've changed your mind.
+
+Because I realized that under that system, you could never use :vtable 
+by itself (there's no such thing as a vtable without a PMC), and because 
+the most common case (only overriding the vtable entry and not modifying 
+the class namespace) required 3 modifiers on the sub. This way the 2 
+most common cases each only need one modifier (:method or :vtable).
+
+> Making :method mean one thing when used with :vtable, and something
+> completely different without, seems like a really bad idea to me, and
+> is confusing to the user.  The user will also be confused because
+> adding :vtable removes it from the namespace, which they didn't
+> explicitly ask it to do.  What is :anon good for if we use a
+> completely different system for :vtable?
+
+The whole point of the original change was to keep vtable overrides from 
+polluting the namespace of the class. vtables are Parrot's way of 
+interfacing with PMCs at a low-level, and not every language will want 
+all the vtable behavior exposed. When they do, we give them the option, 
+but we don't expect most classes written in PIR to expose the vtable 
+entries as methods.
+
+> .sub get_string :vtable :anon # unspecified
+
+Just no effect, since :vtable already implies no entry in the namespace.
+
+> .sub get_string :vtable :method :anon # now we're in trouble
+
+Just like ":method :anon", but also stores it as a vtable entry.
+
+> The same thing, with what I've proposed:
+> 
+> .sub get_string # normal sub, attached to a namespace but not a method
+> 
+> .sub get_string :method # a full method, attached to a namespace
+> 
+> .sub get_string :vtable # a method that also overrides the vtable
+> 
+> .sub get_string :vtable :method # same as before
+> 
+> .sub get_string :vtable :anon # same, but not attached to the
+> namespace (note that the user has actually specified this, so they
+> expect it to happen)
+> 
+> .sub get_string :vtable :method :anon # same as before
+
+This works too, but doesn't optimize for the most common case.
+
+Allison
+

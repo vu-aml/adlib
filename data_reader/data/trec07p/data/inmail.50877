@@ -1,0 +1,99 @@
+From perl6-all-return-81796-ktwarwic=speedy.uwaterloo.ca@perl.org  Mon Jun  4 15:39:08 2007
+Return-Path: <perl6-all-return-81796-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l54Jd7hB031939
+	for <ktwarwic@flax9.uwaterloo.ca>; Mon, 4 Jun 2007 15:39:08 -0400
+Received: (qmail 3720 invoked by uid 514); 4 Jun 2007 19:39:01 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 3715 invoked from network); 4 Jun 2007 19:39:00 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=0.0 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-language-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-language
+List-Id: <perl6-language.perl.org>
+Delivered-To: mailing list perl6-language@perl.org
+Delivered-To: perl6-language@perl.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+X-ORBL: [71.139.8.243]
+Date: Mon, 4 Jun 2007 11:06:18 -0700
+From: Larry Wall <larry@wall.org>
+To: perl6-language@perl.org
+Subject: Re: [svn:perl6-synopsis] r14415 - doc/trunk/design/syn
+Message-ID: <20070604180618.GA26518@wall.org>
+Mail-Followup-To: perl6-language@perl.org
+References: <20070604002317.AD5CCCBA7D@x12.develooper.com> <ef30550b0706032223j33ae3e02qcd1dad48a2f64c06@mail.gmail.com>
+Mime-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+In-Reply-To: <ef30550b0706032223j33ae3e02qcd1dad48a2f64c06@mail.gmail.com>
+User-Agent: Mutt/1.4.2.3i
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=2.7 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,KARMA_CONNECT_NEGATIVE,SPF_NEUTRAL
+
+On Sun, Jun 03, 2007 at 10:23:44PM -0700, Jonathan Lang wrote:
+: Let me see if I understand this correctly:
+: 
+: * In list context, a list of captures gets flattened.
+
+Yes.
+
+: * In slice context (a variant of list context), a list of captures
+: doesn't get flattened.
+
+More than that, the captures get turned into sublists (subarrays?)
+that prevent any subsequent flattening.
+
+: * In hash context (another variant of list context), a list of
+: captures gets flattened, and then grouped into Pairs.
+
+Yes.
+
+: * In item context, a list of captures becomes a single Array object,
+: and the question about whether or not it gets flattened gets deferred
+: until its contents get looked at in list, slice, or hash context.
+
+That's the intent.  $() used to assume @@ inside till this latest
+change, but that seemed insufficiently lazy to me...
+
+But it kinda means there's yet another list context that doesn't
+decide yet, used explicitly by the insides of \(...) and implicitly
+by the $() context.  Not sure if it needs a name yet, or whether it's
+a design smell.  Arguably "list" should be non-committal and we give
+@() a different name like "flat", but that grates in my brain for
+some reason, if only because most list contexts would in the end
+be flat anyway.  And "list" in English already implies something
+flatter than, say, an "outline".
+
+: Meanwhile, 'zip' produces a list of captures - which, because list
+: context is the default "plural" context, immediately gets flattened
+: most of the time.  As I see it, then, the serial equivalent to
+: 'zip(@a;@b)' would be '(@a;@b)', and 'list(@a;@b)' would be the serial
+: equivalent to 'list(zip(@a;@b))'.
+
+That doesn't make sense to me.  You seem to be thinking that semicolon
+has zip semantics, when it doesn't.  All ; does is make a list of
+captures.  list() flattens any ; by interpolating the captures when
+you bind to list's *@ argument, but zip binds to *@@ so it slices
+it instead so that it can deal with the lists in parallel rather
+than serially.  And the list() in list(zip()) would just listify the
+*results* of zip, not the arguments to zip...
+
+: Or does '(@a;@b)' default to slice context?
+
+Parentheses don't supply context.  They only group.  (@a;@b) returns
+a list of captures.  It requires a binding (or other sigil) coercion
+to supply context.
+
+Larry
+

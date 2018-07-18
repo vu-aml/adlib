@@ -1,0 +1,188 @@
+From perl6-all-return-82487-ktwarwic=speedy.uwaterloo.ca@perl.org  Sun Jul  1 16:55:36 2007
+Return-Path: <perl6-all-return-82487-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l61KtYL9005214
+	for <ktwarwic@flax9.uwaterloo.ca>; Sun, 1 Jul 2007 16:55:34 -0400
+Received: (qmail 10331 invoked by uid 514); 1 Jul 2007 20:55:29 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 10320 invoked from network); 1 Jul 2007 20:55:28 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: moderator for perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: Bram Geron (via RT) <parrotbug-followup@parrotcode.org>
+X-RT-NewTicket: yes
+To: bugs-bitbucket@netlabs.develooper.com
+Resent-To: perl6-internals@perl.org
+Mail-Followup-To: perl6-internals@perl.org
+Reply-To: perl6-internals@perl.org
+Date: Sun, 01 Jul 2007 03:53:50 -0700
+Subject: [perl #43462] [PATCH] some clearups, illegal memory accessing 
+In-Reply-To: <4687879D.4090902@gmail.com>
+References: <RT-Ticket-43462@perl.org> <4687879D.4090902@gmail.com>
+Message-ID: <rt-3.6.HEAD-1276-1183287230-1103.43462-72-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #43462
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: bgeron@gmail.com
+MIME-Version: 1.0
+X-RT-Original-Encoding: utf-8
+Content-type: multipart/mixed; boundary="----------=_1183287230-1276-142"
+Resent-Message-Id: <20070701105351.351A62AFE6@x3.develooper.com>
+Resent-Date: Sun,  1 Jul 2007 03:53:51 -0700 (PDT)
+Resent-From: rt-bgeron=gmail.com@netlabs.develooper.com
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+
+------------=_1183287230-1276-142
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+# New Ticket Created by  Bram Geron 
+# Please include the string:  [perl #43462]
+# in the subject line of all future correspondence about this issue. 
+# <URL: http://rt.perl.org/rt3/Ticket/Display.html?id=43462 >
+
+
+Firstly, there are some clearups in <clearups.patch>, I think they're
+self-explanatory.
+
+Secondly, I discovered that when you're using -D80, Parrot_free_context
+prints out the name of the 'sub' that the context was made for. I think
+we can't rely on the sub being there, as this example will show:
+
+- Create closure A over main.
+- Invoke closure A, creating context B.
+  - Create closure C over closure A, storing a ref to context B (but not
+    to closure A). Store it in a global var maybe.
+- Exit closure A. There is one less reference to context B.
+- Empty the global var holding closure C.
+- Free closure C. Now context B can be freed too:
+  [free  ctx 0x12345678 of sub '<accessing freed memory here>']
+
+I got a segfault for it, but my test case is too large to attach and I
+think it will be hard to get the size down. It isn't very legible anyway.
+
+To solve this we can omit printing the sub name in Parrot_free_context.
+A patch that does this is in <context.patch>. Using -D80 does become
+less legible, but I think we prefer more correct behavior.
+
+Thanks,
+-- 
+Bram Geron | GPG 0xE7B9E65E
+
+
+
+
+
+------------=_1183287230-1276-142
+Content-Type: text/x-patch; charset="ascii"; name="clearups.patch"
+Content-Disposition: inline; filename="clearups.patch"
+Content-Transfer-Encoding: 7bit
+RT-Attachment: 43462/266355/116533
+
+commit 75f9702c205694f1a81a00d0cc0181ae04436c0d
+Author: Bram Geron <bgeron@gmail.com>
+Date:   Thu Jun 28 17:23:46 2007 +0200
+
+    some clearups
+
+diff --git a/src/pmc/closure.pmc b/src/pmc/closure.pmc
+index 40073ad..fac291a 100644
+--- a/src/pmc/closure.pmc
++++ b/src/pmc/closure.pmc
+@@ -203,7 +203,7 @@ Destroys the closure.  This is necessary in order to reclaim the context.
+         struct Parrot_sub * sub = PMC_sub(SELF);
+ #if CTX_LEAK_DEBUG
+         if (Interp_debug_TEST(INTERP, PARROT_CTX_DESTROY_DEBUG_FLAG)) {
+-            fprintf(stderr, "[destroy closure %p, context %p, refs=%d]\n",
++            fprintf(stderr, "[destroy closure %p, context %p with %d refs]\n",
+                     (void *)SELF, (void *)sub->outer_ctx,
+                     (sub->outer_ctx ? sub->outer_ctx->ref_count : 0));
+         }
+diff --git a/src/pmc/sub.pmc b/src/pmc/sub.pmc
+index 58d4ca1..abc94f7 100644
+--- a/src/pmc/sub.pmc
++++ b/src/pmc/sub.pmc
+@@ -58,10 +58,10 @@ Initializes the subroutine.
+      *                as some other sub has :outer(this)
+      * - private2 ... tailcall invoked this Sub
+      * - private3 ... pythonic coroutine generator flag
+-     * - private4 ... :main (nee @MAIN)
+-     * - private5 ... :load (nee @LOAD)
+-     * - private6 ... :immediate (nee @IMMEDIATE)
+-     * - private7 ... :postcomp (nee @POSTCOMP)
++     * - private4 ... :main (see @MAIN)
++     * - private5 ... :load (see @LOAD)
++     * - private6 ... :immediate (see @IMMEDIATE)
++     * - private7 ... :postcomp (see @POSTCOMP)
+      *
+      * see also the enum in include/parrot/sub.h
+      *
+
+
+
+
+
+------------=_1183287230-1276-142
+Content-Type: text/x-patch; charset="ascii"; name="context.patch"
+Content-Disposition: inline; filename="context.patch"
+Content-Transfer-Encoding: 7bit
+RT-Attachment: 43462/266355/116534
+
+diff --git a/src/gc/register.c b/src/gc/register.c
+index b0e2a88..e71e745 100644
+--- a/src/gc/register.c
++++ b/src/gc/register.c
+@@ -472,13 +472,7 @@ Parrot_free_context(Interp *interp /*NN*/, struct Parrot_Context *ctxp /*NN*/, i
+         if (   Interp_debug_TEST(interp, PARROT_CTX_DESTROY_DEBUG_FLAG)
+             && ctxp->current_sub) {
+             /* can't probably PIO_eprintf here */
+-            const Parrot_sub * const doomed = PMC_sub(ctxp->current_sub);
+-
+-            fprintf(stderr, "[free  ctx %p of sub '%s']\n",
+-                    (void *)ctxp,
+-                    (doomed->name == (void*)0xdeadbeef
+-                     ? "???"
+-                     : (char*)doomed->name->strstart));
++            fprintf(stderr, "[free  ctx %p]\n", (void *)ctxp);
+         }
+ #endif
+         ptr  = ctxp;
+diff --git a/src/pmc/sub.pmc b/src/pmc/sub.pmc
+index d57289d..58d4ca1 100644
+--- a/src/pmc/sub.pmc
++++ b/src/pmc/sub.pmc
+@@ -101,6 +101,9 @@ Destroys the subroutine.
+                     n && n->strstart ? (char*)n->strstart : "???");
+         }
+ #endif
++#ifndef NDEBUG
++        sub->name = NULL; /* detect it more often when we illegally try to print sub->name, like when using -D80 */
++#endif
+         mem_sys_free(sub);
+         PMC_struct_val(SELF) = NULL;
+     }
+
+
+
+
+
+------------=_1183287230-1276-142--
+

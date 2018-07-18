@@ -1,0 +1,404 @@
+From beginners-return-92298-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue Jun 12 04:32:28 2007
+Return-Path: <beginners-return-92298-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l5C8WRL9024456
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 12 Jun 2007 04:32:27 -0400
+Received: (qmail 8935 invoked by uid 514); 12 Jun 2007 08:32:17 -0000
+Mailing-List: contact beginners-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:beginners@perl.org>
+List-Help: <mailto:beginners-help@perl.org>
+List-Unsubscribe: <mailto:beginners-unsubscribe@perl.org>
+List-Subscribe: <mailto:beginners-subscribe@perl.org>
+List-Id: <beginners.perl.org>
+Delivered-To: mailing list beginners@perl.org
+Delivered-To: moderator for beginners@perl.org
+Received: (qmail 1172 invoked from network); 11 Jun 2007 23:53:42 -0000
+Delivered-To: beginners@perl.org
+X-Spam-Status: No, hits=-0.1 required=8.0
+	tests=BAYES_20,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_NEUTRAL
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: neutral (x1.develooper.com: 63.251.223.186 is neither permitted nor denied by domain of northstardomus@gmail.com)
+To: beginners@perl.org
+MBOX-Line: From news@google.com Mon Jun 11 23:53:20 2007
+Delivered-To: colobus-nntpmod@lists.develooper.com
+Delivered-To: news-moderator-perl.beginners@perl.org
+Received-SPF: neutral (x1.develooper.com: 216.168.1.22 is neither permitted nor denied by domain of news@google.com)
+From: Northstardomus <northstardomus@gmail.com>
+Subject: Database insertion, escape issue
+Date: Mon, 11 Jun 2007 23:52:56 -0000
+Organization: http://groups.google.com
+Lines: 347
+Message-ID: <1181605976.566716.57440@g4g2000hsf.googlegroups.com>
+NNTP-Posting-Host: 207.109.1.73
+Mime-Version: 1.0
+Content-Type: text/plain; charset="iso-8859-1"
+X-Trace: posting.google.com 1181605976 30150 127.0.0.1 (11 Jun 2007 23:52:56 GMT)
+X-Complaints-To: groups-abuse@google.com
+NNTP-Posting-Date: Mon, 11 Jun 2007 23:52:56 +0000 (UTC)
+User-Agent: G2/1.0
+X-HTTP-UserAgent: Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; .NET CLR 1.1.4322; .NET CLR 2.0.50727),gzip(gfe),gzip(gfe)
+Complaints-To: groups-abuse@google.com
+Injection-Info: g4g2000hsf.googlegroups.com; posting-host=207.109.1.73;
+   posting-account=sNFuog0AAAB-uOxC49iR-T4MUn-Sq9e0
+X-Virus-Checked: Checked
+X-Posted-By: 63.251.223.186
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=0.5 required=8.0
+	tests=BAYES_40,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_NEUTRAL
+
+I have a Perl script where I try to strip some data from a web page
+and insert it
+
+into a database.  I'm having a problem where, it seems like the method
+of quoting
+
+the data for insertion don't seem to be working (as far as escaping
+the text) and
+
+some of the text is ending up getting injected into the SQL command.
+
+In this example, I am capturing the paragraphs of text and inserting
+each HTML
+
+paragraph into a new record.  What seems to be hanging up the
+insertion is the "or
+
+die" portion of the text.  It will also bomb if the text has a word
+like "don't".
+
+I thought the insertion mechanism I'm using would properly escape
+these special
+
+characters/phrases.
+
+This is an old problem for me, I know I tried multiple methods but had
+to put the
+
+project down for a few months here so I'm a bit sketchy on the details
+of what I
+
+have tried already, otherwise I would have posted that as well.
+
+I am currently trying this with a SQLite database.  I tried it on a
+MySQL database
+
+with the same results.  Here is the database Schema:
+
+CREATE TABLE area_status (updatre_time TEXT, status BLOB, survey_date
+TEXT, areaID
+
+NUMERIC, area_statusID INTEGER PRIMARY KEY);
+
+The only thing you hsould have to change is the $file_prefix
+variable.  Also, the
+
+example webpage and SQLite database are here:
+http://www.ottomatica.com/perl/paragraph_insert_issue/test_page.html
+http://www.ottomatica.com/perl/paragraph_insert_issue/area.db
+
+Thanks in advance!!!!!
+
+Here's the code.
+
+#!/usr/bin/perl
+use strict;
+use LWP::Simple qw(!head);
+use diagnostics;
+use DBI();
+
+sub trim($);                        # subroutines to trim off
+whitespace
+sub ltrim($);                       # subroutines to trim off
+whitespace
+sub rtrim($);                       # subroutines to trim off
+whitespace
+sub status_of_the_area_insert;      # subroutine that inserts data
+into database
+
+my $html_string;                    # This variable will contain the
+whole web
+
+page
+my $file_string;                    # This contains the complete file
+path (in the
+
+real program I loop through many web pages)
+my $status_of_the_area_error = 0;   # This is a debuging variable that
+is a
+
+boolean and will help decide if I execute certain portions of code
+my $file_name;                      # The file name and extension
+portion of
+
+$file_string above
+my $areaID;                         # A field in my area_status table,
+hardcoded
+
+in this case
+my $inventory_number;               # A field in my area_status table,
+hardcoded
+
+in this case
+my $survey_date;                    # A field in my area_status table,
+hardcoded
+
+in this case
+my $time = localtime(time);         # The current time when the code
+is exectued
+
+for later reference
+my $status_of_the_area;             # This contains the text I'm
+interested in
+
+capture by a Perl Regex
+my $status_of_the_area_complete;    # The final text that I am
+interested in
+
+(after trimming)
+my $status_of_the_area_present;     # This is a boolean that tells me
+whether the
+
+text I'm interested in is there or not
+my $detect_paragraphs;              # A boolean to detect if there are
+multiple
+
+paragraphs present
+my @status_of_the_area_array;       # An array that contains multiple
+paragraphs
+
+if present
+my $status_of_the_area_array;       # Used to loop through the
+
+@status_of_the_area_array array
+my $file_prefix;                    # The location of the html file on
+the user's
+
+computer.
+
+# Declare the location of the html file on the user's computer.
+$file_prefix = 'file:///C:/Lanosrep/beW/Perl/HelpPage/';
+
+# Print Status
+print "<br/>Begin looping through the directory <br/>";
+
+# Loop through directory (in this case there will be only one file)
+while ( $file_name=glob("test_page.html") ) { #Use this for a test
+string to limit
+
+results *downum=0100*.html
+
+    # Reset the $status_of_the_area_error to zero
+    # This is a debuging variable that is a boolean and will help
+decide if I
+
+execute certain portions of code
+    $status_of_the_area_error = 0;
+
+    # Create the file string
+    # This contains the complete file path (in the real program I loop
+through
+
+many web pages)
+    $file_string = $file_prefix.$file_name;
+
+    # Assign the contents of the web page to the $html_string variable
+    # This variable will contain the whole web page
+    $html_string = get($file_string);
+
+    # Determine if the text I care about is present
+    # This is a boolean that tells me whether the text I'm interested
+in is there
+
+or not
+    $status_of_the_area_present = $html_string =~ m/<H2>.??Status of
+the
+
+Area.*?<\/H2>(.*?)<H2>.??For Additional Information.*?<\/H2>/si;
+
+    # If it is present, print status that tells me it's there and
+execute some
+
+additional code
+    if ($status_of_the_area_present) {
+        print "<a href=$file_string>Status of the area Found -
+
+$file_string</a>.<br/>";
+
+        # This contains the text I'm interested in capture by a Perl
+Regex
+        ($status_of_the_area) = $html_string =~ m/<H2>.??Status of
+the
+
+Area.*?<\/H2>(.*?)<H2>.??For Additional Information.*?<\/H2>/si;
+
+        # The final text that I am interested in (after trimming)
+        $status_of_the_area_complete = trim($status_of_the_area);
+
+        # A boolean to detect if there are multiple paragraphs present
+        $detect_paragraphs = $status_of_the_area =~ m/<P>/i;
+
+        # If multiple paragraphs are detected, split them up and place
+in an array
+        if ($detect_paragraphs) {
+            $status_of_the_area =~ s/<P>.??<P>//sgi;
+            (@status_of_the_area_array) = split /<P>/i,
+$status_of_the_area;
+        }
+
+        # Hardcode the following variables as they are unimportant for
+this
+
+discussion
+        $inventory_number = 22222222;
+        $areaID = 22222222;
+        $survey_date = "01-01-1999";
+
+        # If multiple paragraphs are detected, loop through the
+array,
+
+@status_of_the_area_array and insert the data
+        if ($detect_paragraphs) {
+            my $i = 1;
+            foreach $status_of_the_area_array
+(@status_of_the_area_array) {
+                # Detect if the paragraph contains any text
+                if ($status_of_the_area_array) {
+
+
+status_of_the_area_insert($status_of_the_area_array,$areaID,
+$survey_date,$time,1);
+                }
+                # If paragraph is blank don't insert into the database
+                else {
+                    #print "<P>Paragraph $i<P>Nothing Here";
+                }
+            $i++;
+            }
+        }
+
+        # If just a single paragraph, insert the data captured in the
+variable
+
+$status_of_the_area_complete
+        else {
+            #print $status_of_the_area;
+
+
+status_of_the_area_insert($status_of_the_area_complete,$areaID,
+$survey_date,$time,
+
+1);
+        }
+            print "<br/>";
+        }
+    # If text is not detected print status
+    else {
+        print "<a href=$file_string>Status of the area NOT Found -
+
+$file_string</a>.<br/>";
+    }
+    }
+
+# Done
+# Subroutines below
+
+# Perl trim function to remove whitespace from the start and end of
+the string
+sub trim($)
+{
+	my $string = shift;
+	$string =~ s/^\s+//;
+	$string =~ s/\s+$//;
+	return $string;
+}
+# Left trim function to remove leading whitespace
+sub ltrim($)
+{
+	my $string = shift;
+	$string =~ s/^\s+//;
+	return $string;
+}
+# Right trim function to remove trailing whitespace
+sub rtrim($)
+{
+	my $string = shift;
+	$string =~ s/\s+$//;
+	return $string;
+}
+
+# subroutine that inserts data into database
+sub status_of_the_area_insert {
+    my $var;
+    my $areaID;
+    my $survey_date;
+    my $update_time;
+    my $row_count_final;
+    ($var,$areaID,$survey_date,$update_time,$row_count_final)=@_;
+    my $dbh =
+
+DBI->connect("DBI:SQLite:dbname=C:/Lanosrep/beW/Perl/HelpPage/
+area.db", "", "",
+
+{'RaiseError' => 1});
+    my $row_count = 0;
+    my $sth;
+    my @values;
+    my @sql_row;
+    my $rv;
+    my $sql;
+    my $OK2INSERT;
+    my $parsed_var;
+
+    $values[0] = trim($areaID);
+    $values[1] = trim($survey_date);
+    $values[2] = trim($update_time);
+    $values[3] = trim($var);
+    $sql = "SELECT * FROM area_status WHERE areaID='$values[0]' AND
+
+survey_date='$values[1]' AND status='$values[3]'";
+    $sth = $dbh->prepare($sql);
+    $sth->execute;
+    $rv = $sth->rows;
+    if ($rv > 1) {
+        print "<br/>Error: There were $rv rows returned for SQL
+statement:
+
+$sql<br/><br/>";
+    }
+    else {
+        if ($rv == 1) {
+            print "<br/>Database entry, @values, already exists.";
+        }
+        else {
+            $OK2INSERT = 1;
+            }
+    }
+    $sth->finish;
+    # Disconnect from the database.
+    $dbh->disconnect();
+    if ($OK2INSERT) {
+        $dbh =
+
+DBI->connect("DBI:SQLite:dbname=C:/Lanosrep/beW/Perl/HelpPage/
+area.db", "", "",
+
+{'RaiseError' => 1});
+        print "<br/>Inserting into Database , @values.";
+        $dbh->do("INSERT INTO area_status (areaID, survey_date,
+update_time,
+
+status ) VALUES ('$values[0]', '$values[1]', '$values[2]',
+'$values[3]')");
+        $dbh->disconnect();
+    }
+}
+
+
+-- 
+To unsubscribe, e-mail: beginners-unsubscribe@perl.org
+For additional commands, e-mail: beginners-help@perl.org
+http://learn.perl.org/
+
+

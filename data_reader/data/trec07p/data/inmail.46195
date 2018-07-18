@@ -1,0 +1,149 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 29 12:54:38 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4TGschB000997
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 12:54:38 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 4B96B16385F
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 16:54:33 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.3 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 540)
+	id 2F303162AC3; Tue, 29 May 2007 16:54:02 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jerry@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070529165402.2F303162AC3@lists.samba.org>
+Date: Tue, 29 May 2007 16:54:02 +0000 (GMT)
+Subject: svn commit: samba r23213 - in
+	branches/SAMBA_3_0_26/source/rpc_server: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: jerry
+Date: 2007-05-29 16:54:01 +0000 (Tue, 29 May 2007)
+New Revision: 23213
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23213
+
+Log:
+Merge printer_info6 support from SAMBA_3_0
+(TODO check svn annotate in SAMBA_3_0 for release notes)
+
+
+Modified:
+   branches/SAMBA_3_0_26/source/rpc_server/srv_spoolss_nt.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0_26/source/rpc_server/srv_spoolss_nt.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/rpc_server/srv_spoolss_nt.c	2007-05-29 16:46:16 UTC (rev 23212)
++++ branches/SAMBA_3_0_26/source/rpc_server/srv_spoolss_nt.c	2007-05-29 16:54:01 UTC (rev 23213)
+@@ -4333,6 +4333,32 @@
+ }
+ 
+ /********************************************************************
++ * construct_printer_info_6
++ * fill a printer_info_6 struct
++ ********************************************************************/
++
++static BOOL construct_printer_info_6(Printer_entry *print_hnd,
++				     PRINTER_INFO_6 *printer,
++				     int snum)
++{
++	NT_PRINTER_INFO_LEVEL *ntprinter = NULL;
++	int count;
++	print_status_struct status;
++
++	if (!W_ERROR_IS_OK(get_a_printer(print_hnd, &ntprinter, 2,
++					 lp_const_servicename(snum))))
++		return False;
++
++	count = print_queue_length(snum, &status);
++
++	printer->status = nt_printq_status(status.status);
++		
++	free_a_printer(&ntprinter, 2);
++
++	return True;
++}
++
++/********************************************************************
+  * construct_printer_info_7
+  * fill a printer_info_7 struct
+  ********************************************************************/
+@@ -4960,6 +4986,46 @@
+ 	return result;	
+ }
+ 
++static WERROR getprinter_level_6(Printer_entry *print_hnd,
++				 int snum,
++				 RPC_BUFFER *buffer, uint32 offered,
++				 uint32 *needed)
++{
++	PRINTER_INFO_6 *printer;
++	WERROR result = WERR_OK;
++
++	if ((printer = SMB_MALLOC_P(PRINTER_INFO_6)) == NULL) {
++		return WERR_NOMEM;
++	}
++
++	if (!construct_printer_info_6(print_hnd, printer, snum)) {
++		free_printer_info_6(printer);
++		return WERR_NOMEM;
++	}
++
++	/* check the required size. */
++	*needed += spoolss_size_printer_info_6(printer);
++
++	if (*needed > offered) {
++		result = WERR_INSUFFICIENT_BUFFER;
++		goto out;
++	}
++
++	if (!rpcbuf_alloc_size(buffer, *needed)) {
++		result = WERR_NOMEM;
++		goto out;
++	}
++
++	/* fill the buffer with the structures */
++	smb_io_printer_info_6("", buffer, printer, 0);	
++	
++out:
++	/* clear memory */
++	free_printer_info_6(printer);
++	
++	return result;	
++}
++
+ static WERROR getprinter_level_7(Printer_entry *print_hnd, int snum, RPC_BUFFER *buffer, uint32 offered, uint32 *needed)
+ {
+ 	PRINTER_INFO_7 *printer=NULL;
+@@ -5036,6 +5102,8 @@
+ 		return getprinter_level_4(Printer, snum, buffer, offered, needed);
+ 	case 5:		
+ 		return getprinter_level_5(Printer, snum, buffer, offered, needed);
++	case 6:		
++		return getprinter_level_6(Printer, snum, buffer, offered, needed);
+ 	case 7:
+ 		return getprinter_level_7(Printer, snum, buffer, offered, needed);
+ 	}
+

@@ -1,0 +1,127 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Jul  3 09:08:21 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l63D8KL9028829
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 3 Jul 2007 09:08:20 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 77FE0162C34
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue,  3 Jul 2007 13:08:16 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 535)
+	id 480BA162AF1; Tue,  3 Jul 2007 13:07:57 +0000 (GMT)
+To: samba-cvs@samba.org
+From: idra@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070703130757.480BA162AF1@lists.samba.org>
+Date: Tue,  3 Jul 2007 13:07:57 +0000 (GMT)
+Subject: svn commit: samba r23682 - in branches: SAMBA_3_0/source/smbd
+	SAMBA_3_0_26/source/smbd
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: idra
+Date: 2007-07-03 13:07:56 +0000 (Tue, 03 Jul 2007)
+New Revision: 23682
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23682
+
+Log:
+
+Old patch I forgot in one of my 3.0.25 trees.
+Make sure we honour the directive not to allow machine password changes.
+
+
+Modified:
+   branches/SAMBA_3_0/source/smbd/chgpasswd.c
+   branches/SAMBA_3_0_26/source/smbd/chgpasswd.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/smbd/chgpasswd.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/chgpasswd.c	2007-07-03 08:22:24 UTC (rev 23681)
++++ branches/SAMBA_3_0/source/smbd/chgpasswd.c	2007-07-03 13:07:56 UTC (rev 23682)
+@@ -1019,6 +1019,7 @@
+ NTSTATUS change_oem_password(struct samu *hnd, char *old_passwd, char *new_passwd, BOOL as_root, uint32 *samr_reject_reason)
+ {
+ 	uint32 min_len;
++	uint32 refuse;
+ 	struct passwd *pass = NULL;
+ 	const char *username = pdb_get_username(hnd);
+ 	time_t can_change_time = pdb_get_pass_can_change_time(hnd);
+@@ -1036,6 +1037,21 @@
+ 		return NT_STATUS_ACCOUNT_RESTRICTION;
+ 	}
+ 
++	/* check to see if it is a Machine account and if the policy
++	 * denies machines to change the password. *
++	 * Should we deny also SRVTRUST and/or DOMSTRUST ? .SSS. */
++	if (pdb_get_acct_ctrl(hnd) & ACB_WSTRUST) {
++		if (pdb_get_account_policy(AP_REFUSE_MACHINE_PW_CHANGE, &refuse) && refuse) {
++			DEBUG(1, ("Machine %s cannot change password now, "
++				  "denied by Refuse Machine Password Change policy\n",
++				  username));
++			if (samr_reject_reason) {
++				*samr_reject_reason = REJECT_REASON_OTHER;
++			}
++			return NT_STATUS_ACCOUNT_RESTRICTION;
++		}
++	}
++
+ 	/* removed calculation here, becuase passdb now calculates
+ 	   based on policy.  jmcd */
+ 	if ((can_change_time != 0) && (time(NULL) < can_change_time)) {
+
+Modified: branches/SAMBA_3_0_26/source/smbd/chgpasswd.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/smbd/chgpasswd.c	2007-07-03 08:22:24 UTC (rev 23681)
++++ branches/SAMBA_3_0_26/source/smbd/chgpasswd.c	2007-07-03 13:07:56 UTC (rev 23682)
+@@ -1019,6 +1019,7 @@
+ NTSTATUS change_oem_password(struct samu *hnd, char *old_passwd, char *new_passwd, BOOL as_root, uint32 *samr_reject_reason)
+ {
+ 	uint32 min_len;
++	uint32 refuse;
+ 	struct passwd *pass = NULL;
+ 	const char *username = pdb_get_username(hnd);
+ 	time_t can_change_time = pdb_get_pass_can_change_time(hnd);
+@@ -1036,6 +1037,21 @@
+ 		return NT_STATUS_ACCOUNT_RESTRICTION;
+ 	}
+ 
++	/* check to see if it is a Machine account and if the policy
++	 * denies machines to change the password. *
++	 * Should we deny also SRVTRUST and/or DOMSTRUST ? .SSS. */
++	if (pdb_get_acct_ctrl(hnd) & ACB_WSTRUST) {
++		if (pdb_get_account_policy(AP_REFUSE_MACHINE_PW_CHANGE, &refuse) && refuse) {
++			DEBUG(1, ("Machine %s cannot change password now, "
++				  "denied by Refuse Machine Password Change policy\n",
++				  username));
++			if (samr_reject_reason) {
++				*samr_reject_reason = REJECT_REASON_OTHER;
++			}
++			return NT_STATUS_ACCOUNT_RESTRICTION;
++		}
++	}
++
+ 	/* removed calculation here, becuase passdb now calculates
+ 	   based on policy.  jmcd */
+ 	if ((can_change_time != 0) && (time(NULL) < can_change_time)) {
+

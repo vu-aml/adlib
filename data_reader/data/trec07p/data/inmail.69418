@@ -1,0 +1,170 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Jun 29 08:31:25 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5TCVOL9025564
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 29 Jun 2007 08:31:24 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 7721F163922
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 29 Jun 2007 12:31:21 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.4 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1017)
+	id 731F5162AD6; Fri, 29 Jun 2007 12:30:48 +0000 (GMT)
+To: samba-cvs@samba.org
+From: obnox@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070629123048.731F5162AD6@lists.samba.org>
+Date: Fri, 29 Jun 2007 12:30:48 +0000 (GMT)
+Subject: svn commit: samba r23656 - in branches: SAMBA_3_0/source/param
+	SAMBA_3_0/source/utils SAMBA_3_0_26/source/param
+	SAMBA_3_0_26/source/utils
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: obnox
+Date: 2007-06-29 12:30:41 +0000 (Fri, 29 Jun 2007)
+New Revision: 23656
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23656
+
+Log:
+Add initial checking of the validity of a paramter
+given to "net conf setparm". Add a utility function
+lp_parameter_valid() for this to loadparm.c.
+
+Michael
+
+
+Modified:
+   branches/SAMBA_3_0/source/param/loadparm.c
+   branches/SAMBA_3_0/source/utils/net_conf.c
+   branches/SAMBA_3_0_26/source/param/loadparm.c
+   branches/SAMBA_3_0_26/source/utils/net_conf.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/param/loadparm.c
+===================================================================
+--- branches/SAMBA_3_0/source/param/loadparm.c	2007-06-29 12:15:41 UTC (rev 23655)
++++ branches/SAMBA_3_0/source/param/loadparm.c	2007-06-29 12:30:41 UTC (rev 23656)
+@@ -2776,7 +2776,19 @@
+ 	return (True);
+ }
+ 
++
+ /***************************************************************************
++ Check whether the given parameter name is valid.
++ Parametric options (names containing a colon) are considered valid.
++***************************************************************************/
++
++BOOL lp_parameter_valid(const char *pszParmName)
++{
++	return ((map_parameter(pszParmName) != -1) ||
++		(strchr(pszParmName, ':') != NULL));
++}
++
++/***************************************************************************
+  Map a parameter's string representation to something we can use. 
+  Returns False if the parameter string is not recognised, else TRUE.
+ ***************************************************************************/
+
+Modified: branches/SAMBA_3_0/source/utils/net_conf.c
+===================================================================
+--- branches/SAMBA_3_0/source/utils/net_conf.c	2007-06-29 12:15:41 UTC (rev 23655)
++++ branches/SAMBA_3_0/source/utils/net_conf.c	2007-06-29 12:30:41 UTC (rev 23656)
+@@ -167,9 +167,23 @@
+ 	else {
+ 		d_fprintf(stderr, "Only value types DWORD and SZ are"
+ 			  "currently implemented for setting values.\n");
++		werr = WERR_INVALID_PARAM;
+ 		goto done;
+ 	}
+ 
++	if (!lp_parameter_valid(valname)) {
++		d_fprintf(stderr, "Invalid parameter '%s' given.\n", valname);
++		werr = WERR_INVALID_PARAM;
++		goto done;
++	}
++
++	if (registry_smbconf_valname_forbidden(valname)) {
++		d_fprintf(stderr, "Parameter '%s' not allowed in registry.\n", 
++			  valname);
++		werr = WERR_INVALID_PARAM;
++		goto done;
++	}
++
+ 	werr = reg_setvalue(key, valname, &val);
+ 	if (!W_ERROR_IS_OK(werr)) {
+ 		d_fprintf(stderr,
+
+Modified: branches/SAMBA_3_0_26/source/param/loadparm.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/param/loadparm.c	2007-06-29 12:15:41 UTC (rev 23655)
++++ branches/SAMBA_3_0_26/source/param/loadparm.c	2007-06-29 12:30:41 UTC (rev 23656)
+@@ -2777,7 +2777,19 @@
+ 	return (True);
+ }
+ 
++
+ /***************************************************************************
++ Check whether the given parameter name is valid.
++ Parametric options (names containing a colon) are considered valid.
++***************************************************************************/
++
++BOOL lp_parameter_valid(const char *pszParmName)
++{
++	return ((map_parameter(pszParmName) != -1) ||
++		(strchr(pszParmName, ':') != NULL));
++}
++
++/***************************************************************************
+  Map a parameter's string representation to something we can use. 
+  Returns False if the parameter string is not recognised, else TRUE.
+ ***************************************************************************/
+
+Modified: branches/SAMBA_3_0_26/source/utils/net_conf.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/utils/net_conf.c	2007-06-29 12:15:41 UTC (rev 23655)
++++ branches/SAMBA_3_0_26/source/utils/net_conf.c	2007-06-29 12:30:41 UTC (rev 23656)
+@@ -167,9 +167,23 @@
+ 	else {
+ 		d_fprintf(stderr, "Only value types DWORD and SZ are"
+ 			  "currently implemented for setting values.\n");
++		werr = WERR_INVALID_PARAM;
+ 		goto done;
+ 	}
+ 
++	if (!lp_parameter_valid(valname)) {
++		d_fprintf(stderr, "Invalid parameter '%s' given.\n", valname);
++		werr = WERR_INVALID_PARAM;
++		goto done;
++	}
++
++	if (registry_smbconf_valname_forbidden(valname)) {
++		d_fprintf(stderr, "Parameter '%s' not allowed in registry.\n", 
++			  valname);
++		werr = WERR_INVALID_PARAM;
++		goto done;
++	}
++
+ 	werr = reg_setvalue(key, valname, &val);
+ 	if (!W_ERROR_IS_OK(werr)) {
+ 		d_fprintf(stderr,
+

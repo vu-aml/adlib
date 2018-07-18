@@ -1,0 +1,156 @@
+From r-help-bounces@stat.math.ethz.ch  Mon Jun 25 09:36:12 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5PDaBL9029210
+	for <ktwarwic@flax9.uwaterloo.ca>; Mon, 25 Jun 2007 09:36:11 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5OLS5kl011549;
+	Sun, 24 Jun 2007 23:28:29 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: *
+X-Spam-Status: No, score=1.5 required=5.0 tests=BAYES_50, DKIM_POLICY_SIGNSOME,
+	SPF_HELO_PASS, WHOIS_MYPRIVREG autolearn=no version=3.2.0
+Received: from kuber.nabble.com (kuber.nabble.com [216.139.236.158])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5OLRWDd011409
+	(version=TLSv1/SSLv3 cipher=AES256-SHA bits=256 verify=NO)
+	for <r-help@stat.math.ethz.ch>; Sun, 24 Jun 2007 23:27:34 +0200
+Received: from isper.nabble.com ([192.168.236.156])
+	by kuber.nabble.com with esmtp (Exim 4.63)
+	(envelope-from <bounces@nabble.com>) id 1I2ZcK-0005YH-BB
+	for r-help@stat.math.ethz.ch; Sun, 24 Jun 2007 14:27:32 -0700
+Message-ID: <11278677.post@talk.nabble.com>
+Date: Sun, 24 Jun 2007 14:27:32 -0700 (PDT)
+From: Tavpritesh <tavpritesh@gmail.com>
+To: r-help@stat.math.ethz.ch
+In-Reply-To: <11273379.post@talk.nabble.com>
+MIME-Version: 1.0
+X-Nabble-From: tavpritesh@gmail.com
+References: <33846cd50706230944r7b2e107ap8a978a46b024ceec@mail.gmail.com>
+	<11273379.post@talk.nabble.com>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Subject: Re: [R] @ Mike warning in a loop
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+
+Hi Mike,
+Thanks for the help, but I want to conduct tests, not between column 1 & 2
+of the data but between the values of column two itself which have been
+categorized into 3 classes, and indexed in column 1 as 1,2 and 3. Also if
+you could help me with the commands for ANOVA for the same purpose, for
+three classes.
+Thanks.
+
+
+Mike Meredith wrote:
+> 
+> 
+> You can investigate what's gone wrong after the loop has failed by looking
+> at the values of i, k, p, and t. Although d[(d[,(i+1)]%in%1),1] produces a
+> vector, k has only one element. Same with p. Should then be obvious why
+> the t.test produces an error.
+> 
+> The problem is with the [i] index for k and p; take those away and it
+> works. If you want to keep the values generated in the loop, make k and p
+> lists and index with k[[i]] and p[[i]].
+> 
+> 
+> A better way to do this would be to use 'sample' to randomize the measured
+> values in d[,1] and then use d[,2] to group them for testing. You can then
+> use hundreds of iterations:
+> 
+> t <- rep(NA, 999) 
+> for(i in 1:999) {
+>    samp <- sample(d[,1])
+>    t <- t.test(samp[d[,2]==1], samp[d[,2]==2])$p.value
+> }
+> sum(t < 0.05)  # How many were 'significant'?
+> 
+> Note that I prefer to use t <- rep(NA,...) to allocate space, rather than
+> 1:999, so that NA appears as the result if there's a problem.
+> 
+> Why not just do a randomization test?
+> 
+> t <- rep(NA, 1000)
+> t[1] <- mean(d[d[,2]==1,1]) - mean(d[d[,2]==2,1]) # This is the observed
+> difference in means
+> for(i in 2:1000) {
+>    samp <- sample(d[,1])
+>    t[i] <- mean(samp[d[,2]==1]) - mean(samp[d[,2]==2])
+> }
+> t <- abs(t)   # Skip this line if you want a 1-sided test
+> sum(t >= t[1])/1000  # This is the 'p-value'
+> 
+> HTH, Mike.
+> 
+> 
+> Tavpritesh Sethi wrote:
+>> 
+>> hi all,
+>> I have a matrix with first column having some measurable values, these
+>> are
+>> indexed by the numerals 1,2 and 3 in the other columns of the data and
+>> may
+>> be interpreted as values for categories 1,2 and 3.
+>> I have written the following loop
+>> t<-1:10
+>>  for(i in 1:10)
+>> + {
+>> + k[i]<-d[(d[,(i+1)]%in%1),1]
+>> + p[i]<-d[(d[,(i+1)]%in%2),1]
+>> + t[i]<-t.test(k[i],p[i])$p.value
+>> + }
+>> Error in t.test.default(k[i], p[i]) : not enough 'x' observations
+>> In addition: Warning messages:
+>> 1: number of items to replace is not a multiple of replacement length
+>> 2: number of items to replace is not a multiple of replacement length
+>> 
+>> As you might have understood, I want to test for difference between the
+>> two
+>> cagories: "k" and "v". the second column of the data is the original
+>> categorization and the rest columns(3:10) are a matrix of randomized
+>> values
+>> between 1 to 3. (I have three categories)
+>> My purpose of doing so is to check whether significant difference comes
+>> up
+>> in the randomized data also. This is to check the effect of the small
+>> sample
+>> size of my data.
+>> Please suggest a way or an alternative to the above approach.
+>> 
+>> 	[[alternative HTML version deleted]]
+>> 
+>> ______________________________________________
+>> R-help@stat.math.ethz.ch mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-help
+>> PLEASE do read the posting guide
+>> http://www.R-project.org/posting-guide.html
+>> and provide commented, minimal, self-contained, reproducible code.
+>> 
+>> 
+> 
+> 
+
+-- 
+View this message in context: http://www.nabble.com/warning-in-a-loop-tf3969850.html#a11278677
+Sent from the R help mailing list archive at Nabble.com.
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

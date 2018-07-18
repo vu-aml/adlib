@@ -1,0 +1,134 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Jun 15 21:05:06 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5G156L9008592
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 15 Jun 2007 21:05:06 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 39304162C3B
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 16 Jun 2007 01:05:05 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.8 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 549)
+	id 94A44162AC8; Sat, 16 Jun 2007 01:04:24 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jra@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070616010424.94A44162AC8@lists.samba.org>
+Date: Sat, 16 Jun 2007 01:04:24 +0000 (GMT)
+Subject: svn commit: samba r23516 - in branches: SAMBA_3_0/source/locking
+	SAMBA_3_0_25/source/locking SAMBA_3_0_26/source/locking
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: jra
+Date: 2007-06-16 01:04:22 +0000 (Sat, 16 Jun 2007)
+New Revision: 23516
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23516
+
+Log:
+Fix bug found & fixed by Spie Rudoff (spie_rudoff@isilon.com)
+- when cleaning up invalid locks make sure we mark the lck
+struct as modified so it'll get saved back correctly (that
+was the original intent).
+Jeremy.
+
+Modified:
+   branches/SAMBA_3_0/source/locking/brlock.c
+   branches/SAMBA_3_0_25/source/locking/brlock.c
+   branches/SAMBA_3_0_26/source/locking/brlock.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/locking/brlock.c
+===================================================================
+--- branches/SAMBA_3_0/source/locking/brlock.c	2007-06-16 00:54:58 UTC (rev 23515)
++++ branches/SAMBA_3_0/source/locking/brlock.c	2007-06-16 01:04:22 UTC (rev 23516)
+@@ -1646,6 +1646,7 @@
+ 	memcpy(br_lck->lock_data, data.dptr, data.dsize);
+ 	
+ 	if (!fsp->lockdb_clean) {
++		int orig_num_locks = br_lck->num_locks;
+ 
+ 		/* This is the first time we've accessed this. */
+ 		/* Go through and ensure all entries exist - remove any that don't. */
+@@ -1658,6 +1659,11 @@
+ 			return NULL;
+ 		}
+ 
++		/* Ensure invalid locks are cleaned up in the destructor. */
++		if (orig_num_locks != br_lck->num_locks) {
++			br_lck->modified = True;
++		}
++
+ 		/* Mark the lockdb as "clean" as seen from this open file. */
+ 		fsp->lockdb_clean = True;
+ 	}
+
+Modified: branches/SAMBA_3_0_25/source/locking/brlock.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/locking/brlock.c	2007-06-16 00:54:58 UTC (rev 23515)
++++ branches/SAMBA_3_0_25/source/locking/brlock.c	2007-06-16 01:04:22 UTC (rev 23516)
+@@ -1609,6 +1609,7 @@
+ 	br_lck->num_locks = data.dsize / sizeof(struct lock_struct);
+ 
+ 	if (!fsp->lockdb_clean) {
++		int orig_num_locks = br_lck->num_locks;
+ 
+ 		/* This is the first time we've accessed this. */
+ 		/* Go through and ensure all entries exist - remove any that don't. */
+@@ -1623,6 +1624,11 @@
+ 			return NULL;
+ 		}
+ 
++                /* Ensure invalid locks are cleaned up in the destructor. */
++		if (orig_num_locks != br_lck->num_locks) {
++			br_lck->modified = True;
++		}
++
+ 		/*
+ 		 * validate_lock_entries might have changed locks. We can't
+ 		 * use a direct pointer here because otherwise gcc warnes
+
+Modified: branches/SAMBA_3_0_26/source/locking/brlock.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/locking/brlock.c	2007-06-16 00:54:58 UTC (rev 23515)
++++ branches/SAMBA_3_0_26/source/locking/brlock.c	2007-06-16 01:04:22 UTC (rev 23516)
+@@ -1646,6 +1646,7 @@
+ 	memcpy(br_lck->lock_data, data.dptr, data.dsize);
+ 	
+ 	if (!fsp->lockdb_clean) {
++		int orig_num_locks = br_lck->num_locks;
+ 
+ 		/* This is the first time we've accessed this. */
+ 		/* Go through and ensure all entries exist - remove any that don't. */
+@@ -1658,6 +1659,11 @@
+ 			return NULL;
+ 		}
+ 
++		/* Ensure invalid locks are cleaned up in the destructor. */
++		if (orig_num_locks != br_lck->num_locks) {
++			br_lck->modified = True;
++		}
++
+ 		/* Mark the lockdb as "clean" as seen from this open file. */
+ 		fsp->lockdb_clean = True;
+ 	}
+

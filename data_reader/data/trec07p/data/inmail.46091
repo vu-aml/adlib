@@ -1,0 +1,107 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 29 10:27:14 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4TERDhB031942
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 10:27:13 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 65BB9162C22
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 14:27:05 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 540)
+	id C93E9162ACC; Tue, 29 May 2007 14:26:27 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jerry@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070529142627.C93E9162ACC@lists.samba.org>
+Date: Tue, 29 May 2007 14:26:27 +0000 (GMT)
+Subject: svn commit: samba r23200 - in branches/SAMBA_3_0_26/source: libads
+	nmbd
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: jerry
+Date: 2007-05-29 14:26:27 +0000 (Tue, 29 May 2007)
+New Revision: 23200
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23200
+
+Log:
+More merge's:
+
+* A little const
+* Metze's fix for GSS-SPNEGO against Win2k3
+
+
+Modified:
+   branches/SAMBA_3_0_26/source/libads/sasl.c
+   branches/SAMBA_3_0_26/source/nmbd/nmbd_lmhosts.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0_26/source/libads/sasl.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/libads/sasl.c	2007-05-29 14:19:53 UTC (rev 23199)
++++ branches/SAMBA_3_0_26/source/libads/sasl.c	2007-05-29 14:26:27 UTC (rev 23200)
+@@ -441,7 +441,8 @@
+ 
+ 	gss_release_buffer(&minor_status, &output_token);
+ 
+-	output_token.value = SMB_MALLOC(strlen(ads->config.bind_path) + 8);
++	output_token.length = 4;
++	output_token.value = SMB_MALLOC(output_token.length);
+ 	p = (uint8 *)output_token.value;
+ 
+ 	*p++ = 1; /* no sign & seal selection */
+@@ -449,11 +450,15 @@
+ 	*p++ = max_msg_size>>16;
+ 	*p++ = max_msg_size>>8;
+ 	*p++ = max_msg_size;
+-	snprintf((char *)p, strlen(ads->config.bind_path)+4, "dn:%s", ads->config.bind_path);
+-	p += strlen((const char *)p);
++	/*
++	 * we used to add sprintf("dn:%s", ads->config.bind_path) here.
++	 * but using ads->config.bind_path is the wrong! It should be
++	 * the DN of the user object!
++	 *
++	 * w2k3 gives an error when we send an incorrect DN, but sending nothing
++	 * is ok and matches the information flow used in GSS-SPNEGO.
++	 */
+ 
+-	output_token.length = PTR_DIFF(p, output_token.value);
+-
+ 	gss_rc = gss_wrap(&minor_status, context_handle,0,GSS_C_QOP_DEFAULT,
+ 			  &output_token, (int *)&conf_state,
+ 			  &input_token);
+
+Modified: branches/SAMBA_3_0_26/source/nmbd/nmbd_lmhosts.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/nmbd/nmbd_lmhosts.c	2007-05-29 14:19:53 UTC (rev 23199)
++++ branches/SAMBA_3_0_26/source/nmbd/nmbd_lmhosts.c	2007-05-29 14:26:27 UTC (rev 23200)
+@@ -29,7 +29,7 @@
+ Load a lmhosts file.
+ ****************************************************************************/
+ 
+-void load_lmhosts_file(char *fname)
++void load_lmhosts_file(const char *fname)
+ {  
+ 	pstring name;
+ 	int name_type;
+

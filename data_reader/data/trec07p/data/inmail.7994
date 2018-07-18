@@ -1,0 +1,120 @@
+From r-help-bounces@stat.math.ethz.ch  Fri Apr 13 17:10:56 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3DLAs0I026999
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 13 Apr 2007 17:10:55 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3DL9Ka1001172;
+	Fri, 13 Apr 2007 23:09:28 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.7 required=5.0 tests=AWL, BAYES_50,
+	SPF_HELO_PASS autolearn=no version=3.1.8
+Received: from ciao.gmane.org (main.gmane.org [80.91.229.2])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3DL8Hq6000833
+	(version=TLSv1/SSLv3 cipher=AES256-SHA bits=256 verify=NO)
+	for <r-help@stat.math.ethz.ch>; Fri, 13 Apr 2007 23:08:18 +0200
+Received: from list by ciao.gmane.org with local (Exim 4.43)
+	id 1HcSzz-0007KS-4v
+	for r-help@stat.math.ethz.ch; Fri, 13 Apr 2007 23:08:03 +0200
+Received: from zoo39da.dhcp.clas.ufl.edu ([128.227.60.176])
+	by main.gmane.org with esmtp (Gmexim 0.1 (Debian))
+	id 1AlnuQ-0007hv-00
+	for <r-help@stat.math.ethz.ch>; Fri, 13 Apr 2007 23:08:03 +0200
+Received: from bolker by zoo39da.dhcp.clas.ufl.edu with local (Gmexim 0.1
+	(Debian)) id 1AlnuQ-0007hv-00
+	for <r-help@stat.math.ethz.ch>; Fri, 13 Apr 2007 23:08:03 +0200
+X-Injected-Via-Gmane: http://gmane.org/
+To: r-help@stat.math.ethz.ch
+From: Ben Bolker <bolker@zoo.ufl.edu>
+Date: Fri, 13 Apr 2007 21:07:55 +0000 (UTC)
+Message-ID: <loom.20070413T225856-478@post.gmane.org>
+References: <1136.161.111.168.62.1176458181.squirrel@goliat13.ugr.es>
+Mime-Version: 1.0
+X-Complaints-To: usenet@sea.gmane.org
+X-Gmane-NNTP-Posting-Host: main.gmane.org
+User-Agent: Loom/3.14 (http://gmane.org/)
+X-Loom-IP: 128.227.60.176 (Mozilla/5.0 (X11; U; Linux i686; en-US;
+	rv:1.8.0.11) Gecko/20070327 Ubuntu/dapper-security Firefox/1.5.0.11)
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Subject: Re: [R] Simulated annealing using optim()
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+Status: O
+Content-Length: 2393
+Lines: 54
+
+ <otalora <at> ugr.es> writes:
+
+> Finally, I tried to write my "gr" function to compute new random test
+> configurations. Here I found a problem: In the simulated annealing
+> algorithm, changes between succesive iterations during the optimization
+> must be progressively smaller. The "distance" from the "current"
+> configuration to the next one to be tested must be somehow proportional to
+> the "temperature" but I don't see how to acces the value of the
+> "temperature" from my gr function. Unfortunately, this is not described in
+> the help page and the examples shown don't need a gr function (in the case
+> of the "wild" function example) or uses an "temperature" independent
+> function (in the case of the Traveling salesman problem example).
+> 
+> I had a look at the C source code for optim(), and I confirmed that the
+> shrinking "temperature" is used by the default Gaussian Markov kernel
+> (under the name "scale") but I didn't found any clue on how to access this
+> value from the user defined gr function (probably because of my lack of
+> knowledge of the R API).
+
+
+Unfortunately, it looks at the moment optim assumes that "gr" only
+has a single argument -- the parameter vector.  It would take some
+hacking, which I'm (a) not quite sure how to do and (b) really not
+sure how to handle without breaking backward compatibility
+(i.e. how do you check in C code to see whether an R function
+has one or two arguments?)
+
+>From optim.c:
+
+static void genptry(int n, double *p, double *ptry, double scale, void *ex)
+{
+
+  [SNIP]  
+
+  /* if user-defined call */
+  /* set x equal to the scaled parameter vector */
+
+         SETCADR(OS->R_gcall, x); /* set argument of "gr" to x */
+
+        PROTECT_WITH_INDEX(s = eval(OS->R_gcall, OS->R_env), &ipx);
+             /* call the "gr" function */
+    /* etc. */
+    }
+    else {  /* default Gaussian Markov kernel */
+        for (i = 0; i < n; i++)
+            ptry[i] = p[i] + scale * norm_rand();  /* new candidate point */
+    }
+}
+
+   Possibly useful:
+
+http://finzi.psych.upenn.edu/R/Rhelp02a/archive/21978.html
+
+  further discussion should probably go to R-devel ...
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

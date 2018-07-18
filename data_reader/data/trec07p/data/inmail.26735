@@ -1,0 +1,88 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May  2 05:54:27 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l429sRb9020532
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 2 May 2007 05:54:27 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id B72FA163870
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed,  2 May 2007 09:54:26 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 620)
+	id 94B00162AC6; Wed,  2 May 2007 09:54:07 +0000 (GMT)
+To: samba-cvs@samba.org
+From: metze@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070502095407.94B00162AC6@lists.samba.org>
+Date: Wed,  2 May 2007 09:54:07 +0000 (GMT)
+Subject: svn commit: samba r22635 - in branches/SAMBA_4_0/source/auth:
+	gensec kerberos
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: metze
+Date: 2007-05-02 09:54:06 +0000 (Wed, 02 May 2007)
+New Revision: 22635
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22635
+
+Log:
+make it possible to not turn off dns canonicalization of hostnames
+with krb5:set_dns_canonicalize=yes
+
+needed for the drsuapi replication, but we should fix this with
+a kdc locator plugin ...
+
+metze
+Modified:
+   branches/SAMBA_4_0/source/auth/gensec/gensec_gssapi.c
+   branches/SAMBA_4_0/source/auth/kerberos/krb5_init_context.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/auth/gensec/gensec_gssapi.c
+===================================================================
+--- branches/SAMBA_4_0/source/auth/gensec/gensec_gssapi.c	2007-05-01 21:29:42 UTC (rev 22634)
++++ branches/SAMBA_4_0/source/auth/gensec/gensec_gssapi.c	2007-05-02 09:54:06 UTC (rev 22635)
+@@ -218,7 +218,7 @@
+ 	}
+ 
+ 	/* don't do DNS lookups of any kind, it might/will fail for a netbios name */
+-	ret = gsskrb5_set_dns_canonicalize(FALSE);
++	ret = gsskrb5_set_dns_canonicalize(lp_parm_bool(-1, "krb5", "set_dns_canonicalize", false));
+ 	if (ret) {
+ 		DEBUG(1,("gensec_krb5_start: gsskrb5_set_dns_canonicalize failed\n"));
+ 		talloc_free(gensec_gssapi_state);
+
+Modified: branches/SAMBA_4_0/source/auth/kerberos/krb5_init_context.c
+===================================================================
+--- branches/SAMBA_4_0/source/auth/kerberos/krb5_init_context.c	2007-05-01 21:29:42 UTC (rev 22634)
++++ branches/SAMBA_4_0/source/auth/kerberos/krb5_init_context.c	2007-05-02 09:54:06 UTC (rev 22635)
+@@ -473,7 +473,8 @@
+ 
+ 	/* Set options in kerberos */
+ 
+-	krb5_set_dns_canonicalize_hostname((*smb_krb5_context)->krb5_context, FALSE);
++	krb5_set_dns_canonicalize_hostname((*smb_krb5_context)->krb5_context,
++					   lp_parm_bool(-1, "krb5", "set_dns_canonicalize", false));
+ 
+ 	return 0;
+ }
+

@@ -1,0 +1,130 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu May 10 03:51:11 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4A7pBqD006486
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 10 May 2007 03:51:11 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 85C11162AD8
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 10 May 2007 07:51:09 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 37D69162ADA; Thu, 10 May 2007 07:50:40 +0000 (GMT)
+Date: Thu, 10 May 2007 17:43:09 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070510075040.37D69162ADA@lists.samba.org>
+Subject: Rev 274: added nonblocking varients of the two lockall functions to
+	tdb in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 274
+revision-id: tridge@samba.org-20070510074308-pfgaxsep5jj1v3w4
+parent: tridge@samba.org-20070510040648-0lwu9l2b8vl3zq86
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Thu 2007-05-10 17:43:08 +1000
+message:
+  added nonblocking varients of the two lockall functions to tdb
+modified:
+  lib/tdb/common/lock.c          lock.c-20070220022425-m1wibgjq7n5hahs6-7
+  lib/tdb/include/tdb.h          tdb.h-20070125040949-7t3f5zdl1q4z9hyv-101
+=== modified file 'lib/tdb/common/lock.c'
+--- a/lib/tdb/common/lock.c	2007-05-05 07:14:33 +0000
++++ b/lib/tdb/common/lock.c	2007-05-10 07:43:08 +0000
+@@ -288,7 +288,7 @@
+ 
+ 
+ /* lock/unlock entire database */
+-static int _tdb_lockall(struct tdb_context *tdb, int ltype)
++static int _tdb_lockall(struct tdb_context *tdb, int ltype, int op)
+ {
+ 	/* There are no locks on read-only dbs */
+ 	if (tdb->read_only || tdb->traverse_read)
+@@ -309,9 +309,11 @@
+ 		return TDB_ERRCODE(TDB_ERR_LOCK, -1);
+ 	}
+ 
+-	if (tdb->methods->tdb_brlock(tdb, FREELIST_TOP, ltype, F_SETLKW, 
++	if (tdb->methods->tdb_brlock(tdb, FREELIST_TOP, ltype, op,
+ 				     0, 4*tdb->header.hash_size)) {
+-		TDB_LOG((tdb, TDB_DEBUG_ERROR, "tdb_lockall failed (%s)\n", strerror(errno)));
++		if (op == F_SETLKW) {
++			TDB_LOG((tdb, TDB_DEBUG_ERROR, "tdb_lockall failed (%s)\n", strerror(errno)));
++		}
+ 		return -1;
+ 	}
+ 
+@@ -321,6 +323,8 @@
+ 	return 0;
+ }
+ 
++
++
+ /* unlock entire db */
+ static int _tdb_unlockall(struct tdb_context *tdb, int ltype)
+ {
+@@ -353,7 +357,13 @@
+ /* lock entire database with write lock */
+ int tdb_lockall(struct tdb_context *tdb)
+ {
+-	return _tdb_lockall(tdb, F_WRLCK);
++	return _tdb_lockall(tdb, F_WRLCK, F_SETLKW);
++}
++
++/* lock entire database with write lock - nonblocking varient */
++int tdb_lockall_nonblock(struct tdb_context *tdb)
++{
++	return _tdb_lockall(tdb, F_WRLCK, F_SETLK);
+ }
+ 
+ /* unlock entire database with write lock */
+@@ -365,7 +375,13 @@
+ /* lock entire database with read lock */
+ int tdb_lockall_read(struct tdb_context *tdb)
+ {
+-	return _tdb_lockall(tdb, F_RDLCK);
++	return _tdb_lockall(tdb, F_RDLCK, F_SETLKW);
++}
++
++/* lock entire database with read lock - nonblock varient */
++int tdb_lockall_read_nonblock(struct tdb_context *tdb)
++{
++	return _tdb_lockall(tdb, F_RDLCK, F_SETLK);
+ }
+ 
+ /* unlock entire database with read lock */
+
+=== modified file 'lib/tdb/include/tdb.h'
+--- a/lib/tdb/include/tdb.h	2007-05-05 07:14:33 +0000
++++ b/lib/tdb/include/tdb.h	2007-05-10 07:43:08 +0000
+@@ -116,8 +116,10 @@
+ int tdb_traverse_read(struct tdb_context *tdb, tdb_traverse_func fn, void *);
+ int tdb_exists(struct tdb_context *tdb, TDB_DATA key);
+ int tdb_lockall(struct tdb_context *tdb);
++int tdb_lockall_nonblock(struct tdb_context *tdb);
+ int tdb_unlockall(struct tdb_context *tdb);
+ int tdb_lockall_read(struct tdb_context *tdb);
++int tdb_lockall_read_nonblock(struct tdb_context *tdb);
+ int tdb_unlockall_read(struct tdb_context *tdb);
+ const char *tdb_name(struct tdb_context *tdb);
+ int tdb_fd(struct tdb_context *tdb);
+

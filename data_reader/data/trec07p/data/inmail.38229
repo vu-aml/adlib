@@ -1,0 +1,171 @@
+From perl6-all-return-81445-ktwarwic=speedy.uwaterloo.ca@perl.org  Thu May 17 03:55:22 2007
+Return-Path: <perl6-all-return-81445-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4H7tLqD029256
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 17 May 2007 03:55:21 -0400
+Received: (qmail 21421 invoked by uid 514); 17 May 2007 07:55:18 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 21416 invoked from network); 17 May 2007 07:55:18 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=0.0 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-language-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-language
+List-Id: <perl6-language.perl.org>
+Delivered-To: mailing list perl6-language@perl.org
+Delivered-To: perl6-language@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+Mime-Version: 1.0
+Message-Id: <p06240800c271ae7b147d@[192.168.1.101]>
+Date: Thu, 17 May 2007 00:35:58 -0700
+To: perl6-language@perl.org
+From: Darren Duncan <darren@DarrenDuncan.net>
+Subject: protecting internals from mutable arguments
+Content-Type: text/plain; charset="us-ascii" ; format="flowed"
+X-Scanned-By: MIMEDefang 2.36
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=0.0 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_HELO_PASS,SPF_PASS
+
+All,
+
+Something that tops my current list of Perl 6 features to desire, or 
+design flaws to deal with, concerns protecting private attributes of 
+our objects from being mutated outside of our control due to their 
+being assigned to from arguments to our routines that are mutable.
+
+I want to raise the issue here for discussion since I see it as a 
+very real issue that affects many people, such that either our 
+objects are vulnerable, or we have to do manual copying in our 
+routines to save ourselves which results in great inefficiencies and 
+more verbose code.
+
+Typically, the declared types of my routine parameters are immutable 
+types, because I want the guarantee that values I receive as 
+arguments through them won't change values later on.
+
+For example, I may request a Seq or a Mapping rather than an Array or 
+Hash, because I want to avoid the Perl 5 hassle of needing to clone 
+such arguments to keep my version safe from action at a distance.
+
+However, given that actual behaviour and/or best practice involves 
+accepting an argument if it .does() the parameter type, then a 
+parameter declared as a Seq will accept an Array, because Array .does 
+Seq.  So despite requesting an immutable type, I can get a mutable 
+type, so I have the aforementioned problem.
+
+It actually gets a lot worse, because in Perl 6 any built-in 
+immutable types, including Int and Str and Bool can be done by other, 
+mutable types, so even if you declare a Str parameter, what you get 
+could mutate on you from a distance, so there's more to deal with 
+than in Perl 5.
+
+Now, I had a brief #perl6 discussion about this with Larry, which can 
+be seen at 
+http://colabti.de/irclogger/irclogger_log/perl6?date=2007-05-17,Thu&sel=172#l288 
+, and the meat of which is also quoted below this email (it's not too 
+long).
+
+Larry had some ideas for dealing with the problem, but this is a 
+matter that should be more widely discussed, particularly among 
+implementers and such.
+
+A general thought is that a parameter could be marked so that any 
+argument passed through it is effectively snapshot (which is a no-op 
+if the type is already immutable, or it is likely lazy/COW if it is 
+mutable) so further changes to the external version do indeed not 
+affect our internal copy.
+
+Such as this could solve the problem in the general case.
+
+(However, I should mention in postscript that there may be a 
+complicating factor which concerns immutable objects which are also 
+lazy to an extent, eg that may internally cache derived values, such 
+as their .WHICH, when the derived is first asked for rather than at 
+construction time, though this doesn't affect their actual value, 
+which stays immutable.  We wouldn't want to lose that ability.)
+
+Um, yes, so thank you all who assist in solving this problem.
+
+-- Darren Duncan
+
+---------------
+
+[ 11:42pm ] dduncan : given that afaik it is best practice when 
+declaring parameter types or testing argument types that .does() is 
+used, so that valid arguments for the parameter are ones that .does() 
+the declared parameter type ...
+[ 11:42pm ] dduncan : and given that we often have mutable types 
+saying they do immutable types, eg Array does Seq ...
+[ 11:43pm ] dduncan : I get the impression that if I declare a 
+parameter of type Seq, I could validly be handed an array?
+[ 11:44pm ] TimToady : I suppose so.  'Course, all parameters are 
+considered readonly by default anyway...
+[ 11:44pm ] dduncan : but the reason I asked for a Seq is that I want 
+the value I am given to be immutable, so eg if I then assign it to 
+one of my private attributes, then subsequent modification of a 
+passed array argument won't affect my attribute
+[ 11:45pm ] dduncan : afaik, the read-only thing just prevents me 
+inside my routine from changing it, but doesn't prevent the above 
+scenario
+[ 11:45pm ] dduncan : or that is, read-only prevents me from 
+assigning to the parameter
+[ 11:45pm ] TimToady : yeah, maybe we need an "is snap" or some such 
+for a readonly snapshot
+[ 11:45pm ] TimToady : or COW or something
+[ 11:46pm ] dduncan : and so then if the original is immutable, then 
+the process doesn't make a copy, and if the argument is mutable, then 
+it does make a snapshot
+[ 11:46pm ] TimToady : have the same problem if we allow people to 
+use a class as a role
+[ 11:46pm ] TimToady : we have to take a snapshot of the current 
+state of the class and make an immutable role from it
+[ 11:47pm ] TimToady : if objects have some kind of versioning 
+builtin, then it could just refer to the particular state in time
+[ 11:47pm ] dduncan : still, if we can get that kind of protection, 
+then it would be very useful to me, as I won't have to clone the 
+argument manually in case it was mutable, to protect my internals
+[ 11:47pm ] TimToady : might work with STM somehow
+[ 11:47pm ] dduncan : perhaps, though I thought STM was more for 
+short-term atomicity
+[ 11:48pm ] dduncan : still, thanks for anything you can do to design 
+a fix for this matter, as I see it as a very real issue that would 
+affect many peole
+[ 11:48pm ] TimToady : well, it's about proving lack of contradiction 
+in some update order, and it just feels like "not updated" is one 
+variety of assertion about the update.
+[ 11:49pm ] dduncan : is it worth my bringing up this matter on p6l, 
+or is my just telling you now enough?
+[ 11:49pm ] TimToady : but maybe it's more of a COW issue underneath, 
+so you only have to take a snapshot if someone has already claimed 
+the mutability of the object.
+[ 11:50pm ] dduncan : copy-on-write sounds reasonable ...
+[ 11:50pm ] dduncan : for that matter, while I mentioned Arrays, I 
+see this issue potentially affecting every data type
+[ 11:50pm ] TimToady : might be worth discussing on p6l; I'm likely 
+to get distracted, and it's partly the implementors that have to 
+figure out what it really means underneath
+[ 11:50pm ] dduncan : for example, if we have a random object that 
+does Str or Int or Bool, they could be mutable too
+[ 11:51pm ] TimToady : sure, might even be worth some very short sugar
+[ 11:51pm ] dduncan : and for those it may not even be possible to 
+work around outside the language, short of eg $copy = "$original" 
+which forces a new Str to be made
+[ 11:51pm ] dduncan : and that is inefficient
+[ 11:52pm ] TimToady : maybe all objects have a .snap method to go 
+with .bless and .clone
+[ 11:53pm ] dduncan : but .snap would be called lazily, citing COW
+[ 11:53pm ] TimToady : well, it's a noop on immutable types
+[ 11:53pm ] TimToady : would only need COW on mutables
+

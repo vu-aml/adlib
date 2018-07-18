@@ -1,0 +1,273 @@
+From cc-devel-bounces@lists.ibiblio.org  Mon Jul  2 20:31:35 2007
+Return-Path: <cc-devel-bounces@lists.ibiblio.org>
+Received: from metalab.unc.edu (mail.metalab.unc.edu [152.46.7.112])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l630VZL9021404
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 2 Jul 2007 20:31:35 -0400
+Received: from malecky (unknown [152.46.7.119])
+	by metalab.unc.edu (Postfix) with ESMTP id B880849098;
+	Mon,  2 Jul 2007 20:31:30 -0400 (EDT)
+X-Original-To: cc-devel@lists.ibiblio.org
+Delivered-To: cc-devel@lists.ibiblio.org
+Received: from nz-out-0506.google.com (nz-out-0506.google.com [64.233.162.227])
+	by lists.ibiblio.org (Postfix) with ESMTP id 8BE064C015
+	for <cc-devel@lists.ibiblio.org>; Mon,  2 Jul 2007 20:31:28 -0400 (EDT)
+Received: by nz-out-0506.google.com with SMTP id m22so953885nzf
+	for <cc-devel@lists.ibiblio.org>; Mon, 02 Jul 2007 17:31:24 -0700 (PDT)
+Received: by 10.114.196.1 with SMTP id t1mr5632572waf.1183422684104;
+	Mon, 02 Jul 2007 17:31:24 -0700 (PDT)
+Received: from ?192.168.0.101? ( [67.160.97.153])
+	by mx.google.com with ESMTP id k24sm16357426waf.2007.07.02.17.31.23
+	(version=TLSv1/SSLv3 cipher=RC4-MD5);
+	Mon, 02 Jul 2007 17:31:23 -0700 (PDT)
+Message-ID: <46899913.70500@gmail.com>
+Date: Mon, 02 Jul 2007 17:32:19 -0700
+From: Jason Kivlighn <jkivlighn@gmail.com>
+User-Agent: Thunderbird 2.0.0.4 (X11/20070618)
+MIME-Version: 1.0
+To: jamie <jamiemcc@blueyonder.co.uk>
+References: <466E1D1F.7050504@gmail.com>
+	<1183225450.6096.22.camel@DemonMachine>
+In-Reply-To: <1183225450.6096.22.camel@DemonMachine>
+X-Enigmail-Version: 0.95.0
+Content-Type: multipart/mixed; boundary="------------040107080802090804090603"
+Cc: CC Developer Mailing List <cc-devel@lists.ibiblio.org>,
+   tracker-list@gnome.org
+Subject: Re: [cc-devel] [PATCH] Read XMP Sidecar
+X-BeenThere: cc-devel@lists.ibiblio.org
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: <cc-devel.lists.ibiblio.org>
+List-Unsubscribe: <http://lists.ibiblio.org/mailman/listinfo/cc-devel>,
+	<mailto:cc-devel-request@lists.ibiblio.org?subject=unsubscribe>
+List-Archive: <http://lists.ibiblio.org/pipermail/cc-devel>
+List-Post: <mailto:cc-devel@lists.ibiblio.org>
+List-Help: <mailto:cc-devel-request@lists.ibiblio.org?subject=help>
+List-Subscribe: <http://lists.ibiblio.org/mailman/listinfo/cc-devel>,
+	<mailto:cc-devel-request@lists.ibiblio.org?subject=subscribe>
+Sender: cc-devel-bounces@lists.ibiblio.org
+Errors-To: cc-devel-bounces@lists.ibiblio.org
+
+This is a multi-part message in MIME format.
+--------------040107080802090804090603
+Content-Type: text/plain; charset=ISO-8859-1
+Content-Transfer-Encoding: 7bit
+
+Here's an updated patch.  When a sidecar file is modified, it now checks
+for any master files (plural) and updates those accordingly.  This
+should handle any situation, such that sidecar/master file(s) are always
+in sync.
+
+-Jason
+
+> On Mon, 2007-06-11 at 21:12 -0700, Jason Kivlighn wrote:
+>   
+>> Here's a patch to have Tracker read XMP sidecar files.  It adds a
+>> configure check for Exempi, enabling reading XMP if found.
+>>     
+>
+>
+> looks good other than minor styling issues and memory leak as I pointed
+> out before - can you correct these please?
+>
+>   
+>> One problem I see is how to handle updating the associated file when
+>> it's sidecar file is updated.
+>>     
+>
+> you will need to handle the case when the xmp file changes - suggest
+> changing the filename extension to the master filename if its xmp when a
+> file is queued for processing 
+>
+> let me know if you need help with this
+>
+> thanks
+>
+> jamie
+>
+>
+>
+>
+>
+>   
+
+
+--------------040107080802090804090603
+Content-Type: text/plain;
+ name="tracker-read-xmp-sidecar.patch"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline;
+ filename="tracker-read-xmp-sidecar.patch"
+
+Index: src/trackerd/tracker-db.c
+===================================================================
+--- src/trackerd/tracker-db.c	(revision 623)
++++ src/trackerd/tracker-db.c	(working copy)
+@@ -1,5 +1,7 @@
+ /* Tracker - indexer and metadata database engine
+  * Copyright (C) 2006, Mr Jamie McCracken (jamiemcc@gnome.org)
++ * Copyright (C) 2007, Jason Kivlighn (jkivlighn@gmail.com)
++ * Copyright (C) 2007, Creative Commons (http://creativecommons.org)
+  *
+  * This library is free software; you can redistribute it and/or
+  * modify it under the terms of the GNU General Public
+@@ -29,6 +31,7 @@
+ 
+ extern Tracker *tracker;
+ 
++#define XMP_MIME_TYPE "application/rdf+xml"
+ 
+ typedef struct {
+ 	DBConnection	*db_con;
+@@ -834,7 +837,41 @@
+ 
+ }
+ 
++void
++tracker_db_index_master_files (DBConnection *db_con, const gchar *dirname, const gchar *basename, const gchar *filename)
++{
++	GDir* dir = g_dir_open (dirname, 0, NULL);
++	if (dir) {
++		const gchar *curr_ext;
++		const gchar *curr_filename;
+ 
++		FileInfo *master_info;
++		gchar *master_uri;
++
++		while ((curr_filename = g_dir_read_name (dir)) != NULL) {
++			curr_ext = strrchr (curr_filename, '.');
++			if (!curr_ext) {
++				curr_ext = &curr_filename[strlen (curr_filename)];
++			}
++
++			if (strncmp (basename, curr_filename, curr_ext-curr_filename) == 0 &&
++					strcmp (curr_ext+1, "xmp") != 0 &&
++					!g_str_has_suffix (curr_ext+1, "~")) {
++				tracker_debug ("master file, %s, about to be updated", curr_filename);
++
++				master_uri = g_build_filename (dirname, curr_filename, NULL);
++				master_info = tracker_create_file_info (master_uri, TRACKER_ACTION_EXTRACT_METADATA, 0, 0);
++				master_info = tracker_db_get_file_info (db_con, master_info);
++				g_free (master_uri);
++
++				tracker_db_index_file (db_con, master_info, NULL, NULL);
++			}
++		}
++		g_dir_close (dir);
++	}
++}
++
++
+ void
+ tracker_db_index_file (DBConnection *db_con, FileInfo *info, const char *attachment_uri, const char *attachment_service)
+ {
+@@ -844,8 +881,9 @@
+ 
+ 	GHashTable	*meta_table;
+ 	const char	*ext;
++	char		*filename, *dirname;
+ 	char		*str_link_uri, *service_name;
+-	gboolean	is_file_indexable, service_has_metadata, is_external_service, service_has_fulltext, service_has_thumbs;
++	gboolean	is_file_indexable, service_has_metadata, is_external_service, service_has_fulltext, service_has_thumbs, is_sidecar;
+ 
+ 	const char *uri;
+ 
+@@ -888,15 +926,20 @@
+ 
+ 		tracker_add_metadata_to_table  (meta_table, g_strdup ("File:NameDelimited"), g_strdup (uri));
+ 
+-		ext = strrchr (uri, '.');
++		dirname = g_path_get_dirname (uri);
++		filename = g_path_get_basename (uri);
++		ext = strrchr (filename, '.');
+ 		if (ext) {
+ 			ext++;
+ 			tracker_debug ("file extension is %s", ext);
+ 			tracker_add_metadata_to_table  (meta_table, g_strdup ("File:Ext"), g_strdup (ext));
++			is_sidecar = strcmp("xmp",ext) == 0;
++		} else {
++			is_sidecar = FALSE;
+ 		}
+ 
+-		tracker_add_metadata_to_table  (meta_table, g_strdup ("File:Path"), g_path_get_dirname (uri));
+-		tracker_add_metadata_to_table  (meta_table, g_strdup ("File:Name"), g_path_get_basename (uri));
++		tracker_add_metadata_to_table  (meta_table, g_strdup ("File:Path"), g_strdup (dirname));
++		tracker_add_metadata_to_table  (meta_table, g_strdup ("File:Name"), g_strdup (filename));
+ 
+ 		if (str_link_uri) {
+ 			tracker_add_metadata_to_table  (meta_table, g_strdup ("File:Link"), str_link_uri);
+@@ -911,18 +954,46 @@
+ 		is_file_indexable = (!info->is_directory && (strcmp (info->mime, "unknown") != 0) && (strcmp (info->mime, "symlink") != 0) && tracker_file_is_indexable (info->uri));
+ 
+ 		service_has_metadata = (is_external_service ||
+-					(is_file_indexable && (tracker_str_in_array (service_name, services_with_metadata) != -1)));
++					(is_file_indexable && (tracker_str_in_array (service_name, services_with_metadata) != -1))) && !is_sidecar;
+ 		service_has_fulltext = (is_external_service ||
+-					(is_file_indexable && (tracker_str_in_array (service_name, services_with_text) != -1)));
++					(is_file_indexable && (tracker_str_in_array (service_name, services_with_text) != -1))) && !is_sidecar;
+ 		service_has_thumbs = (is_external_service ||
+ 				      (is_file_indexable && (tracker_str_in_array (service_name, services_with_thumbs) != -1)));
+ 
++		#ifdef HAVE_EXEMPI
++		if (!info->is_directory) {
++			gchar *basename;
++			if (ext) {
++				basename = g_strndup (filename, ext-filename-1);
++			}
++			else {
++				basename = g_strdup (filename);
++			}
++			if (is_sidecar) {
++				tracker_db_index_master_files (db_con, dirname, basename, filename);
++			} else {
++				gchar *sidecar_filename = g_strconcat (basename, ".xmp", NULL);
++				gchar *sidecar_uri = g_build_filename (dirname, sidecar_filename, NULL);
++	
++				if (g_file_test (sidecar_uri, G_FILE_TEST_EXISTS)) {
++					tracker_debug ("xmp sidecar found for %s", uri);
++					tracker_metadata_get_embedded (sidecar_uri, XMP_MIME_TYPE, meta_table);
++				}
++	
++				g_free (sidecar_filename);
++				g_free (sidecar_uri);
++			}
++			g_free (basename);
++		}
++		#endif
+ 
+  		tracker_debug ("file %s has fulltext %d with service %s", info->uri, service_has_fulltext, service_name); 
+ 		tracker_db_index_service (db_con, info, service_name, meta_table, uri, attachment_service, service_has_metadata, service_has_fulltext, service_has_thumbs);
+ 
+ 		g_hash_table_destroy (meta_table);
+ 
++		g_free(filename);
++		g_free(dirname);
+ 	} else {
+ 		tracker_db_index_service (db_con, info, service_name, NULL, uri, NULL, FALSE, FALSE, FALSE);
+ 
+Index: configure.ac
+===================================================================
+--- configure.ac	(revision 623)
++++ configure.ac	(working copy)
+@@ -722,7 +722,7 @@
+ 	exif (jpeg):				$have_libexif
+ 	gsf:					$have_libgsf
+ 	video files:				$videos_are_handled ($videos_handler)
+-	embedded xmp:				$have_exempi
++	embedded/sidecar xmp:			$have_exempi
+ 
+ "
+ if test "x$enable_external_sqlite" = "xyes"; then
+
+--------------040107080802090804090603
+Content-Type: text/plain; charset="us-ascii"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+
+_______________________________________________
+cc-devel mailing list
+cc-devel@lists.ibiblio.org
+http://lists.ibiblio.org/mailman/listinfo/cc-devel
+
+--------------040107080802090804090603--
+

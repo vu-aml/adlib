@@ -1,0 +1,108 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun Apr 15 20:30:26 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3G0UP0I031659
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 15 Apr 2007 20:30:25 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 6F4CF162AE8
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 16 Apr 2007 00:30:01 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.4 required=3.8 tests=AWL,BAYES_05,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 4AA50162ADC; Mon, 16 Apr 2007 00:29:16 +0000 (GMT)
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070416002916.4AA50162ADC@lists.samba.org>
+Date: Mon, 16 Apr 2007 00:29:16 +0000 (GMT)
+Subject: svn commit: samba r22232 - in
+	branches/SAMBA_4_0/source/cluster/ctdb: . common include
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2434
+Lines: 65
+
+Author: tridge
+Date: 2007-04-16 00:29:13 +0000 (Mon, 16 Apr 2007)
+New Revision: 22232
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22232
+
+Log:
+
+add a special message handler ID meaning "all messages please"
+
+This better fits the way Samba4 does message dispatch
+
+Modified:
+   branches/SAMBA_4_0/source/cluster/ctdb/common/ctdb_message.c
+   branches/SAMBA_4_0/source/cluster/ctdb/ctdb_cluster.c
+   branches/SAMBA_4_0/source/cluster/ctdb/include/ctdb.h
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/cluster/ctdb/common/ctdb_message.c
+===================================================================
+--- branches/SAMBA_4_0/source/cluster/ctdb/common/ctdb_message.c	2007-04-16 00:18:54 UTC (rev 22231)
++++ branches/SAMBA_4_0/source/cluster/ctdb/common/ctdb_message.c	2007-04-16 00:29:13 UTC (rev 22232)
+@@ -39,7 +39,7 @@
+ 	/* XXX we need a must faster way of finding the matching srvid
+ 	   - maybe a tree? */
+ 	for (ml=ctdb->message_list;ml;ml=ml->next) {
+-		if (ml->srvid == srvid) break;
++		if (ml->srvid == srvid || ml->srvid == CTDB_SRVID_ALL) break;
+ 	}
+ 	if (ml == NULL) {
+ 		printf("daemon vnn:%d  no msg handler for srvid=%u\n", ctdb_get_vnn(ctdb), srvid);
+
+Modified: branches/SAMBA_4_0/source/cluster/ctdb/ctdb_cluster.c
+===================================================================
+--- branches/SAMBA_4_0/source/cluster/ctdb/ctdb_cluster.c	2007-04-16 00:18:54 UTC (rev 22231)
++++ branches/SAMBA_4_0/source/cluster/ctdb/ctdb_cluster.c	2007-04-16 00:29:13 UTC (rev 22232)
+@@ -144,8 +144,8 @@
+ 	int ret;
+ 
+ 	/* setup messaging handler */
+-	ret = ctdb_set_message_handler(state->ctdb, ctdb_message_handler, 
+-				       server.id, state);
++	ret = ctdb_set_message_handler(state->ctdb, CTDB_SRVID_ALL, 
++				       ctdb_message_handler, state);
+         if (ret == -1) {
+                 DEBUG(0,("ctdb_set_message_handler failed - %s\n", 
+ 			 ctdb_errstr(state->ctdb)));
+
+Modified: branches/SAMBA_4_0/source/cluster/ctdb/include/ctdb.h
+===================================================================
+--- branches/SAMBA_4_0/source/cluster/ctdb/include/ctdb.h	2007-04-16 00:18:54 UTC (rev 22231)
++++ branches/SAMBA_4_0/source/cluster/ctdb/include/ctdb.h	2007-04-16 00:29:13 UTC (rev 22232)
+@@ -56,6 +56,11 @@
+ #define CTDB_FLAG_CONNECT_WAIT (1<<2)
+ 
+ 
++/* 
++   a message handler ID meaning "give me all messages"
++ */
++#define CTDB_SRVID_ALL 0xFFFFFFFF
++
+ struct event_context;
+ 
+ /*
+

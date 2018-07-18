@@ -1,0 +1,124 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Apr 16 00:56:31 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3G4uV0I001412
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 16 Apr 2007 00:56:31 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 47E97163821
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 16 Apr 2007 04:56:07 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.7 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 501)
+	id 2E8E2162AD6; Mon, 16 Apr 2007 04:55:53 +0000 (GMT)
+To: samba-cvs@samba.org
+From: abartlet@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070416045553.2E8E2162AD6@lists.samba.org>
+Date: Mon, 16 Apr 2007 04:55:53 +0000 (GMT)
+Subject: svn commit: samba r22235 - in branches/SAMBA_4_0:
+	source/script/tests testprogs/blackbox
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2491
+Lines: 81
+
+Author: abartlet
+Date: 2007-04-16 04:55:52 +0000 (Mon, 16 Apr 2007)
+New Revision: 22235
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22235
+
+Log:
+Test kinit, and PKINIT functionality by means of a new blackbox test.
+
+Andrew Bartlett
+
+Added:
+   branches/SAMBA_4_0/testprogs/blackbox/test_kinit.sh
+Modified:
+   branches/SAMBA_4_0/source/script/tests/tests_all.sh
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/script/tests/tests_all.sh
+===================================================================
+--- branches/SAMBA_4_0/source/script/tests/tests_all.sh	2007-04-16 04:47:11 UTC (rev 22234)
++++ branches/SAMBA_4_0/source/script/tests/tests_all.sh	2007-04-16 04:55:52 UTC (rev 22235)
+@@ -11,6 +11,6 @@
+  $SRCDIR/script/tests/test_cifs.sh
+  $SRCDIR/script/tests/test_local.sh
+  $SRCDIR/script/tests/test_pidl.sh
+- $SRCDIR/script/tests/test_blackbox.sh $PREFIX/blackbox
++ $SRCDIR/script/tests/test_blackbox.sh $PREFIX
+  $SRCDIR/script/tests/test_simple.sh
+  $SRCDIR/script/tests/test_s3upgrade.sh $PREFIX/upgrade
+
+Added: branches/SAMBA_4_0/testprogs/blackbox/test_kinit.sh
+===================================================================
+--- branches/SAMBA_4_0/testprogs/blackbox/test_kinit.sh	2007-04-16 04:47:11 UTC (rev 22234)
++++ branches/SAMBA_4_0/testprogs/blackbox/test_kinit.sh	2007-04-16 04:55:52 UTC (rev 22235)
+@@ -0,0 +1,45 @@
++#!/bin/sh
++
++if [ $# -lt 5 ]; then
++cat <<EOF
++Usage: test_kinit.sh SERVER USERNAME PASSWORD REALM PREFIX
++EOF
++exit 1;
++fi
++
++SERVER=$1
++USERNAME=$2
++PASSWORD=$3
++REALM=$4
++PREFIX=$5
++shift 5
++failed=0
++
++testit() {
++	name="$1"
++	shift
++	cmdline="$*"
++	echo "test: $name"
++	$cmdline
++	status=$?
++	if [ x$status = x0 ]; then
++		echo "success: $name"
++	else
++		echo "failure: $name"
++	fi
++	return $status
++}
++
++KRB5CCNAME=`pwd`/tmpccache
++export KRB5CCNAME
++
++echo $PASSWORD > ./tmppassfile
++testit "kinit with password" samba4kinit --password-file=./tmppassfile --request-pac $USERNAME@$REALM   || failed=`expr $failed + 1`
++testit "kinit with pkinit" samba4kinit --request-pac --pk-user=FILE:$PREFIX/dc/private/tls/admincert.pem,$PREFIX/dc/private/tls/adminkey.pem $USERNAME@$REALM || failed=`expr $failed + 1`
++
++echo ls | testit "Test login with kerberos ccache" $VALGRIND bin/smbclient $CONFIGURATION //$SERVER/tmp -k yes || failed=`expr $failed + 1`
++
++testit "domain join with kerberos ccache" $VALGRIND bin/net join $DOMAIN $CONFIGURATION  -W "$DOMAIN" -k yes $@
++
++rm -f tmpccfile tmppassfile
++exit $failed
+

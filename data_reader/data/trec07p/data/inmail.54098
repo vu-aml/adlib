@@ -1,0 +1,109 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Jun  8 14:13:10 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l58IDAhB018478
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 8 Jun 2007 14:13:10 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id EB2C31639F5
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri,  8 Jun 2007 18:13:03 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-3.6 required=3.8 tests=ALL_TRUSTED,AWL,BAYES_00 
+	autolearn=ham version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from [IPv6:::1] (dp [66.70.73.150])
+	by lists.samba.org (Postfix) with ESMTP id 34301162AE4;
+	Fri,  8 Jun 2007 18:12:40 +0000 (GMT)
+Message-Id: <BC0802F3-DA74-40F2-B06B-A5A1B2837D86@samba.org>
+From: James Peach <jpeach@samba.org>
+To: Jeremy Allison <jra@samba.org>
+In-Reply-To: <20070608164814.GA6173@jeremy-laptop>
+Content-Type: text/plain; charset=US-ASCII; format=flowed; delsp=yes
+Content-Transfer-Encoding: 7bit
+Mime-Version: 1.0 (Apple Message framework v890.1)
+Date: Fri, 8 Jun 2007 11:12:39 -0700
+References: <DA041B37-7FC6-4390-A3E6-FD881A126592@samba.org>
+	<20070608043125.GC3690@jeremy2.wintest.samba.local>
+	<20070608043939.GD3690@jeremy2.wintest.samba.local>
+	<20070608044922.GE3690@jeremy2.wintest.samba.local>
+	<A3550CEA-EC03-4781-BD40-D92321D05419@samba.org>
+	<20070608164814.GA6173@jeremy-laptop>
+X-Mailer: Apple Mail (2.890.1)
+Cc: samba-technical@lists.samba.org
+Subject: Re: [PATCH 1/4] Make sure groups[0] is the effective gid on FreeBSD.
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+On Jun 8, 2007, at 9:48 AM, Jeremy Allison wrote:
+
+> On Fri, Jun 08, 2007 at 09:01:44AM -0700, James Peach wrote:
+>>
+>> There's 2 related issues in this patch set. The first is the BSD- 
+>> style
+>> changes for setgroups, the second is the Darwin-specific changes to
+>> the order of credential operations.
+>
+> If it's Darwin specific then I want it split into a Darwin-specific
+> change.
+>
+>> The current code intertwines these two parts in two places,
+>> set_sec_ctx() and pop_sec_ctx(). I felt that splitting the credential
+>> switch into a separate function made this a lot clearer. There is
+>> exactly one place where the credential is switched and the credential
+>> switching code is not mixed with the security context stack  
+>> management
+>> code. The result is credential switching code that is easier to read,
+>> audit and log.
+>
+> Sez you. The existing code works, and works well on all
+> but one class of broken systems (*BSD).
+>
+> Please do not modify existing working code, just fix
+> the specific problem. Don't get creative here.
+>
+>> Yep, I have a tree with a similar patch, but the Darwin initgroups
+>> wrapper needs to be passed the UID you are switching to.  
+>> Additionally,
+>> for Darwin the order of operations in the credential switch is
+>> important. This means that I can't hide all of this behind
+>> sys_setgroups().
+>
+> That's a Darwin bug (IMHO). Their credentials system is now
+> non-POSIX and now non-standard.
+>
+> When are they planning to fix that ?
+>
+>> I would be very happy to split apply_unix_token into a separate  
+>> Darwin
+>> implementation, if you would prefer that better. Perhaps it is poorly
+>> named, maybe it should be:
+>>
+>> 	BOOL switch_to_credential(const UNIX_USER_TOKEN *ut)
+>
+> No, I want the change I asked for - a modified
+> sys_setgroups that works for *BSD
+
+OK, I'll do that for SAMBA_3_0 only (at least for now).
+
+> If Darwin is broken after that, then let's push for
+> them to fix their code.
+
+There is no possibility of that.
+
+--
+James Peach | jpeach@samba.org
+

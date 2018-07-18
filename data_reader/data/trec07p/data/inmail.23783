@@ -1,0 +1,177 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat Apr 28 14:17:03 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3SIH36w010802
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 28 Apr 2007 14:17:03 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 8AB24163944
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 28 Apr 2007 18:17:01 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.3 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id A64BA162AE6; Sat, 28 Apr 2007 18:16:35 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070428181635.A64BA162AE6@lists.samba.org>
+Date: Sat, 28 Apr 2007 18:16:35 +0000 (GMT)
+Subject: svn commit: samba r22561 - in branches/SAMBA_3_0/source: rpc_server
+	smbd
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 3642
+Lines: 134
+
+Author: vlendec
+Date: 2007-04-28 18:16:33 +0000 (Sat, 28 Apr 2007)
+New Revision: 22561
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22561
+
+Log:
+Fix a memleak in lanman.c: Nobody would free the session_list.
+
+Volker
+
+Modified:
+   branches/SAMBA_3_0/source/rpc_server/srv_srvsvc_nt.c
+   branches/SAMBA_3_0/source/smbd/lanman.c
+   branches/SAMBA_3_0/source/smbd/session.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/rpc_server/srv_srvsvc_nt.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpc_server/srv_srvsvc_nt.c	2007-04-28 16:56:35 UTC (rev 22560)
++++ branches/SAMBA_3_0/source/rpc_server/srv_srvsvc_nt.c	2007-04-28 18:16:33 UTC (rev 22561)
+@@ -769,13 +769,12 @@
+ {
+ 	struct sessionid *session_list;
+ 	uint32 num_entries = 0;
+-	(*stot) = list_sessions(&session_list);
++	(*stot) = list_sessions(p->mem_ctx, &session_list);
+ 
+ 	if (ss0 == NULL) {
+ 		if (snum) {
+ 			(*snum) = 0;
+ 		}
+-		SAFE_FREE(session_list);
+ 		return;
+ 	}
+ 
+@@ -799,7 +798,6 @@
+ 		ss0->array = NULL;
+ 		ss0->count = 0;
+ 	}
+-	SAFE_FREE(session_list);
+ }
+ 
+ /*******************************************************************
+@@ -859,7 +857,7 @@
+ 		return;
+ 	}
+ 
+-	(*stot) = list_sessions(&session_list);
++	(*stot) = list_sessions(p->mem_ctx, &session_list);
+ 
+ 	ss1->array = TALLOC_ARRAY(p->mem_ctx, struct srvsvc_NetSessInfo1, *stot);
+ 	
+@@ -900,8 +898,6 @@
+ 	if ((*snum) >= (*stot)) {
+ 		(*snum) = 0;
+ 	}
+-
+-	SAFE_FREE(session_list);
+ }
+ 
+ /*******************************************************************
+@@ -1222,7 +1218,7 @@
+ 		memmove(machine, &machine[1], strlen(machine));
+ 	}
+ 
+-	num_sessions = list_sessions(&session_list);
++	num_sessions = list_sessions(p->mem_ctx, &session_list);
+ 
+ 	DEBUG(5,("_srv_net_sess_del: %d\n", __LINE__));
+ 
+@@ -1248,10 +1244,7 @@
+ 
+ 	DEBUG(5,("_srv_net_sess_del: %d\n", __LINE__));
+ 
+-
+ done:
+-	SAFE_FREE(session_list);
+-
+ 	return status;
+ }
+ 
+
+Modified: branches/SAMBA_3_0/source/smbd/lanman.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/lanman.c	2007-04-28 16:56:35 UTC (rev 22560)
++++ branches/SAMBA_3_0/source/smbd/lanman.c	2007-04-28 18:16:33 UTC (rev 22561)
+@@ -4213,7 +4213,7 @@
+ 		return False;
+ 	}
+ 
+-	num_sessions = list_sessions(&session_list);
++	num_sessions = list_sessions(tmp_talloc_ctx(), &session_list);
+ 
+ 	if (mdrcnt > 0) {
+ 		*rdata = SMB_REALLOC_LIMIT(*rdata,mdrcnt);
+
+Modified: branches/SAMBA_3_0/source/smbd/session.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/session.c	2007-04-28 16:56:35 UTC (rev 22560)
++++ branches/SAMBA_3_0/source/smbd/session.c	2007-04-28 18:16:33 UTC (rev 22561)
+@@ -218,6 +218,7 @@
+ ********************************************************************/
+ 
+ struct session_list {
++	TALLOC_CTX *mem_ctx;
+ 	int count;
+ 	struct sessionid *sessions;
+ };
+@@ -230,7 +231,9 @@
+ 
+ 	i = sesslist->count;
+ 	
+-	sesslist->sessions = SMB_REALLOC_ARRAY(sesslist->sessions, struct sessionid, i+1);
++	sesslist->sessions = TALLOC_REALLOC_ARRAY(
++		sesslist->mem_ctx, sesslist->sessions, struct sessionid, i+1);
++
+ 	if (!sesslist->sessions) {
+ 		sesslist->count = 0;
+ 		return -1;
+@@ -248,10 +251,11 @@
+ /********************************************************************
+ ********************************************************************/
+ 
+-int list_sessions(struct sessionid **session_list)
++int list_sessions(TALLOC_CTX *mem_ctx, struct sessionid **session_list)
+ {
+ 	struct session_list sesslist;
+ 
++	sesslist.mem_ctx = mem_ctx;
+ 	sesslist.count = 0;
+ 	sesslist.sessions = NULL;
+ 	
+

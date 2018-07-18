@@ -1,0 +1,201 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Apr 16 22:08:54 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3H28s0I022003
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 16 Apr 2007 22:08:54 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 6B21A163885
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 02:08:30 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.0 required=3.8 tests=AWL,BAYES_50,NO_RELAYS,
+	RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: by lists.samba.org (Postfix, from userid 549)
+	id 68832162AC8; Tue, 17 Apr 2007 02:07:59 +0000 (GMT)
+Date: Mon, 16 Apr 2007 19:07:56 -0700
+From: Jeremy Allison <jra@samba.org>
+To: jerry@samba.org
+Message-ID: <20070417020756.GA19189@samba1>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="nFreZHaLTZJo0R7j"
+Content-Disposition: inline
+User-Agent: Mutt/1.5.11
+Cc: jra@samba.org, samba-technical@samba.org
+Subject: [dina@exanet.com: Incorrect inbuf parsing in reply_tcon_and_X
+	(reply.c)]
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: Jeremy Allison <jra@samba.org>
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 4321
+Lines: 153
+
+
+--nFreZHaLTZJo0R7j
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+
+Very old post but I think relevent for 3.0.25.
+
+Attached is my fix. I'm going to test tomorrow but if
+good I'd like to add for 3.0.25rc2.
+
+Jeremy.
+
+
+----- Forwarded message from Dina Fine <dina@exanet.com> -----
+
+From: Dina Fine <dina@exanet.com>
+To: samba-technical@lists.samba.org
+Subject: Incorrect inbuf parsing in reply_tcon_and_X (reply.c)
+
+Hi
+
+If the security is share then the inbuf data also includes the user
+password.
+In this case before taking the path (service path) from inbuf, the
+pointer should be increased by passlen + 1 (instead of passlen).
+
+Usually when a domain or ads security is used the password is NULL  in
+tcon request and the passlen is  1. In this case the data buffer will
+start with an empty space followed by service and device type as in the
+following example:
+[2006/07/11 15:00:34, 5, pid=17477] lib/util.c:show_msg(464)
+  size=89
+  smb_com=0x75
+  smb_rcls=0
+  smb_reh=0
+  smb_err=0
+  smb_flg=8
+  smb_flg2=51201
+  smb_tid=0
+  smb_pid=27841
+  smb_uid=101
+  smb_mid=4
+  smt_wct=4
+  smb_vwv[ 0]=  255 (0xFF)
+  smb_vwv[ 1]=    0 (0x0)
+  smb_vwv[ 2]=    0 (0x0)
+  smb_vwv[ 3]=    1 (0x1)
+  smb_bcc=46
+[2006/07/11 15:00:34, 3, pid=17477] lib/util.c:dump_data(2053)
+  [000] 00 5C 00 5C 00 4E 00 4F  00 44 00 45 00 30 00 2E  .\.\.N.O
+.D.E.0..
+  [010] 00 54 00 57 00 49 00 53  00 54 00 45 00 52 00 5C  .T.W.I.S
+.T.E.R.\
+  [020] 00 49 00 50 00 43 00 24  00 00 00 41 3A 00        .I.P.C.$
+...A:.
+
+But if the security is share, then the data will also include the user
+password, then empty space and only then the service path as in the
+following example:
+[2006/07/11 14:47:42, 5, pid=1134] lib/util.c:show_msg(464)
+  size=113
+  smb_com=0x75
+  smb_rcls=0
+  smb_reh=0
+  smb_err=0
+  smb_flg=8
+  smb_flg2=51201
+  smb_tid=0
+  smb_pid=27773
+  smb_uid=0
+  smb_mid=3
+  smt_wct=4
+  smb_vwv[ 0]=  255 (0xFF)
+  smb_vwv[ 1]=    0 (0x0)
+  smb_vwv[ 2]=    0 (0x0)
+  smb_vwv[ 3]=   24 (0x18)
+  smb_bcc=70
+[2006/07/11 14:47:42, 3, pid=1134] lib/util.c:dump_data(2053)
+  [000] 9F A8 9F 2B DE 76 82 6B  36 F2 5D A1 08 AC B6 5F  ...+.v.k
+6.]...._
+  [010] 38 30 DB 71 8A 2B C3 74  00 5C 00 5C 00 4E 00 4F  80.q.+.t
+.\.\.N.O
+  [020] 00 44 00 45 00 30 00 2E  00 54 00 57 00 49 00 53  .D.E.0..
+.T.W.I.S
+  [030] 00 54 00 45 00 52 00 5C  00 49 00 50 00 43 00 24  .T.E.R.\
+.I.P.C.$
+  [040] 00 00 00 41 3A 00                                 ...A:.
+
+In this case since the pointer (char *p) in increased only by passlen
+will point one byte before the service path, e.g.
+(dumping p)
+[2006/07/11 14:47:42, 3, pid=1134] lib/util.c:dump_data(2053)
+  [000] 00 5C 00 5C 00 4E 00 4F  00 44 00 45 00 30 00 2E  .\.\.N.O
+.D.E.0..
+  [010] 00 54 00 57 00 49 00 53  00 54 00 45 00 52 00 5C  .T.W.I.S
+.T.E.R.\
+  [020] 00 49 00 50 00 43 00 24  00 00 00 41 3A 00 00 00  .I.P.C.$
+...A:...
+  [030] 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ........
+........
+  [040] 00 00 00 00 4C 41                                 ....LA
+
+srvstr_pull_buf will success to pull the service path, but the next pull
+fails and we get empty client device type for the request.
+
+The solution will be to increase the p pointer one more byte in case the
+password is not empty.
+
+Thanks
+Dina
+
+P.S. By the way I found this using smbtorture TCONDEV test when the
+security = share and guest is allowed.
+
+
+
+----- End forwarded message -----
+
+--nFreZHaLTZJo0R7j
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: attachment; filename=look
+
+Index: smbd/reply.c
+===================================================================
+--- smbd/reply.c	(revision 22290)
++++ smbd/reply.c	(working copy)
+@@ -468,13 +468,22 @@
+  
+ 	if (global_encrypted_passwords_negotiated) {
+ 		password = data_blob(smb_buf(inbuf),passlen);
++		if (lp_security() == SEC_SHARE) {
++			/*
++			 * Security = share always has a pad byte
++			 * after the password.
++			 */
++			p = smb_buf(inbuf) + passlen + 1;
++		} else {
++			p = smb_buf(inbuf) + passlen;
++		}
+ 	} else {
+ 		password = data_blob(smb_buf(inbuf),passlen+1);
+ 		/* Ensure correct termination */
+-		password.data[passlen]=0;    
++		password.data[passlen]=0;
++		p = smb_buf(inbuf) + passlen + 1;
+ 	}
+ 
+-	p = smb_buf(inbuf) + passlen;
+ 	p += srvstr_pull_buf(inbuf, path, p, sizeof(path), STR_TERMINATE);
+ 
+ 	/*
+
+--nFreZHaLTZJo0R7j--
+

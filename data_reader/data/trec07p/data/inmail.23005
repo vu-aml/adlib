@@ -1,0 +1,147 @@
+From perl6-all-return-80947-ktwarwic=speedy.uwaterloo.ca@perl.org  Fri Apr 27 19:56:28 2007
+Return-Path: <perl6-all-return-80947-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3RNuR6w032681
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 27 Apr 2007 19:56:27 -0400
+Received: (qmail 17548 invoked by uid 514); 27 Apr 2007 23:56:26 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 17541 invoked from network); 27 Apr 2007 23:56:25 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: moderator for perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: Andy Spieherty (via RT) <parrotbug-followup@parrotcode.org>
+X-RT-NewTicket: yes
+To: bugs-bitbucket@netlabs.develooper.com
+Resent-To: perl6-internals@perl.org
+Mail-Followup-To: perl6-internals@perl.org
+Reply-To: perl6-internals@perl.org
+Date: Fri, 27 Apr 2007 10:49:57 -0700
+Subject: [perl #42772] [PATCH] Re: mmx/sse copy functions (was: Puzzling structure in <parrot/stacks.h>) 
+In-Reply-To: <Pine.LNX.4.62.0704271333150.14131@fractal.phys.lafayette.edu>
+References: <RT-Ticket-42772@perl.org> <Pine.LNX.4.62.0704261514050.20693@fractal.phys.lafayette.edu> <200704262244.05667.lt@toetsch.at> <Pine.LNX.4.62.0704271333150.14131@fractal.phys.lafayette.edu>
+Message-ID: <rt-3.6.HEAD-30201-1177696198-836.42772-72-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #42772
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: spiehera@lafayette.edu
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+X-RT-Original-Encoding: utf-8
+Resent-Message-Id: <20070427174958.B480B2AFD8@x3.develooper.com>
+Resent-Date: Fri, 27 Apr 2007 10:49:58 -0700 (PDT)
+Resent-From: rt-spiehera=lafayette.edu@netlabs.develooper.com
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-4.4 required=8.0
+	tests=ALL_TRUSTED,BAYES_00,DK_POLICY_SIGNSOME
+Status: O
+Content-Length: 3467
+Lines: 90
+
+# New Ticket Created by  Andy Spieherty 
+# Please include the string:  [perl #42772]
+# in the subject line of all future correspondence about this issue. 
+# <URL: http://rt.perl.org/rt3/Ticket/Display.html?id=42772 >
+
+
+On Thu, 26 Apr 2007, Leopold Toetsch wrote:
+
+> Am Donnerstag, 26. April 2007 21:44 schrieb Andy Spieherty:
+> > Does anyone understand the 'dummy' element in
+> > include/parrot/stacks.h?  Here is the relevant snippet:
+> >
+> >     typedef struct Stack_Chunk {
+> >         pobj_t obj;
+> >         int size;
+> >         const char * name;
+> >         struct Stack_Chunk *prev;
+> >     #if ! DISABLE_GC_DEBUG && defined(I386)
+> >         void * dummy;   /* force 8 byte align for mmx and sse moves */
+> >     #endif
+> >         union { /* force appropriate alignment of 'data' */
+> >             void *data;
+> >     #ifndef I386
+> >             double d_dummy;         /* align double values on stack */
+> >     #endif
+> >         } u;
+> >     } Stack_Chunk_t;
+
+> At some earlier time in parrot history, there was a (32 bit, pointer-sized) 
+> 'version' [1] structure item in pobj_t, which was active 
+> with !DISABLE_GC_DEBUG. The dummy was needed for i386 (when x86_64 didn't 
+> even exist) to align the data pointer at an 8-byte boundary.
+
+Ah, yes.  Thanks for the detailed reply.   At this point, removing the 
+dummy will put u.data back on an 8-byte boundary (for i386), so that's 
+probably a good thing all around.
+
+I'd suggest the following patch:
+
+diff -ru parrot-current/include/parrot/stacks.h parrot-andy/include/parrot/stacks.h
+--- parrot-current/include/parrot/stacks.h	2006-11-12 03:15:19.000000000 -0500
++++ parrot-andy/include/parrot/stacks.h	2007-04-27 09:24:04.000000000 -0400
+@@ -29,13 +29,11 @@
+     int size;
+     const char * name;
+     struct Stack_Chunk *prev;
+-#if ! DISABLE_GC_DEBUG && defined(I386)
+-    void * dummy;   /* force 8 byte align for mmx and sse moves */
+-#endif
+-    union { /* force appropriate alignment of 'data' */
++    union { /* force appropriate alignment of 'data'.  If alignment
++               is necessary, assume double is good enough.  27-04-2007. */
+         void *data;
+-#ifndef I386
+-        double d_dummy;         /* align double values on stack */
++#if PARROT_PTR_ALIGNMENT > 1
++        double d_dummy;
+ #endif
+     } u;
+ } Stack_Chunk_t;
+--- parrot-current/src/stack_common.c	Thu Apr 26 19:15:14 2007
++++ parrot-andy/src/stack_common.c	Fri Apr 27 11:49:53 2007
+@@ -59,9 +59,6 @@
+     Stack_Chunk_t *chunk;
+ 
+     item_size += offsetof(Stack_Chunk_t, u.data);
+-    item_size += 7;
+-    item_size &= ~7;    /* round up to 8 so that the chunk is aligned at
+-                           the same size - the aligned MMX memcpy needs it */
+     make_bufferlike_pool(interp, item_size);
+     chunk = (Stack_Chunk_t *)new_bufferlike_header(interp, item_size);
+     chunk->prev = chunk;        /* mark the top of the stack */
+
+
+
+
+> As the past tense is indicating, above dummy is totally obsolete and the copy 
+> functions[2] are unused. The latter could be removed too, but might be a 
+> nice-to-have, when something faster than memcpy(3) is wanted or needed, 
+> albeit only on restricted (but common) platforms and for aligned memory only. 
+> Some recent CPUs do have special instructions for copying unaligned memory 
+> reegions too.
+
+Yes, indeed.  I could see a future optimization pairing memalign(3C) with 
+specialized copy functions.
+
+Thanks again,
+
+-- 
+    Andy Spieherty		spiehera@lafayette.edu
+

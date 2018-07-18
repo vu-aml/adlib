@@ -1,0 +1,147 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 29 01:53:46 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4T5rkhB026953
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 01:53:46 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 36616162BC2
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 05:53:41 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 8A9AD162BD6; Tue, 29 May 2007 05:52:20 +0000 (GMT)
+Date: Tue, 29 May 2007 15:26:38 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070529055220.8A9AD162BD6@lists.samba.org>
+Subject: Rev 382: default log file to reasonable location in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 382
+revision-id: tridge@samba.org-20070529052638-xj2efvjbm9e8o6y7
+parent: tridge@samba.org-20070529052041-dmvblb655nqxg7dx
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Tue 2007-05-29 15:26:38 +1000
+message:
+  default log file to reasonable location
+modified:
+  common/cmdline.c               cmdline.c-20070416041216-w1zvz91bkdsgjckw-1
+  direct/ctdbd.c                 ctdbd.c-20070411085044-dqmhr6mfeexnyt4m-1
+  packaging/RHEL/setup/ctdb.sysconfig ctdb.sysconfig-20070527204758-biuh7znabuwan3zn-7
+=== modified file 'common/cmdline.c'
+--- a/common/cmdline.c	2007-05-29 05:20:41 +0000
++++ b/common/cmdline.c	2007-05-29 05:26:38 +0000
+@@ -36,7 +36,6 @@
+ 	int self_connect;
+ 	const char *db_dir;
+ 	int torture;
+-	const char *logfile;
+ 	const char *events;
+ } ctdb_cmdline = {
+ 	.nlist = ETCDIR "/ctdb/nodes",
+@@ -46,7 +45,6 @@
+ 	.self_connect = 0,
+ 	.db_dir = VARDIR "/ctdb",
+ 	.torture = 0,
+-	.logfile = NULL,
+ };
+ 
+ enum {OPT_EVENTSYSTEM=1};
+@@ -74,7 +72,6 @@
+ 	{ "debug", 'd', POPT_ARG_INT, &LogLevel, 0, "debug level"},
+ 	{ "dbdir", 0, POPT_ARG_STRING, &ctdb_cmdline.db_dir, 0, "directory for the tdb files", NULL },
+ 	{ "torture", 0, POPT_ARG_NONE, &ctdb_cmdline.torture, 0, "enable nastiness in library", NULL },
+-	{ "logfile", 0, POPT_ARG_STRING, &ctdb_cmdline.logfile, 0, "log file location", "filename" },
+ 	{ "events", 0, POPT_ARG_STRING, NULL, OPT_EVENTSYSTEM, "event system", NULL },
+ 	{ NULL }
+ };
+@@ -100,12 +97,6 @@
+ 		exit(1);
+ 	}
+ 
+-	ret = ctdb_set_logfile(ctdb, ctdb_cmdline.logfile);
+-	if (ret == -1) {
+-		printf("ctdb_set_logfile failed - %s\n", ctdb_errstr(ctdb));
+-		exit(1);
+-	}
+-
+ 	if (ctdb_cmdline.self_connect) {
+ 		ctdb_set_flags(ctdb, CTDB_FLAG_SELF_CONNECT);
+ 	}
+
+=== modified file 'direct/ctdbd.c'
+--- a/direct/ctdbd.c	2007-05-29 05:20:41 +0000
++++ b/direct/ctdbd.c	2007-05-29 05:26:38 +0000
+@@ -42,11 +42,14 @@
+ 	const char *public_address_list;
+ 	const char *public_interface;
+ 	const char *event_script;
++	const char *logfile;
+ } options = {
+-	.event_script = ETCDIR "/ctdb/events"
++	.event_script = ETCDIR "/ctdb/events",
++	.logfile = VARDIR "/log/log.ctdb"
+ };
+ 
+ 
++
+ /*
+   main program
+ */
+@@ -62,6 +65,7 @@
+ 		{ "public-addresses", 0, POPT_ARG_STRING, &options.public_address_list, 0, "public address list file", "filename" },
+ 		{ "public-interface", 0, POPT_ARG_STRING, &options.public_interface, 0, "public interface", "interface"},
+ 		{ "event-script", 0, POPT_ARG_STRING, &options.event_script, 0, "event script", "filename" },
++		{ "logfile", 0, POPT_ARG_STRING, &options.logfile, 0, "log file location", "filename" },
+ 		POPT_TABLEEND
+ 	};
+ 	int opt, ret;
+@@ -94,6 +98,12 @@
+ 
+ 	ctdb = ctdb_cmdline_init(ev);
+ 
++	ret = ctdb_set_logfile(ctdb, options.logfile);
++	if (ret == -1) {
++		printf("ctdb_set_logfile to %s failed - %s\n", options.logfile, ctdb_errstr(ctdb));
++		exit(1);
++	}
++
+ 	if (options.public_interface) {
+ 		ctdb->takeover.interface = talloc_strdup(ctdb, options.public_interface);
+ 		CTDB_NO_MEMORY(ctdb, ctdb->takeover.interface);
+
+=== modified file 'packaging/RHEL/setup/ctdb.sysconfig'
+--- a/packaging/RHEL/setup/ctdb.sysconfig	2007-05-28 15:38:04 +0000
++++ b/packaging/RHEL/setup/ctdb.sysconfig	2007-05-29 05:26:38 +0000
+@@ -1,8 +1,7 @@
+ # Options to ctdbd
+-CLUSTER_NODES=/etc/samba/cluster_nodes.txt
+-PUBLIC_ADDRESSES=/etc/samba/public_addresses.txt
++CLUSTER_NODES=/etc/ctdb/nodes
++PUBLIC_ADDRESSES=/etc/ctdb/public_addresses
+ PUBLIC_INTERFACE=eth0
+-#CTDB_PORT=9001
+ #LOGFILE=/var/log/samba/log.ctdb
+ #DEBUGLEVEL=0
+ 
+

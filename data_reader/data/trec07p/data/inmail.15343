@@ -1,0 +1,201 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Apr 20 17:32:05 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3KLW50I011312
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 20 Apr 2007 17:32:05 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id A60CA163899
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 20 Apr 2007 21:31:40 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.4 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1013)
+	id 22F61162ADA; Fri, 20 Apr 2007 21:31:05 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jpeach@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070420213105.22F61162ADA@lists.samba.org>
+Date: Fri, 20 Apr 2007 21:31:05 +0000 (GMT)
+Subject: svn commit: samba r22419 - in branches/SAMBA_3_0/source: . tests
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 3824
+Lines: 159
+
+Author: jpeach
+Date: 2007-04-20 21:31:04 +0000 (Fri, 20 Apr 2007)
+New Revision: 22419
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22419
+
+Log:
+Update configure so that we only need one copy of os2_delete.c
+
+Removed:
+   branches/SAMBA_3_0/source/tests/os2_delete.c
+Modified:
+   branches/SAMBA_3_0/source/configure.in
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/configure.in
+===================================================================
+--- branches/SAMBA_3_0/source/configure.in	2007-04-20 21:09:44 UTC (rev 22418)
++++ branches/SAMBA_3_0/source/configure.in	2007-04-20 21:31:04 UTC (rev 22419)
+@@ -2813,7 +2813,12 @@
+ fi
+ 
+ AC_CACHE_CHECK([for broken readdir],samba_cv_HAVE_BROKEN_READDIR,[
+-	AC_TRY_RUN([#include "${srcdir-.}/tests/os2_delete.c"],
++	AC_TRY_RUN([
++#include "${srcdir-.}/lib/replace/test/os2_delete.c"
++int main(void) {
++    return test_readdir_os2_delete();
++}
++],
+ 		[samba_cv_HAVE_BROKEN_READDIR=no],
+ 			[samba_cv_HAVE_BROKEN_READDIR=yes],
+ 			[samba_cv_HAVE_BROKEN_READDIR="assuming not"])])
+@@ -2822,7 +2827,10 @@
+ AC_CACHE_CHECK([for replacing readdir],samba_cv_REPLACE_READDIR,[
+ 	AC_TRY_RUN([
+ #include "${srcdir-.}/lib/repdir.c"
+-#include "${srcdir-.}/tests/os2_delete.c"],
++#include "${srcdir-.}/lib/replace/test/os2_delete.c"
++int main(void) {
++    return test_readdir_os2_delete();
++],
+ 	samba_cv_REPLACE_READDIR=yes,samba_cv_REPLACE_READDIR=no)])
+ fi
+ 
+
+Deleted: branches/SAMBA_3_0/source/tests/os2_delete.c
+===================================================================
+--- branches/SAMBA_3_0/source/tests/os2_delete.c	2007-04-20 21:09:44 UTC (rev 22418)
++++ branches/SAMBA_3_0/source/tests/os2_delete.c	2007-04-20 21:31:04 UTC (rev 22419)
+@@ -1,107 +0,0 @@
+-/*
+-  test readdir/unlink pattern that OS/2 uses
+-  tridge@samba.org July 2005
+-*/
+-
+-#include <stdio.h>
+-#include <stdlib.h>
+-#include <sys/stat.h>
+-#include <unistd.h>
+-#include <sys/types.h>
+-#include <dirent.h>
+-#include <errno.h>
+-#include <string.h>
+-#include <fcntl.h>
+-
+-#define NUM_FILES 700
+-#define READDIR_SIZE 100
+-#define DELETE_SIZE 4
+-
+-#define TESTDIR "test.dir"
+-
+-#define FAILED(d) (fprintf(stderr, "Failed for %s - %s\n", d, strerror(errno)), exit(1), 1)
+-
+-#ifndef MIN
+-#define MIN(a,b) ((a)<(b)?(a):(b))
+-#endif
+-
+-static void cleanup(void)
+-{
+-	/* I'm a lazy bastard */
+-	system("rm -rf " TESTDIR);
+-	mkdir(TESTDIR, 0700) == 0 || FAILED("mkdir");
+-}
+-
+-static void create_files()
+-{
+-	int i;
+-	for (i=0;i<NUM_FILES;i++) {
+-		char fname[40];
+-		sprintf(fname, TESTDIR "/test%u.txt", i);
+-		close(open(fname, O_CREAT|O_RDWR, 0600)) == 0 || FAILED("close");
+-	}
+-}
+-
+-static int os2_delete(DIR *d)
+-{
+-	off_t offsets[READDIR_SIZE];
+-	int i, j;
+-	struct dirent *de;
+-	char names[READDIR_SIZE][30];
+-
+-	/* scan, remembering offsets */
+-	for (i=0, de=readdir(d); 
+-	     de && i < READDIR_SIZE; 
+-	     de=readdir(d), i++) {
+-		offsets[i] = telldir(d);
+-		strcpy(names[i], de->d_name);
+-	}
+-
+-	if (i == 0) {
+-		return 0;
+-	}
+-
+-	/* delete the first few */
+-	for (j=0; j<MIN(i, DELETE_SIZE); j++) {
+-		char fname[40];
+-		sprintf(fname, TESTDIR "/%s", names[j]);
+-		unlink(fname) == 0 || FAILED("unlink");
+-	}
+-
+-	/* seek to just after the deletion */
+-	seekdir(d, offsets[j-1]);
+-
+-	/* return number deleted */
+-	return j;
+-}
+-
+-int main(void)
+-{
+-	int total_deleted = 0;
+-	DIR *d;
+-	struct dirent *de;
+-
+-	cleanup();
+-	create_files();
+-	
+-	d = opendir(TESTDIR);
+-
+-	/* skip past . and .. */
+-	de = readdir(d);
+-	strcmp(de->d_name, ".") == 0 || FAILED("match .");
+-	de = readdir(d);
+-	strcmp(de->d_name, "..") == 0 || FAILED("match ..");
+-
+-	while (1) {
+-		int n = os2_delete(d);
+-		if (n == 0) break;
+-		total_deleted += n;
+-	}
+-	closedir(d);
+-
+-	printf("Deleted %d files of %d\n", total_deleted, NUM_FILES);
+-
+-	rmdir(TESTDIR) == 0 || FAILED("rmdir");
+-
+-	return 0;
+-}
+

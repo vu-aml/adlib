@@ -1,0 +1,78 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu May 10 15:09:21 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4AJ9LqD013223
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 10 May 2007 15:09:21 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id A93F81638B0
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 10 May 2007 19:09:19 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.4 required=3.8 tests=AWL,BAYES_00,NO_RELAYS,
+	RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: by lists.samba.org (Postfix, from userid 549)
+	id 0BDAF162ADA; Thu, 10 May 2007 19:08:50 +0000 (GMT)
+Date: Thu, 10 May 2007 12:08:47 -0700
+From: Jeremy Allison <jra@samba.org>
+To: derrell@samba.org
+Message-ID: <20070510190847.GA19329@samba1>
+References: <8xbx4g0u.fsf@oberon-mail.internal>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+In-Reply-To: <8xbx4g0u.fsf@oberon-mail.internal>
+User-Agent: Mutt/1.5.11
+Cc: samba-technical <samba-technical@lists.samba.org>
+Subject: Re: readahead() which is Linux-only vs. posix_fadvise()
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: Jeremy Allison <jra@samba.org>
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+On Wed, May 09, 2007 at 09:35:29PM -0400, derrell@samba.org wrote:
+> 
+> The only place that readahead() is used, I think, is in vfs_readahead.c.
+> It might make sense for the maintainer of this module to look into using
+> posix_fadvise() instead of readahead().
+
+Did you look at the code here :-) ? I'm guessing not....
+
+#if defined(HAVE_LINUX_READAHEAD)
+                int err = readahead(fromfd, offset, (size_t)rhd->len);
+                DEBUG(10,("readahead_sendfile: readahead on fd %u,
+offset %llu, len %u returned %d\n",
+                        (unsigned int)fromfd,
+                        (unsigned long long)offset,
+                        (unsigned int)rhd->len,
+                        err ));
+#elif defined(HAVE_POSIX_FADVISE)
+                int err = posix_fadvise(fromfd, offset, (off_t)rhd->len,
+POSIX_FADV_WILLNEED);
+                DEBUG(10,("readahead_sendfile: posix_fadvise on fd %u,
+offset %llu, len %u returned %d\n",
+                        (unsigned int)fromfd,
+                        (unsigned long long)offset,
+                        (unsigned int)rhd->len,
+                        err ));
+#else
+                if (!rhd->didmsg) {
+                        DEBUG(0,("readahead_sendfile: no readahead on
+this platform\n"));
+                        rhd->didmsg = True;
+                }
+#endif
+

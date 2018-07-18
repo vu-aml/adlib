@@ -1,0 +1,313 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May  1 22:22:29 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l422MTb9016219
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 1 May 2007 22:22:29 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id DA4DA163825
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue,  1 May 2007 21:30:24 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 5275F162BC1; Tue,  1 May 2007 21:29:43 +0000 (GMT)
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070501212943.5275F162BC1@lists.samba.org>
+Date: Tue,  1 May 2007 21:29:43 +0000 (GMT)
+Subject: svn commit: samba r22634 - in branches/SAMBA_4_0/source/lib/events:
+	.
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: tridge
+Date: 2007-05-01 21:29:42 +0000 (Tue, 01 May 2007)
+New Revision: 22634
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22634
+
+Log:
+
+make the events system much less dependent on the samba4 build system
+
+Modified:
+   branches/SAMBA_4_0/source/lib/events/config.mk
+   branches/SAMBA_4_0/source/lib/events/events.c
+   branches/SAMBA_4_0/source/lib/events/events_aio.c
+   branches/SAMBA_4_0/source/lib/events/events_epoll.c
+   branches/SAMBA_4_0/source/lib/events/events_internal.h
+   branches/SAMBA_4_0/source/lib/events/events_select.c
+   branches/SAMBA_4_0/source/lib/events/events_signal.c
+   branches/SAMBA_4_0/source/lib/events/events_standard.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/lib/events/config.mk
+===================================================================
+--- branches/SAMBA_4_0/source/lib/events/config.mk	2007-05-01 21:22:55 UTC (rev 22633)
++++ branches/SAMBA_4_0/source/lib/events/config.mk	2007-05-01 21:29:42 UTC (rev 22634)
+@@ -3,28 +3,28 @@
+ OBJ_FILES = events_aio.o
+ PRIVATE_DEPENDENCIES = LIBAIO_LINUX
+ SUBSYSTEM = LIBEVENTS
+-INIT_FUNCTION = events_aio_init
++INIT_FUNCTION = s4_events_aio_init
+ ##############################
+ 
+ ##############################
+ [MODULE::EVENTS_EPOLL]
+ OBJ_FILES = events_epoll.o
+ SUBSYSTEM = LIBEVENTS
+-INIT_FUNCTION = events_epoll_init
++INIT_FUNCTION = s4_events_epoll_init
+ ##############################
+ 
+ ##############################
+ [MODULE::EVENTS_SELECT]
+ OBJ_FILES = events_select.o
+ SUBSYSTEM = LIBEVENTS
+-INIT_FUNCTION = events_select_init
++INIT_FUNCTION = s4_events_select_init
+ ##############################
+ 
+ ##############################
+ [MODULE::EVENTS_STANDARD]
+ OBJ_FILES = events_standard.o
+ SUBSYSTEM = LIBEVENTS
+-INIT_FUNCTION = events_standard_init
++INIT_FUNCTION = s4_events_standard_init
+ ##############################
+ 
+ 
+
+Modified: branches/SAMBA_4_0/source/lib/events/events.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/events/events.c	2007-05-01 21:22:55 UTC (rev 22633)
++++ branches/SAMBA_4_0/source/lib/events/events.c	2007-05-01 21:29:42 UTC (rev 22634)
+@@ -58,7 +58,9 @@
+ #include "lib/events/events.h"
+ #include "lib/events/events_internal.h"
+ #include "lib/util/dlinklist.h"
++#if _SAMBA_BUILD_
+ #include "build.h"
++#endif
+ 
+ struct event_ops_list {
+ 	struct event_ops_list *next, *prev;
+@@ -72,15 +74,15 @@
+ /*
+   register an events backend
+ */
+-NTSTATUS event_register_backend(const char *name, const struct event_ops *ops)
++bool event_register_backend(const char *name, const struct event_ops *ops)
+ {
+ 	struct event_ops_list *e;
+ 	e = talloc(talloc_autofree_context(), struct event_ops_list);
+-	NT_STATUS_HAVE_NO_MEMORY(e);
++	if (e == NULL) return False;
+ 	e->name = name;
+ 	e->ops = ops;
+ 	DLIST_ADD(event_backends, e);
+-	return NT_STATUS_OK;
++	return True;
+ }
+ 
+ /*
+@@ -88,12 +90,17 @@
+ */
+ static void event_backend_init(void)
+ {
++#if _SAMBA_BUILD_
+ 	init_module_fn static_init[] = STATIC_LIBEVENTS_MODULES;
+ 	init_module_fn *shared_init;
+ 	if (event_backends) return;
+ 	shared_init = load_samba_modules(NULL, "LIBEVENTS");
+ 	run_init_functions(static_init);
+ 	run_init_functions(shared_init);
++#else
++	bool events_standard_init(void);
++	events_standard_init();
++#endif
+ }
+ 
+ /*
+
+Modified: branches/SAMBA_4_0/source/lib/events/events_aio.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/events/events_aio.c	2007-05-01 21:22:55 UTC (rev 22633)
++++ branches/SAMBA_4_0/source/lib/events/events_aio.c	2007-05-01 21:29:42 UTC (rev 22634)
+@@ -165,9 +165,9 @@
+ 
+ static void epoll_change_event(struct aio_event_context *aio_ev, struct fd_event *fde)
+ {
+-	BOOL got_error = (fde->additional_flags & EPOLL_ADDITIONAL_FD_FLAG_GOT_ERROR);
+-	BOOL want_read = (fde->flags & EVENT_FD_READ);
+-	BOOL want_write= (fde->flags & EVENT_FD_WRITE);
++	bool got_error = (fde->additional_flags & EPOLL_ADDITIONAL_FD_FLAG_GOT_ERROR);
++	bool want_read = (fde->flags & EVENT_FD_READ);
++	bool want_write= (fde->flags & EVENT_FD_WRITE);
+ 
+ 	if (aio_ev->epoll_fd == -1) return;
+ 
+@@ -512,7 +512,17 @@
+ 	.loop_wait	= aio_event_loop_wait,
+ };
+ 
+-NTSTATUS events_aio_init(void)
++bool events_aio_init(void)
+ {
+ 	return event_register_backend("aio", &aio_event_ops);
+ }
++
++#if _SAMBA_BUILD_
++NTSTATUS s4_events_aio_init(void)
++{
++	if (!events_aio_init()) {
++		return NT_STATUS_INTERNAL_ERROR;
++	}
++	return NT_STATUS_OK;
++}
++#endif
+
+Modified: branches/SAMBA_4_0/source/lib/events/events_epoll.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/events/events_epoll.c	2007-05-01 21:22:55 UTC (rev 22633)
++++ branches/SAMBA_4_0/source/lib/events/events_epoll.c	2007-05-01 21:29:42 UTC (rev 22634)
+@@ -165,9 +165,9 @@
+ 
+ static void epoll_change_event(struct epoll_event_context *epoll_ev, struct fd_event *fde)
+ {
+-	BOOL got_error = (fde->additional_flags & EPOLL_ADDITIONAL_FD_FLAG_GOT_ERROR);
+-	BOOL want_read = (fde->flags & EVENT_FD_READ);
+-	BOOL want_write= (fde->flags & EVENT_FD_WRITE);
++	bool got_error = (fde->additional_flags & EPOLL_ADDITIONAL_FD_FLAG_GOT_ERROR);
++	bool want_read = (fde->flags & EVENT_FD_READ);
++	bool want_write= (fde->flags & EVENT_FD_WRITE);
+ 
+ 	if (epoll_ev->epoll_fd == -1) return;
+ 
+@@ -413,7 +413,17 @@
+ 	.loop_wait	= epoll_event_loop_wait,
+ };
+ 
+-NTSTATUS events_epoll_init(void)
++bool events_epoll_init(void)
+ {
+ 	return event_register_backend("epoll", &epoll_event_ops);
+ }
++
++#if _SAMBA_BUILD_
++NTSTATUS s4_events_epoll_init(void)
++{
++	if (!events_epoll_init()) {
++		return NT_STATUS_INTERNAL_ERROR;
++	}
++	return NT_STATUS_OK;
++}
++#endif
+
+Modified: branches/SAMBA_4_0/source/lib/events/events_internal.h
+===================================================================
+--- branches/SAMBA_4_0/source/lib/events/events_internal.h	2007-05-01 21:22:55 UTC (rev 22633)
++++ branches/SAMBA_4_0/source/lib/events/events_internal.h	2007-05-01 21:29:42 UTC (rev 22634)
+@@ -113,7 +113,7 @@
+ };
+ 
+ 
+-NTSTATUS event_register_backend(const char *name, const struct event_ops *ops);
++bool event_register_backend(const char *name, const struct event_ops *ops);
+ 
+ struct timed_event *common_event_add_timed(struct event_context *, TALLOC_CTX *,
+ 					   struct timeval, event_timed_handler_t, void *);
+
+Modified: branches/SAMBA_4_0/source/lib/events/events_select.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/events/events_select.c	2007-05-01 21:22:55 UTC (rev 22633)
++++ branches/SAMBA_4_0/source/lib/events/events_select.c	2007-05-01 21:29:42 UTC (rev 22634)
+@@ -291,7 +291,17 @@
+ 	.loop_wait	= select_event_loop_wait,
+ };
+ 
+-NTSTATUS events_select_init(void)
++bool events_select_init(void)
+ {
+ 	return event_register_backend("select", &select_event_ops);
+ }
++
++#if _SAMBA_BUILD_
++NTSTATUS s4_events_select_init(void)
++{
++	if (!events_select_init()) {
++		return NT_STATUS_INTERNAL_ERROR;
++	}
++	return NT_STATUS_OK;
++}
++#endif
+
+Modified: branches/SAMBA_4_0/source/lib/events/events_signal.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/events/events_signal.c	2007-05-01 21:22:55 UTC (rev 22633)
++++ branches/SAMBA_4_0/source/lib/events/events_signal.c	2007-05-01 21:29:42 UTC (rev 22634)
+@@ -23,6 +23,7 @@
+ #include "includes.h"
+ #include "system/filesys.h"
+ #include "system/select.h"
++#include "system/wait.h"
+ #include "lib/util/dlinklist.h"
+ #include "lib/events/events.h"
+ #include "lib/events/events_internal.h"
+
+Modified: branches/SAMBA_4_0/source/lib/events/events_standard.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/events/events_standard.c	2007-05-01 21:22:55 UTC (rev 22633)
++++ branches/SAMBA_4_0/source/lib/events/events_standard.c	2007-05-01 21:29:42 UTC (rev 22634)
+@@ -180,9 +180,9 @@
+ 
+ static void epoll_change_event(struct std_event_context *std_ev, struct fd_event *fde)
+ {
+-	BOOL got_error = (fde->additional_flags & EPOLL_ADDITIONAL_FD_FLAG_GOT_ERROR);
+-	BOOL want_read = (fde->flags & EVENT_FD_READ);
+-	BOOL want_write= (fde->flags & EVENT_FD_WRITE);
++	bool got_error = (fde->additional_flags & EPOLL_ADDITIONAL_FD_FLAG_GOT_ERROR);
++	bool want_read = (fde->flags & EVENT_FD_READ);
++	bool want_write= (fde->flags & EVENT_FD_WRITE);
+ 
+ 	if (std_ev->epoll_fd == -1) return;
+ 
+@@ -549,7 +549,17 @@
+ };
+ 
+ 
+-NTSTATUS events_standard_init(void)
++bool events_standard_init(void)
+ {
+ 	return event_register_backend("standard", &std_event_ops);
+ }
++
++#if _SAMBA_BUILD_
++NTSTATUS s4_events_standard_init(void)
++{
++	if (!events_standard_init()) {
++		return NT_STATUS_INTERNAL_ERROR;
++	}
++	return NT_STATUS_OK;
++}
++#endif
+

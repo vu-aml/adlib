@@ -1,0 +1,140 @@
+From r-help-bounces@stat.math.ethz.ch  Thu May 24 13:44:02 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4OHi0qD008753
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 24 May 2007 13:44:01 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4OHhNS9025043;
+	Thu, 24 May 2007 19:43:34 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=5.0 tests=AWL autolearn=no version=3.1.8
+Received: from post-24.mail.nl.demon.net (post-24.mail.nl.demon.net
+	[194.159.73.194])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4OHcDjd023660
+	for <r-help@stat.math.ethz.ch>; Thu, 24 May 2007 19:38:14 +0200
+Received: from duineveld.demon.nl ([83.161.55.49]:18910 helo=[192.168.1.101])
+	by post-24.mail.nl.demon.net with esmtp (Exim 4.51)
+	id 1HrHGP-000KWp-NI
+	for r-help@stat.math.ethz.ch; Thu, 24 May 2007 17:38:13 +0000
+From: chao gai <chaogai@duineveld.demon.nl>
+To: r-help@stat.math.ethz.ch
+Date: Thu, 24 May 2007 19:30:14 +0200
+User-Agent: KMail/1.9.5
+References: <000001c79dad$4c2eff80$7000a8c0@scbit94ec75129>
+In-Reply-To: <000001c79dad$4c2eff80$7000a8c0@scbit94ec75129>
+MIME-Version: 1.0
+Message-Id: <200705241930.15103.chaogai@duineveld.demon.nl>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+X-MIME-Autoconverted: from quoted-printable to 8bit by hypatia.math.ethz.ch id
+	l4OHcDjd023660
+Subject: Re: [R] "[RODBC] ERROR: Could not SQLExecDirect"
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+Reply-To: chaogai@duineveld.demon.nl
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: multipart/mixed; boundary="===============1100835334=="
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+--===============1100835334==
+Content-Type: text/plain;
+  charset="utf-8"
+Content-Disposition: inline
+Content-Transfer-Encoding: 8bit
+
+Ruixin,
+
+I think there are a number of issues here:
+
+FIrst of all, ODBC is data base talk. In a data base there are ususally a 
+number of tables. Hence you should tell R which table you want to read.
+the function sqlTables can tell you which tables are available.
+
+Second, I seem to remember that the $ in some of these table names caused me 
+some trouble
+Perhaps 
+sqlFetch(cnct,'Sheet1') or sqlFetch(cnct,'Sheet1$') could do the trick and 
+avoid you the query
+
+Third, it seems that the driver is determining variable types and passing 
+these to R. It is not very good at that. You might have unexpected results.
+
+The bright side is, SQL/ODBC is powerfull. After using named regions in my 
+Excel sheetI had the following query running  :)
+
+oCE <- odbcConnectExcel('blockdata.2.xls')
+
+#sqlTables(oCE)
+# keep for reference
+q1 <- sqlQuery(oCE,'select * from linksblok , ((select * from blok1 union 
+select * from blok2 union select * from blok3 union select * from blok4 union 
+select * from blok5 union select * from blok6) as dit),  rechtsblok,  seco 
+where linksblok.mainid=dit.mainid and linksblok.mainid=rechtsblok.mainid and 
+dit.oldmonscode=seco.oldmonscode ')
+
+
+
+On Thursday 24 May 2007 04:43, Ruixin ZHU wrote:
+> Hi, everyone,
+>
+> I try to run as follows:
+> Z>library("RODBC")
+> Z>cnct<-odbcConnectExcel("Forbes2000.xls")
+> Z>cnct
+> RODB Connection 1
+> Details:
+>   case=nochange
+>   DBQ=C:\Program Files\R\R-2.5.0\Forbes2000.xls
+>   DefaultDir=C:\Program Files\R\R-2.5.0
+>   Driver={Microsoft Excel Driver (*.xls)}
+>   DriverId=790
+>   MaxBufferSize=2048
+>   PageTimeout=5
+> Z>sqlQuery(cnct, "select * from \"Forbes2000\\$\"")
+>
+> However, I got error like this:
+> [1] "[RODBC] ERROR: Could not SQLExecDirect"
+>
+> [2] "42S02 -1305 [Microsoft][ODBC Excel Driver] Microsoft Jet
+> 数据库引擎
+> 找不到对象'Forbes2000\\$'。请确定对象是否存在，并正
+>确地写出它的名称和路 径。"
+>
+> I do can find Forbes2000.xls in directory, C:\Program Files\R\R-2.5.0.
+> Would anybody help me out?
+>
+> Thanks for any suggestions!
+> _____________________________________________
+> Dr.Ruixin ZHU
+> Shanghai Center for Bioinformation Technology
+> rxzhu@scbit.org
+> zhurx@mail.sioc.ac.cn
+> 86-21-13040647832
+>
+>
+> 	[[alternative HTML version deleted]]
+
+
+--===============1100835334==
+Content-Type: text/plain; charset="us-ascii"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+
+--===============1100835334==--
+

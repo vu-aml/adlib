@@ -1,0 +1,121 @@
+From r-help-bounces@stat.math.ethz.ch  Fri Apr 20 05:45:38 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3K9ja0I004322
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 20 Apr 2007 05:45:37 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3K9i1M8002393;
+	Fri, 20 Apr 2007 11:44:10 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: **
+X-Spam-Status: No, score=2.1 required=5.0 tests=AWL, BAYES_50, FUZZY_XPILL,
+	SPF_HELO_PASS autolearn=no version=3.1.8
+Received: from talk.nabble.com (www.nabble.com [72.21.53.35])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3K9hngV002373
+	(version=TLSv1/SSLv3 cipher=AES256-SHA bits=256 verify=NO)
+	for <r-help@stat.math.ethz.ch>; Fri, 20 Apr 2007 11:43:51 +0200
+Received: from [72.21.53.38] (helo=jubjub.nabble.com)
+	by talk.nabble.com with esmtp (Exim 4.50) id 1Hepef-0005Tu-Dx
+	for r-help@stat.math.ethz.ch; Fri, 20 Apr 2007 02:43:49 -0700
+Message-ID: <10094068.post@talk.nabble.com>
+Date: Fri, 20 Apr 2007 02:43:49 -0700 (PDT)
+From: francogrex <francogrex@mail.com>
+To: r-help@stat.math.ethz.ch
+In-Reply-To: <10079648.post@talk.nabble.com>
+MIME-Version: 1.0
+X-Nabble-From: francogrex@mail.com
+References: <10066991.post@talk.nabble.com> <10079648.post@talk.nabble.com>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Subject: Re: [R] Conditional power, predictive power
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+Status: O
+Content-Length: 2199
+Lines: 72
+
+
+Or more elegantly the function below where a and b are the parameters of the
+beta prior, xa and xb are the current number of events in group A and B
+respectively; na and nb are the current total number of subjects in group A
+and B respectively; Na and Nb are the final total number of subject in group
+A and B respectively; and alpha is the alpha level (from 0 to 1).
+Don't forget to empty your folder: "DATA/predictivepower" (that you create
+in advance of course) after each computation.
+
+-----------------------------------------------------------------------------
+##Predictive Probability Interim Analysis, John Cook, 2006
+predictive.power=function (a,b,xa,xb,na,nb,Na,Nb,alpha){
+setwd("C:/R-2.4.1/DATA/predictivepower")
+prepower=function(a,b,s0,f0,s1,f1){
+factorial(s1+f1)/ (factorial(s1)*factorial(f1))*
+beta(s0+s1+a,f0+f1+b)/beta(s0+a,f0+b)}
+
+Nta=Na-na
+for(i in 0:Nta) {sink("pw.power1.txt",append=TRUE);
+v=prepower(a,b,xa,(na-xa),i,Nta-i)
+dput(v)
+sink()
+}
+Ntb=Nb-nb
+for(i in 0:Ntb) {sink("pw.power2.txt",append=TRUE);
+v=prepower(a,b,xb,(nb-xb),i,Ntb-i)
+dput(v)
+sink()
+}
+
+x=scan(file="pw.power1.txt")
+y=scan(file="pw.power2.txt")
+
+zth=function(xa,ya,Na,xb,yb,Nb){
+tha=(xa+ya)/Na
+thb=(xb+yb)/Nb
+th=(xa+xb+ya+yb)/(Na+Nb)
+z=(tha-thb)/sqrt(th*(1-th)*((1/Na)+(1/Nb)))
+z
+}
+
+for(i in 0:Nta){sink("pw.zval.txt",append=TRUE)
+zval=(zth(xa,i,Na,xb,0:Ntb,Nb))
+cat(zval,sep="\n")
+sink()
+}
+zz=scan(file="pw.zval.txt")
+
+for(i in 1:(Nta+1)){sink("pw.predict.txt",append=TRUE)
+pw=((x[i]*y[1:(Ntb+1)]))
+cat(pw,sep="\n")
+sink()
+}
+p=scan(file="pw.predict.txt")
+z=-qnorm(alpha)
+mdf <- cbind(zz, p) 
+d1=subset(mdf,apply(mdf>(z),1,any))
+d2=subset(mdf,apply(mdf<(-z),1,any))
+s1=sum(d1[,2])
+s2=sum(d2[,2])
+s3=1-(s1+s2)
+print(c("p A>B"=s1,"p B>A"=s2, "p A=B"=s3))
+}
+-- 
+View this message in context: http://www.nabble.com/Conditional-power%2C-predictive-power-tf3603396.html#a10094068
+Sent from the R help mailing list archive at Nabble.com.
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

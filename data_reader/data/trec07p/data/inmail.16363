@@ -1,0 +1,1421 @@
+From perl6-all-return-80767-ktwarwic=speedy.uwaterloo.ca@perl.org  Sun Apr 22 01:02:04 2007
+Return-Path: <perl6-all-return-80767-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3M51v0I002912
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 22 Apr 2007 01:01:58 -0400
+Received: (qmail 10093 invoked by uid 514); 22 Apr 2007 05:01:32 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 10088 invoked from network); 22 Apr 2007 05:01:32 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: domain of chromatic@wgz.org designates 63.105.17.39 as permitted sender)
+From: chromatic <chromatic@wgz.org>
+Organization: Snafu
+To: perl6-internals@perl.org
+Subject: Re: [perl #42408] Re: [PATCH] refactor vtable overriding, delegate.c generation
+Date: Sat, 21 Apr 2007 22:00:15 -0700
+User-Agent: KMail/1.9.5
+Cc: "Alek Storm" <alek.storm@gmail.com>, bugs-bitbucket@netlabs.develooper.com
+References: <RT-Ticket-42408@perl.org> <rt-3.6.HEAD-30557-1176172677-694.42408-72-0@perl.org> <189adbd0704211820t49a11ee0u7f62d123d5d65aea@mail.gmail.com>
+In-Reply-To: <189adbd0704211820t49a11ee0u7f62d123d5d65aea@mail.gmail.com>
+MIME-Version: 1.0
+Content-Type: Multipart/Mixed;
+  boundary="Boundary-00=_fvuKGAtT3A+GP6g"
+Message-Id: <200704212200.15380.chromatic@wgz.org>
+X-Virus-Scanned: by amavisd-new at wgz.org
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO,SPF_PASS
+Status: O
+Content-Length: 47843
+Lines: 1371
+
+--Boundary-00=_fvuKGAtT3A+GP6g
+Content-Type: text/plain;
+  charset="iso-8859-1"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+
+On Saturday 21 April 2007 18:20, Alek Storm wrote:
+
+> This patch has been sitting for over a week. Is there a problem? I
+> can't continue work in this area until this is committed.
+
+It came in just before the release and it touched a lot of files, so I 
+(speaking only for myself) let it sit for a couple of days.  Unfortunately, 
+it also came in after Steve Peters's "No C++ Keywords" patch, so it didn't 
+apply cleanly.
+
+I massaged it a little bit to get it to apply.  Then I cleaned up a few 
+stylistic nits.
+
++    const char *meth_c, *name_c = string_to_cstring(interp, name);
++    for (i = 0; (meth_c = Parrot_vtable_slot_names[i]); ++i) {
++        if (!*meth_c)
+             continue;
+         /* XXX slot_names still have __ in front */
+-        if (strcmp(name, meth + 2) == 0)
++        if (strcmp(name_c, meth_c + 2) == 0)
+             return i;
+     }
+     return -1;
+ }
+
+The char * returned from string_to_cstring() needs explicit 
+string_cstring_free().  This is annoying, but I'm not sure anyone has a good 
+fix for it at the moment.  I have been performing the free even after 
+real_exception calls, though I bet we could mark the lowest bit of the 
+pointer in the string so that real_exception could free the strings directly 
+and not leak memory.
+
++        STRING *ns_key = parrot_hash_get_idx(interp, PMC_struct_val(ns), 
+key);
++        PMC *res = VTABLE_get_pmc_keyed_str(interp, ns, ns_key);
+
+PDD 07 says:
+
+	Use vertical alignment for clarity of parallelism.
+
+... so when I make a change to a function, I try to align assignments and 
+declarations as far as possible.  It does improve clarity and scannability.
+
+Here's patch as I have it now.  I do notice one failure that I can't explain, 
+in t/pmc/smop_attribute.t:
+
+1..9
+ok 1 - The object isa SMOP_Attribute
+ok 2 - test the SMOP_Attribute name method
+ok 3 - test the SMOP_Attribute name method
+ok 4 - test the SMOP_Attribute name method
+Segmentation fault (core dumped)
+
+Program received signal SIGSEGV, Segmentation fault.
+[Switching to Thread -1212630848 (LWP 3539)]
+0xb7dd5d05 in pobject_lives (interp=0x804e008, obj=0x11) at src/gc/dod.c:141
+141         if (PObj_is_live_or_free_TESTALL(obj)) {
+(gdb) bt
+#0  0xb7dd5d05 in pobject_lives (interp=0x804e008, obj=0x11)
+    at src/gc/dod.c:141
+#1  0xb7dd6293 in Parrot_dod_trace_children (interp=0x804e008, 
+    how_many=4294967010) at src/gc/dod.c:391
+#2  0xb7dd607d in trace_active_PMCs (interp=0x804e008, trace_stack=1)
+    at src/gc/dod.c:320
+#3  0xb7dd6c93 in Parrot_dod_ms_run (interp=0x804e008, flags=1)
+    at src/gc/dod.c:956
+#4  0xb7dd6d87 in Parrot_do_dod_run (interp=0x804e008, flags=1)
+    at src/gc/dod.c:995
+#5  0xb7dd5382 in more_traceable_objects (interp=0x804e008, pool=0x806eb00)
+    at src/gc/smallobject.c:107
+#6  0xb7dd5411 in gc_ms_get_free_object (interp=0x804e008, pool=0x806eb00)
+    at src/gc/smallobject.c:152
+#7  0xb7dd3558 in get_free_buffer (interp=0x804e008, pool=0x806eb00)
+    at src/headers.c:51
+#8  0xb7dd3b1a in new_string_header (interp=0x804e008, flags=0)
+    at src/headers.c:351
+#9  0xb7d7afd2 in string_make_direct (interp=0x804e008, buffer=0xb7ee83fb, 
+    len=11, encoding=0x806ec20, charset=0x80711d0, flags=0) at 
+src/string.c:601
+#10 0xb7d7adc5 in string_from_cstring (interp=0x804e008, buffer=0xb7ee83fb, 
+    len=0) at src/string.c:482
+#11 0xb7d70f83 in find_vtable_meth_ns (interp=0x804e008, ns=0x820adb4,
+    vtable_index=139) at src/objects.c:70
+#12 0xb7d71122 in Parrot_find_vtable_meth (interp=0x804e008, pmc=0x820a684, 
+    meth=0x806f6f8) at src/objects.c:116
+#13 0xb7e6b366 in Parrot_ParrotObject_get_class (interp=0x804e008, 
+    pmc=0x820a684) at src/pmc/parrotobject.pmc:210
+
+That obj=0x11 looks really suspicious to me.
+
+(gdb) frame 12
+#12 0xb7d71122 in Parrot_find_vtable_meth (interp=0x804e008, pmc=0x820a684, 
+    meth=0x806f6f8) at src/objects.c:116
+116                 PMC *res = find_vtable_meth_ns(interp, ns, vtable_index);
+(gdb) p meth
+$5 = (STRING *) 0x806f6f8
+(gdb) p meth->strstart
+$6 = 0xb7eea156 "get_class"
+
+That's as far as I've been able to trace however.  The tests do pass if I 
+revert the patch.  Any ideas?
+
+-- c
+
+
+--Boundary-00=_fvuKGAtT3A+GP6g
+Content-Type: text/x-diff;
+  charset="iso-8859-1";
+  name="42408_modified.patch"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: attachment;
+	filename="42408_modified.patch"
+
+=== compilers/imcc/pbc.c
+==================================================================
+--- compilers/imcc/pbc.c	(revision 3268)
++++ compilers/imcc/pbc.c	(local)
+@@ -637,20 +637,20 @@
+ add_const_pmc_sub(Interp *interp, SymReg *r,
+         int offs, int end)
+ {
+-    int i, k;
+-    INTVAL type;
+-    PMC *ns_pmc;
+-    PMC *sub_pmc;
+-    struct Parrot_sub *sub;
+-    PackFile_Constant *pfc;
+-    SymReg *ns;
+-    int ns_const = -1;
+-    char *real_name;
++    int                  i, k;
++    int                  ns_const = -1;
++    INTVAL               type;
++    INTVAL               vtable_index;
++    char                *real_name;
++    char                *c_name;
++    IMC_Unit            *unit;
++    PMC                 *ns_pmc;
++    PMC                 *sub_pmc;
++    struct Parrot_sub   *sub;
++    PackFile_Constant   *pfc;
+     PackFile_ConstTable *ct;
+-    IMC_Unit *unit;
+-    STRING *vtable_name;
+-    char *c_name;
+-    int vtable_index;
++    SymReg              *ns;
++    STRING              *vtable_name;
+ 
+     unit = globals.cs->subs->unit;
+ 
+@@ -737,8 +737,8 @@
+             vtable_name = sub->name;
+ 
+         /* Check this is a valid vtable method to override. */
++        vtable_index = Parrot_get_vtable_index(interp, vtable_name);
+         c_name       = string_to_cstring(interp, vtable_name);
+-        vtable_index = Parrot_get_vtable_index(interp, c_name);
+ 
+         if (vtable_index == -1) {
+             IMCC_fatal(interp, 1,
+@@ -751,17 +751,18 @@
+         sub->vtable_index = vtable_index;
+     }
+ 
+-    pfc->type = PFC_PMC;
+-    pfc->u.key = sub_pmc;
++    pfc->type     = PFC_PMC;
++    pfc->u.key    = sub_pmc;
+     unit->sub_pmc = sub_pmc;
++
+     IMCC_debug(interp, DEBUG_PBC_CONST,
+             "add_const_pmc_sub '%s' flags %d color %d (%s) "
+             "lex_info %s :outer(%s)\n",
+             r->name, r->pcc_sub->pragma, k,
+-            (char*) sub_pmc->vtable->whoami->strstart,
++            (char *) sub_pmc->vtable->whoami->strstart,
+             sub->lex_info ? "yes" : "no",
+             sub->outer_sub ?
+-                (char*)PMC_sub(sub->outer_sub)->name->strstart :
++                (char *)PMC_sub(sub->outer_sub)->name->strstart :
+                 "*none*"
+             );
+     /*
+=== include/parrot/objects.h
+==================================================================
+--- include/parrot/objects.h	(revision 3268)
++++ include/parrot/objects.h	(local)
+@@ -57,7 +57,7 @@
+ PARROT_API void Parrot_set_class_fallback(Parrot_Interp, STRING *, INTVAL, STRING *);
+ PARROT_API void Parrot_invalidate_method_cache(Interp*, STRING *_class, STRING *meth);
+ PARROT_API STRING *readable_name(Parrot_Interp, PMC *);
+-PARROT_API int Parrot_get_vtable_index(Interp *, const char *name);
++PARROT_API INTVAL Parrot_get_vtable_index(Interp *, STRING *name);
+ PARROT_API PMC *Parrot_find_vtable_meth(Interp* interp, PMC *pmc, STRING *meth);
+ 
+ /* Objects, classes and PMCarrays all use the same data scheme:
+=== lib/Parrot/Pmc2c/delegate.pm
+==================================================================
+--- lib/Parrot/Pmc2c/delegate.pm	(revision 3268)
++++ lib/Parrot/Pmc2c/delegate.pm	(local)
+@@ -52,19 +52,6 @@
+     return join '', @types;
+ }
+ 
+-=item C<gen_ret($type)>
+-
+-Generate the C code for a C<return> statement.
+-
+-=cut
+-
+-sub gen_ret {
+-    my ( $self, $type ) = @_;
+-
+-    #return "ret_val = *($1*) " if ($type =~ /((?:INT|FLOAT)VAL)/);
+-    return "ret_val = ($type) ";
+-}
+-
+ =item C<body($method, $line, $out_name)>
+ 
+ Returns the C code for the method body. C<$line> is used to accumulate
+@@ -95,42 +82,29 @@
+     $arg = ", " . join( ' ', @args ) if @args;
+     my $sig = $self->signature($parameters);
+     $sig = $self->trans( $method->{type} ) . $sig;
+-    my $ret      = '';
+-    my $ret_def  = '';
+-    my $func_ret = '(void) ';
++    my $func_ret = '';
+     my $ret_type = '';
+ 
+     if ( $method->{type} ne 'void' ) {
+         my $type = $method->{type};
+-        $ret_def  = "$type ret_val;";
+-        $func_ret = $self->gen_ret( $method->{type} );
+-        $ret      = "return ret_val;";
++        $func_ret = "return ($type)";
+         if ( $type !~ /\*/ ) {
+             $ret_type = "_ret" . lc substr $type, 0, 1;
+             $ret_type = "_reti" if $ret_type eq '_retu';
+         }
+     }
+-    my $umeth         = uc $meth;
+-    my $delegate_meth = "PARROT_VTABLE_${umeth}_METHNAME";
+ 
+     # I think that these will be out by one - NWC
+     my $l = $self->line_directive( $line, "delegate.c" );
+     my $cout = <<EOC;
+ $l
+-${decl} {
+-EOC
+-    $cout .= "    $ret_def\n" if $ret_def;
+-    $cout .= <<EOC;
+-    STRING *meth = CONST_STRING(interp, "__$meth");
+-    STRING *meth_v = CONST_STRING(interp, "$meth");
+-    PMC *sub = Parrot_find_vtable_meth(interp, pmc, meth_v);
++${decl}{
++    STRING *meth = CONST_STRING(interp, "$meth");
++    PMC *sub = Parrot_find_vtable_meth(interp, pmc, meth);
+     if (PMC_IS_NULL(sub))
+-        sub = find_or_die(interp, pmc, meth);
++        vtable_meth_not_found(interp, pmc, "$meth");
+     ${func_ret}Parrot_run_meth_fromc_args$ret_type(interp, sub,
+         pmc, meth, "$sig"$arg);
+-EOC
+-    $cout .= "    $ret\n" if $ret;
+-    $cout .= <<EOC;
+ }
+ 
+ EOC
+=== src/objects.c
+==================================================================
+--- src/objects.c	(revision 3268)
++++ src/objects.c	(local)
+@@ -29,7 +29,7 @@
+ 
+ /*
+ 
+-=item C<int Parrot_get_vtable_index(Interp *, const char *name)>
++=item C<INTVAL Parrot_get_vtable_index(Interp *, STRING *name)>
+ 
+ Return index if C<name> is a valid vtable slot name.
+ 
+@@ -37,68 +37,90 @@
+ 
+ */
+ 
+-int
+-Parrot_get_vtable_index(Interp *interp, const char *name)
++INTVAL
++Parrot_get_vtable_index(Interp *interp, STRING *name)
+ {
+-    int i;
+-    const char *meth;
+-    for (i = 0; (meth = Parrot_vtable_slot_names[i]) != NULL; ++i) {
+-        if (!*meth)
++    const char  *meth_c;
++    char        *name_c = string_to_cstring(interp, name);
++    INTVAL       i;
++
++    for (i = 0; (meth_c = Parrot_vtable_slot_names[i]); ++i) {
++        if (!*meth_c)
+             continue;
++
+         /* XXX slot_names still have __ in front */
+-        if (strcmp(name, meth + 2) == 0)
++        if (strcmp(name_c, meth_c + 2) == 0) {
++            string_cstring_free(name_c);
+             return i;
++        }
+     }
++
++    string_cstring_free(name_c);
+     return -1;
+ }
+ 
++static PMC*
++find_vtable_meth_ns(Interp *interp, PMC *ns, INTVAL vtable_index)
++{
++    INTVAL k   = VTABLE_elements(interp, ns);
++    PMC   *key = VTABLE_nextkey_keyed(interp, key_new(interp), ns,
++        ITERATE_FROM_START);
++
++    const char *meth     = Parrot_vtable_slot_names[vtable_index];
++    STRING     *meth_str = string_from_cstring(interp, meth, strlen(meth));
++
++    int j;
++
++    for (j = 0; j < k; ++j) {
++        STRING *ns_key = parrot_hash_get_idx(interp, PMC_struct_val(ns), key);
++        PMC    *res    = VTABLE_get_pmc_keyed_str(interp, ns, ns_key);
++
++        /* success if matching vtable index or double-underscored name */
++        if (res->vtable->base_type == enum_class_Sub &&
++               (PMC_sub(res)->vtable_index == vtable_index ||
++                string_compare(interp, meth_str, ns_key) == 0))
++            return res;
++    }
++
++    return PMCNULL;
++}
++
+ PMC*
+-Parrot_find_vtable_meth(Interp* interp, PMC *pmc, STRING *meth) {
++Parrot_find_vtable_meth(Interp* interp, PMC *pmc, STRING *meth)
++{
+     PMC  *_class = pmc;
+-    PMC  *ns     = NULL;
+-    PMC  *mro;
+-    PMC  *key;
+-    char *slot_name;
+-    int vtable_index;
+     INTVAL i, n, j, k;
++    PMC  *ns, *mro, *key, *self_class;
+ 
+     /* Get index in Parrot_vtable_slot_names[]. */
+-    slot_name        = string_to_cstring(interp, meth);
+-    vtable_index     = Parrot_get_vtable_index(interp, slot_name);
+-    string_cstring_free(slot_name);
++    INTVAL vtable_index = Parrot_get_vtable_index(interp, meth);
++
+     if (vtable_index == -1)
+-      return NULL;
++        return NULL;
+ 
+     /* Get class. */
+     if (PObj_is_object_TEST(pmc)) {
+-        _class = GET_CLASS((Buffer *)PMC_data(pmc), pmc);
++        _class = self_class = GET_CLASS((Buffer *)PMC_data(pmc), pmc);
+     }
+ 
+     /* Get MRO and iterate over it to find method with a matching
+-       vtable index. */
++       vtable index or double-underscored name. */
+     mro = _class->vtable->mro;
+-    n = VTABLE_elements(interp, mro);
++    n   = VTABLE_elements(interp, mro);
++
+     for (i = 0; i < n; ++i) {
+         _class = VTABLE_get_pmc_keyed_int(interp, mro, i);
+-        ns = VTABLE_pmc_namespace(interp, _class);
++        ns     = VTABLE_pmc_namespace(interp, _class);
++
+         if (!PMC_IS_NULL(ns)) {
+-            k = VTABLE_elements(interp, ns);
+-            key = VTABLE_nextkey_keyed(interp, key_new(interp), ns,
+-                ITERATE_FROM_START);
+-            for (j = 0; j < k; ++j) {
+-                STRING *ns_key =
+-                    (STRING *)parrot_hash_get_idx(interp,
+-                        (Hash *)PMC_struct_val(ns), key);
+-                PMC *res = VTABLE_get_pmc_keyed_str(interp, ns, ns_key);
+-                if (res->vtable->base_type == enum_class_Sub &&
+-                        PMC_sub(res)->vtable_index == vtable_index)
+-                    return res;
+-            }
++            PMC *res = find_vtable_meth_ns(interp, ns, vtable_index);
++            if (!PMC_IS_NULL(res))
++                return res;
+         }
+     }
+ 
+-    /* If we get here, not found in the current class. */
+-    return NULL;
++    /* If we get here, method is not overridden in the class. */
++    return PMCNULL;
+ }
+ 
+ STRING*
+@@ -252,34 +274,6 @@
+ 
+ /*
+ 
+-=item C<static PMC *find_vtable_override_byname(Interp *interp,
+-                                                PMC *_class,
+-                                                STRING *method_name)>
+-
+-Tries to locate a PIR override method for the given v-table method in the
+-given class. If one is found, returns the method.
+-
+-=cut
+-
+-*/
+-
+-static PMC*
+-find_vtable_override_byname(Interp *interp, PMC *_class,
+-                            PMC *class_name, STRING *method_name)
+-{
+-    /* First try it in the :vtable namespace. */
+-    STRING *no_underscores = string_substr(interp, method_name,
+-        2, method_name->strlen - 2, NULL, 0);
+-    PMC *res = Parrot_find_vtable_meth(interp, _class, no_underscores);
+-    if (!PMC_IS_NULL(res))
+-        return res;
+-
+-    /* Otherwise, do lookup in the old way. */
+-    return Parrot_find_global_k(interp, class_name, method_name);
+-}
+-
+-/*
+-
+ =item C<static void create_deleg_pmc_vtable(Interp *, PMC *_class,
+                                             PMC *class_name, int full)>
+ 
+@@ -318,10 +312,13 @@
+     for (i = 0; (meth = Parrot_vtable_slot_names[i]) != NULL; ++i) {
+         if (!*meth)
+             continue;
+-        meth_str.strstart = const_cast(meth);
+-        meth_str.strlen = meth_str.bufused = strlen(meth);
+-        meth_str.hashval = 0;
+-        if (find_vtable_override_byname(interp, _class, class_name, &meth_str)) {
++
++        /* strip underscores from method name */
++        meth_str.strstart = const_cast(meth + 2);
++        meth_str.strlen   = meth_str.bufused = strlen(meth) - 2;
++        meth_str.hashval  = 0;
++
++        if (!PMC_IS_NULL(Parrot_find_vtable_meth(interp, _class, &meth_str))) {
+             /*
+              * the method exists; keep the ParrotObject aka delegate vtable slot
+              */
+@@ -775,8 +772,9 @@
+ do_initcall(Interp *interp, PMC* _class, PMC *object, PMC *init)
+ {
+     PMC * const classsearch_array = _class->vtable->mro;
+-    PMC *parent_class;
+-    INTVAL i, nparents;
++    PMC        *parent_class;
++    INTVAL      i, nparents;
++
+     /*
+      * 1) if class has a CONSTRUCT property run it on the object
+      *    no redispatch
+@@ -784,11 +782,11 @@
+      * XXX isn't CONSTRUCT for creating new objects?
+      */
+     STRING *meth_str;
+-    PMC *meth = get_init_meth(interp, _class,
++    PMC    *meth = get_init_meth(interp, _class,
+             CONST_STRING(interp, "CONSTRUCT"), &meth_str);
+-    int default_meth;
++    int     default_meth;
+ 
+-    if (meth) {
++    if (!PMC_IS_NULL(meth)) {
+         if (init)
+             Parrot_run_meth_fromc_args(interp, meth,
+                     object, meth_str, "vP", init);
+@@ -834,31 +832,27 @@
+                 CONST_STRING(interp, "BUILD"), &meth_str);
+         /* no method found and no BUILD property set? */
+         if (!meth && meth_str == NULL) {
+-            PMC *ns;
+-            STRING *meth_str_v;
++            PMC   *ns;
++            INTVAL vtable_index;
++
+             /* use __init or __init_pmc (depending on if an argument was passed)
+              * as fallback constructor method, if it exists */
+-            if (init) {
+-                meth_str   = CONST_STRING(interp, "__init_pmc");
+-                meth_str_v = CONST_STRING(interp, "init_pmc");
+-            }
+-            else {
+-                meth_str   = CONST_STRING(interp, "__init");
+-                meth_str_v = CONST_STRING(interp, "init");
+-            }
+-            ns = VTABLE_pmc_namespace(interp, parent_class);
++            if (init)
++                meth_str = CONST_STRING(interp, "init_pmc");
++            else
++                meth_str = CONST_STRING(interp, "init");
++
++            ns   = VTABLE_pmc_namespace(interp, parent_class);
++
+             /* can't use find_method, it walks mro */
+-            meth = Parrot_find_vtable_meth(interp, _class,
+-                meth_str_v);
+-            if (PMC_IS_NULL(meth))
+-                meth = VTABLE_get_pmc_keyed_str(interp, ns, meth_str);
+-            if (meth == PMCNULL)
+-                meth = NULL;
++            vtable_index = Parrot_get_vtable_index(interp, meth_str);
++            meth         = find_vtable_meth_ns(interp, ns, vtable_index);
+             default_meth = 1;
+         }
+         else
+             default_meth = 0;
+-        if (meth) {
++
++        if (!PMC_IS_NULL(meth)) {
+             if (init)
+                 Parrot_run_meth_fromc_args(interp, meth,
+                         object, meth_str, "vP", init);
+=== src/pmc/delegate.pmc
+==================================================================
+--- src/pmc/delegate.pmc	(revision 3268)
++++ src/pmc/delegate.pmc	(local)
+@@ -1,5 +1,5 @@
+ /*
+-Copyright (C) 2003, The Perl Foundation.
++Copyright (C) 2003-2007, The Perl Foundation.
+ $Id$
+ 
+ =head1 NAME
+@@ -20,109 +20,36 @@
+ 
+ */
+ 
+-
+ #include "parrot/parrot.h"
+ #include "delegate.str"
+ #include <assert.h>
+ 
+-
+ /*
+ 
+-=item C<static PMC *
+-find_meth(Interp *interp, PMC *pmc, STRING *name)>
+-
+-Finds and returns the delegated method with string C<name>.
+-
+-=cut
+-
+-*/
+-
+-
+-static PMC *
+-find_meth(Interp *interp, PMC *pmc, STRING *meth) {
+-    PMC *_class = pmc;
+-
+-    if (PObj_is_object_TEST(pmc)) {
+-        _class = GET_CLASS(PMC_data(pmc), pmc);
+-    }
+-    return Parrot_find_method_with_cache(interp, _class, meth);
+-}
+-
+-/*
+-
+-=item C<static PMC *
+-find_or_die(Interp *interp, PMC *pmc, STRING *name)>
+-
+-Returns the result of calling C<find_meth()> with the arguments, raising
+-an exception if no method is found.
+-
+-=cut
+-
+-*/
+-
+-static PMC *
+-find_or_die(Interp *interp, PMC *pmc, STRING *meth) {
+-    PMC *returnPMC = find_meth(interp, pmc, meth);
+-    if (PMC_IS_NULL(returnPMC)) {
+-        PMC  *_class    = pmc;
+-        char *meth_name = string_to_cstring(interp, meth);
+-        if (PObj_is_object_TEST(pmc)) {
+-            char *obj_name  = string_to_cstring(interp, PMC_str_val(
+-                        get_attrib_num((SLOTTYPE *)PMC_data(_class),
+-                            PCD_CLASS_NAME)));
+-            _class = GET_CLASS(PMC_data(pmc), pmc);
+-            real_exception(interp, NULL, E_LookupError,
+-                "Can't find method '%s' for object '%s'", meth_name, obj_name);
+-            string_cstring_free(obj_name);
+-        }
+-        else {
+-            real_exception(interp, NULL, E_LookupError,
+-                "Can't find method '%s' - erroneous PMC",
+-                string_to_cstring(interp, meth));
+-        }
+-        string_cstring_free(meth_name);
+-    }
+-    return returnPMC;
+-}
+-
+-/*
+-
+-=back
+-
+-All these functions to run code can leak a full parrot register file, as
++All these functions to run code can leak a full Parrot register file, as
+ well as potentially permanently unroot some PMCs or strings, if the
+ vtable method throws an exception. It really ought be caught rather than
+ let flow through.
+ 
+-=over 4
+-
+-=item C<PARROT_INLINE static void
+-noarg_noreturn(Interp *interp, PMC *obj, const char *meth, int die)>
+-
+-Calls the delegated method with no arguments or return value. If C<die>
+-is true then an exception will be raised if the method is not found.
+-
+-=cut
+-
+ */
+ 
+ static void
+-noarg_noreturn(Interp *interp, PMC *obj, PMC* _class,
+-        const char *name, int die)
++vtable_meth_not_found(Interp *interp, PMC *pmc, const char *meth)
+ {
+-    STRING *meth = const_string(interp, name);
+-    STRING *meth_v = const_string(interp, name + 2);
+-    PMC *method = Parrot_find_vtable_meth(interp, _class, meth);
+-    if (PMC_IS_NULL(method))
+-        method = die ? find_or_die(interp, _class, meth) :
+-            find_meth(interp, _class, meth);
+-    if (PMC_IS_NULL(method)) {
+-        if (Interp_trace_TEST(interp, PARROT_TRACE_FIND_METH_FLAG)) {
+-            PIO_eprintf(interp, "# not found\n");
+-        }
+-        return;
+-    }
+-    Parrot_run_meth_fromc(interp, method, obj, meth);
++    char *_class;
++
++    if (PObj_is_class_TEST(pmc))
++        _class = string_to_cstring(interp, PMC_str_val(
++            get_attrib_num(
++                (SLOTTYPE *)PMC_data(GET_CLASS(PMC_data(pmc), pmc)),
++                    PCD_CLASS_NAME)));
++    else
++        _class = string_to_cstring(interp, pmc->vtable->whoami);
++
++    real_exception(interp, NULL, E_LookupError,
++        "Can't find vtable method '%s' in class '%s'", meth, _class);
++
++    string_cstring_free(_class);
+ }
+ 
+ pmclass delegate {
+@@ -135,10 +62,6 @@
+ 
+ =over 4
+ 
+-=item C<void init()>
+-
+-Calls the delegated C<__init()> method if it exists.
+-
+ =item C<PMC* instantiate(PMC* sig)>
+ 
+ Calls the delegated C<__instantiate> method if it exists.
+@@ -152,13 +75,27 @@
+ */
+ 
+     void init() {
+-        noarg_noreturn(INTERP, SELF, SELF, PARROT_VTABLE_INIT_METHNAME, 0);
++        STRING *meth = CONST_STRING(interp, "init");
++        PMC *sub = Parrot_find_vtable_meth(INTERP, SELF, meth);
++        if (!PMC_IS_NULL(sub))
++            Parrot_run_meth_fromc(interp, sub, SELF, meth);
+     }
+ 
+-    void init_pmc(PMC* _class) {
+-        noarg_noreturn(INTERP, SELF, _class, PARROT_VTABLE_INIT_METHNAME, 0);
++    void init_pmc(PMC* initializer) {
++        STRING *meth = CONST_STRING(interp, "init_pmc");
++        PMC *sub = Parrot_find_vtable_meth(INTERP, SELF, meth);
++        if (!PMC_IS_NULL(sub))
++            Parrot_run_meth_fromc_args(interp, sub, pmc, meth, "vP", initializer);
+     }
+ 
++    PMC* instantiate(PMC* sig) {
++        STRING *meth = CONST_STRING(interp, "instantiate");
++        PMC *sub = Parrot_find_vtable_meth(INTERP, SELF, meth);
++        if (PMC_IS_NULL(sub))
++            return SUPER(sig);
++        return (PMC*) Parrot_run_meth_fromc(INTERP, sub, SELF, meth);
++    }
++
+     void destroy() {
+         /* don't delegate destroy */
+     }
+@@ -167,20 +104,6 @@
+         /* don't delegate mark */
+     }
+ 
+-    PMC* instantiate(PMC* sig) {
+-        STRING *meth = const_string(INTERP,
+-                PARROT_VTABLE_INSTANTIATE_METHNAME);
+-        PMC *sub = Parrot_find_vtable_meth(INTERP, SELF, meth);
+-        if (PMC_IS_NULL(sub))
+-            sub = find_meth(INTERP, SELF, meth);
+-
+-        if (PMC_IS_NULL(sub)) {
+-            /* run default fallback that constructs an empty object */
+-            return SUPER(sig);
+-        }
+-        return (PMC*) Parrot_run_meth_fromc(INTERP, sub, SELF, meth);
+-    }
+-
+     void add_method(STRING *method_name, PMC *sub_pmc) {
+         SUPER(method_name, sub_pmc);
+     }
+@@ -208,11 +131,10 @@
+ */
+ 
+     opcode_t* invoke(void *next) {
+-        STRING *meth = CONST_STRING(interp, "__invoke");
+-        STRING *meth_v = CONST_STRING(interp, "invoke");
+-        PMC *sub = Parrot_find_vtable_meth(interp, pmc, meth_v);
++        STRING *meth = CONST_STRING(interp, "invoke");
++        PMC *sub = Parrot_find_vtable_meth(INTERP, SELF, meth);
+         if (PMC_IS_NULL(sub))
+-            sub = find_or_die(interp, pmc, meth);
++            vtable_meth_not_found(INTERP, SELF, "invoke");
+         INTERP->current_object = SELF;
+         return VTABLE_invoke(interp, sub, next);
+     }
+=== src/pmc/parrotobject.pmc
+==================================================================
+--- src/pmc/parrotobject.pmc	(revision 3268)
++++ src/pmc/parrotobject.pmc	(local)
+@@ -26,17 +26,6 @@
+ #include "parrot/parrot.h"
+ #include "pmc_deleg_pmc.h"
+ 
+-/* XXX duplicated from delegate.pmc */
+-static PMC *
+-find_meth(Interp* interp, PMC *pmc, STRING *meth) {
+-    PMC *_class = pmc;
+-
+-    if (PObj_is_object_TEST(pmc)) {
+-        _class = GET_CLASS((Buffer *)PMC_data(pmc), pmc);
+-    }
+-    return Parrot_find_method_with_cache(interp, _class, meth);
+-}
+-
+ pmclass ParrotObject extends ParrotClass need_ext {
+ 
+ /*
+@@ -162,96 +151,79 @@
+ 
+ */
+ 
+-    PMC* find_method(STRING* name) {
+-        PMC *_class = VTABLE_get_class(INTERP, SELF);
+-        STRING *meth = CONST_STRING(interp, "__find_method");
+-        STRING *meth_v = CONST_STRING(interp, "find_method");
+-        PMC *sub = Parrot_find_vtable_meth(interp, SELF, meth_v);
++    PMC* find_method(STRING *name) {
++        STRING *meth   = CONST_STRING(interp, "find_method");
++        PMC    *_class = VTABLE_get_class(INTERP, SELF);
++        PMC    *sub    = Parrot_find_vtable_meth(interp, SELF, meth);
++
+         if (PMC_IS_NULL(sub))
+-            sub = find_meth(interp, SELF, meth);
+-        if (PMC_IS_NULL(sub))
+             return VTABLE_find_method(INTERP, _class, name);
+-        return (PMC*) Parrot_run_meth_fromc_args(interp, sub,
++        return (PMC *) Parrot_run_meth_fromc_args(interp, sub,
+             SELF, meth, "PS", name);
+     }
+ 
+     PMC* get_attr(INTVAL idx) {
+-        STRING *meth = CONST_STRING(interp, "__get_attr");
+-        STRING *meth_v = CONST_STRING(interp, "get_attr");
+-        PMC *sub = Parrot_find_vtable_meth(interp, SELF, meth_v);
++        STRING *meth = CONST_STRING(interp, "get_attr");
++        PMC    *sub  = Parrot_find_vtable_meth(interp, SELF, meth);
++
+         if (PMC_IS_NULL(sub))
+-            sub = find_meth(interp, SELF, meth);
+-        if (PMC_IS_NULL(sub))
+             return Parrot_get_attrib_by_num(INTERP, SELF, idx);
+-        return (PMC*) Parrot_run_meth_fromc_args(interp, sub,
++        return (PMC *) Parrot_run_meth_fromc_args(interp, sub,
+             SELF, meth, "PI", idx);
+     }
+ 
+-    PMC* get_attr_str(STRING* idx) {
+-        STRING *meth = CONST_STRING(interp, "__get_attr_str");
+-        STRING *meth_v = CONST_STRING(interp, "get_attr_str");
+-        PMC *sub = Parrot_find_vtable_meth(interp, SELF, meth_v);
+-        PMC* r;
++    PMC* get_attr_str(STRING *idx) {
++        STRING *meth = CONST_STRING(interp, "get_attr_str");
++        PMC    *sub  = Parrot_find_vtable_meth(interp, SELF, meth);
++
+         if (PMC_IS_NULL(sub))
+-            sub = find_meth(interp, SELF, meth);
+-        if (PMC_IS_NULL(sub))
+-            r = Parrot_get_attrib_by_str(INTERP, SELF, idx);
+-        else r = (PMC*) Parrot_run_meth_fromc_args(interp, sub,
++            return Parrot_get_attrib_by_str(INTERP, SELF, idx);
++
++        return (PMC *) Parrot_run_meth_fromc_args(interp, sub,
+             SELF, meth, "PS", idx);
+-        return r;
+     }
+ 
+-    void set_attr(INTVAL idx, PMC* value) {
+-        STRING *meth = CONST_STRING(interp, "__set_attr");
+-        STRING *meth_v = CONST_STRING(interp, "set_attr");
+-        PMC *sub = Parrot_find_vtable_meth(interp, SELF, meth_v);
++    void set_attr(INTVAL idx, PMC *value) {
++        STRING *meth = CONST_STRING(interp, "set_attr");
++        PMC    *sub  = Parrot_find_vtable_meth(interp, SELF, meth);
++
+         if (PMC_IS_NULL(sub))
+-            sub = find_meth(interp, SELF, meth);
+-        if (PMC_IS_NULL(sub)) {
+             Parrot_set_attrib_by_num(INTERP, SELF, idx, value);
+-            return;
+-        }
+-        (PMC*) Parrot_run_meth_fromc_args(interp, sub,
+-            SELF, meth, "vIP", idx, value);
++        else
++            Parrot_run_meth_fromc_args(interp, sub, SELF, meth,
++                "vIP", idx, value);
+     }
+ 
+-    void set_attr_str(STRING* idx, PMC* value) {
+-        STRING *meth = CONST_STRING(interp, "__set_attr_str");
+-        STRING *meth_v = CONST_STRING(interp, "set_attr_str");
+-        PMC *sub = Parrot_find_vtable_meth(interp, SELF, meth_v);
++    void set_attr_str(STRING *idx, PMC *value) {
++        STRING *meth = CONST_STRING(interp, "set_attr_str");
++        PMC    *sub  = Parrot_find_vtable_meth(interp, SELF, meth);
++
+         if (PMC_IS_NULL(sub))
+-            sub = find_meth(interp, SELF, meth);
+-        if (PMC_IS_NULL(sub)) {
+             Parrot_set_attrib_by_str(INTERP, SELF, idx, value);
+-            return;
+-        }
+-        (PMC*) Parrot_run_meth_fromc_args(interp, sub,
+-            SELF, meth, "vSP", idx, value);
++        else
++            Parrot_run_meth_fromc_args(interp, sub, SELF, meth,
++                "vSP", idx, value);
+     }
+ 
+     PMC* get_class() {
+-        STRING *meth = CONST_STRING(interp, "__get_class");
+-        STRING *meth_v = CONST_STRING(interp, "get_class");
+-        PMC *sub = Parrot_find_vtable_meth(interp, SELF, meth_v);
+-        if (PMC_IS_NULL(sub))
+-            sub = find_meth(interp, SELF, meth);
++        STRING *meth = CONST_STRING(interp, "get_class");
++        PMC    *sub  = Parrot_find_vtable_meth(interp, SELF, meth);
++        int     type_num;
++
+         if (PMC_IS_NULL(sub)) {
+-            if (!PObj_is_PMC_shared_TEST(SELF)) {
++            if (!PObj_is_PMC_shared_TEST(SELF))
+                 return GET_CLASS(PMC_data(SELF), SELF);
+-            }
+             else {
+                 /* get the class object for this interpreter */
+                 /* XXX this is rather a hack, it is, however, necessary:
+                  * otherwise we will be accessing the wrong interpreter's
+                  * namespace
+                  */
+-                int type_num = SELF->vtable->base_type;
+-
++                type_num = SELF->vtable->base_type;
+                 return INTERP->vtables[type_num]->pmc_class;
+             }
+-         }
+-        return (PMC*) Parrot_run_meth_fromc_args(interp, sub,
+-            SELF, meth, "P");
++        }
++        return (PMC *) Parrot_run_meth_fromc_args(interp, sub, SELF, meth, "P");
+     }
+ 
+ /*
+@@ -290,267 +262,261 @@
+ */
+ 
+     INTVAL get_integer_keyed_int(INTVAL key) {
+-        STRING *meth = CONST_STRING(interp, "__get_integer_keyed_int");
+-        STRING *meth_v = CONST_STRING(interp, "get_integer_keyed_int");
+-        PMC *sub = Parrot_find_vtable_meth(interp, pmc, meth_v);
+-        if (PMC_IS_NULL(sub))
+-            sub = find_meth(interp, pmc, meth);
+-        if (sub) {
+-            return Parrot_run_meth_fromc_args_reti(interp, sub,
+-                                              pmc, meth, "II", key);
+-        }
+-        else {
++        STRING *meth = CONST_STRING(INTERP, "get_integer_keyed_int");
++        PMC    *sub  = Parrot_find_vtable_meth(INTERP, pmc, meth);
++
++        if (PMC_IS_NULL(sub)) {
+             PMC *mro = SELF->vtable->mro;
++
+             if (VTABLE_elements(INTERP, mro) == 1)
+                 return SUPER(key);
+             else {
+-                PMC *parent = VTABLE_get_pmc_keyed_int(INTERP,SELF->vtable->mro, 1);
++                PMC *parent = VTABLE_get_pmc_keyed_int(INTERP,
++                    SELF->vtable->mro, 1);
++
+                 if (PObj_is_class_TEST(parent))
+                     return SUPER(key);
+-                else
+-                    return deleg_pmc.SUPER(key);
++
++                return deleg_pmc.SUPER(key);
+             }
+         }
++        return Parrot_run_meth_fromc_args_reti(INTERP, sub,
++                                               pmc, meth, "II", key);
+     }
+ 
+     FLOATVAL get_number_keyed_int(INTVAL key) {
+-        STRING *meth = CONST_STRING(interp, "__get_number_keyed_int");
+-        STRING *meth_v = CONST_STRING(interp, "get_number_keyed_int");
+-        PMC *sub = Parrot_find_vtable_meth(interp, pmc, meth_v);
+-        if (PMC_IS_NULL(sub))
+-            sub = find_meth(interp, pmc, meth);
+-        if (sub) {
+-            return Parrot_run_meth_fromc_args_retf(interp, sub,
+-                                              pmc, meth, "NI", key);
+-        }
+-        else {
++        STRING *meth = CONST_STRING(INTERP, "get_number_keyed_int");
++        PMC    *sub  = Parrot_find_vtable_meth(INTERP, pmc, meth);
++
++        if (PMC_IS_NULL(sub)) {
+             PMC *mro = SELF->vtable->mro;
++
+             if (VTABLE_elements(INTERP, mro) == 1)
+                 return SUPER(key);
+             else {
+-                PMC *parent = VTABLE_get_pmc_keyed_int(INTERP,SELF->vtable->mro, 1);
++                PMC *parent = VTABLE_get_pmc_keyed_int(INTERP,
++                    SELF->vtable->mro, 1);
++
+                 if (PObj_is_class_TEST(parent))
+                     return SUPER(key);
+-                else
+-                    return deleg_pmc.SUPER(key);
++
++                return deleg_pmc.SUPER(key);
+             }
+         }
++        return Parrot_run_meth_fromc_args_retf(INTERP, sub,
++                                               pmc, meth, "NI", key);
+     }
+ 
+     STRING* get_string_keyed_int(INTVAL key) {
+-        STRING *meth = CONST_STRING(interp, "__get_string_keyed_int");
+-        STRING *meth_v = CONST_STRING(interp, "get_string_keyed_int");
+-        PMC *sub = Parrot_find_vtable_meth(interp, pmc, meth_v);
+-        if (PMC_IS_NULL(sub))
+-            sub = find_meth(interp, pmc, meth);
+-        if (sub) {
+-            return Parrot_run_meth_fromc_args(interp, sub,
+-                                              pmc, meth, "SI", key);
+-        }
+-        else {
++        STRING *meth = CONST_STRING(INTERP, "get_string_keyed_int");
++        PMC    *sub  = Parrot_find_vtable_meth(INTERP, pmc, meth);
++
++        if (PMC_IS_NULL(sub)) {
+             PMC *mro = SELF->vtable->mro;
++
+             if (VTABLE_elements(INTERP, mro) == 1)
+                 return SUPER(key);
+             else {
+-                PMC *parent = VTABLE_get_pmc_keyed_int(INTERP,SELF->vtable->mro, 1);
++                PMC *parent = VTABLE_get_pmc_keyed_int(INTERP,
++                    SELF->vtable->mro, 1);
++
+                 if (PObj_is_class_TEST(parent))
+                     return SUPER(key);
+-                else
+-                    return deleg_pmc.SUPER(key);
++
++                return deleg_pmc.SUPER(key);
+             }
+         }
++        return (STRING*)Parrot_run_meth_fromc_args(INTERP, sub,
++                                                   pmc, meth, "SI", key);
+     }
+ 
+     PMC* get_pmc_keyed_int(INTVAL key) {
+-        STRING *meth = CONST_STRING(interp, "__get_pmc_keyed_int");
+-        STRING *meth_v = CONST_STRING(interp, "get_pmc_keyed_int");
+-        PMC *sub = Parrot_find_vtable_meth(interp, pmc, meth_v);
+-        if (PMC_IS_NULL(sub))
+-            sub = find_meth(interp, pmc, meth);
+-        if (sub) {
+-            return Parrot_run_meth_fromc_args(interp, sub,
+-                                              pmc, meth, "PI", key);
+-        }
+-        else {
++        STRING *meth = CONST_STRING(INTERP, "get_pmc_keyed_int");
++        PMC    *sub  = Parrot_find_vtable_meth(INTERP, pmc, meth);
++
++        if (PMC_IS_NULL(sub)) {
+             PMC *mro = SELF->vtable->mro;
++
+             if (VTABLE_elements(INTERP, mro) == 1)
+                 return SUPER(key);
+             else {
+-                PMC *parent = VTABLE_get_pmc_keyed_int(INTERP,SELF->vtable->mro, 1);
++                PMC *parent = VTABLE_get_pmc_keyed_int(INTERP,
++                    SELF->vtable->mro, 1);
++
+                 if (PObj_is_class_TEST(parent))
+                     return SUPER(key);
+-                else
+-                    return deleg_pmc.SUPER(key);
++
++                return deleg_pmc.SUPER(key);
+             }
+         }
++        return (PMC*)Parrot_run_meth_fromc_args(INTERP, sub,
++                                                pmc, meth, "PI", key);
+     }
+ 
+     void set_integer_keyed_int(INTVAL key, INTVAL value) {
+-        STRING *meth = CONST_STRING(interp, "__set_integer_keyed_int");
+-        STRING *meth_v = CONST_STRING(interp, "set_integer_keyed_int");
+-        PMC *sub = Parrot_find_vtable_meth(interp, pmc, meth_v);
+-        if (PMC_IS_NULL(sub))
+-            sub = find_meth(interp, pmc, meth);
+-        if (sub) {
+-            (void) Parrot_run_meth_fromc_args(interp, sub,
+-                    pmc, meth, "vII", key, value);
+-        }
+-        else {
++        STRING *meth = CONST_STRING(INTERP, "set_integer_keyed_int");
++        PMC    *sub  = Parrot_find_vtable_meth(INTERP, pmc, meth);
++
++        if (PMC_IS_NULL(sub)) {
+             PMC *mro = SELF->vtable->mro;
++
+             if (VTABLE_elements(INTERP, mro) == 1)
+                 SUPER(key, value);
+             else {
+-                PMC *parent = VTABLE_get_pmc_keyed_int(INTERP,SELF->vtable->mro, 1);
++                PMC *parent = VTABLE_get_pmc_keyed_int(INTERP,
++                    SELF->vtable->mro, 1);
++
+                 if (PObj_is_class_TEST(parent))
+                     SUPER(key, value);
+                 else
+                     deleg_pmc.SUPER(key, value);
+             }
+         }
++        else
++            Parrot_run_meth_fromc_args(INTERP, sub,
++                                       pmc, meth, "vII", key, value);
+     }
+ 
+     void set_number_keyed_int(INTVAL key, FLOATVAL value) {
+-        STRING *meth = CONST_STRING(interp, "__set_number_keyed_int");
+-        STRING *meth_v = CONST_STRING(interp, "set_number_keyed_int");
+-        PMC *sub = Parrot_find_vtable_meth(interp, pmc, meth_v);
+-        if (PMC_IS_NULL(sub))
+-            sub = find_meth(interp, pmc, meth);
+-        if (sub) {
+-            (void) Parrot_run_meth_fromc_args(interp, sub,
+-                                              pmc, meth, "vIN", key, value);
+-        }
+-        else {
++        STRING *meth = CONST_STRING(INTERP, "set_number_keyed_int");
++        PMC    *sub  = Parrot_find_vtable_meth(INTERP, pmc, meth);
++
++        if (PMC_IS_NULL(sub)) {
+             PMC *mro = SELF->vtable->mro;
++
+             if (VTABLE_elements(INTERP, mro) == 1)
+                 SUPER(key, value);
+             else {
+-                PMC *parent = VTABLE_get_pmc_keyed_int(INTERP,SELF->vtable->mro, 1);
++                PMC *parent = VTABLE_get_pmc_keyed_int(INTERP,
++                    SELF->vtable->mro, 1);
++
+                 if (PObj_is_class_TEST(parent))
+                     SUPER(key, value);
+                 else
+                     deleg_pmc.SUPER(key, value);
+             }
+         }
++        else
++            Parrot_run_meth_fromc_args(INTERP, sub,
++                                       pmc, meth, "vIN", key, value);
+     }
+ 
+     void set_string_keyed_int(INTVAL key, STRING* value) {
+-        STRING *meth = CONST_STRING(interp, "__set_string_keyed_int");
+-        STRING *meth_v = CONST_STRING(interp, "set_string_keyed_int");
+-        PMC *sub = Parrot_find_vtable_meth(interp, pmc, meth_v);
+-        if (PMC_IS_NULL(sub))
+-            sub = find_meth(interp, pmc, meth);
+-        if (sub) {
+-            (void) Parrot_run_meth_fromc_args(interp, sub,
+-                                              pmc, meth, "vIS", key, value);
+-        }
+-        else {
++        STRING *meth = CONST_STRING(INTERP, "set_string_keyed_int");
++        PMC    *sub  = Parrot_find_vtable_meth(INTERP, pmc, meth);
++
++        if (PMC_IS_NULL(sub)) {
+             PMC *mro = SELF->vtable->mro;
++
+             if (VTABLE_elements(INTERP, mro) == 1)
+                 SUPER(key, value);
+             else {
+-                PMC *parent = VTABLE_get_pmc_keyed_int(INTERP,SELF->vtable->mro, 1);
++                PMC *parent = VTABLE_get_pmc_keyed_int(INTERP,
++                    SELF->vtable->mro, 1);
++
+                 if (PObj_is_class_TEST(parent))
+                     SUPER(key, value);
+                 else
+                     deleg_pmc.SUPER(key, value);
+             }
+         }
++        else
++            Parrot_run_meth_fromc_args(INTERP, sub,
++                                       pmc, meth, "vIS", key, value);
+     }
+ 
+     void set_pmc_keyed_int(INTVAL key, PMC* value) {
+-        STRING *meth = CONST_STRING(interp, "__set_pmc_keyed_int");
+-        STRING *meth_v = CONST_STRING(interp, "set_pmc_keyed_int");
+-        PMC *sub = Parrot_find_vtable_meth(interp, pmc, meth_v);
+-        if (PMC_IS_NULL(sub))
+-            sub = find_meth(interp, pmc, meth);
+-        if (sub) {
+-            (void) Parrot_run_meth_fromc_args(interp, sub,
+-                                              pmc, meth, "vIP", key, value);
+-        }
+-        else {
++        STRING *meth = CONST_STRING(INTERP, "set_pmc_keyed_int");
++        PMC    *sub  = Parrot_find_vtable_meth(INTERP, pmc, meth);
++
++        if (PMC_IS_NULL(sub)) {
+             PMC *mro = SELF->vtable->mro;
++
+             if (VTABLE_elements(INTERP, mro) == 1)
+                 SUPER(key, value);
+             else {
+-                PMC *parent = VTABLE_get_pmc_keyed_int(INTERP,SELF->vtable->mro, 1);
++                PMC *parent = VTABLE_get_pmc_keyed_int(INTERP,
++                    SELF->vtable->mro, 1);
++
+                 if (PObj_is_class_TEST(parent))
+                     SUPER(key, value);
+                 else
+                     deleg_pmc.SUPER(key, value);
+             }
+         }
++        else
++            Parrot_run_meth_fromc_args(INTERP, sub,
++                                       pmc, meth, "vIP", key, value);
+     }
+ 
+     void delete_keyed_int(INTVAL key) {
+-        STRING *meth = CONST_STRING(interp, "__delete_keyed_int");
+-        STRING *meth_v = CONST_STRING(interp, "delete_keyed_int");
+-        PMC *sub = Parrot_find_vtable_meth(interp, pmc, meth_v);
+-        if (PMC_IS_NULL(sub))
+-            sub = find_meth(interp, pmc, meth);
+-        if (sub) {
+-            (void) Parrot_run_meth_fromc_args(interp, sub,
+-                                              pmc, meth, "vI", key);
+-        }
+-        else {
++        STRING *meth = CONST_STRING(INTERP, "delete_keyed_int");
++        PMC    *sub  = Parrot_find_vtable_meth(INTERP, pmc, meth);
++
++        if (PMC_IS_NULL(sub)) {
+             PMC *mro = SELF->vtable->mro;
++
+             if (VTABLE_elements(INTERP, mro) == 1)
+                 SUPER(key);
+             else {
+-                PMC *parent = VTABLE_get_pmc_keyed_int(INTERP,SELF->vtable->mro, 1);
++                PMC *parent = VTABLE_get_pmc_keyed_int(INTERP,
++                    SELF->vtable->mro, 1);
++
+                 if (PObj_is_class_TEST(parent))
+                     SUPER(key);
+                 else
+                     deleg_pmc.SUPER(key);
+             }
+         }
++        else
++            Parrot_run_meth_fromc_args(INTERP, sub,
++                                       pmc, meth, "vI", key);
+     }
+ 
+     INTVAL defined_keyed_int(INTVAL key) {
+-        STRING *meth = CONST_STRING(interp, "__defined_keyed_int");
+-        STRING *meth_v = CONST_STRING(interp, "defined_keyed_int");
+-        PMC *sub = Parrot_find_vtable_meth(interp, pmc, meth_v);
+-        if (PMC_IS_NULL(sub))
+-            sub = find_meth(interp, pmc, meth);
+-        if (sub) {
+-            return Parrot_run_meth_fromc_args_reti(interp, sub,
+-                                              pmc, meth, "II", key);
+-        }
+-        else {
++        STRING *meth = CONST_STRING(INTERP, "defined_keyed_int");
++        PMC    *sub  = Parrot_find_vtable_meth(INTERP, pmc, meth);
++
++        if (PMC_IS_NULL(sub)) {
+             PMC *mro = SELF->vtable->mro;
++
+             if (VTABLE_elements(INTERP, mro) == 1)
+                 return SUPER(key);
+             else {
+-                PMC *parent = VTABLE_get_pmc_keyed_int(INTERP,SELF->vtable->mro, 1);
++                PMC *parent = VTABLE_get_pmc_keyed_int(INTERP,
++                    SELF->vtable->mro, 1);
++
+                 if (PObj_is_class_TEST(parent))
+                     return SUPER(key);
+-                else
+-                    return deleg_pmc.SUPER(key);
++
++                return deleg_pmc.SUPER(key);
+             }
+         }
++        return Parrot_run_meth_fromc_args_reti(INTERP, sub,
++                                               pmc, meth, "II", key);
+     }
+ 
+     INTVAL exists_keyed_int(INTVAL key) {
+-        STRING *meth = CONST_STRING(interp, "__exists_keyed_int");
+-        STRING *meth_v = CONST_STRING(interp, "exists_keyed_int");
+-        PMC *sub = Parrot_find_vtable_meth(interp, pmc, meth_v);
+-        if (PMC_IS_NULL(sub))
+-            sub = find_meth(interp, pmc, meth);
+-        if (sub) {
+-            return Parrot_run_meth_fromc_args_reti(interp, sub,
+-                                              pmc, meth, "II", key);
+-        }
+-        else {
++        STRING *meth = CONST_STRING(INTERP, "exists_keyed_int");
++        PMC    *sub  = Parrot_find_vtable_meth(INTERP, pmc, meth);
++
++        if (PMC_IS_NULL(sub)) {
+             PMC *mro = SELF->vtable->mro;
++
+             if (VTABLE_elements(INTERP, mro) == 1)
+                 return SUPER(key);
+             else {
+-                PMC *parent = VTABLE_get_pmc_keyed_int(INTERP,SELF->vtable->mro, 1);
++                PMC *parent = VTABLE_get_pmc_keyed_int(INTERP,
++                    SELF->vtable->mro, 1);
++
+                 if (PObj_is_class_TEST(parent))
+                     return SUPER(key);
+-                else
+-                    return deleg_pmc.SUPER(key);
++
++                return deleg_pmc.SUPER(key);
+             }
+         }
++        return Parrot_run_meth_fromc_args_reti(INTERP, sub,
++                                               pmc, meth, "II", key);
+     }
+ 
+     PMC* share_ro() {
+@@ -562,14 +528,14 @@
+         if (PObj_is_PMC_shared_TEST(SELF))
+             return SELF;
+ 
+-        ret = pt_shared_fixup(INTERP, SELF);
++        ret  = pt_shared_fixup(INTERP, SELF);
+         true = pmc_new(INTERP, enum_class_Integer);
++
+         VTABLE_set_integer_native(INTERP, true, 1);
+         VTABLE_setprop(INTERP, ret, CONST_STRING(interp, "_ro"), true);
+         PObj_is_PMC_shared_SET(SELF);
+ 
+-        n = PMC_int_val(ret);
+-
++        n    = PMC_int_val(ret);
+         data = (PMC **) PMC_data(ret);
+ 
+         for (i = 0; i < n; ++i)
+=== t/pmc/object-meths.t
+==================================================================
+--- t/pmc/object-meths.t	(revision 3268)
++++ t/pmc/object-meths.t	(local)
+@@ -6,7 +6,7 @@
+ use warnings;
+ use lib qw( . lib ../lib ../../lib );
+ use Test::More;
+-use Parrot::Test tests => 43;
++use Parrot::Test tests => 44;
+ 
+ =head1 NAME
+ 
+@@ -707,6 +707,28 @@
+ done
+ OUTPUT
+ 
++pir_output_is( <<'CODE', <<'OUTPUT', "constructor - vtable override" );
++.sub main :main
++  $P0 = newclass 'Foo'
++  $P1 = subclass 'Foo', 'Bar'
++  $P2 = new 'Bar'
++.end
++
++.namespace ['Foo']
++.sub init :vtable :method
++  print "foo init\n"
++.end
++
++.namespace ['Bar']
++.sub init :vtable :method
++  print "bar init\n"
++.end
++
++CODE
++foo init
++bar init
++OUTPUT
++
+ pir_output_is( <<'CODE', <<'OUTPUT', "same method name in two namespaces" );
+ 
+ .namespace ["A"]
+
+--Boundary-00=_fvuKGAtT3A+GP6g--
+

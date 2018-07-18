@@ -1,0 +1,143 @@
+From perl6-all-return-80792-ktwarwic=speedy.uwaterloo.ca@perl.org  Sun Apr 22 18:50:49 2007
+Return-Path: <perl6-all-return-80792-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3MMol0I024937
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 22 Apr 2007 18:50:47 -0400
+Received: (qmail 20067 invoked by uid 514); 22 Apr 2007 22:50:22 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 20062 invoked from network); 22 Apr 2007 22:50:21 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Virus-Scanned: Debian amavisd-new at wet.ekstrom.org
+Message-ID: <462BE696.8020507@tewk.com>
+Date: Sun, 22 Apr 2007 16:49:58 -0600
+From: tewk <tewk@tewk.com>
+User-Agent: Thunderbird 1.5.0.10 (X11/20070403)
+MIME-Version: 1.0
+To: Patrick Rutkowski <rutski89@gmail.com>
+CC: perl6-internals@perl.org, chromatic <chromatic@wgz.org>
+Subject: Re: I Don't Understand The Context Allocation/Destruction Code
+References: <200704211824.18554.chromatic@wgz.org> <200704221414.34761.chromatic@wgz.org> <4E0B904A-2184-46B5-8054-D34193F323FE@gmail.com> <200704222355.36096.lt@toetsch.at> <788BE0AA-1D26-41AE-A330-C3858B8030B9@gmail.com>
+In-Reply-To: <788BE0AA-1D26-41AE-A330-C3858B8030B9@gmail.com>
+Content-Type: multipart/mixed;
+ boundary="------------080802060601060700090700"
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME
+Status: O
+Content-Length: 3217
+Lines: 96
+
+--------------080802060601060700090700
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+
+This is a clean up attempt.
+Passes tests.
+
+Kevin Tew
+
+--------------080802060601060700090700
+Content-Type: text/x-diff;
+ name="register.c.diff"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline;
+ filename="register.c.diff"
+
+Index: src/gc/register.c
+===================================================================
+--- src/gc/register.c	(revision 18297)
++++ src/gc/register.c	(working copy)
+@@ -321,6 +321,12 @@
+     interp->ctx.bp_ps = old->bp_ps;
+ }
+ 
++
++#define SLOT_CHUNK_SIZE 8
++
++#define CALCULATE_SLOT(all_regs_size) ((all_regs_size + SLOT_CHUNK_SIZE - 1) / SLOT_CHUNK_SIZE)
++#define CALCULATE_ALLOC_SIZE(all_regs_size) (((all_regs_size + SLOT_CHUNK_SIZE - 1) / SLOT_CHUNK_SIZE) * SLOT_CHUNK_SIZE)
++
+ struct Parrot_Context *
+ Parrot_alloc_context(Interp *interp, INTVAL *n_regs_used)
+ {
+@@ -331,16 +337,19 @@
+      * TODO (OPT) if we allocate a new context due to a self-recursive call
+      *      create a specialized version that just uses caller's size
+      */
++    const size_t size_i = sizeof (INTVAL)   * n_regs_used[REGNO_INT];
+     const size_t size_n = sizeof (FLOATVAL) * n_regs_used[REGNO_NUM];
+-    const size_t size_nip = size_n +
+-        sizeof (INTVAL) *   n_regs_used[REGNO_INT] +
+-        sizeof (PMC*) *     n_regs_used[REGNO_PMC];
+-    size_t reg_alloc = size_nip +
+-        sizeof (STRING*) *  n_regs_used[REGNO_STR];
++    const size_t size_s = sizeof (STRING*)  * n_regs_used[REGNO_STR];
++    const size_t size_p = sizeof (PMC*)     * n_regs_used[REGNO_PMC];
+ 
+-    const int slot = (reg_alloc + 7) >> 3;
+-    reg_alloc = slot << 3;
++    const size_t size_nip = size_n + size_i + size_p;
++    const size_t all_regs_size  = size_n + size_i + size_p + size_s;
+ 
++    const int slot = CALCULATE_SLOT(all_regs_size);
++    const size_t reg_alloc = CALCULATE_ALLOC_SIZE(all_regs_size);
++
++
++    /* alloc more slots if needed */
+     if (slot >= interp->ctx_mem.n_free_slots) {
+         const int n = slot + 1;
+         int i;
+@@ -353,6 +362,7 @@
+         interp->ctx_mem.n_free_slots = n;
+     }
+ 
++    /* pop new ctx from free list, else alloc ctx if needed */
+     ptr = interp->ctx_mem.free_list[slot];
+     old = CONTEXT(interp->ctx);
+     if (ptr) {
+@@ -365,11 +375,13 @@
+         else
+             ptr = mem_sys_allocate_zeroed(to_alloc);
+     }
++
+ #if CTX_LEAK_DEBUG
+     if (Interp_debug_TEST(interp, PARROT_CTX_DESTROY_DEBUG_FLAG)) {
+         fprintf(stderr, "[alloc ctx %p]\n", ptr);
+     }
+ #endif
++
+     CONTEXT(interp->ctx) = ctx = (struct Parrot_Context *)ptr;
+ 
+     ctx->regs_mem_size   = reg_alloc;
+@@ -377,9 +389,9 @@
+ 
+     /* regs start past the context */
+     p = (void *) ((char *)ptr + ALIGNED_CTX_SIZE);
+-    /* ctx.bp points to I0, which has Nx at left */
++    /* ctx.bp points to I0, which has Nx on the left */
+     interp->ctx.bp.regs_i = (INTVAL*)((char*)p + size_n);
+-    /* this points to S0 */
++    /* ctx.bp_ps points to S0, which has Px on the left */
+     interp->ctx.bp_ps.regs_s = (STRING**)((char*)p + size_nip);
+     init_context(interp, ctx, old);
+     return ctx;
+
+--------------080802060601060700090700--
+

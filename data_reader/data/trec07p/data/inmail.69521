@@ -1,0 +1,178 @@
+From r-help-bounces@stat.math.ethz.ch  Fri Jun 29 10:02:07 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5TE25L9026695
+	for <ktwarwic@flax9.uwaterloo.ca>; Fri, 29 Jun 2007 10:02:06 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5TE0Vks008500;
+	Fri, 29 Jun 2007 16:00:45 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.3 required=5.0 tests=AWL, BAYES_50,
+	DKIM_POLICY_SIGNSOME autolearn=no version=3.2.0
+Received: from markov.stats.ox.ac.uk (markov.stats.ox.ac.uk [163.1.210.1])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5TDPFP3024830;
+	Fri, 29 Jun 2007 15:25:16 +0200
+Received: from [192.168.1.102] (cpc3-oxfd4-0-0-cust250.oxfd.cable.ntl.com
+	[86.2.112.251])
+	by markov.stats.ox.ac.uk (8.13.6/8.13.6) with ESMTP id l5TDP6wC026192; 
+	Fri, 29 Jun 2007 14:25:07 +0100 (BST)
+Date: Fri, 29 Jun 2007 14:24:36 +0100 (BST)
+From: Prof Brian Ripley <ripley@stats.ox.ac.uk>
+X-X-Sender: ripley@auk.stats
+To: Markus Loecher <markus@insightfromdata.com>
+In-Reply-To: <1183122181-28569@relay0.mail.ox.ac.uk>
+Message-ID: <Pine.LNX.4.64.0706291409470.10093@auk.stats>
+References: <200706281511.l5SFBlat007218@hypatia.math.ethz.ch>
+	<18052.43963.748646.703108@stat.math.ethz.ch>
+	<Pine.LNX.4.64.0706290840510.1099@gannet.stats.ox.ac.uk>
+	<1183122181-28569@relay0.mail.ox.ac.uk>
+MIME-Version: 1.0
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch, Martin Maechler <maechler@stat.math.ethz.ch>
+Subject: Re: [R] align() function missing in R ?
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+On Fri, 29 Jun 2007, Markus Loecher wrote:
+
+> Thank you for your responses, I should have given an example of the 
+> functionality I am looking for, here are three typical scenarios that I deal 
+> with a lot in my work:
+>
+> - a regular timeseries with lots of missing values that I want to convert to 
+> the corresponding regular time series with mssing values replaced by NAs, 
+> e.g.:
+>        x = timeSeries(c(0.5,0.2,0.3,0.4,0.3,0.2,0.3), pos = 
+> c(1,2,5,8,9,12,14));
+>        x.align = align(x, pos = 1:14, method = "NA");
+> - a regular timeseries at a coarse scale which I want to linearly interpolate 
+> to a finer time scale:
+>        x = ts(1:10, frequency = 4);
+>        x.align = align(x, frequency = 8, method = "interp")
+> - an irregular timeseries which I want to linearly interpolate to a regular 
+> time grid:
+>        x = timeSeries(c(0.5,0.2,0.3,0.4,0.3,0.2,0.3), pos = 
+> c(1,2.5,3.2,4.1,5.7,6.5,7.3));
+>        x.align = align(x, pos = 1:7, method = "interp");
+>
+> I am wondering how to easily code such a function using only window, ts.union 
+> and ts.intersect.
+
+Well, the first and third are using timeSeries which is not in R, and more 
+to the point there is no support for irregular time series in R itself.
+But they seem nothing to do with alignment!
+
+The first is easy by indexing
+
+x.align <- ts(NA_real_, start=1, end=14)
+x.align[c(1,2,5,8,9,12,14)] <- c(0.5,0.2,0.3,0.4,0.3,0.2,0.3)
+
+The second and third you can do via approx:
+
+x <- ts(1:10, frequency = 4)
+x.align <- ts(approx(unclass(x), xout=seq(1, 10, 0.5))$y, frequency = 8)
+
+pos <- c(1,2.5,3.2,4.1,5.7,6.5,7.3)
+x <- c(0.5,0.2,0.3,0.4,0.3,0.2,0.3)
+ts(approx(pos, x, 1:7)$y)
+
+I suspect the first can also be done via package 'zoo', which is the sort 
+of place I would expect to find this functionality.
+
+>
+> Thanks again,
+> Markus
+>
+> At 03:52 AM 6/29/2007, Prof Brian Ripley wrote:
+>> On Fri, 29 Jun 2007, Martin Maechler wrote:
+>> 
+>>> Hi Markus,
+>>> 
+>>> You can't assume that a typical R users knows much about S+.
+>>> "R has been beyond S+ for a long time"
+>>>   {{ :-) :-) please Insightful staff, don't start to jump at me !}}
+>>> Even I, as a very long time S and Splus user (of the past:
+>>> 1987--~1997), have never, I think, used align().
+>>> 
+>>> Can you give *reproducible examples* of what  align() does for you?
+>>> Then, kind R users will typically show you simple ways to achieve the
+>>> same.
+>>> 
+>>> Also: R is Free Software (i.e. open source and more), so
+>>>      we'd be happy to accept offers of an align() function that
+>>>      behaved compatibly (``or better'') than the S-plus one.
+>>> Note however that you'd typically not be allowed to copy the
+>>> S-plus implementation.
+>> 
+>> align() relates to the S4 time series classes introduced in S-PLUS 5 (or 
+>> so, after 1997).  There are no comparable classes in base R, but there are 
+>> in some of the addon packages - fCalendar has already been mentioned and 
+>> there are others (see the CRAN Econometric task view).
+>> 
+>> window, ts.union and ts.intersect have done all the alignment on regular 
+>> time series (class "ts") I have ever needed.
+>> 
+>>> 
+>>> Martin
+>>> 
+>>> 
+>>>>>>>> "ML" == Markus Loecher <markus@insightfromdata.com>
+>>>>>>>>     on Thu, 28 Jun 2007 11:10:51 -0400 writes:
+>>>
+>>>    ML> Dear list members, I switched from Splus to R a few
+>>>    ML> years ago and so far found no functionality missing.
+>>>    ML> However, I am struggling to find the equivalent align()
+>>>    ML> function for time series. I did find some reduced
+>>>    ML> functionality such as alignDailySeries in
+>>>    ML> package:fCalendar but the full capability of aligning
+>>>    ML> two timeseries seems to be missing.  Could this be true
+>>>    ML> ? I am sure there must be a need for this useful
+>>>    ML> function.  Any help would be greatly appreciated.
+>>>
+>>>    ML> Thanks !
+>>>
+>>>    ML> Markus
+>>> 
+>>> ______________________________________________
+>>> R-help@stat.math.ethz.ch mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-help
+>>> PLEASE do read the posting guide 
+>>> http://www.R-project.org/posting-guide.html
+>>> and provide commented, minimal, self-contained, reproducible code.
+>> 
+>> --
+>> Brian D. Ripley,                  ripley@stats.ox.ac.uk
+>> Professor of Applied Statistics,  http://www.stats.ox.ac.uk/~ripley/
+>> University of Oxford,             Tel:  +44 1865 272861 (self)
+>> 1 South Parks Road,                     +44 1865 272866 (PA)
+>> Oxford OX1 3TG, UK                Fax:  +44 1865 272595
+>
+>
+
+-- 
+Brian D. Ripley,                  ripley@stats.ox.ac.uk
+Professor of Applied Statistics,  http://www.stats.ox.ac.uk/~ripley/
+University of Oxford,             Tel:  +44 1865 272861 (self)
+1 South Parks Road,                     +44 1865 272866 (PA)
+Oxford OX1 3TG, UK                Fax:  +44 1865 272595
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

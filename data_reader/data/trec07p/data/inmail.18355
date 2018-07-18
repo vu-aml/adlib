@@ -1,0 +1,246 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Apr 24 01:21:42 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3O5Lf6w005289
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 24 Apr 2007 01:21:41 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 4866A163895
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 24 Apr 2007 05:21:41 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.2 required=3.8 tests=BAYES_20,DATE_IN_PAST_03_06,
+	RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from mx2.suse.de (mx2.suse.de [195.135.220.15])
+	by lists.samba.org (Postfix) with ESMTP id 3F137162BC3
+	for <samba-technical@lists.samba.org>;
+	Tue, 24 Apr 2007 05:21:09 +0000 (GMT)
+Received: from Relay1.suse.de (mail2.suse.de [195.135.221.8])
+	(using TLSv1 with cipher DHE-RSA-AES256-SHA (256/256 bits))
+	(No client certificate requested)
+	by mx2.suse.de (Postfix) with ESMTP id 6BD0A218C9;
+	Tue, 24 Apr 2007 07:21:01 +0200 (CEST)
+Message-Id: <20070424013439.260229000@suse.de>
+References: <20070424012346.696840000@suse.de>
+User-Agent: quilt/0.46-1
+Date: Tue, 24 Apr 2007 11:24:25 +1000
+From: Nick Piggin <npiggin@suse.de>
+To: Andrew Morton <akpm@linux-foundation.org>
+Content-Disposition: inline; filename=fs-cifs-aops.patch
+Cc: Linux Filesystems <linux-fsdevel@vger.kernel.org>, sfrench@samba.org,
+   samba-technical@lists.samba.org, Mark Fasheh <mark.fasheh@oracle.com>
+Subject: [patch 39/44] cifs convert to new aops
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 6270
+Lines: 193
+
+Convert to new aops, and fix security hole where page is set uptodate
+before contents are uptodate.
+
+Cc: sfrench@samba.org
+Cc: samba-technical@lists.samba.org
+Cc: Linux Filesystems <linux-fsdevel@vger.kernel.org>
+Signed-off-by: Nick Piggin <npiggin@suse.de>
+
+ fs/cifs/file.c |   89 ++++++++++++++++++++++++++++++++-------------------------
+ 1 file changed, 51 insertions(+), 38 deletions(-)
+
+Index: linux-2.6/fs/cifs/file.c
+===================================================================
+--- linux-2.6.orig/fs/cifs/file.c
++++ linux-2.6/fs/cifs/file.c
+@@ -103,7 +103,7 @@ static inline int cifs_open_inode_helper
+ 
+ 	/* want handles we can use to read with first
+ 	   in the list so we do not have to walk the
+-	   list to search for one in prepare_write */
++	   list to search for one in write_begin */
+ 	if ((file->f_flags & O_ACCMODE) == O_WRONLY) {
+ 		list_add_tail(&pCifsFile->flist, 
+ 			      &pCifsInode->openFileList);
+@@ -1358,40 +1358,37 @@ static int cifs_writepage(struct page* p
+ 	return rc;
+ }
+ 
+-static int cifs_commit_write(struct file *file, struct page *page,
+-	unsigned offset, unsigned to)
++static int cifs_write_end(struct file *file, struct address_space *mapping,
++			loff_t pos, unsigned len, unsigned copied,
++			struct page *page, void *fsdata)
+ {
+ 	int xid;
+ 	int rc = 0;
+-	struct inode *inode = page->mapping->host;
+-	loff_t position = ((loff_t)page->index << PAGE_CACHE_SHIFT) + to;
++	struct inode *inode = mapping->host;
++	loff_t position = pos + copied;
+ 	char *page_data;
+ 
+ 	xid = GetXid();
+-	cFYI(1, ("commit write for page %p up to position %lld for %d", 
+-		 page, position, to));
++	cFYI(1, ("write end for page %p at pos %lld, copied %d",
++		 page, pos, copied));
+ 	spin_lock(&inode->i_lock);
+ 	if (position > inode->i_size) {
+ 		i_size_write(inode, position);
+ 	}
+ 	spin_unlock(&inode->i_lock);
++	if (!PageUptodate(page) && copied == PAGE_CACHE_SIZE)
++		SetPageUptodate(page);
++
+ 	if (!PageUptodate(page)) {
+-		position =  ((loff_t)page->index << PAGE_CACHE_SHIFT) + offset;
+-		/* can not rely on (or let) writepage write this data */
+-		if (to < offset) {
+-			cFYI(1, ("Illegal offsets, can not copy from %d to %d",
+-				offset, to));
+-			FreeXid(xid);
+-			return rc;
+-		}
++		unsigned long offset = pos & (PAGE_CACHE_SIZE - 1);
++
+ 		/* this is probably better than directly calling
+ 		   partialpage_write since in this function the file handle is
+ 		   known which we might as well	leverage */
+ 		/* BB check if anything else missing out of ppw
+ 		   such as updating last write time */
+ 		page_data = kmap(page);
+-		rc = cifs_write(file, page_data + offset, to-offset,
+-				&position);
++		rc = cifs_write(file, page_data + offset, copied, &pos);
+ 		if (rc > 0)
+ 			rc = 0;
+ 		/* else if (rc < 0) should we set writebehind rc? */
+@@ -1399,9 +1396,12 @@ static int cifs_commit_write(struct file
+ 	} else {	
+ 		set_page_dirty(page);
+ 	}
+-
+ 	FreeXid(xid);
+-	return rc;
++
++	unlock_page(page);
++	page_cache_release(page);
++
++	return rc < 0 ? rc : copied;
+ }
+ 
+ int cifs_fsync(struct file *file, struct dentry *dentry, int datasync)
+@@ -1928,34 +1928,47 @@ int is_size_safe_to_change(struct cifsIn
+ 		return 1;
+ }
+ 
+-static int cifs_prepare_write(struct file *file, struct page *page,
+-	unsigned from, unsigned to)
++static int cifs_write_begin(struct file *file, struct address_space *mapping,
++			loff_t pos, unsigned len, unsigned flags,
++			struct page **pagep, void **fsdata)
+ {
+ 	int rc = 0;
+ 	loff_t i_size;
+ 	loff_t offset;
++	pgoff_t index = pos >> PAGE_CACHE_SHIFT;
++	struct page *page;
++
++	page = __grab_cache_page(mapping, index);
++	if (!page)
++		return -ENOMEM;
++	*pagep = page;
+ 
+-	cFYI(1, ("prepare write for page %p from %d to %d",page,from,to));
++	cFYI(1, ("write begin for page %p at pos %lld, length %d",
++		 page, pos, len));
+ 	if (PageUptodate(page))
+ 		return 0;
+ 
+-	/* If we are writing a full page it will be up to date,
+-	   no need to read from the server */
+-	if ((to == PAGE_CACHE_SIZE) && (from == 0)) {
+-		SetPageUptodate(page);
++	/* If we are writing a full page it will become up to date,
++	   no need to read from the server (although we may encounter a
++	   short copy, so write_end has to handle this) */
++	if (len == PAGE_CACHE_SIZE)
+ 		return 0;
+-	}
+ 
+-	offset = (loff_t)page->index << PAGE_CACHE_SHIFT;
+-	i_size = i_size_read(page->mapping->host);
++	offset = index << PAGE_CACHE_SHIFT;
++	i_size = i_size_read(mapping->host);
++
++	if (offset >= i_size) {
++		void *kaddr;
++		unsigned from, to;
+ 
+-	if ((offset >= i_size) ||
+-	    ((from == 0) && (offset + to) >= i_size)) {
+ 		/*
+ 		 * We don't need to read data beyond the end of the file.
+ 		 * zero it, and set the page uptodate
+ 		 */
+-		void *kaddr = kmap_atomic(page, KM_USER0);
++		from = pos & (PAGE_CACHE_SIZE - 1);
++		to = from + len;
++
++		kaddr = kmap_atomic(page, KM_USER0);
+ 
+ 		if (from)
+ 			memset(kaddr, 0, from);
+@@ -1971,12 +1984,12 @@ static int cifs_prepare_write(struct fil
+ 		/* we could try using another file handle if there is one -
+ 		   but how would we lock it to prevent close of that handle
+ 		   racing with this read? In any case
+-		   this will be written out by commit_write so is fine */
++		   this will be written out by write_end so is fine */
+ 	}
+ 
+ 	/* we do not need to pass errors back 
+ 	   e.g. if we do not have read access to the file 
+-	   because cifs_commit_write will do the right thing.  -- shaggy */
++	   because cifs_write_end will do the right thing.  -- shaggy */
+ 
+ 	return 0;
+ }
+@@ -1986,8 +1999,8 @@ const struct address_space_operations ci
+ 	.readpages = cifs_readpages,
+ 	.writepage = cifs_writepage,
+ 	.writepages = cifs_writepages,
+-	.prepare_write = cifs_prepare_write,
+-	.commit_write = cifs_commit_write,
++	.write_begin = cifs_write_begin,
++	.write_end = cifs_write_end,
+ 	.set_page_dirty = __set_page_dirty_nobuffers,
+ 	/* .sync_page = cifs_sync_page, */
+ 	/* .direct_IO = */
+@@ -2002,8 +2015,8 @@ const struct address_space_operations ci
+ 	.readpage = cifs_readpage,
+ 	.writepage = cifs_writepage,
+ 	.writepages = cifs_writepages,
+-	.prepare_write = cifs_prepare_write,
+-	.commit_write = cifs_commit_write,
++	.write_begin = cifs_write_begin,
++	.write_end = cifs_write_end,
+ 	.set_page_dirty = __set_page_dirty_nobuffers,
+ 	/* .sync_page = cifs_sync_page, */
+ 	/* .direct_IO = */
+
+-- 
+

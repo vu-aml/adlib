@@ -1,0 +1,113 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun Jun  3 01:27:27 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l535RRhB031523
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 3 Jun 2007 01:27:27 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 74913162B6E
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun,  3 Jun 2007 05:27:21 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id F0812162AE1; Sun,  3 Jun 2007 05:26:46 +0000 (GMT)
+Date: Sun, 03 Jun 2007 14:39:28 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070603052646.F0812162AE1@lists.samba.org>
+Subject: Rev 442: don't start nfs services unless the relevant directories
+	are available in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 442
+revision-id: tridge@samba.org-20070603043927-duv31mw1amr5hkfs
+parent: tridge@samba.org-20070603032107-p22c1plg1zp468ov
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Sun 2007-06-03 14:39:27 +1000
+message:
+  don't start nfs services unless the relevant directories are available
+modified:
+  config/events.d/nfs            nfs-20070601141008-hy3h4qgbk1jd2jci-1
+  config/events.d/nfslock        nfslock-20070601105340-vlcvnp6euoj3zdwy-2
+  config/events.d/samba          samba-20070601105340-vlcvnp6euoj3zdwy-3
+=== modified file 'config/events.d/nfs'
+--- a/config/events.d/nfs	2007-06-02 08:51:05 +0000
++++ b/config/events.d/nfs	2007-06-03 04:39:27 +0000
+@@ -13,6 +13,11 @@
+ case $cmd in 
+      startup)
+ 	mkdir -p /etc/ctdb/state/nfs
++
++	# wait for all nfs exported directories to become available
++	nfs_dirs=`cut -d' ' -f1 /etc/exports`
++	ctdb_wait_directories "NFS" $nfs_dirs
++
+ 	service nfs start
+ 	;;
+ 
+
+=== modified file 'config/events.d/nfslock'
+--- a/config/events.d/nfslock	2007-06-02 06:44:15 +0000
++++ b/config/events.d/nfslock	2007-06-03 04:39:27 +0000
+@@ -7,12 +7,16 @@
+ [ -z $CTDB_MANAGES_NFS ] && exit 0
+ [ $CTDB_MANAGES_NFS != "yes" ] && exit 0
+ 
++[ -z "$STATD_SHARED_DIRECTORY" ] && exit 0
++
+ cmd="$1"
+ shift
+ 
+ case $cmd in 
+      startup)
+ 	/bin/mkdir -p /etc/ctdb/state/statd/ip
++	ctdb_wait_directories "nfslock" "$STATD_SHARED_DIRECTORY"
++
+ 	service nfslock start
+ 	;;
+ 
+
+=== modified file 'config/events.d/samba'
+--- a/config/events.d/samba	2007-06-02 08:51:05 +0000
++++ b/config/events.d/samba	2007-06-03 04:39:27 +0000
+@@ -13,6 +13,10 @@
+ 
+ case $cmd in 
+      startup)
++	# wait for all shared directories to become available
++	smb_dirs=`testparm -st 2> /dev/null | egrep '^\s*path = '  | cut -d= -f2`
++	ctdb_wait_directories "Samba" $smb_dirs	
++
+ 	# start Samba service
+ 	service smb start
+ 	service winbind start
+@@ -20,10 +24,6 @@
+ 	# wait for the Samba tcp ports to become available
+ 	smb_ports=`testparm -stv 2> /dev/null | egrep '\s*smb ports =' | cut -d= -f2`
+ 	ctdb_wait_tcp_ports "Samba" $smb_ports
+-
+-	# wait for all shared directories to become available
+-	smb_dirs=`testparm -st 2> /dev/null | egrep '^\s*path = '  | cut -d= -f2`
+-	ctdb_wait_directories "Samba" $smb_dirs	
+ 	;;
+ 	
+      takeip)
+

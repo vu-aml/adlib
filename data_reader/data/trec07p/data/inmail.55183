@@ -1,0 +1,285 @@
+From r-help-bounces@stat.math.ethz.ch  Sun Jun 10 23:30:50 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5B3UmL9009240
+	for <ktwarwic@flax9.uwaterloo.ca>; Sun, 10 Jun 2007 23:30:49 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5B3T2R8008462;
+	Mon, 11 Jun 2007 05:29:34 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.3 required=5.0 tests=AWL, BAYES_50, DKIM_SIGNED,
+	DKIM_VERIFIED autolearn=no version=3.2.0
+Received: from web39711.mail.mud.yahoo.com (web39711.mail.mud.yahoo.com
+	[209.191.106.57])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with SMTP id l5B3Srqj008435
+	for <r-help@stat.math.ethz.ch>; Mon, 11 Jun 2007 05:28:53 +0200
+Received: (qmail 85723 invoked by uid 60001); 11 Jun 2007 03:15:21 -0000
+X-YMail-OSG: vn_L6fAVM1ljX1bHuINq_x7BpQ2QUuWF4CZ9lChX_3KlqXGJAoZMvfi_BkY6c_ouHzvNJkY0zacOpl.jWNNnolFaV5MJsq0Dyk6ska3khPbaX2zOA3TZp4dXlVYTYQ--
+Received: from [66.91.227.183] by web39711.mail.mud.yahoo.com via HTTP;
+	Sun, 10 Jun 2007 20:15:21 PDT
+Date: Sun, 10 Jun 2007 20:15:21 -0700 (PDT)
+From: Stephen Tucker <brown_emu@yahoo.com>
+To: ted.harding@manchester.ac.uk, r-help@stat.math.ethz.ch
+In-Reply-To: <XFMail.070610221440.Ted.Harding@manchester.ac.uk>
+MIME-Version: 1.0
+Message-ID: <473010.85286.qm@web39711.mail.mud.yahoo.com>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Subject: Re: [R] Tools For Preparing Data For Analysis
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+Embarrasingly, I don't know awk or sed but R's code seems to be
+shorter for most tasks than Python, which is my basis for comparison.
+
+It's true that R's more powerful data structures usually aren't
+necessary for the data cleaning, but sometimes in the filtering
+process I will pick out lines that contain certain data, in which case
+I have to convert text to numbers and perform operations like
+which.min(), order(), etc., so in that sense I like to have R's
+vectorized notation and the objects/functions that support it.
+
+As far as some of the tasks you described, I've tried transcribing
+them to R. I know you provided only the simplest examples, but even in
+these cases I think R's functions for handling these situations
+exemplify their usefulness in this step of the analysis. But perhaps
+you would argue that this code is too long... In any event it will
+still save the trouble of keeping track of an extra (intermediate)
+file passed between awk and R.
+
+(1) the numbers of fields in each line equivalent to 
+>    cat datafile.csv | awk 'BEGIN{FS=","}{n=NF;print n}'
+in awk
+
+# R equivalent:
+nFields <- count.fields("datafile.csv",sep=",")
+# or 
+nFields <- sapply(strsplit(readLines("datafile.csv"),","),length)
+
+(2) which lines have the wrong number of fields, and how many fields
+they have. You can similarly count how many lines there are (e.g. pipe
+into wc -l).
+
+# number of lines with wrong number of fields
+nWrongFields <- length(nFields[nFields > 10])
+
+# select only first ten fields from each line
+# and return a matrix
+firstTenFields <- 
+  do.call(rbind,
+          lapply(strsplit(readLines("datafile.csv"),","),
+                 function(x) x[1:10]))
+
+# select only those lines which contain ten fields
+# and return a matrix
+onlyTenFields <- 
+  do.call(rbind,
+          lapply(strsplit(readLines("datafile.csv"),","),
+                 function(x) if(length(x) <= 10) x else NULL))
+
+(3)
+>    If for instance you try to
+>    read the following CSV into R as a dataframe:
+> 
+>    1,2,.,4
+>    2,.,4,5
+>    3,4,.,6
+> 
+
+txtC <- textConnection(
+"1,2,.,4
+2,.,4,5
+3,4,.,6")
+# using read.csv() specifying na.string argument:
+> read.csv(txtC,header=FALSE,na.string=".")
+  V1 V2 V3 V4
+1  1  2 NA  4
+2  2 NA  4  5
+3  3  4 NA  6
+
+# Of course, read.csv will work only if data is formatted correctly.
+# More generally, using readLines(), strsplit(), etc., which are more
+# flexible :
+
+> do.call(rbind,
++         lapply(strsplit(readLines(txtC),","),
++                type.convert,na.string="."))
+     [,1] [,2] [,3] [,4]
+[1,]    1    2   NA    4
+[2,]    2   NA    4    5
+[3,]    3    4   NA    6
+
+(4) Situations where people mix ",," and ",.,"!
+
+# type.convert (and read.csv) will still work when missing values are ",,"
+# and ",.," (automatically recognizes "" as NA and through
+# specification of 'na.string', can recognize "." as NA)
+
+# If it is desired to convert "." to "" first, this is simple as
+# well:
+
+m <- do.call(rbind,
+        lapply(strsplit(readLines(txtC),","),
+               function(x) gsub("^\\.$","",x)))
+> m
+     [,1] [,2] [,3] [,4]
+[1,] "1"  "2"  ""   "4" 
+[2,] "2"  ""   "4"  "5" 
+[3,] "3"  "4"  ""   "6" 
+
+# then
+mode(m) <- "numeric"
+# or
+m <- apply(m,2,type.convert)
+# will give
+> m
+     [,1] [,2] [,3] [,4]
+[1,]    1    2   NA    4
+[2,]    2   NA    4    5
+[3,]    3    4   NA    6
+
+
+--- Ted.Harding@manchester.ac.uk wrote:
+
+> On 10-Jun-07 19:27:50, Stephen Tucker wrote:
+> > 
+> > Since R is supposed to be a complete programming language,
+> > I wonder why these tools couldn't be implemented in R
+> > (unless speed is the issue). Of course, it's a naive desire
+> > to have a single language that does everything, but it seems
+> > that R currently has most of the functions necessary to do
+> > the type of data cleaning described.
+> 
+> In principle that is certainly true. A couple of comments,
+> though.
+> 
+> 1. R's rich data structures are likely to be superfluous.
+>    Mostly, at the sanitisation stage, one is working with
+>    "flat" files (row & column). This straightforward format
+>    is often easier to handle using simple programs for the
+>    kind of basic filtering needed, rather then getting into
+>    the heavier programming constructs of R.
+> 
+> 2. As follow-on and contrast at the same time, very often
+>    what should be a nice flat file with no rough edges is not.
+>    If there are variable numbers of fields per line, R will
+>    not handle it straightforwardly (you can force it in,
+>    but it's more elaborate). There are related issues as well.
+> 
+> a) If someone entering data into an Excel table lets their
+>    cursor wander outside the row/col range of the table,
+>    this can cause invisible entities to be planted in the
+>    extraneous cells. When saved as a CSV, this file then
+>    has variable numbers of fields per line, and possibly
+>    also extra lines with arbitrary blank fields.
+> 
+>    cat datafile.csv | awk 'BEGIN{FS=","}{n=NF;print n}'
+> 
+>    will give you the numbers of fields in each line.
+> 
+>    If you further pipe it into | sort -nu you will get
+>    the distinct field-numbers. If you know (by now) how many
+>    fields there should be (e.g. 10), then
+> 
+>    cat datafile.csv | awk 'BEGIN{FS=","} (NF != 10){print NR ", " NF}'
+> 
+>    will tell you which lines have the wrong number of fields,
+>    and how many fields they have. You can similarly count how
+>    many lines there are (e.g. pipe into wc -l).
+> 
+> b) Poeple sometimes randomly use a blank space or a "." in a
+>    cell to demote a missing value. Consistent use of either
+>    is OK: ",," in a CSV will be treated as "NA" by R. The use
+>    of "." can be more problematic. If for instance you try to
+>    read the following CSV into R as a dataframe:
+> 
+>    1,2,.,4
+>    2,.,4,5
+>    3,4,.,6
+> 
+>    the "." in cols 2 and 3 is treated as the character ".",
+>    with the result that something complicated happens to
+>    the typing of the items.
+> 
+>    typeeof(D[i,j]) is always integer. sum(D[1,1]=1, but
+>    sum(D[1,2]) gives a type-error, even though the entry
+>    is in fact 2. And so on , in various combinations.
+> 
+>    And (as.nmatrix(D)) is of course a matrix of characters.
+> 
+>    In fact, columns 2 and 3 of D are treated as factors!
+> 
+>    for(i in (1:3)){ for(j in (1:4)){ print( (D[i,j]))}}
+>    [1] 1
+>    [1] 2
+>    Levels: . 2 4
+>    [1] .
+>    Levels: . 4
+>    [1] 4
+>    [1] 2
+>    [1] .
+>    Levels: . 2 4
+>    [1] 4
+>    Levels: . 4
+>    [1] 5
+>    [1] 3
+>    [1] 4
+>    Levels: . 2 4
+>    [1] .
+>    Levels: . 4
+>    [1] 6
+> 
+>    This is getting altogether too complicated for the job
+>    one wants to do!
+> 
+>    And it gets worse when people mix ",," and ",.,"!
+> 
+>    On the other hand, a simple brush with awk (or sed in
+>    this case) can sort it once and for all, without waking
+>    the sleeping dogs in R.
+> 
+> I could go on. R undoubtedly has the power, but it can very
+> quickly get over-complicated for simple jobs.
+> 
+> Best wishes to all,
+> Ted.
+> 
+> --------------------------------------------------------------------
+> E-Mail: (Ted Harding) <Ted.Harding@manchester.ac.uk>
+> Fax-to-email: +44 (0)870 094 0861
+> Date: 10-Jun-07                                       Time: 22:14:35
+> ------------------------------ XFMail ------------------------------
+> 
+> ______________________________________________
+> R-help@stat.math.ethz.ch mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-help
+> PLEASE do read the posting guide
+> http://www.R-project.org/posting-guide.html
+> and provide commented, minimal, self-contained, reproducible code.
+> 
+
+
+
+       
+____________________________________________________________________________________
+Pinpoint customers who are looking for what you sell.
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

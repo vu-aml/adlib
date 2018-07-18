@@ -1,0 +1,387 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu May 24 16:41:46 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4OKfkqD010559
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 24 May 2007 16:41:46 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 66D7F16385C
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 24 May 2007 20:41:41 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 549)
+	id ABC3C162ADC; Thu, 24 May 2007 20:40:50 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jra@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070524204050.ABC3C162ADC@lists.samba.org>
+Date: Thu, 24 May 2007 20:40:50 +0000 (GMT)
+Subject: svn commit: samba r23122 - in branches: SAMBA_3_0/source/rpc_parse
+	SAMBA_3_0_25/source/rpc_parse SAMBA_3_0_26/source/rpc_parse
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: jra
+Date: 2007-05-24 20:40:46 +0000 (Thu, 24 May 2007)
+New Revision: 23122
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23122
+
+Log:
+Fix bug #4655. We marshall the enumdataex correctly,
+but W2K3 doesn't follow our rules when sending data to
+us. Ensure we look for the data at the correct offsets
+when reading the data.
+Too late for 3.0.25a - don't merge.
+Jeremy.
+
+Modified:
+   branches/SAMBA_3_0/source/rpc_parse/parse_spoolss.c
+   branches/SAMBA_3_0_25/source/rpc_parse/parse_spoolss.c
+   branches/SAMBA_3_0_26/source/rpc_parse/parse_spoolss.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/rpc_parse/parse_spoolss.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpc_parse/parse_spoolss.c	2007-05-24 20:26:07 UTC (rev 23121)
++++ branches/SAMBA_3_0/source/rpc_parse/parse_spoolss.c	2007-05-24 20:40:46 UTC (rev 23122)
+@@ -7022,10 +7022,10 @@
+ 		data_offset,
+ 		current_offset;
+ 	const uint32 basic_unit = 20; /* size of static portion of enum_values */
+-	
++
+ 	prs_debug(ps, depth, desc, "spoolss_io_printer_enum_values_ctr");
+ 	depth++;	
+-	
++
+ 	/* 
+ 	 * offset data begins at 20 bytes per structure * size_of_array.
+ 	 * Don't forget the uint32 at the beginning 
+@@ -7042,10 +7042,29 @@
+ 	}
+ 
+ 	for (i=0; i<ctr->size_of_array; i++) {
++		uint32 base_offset, return_offset;
++
++		base_offset = prs_offset(ps);
++
+ 		valuename_offset = current_offset;
+ 		if (!prs_uint32("valuename_offset", ps, depth, &valuename_offset))
+ 			return False;
+ 
++		/* Read or write the value. */
++
++		return_offset = prs_offset(ps);
++
++		if (!prs_set_offset(ps, base_offset + valuename_offset)) {
++			return False;
++		}
++
++		if (!prs_unistr("valuename", ps, depth, &ctr->values[i].valuename))
++			return False;
++
++		/* And go back. */
++		if (!prs_set_offset(ps, return_offset))
++			return False;
++
+ 		if (!prs_uint32("value_len", ps, depth, &ctr->values[i].value_len))
+ 			return False;
+ 	
+@@ -7060,21 +7079,14 @@
+ 		if (!prs_uint32("data_len", ps, depth, &ctr->values[i].data_len))
+ 			return False;
+ 			
+-		current_offset  = data_offset + ctr->values[i].data_len - basic_unit;
+-		/* account for 2 byte alignment */
+-		current_offset += (current_offset % 2);
+-	}
++		/* Read or write the data. */
+ 
+-	/* 
+-	 * loop #2 for writing the dynamically size objects; pay 
+-	 * attention to 2-byte alignment here....
+-	 */
+-	
+-	for (i=0; i<ctr->size_of_array; i++) {
+-	
+-		if (!prs_unistr("valuename", ps, depth, &ctr->values[i].valuename))
++		return_offset = prs_offset(ps);
++
++		if (!prs_set_offset(ps, base_offset + data_offset)) {
+ 			return False;
+-		
++		}
++
+ 		if ( ctr->values[i].data_len ) {
+ 			if ( UNMARSHALLING(ps) ) {
+ 				ctr->values[i].data = PRS_ALLOC_MEM(ps, uint8, ctr->values[i].data_len);
+@@ -7084,11 +7096,30 @@
+ 			if (!prs_uint8s(False, "data", ps, depth, ctr->values[i].data, ctr->values[i].data_len))
+ 				return False;
+ 		}
+-			
+-		if ( !prs_align_uint16(ps) )
++
++		current_offset  = data_offset + ctr->values[i].data_len - basic_unit;
++		/* account for 2 byte alignment */
++		current_offset += (current_offset % 2);
++
++		/* Remember how far we got. */
++		data_offset = prs_offset(ps);
++
++		/* And go back. */
++		if (!prs_set_offset(ps, return_offset))
+ 			return False;
++
+ 	}
+ 
++	/* Go to the last data offset we got to. */
++
++	if (!prs_set_offset(ps, data_offset))
++		return False;
++
++	/* And ensure we're 2 byte aligned. */
++
++	if ( !prs_align_uint16(ps) )
++		return False;
++
+ 	return True;	
+ }
+ 
+
+Modified: branches/SAMBA_3_0_25/source/rpc_parse/parse_spoolss.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/rpc_parse/parse_spoolss.c	2007-05-24 20:26:07 UTC (rev 23121)
++++ branches/SAMBA_3_0_25/source/rpc_parse/parse_spoolss.c	2007-05-24 20:40:46 UTC (rev 23122)
+@@ -7026,10 +7026,10 @@
+ 		data_offset,
+ 		current_offset;
+ 	const uint32 basic_unit = 20; /* size of static portion of enum_values */
+-	
++
+ 	prs_debug(ps, depth, desc, "spoolss_io_printer_enum_values_ctr");
+ 	depth++;	
+-	
++
+ 	/* 
+ 	 * offset data begins at 20 bytes per structure * size_of_array.
+ 	 * Don't forget the uint32 at the beginning 
+@@ -7046,10 +7046,29 @@
+ 	}
+ 
+ 	for (i=0; i<ctr->size_of_array; i++) {
++		uint32 base_offset, return_offset;
++
++		base_offset = prs_offset(ps);
++
+ 		valuename_offset = current_offset;
+ 		if (!prs_uint32("valuename_offset", ps, depth, &valuename_offset))
+ 			return False;
+ 
++		/* Read or write the value. */
++
++		return_offset = prs_offset(ps);
++
++		if (!prs_set_offset(ps, base_offset + valuename_offset)) {
++			return False;
++		}
++
++		if (!prs_unistr("valuename", ps, depth, &ctr->values[i].valuename))
++			return False;
++
++		/* And go back. */
++		if (!prs_set_offset(ps, return_offset))
++			return False;
++
+ 		if (!prs_uint32("value_len", ps, depth, &ctr->values[i].value_len))
+ 			return False;
+ 	
+@@ -7064,21 +7083,14 @@
+ 		if (!prs_uint32("data_len", ps, depth, &ctr->values[i].data_len))
+ 			return False;
+ 			
+-		current_offset  = data_offset + ctr->values[i].data_len - basic_unit;
+-		/* account for 2 byte alignment */
+-		current_offset += (current_offset % 2);
+-	}
++		/* Read or write the data. */
+ 
+-	/* 
+-	 * loop #2 for writing the dynamically size objects; pay 
+-	 * attention to 2-byte alignment here....
+-	 */
+-	
+-	for (i=0; i<ctr->size_of_array; i++) {
+-	
+-		if (!prs_unistr("valuename", ps, depth, &ctr->values[i].valuename))
++		return_offset = prs_offset(ps);
++
++		if (!prs_set_offset(ps, base_offset + data_offset)) {
+ 			return False;
+-		
++		}
++
+ 		if ( ctr->values[i].data_len ) {
+ 			if ( UNMARSHALLING(ps) ) {
+ 				ctr->values[i].data = PRS_ALLOC_MEM(ps, uint8, ctr->values[i].data_len);
+@@ -7088,11 +7100,30 @@
+ 			if (!prs_uint8s(False, "data", ps, depth, ctr->values[i].data, ctr->values[i].data_len))
+ 				return False;
+ 		}
+-			
+-		if ( !prs_align_uint16(ps) )
++
++		current_offset  = data_offset + ctr->values[i].data_len - basic_unit;
++		/* account for 2 byte alignment */
++		current_offset += (current_offset % 2);
++
++		/* Remember how far we got. */
++		data_offset = prs_offset(ps);
++
++		/* And go back. */
++		if (!prs_set_offset(ps, return_offset))
+ 			return False;
++
+ 	}
+ 
++	/* Go to the last data offset we got to. */
++
++	if (!prs_set_offset(ps, data_offset))
++		return False;
++
++	/* And ensure we're 2 byte aligned. */
++
++	if ( !prs_align_uint16(ps) )
++		return False;
++
+ 	return True;	
+ }
+ 
+
+Modified: branches/SAMBA_3_0_26/source/rpc_parse/parse_spoolss.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/rpc_parse/parse_spoolss.c	2007-05-24 20:26:07 UTC (rev 23121)
++++ branches/SAMBA_3_0_26/source/rpc_parse/parse_spoolss.c	2007-05-24 20:40:46 UTC (rev 23122)
+@@ -7026,10 +7026,10 @@
+ 		data_offset,
+ 		current_offset;
+ 	const uint32 basic_unit = 20; /* size of static portion of enum_values */
+-	
++
+ 	prs_debug(ps, depth, desc, "spoolss_io_printer_enum_values_ctr");
+ 	depth++;	
+-	
++
+ 	/* 
+ 	 * offset data begins at 20 bytes per structure * size_of_array.
+ 	 * Don't forget the uint32 at the beginning 
+@@ -7046,10 +7046,29 @@
+ 	}
+ 
+ 	for (i=0; i<ctr->size_of_array; i++) {
++		uint32 base_offset, return_offset;
++
++		base_offset = prs_offset(ps);
++
+ 		valuename_offset = current_offset;
+ 		if (!prs_uint32("valuename_offset", ps, depth, &valuename_offset))
+ 			return False;
+ 
++		/* Read or write the value. */
++
++		return_offset = prs_offset(ps);
++
++		if (!prs_set_offset(ps, base_offset + valuename_offset)) {
++			return False;
++		}
++
++		if (!prs_unistr("valuename", ps, depth, &ctr->values[i].valuename))
++			return False;
++
++		/* And go back. */
++		if (!prs_set_offset(ps, return_offset))
++			return False;
++
+ 		if (!prs_uint32("value_len", ps, depth, &ctr->values[i].value_len))
+ 			return False;
+ 	
+@@ -7064,21 +7083,14 @@
+ 		if (!prs_uint32("data_len", ps, depth, &ctr->values[i].data_len))
+ 			return False;
+ 			
+-		current_offset  = data_offset + ctr->values[i].data_len - basic_unit;
+-		/* account for 2 byte alignment */
+-		current_offset += (current_offset % 2);
+-	}
++		/* Read or write the data. */
+ 
+-	/* 
+-	 * loop #2 for writing the dynamically size objects; pay 
+-	 * attention to 2-byte alignment here....
+-	 */
+-	
+-	for (i=0; i<ctr->size_of_array; i++) {
+-	
+-		if (!prs_unistr("valuename", ps, depth, &ctr->values[i].valuename))
++		return_offset = prs_offset(ps);
++
++		if (!prs_set_offset(ps, base_offset + data_offset)) {
+ 			return False;
+-		
++		}
++
+ 		if ( ctr->values[i].data_len ) {
+ 			if ( UNMARSHALLING(ps) ) {
+ 				ctr->values[i].data = PRS_ALLOC_MEM(ps, uint8, ctr->values[i].data_len);
+@@ -7088,11 +7100,30 @@
+ 			if (!prs_uint8s(False, "data", ps, depth, ctr->values[i].data, ctr->values[i].data_len))
+ 				return False;
+ 		}
+-			
+-		if ( !prs_align_uint16(ps) )
++
++		current_offset  = data_offset + ctr->values[i].data_len - basic_unit;
++		/* account for 2 byte alignment */
++		current_offset += (current_offset % 2);
++
++		/* Remember how far we got. */
++		data_offset = prs_offset(ps);
++
++		/* And go back. */
++		if (!prs_set_offset(ps, return_offset))
+ 			return False;
++
+ 	}
+ 
++	/* Go to the last data offset we got to. */
++
++	if (!prs_set_offset(ps, data_offset))
++		return False;
++
++	/* And ensure we're 2 byte aligned. */
++
++	if ( !prs_align_uint16(ps) )
++		return False;
++
+ 	return True;	
+ }
+ 
+

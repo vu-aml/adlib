@@ -1,0 +1,112 @@
+From perl6-all-return-81478-ktwarwic=speedy.uwaterloo.ca@perl.org  Sat May 19 19:25:58 2007
+Return-Path: <perl6-all-return-81478-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4JNPvqD031805
+	for <ktwarwic@flax9.uwaterloo.ca>; Sat, 19 May 2007 19:25:57 -0400
+Received: (qmail 6839 invoked by uid 514); 19 May 2007 23:25:53 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 6834 invoked from network); 19 May 2007 23:25:53 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+Subject: [perl #42975] [BUG] t/tools/ops2pmutils/08-sort_ops.t experiencing test failure when warning was not emitted 
+From: "James Keenan via RT" <parrotbug-followup@parrotcode.org>
+Reply-To: parrotbug-followup@parrotcode.org
+In-Reply-To: <rt-3.6.HEAD-14517-1179391779-503.42975-15-0@perl.org>
+References: <RT-Ticket-42975@perl.org> <149C7647-72EC-4D51-973C-5B6BF5FB1874@verizon.net> <rt-3.6.HEAD-14517-1179391779-503.42975-15-0@perl.org>
+Message-ID: <rt-3.6.HEAD-4015-1179615920-558.42975-15-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #42975
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: jkeen@verizon.net
+Cc: perl6-internals@perl.org
+To: "OtherRecipients of perl Ticket #42975": ;
+MIME-Version: 1.0
+X-RT-Original-Encoding: utf-8
+Content-type: multipart/mixed; boundary="----------=_1179615923-4015-31"
+Date: Sat, 19 May 2007 16:05:23 -0700
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+
+------------=_1179615923-4015-31
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+On Thu May 17 01:49:39 2007, bernhard wrote:
+> 
+> 
+> For the code coverage I suggest that you add an op like
+> 'non_existent_op_used_for_testing' hardcoded in your test script. In
+> this way you wouldn't depend on src/ops/*.ops.
+> 
+
+bernhard++!  I was able to implement your suggestion in less than an hour.  Fixed in r18591.
+
+
+------------=_1179615923-4015-31
+Content-Type: text/plain; charset="ascii"; name="dummyops.patch.txt"
+Content-Disposition: inline; filename="dummyops.patch.txt"
+Content-Transfer-Encoding: 7bit
+RT-Attachment: 42975/260169/113613
+
+Index: t/tools/ops2pmutils/08-sort_ops.t
+===================================================================
+--- t/tools/ops2pmutils/08-sort_ops.t	(revision 18590)
++++ t/tools/ops2pmutils/08-sort_ops.t	(working copy)
+@@ -206,6 +206,21 @@
+         ok( copy( qq{$cwd/$num},       qq{$tdir/$num} ),       "copied ops.num file" );
+         ok( copy( qq{$cwd/$skip},      qq{$tdir/$skip} ),      "copied ops.skip file" );
+         ok( copy( qq{$cwd/DEVELOPING}, qq{$tdir/DEVELOPING} ), "copied DEVELOPING file" );
++        my $dummyops = "./src/ops/dummy.ops";
++        open my $FH, ">", $dummyops or
++            croak "Unable to open handle to create dummy ops file: $!";
++        print $FH <<DUMMYOPS;
++/*
++** dummy.ops
++*/
++
++VERSION = PARROT_VERSION;
++
++inline op zzzzzz(inout INT, in INT) :base_core {
++  goto NEXT();
++}
++DUMMYOPS
++        close $FH or croak "Unable to close handle after writing: $!";
+         my @opsfiles = glob("./src/ops/*.ops");
+ 
+         my $self = Parrot::Ops2pm::Utils->new(
+@@ -232,15 +247,12 @@
+         ok( $self->sort_ops(), "sort_ops returned successfully" );
+         $msg = $tie->READLINE;
+         untie *STDERR;
+-    TODO: {
+-        local $TODO = "All ops currently being passed as arguments are found either in ops.num or in ops.skip";
+         
+         like(
+             $msg,
+             qr|not in ops\.num nor ops\.skip|,
+             "Got expected warning about ops in neither ops.num or ops.skip"
+         );
+-    };
+ 
+         # To do:  Test that the sorting was correct.
+ 
+
+------------=_1179615923-4015-31--
+

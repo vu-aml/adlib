@@ -1,0 +1,187 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Jul  5 02:16:06 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l656G6L9022168
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 5 Jul 2007 02:16:06 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 992D816384D
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu,  5 Jul 2007 06:16:01 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.6 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 501)
+	id 69241162AC0; Thu,  5 Jul 2007 06:15:42 +0000 (GMT)
+To: samba-cvs@samba.org
+From: abartlet@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070705061542.69241162AC0@lists.samba.org>
+Date: Thu,  5 Jul 2007 06:15:42 +0000 (GMT)
+Subject: svn commit: samba r23720 - in branches/SAMBA_4_0/source:
+	scripting/libjs selftest setup
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: abartlet
+Date: 2007-07-05 06:15:40 +0000 (Thu, 05 Jul 2007)
+New Revision: 23720
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23720
+
+Log:
+Allow the member server to work against an LDAP Backend.  Another case
+where LDB isn't as strict as OpenLDAP, the self join record contains
+duplicate servicePrincipalNames once the DNS name and domain name are
+made equal.  (Easier to just skip the useless self-join).
+
+Andrew Bartlett
+
+Added:
+   branches/SAMBA_4_0/source/setup/provision_self_join.ldif
+Modified:
+   branches/SAMBA_4_0/source/scripting/libjs/provision.js
+   branches/SAMBA_4_0/source/selftest/Samba4.pm
+   branches/SAMBA_4_0/source/setup/provision_users.ldif
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/scripting/libjs/provision.js
+===================================================================
+--- branches/SAMBA_4_0/source/scripting/libjs/provision.js	2007-07-05 03:30:46 UTC (rev 23719)
++++ branches/SAMBA_4_0/source/scripting/libjs/provision.js	2007-07-05 06:15:40 UTC (rev 23720)
+@@ -700,6 +700,11 @@
+ 	message("Setting up sam.ldb users and groups\n");
+ 	setup_add_ldif("provision_users.ldif", info, samdb, false);
+ 
++	if (lp.get("server role") == "domain controller") {
++		message("Setting up self join\n");
++		setup_add_ldif("provision_self_join.ldif", info, samdb, false);
++	}
++
+ 	if (setup_name_mappings(info, samdb) == false) {
+ 		return false;
+ 	}
+@@ -769,6 +774,11 @@
+ /* Write out a DNS zone file, from the info in the current database */
+ function provision_dns(subobj, message, paths, session_info, credentials)
+ {
++	var lp = loadparm_init();
++	if (lp.get("server role") != "domain controller") {
++		message("No DNS zone required for role %s\n", lp.get("server role"));
++		return;
++	}
+ 	message("Setting up DNS zone: " + subobj.DNSDOMAIN + " \n");
+ 	var ldb = ldb_init();
+ 	ldb.session_info = session_info;
+
+Modified: branches/SAMBA_4_0/source/selftest/Samba4.pm
+===================================================================
+--- branches/SAMBA_4_0/source/selftest/Samba4.pm	2007-07-05 03:30:46 UTC (rev 23719)
++++ branches/SAMBA_4_0/source/selftest/Samba4.pm	2007-07-05 06:15:40 UTC (rev 23720)
+@@ -281,6 +281,8 @@
+ 	$localdomain = $netbiosname if $server_role eq "member server";
+ 	my $localrealm = $realm;
+ 	$localrealm = $netbiosname if $server_role eq "member server";
++	my $localbasedn = $basedn;
++	$localbasedn = "DC=$netbiosname" if $server_role eq "member server";
+ 
+ 	open(CONFFILE, ">$conffile");
+ 	print CONFFILE "
+@@ -400,7 +402,7 @@
+ 	push (@provision_options, "--krbtgtpass=krbtgt$password");
+ 	push (@provision_options, "--machinepass=machine$password");
+ 	push (@provision_options, "--root=$root");
+-	push (@provision_options, "--simple-bind-dn=cn=Manager,$basedn");
++	push (@provision_options, "--simple-bind-dn=cn=Manager,$localbasedn");
+ 	push (@provision_options, "--password=$password");
+ 	push (@provision_options, "--root=$root");
+ 
+@@ -430,7 +432,7 @@
+ 	if (defined($self->{ldap})) {
+ 
+                 push (@provision_options, "--ldap-backend=$ldap_uri");
+-	        system("$self->{bindir}/smbscript $self->{setupdir}/provision-backend $configuration --ldap-manager-pass=$password --root=$root --realm=$dnsname --host-name=$netbiosname --ldap-backend-type=$self->{ldap}>&2") == 0 or die("backend provision failed");
++	        system("$self->{bindir}/smbscript $self->{setupdir}/provision-backend $configuration --ldap-manager-pass=$password --root=$root --realm=$localrealm --host-name=$netbiosname --ldap-backend-type=$self->{ldap}>&2") == 0 or die("backend provision failed");
+ 
+ 	        if ($self->{ldap} eq "openldap") {
+ 		       ($ret->{SLAPD_CONF}, $ret->{OPENLDAP_PIDFILE}) = $self->mk_openldap($ldapdir, $configuration) or die("Unable to create openldap directories");
+
+Added: branches/SAMBA_4_0/source/setup/provision_self_join.ldif
+===================================================================
+--- branches/SAMBA_4_0/source/setup/provision_self_join.ldif	2007-07-05 03:30:46 UTC (rev 23719)
++++ branches/SAMBA_4_0/source/setup/provision_self_join.ldif	2007-07-05 06:15:40 UTC (rev 23720)
+@@ -0,0 +1,23 @@
++#Join the DC to itself by default
++
++dn: CN=${NETBIOSNAME},CN=Domain Controllers,${DOMAINDN}
++objectClass: computer
++cn: ${NETBIOSNAME}
++userAccountControl: 532480
++localPolicyFlags: 0
++primaryGroupID: 516
++accountExpires: 9223372036854775807
++sAMAccountName: ${NETBIOSNAME}$
++sAMAccountType: 805306369
++operatingSystem: Samba
++operatingSystemVersion: 4.0
++dNSHostName: ${DNSNAME}
++isCriticalSystemObject: TRUE
++sambaPassword: ${MACHINEPASS}
++servicePrincipalName: HOST/${DNSNAME}
++servicePrincipalName: HOST/${NETBIOSNAME}
++servicePrincipalName: HOST/${DNSNAME}/${REALM}
++servicePrincipalName: HOST/${NETBIOSNAME}/${REALM}
++servicePrincipalName: HOST/${DNSNAME}/${DOMAIN}
++servicePrincipalName: HOST/${NETBIOSNAME}/${DOMAIN}
++${HOSTGUID_ADD}
+
+Modified: branches/SAMBA_4_0/source/setup/provision_users.ldif
+===================================================================
+--- branches/SAMBA_4_0/source/setup/provision_users.ldif	2007-07-05 03:30:46 UTC (rev 23719)
++++ branches/SAMBA_4_0/source/setup/provision_users.ldif	2007-07-05 06:15:40 UTC (rev 23720)
+@@ -67,29 +67,6 @@
+ privilege: SeNetworkLogonRight
+ privilege: SeRemoteInteractiveLogonRight
+ 
+-
+-dn: CN=${NETBIOSNAME},CN=Domain Controllers,${DOMAINDN}
+-objectClass: computer
+-cn: ${NETBIOSNAME}
+-userAccountControl: 532480
+-localPolicyFlags: 0
+-primaryGroupID: 516
+-accountExpires: 9223372036854775807
+-sAMAccountName: ${NETBIOSNAME}$
+-sAMAccountType: 805306369
+-operatingSystem: Samba
+-operatingSystemVersion: 4.0
+-dNSHostName: ${DNSNAME}
+-isCriticalSystemObject: TRUE
+-sambaPassword: ${MACHINEPASS}
+-servicePrincipalName: HOST/${DNSNAME}
+-servicePrincipalName: HOST/${NETBIOSNAME}
+-servicePrincipalName: HOST/${DNSNAME}/${REALM}
+-servicePrincipalName: HOST/${NETBIOSNAME}/${REALM}
+-servicePrincipalName: HOST/${DNSNAME}/${DOMAIN}
+-servicePrincipalName: HOST/${NETBIOSNAME}/${DOMAIN}
+-${HOSTGUID_ADD}
+-
+ dn: CN=Users,CN=Builtin,${DOMAINDN}
+ objectClass: top
+ objectClass: group
+

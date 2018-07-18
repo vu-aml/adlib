@@ -1,0 +1,168 @@
+From perl6-all-return-81545-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue May 22 22:13:31 2007
+Return-Path: <perl6-all-return-81545-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4N2DUqD019748
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 22 May 2007 22:13:31 -0400
+Received: (qmail 18328 invoked by uid 514); 23 May 2007 02:13:26 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 18323 invoked from network); 23 May 2007 02:13:26 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-0.2 required=8.0
+	tests=BAYES_40,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+Delivered-To: perlmail-parrot-porters@onion.perl.org
+Delivered-To: parrot-porters@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+Date: Tue, 22 May 2007 21:05:39 -0500
+From: "Patrick R. Michaud" <pmichaud@pobox.com>
+To: Allison Randal <allison@perl.org>
+Cc: p2 <parrot-porters@perl.org>
+Subject: Re: PMC architecture discussion
+Message-ID: <20070523020539.GB25819@host.pmichaud.com>
+References: <46524BE9.7030808@perl.org> <20070522122533.GG20876@plum.flirble.org> <20070522132019.GA16372@host.pmichaud.com> <20070522155445.GE16372@host.pmichaud.com> <46537FD7.6080004@perl.org>
+Mime-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+In-Reply-To: <46537FD7.6080004@perl.org>
+User-Agent: Mutt/1.4.2.1i
+X-AntiAbuse: This header was added to track abuse, please include it with any abuse report
+X-AntiAbuse: Primary Hostname - host.pmichaud.com
+X-AntiAbuse: Original Domain - perl.org
+X-AntiAbuse: Originator/Caller UID/GID - [32003 505] / [47 12]
+X-AntiAbuse: Sender Address Domain - host.pmichaud.com
+X-Source: 
+X-Source-Args: 
+X-Source-Dir: 
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=0.0 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=0.5 required=8.0
+	tests=BAYES_40,SPF_NEUTRAL
+
+On Tue, May 22, 2007 at 04:42:15PM -0700, Allison Randal wrote:
+> Patrick R. Michaud wrote:
+> >
+> >Now then, this assumes that every type knows how to morph itself
+> >into an .Undef and that .Undef can handle assignment from any type.
+> >For many PMC classes this isn't (or hasn't been) the case; from
+> >time to time we stumble across another type that doesn't know
+> >how to morph itself to .Undef or for which .Undef cannot handle
+> >the assignment.  When this happens either Matt or I have gone
+> >in and updated the PMC code to allow these conversions -- the
+> >prime example is .Sub, but there have been a few others.
+> 
+> I'm not sure it should be the case. Why should a Sub morph itself to 
+> Undef? Why should the default implementation of Sub morph itself to 
+> anything?
+
+Here's the perl 6 code:
+
+    my $a = sub { ... };      # $a is a subroutine reference
+    my $b := $a;
+    # ...;
+    $a = 4;                   # $a is now an Int
+
+How to do the above in PIR if we can't morph a Sub?  (Note that
+the ability to reassign a variable containing a Sub already exists
+in the 01-sanity tests, which is why we had to make the change.)
+
+If the plan is to morph a "Perl6Sub", then we need a way of
+compiling PIR into HLL-specific subclasses of Sub, or something like
+that.  Of course, we need this anyway.  But until we have that,
+I need to be able to assign to Sub PMCs somehow.
+
+> I'm nearly convinced on adding assign_pmc_keyed, assign_pmc_keyed_int, 
+> and assign_pmc_keyed_str as vtable functions. The simplified code is a 
+> strong motivator, but a stronger motivator is the cross-language 
+> abstraction: not all languages want to morph and autovivify this way. 
+
+Excellent.  Whatever reason makes it happen makes me happy.  :-)
+
+> So, the morphing behavior would be a feature of the Perl 6 types, not of 
+> the system as a whole.
+> 
+> Would we also need assign_string_keyed, etc?
+
+I don't think so -- at least I don't seen an immediate need for
+them.  Having assign_pmc_keyed and assign_pmc_keyed_int would
+cover most everything.
+
+> >For package-scoped and global variables we'd just use 
+> >assign_keyed on the namespace objects 
+> 
+> I'm less convinced that global namespaces should perform the same 
+> autovivification and morphing.
+
+Something will have to handle it.
+
+> >  ## our $y; $y = foo();
+> >    $P0 = 'foo'()
+> >    $P1 = get_namespace
+> >
+> >    assign_keyed $P1['$y'], $P0
+> 
+> [...] I can see 
+> adding assign_pmc_keyed to namespaces, but if we did it'd be a simple:
+> 
+>     $P0 = 'foo'()
+>     get_global $P1, '$y'
+>     unless_null $P1, assign_1
+>     clone $P1, $P0
+>     set_global $P1, '$y'
+>     goto done
+>   assign_1:
+>     assign $P1, $P0
+>   done:
+
+If the assign opcode is handling morphing, then this is all I'm
+wanting assign_pmc_keyed to do in any case -- namespaces or otherwise.  :-)
+
+> The best default is the simplest default (only provide set), and 
+> languages that want more can subclass the namespace PMC.
+
+I think it's important that we have some vtable-based way to
+distinguish binding from assignment.  The C< set > opcode only
+gives us binding.
+
+> >Also, we get a win because we can get the namespace just
+> >once at the beginning of any sub that needs it, instead of
+> >a separate find_global/test existence/store_global for
+> >each assignment operation:
+> >
+> >  ## our $x, $y, $z; $x = foo(); $y = bar(); $z = baz();
+> 
+> You can do this anyway, you don't need the special assign_keyed.
+> ...
+>     $P1 = 'foo'()
+>     $P2 = $P0['$x']
+>     assign $P2, $P1
+> 
+> etc.
+
+Again, I can only do this if the all of the data types going to
+the C< assign > opcode understand the "change your type" semantic.
+If we have that, then things are indeed a lot simpler.
+
+But as things stand now, many of Parrot's built in types (including
+Subs and almost all the aggregates), don't know how to do this.
+That means that we have to come up with Perl6-specific types for
+everything in order to overload the assign opcode.  And I'm really
+not sure how to create a Perl6Sub from PIR source code.
+
+Pm
+

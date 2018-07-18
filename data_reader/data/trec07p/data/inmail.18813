@@ -1,0 +1,162 @@
+From r-help-bounces@stat.math.ethz.ch  Tue Apr 24 10:24:38 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3OEOb6w015048
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 24 Apr 2007 10:24:38 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3OENP1S025382;
+	Tue, 24 Apr 2007 16:23:44 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.7 required=5.0 tests=AWL,
+	BAYES_50 autolearn=no version=3.1.8
+Received: from fork6.mail.virginia.edu (fork6.mail.Virginia.EDU
+	[128.143.2.176])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3OENHld025319
+	for <r-help@stat.math.ethz.ch>; Tue, 24 Apr 2007 16:23:18 +0200
+Received: from localhost (localhost [127.0.0.1])
+	by fork6.mail.virginia.edu (Postfix) with ESMTP id 509B51BF99
+	for <r-help@stat.math.ethz.ch>; Tue, 24 Apr 2007 10:23:17 -0400 (EDT)
+Received: from fork6.mail.virginia.edu ([127.0.0.1])
+	by localhost (fork6.mail.virginia.edu [127.0.0.1]) (amavisd-new,
+	port 10024) with ESMTP id 08960-06 for <r-help@stat.math.ethz.ch>;
+	Tue, 24 Apr 2007 10:23:17 -0400 (EDT)
+Received: from [10.10.10.104] (vpn-user-1-38.itc.Virginia.EDU [128.143.1.38])
+	by fork6.mail.virginia.edu (Postfix) with ESMTP id A5E561BF03
+	for <r-help@stat.math.ethz.ch>; Tue, 24 Apr 2007 10:23:15 -0400 (EDT)
+Mime-Version: 1.0 (Apple Message framework v752.3)
+Message-Id: <05A3C400-92E8-4CC5-B24E-C5F2C98D87D8@virginia.edu>
+To: r-help@stat.math.ethz.ch
+From: Michael Kubovy <kubovy@virginia.edu>
+Date: Tue, 24 Apr 2007 10:22:59 -0400
+X-Mailer: Apple Mail (2.752.3)
+X-UVA-Virus-Scanned: by amavisd-new at fork6.mail.virginia.edu
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Subject: [R] Bug in xYplot() with method = 'filled bands'
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+Status: O
+Content-Length: 3681
+Lines: 107
+
+Dear r-helpers,
+
+I have been bitten by a cryptic comment in the help page for xYplot().
+
+Here is some code from Madeline Bauer, one of the authors, which is  
+essentailly the code on the help page for xYplot():
+
+# This example uses the summarize function in Hmisc to
+# compute the median and outer quartiles.  The outer quartiles are
+# displayed using "filled bands"
+
+set.seed(111)
+dfr <- expand.grid(month=1:12, year=c(1997,1998), reps=1:100)
+month <- dfr$month; year <- dfr$year
+y <- abs(month-6.5) + 2*runif(length(month)) + year-1997
+s <- summarize(y, llist(month,year), smedian.hilow, conf.int=.5)
+
+# filled bands: default fill = pastel colors matching solid colors
+# in superpose.line (this works differently in R)
+xYplot ( Cbind ( y, Lower, Upper ) ~ month, groups=year,
+      method="filled bands" , data=s, type="l")
+
+The comment "this works differently in R" should be ammended to a  
+more explicit danger sign (otherwise users like myself might find  
+themselves wasting a great deal of time). There appear to be two  
+differences between S+ and R here: (1) the default colors of the  
+bands are not as expected (but they can be changed at will, so that's  
+not a serious problem); (2) I have not been able get rid of the  
+outline around the filled bands or change their colors to match the  
+fill.
+
+I would have thought that ...
+
+xYplot ( Cbind ( y, Lower, Upper ) ~ month, groups=year,
+      method="filled bands" , data=s, type="l", lwd.bands = 0,
+      lty.bands = 0, col.bands = 'white')
+
+... would do the trick.
+
+I even tried to fix the problem in the code of xYplot:
+
+ > panel.XYplot
+
+function (x, y, subscripts, groups = NULL, type = if (is.function 
+(method) ||
+...
+if (method == "filled bands") {
+if (.R.)
+grid.polygon(x = c(x, rev(x)), y = c(lower, rev(upper)),
+gp = gpar(fill = col.fill, col = col.bands,
+lty = lty.bands, lwd = lwd.bands),
+default.units = "native")
+else polygon(x = c(x, rev(x)), y = c(lower, rev(upper)),
+col = col.fill)
+}
+...
+}
+
+Obviously I don't know grid well enough to fix the problem. Help  
+would be much appreciated, as well as a more explicit warning on the  
+xYplot() help page.
+
+There is, of course, the possibility that there's something wrong  
+with my version of R or my OS or my machine. In that case a  
+replication or non-replication of this problem on a different OS  
+might alert me to this.
+
+R version 2.5.0 RC (2007-04-21 r41269)
+i386-apple-darwin8.9.1
+
+locale:
+C
+
+attached base packages:
+[1] "grDevices" "datasets"  "grid"      "graphics"  "stats"     "utils"
+[7] "methods"   "base"
+
+other attached packages:
+         coda         lme4       Matrix          car   
+cacheSweave       stashR
+     "0.10-7"  "0.9975-13"  "0.9975-11"      "1.2-1"         
+"0.3"      "0.2-1"
+     filehash       digest     circular         boot      gmodels  
+multcompView
+      "0.9-4"      "0.2.3"      "0.3-6"     "1.2-27"      
+"2.13.2"      "0.1-0"
+      reshape          vcd   colorspace      effects         
+Hmisc      acepack
+      "0.7.2"      "1.0-3"       "0.95"     "1.0-10"      "3.3-1"     
+"1.3-2.2"
+           HH     multcomp      mvtnorm          JGR        
+iplots       JavaGD
+     "1.18-3"    "0.991-9"      "0.7-5"     "1.4-15"       
+"1.0-7"      "0.3-6"
+         MASS     gridBase      lattice latticeExtra         
+rJava       xtable
+     "7.2-33"      "0.4-3"     "0.15-4"      "0.1-6"      
+"0.4-15"      "1.4-3"
+
+Thanks,
+Michael Kubovy
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

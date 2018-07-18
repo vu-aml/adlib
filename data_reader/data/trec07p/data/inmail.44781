@@ -1,0 +1,98 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun May 27 10:57:51 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4REvpqD003063
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 27 May 2007 10:57:51 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id ED98E163858
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 27 May 2007 14:57:46 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 31523162AD6; Sun, 27 May 2007 14:57:29 +0000 (GMT)
+Date: Mon, 28 May 2007 00:51:11 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070527145729.31523162AD6@lists.samba.org>
+Subject: Rev 364: when handing over an IP to another node,
+	also tell them of any tcp connections we were handling,
+	so they can send tickle acks for those connections in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 364
+revision-id: tridge@samba.org-20070527145110-4dwpd6btx287elvc
+parent: tridge@samba.org-20070527143440-4hr0qbiyrynndwos
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Mon 2007-05-28 00:51:10 +1000
+message:
+  when handing over an IP to another node, also tell them of any tcp connections we were handling, so they can send tickle acks for those connections
+modified:
+  takeover/ctdb_takeover.c       ctdb_takeover.c-20070525071636-a5n1ihghjtppy08r-2
+=== modified file 'takeover/ctdb_takeover.c'
+--- a/takeover/ctdb_takeover.c	2007-05-27 14:34:40 +0000
++++ b/takeover/ctdb_takeover.c	2007-05-27 14:51:10 +0000
+@@ -68,7 +68,7 @@
+ 	}
+ 
+ 	for (tcp=arp->tcp_list;tcp;tcp=tcp->next) {
+-		DEBUG(0,("sending tcp tickle ack for %u->%s:%u\n",
++		DEBUG(2,("sending tcp tickle ack for %u->%s:%u\n",
+ 			 (unsigned)ntohs(tcp->daddr.sin_port), 
+ 			 inet_ntoa(tcp->saddr.sin_addr),
+ 			 (unsigned)ntohs(tcp->saddr.sin_port)));
+@@ -152,6 +152,7 @@
+ 	TDB_DATA data;
+ 	char *ip = inet_ntoa(sin->sin_addr);
+ 	int ret;
++	struct ctdb_tcp_list *tcp;
+ 
+ 	if (!ctdb_sys_have_ip(ip)) {
+ 		return 0;
+@@ -178,6 +179,26 @@
+ 
+ 	ctdb_daemon_send_message(ctdb, ctdb->vnn, CTDB_SRVID_RELEASE_IP, data);
+ 
++	/* tell other nodes about any tcp connections we were holding with this IP */
++	for (tcp=ctdb->tcp_list;tcp;tcp=tcp->next) {
++		if (tcp->vnn == ctdb->vnn && 
++		    sin->sin_addr.s_addr == tcp->daddr.sin_addr.s_addr) {
++			struct ctdb_control_tcp_vnn t;
++
++			t.vnn  = ctdb->vnn;
++			t.src  = tcp->saddr;
++			t.dest = tcp->daddr;
++
++			data.dptr = (uint8_t *)&t;
++			data.dsize = sizeof(t);
++
++			ctdb_daemon_send_control(ctdb, CTDB_BROADCAST_VNNMAP, 0, 
++						 CTDB_CONTROL_TCP_ADD,
++						 0, CTDB_CTRL_FLAG_NOREPLY, data, NULL, NULL);
++		}
++	}
++
++
+ 	return 0;
+ }
+ 
+

@@ -1,0 +1,417 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May 16 16:57:24 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4GKvNqD023710
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 16 May 2007 16:57:24 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 027E1163883
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 16 May 2007 20:57:21 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id 9BDD2162AC7; Wed, 16 May 2007 20:56:40 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070516205640.9BDD2162AC7@lists.samba.org>
+Date: Wed, 16 May 2007 20:56:40 +0000 (GMT)
+Subject: svn commit: samba r22954 - in branches: SAMBA_3_0/source/printing
+	SAMBA_3_0/source/rpc_server SAMBA_3_0/source/smbd
+	SAMBA_3_0/source/utils SAMBA_3_0_26/source/printing
+	SAMBA_3_0_26/source/rpc_server SAMBA_3_0_26/source/smbd
+	SAMBA_3_0_26/source/utils
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-05-16 20:56:39 +0000 (Wed, 16 May 2007)
+New Revision: 22954
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22954
+
+Log:
+More messaging_register
+
+Modified:
+   branches/SAMBA_3_0/source/printing/nt_printing.c
+   branches/SAMBA_3_0/source/printing/printing.c
+   branches/SAMBA_3_0/source/rpc_server/srv_spoolss_nt.c
+   branches/SAMBA_3_0/source/smbd/server.c
+   branches/SAMBA_3_0/source/utils/net_ads.c
+   branches/SAMBA_3_0_26/source/printing/nt_printing.c
+   branches/SAMBA_3_0_26/source/printing/printing.c
+   branches/SAMBA_3_0_26/source/rpc_server/srv_spoolss_nt.c
+   branches/SAMBA_3_0_26/source/smbd/server.c
+   branches/SAMBA_3_0_26/source/utils/net_ads.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/printing/nt_printing.c
+===================================================================
+--- branches/SAMBA_3_0/source/printing/nt_printing.c	2007-05-16 20:02:32 UTC (rev 22953)
++++ branches/SAMBA_3_0/source/printing/nt_printing.c	2007-05-16 20:56:39 UTC (rev 22954)
+@@ -542,7 +542,7 @@
+  Open the NT printing tdbs. Done once before fork().
+ ****************************************************************************/
+ 
+-BOOL nt_printing_init(void)
++BOOL nt_printing_init(struct messaging_context *msg_ctx)
+ {
+ 	const char *vstring = "INFO/version";
+ 	WERROR win_rc;
+@@ -631,15 +631,16 @@
+ 	 * drivers are installed
+ 	 */
+ 
+-	message_register(MSG_PRINTER_DRVUPGRADE, do_drv_upgrade_printer, NULL);
++	messaging_register(msg_ctx, NULL, MSG_PRINTER_DRVUPGRADE,
++			   do_drv_upgrade_printer);
+ 
+ 	/*
+ 	 * register callback to handle updating printer data
+ 	 * when a driver is initialized
+ 	 */
+ 
+-	message_register(MSG_PRINTERDATA_INIT_RESET, reset_all_printerdata,
+-			 NULL);
++	messaging_register(msg_ctx, NULL, MSG_PRINTERDATA_INIT_RESET,
++			   reset_all_printerdata);
+ 
+ 	/* of course, none of the message callbacks matter if you don't
+ 	   tell messages.c that you interested in receiving PRINT_GENERAL 
+
+Modified: branches/SAMBA_3_0/source/printing/printing.c
+===================================================================
+--- branches/SAMBA_3_0/source/printing/printing.c	2007-05-16 20:02:32 UTC (rev 22953)
++++ branches/SAMBA_3_0/source/printing/printing.c	2007-05-16 20:56:39 UTC (rev 22954)
+@@ -178,7 +178,7 @@
+  Initialise the printing backend. Called once at startup before the fork().
+ ****************************************************************************/
+ 
+-BOOL print_backend_init(void)
++BOOL print_backend_init(struct messaging_context *msg_ctx)
+ {
+ 	const char *sversion = "INFO/version";
+ 	pstring printing_path;
+@@ -215,7 +215,7 @@
+ 	close_all_print_db(); /* Don't leave any open. */
+ 
+ 	/* do NT print initialization... */
+-	return nt_printing_init();
++	return nt_printing_init(msg_ctx);
+ }
+ 
+ /****************************************************************************
+@@ -1348,16 +1348,18 @@
+ /****************************************************************************
+ this is the receive function of the background lpq updater
+ ****************************************************************************/
+-static void print_queue_receive(int msg_type, struct server_id src,
+-				void *buf, size_t msglen,
+-				void *private_data)
++static void print_queue_receive(struct messaging_context *msg,
++				void *private_data,
++				uint32_t msg_type,
++				struct server_id server_id,
++				DATA_BLOB *data)
+ {
+ 	fstring sharename;
+ 	pstring lpqcommand, lprmcommand;
+ 	int printing_type;
+ 	size_t len;
+ 
+-	len = tdb_unpack( (uint8 *)buf, msglen, "fdPP",
++	len = tdb_unpack( (uint8 *)data->data, data->length, "fdPP",
+ 		sharename,
+ 		&printing_type,
+ 		lpqcommand,
+@@ -1401,8 +1403,8 @@
+ 			exit(1);
+ 		}
+ 
+-		message_register(MSG_PRINTER_UPDATE, print_queue_receive,
+-				 NULL);
++		messaging_register(smbd_messaging_context(), NULL,
++				   MSG_PRINTER_UPDATE, print_queue_receive);
+ 		
+ 		DEBUG(5,("start_background_queue: background LPQ thread waiting for messages\n"));
+ 		while (1) {
+
+Modified: branches/SAMBA_3_0/source/rpc_server/srv_spoolss_nt.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpc_server/srv_spoolss_nt.c	2007-05-16 20:02:32 UTC (rev 22953)
++++ branches/SAMBA_3_0/source/rpc_server/srv_spoolss_nt.c	2007-05-16 20:56:39 UTC (rev 22954)
+@@ -1225,15 +1225,19 @@
+  over all printers, upgrading ones as necessary 
+  **********************************************************************/
+  
+-void do_drv_upgrade_printer(int msg_type, struct server_id src,
+-			    void *buf, size_t len, void *private_data)
++void do_drv_upgrade_printer(struct messaging_context *msg,
++			    void *private_data,
++			    uint32_t msg_type,
++			    struct server_id server_id,
++			    DATA_BLOB *data)
+ {
+ 	fstring drivername;
+ 	int snum;
+ 	int n_services = lp_numservices();
++	size_t len;
+ 	
+-	len = MIN(len,sizeof(drivername)-1);
+-	strncpy(drivername, (const char *)buf, len);
++	len = MIN(data->length,sizeof(drivername)-1);
++	strncpy(drivername, (const char *)data->data, len);
+ 	
+ 	DEBUG(10,("do_drv_upgrade_printer: Got message for new driver [%s]\n", drivername ));
+ 
+@@ -1324,15 +1328,19 @@
+  over all printers, resetting printer data as neessary 
+  **********************************************************************/
+  
+-void reset_all_printerdata(int msg_type, struct server_id src,
+-			   void *buf, size_t len, void *private_data)
++void reset_all_printerdata(struct messaging_context *msg,
++			   void *private_data,
++			   uint32_t msg_type,
++			   struct server_id server_id,
++			   DATA_BLOB *data)
+ {
+ 	fstring drivername;
+ 	int snum;
+ 	int n_services = lp_numservices();
++	size_t len;
+ 	
+-	len = MIN( len, sizeof(drivername)-1 );
+-	strncpy( drivername, (const char *)buf, len );
++	len = MIN( data->length, sizeof(drivername)-1 );
++	strncpy( drivername, (const char *)data->data, len );
+ 	
+ 	DEBUG(10,("reset_all_printerdata: Got message for new driver [%s]\n", drivername ));
+ 
+
+Modified: branches/SAMBA_3_0/source/smbd/server.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/server.c	2007-05-16 20:02:32 UTC (rev 22953)
++++ branches/SAMBA_3_0/source/smbd/server.c	2007-05-16 20:56:39 UTC (rev 22954)
+@@ -1029,7 +1029,7 @@
+                 exit(1);
+ #endif
+ 
+-	if (!print_backend_init())
++	if (!print_backend_init(smbd_messaging_context()))
+ 		exit(1);
+ 
+ 	if (!init_guest_info()) {
+
+Modified: branches/SAMBA_3_0/source/utils/net_ads.c
+===================================================================
+--- branches/SAMBA_3_0/source/utils/net_ads.c	2007-05-16 20:02:32 UTC (rev 22953)
++++ branches/SAMBA_3_0/source/utils/net_ads.c	2007-05-16 20:56:39 UTC (rev 22954)
+@@ -1921,12 +1921,6 @@
+ 	return 0;
+ }
+ 
+-void do_drv_upgrade_printer(int msg_type, struct server_id src,
+-			    void *buf, size_t len, void *private_data)
+-{
+-	return;
+-}
+-
+ static int net_ads_printer_publish(int argc, const char **argv)
+ {
+         ADS_STRUCT *ads;
+
+Modified: branches/SAMBA_3_0_26/source/printing/nt_printing.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/printing/nt_printing.c	2007-05-16 20:02:32 UTC (rev 22953)
++++ branches/SAMBA_3_0_26/source/printing/nt_printing.c	2007-05-16 20:56:39 UTC (rev 22954)
+@@ -542,7 +542,7 @@
+  Open the NT printing tdbs. Done once before fork().
+ ****************************************************************************/
+ 
+-BOOL nt_printing_init(void)
++BOOL nt_printing_init(struct messaging_context *msg_ctx)
+ {
+ 	const char *vstring = "INFO/version";
+ 	WERROR win_rc;
+@@ -631,15 +631,16 @@
+ 	 * drivers are installed
+ 	 */
+ 
+-	message_register(MSG_PRINTER_DRVUPGRADE, do_drv_upgrade_printer, NULL);
++	messaging_register(msg_ctx, NULL, MSG_PRINTER_DRVUPGRADE,
++			   do_drv_upgrade_printer);
+ 
+ 	/*
+ 	 * register callback to handle updating printer data
+ 	 * when a driver is initialized
+ 	 */
+ 
+-	message_register(MSG_PRINTERDATA_INIT_RESET, reset_all_printerdata,
+-			 NULL);
++	messaging_register(msg_ctx, NULL, MSG_PRINTERDATA_INIT_RESET,
++			   reset_all_printerdata);
+ 
+ 	/* of course, none of the message callbacks matter if you don't
+ 	   tell messages.c that you interested in receiving PRINT_GENERAL 
+
+Modified: branches/SAMBA_3_0_26/source/printing/printing.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/printing/printing.c	2007-05-16 20:02:32 UTC (rev 22953)
++++ branches/SAMBA_3_0_26/source/printing/printing.c	2007-05-16 20:56:39 UTC (rev 22954)
+@@ -178,7 +178,7 @@
+  Initialise the printing backend. Called once at startup before the fork().
+ ****************************************************************************/
+ 
+-BOOL print_backend_init(void)
++BOOL print_backend_init(struct messaging_context *msg_ctx)
+ {
+ 	const char *sversion = "INFO/version";
+ 	pstring printing_path;
+@@ -215,7 +215,7 @@
+ 	close_all_print_db(); /* Don't leave any open. */
+ 
+ 	/* do NT print initialization... */
+-	return nt_printing_init();
++	return nt_printing_init(msg_ctx);
+ }
+ 
+ /****************************************************************************
+@@ -1348,16 +1348,18 @@
+ /****************************************************************************
+ this is the receive function of the background lpq updater
+ ****************************************************************************/
+-static void print_queue_receive(int msg_type, struct server_id src,
+-				void *buf, size_t msglen,
+-				void *private_data)
++static void print_queue_receive(struct messaging_context *msg,
++				void *private_data,
++				uint32_t msg_type,
++				struct server_id server_id,
++				DATA_BLOB *data)
+ {
+ 	fstring sharename;
+ 	pstring lpqcommand, lprmcommand;
+ 	int printing_type;
+ 	size_t len;
+ 
+-	len = tdb_unpack( buf, msglen, "fdPP",
++	len = tdb_unpack( (char *)data->data, data->length, "fdPP",
+ 		sharename,
+ 		&printing_type,
+ 		lpqcommand,
+@@ -1401,8 +1403,8 @@
+ 			exit(1);
+ 		}
+ 
+-		message_register(MSG_PRINTER_UPDATE, print_queue_receive,
+-				 NULL);
++		messaging_register(smbd_messaging_context(), NULL,
++				   MSG_PRINTER_UPDATE, print_queue_receive);
+ 		
+ 		DEBUG(5,("start_background_queue: background LPQ thread waiting for messages\n"));
+ 		while (1) {
+
+Modified: branches/SAMBA_3_0_26/source/rpc_server/srv_spoolss_nt.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/rpc_server/srv_spoolss_nt.c	2007-05-16 20:02:32 UTC (rev 22953)
++++ branches/SAMBA_3_0_26/source/rpc_server/srv_spoolss_nt.c	2007-05-16 20:56:39 UTC (rev 22954)
+@@ -1217,15 +1217,19 @@
+  over all printers, upgrading ones as necessary 
+  **********************************************************************/
+  
+-void do_drv_upgrade_printer(int msg_type, struct server_id src,
+-			    void *buf, size_t len, void *private_data)
++void do_drv_upgrade_printer(struct messaging_context *msg,
++			    void *private_data,
++			    uint32_t msg_type,
++			    struct server_id server_id,
++			    DATA_BLOB *data)
+ {
+ 	fstring drivername;
+ 	int snum;
+ 	int n_services = lp_numservices();
++	size_t len;
+ 	
+-	len = MIN(len,sizeof(drivername)-1);
+-	strncpy(drivername, (const char *)buf, len);
++	len = MIN(data->length,sizeof(drivername)-1);
++	strncpy(drivername, (const char *)data->data, len);
+ 	
+ 	DEBUG(10,("do_drv_upgrade_printer: Got message for new driver [%s]\n", drivername ));
+ 
+@@ -1316,15 +1320,19 @@
+  over all printers, resetting printer data as neessary 
+  **********************************************************************/
+  
+-void reset_all_printerdata(int msg_type, struct server_id src,
+-			   void *buf, size_t len, void *private_data)
++void reset_all_printerdata(struct messaging_context *msg,
++			   void *private_data,
++			   uint32_t msg_type,
++			   struct server_id server_id,
++			   DATA_BLOB *data)
+ {
+ 	fstring drivername;
+ 	int snum;
+ 	int n_services = lp_numservices();
++	size_t len;
+ 	
+-	len = MIN( len, sizeof(drivername)-1 );
+-	strncpy( drivername, (const char *)buf, len );
++	len = MIN( data->length, sizeof(drivername)-1 );
++	strncpy( drivername, (const char *)data->data, len );
+ 	
+ 	DEBUG(10,("reset_all_printerdata: Got message for new driver [%s]\n", drivername ));
+ 
+
+Modified: branches/SAMBA_3_0_26/source/smbd/server.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/smbd/server.c	2007-05-16 20:02:32 UTC (rev 22953)
++++ branches/SAMBA_3_0_26/source/smbd/server.c	2007-05-16 20:56:39 UTC (rev 22954)
+@@ -1077,7 +1077,7 @@
+                 exit(1);
+ #endif
+ 
+-	if (!print_backend_init())
++	if (!print_backend_init(smbd_messaging_context()))
+ 		exit(1);
+ 
+ 	if (!init_guest_info()) {
+
+Modified: branches/SAMBA_3_0_26/source/utils/net_ads.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/utils/net_ads.c	2007-05-16 20:02:32 UTC (rev 22953)
++++ branches/SAMBA_3_0_26/source/utils/net_ads.c	2007-05-16 20:56:39 UTC (rev 22954)
+@@ -1921,12 +1921,6 @@
+ 	return 0;
+ }
+ 
+-void do_drv_upgrade_printer(int msg_type, struct server_id src,
+-			    void *buf, size_t len, void *private_data)
+-{
+-	return;
+-}
+-
+ static int net_ads_printer_publish(int argc, const char **argv)
+ {
+         ADS_STRUCT *ads;
+

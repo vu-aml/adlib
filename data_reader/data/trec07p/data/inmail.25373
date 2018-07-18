@@ -1,0 +1,144 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Apr 30 11:08:17 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3UF8H6w013997
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 30 Apr 2007 11:08:17 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id D6BEE1638C8
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 30 Apr 2007 15:08:15 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.7 required=3.8 tests=AWL,BAYES_20,
+	RCVD_IN_BLARS_RBL,RCVD_IN_DSBL,SPF_PASS autolearn=no version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: from relay2.netspeed.com.au (relay2.netspeed.com.au [202.78.47.27])
+	by lists.samba.org (Postfix) with ESMTP id 46095162AE7
+	for <samba-technical@samba.org>; Mon, 30 Apr 2007 15:07:29 +0000 (GMT)
+Received: from netspeed.com.au (unverified [202.78.47.28]) 
+	by NSmailstor (SurgeMail 3.8f) with ESMTP id 15941075-1803867 
+	for <samba-technical@samba.org>; Tue, 01 May 2007 01:06:46 +1000
+Received: from netgear (unverified [210.9.138.167]) 
+	by NSmailstor (SurgeMail 3.8g) with ESMTP id 48837564-1803868 
+	for <samba-technical@samba.org>; Tue, 01 May 2007 01:05:27 +1000
+Received: by netgear (sSMTP sendmail emulation);
+	Tue, 01 May 2007 01:07:26 +1000
+Date: Tue, 1 May 2007 01:07:26 +1000
+From: Michael Cohen <michael.cohen@netspeed.com.au>
+To: samba-technical@samba.org
+Message-ID: <20070430150726.GE8482@OpenWrt>
+Mime-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+User-Agent: Mutt/1.5.11
+X-X-SpamDetect: : 0.000000 
+X-NotAscii: charset=us-ascii
+X-IP-stats: Incoming Last 1, First 0, in=3, out=0,
+	spam=0 Known=true ip=210.9.138.167
+X-Originating-IP: 210.9.138.167
+Subject: talloc_reference bug?
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2441
+Lines: 85
+
+Hi there,
+  The following example shows talloc_reference behaviour which perhaps needs to
+  be better documented?
+
+
+#include <stdlib.h>
+#include <sys/types.h>
+#include <stdarg.h>
+#include <stdio.h>
+
+#include "talloc.h"
+
+// This is supposed to represent some other context which might be
+// owned by something else
+char *g_context;
+
+// This string is supposed to hold a reference to a talloc string
+char *some_string;
+
+// This bit of code tries to take ownership of the string by adding a reference to it.
+void process_string(char * string) {
+  // We want to keep hold of the string - so we take a reference on it:
+  talloc_reference(g_context, string);
+
+  some_string = string;
+};
+
+// This function tries to use the reference taken above. When done it tries to free it.
+void do_something() {
+  // We expect some_string to be set and valid here (because we took a
+  // reference to it before).
+
+  printf("string is %s\n", some_string);
+
+  // Ok we are dont with it now...
+  talloc_free(some_string);
+};
+
+int main() {
+  char *root;
+  char *string;
+ 
+  talloc_enable_leak_report_full();
+
+  g_context = talloc_named_const(NULL, 1, "foreign context");
+
+  // This is a provider of a string - the string is provided to the consumer
+  // which does what they like with it.
+  {
+  root = talloc_named_const(NULL, 1, "root context");
+
+  // We just create a string:
+  string = talloc_strdup(root, "hi there");
+
+  // Now we simulate a processing of the string:
+  process_string(string);
+
+  // Now we free the string:
+  talloc_free(string);
+
+  // This function is finished:
+  talloc_free(root);
+  };
+
+  
+  // Now we call some other bit of code:
+  do_something();
+
+  return 0;
+};
+
+
+The main issue is that the caller prepares a talloc context and provides it to
+a client, and then frees the context after use. The client wants to retain a
+reference to it, but in fact when the provider calls talloc_free(string) this
+reference is being removed _instead_ of string being freed. When the other part
+of the code wants to use its referenced string (and tries to free it when done)
+this program will abort because that reference is no longer valid.
+
+The solution is for the provider to use talloc_unlink() instead of talloc free
+to ensure that the reference is maintained - but that kind of instroduces lots
+of coupling between providers and consumers. i.e. the provider needs to know
+that references will be used in the consumer to use talloc_unlink.
+
+Michael.
+

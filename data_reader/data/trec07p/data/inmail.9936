@@ -1,0 +1,70 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Apr 16 02:09:57 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3G69u0I002059
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 16 Apr 2007 02:09:57 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 31D901638D8
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 16 Apr 2007 06:09:33 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.6 required=3.8 tests=AWL,BAYES_50,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 90515162AC4; Mon, 16 Apr 2007 06:08:53 +0000 (GMT)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Transfer-Encoding: 7bit
+Message-ID: <17955.4880.90755.415666@samba.org>
+Date: Mon, 16 Apr 2007 16:09:20 +1000
+To: Volker.Lendecke@SerNet.DE
+X-Mailer: VM 7.19 under Emacs 22.0.95.1
+From: tridge@samba.org
+Cc: ronniesahlberg@gmail.com, samba-technical@samba.org
+Subject: ctdb shortcut locking
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: tridge@samba.org
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 906
+Lines: 23
+
+Volker and Ronnie,
+
+I've just checked in some very strange code! Have a look at
+tests/lockwait.c in my bzr ctdb tree.
+
+Basically it shows how we can do event driven tdb, with basically zero
+overhead (at least for the common uncontended case).  This solves the
+problem of how we can handle waiting on a tdb lock in the ctdb daemon.
+
+Internally, it uses fork()+lock on the contended path, but its wrapped
+in a little bit of magic that turns this into a event in our event
+system, so basically the caller does a non-blocking tdb_chainlock(),
+then if it blocks they use the lockwait() code to trigger an event
+when the lock becomes available. When the callback happens the
+tdb_chainlock() can be retried.
+
+What I really like about this is we only pay a price in the contended
+case, which I expect to be very rare. We also send no extra messages
+over the unix domain socket.
+
+What do you think?
+
+Cheers, Tridge
+

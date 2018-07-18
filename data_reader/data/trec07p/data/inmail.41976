@@ -1,0 +1,149 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May 23 01:18:36 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4N5IaqD021164
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 23 May 2007 01:18:36 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 72ED41638AB
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 23 May 2007 05:18:32 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_05,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id DC90F162AD6; Wed, 23 May 2007 05:18:08 +0000 (GMT)
+Date: Wed, 23 May 2007 15:18:31 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070523051808.DC90F162AD6@lists.samba.org>
+Subject: Rev 333: - get rid of ctdb_ctrl_get_config in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 333
+revision-id: tridge@samba.org-20070523051830-vhegrb2m9buoisze
+parent: tridge@samba.org-20070523045041-a6v1tls6f3m01bqx
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Wed 2007-05-23 15:18:30 +1000
+message:
+  - get rid of ctdb_ctrl_get_config
+  - cope with zero timeout in ctdb_control
+modified:
+  common/cmdline.c               cmdline.c-20070416041216-w1zvz91bkdsgjckw-1
+  common/ctdb_client.c           ctdb_client.c-20070411010216-3kd8v37k61steeya-1
+  common/ctdb_daemon.c           ctdb_daemon.c-20070409200331-3el1kqgdb9m4ib0g-1
+=== modified file 'common/cmdline.c'
+--- a/common/cmdline.c	2007-05-15 05:13:36 +0000
++++ b/common/cmdline.c	2007-05-23 05:18:30 +0000
+@@ -183,10 +183,10 @@
+ 		return NULL;
+ 	}
+ 
+-	/* get our config */
+-	ret = ctdb_ctrl_get_config(ctdb);
+-	if (ret != 0) {
+-		DEBUG(0,(__location__ " Failed to get ctdb config\n"));
++	/* get our vnn */
++	ctdb->vnn = ctdb_ctrl_getvnn(ctdb, timeval_zero(), CTDB_CURRENT_NODE);
++	if (ctdb->vnn == (uint32_t)-1) {
++		DEBUG(0,(__location__ " Failed to get ctdb vnn\n"));
+ 		talloc_free(ctdb);
+ 		return NULL;
+ 	}
+
+=== modified file 'common/ctdb_client.c'
+--- a/common/ctdb_client.c	2007-05-23 04:50:41 +0000
++++ b/common/ctdb_client.c	2007-05-23 05:18:30 +0000
+@@ -469,9 +469,6 @@
+ 	/* now we can go into the normal wait routine, as the reply packet
+ 	   will update the ctdb->num_connected variable */
+ 	ctdb_daemon_connect_wait(ctdb);
+-
+-	/* get other config variables */
+-	ctdb_ctrl_get_config(ctdb);
+ }
+ 
+ /*
+@@ -745,7 +742,7 @@
+ 
+ 	/* semi-async operation */
+ 	timed_out = 0;
+-	if (timeout) {
++	if (timeout && !timeval_is_zero(timeout)) {
+ 		event_add_timed(ctdb->ev, state, *timeout, timeout_func, &timed_out);
+ 	}
+ 	while ((state->state == CTDB_CALL_WAIT)
+@@ -1236,38 +1233,6 @@
+ }
+ 
+ /*
+-  get ctdb config
+- */
+-int ctdb_ctrl_get_config(struct ctdb_context *ctdb)
+-{
+-	int ret;
+-	int32_t res;
+-	TDB_DATA data;
+-	struct ctdb_context c;
+-
+-	ZERO_STRUCT(data);
+-	ret = ctdb_control(ctdb, CTDB_CURRENT_NODE, 0, CTDB_CONTROL_CONFIG, 0,
+-			   data, ctdb, &data, &res, NULL, NULL);
+-	if (ret != 0 || res != 0) {
+-		return -1;
+-	}
+-	if (data.dsize != sizeof(c)) {
+-		DEBUG(0,("Bad config size %u - expected %u\n", data.dsize, sizeof(c)));
+-		return -1;
+-	}
+-
+-	c = *(struct ctdb_context *)data.dptr;
+-	talloc_free(data.dptr);
+-
+-	ctdb->num_nodes = c.num_nodes;
+-	ctdb->num_connected = c.num_connected;
+-	ctdb->vnn = c.vnn;
+-	ctdb->max_lacount = c.max_lacount;
+-	
+-	return 0;
+-}
+-
+-/*
+   find the real path to a ltdb 
+  */
+ int ctdb_ctrl_getdbpath(struct ctdb_context *ctdb, struct timeval timeout, uint32_t destnode, uint32_t dbid, TALLOC_CTX *mem_ctx, 
+
+=== modified file 'common/ctdb_daemon.c'
+--- a/common/ctdb_daemon.c	2007-05-23 02:23:07 +0000
++++ b/common/ctdb_daemon.c	2007-05-23 05:18:30 +0000
+@@ -682,7 +682,11 @@
+ 		close(fd[0]);
+ 		close(ctdb->daemon.sd);
+ 		ctdb->daemon.sd = -1;
+-		ctdb_ctrl_get_config(ctdb);
++		ctdb->vnn = ctdb_ctrl_getvnn(ctdb, timeval_zero(), CTDB_CURRENT_NODE);
++		if (ctdb->vnn == (uint32_t)-1) {
++			DEBUG(0,(__location__ " Failed to get ctdb vnn\n"));
++			return -1;
++		}
+ 		return 0;
+ 	}
+ 
+

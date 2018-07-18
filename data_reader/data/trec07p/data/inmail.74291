@@ -1,0 +1,115 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Jul  4 23:51:19 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l653pJL9020926
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 4 Jul 2007 23:51:19 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 5832F163863
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu,  5 Jul 2007 03:51:15 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-2.9 required=3.8 tests=ALL_TRUSTED,AWL,BAYES_00 
+	autolearn=ham version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: from [127.0.0.1] (dp [66.70.73.150])
+	by lists.samba.org (Postfix) with ESMTP id B74E4162AC8;
+	Thu,  5 Jul 2007 03:50:22 +0000 (GMT)
+From: Andrew Bartlett <abartlet@samba.org>
+To: simo@samba.org
+Content-Type: multipart/signed; micalg=pgp-sha1;
+	protocol="application/pgp-signature";
+	boundary="=-iBiSYa7Y7MnCYJF2sxce"
+Date: Thu, 05 Jul 2007 13:50:21 +1000
+Message-Id: <1183607421.3589.18.camel@localhost.localdomain>
+Mime-Version: 1.0
+X-Mailer: Evolution 2.10.2 (2.10.2-2.fc7) 
+Cc: samba-technical@samba.org
+Subject: LDB base DN semantics
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+
+--=-iBiSYa7Y7MnCYJF2sxce
+Content-Type: text/plain
+Content-Transfer-Encoding: quoted-printable
+
+In the naming_fsmo module, we do a base search for
+cn=3Dpartitions,cn=3Dconfiguration,dc=3D.....
+
+This often fails before the DB is fully set up, so the code there allows
+for 0 returned values, and continues.
+
+However, when Samba4 is backed against LDAP, the error return is
+different - NO_SUCH_OBJECT, as the base DN does not exist.  Shouldn't
+LDB's tdb backend also return this?
+
+I had to use this patch to allow naming_fsmo to cope with both cases:
+
+Modified: branches/SAMBA_4_0/source/dsdb/samdb/ldb_modules/naming_fsmo.c
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D
+---
+branches/SAMBA_4_0/source/dsdb/samdb/ldb_modules/naming_fsmo.c      2007-07=
+-05 02:52:58 UTC (rev 23717)
++++
+branches/SAMBA_4_0/source/dsdb/samdb/ldb_modules/naming_fsmo.c      2007-07=
+-05 03:06:59 UTC (rev 23718)
+@@ -69,10 +69,16 @@
+                         LDB_SCOPE_BASE,
+                         NULL, naming_attrs,
+                         &naming_res);
++       if (ret =3D=3D LDB_ERR_NO_SUCH_OBJECT) {
++               ldb_debug(module->ldb, LDB_DEBUG_WARNING,
++                         "naming_fsmo_init: no partitions dn present:
+(skip loading of naming contexts details)\n");
++               talloc_free(mem_ctx);
++               return ldb_next_init(module);
++       }
+        if (ret !=3D LDB_SUCCESS) {
+                ldb_debug_set(module->ldb, LDB_DEBUG_FATAL,
+-                             "naming_fsmo_init: failed to search the
+cross-ref container: %d:%s\n",
+-                             ret, ldb_strerror(ret));
++                             "naming_fsmo_init: failed to search the
+cross-ref container: %s: %s\n",
++                             ldb_strerror(ret),
+ldb_errstring(module->ldb));
+                talloc_free(mem_ctx);
+                return ret;
+        }
+
+--=20
+Andrew Bartlett                                http://samba.org/~abartlet/
+Authentication Developer, Samba Team           http://samba.org
+Samba Developer, Red Hat Inc.                  http://redhat.com
+
+
+--=-iBiSYa7Y7MnCYJF2sxce
+Content-Type: application/pgp-signature; name=signature.asc
+Content-Description: This is a digitally signed message part
+
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.7 (GNU/Linux)
+
+iD8DBQBGjGp9z4A8Wyi0NrsRAmGkAJ9zPcsqHGjNf86bOBIGiBnjyKGVTwCZAaPw
+oSQWNdx3L2jQSTrzFLYJJhY=
+=jgWc
+-----END PGP SIGNATURE-----
+
+--=-iBiSYa7Y7MnCYJF2sxce--
+

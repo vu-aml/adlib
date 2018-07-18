@@ -1,0 +1,154 @@
+From r-help-bounces@stat.math.ethz.ch  Thu Jul  5 07:50:03 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l65Bo1L9025517
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 5 Jul 2007 07:50:02 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l65Bmcfn019867;
+	Thu, 5 Jul 2007 13:48:58 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=5.0 tests=AWL, BAYES_50, DKIM_SIGNED,
+	DKIM_VERIFIED, HTML_MESSAGE autolearn=no version=3.2.0
+Received: from ug-out-1314.google.com (ug-out-1314.google.com [66.249.92.169])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l65Bixjx018608
+	for <r-help@stat.math.ethz.ch>; Thu, 5 Jul 2007 13:44:59 +0200
+Received: by ug-out-1314.google.com with SMTP id m3so433871uge
+	for <r-help@stat.math.ethz.ch>; Thu, 05 Jul 2007 04:44:59 -0700 (PDT)
+Received: by 10.66.252.4 with SMTP id z4mr1916804ugh.1183635899167;
+	Thu, 05 Jul 2007 04:44:59 -0700 (PDT)
+Received: by 10.66.234.6 with HTTP; Thu, 5 Jul 2007 04:44:59 -0700 (PDT)
+Message-ID: <644e1f320707050444t37fc21b1g84a3a7470b6869e1@mail.gmail.com>
+Date: Thu, 5 Jul 2007 07:44:59 -0400
+From: "jim holtman" <jholtman@gmail.com>
+To: "Michael Frumin" <michael@frumin.net>
+In-Reply-To: <1183629380.13417.1198603635@webmail.messagingengine.com>
+MIME-Version: 1.0
+References: <11435994.post@talk.nabble.com> <468BF958.9060102@biostat.ku.dk>
+	<6phy7hv3kdl.fsf@gopher4.fhcrc.org>
+	<eb555e660707041715j4e0906f2i93e03fbb77104284@mail.gmail.com>
+	<1183629380.13417.1198603635@webmail.messagingengine.com>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Content-Disposition: inline
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] Lookups in R
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+You are getting two very different results in what you are comparing.
+
+> system.time(lapply(1:10^4, mean))
+  user  system elapsed
+  1.31    0.00    1.31
+is returning a list with 10,000 values in it.  It is taking time to allocate
+the space and such.
+
+> system.time(for(i in 1:10^4) mean(i))
+  user  system elapsed
+  0.33    0.00    0.32
+is just returning a single value (mean(10^4)) and is not having to allocate
+space and setup the structure for a list.  Typically you use 'lapply' not
+only for 'looping', but more importantly returning the values associated
+with the processing.
+
+So again the timing will be dependent on what you are doing.  If you have a
+large transaction table that you want consolidated to some processing on
+userID, then lapply will probably be very efficient for that.
+
+
+On 7/5/07, Michael Frumin <michael@frumin.net> wrote:
+>
+> the problem I have is that userid's are not just sequential from
+> 1:n_users.  if they were, of course I'd have made a big matrix that was
+> n_users x n_fields and that would be that.  but, I think what I cando is
+> just use the hash to store the index into the result matrix, nothing
+> more. then the rest of it will be easy.
+>
+> but please tell me more about eliminating loops.  In many cases in R I
+> have used lapply and derivatives to avoid loops, but in this case they
+> seem to give me extra overhead simply by the generation of their result
+> lists:
+>
+> > system.time(lapply(1:10^4, mean))
+>   user  system elapsed
+>   1.31    0.00    1.31
+> > system.time(for(i in 1:10^4) mean(i))
+>   user  system elapsed
+>   0.33    0.00    0.32
+>
+>
+> thanks,
+> mike
+>
+>
+> > I don't think that's a fair comparison--- much of the overhead comes
+> > from the use of data frames and the creation of the indexing vector. I
+> > get
+> >
+> > > n_accts <- 10^3
+> > > n_trans <- 10^4
+> > > t <- list()
+> > > t$amt <- runif(n_trans)
+> > > t$acct <- as.character(round(runif(n_trans, 1, n_accts)))
+> > > uhash <- new.env(hash=TRUE, parent=emptyenv(), size=n_accts)
+> > > for (acct in as.character(1:n_accts)) uhash[[acct]] <- list(amt=0,
+> n=0)
+> > > system.time(for (i in seq_along(t$amt)) {
+> > +     acct <- t$acct[i]
+> > +     x <- uhash[[acct]]
+> > +     uhash[[acct]] <- list(amt=x$amt + t$amt[i], n=x$n + 1)
+> > + }, gcFirst = TRUE)
+> >    user  system elapsed
+> >   0.508   0.008   0.517
+> > > udf <- matrix(0, nrow = n_accts, ncol = 2)
+> > > rownames(udf) <- as.character(1:n_accts)
+> > > colnames(udf) <- c("amt", "n")
+> > > system.time(for (i in seq_along(t$amt)) {
+> > +     idx <- t$acct[i]
+> > +     udf[idx, ] <- udf[idx, ] + c(t$amt[i], 1)
+> > + }, gcFirst = TRUE)
+> >    user  system elapsed
+> >   1.872   0.008   1.883
+> >
+> > The loop is still going to be the problem for realistic examples.
+> >
+> > -Deepayan
+>
+> ______________________________________________
+> R-help@stat.math.ethz.ch mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-help
+> PLEASE do read the posting guide
+> http://www.R-project.org/posting-guide.html
+> and provide commented, minimal, self-contained, reproducible code.
+>
+
+
+
+-- 
+Jim Holtman
+Cincinnati, OH
++1 513 646 9390
+
+What is the problem you are trying to solve?
+
+	[[alternative HTML version deleted]]
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

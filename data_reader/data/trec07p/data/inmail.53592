@@ -1,0 +1,88 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Jun  7 23:38:44 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l583cghB010283
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 7 Jun 2007 23:38:43 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 88174162C21
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri,  8 Jun 2007 03:38:36 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-3.6 required=3.8 tests=ALL_TRUSTED,AWL,BAYES_00 
+	autolearn=ham version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from [?????$??P????w?$IPv6:::1] (dp [66.70.73.150])
+	by lists.samba.org (Postfix) with ESMTP id 1A88016384B
+	for <samba-technical@lists.samba.org>;
+	Fri,  8 Jun 2007 03:37:57 +0000 (GMT)
+Mime-Version: 1.0 (Apple Message framework v752.3)
+Content-Transfer-Encoding: 7bit
+Message-Id: <FADACB6E-72CA-45EE-9969-41CD2C68D3F7@samba.org>
+Content-Type: text/plain; charset=US-ASCII; delsp=yes; format=flowed
+To: samba-technical@lists.samba.org
+From: James Peach <jpeach@samba.org>
+Date: Thu, 7 Jun 2007 20:37:51 -0700
+X-Mailer: Apple Mail (2.752.3)
+Subject: [PATCH 4/4] Update setgroups comments for BSDs. 
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Update the comments that describe BSD setgroups semantics. Apply
+the setgroups fix to Darwin as well as FreeBSD.
+---
+source/smbd/sec_ctx.c |   13 ++++++++++---
+1 files changed, 10 insertions(+), 3 deletions(-)
+
+diff --git a/source/smbd/sec_ctx.c b/source/smbd/sec_ctx.c
+index d7a229e..ffbfa64 100644
+--- a/source/smbd/sec_ctx.c
++++ b/source/smbd/sec_ctx.c
+@@ -193,8 +193,15 @@ static BOOL apply_unix_token(const  
+UNIX_USER_TOKEN *ut)
+{
+	int ngroups = 0;
+-#ifdef FREEBSD
+-	/* Most (all?) BSD systems expect that the first element in the groups
++#if defined(FREEBSD) || defined(DARWINOS)
++	/* Most BSD systems return the effective gid as the first gid in the
++	 * list returned by getgroups(2), but only not all expect the
++	 * first gid in the list passed to setgroups(2) to always contain the
++	 * effective gid.
++	 *
++	 * FreeBSD will ignore the first gid in the setgroups array, and  
+Darwin
++	 * will use it as the effective gid.
++	 *
+	 * list passed to setgroups(2) is the effective gid. See also bugzilla
+	 * bug #3990.
+	 */
+@@ -219,7 +226,7 @@ static BOOL apply_unix_token(const  
+UNIX_USER_TOKEN *ut)
+		ut->groups[0] = ut->gid;
+	}
+-#endif /* FREEBSD */
++#endif /* FREEBSD || DARWINOS */
+	/* Always truncate the groups list at the system maximum. On most
+	 * systems, setgroups(2) will fail with EINVAL otherwise.
+--
+1.5.2.1
+
+
+--
+James Peach | jpeach@samba.org
+
+

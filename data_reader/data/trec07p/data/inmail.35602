@@ -1,0 +1,66 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun May 13 23:50:34 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4E3oYqD016091
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 13 May 2007 23:50:34 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 4B535163824
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 14 May 2007 03:50:32 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 4F6EC162C53; Mon, 14 May 2007 03:50:19 +0000 (GMT)
+Date: Mon, 14 May 2007 13:48:15 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070514035019.4F6EC162C53@lists.samba.org>
+Subject: Rev 295: don't allow setrecmaster while not frozen in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 295
+revision-id: tridge@samba.org-20070514034814-tfzpg9mzglmbr2s6
+parent: tridge@samba.org-20070512232016-fdj2opy995c536bs
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Mon 2007-05-14 13:48:14 +1000
+message:
+  don't allow setrecmaster while not frozen
+modified:
+  common/ctdb_control.c          ctdb_control.c-20070426122724-j6gkpiofhbwdin63-1
+=== modified file 'common/ctdb_control.c'
+--- a/common/ctdb_control.c	2007-05-12 11:25:26 +0000
++++ b/common/ctdb_control.c	2007-05-14 03:48:14 +0000
+@@ -123,8 +123,12 @@
+ 	}
+ 
+ 	case CTDB_CONTROL_SET_RECMASTER: {
++		CHECK_CONTROL_DATA_SIZE(sizeof(uint32_t));
++		if (ctdb->freeze_mode != CTDB_FREEZE_FROZEN) {
++			DEBUG(0,("Attempt to set recmaster when not frozen\n"));
++			return -1;
++		}
+ 		ctdb->recovery_master = ((uint32_t *)(&indata.dptr[0]))[0];
+-
+ 		return 0;
+ 	}
+ 
+

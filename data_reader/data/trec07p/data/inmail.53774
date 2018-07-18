@@ -1,0 +1,176 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Jun  8 06:30:41 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l58AUfhB013995
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 8 Jun 2007 06:30:41 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 0F02A162BD8
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri,  8 Jun 2007 10:30:35 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,UPPERCASE_25_50 autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1004)
+	id 00D77162ACC; Fri,  8 Jun 2007 10:29:46 +0000 (GMT)
+To: samba-cvs@samba.org
+From: gd@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070608102947.00D77162ACC@lists.samba.org>
+Date: Fri,  8 Jun 2007 10:29:46 +0000 (GMT)
+Subject: svn commit: samba r23380 - in branches/SAMBA_3_0/source: include
+	rpc_client rpc_parse rpcclient
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: gd
+Date: 2007-06-08 10:29:46 +0000 (Fri, 08 Jun 2007)
+New Revision: 23380
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23380
+
+Log:
+netr_getdcname returns WERROR not NTSTATUS.
+
+Guenther
+
+Modified:
+   branches/SAMBA_3_0/source/include/rpc_netlogon.h
+   branches/SAMBA_3_0/source/rpc_client/cli_netlogon.c
+   branches/SAMBA_3_0/source/rpc_parse/parse_net.c
+   branches/SAMBA_3_0/source/rpcclient/cmd_netlogon.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/include/rpc_netlogon.h
+===================================================================
+--- branches/SAMBA_3_0/source/include/rpc_netlogon.h	2007-06-08 10:15:19 UTC (rev 23379)
++++ branches/SAMBA_3_0/source/include/rpc_netlogon.h	2007-06-08 10:29:46 UTC (rev 23380)
+@@ -442,7 +442,7 @@
+ typedef struct net_r_getdcname {
+ 	uint32  ptr_dcname;
+ 	UNISTR2 uni_dcname;
+-	NTSTATUS status;
++	WERROR status;
+ } NET_R_GETDCNAME;
+ 
+ /* NET_Q_TRUST_DOM_LIST - LSA Query Trusted Domains */
+
+Modified: branches/SAMBA_3_0/source/rpc_client/cli_netlogon.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpc_client/cli_netlogon.c	2007-06-08 10:15:19 UTC (rev 23379)
++++ branches/SAMBA_3_0/source/rpc_client/cli_netlogon.c	2007-06-08 10:29:46 UTC (rev 23380)
+@@ -420,14 +420,14 @@
+ 
+ /* GetDCName */
+ 
+-NTSTATUS rpccli_netlogon_getdcname(struct rpc_pipe_client *cli,
+-				   TALLOC_CTX *mem_ctx, const char *mydcname,
+-				   const char *domainname, fstring newdcname)
++WERROR rpccli_netlogon_getdcname(struct rpc_pipe_client *cli,
++				 TALLOC_CTX *mem_ctx, const char *mydcname,
++				 const char *domainname, fstring newdcname)
+ {
+ 	prs_struct qbuf, rbuf;
+ 	NET_Q_GETDCNAME q;
+ 	NET_R_GETDCNAME r;
+-	NTSTATUS result;
++	WERROR result;
+ 	fstring mydcname_slash;
+ 
+ 	ZERO_STRUCT(q);
+@@ -440,16 +440,16 @@
+ 
+ 	/* Marshall data and send request */
+ 
+-	CLI_DO_RPC(cli, mem_ctx, PI_NETLOGON, NET_GETDCNAME,
++	CLI_DO_RPC_WERR(cli, mem_ctx, PI_NETLOGON, NET_GETDCNAME,
+ 		q, r,
+ 		qbuf, rbuf,
+ 		net_io_q_getdcname,
+ 		net_io_r_getdcname,
+-		NT_STATUS_UNSUCCESSFUL);
++		WERR_GENERAL_FAILURE);
+ 
+ 	result = r.status;
+ 
+-	if (NT_STATUS_IS_OK(result)) {
++	if (W_ERROR_IS_OK(result)) {
+ 		rpcstr_pull_unistr2_fstring(newdcname, &r.uni_dcname);
+ 	}
+ 
+
+Modified: branches/SAMBA_3_0/source/rpc_parse/parse_net.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpc_parse/parse_net.c	2007-06-08 10:15:19 UTC (rev 23379)
++++ branches/SAMBA_3_0/source/rpc_parse/parse_net.c	2007-06-08 10:29:46 UTC (rev 23380)
+@@ -644,7 +644,7 @@
+ 	if (!prs_align(ps))
+ 		return False;
+ 
+-	if (!prs_ntstatus("status", ps, depth, &r_t->status))
++	if (!prs_werror("status", ps, depth, &r_t->status))
+ 		return False;
+ 
+ 	return True;
+
+Modified: branches/SAMBA_3_0/source/rpcclient/cmd_netlogon.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpcclient/cmd_netlogon.c	2007-06-08 10:15:19 UTC (rev 23379)
++++ branches/SAMBA_3_0/source/rpcclient/cmd_netlogon.c	2007-06-08 10:29:46 UTC (rev 23380)
+@@ -76,17 +76,17 @@
+ 	return result;
+ }
+ 
+-static NTSTATUS cmd_netlogon_getdcname(struct rpc_pipe_client *cli, 
+-				       TALLOC_CTX *mem_ctx, int argc, 
+-				       const char **argv)
++static WERROR cmd_netlogon_getdcname(struct rpc_pipe_client *cli, 
++				     TALLOC_CTX *mem_ctx, int argc, 
++				     const char **argv)
+ {
+ 	fstring dcname;
+-	NTSTATUS result = NT_STATUS_UNSUCCESSFUL;
++	WERROR result = WERR_GENERAL_FAILURE;
+ 	int old_timeout;
+ 
+ 	if (argc != 2) {
+ 		fprintf(stderr, "Usage: %s domainname\n", argv[0]);
+-		return NT_STATUS_OK;
++		return WERR_OK;
+ 	}
+ 
+ 	/* Make sure to wait for our DC's reply */
+@@ -96,7 +96,7 @@
+ 
+ 	cli_set_timeout(cli->cli, old_timeout);
+ 
+-	if (!NT_STATUS_IS_OK(result))
++	if (!W_ERROR_IS_OK(result))
+ 		goto done;
+ 
+ 	/* Display results */
+@@ -580,7 +580,7 @@
+ 
+ 	{ "logonctrl2", RPC_RTYPE_NTSTATUS, cmd_netlogon_logon_ctrl2, NULL, PI_NETLOGON, NULL, "Logon Control 2",     "" },
+ 	{ "getanydcname", RPC_RTYPE_WERROR, NULL, cmd_netlogon_getanydcname, PI_NETLOGON, NULL, "Get trusted DC name",     "" },
+-	{ "getdcname", RPC_RTYPE_NTSTATUS, cmd_netlogon_getdcname, NULL, PI_NETLOGON, NULL, "Get trusted PDC name",     "" },
++	{ "getdcname", RPC_RTYPE_WERROR, NULL, cmd_netlogon_getdcname, PI_NETLOGON, NULL, "Get trusted PDC name",     "" },
+ 	{ "dsr_getdcname", RPC_RTYPE_WERROR, NULL, cmd_netlogon_dsr_getdcname, PI_NETLOGON, NULL, "Get trusted DC name",     "" },
+ 	{ "dsr_getdcnameex", RPC_RTYPE_WERROR, NULL, cmd_netlogon_dsr_getdcnameex, PI_NETLOGON, NULL, "Get trusted DC name",     "" },
+ 	{ "dsr_getdcnameex2", RPC_RTYPE_WERROR, NULL, cmd_netlogon_dsr_getdcnameex2, PI_NETLOGON, NULL, "Get trusted DC name",     "" },
+

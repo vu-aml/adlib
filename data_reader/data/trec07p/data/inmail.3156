@@ -1,0 +1,94 @@
+From perl6-all-return-80495-ktwarwic=speedy.uwaterloo.ca@perl.org  Wed Apr 11 14:34:11 2007
+Return-Path: <perl6-all-return-80495-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3BIY90I020273
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 11 Apr 2007 14:34:09 -0400
+Received: (qmail 19035 invoked by uid 514); 11 Apr 2007 18:33:45 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 19023 invoked from network); 11 Apr 2007 18:33:45 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: domain of chromatic@wgz.org designates 63.105.17.39 as permitted sender)
+From: chromatic <chromatic@wgz.org>
+Organization: Snafu
+To: perl6-internals@perl.org
+Subject: Re: [perl #42430] [PATCH] make :vtable imply :method
+Date: Wed, 11 Apr 2007 11:13:07 -0700
+User-Agent: KMail/1.9.5
+Cc: "Alek Storm" <alek.storm@gmail.com>, "Allison Randal" <allison@perl.org>
+References: <RT-Ticket-42430@perl.org> <461C9495.1070109@perl.org> <189adbd0704110540p680a576dje9e0592f6b0db2d5@mail.gmail.com>
+In-Reply-To: <189adbd0704110540p680a576dje9e0592f6b0db2d5@mail.gmail.com>
+MIME-Version: 1.0
+Content-Type: text/plain;
+  charset="utf-8"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+Message-Id: <200704111113.07499.chromatic@wgz.org>
+X-Virus-Scanned: by amavisd-new at wgz.org
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO,SPF_PASS
+Status: O
+Content-Length: 1271
+Lines: 44
+
+On Wednesday 11 April 2007 05:40, Alek Storm wrote:
+
+> On 4/11/07, Allison Randal <allison@perl.org> wrote:
+
+> > Actually, setting :vtable without setting :method makes a great deal of
+> > sense, if you want to override a low-level vtable operation without
+> > adding a named method to the class.
+
+> Just use the :anon flag.  It was designed for this.  Vtable methods are
+> methods, and they're called as methods from C.
+
+Both options seem slightly wrong to me.
+
+Vtable methods are methods, yes, so they should receive the invocant 
+automagically.  I don't believe they do this currently:
+
+.sub 'set_integer_native' :vtable :method
+    .param int size
+
+    .local pmc size_pmc
+    size_pmc = getattribute self, 'size'
+    size_pmc = size
+.end
+
+(runs fine)
+
+.sub 'set_integer_native' :vtable
+    .param int size
+
+    .local pmc size_pmc
+    size_pmc = getattribute self, 'size'
+    size_pmc = size
+.end
+
+error:imcc:The opcode 'getattribute_p_ic_sc' (getattribute<3>) was not found. 
+Check the type and number of the arguments
+
+Allison's right about method visibility outside of the vtable, and 
+throwing :anon on there seems a little hacky.
+
+However, requiring :method to make vtable methods actually work if you use 
+self inside fails Allison's visibility problem.
+
+-- c
+

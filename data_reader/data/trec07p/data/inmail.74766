@@ -1,0 +1,212 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Jul  5 12:28:21 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l65GSLL9028513
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 5 Jul 2007 12:28:21 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 802FE163974
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu,  5 Jul 2007 16:28:16 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id 48043163817; Thu,  5 Jul 2007 16:27:48 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070705162748.48043163817@lists.samba.org>
+Date: Thu,  5 Jul 2007 16:27:48 +0000 (GMT)
+Subject: svn commit: samba r23725 - in branches/SAMBA_3_0/source/smbd: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-07-05 16:27:47 +0000 (Thu, 05 Jul 2007)
+New Revision: 23725
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23725
+
+Log:
+Remove get_current_mid()
+
+Jeremy, next one to review :-)
+
+
+Modified:
+   branches/SAMBA_3_0/source/smbd/open.c
+   branches/SAMBA_3_0/source/smbd/process.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/smbd/open.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/open.c	2007-07-05 16:26:27 UTC (rev 23724)
++++ branches/SAMBA_3_0/source/smbd/open.c	2007-07-05 16:27:47 UTC (rev 23725)
+@@ -644,6 +644,7 @@
+ 
+ static BOOL delay_for_oplocks(struct share_mode_lock *lck,
+ 			      files_struct *fsp,
++			      uint16 mid,
+ 			      int pass_number,
+ 			      int oplock_request)
+ {
+@@ -728,7 +729,7 @@
+ 
+ 	DEBUG(10, ("Sending break request to PID %s\n",
+ 		   procid_str_static(&exclusive->pid)));
+-	exclusive->op_mid = get_current_mid();
++	exclusive->op_mid = mid;
+ 
+ 	/* Create the message. */
+ 	share_mode_entry_to_message(msg, exclusive);
+@@ -768,9 +769,9 @@
+ static void defer_open(struct share_mode_lock *lck,
+ 		       struct timeval request_time,
+ 		       struct timeval timeout,
++		       uint16 mid,
+ 		       struct deferred_open_record *state)
+ {
+-	uint16 mid = get_current_mid();
+ 	int i;
+ 
+ 	/* Paranoia check */
+@@ -1065,7 +1066,9 @@
+ 
+ }
+ 
+-static void schedule_defer_open(struct share_mode_lock *lck, struct timeval request_time)
++static void schedule_defer_open(struct share_mode_lock *lck,
++				struct timeval request_time,
++				uint16 mid)
+ {
+ 	struct deferred_open_record state;
+ 
+@@ -1096,7 +1099,7 @@
+ 	state.id = lck->id;
+ 
+ 	if (!request_timed_out(request_time, timeout)) {
+-		defer_open(lck, request_time, timeout, &state);
++		defer_open(lck, request_time, timeout, mid, &state);
+ 	}
+ }
+ 
+@@ -1443,8 +1446,10 @@
+ 		}
+ 
+ 		/* First pass - send break only on batch oplocks. */
+-		if (delay_for_oplocks(lck, fsp, 1, oplock_request)) {
+-			schedule_defer_open(lck, request_time);
++		if ((req != NULL)
++		    && delay_for_oplocks(lck, fsp, req->mid, 1,
++					 oplock_request)) {
++			schedule_defer_open(lck, request_time, req->mid);
+ 			TALLOC_FREE(lck);
+ 			file_free(fsp);
+ 			return NT_STATUS_SHARING_VIOLATION;
+@@ -1461,8 +1466,11 @@
+ 			 * status again. */
+ 			/* Second pass - send break for both batch or
+ 			 * exclusive oplocks. */
+-			if (delay_for_oplocks(lck, fsp, 2, oplock_request)) {
+-				schedule_defer_open(lck, request_time);
++			if ((req != NULL)
++			     && delay_for_oplocks(lck, fsp, req->mid, 2,
++						  oplock_request)) {
++				schedule_defer_open(lck, request_time,
++						    req->mid);
+ 				TALLOC_FREE(lck);
+ 				file_free(fsp);
+ 				return NT_STATUS_SHARING_VIOLATION;
+@@ -1576,10 +1584,11 @@
+ 				state.delayed_for_oplocks = False;
+ 				state.id = id;
+ 
+-				if (!request_timed_out(request_time,
+-						       timeout)) {
++				if ((req != NULL)
++				    && !request_timed_out(request_time,
++							  timeout)) {
+ 					defer_open(lck, request_time, timeout,
+-						   &state);
++						   req->mid, &state);
+ 				}
+ 			}
+ 
+@@ -1667,8 +1676,10 @@
+ 		}
+ 
+ 		/* First pass - send break only on batch oplocks. */
+-		if (delay_for_oplocks(lck, fsp, 1, oplock_request)) {
+-			schedule_defer_open(lck, request_time);
++		if ((req != NULL)
++		    && delay_for_oplocks(lck, fsp, req->mid, 1,
++					 oplock_request)) {
++			schedule_defer_open(lck, request_time, req->mid);
+ 			TALLOC_FREE(lck);
+ 			fd_close(conn, fsp);
+ 			file_free(fsp);
+@@ -1684,8 +1695,11 @@
+ 			 * status again. */
+ 			/* Second pass - send break for both batch or
+ 			 * exclusive oplocks. */
+-			if (delay_for_oplocks(lck, fsp, 2, oplock_request)) {
+-				schedule_defer_open(lck, request_time);
++			if ((req != NULL)
++			    && delay_for_oplocks(lck, fsp, req->mid, 2,
++						 oplock_request)) {
++				schedule_defer_open(lck, request_time,
++						    req->mid);
+ 				TALLOC_FREE(lck);
+ 				fd_close(conn, fsp);
+ 				file_free(fsp);
+@@ -1709,8 +1723,10 @@
+ 			 * "goto top of this function", but don't tell
+ 			 * anybody... */
+ 
+-			defer_open(lck, request_time, timeval_zero(),
+-				   &state);
++			if (req != NULL) {
++				defer_open(lck, request_time, timeval_zero(),
++					   req->mid, &state);
++			}
+ 			TALLOC_FREE(lck);
+ 			return status;
+ 		}
+
+Modified: branches/SAMBA_3_0/source/smbd/process.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/process.c	2007-07-05 16:26:27 UTC (rev 23724)
++++ branches/SAMBA_3_0/source/smbd/process.c	2007-07-05 16:27:47 UTC (rev 23725)
+@@ -48,15 +48,6 @@
+ extern BOOL global_machine_password_needs_changing;
+ extern int max_send;
+ 
+-/****************************************************************************
+- Function to return the current request mid from Inbuffer.
+-****************************************************************************/
+-
+-uint16 get_current_mid(void)
+-{
+-	return SVAL(InBuffer,smb_mid);
+-}
+-
+ /*
+  * Initialize a struct smb_request from an inbuf
+  */
+

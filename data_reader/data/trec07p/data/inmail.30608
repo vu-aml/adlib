@@ -1,0 +1,145 @@
+From perl6-all-return-81152-ktwarwic=speedy.uwaterloo.ca@perl.org  Mon May  7 10:43:34 2007
+Return-Path: <perl6-all-return-81152-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l47EhXqD032346
+	for <ktwarwic@flax9.uwaterloo.ca>; Mon, 7 May 2007 10:43:34 -0400
+Received: (qmail 27819 invoked by uid 514); 7 May 2007 14:43:31 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 27814 invoked from network); 7 May 2007 14:43:31 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: moderator for perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: Mike Mattie (via RT) <parrotbug-followup@parrotcode.org>
+X-RT-NewTicket: yes
+To: bugs-bitbucket@netlabs.develooper.com
+Resent-To: perl6-internals@perl.org
+Mail-Followup-To: perl6-internals@perl.org
+Reply-To: perl6-internals@perl.org
+Date: Mon, 07 May 2007 06:49:42 -0700
+Subject: [perl #42900] [PATCH] src/packfile.c Parrot_load_bytecode, improve error message 
+In-Reply-To: <20070507064610.795a667b@reforged>
+References: <RT-Ticket-42900@perl.org> <20070507064610.795a667b@reforged>
+Message-ID: <rt-3.6.HEAD-12281-1178545782-1308.42900-72-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #42900
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: codermattie@gmail.com
+MIME-Version: 1.0
+X-RT-Original-Encoding: utf-8
+Content-type: multipart/mixed; boundary="----------=_1178545783-12281-28"
+Resent-Message-Id: <20070507134943.7CE622AFD5@x3.develooper.com>
+Resent-Date: Mon,  7 May 2007 06:49:43 -0700 (PDT)
+Resent-From: rt-codermattie=gmail.com@netlabs.develooper.com
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+
+------------=_1178545783-12281-28
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+# New Ticket Created by  Mike Mattie 
+# Please include the string:  [perl #42900]
+# in the subject line of all future correspondence about this issue. 
+# <URL: http://rt.perl.org/rt3/Ticket/Display.html?id=42900 >
+
+
+Hello,
+
+I noticed while debugging my patches to the loader that the message for a failure in .load_bytecode was really
+horrible. It was something like this:
+
+immc: Couldn't find file %s
+
+At the time I didn't know what immc was, and the message didn't really tell me much more than some
+deep guts of parrot couldn't load a file anymore.
+
+In this patch I try and clarify things a bit by adding to the message something they can associate
+with a parrot op , load_bytecode.
+
+Hopefully the message will now be:
+
+immc: "load_bytecode" couldn't find file %s
+
+Which helps alot for a person that is using the API but isn't familiar with the architecture.
+
+The one test that failed repeatably was t/op/load_bytecode.t . I fixed that (in the patch)
+but I still got that mysterious failure in t/perl/Parrot_Docs.t which I can't reproduce with
+prove.
+
+here is the output:
+
+t/perl/Parrot_Docs...............................                                                                             t/perl/Parrot_Docs...............................ok 1/25                                                                             t/perl/Parrot_Docs...............................ok 2/25
+#     Failed test (t/perl/Parrot_Docs.t at line 61)
+Use of uninitialized value in pattern match (m//) at
+t/perl/Parrot_Docs.t line 65.
+
+That could be from my copy -R HEAD BASE which is duplicating svn meta-data the wrong
+way ? not sure.
+
+If your harness is OK, and I haven't broken any error report convention please apply.
+
+Cheers,
+Mike Mattie - codermattie@gmail.com
+
+------------=_1178545783-12281-28
+Content-Type: text/x-patch;
+ charset="ascii";
+ name="better-load-bytecode-fail-msg.diff"
+Content-Disposition: inline; filename="better-load-bytecode-fail-msg.diff"
+Content-Transfer-Encoding: 7bit
+RT-Attachment: 42900/258918/112896
+
+--- HEAD/src/packfile.c	2007-05-06 17:58:47.000000000 -0700
++++ rev-18443/src/packfile.c	2007-05-07 05:54:07.000000000 -0700
+@@ -3436,7 +3436,7 @@
+     path = Parrot_locate_runtime_file_str(interp, file_str, file_type);
+     if (!path) {
+         real_exception(interp, NULL, E_LibraryNotLoadedError,
+-                "Couldn't find file '%Ss'", file_str);
++                "\"load_bytecode\" couldn't find file '%Ss'", file_str);
+         return;
+     }
+     /* remember wo_ext => full_path mapping */
+--- BASE/t/op/load_bytecode.t	2007-05-07 06:32:51.000000000 -0700
++++ HEAD/t/op/load_bytecode.t	2007-03-18 05:17:23.000000000 -0700
+@@ -35,7 +35,7 @@
+         load_bytecode 'no_file_by_this_name'
+ .end
+ CODE
+-/"load_bytecode" couldn't find file 'no_file_by_this_name'/
++/Couldn't find file 'no_file_by_this_name'/
+ OUTPUT
+ 
+ # Local Variables:
+
+------------=_1178545783-12281-28
+Content-Type: application/pgp-signature; name="signature.asc"
+Content-Disposition: inline; filename="signature.asc"
+Content-Transfer-Encoding: base64
+RT-Attachment: 42900/258918/112897
+
+LS0tLS1CRUdJTiBQR1AgU0lHTkFUVVJFLS0tLS0KVmVyc2lvbjogR251UEcg
+djEuNC42IChHTlUvTGludXgpCgppRDhEQlFGR1B5Mm9kZlJjaHJrQklua1JB
+cENyQUo5YXlUVkFQaUhodGdhdnF4ZnVTVkN2S3IxZ3dRQ2d4L0phCmhJTmlq
+YW8wU3JpODhaNjBZWDlMKzNzPQo9QXNCUgotLS0tLUVORCBQR1AgU0lHTkFU
+VVJFLS0tLS0K
+
+------------=_1178545783-12281-28--
+

@@ -1,0 +1,184 @@
+From r-help-bounces@stat.math.ethz.ch  Thu Jul  5 17:05:58 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l65L5vL9031390
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 5 Jul 2007 17:05:58 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l65L51jg005754;
+	Thu, 5 Jul 2007 23:05:11 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: *
+X-Spam-Status: No, score=1.0 required=5.0 tests=BAYES_60,
+	DKIM_POLICY_SIGNSOME autolearn=no version=3.2.0
+Received: from fork4.mail.virginia.edu (fork4.mail.Virginia.EDU
+	[128.143.2.194])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l65L4roj005714
+	for <r-help@stat.math.ethz.ch>; Thu, 5 Jul 2007 23:04:54 +0200
+Received: from localhost (localhost [127.0.0.1])
+	by fork4.mail.virginia.edu (Postfix) with ESMTP id 18C5711B159
+	for <r-help@stat.math.ethz.ch>; Thu,  5 Jul 2007 17:04:53 -0400 (EDT)
+Received: from fork4.mail.virginia.edu ([127.0.0.1])
+	by localhost (fork4.mail.virginia.edu [127.0.0.1]) (amavisd-new,
+	port 10024) with ESMTP id 23660-03 for <r-help@stat.math.ethz.ch>;
+	Thu,  5 Jul 2007 17:04:52 -0400 (EDT)
+Received: from mail.virginia.edu (neon.mail.Virginia.EDU [128.143.2.220])
+	by fork4.mail.virginia.edu (Postfix) with ESMTP id DB3C111B146
+	for <r-help@stat.math.ethz.ch>; Thu,  5 Jul 2007 17:04:52 -0400 (EDT)
+Received: from [128.143.21.227] (account kmg5b@cms.mail.virginia.edu)
+	by neon.mail.virginia.edu (CommuniGate Pro WEBUSER 5.1.8)
+	with HTTP id 14318517 for r-help@stat.math.ethz.ch;
+	Thu, 05 Jul 2007 17:04:52 -0400
+From: "Kathy Gerber" <kathy@virginia.edu>
+To: r-help@stat.math.ethz.ch
+X-Mailer: CommuniGate Pro WebUser v5.1.8
+Date: Thu, 05 Jul 2007 17:04:52 -0400
+Message-ID: <web-14318517@neon.mail.virginia.edu>
+MIME-Version: 1.0
+X-UVA-Virus-Scanned: by amavisd-new at fork4.mail.virginia.edu
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Subject: [R] Question on Rmpi looping
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+Dear R list,
+
+In the course of learning to work with Rmpi, we are confused about a few 
+points.  The following simple program is based on some examples we retrieved 
+from the web. Each slave is writing the same output line multiple times (a 
+multiple equal to the number of slaves). In other words, the write 
+statements are being executed a number of times equal to the number of 
+slaves.
+
+I am trying to print out the slave number to a file (once), but it is 
+printing it 4 times (since the number of slaves is 4). The code is as 
+follows:
+
+# Initialize the Rmpi environment
+library("Rmpi")
+
+# We are spawning four slaves
+mpi.spawn.Rslaves(nslaves=4)
+
+if (mpi.comm.size() != 5)
+     {
+     print("Please initialize an MPI cluster of at least 5 processors.")
+     print("Then, try again")
+     mpi.quit()
+     }
+
+.Last <- function()
+     {
+     if (is.loaded("mpi_initialize"))
+         {
+         if (mpi.comm.size(1) > 0)
+             {
+             print("Please use mpi.close.Rslaves() to close slaves.")
+             mpi.close.Rslaves()
+             }
+         print("Please use mpi.quit() to quit R")
+         .Call("mpi_finalize")
+         }
+     }
+
+
+# Define the base directory
+basedir <- "/home/user/directory/"
+
+fcnfishtest <- function()
+   {
+          wrout = paste(basedir, paste("processor",my_rank, sep=""), sep="")
+          write(my_rank, wrout, append=TRUE)
+   }
+################## END OF SLAVES ##################
+
+
+# We're in the parent.
+
+#Have each slave get its rank
+  mpi.bcast.cmd(my_rank <- mpi.comm.rank())
+  mpi.bcast.Robj2slave(basedir)
+
+
+# Send the function to the slaves
+   
+  mpi.bcast.Robj2slave(fcnfishtest)
+
+# Call the function
+
+x<- mpi.remote.exec(fcnfishtest())
+x
+
+# close slaves and exit
+  mpi.close.Rslaves()
+  mpi.quit(save = "no")
+
+##### end code
+
+
+The output is as follows:
+
+file 1:
+1
+1
+1
+1
+  
+file 2:
+2
+2
+2
+2
+
+file 3:
+3
+3
+3
+3
+
+file 4:
+4
+4
+4
+4
+
+
+We would like to call four slaves with output files like:
+
+file 1:
+1
+
+file 2:
+2
+
+file 3:
+3
+
+file 4:
+4
+
+
+Any help would be greatly appreciated. Thank you!
+
+Kathy Gerber
+University of Virginia - ITC - Research Computing Support
+kathy@virginia.edu                         434-982-4986
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

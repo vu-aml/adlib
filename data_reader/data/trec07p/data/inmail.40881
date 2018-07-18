@@ -1,0 +1,238 @@
+From r-help-bounces@stat.math.ethz.ch  Mon May 21 12:35:06 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4LGZ4qD001246
+	for <ktwarwic@flax9.uwaterloo.ca>; Mon, 21 May 2007 12:35:05 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4LGY9XG030841;
+	Mon, 21 May 2007 18:34:19 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.1 required=5.0 tests=AWL, BAYES_50, HTML_60_70,
+	HTML_MESSAGE autolearn=no version=3.1.8
+Received: from ug-out-1314.google.com (ug-out-1314.google.com [66.249.92.172])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4LGFBNI024161
+	for <r-help@stat.math.ethz.ch>; Mon, 21 May 2007 18:15:12 +0200
+Received: by ug-out-1314.google.com with SMTP id p37so1063528ugc
+	for <r-help@stat.math.ethz.ch>; Mon, 21 May 2007 09:15:11 -0700 (PDT)
+Received: by 10.67.28.2 with SMTP id f2mr3484783ugj.1179764109879;
+	Mon, 21 May 2007 09:15:09 -0700 (PDT)
+Received: by 10.66.240.10 with HTTP; Mon, 21 May 2007 09:15:09 -0700 (PDT)
+Message-ID: <644e1f320705210915g496a0c79y748941d34da5e46@mail.gmail.com>
+Date: Mon, 21 May 2007 12:15:09 -0400
+From: "jim holtman" <jholtman@gmail.com>
+To: Robert <jsubei@yahoo.fr>
+In-Reply-To: <977049.30208.qm@web26204.mail.ukl.yahoo.com>
+MIME-Version: 1.0
+References: <977049.30208.qm@web26204.mail.ukl.yahoo.com>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Content-Disposition: inline
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] sequentially process a list
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+This should do it for you.  It makes use of 'rle' to find the 'runs' of
+thresholds and then changes the values to the sequence numbers
+
+> x <- "time  value
++ 1        5
++ 2        10
++ 3      7
++ 4      10
++ 5      19
++ 6      21
++ 7      20
++ 8      18
++ 9      10
++ 10      7
++ 11      8
++ 12      12
++ 13      17
++ 14      19
++ 15      24
++ 16      18
++ 17      15
++ 18      10
++ 19      9
++ "
+> x <- read.table(textConnection(x), header=TRUE)
+> # find the 'runs' of thresholds
+> threshold <- rle(x$value >= 17)
+> # get offset of each group
+> offset <- cumsum(c(1,threshold$lengths))
+> # create sequence numbers for the groups
+> seqNum <- cumsum(threshold$value)
+> # compute the indices of where the thresholds are
+> x$group <- NA  # initialize the vector
+> # change the values for the groups
+> for (i in which(threshold$value)){
++     x$group[seq(offset[i], length=threshold$length[i])] <- seqNum[i]
++ }
+> # extract max for each group
+> x
+   time value group
+1     1     5    NA
+2     2    10    NA
+3     3     7    NA
+4     4    10    NA
+5     5    19     1
+6     6    21     1
+7     7    20     1
+8     8    18     1
+9     9    10    NA
+10   10     7    NA
+11   11     8    NA
+12   12    12    NA
+13   13    17     2
+14   14    19     2
+15   15    24     2
+16   16    18     2
+17   17    15    NA
+18   18    10    NA
+19   19     9    NA
+> tapply(x$value, x$group, max)
+ 1  2
+21 24
+
+
+
+On 5/21/07, Robert <jsubei@yahoo.fr> wrote:
+>
+> Hi dear R users,
+>
+> I'm a R beginner and I have a basic question about sequential treatments
+> of lists.
+>
+> I have a time based (i.e. events are consecutive) list of values of a
+> biological property.
+>
+> Like :
+>
+> time  value
+> 1        5
+> 2        10
+> 3      7
+> 4      10
+> 5      19
+> 6      21
+> 7      20
+> 8      18
+> 9      10
+> 10      7
+> 11      8
+> 12      12
+> 13      17
+> 14      19
+> 15      24
+> 16      18
+> 17      15
+> 18      10
+> 19      9
+> [...]
+>
+>
+> And I have to define a threshold and to attach each event to his group,
+> i.e. values upper the threshold.
+>
+> Like, for a threshold value of 17
+>
+> time  value   group
+> 1        5       NA
+> 2        10      NA
+> 3      7      NA
+> 4      10      NA
+> 5      19      1
+> 6      21      1
+> 7      20      1
+> 8      18      1
+> 9      10      NA
+> 10      7      NA
+> 11      8      NA
+> 12      12      NA
+> 13      17      2
+> 14      19      2
+> 15      24      2
+> 16      18      2
+> 17      15      NA
+> 18      10      NA
+> 19      9      NA
+> [...]
+>
+>
+> The only solution that I have found is to do a sequentially read and write
+> :
+> for(i in 1:length(my_events_list))
+> {
+>    [...]
+> }
+>
+> But I very slow. Do you have another ideas ?
+>
+> And after I need to extract maximum values for each group
+> Like :
+> group        max_value
+> 1            21
+> 2            24
+> [...]
+>
+> and for each event which is part of a group to know if is't a ascending
+> phase or no.
+>
+>
+> Yes, lot of questions !! Sorry, but I think that the solution may be
+> unique.
+>
+> In advance, thank you a lot
+>
+> regards
+>
+> JS
+>
+>
+>
+>
+>
+>
+>
+>
+> _____________________________________________________________________________
+>
+> ______________________________________________
+> R-help@stat.math.ethz.ch mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-help
+> PLEASE do read the posting guide
+> http://www.R-project.org/posting-guide.html
+> and provide commented, minimal, self-contained, reproducible code.
+>
+
+
+
+-- 
+Jim Holtman
+Cincinnati, OH
++1 513 646 9390
+
+What is the problem you are trying to solve?
+
+	[[alternative HTML version deleted]]
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

@@ -1,0 +1,81 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu May 10 04:39:58 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4A8dwqD007212
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 10 May 2007 04:39:58 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id D332E163843
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 10 May 2007 08:39:56 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 620)
+	id 352C1162AC5; Thu, 10 May 2007 08:39:45 +0000 (GMT)
+To: samba-cvs@samba.org
+From: metze@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070510083945.352C1162AC5@lists.samba.org>
+Date: Thu, 10 May 2007 08:39:45 +0000 (GMT)
+Subject: svn commit: samba r22774 - in
+	branches/SAMBA_4_0/source/smb_server/smb: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: metze
+Date: 2007-05-10 08:39:44 +0000 (Thu, 10 May 2007)
+New Revision: 22774
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22774
+
+Log:
+correctly initialize the smbsrv_connection when switching to SMB2
+
+metze
+Modified:
+   branches/SAMBA_4_0/source/smb_server/smb/negprot.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/smb_server/smb/negprot.c
+===================================================================
+--- branches/SAMBA_4_0/source/smb_server/smb/negprot.c	2007-05-10 02:48:22 UTC (rev 22773)
++++ branches/SAMBA_4_0/source/smb_server/smb/negprot.c	2007-05-10 08:39:44 UTC (rev 22774)
+@@ -436,8 +436,21 @@
+ static void reply_smb2(struct smbsrv_request *req, uint16_t choice)
+ {
+ 	struct smbsrv_connection *smb_conn = req->smb_conn;
++	NTSTATUS status;
+ 
++	talloc_free(smb_conn->sessions.idtree_vuid);
++	ZERO_STRUCT(smb_conn->sessions);
++	talloc_free(smb_conn->smb_tcons.idtree_tid);
++	ZERO_STRUCT(smb_conn->smb_tcons);
++	ZERO_STRUCT(smb_conn->signing);
++
+ 	/* reply with a SMB2 packet */
++	status = smbsrv_init_smb2_connection(smb_conn);
++	if (!NT_STATUS_IS_OK(status)) {
++		smbsrv_terminate_connection(smb_conn, nt_errstr(status));
++		talloc_free(req);
++		return;
++	}
+ 	packet_set_callback(smb_conn->packet, smbsrv_recv_smb2_request);
+ 	smb2srv_reply_smb_negprot(req);
+ 	req = NULL;
+

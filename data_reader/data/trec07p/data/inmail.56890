@@ -1,0 +1,167 @@
+From r-help-bounces@stat.math.ethz.ch  Wed Jun 13 16:11:53 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5DKBqL9011991
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 13 Jun 2007 16:11:53 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5DKBCET002702;
+	Wed, 13 Jun 2007 22:11:23 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.4 required=5.0 tests=AWL, BAYES_40, DKIM_SIGNED,
+	DKIM_VERIFIED autolearn=no version=3.2.0
+Received: from py-out-1112.google.com (py-out-1112.google.com [64.233.166.179])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5DKAvkI002665
+	for <r-help@stat.math.ethz.ch>; Wed, 13 Jun 2007 22:10:58 +0200
+Received: by py-out-1112.google.com with SMTP id f31so551980pyh
+	for <r-help@stat.math.ethz.ch>; Wed, 13 Jun 2007 13:10:57 -0700 (PDT)
+Received: by 10.65.254.5 with SMTP id g5mr1829485qbs.1181765456102;
+	Wed, 13 Jun 2007 13:10:56 -0700 (PDT)
+Received: by 10.65.61.8 with HTTP; Wed, 13 Jun 2007 13:10:56 -0700 (PDT)
+Message-ID: <40e66e0b0706131310m5efd99c5j32d6f489d1bdffe2@mail.gmail.com>
+Date: Wed, 13 Jun 2007 15:10:56 -0500
+From: "Spielas Bates" <bates@stat.wisc.edu>
+To: "David Daniel" <ddaniel@nmsu.edu>
+In-Reply-To: <8FB7EA8D-6813-425F-9918-E2BC41CC950E@nmsu.edu>
+MIME-Version: 1.0
+Content-Disposition: inline
+References: <8FB7EA8D-6813-425F-9918-E2BC41CC950E@nmsu.edu>
+X-Google-Sender-Auth: e9aba4acafcb90e0
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] lme() doesn't converge on IGF example
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+On 6/13/07, David Daniel <ddaniel@nmsu.edu> wrote:
+> Running the Chapter 4 examples in Pinheiro & Bates' "Mixed-Effects
+> Models in S and S-PLUS" (2000), I get a message that the default
+> optimizer doesn't converge, but using "optim" for the optimizer
+> results in convergence:
+>
+> > > library(nlme)
+> > > fm1IGF.lis <- lmList(IGF)
+> > > fm1IGF.lme <- lme(fm1IGF.lis)
+> > Error in lme.formula(fixed = conc ~ age, data = IGF, random = list
+> > (Lot = c(-0.741604809797216,  :
+> >       nlminb problem, convergence error code = 1; message = iteration
+> > limit reached without convergence (9)
+> > >
+> > > fm1IGF.lme <- lme(fm1IGF.lis, control= list(opt="optim"))
+>
+> I wouldn't have expected the default optimizer to not work with an
+> example from this text.  Not knowing anything about the optimizers,
+> I'm wondering if this is expected or known behavior, or if there are
+> tips for getting it to converge other than changing optimizers?
+
+That model fit corresponds to a singular variance-covariance matrix
+for the random effects (notice that the correlation is -1).  The way
+that the model was written in lme this corresponds to an infinite
+value of one of the parameters so it is actually an advantage that the
+nlminb optimizer doesn't declare convergence.
+
+In the lmer2 function from the lme4 package the model is defined in
+such a way that the singular variance-covariance matrix corresponds to
+a value of zero for one of the parameters that is constrained to be
+nonnegative.   Try
+
+library(lme4)
+data(IGF, package = "nlme")
+fm1IGF.lmer <- lmer2(conc ~ age + (age|Lot), IGF, control =
+list(msVerbose = TRUE))
+
+and you will see that the second parameter is exactly zero at
+convergence (or, at least it is on my amd_64 Linux system).
+
+Currently I do not flag this for the user in the "show" method for the
+fitted model.  I should.  Depending on your point of view such a
+fitted model is either a boundary case or not a legitimate mixed
+model.
+
+The ability to converge to a singular model is actually the big
+difference between the lmer and the lmer2 functions in the lme4
+package.  For the lmer2 function the model is expressed in such a way
+that the log-likelihood or the REML criterion can be evaluated for
+singular variance-covariance matrices.  Furthermore such evaluations
+approach the boundary evaluations smoothly.  The lmer function
+evaluates the log-likelihood using the precision matrix (i.e. the
+inverse of the variance-covariance) which, by definition, cannot be
+evaluated when the variance-covariance matrix is singular.
+
+>
+> nlme Version:       3.1-80
+>
+> > > R.Version()
+> > $platform
+> > [1] "i386-apple-darwin8.9.1"
+> >
+> > $arch
+> > [1] "i386"
+> >
+> > $os
+> > [1] "darwin8.9.1"
+> >
+> > $system
+> > [1] "i386, darwin8.9.1"
+> >
+> > $status
+> > [1] ""
+> >
+> > $major
+> > [1] "2"
+> >
+> > $minor
+> > [1] "5.0"
+> >
+> > $year
+> > [1] "2007"
+> >
+> > $month
+> > [1] "04"
+> >
+> > $day
+> > [1] "23"
+> >
+> > $`svn rev`
+> > [1] "41293"
+> >
+> > $language
+> > [1] "R"
+> >
+> > $version.string
+> > [1] "R version 2.5.0 (2007-04-23)"
+>
+> ----------------------------------
+> David Daniel
+> Associate Professor
+> University Statistics Center
+> New Mexico State University
+>
+> ddaniel@nmsu.edu
+>
+> ______________________________________________
+> R-help@stat.math.ethz.ch mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-help
+> PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+> and provide commented, minimal, self-contained, reproducible code.
+>
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

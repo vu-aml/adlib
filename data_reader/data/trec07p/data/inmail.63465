@@ -1,0 +1,182 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Jun 22 19:19:05 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5MNJ4L9010844
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 22 Jun 2007 19:19:04 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 9AD4916391C
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 22 Jun 2007 14:55:18 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1004)
+	id 94ADB163832; Fri, 22 Jun 2007 14:54:39 +0000 (GMT)
+To: samba-cvs@samba.org
+From: gd@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070622145439.94ADB163832@lists.samba.org>
+Date: Fri, 22 Jun 2007 14:54:39 +0000 (GMT)
+Subject: svn commit: samba r23588 - in branches: SAMBA_3_0/source/libsmb
+	SAMBA_3_0_26/source/libsmb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: gd
+Date: 2007-06-22 14:54:39 +0000 (Fri, 22 Jun 2007)
+New Revision: 23588
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23588
+
+Log:
+Some more cleanups and error checks in the krb5 renew function.
+
+Guenther
+
+Modified:
+   branches/SAMBA_3_0/source/libsmb/clikrb5.c
+   branches/SAMBA_3_0_26/source/libsmb/clikrb5.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/libsmb/clikrb5.c
+===================================================================
+--- branches/SAMBA_3_0/source/libsmb/clikrb5.c	2007-06-22 14:50:15 UTC (rev 23587)
++++ branches/SAMBA_3_0/source/libsmb/clikrb5.c	2007-06-22 14:54:39 UTC (rev 23588)
+@@ -1151,6 +1151,11 @@
+ 		ccache_string = krb5_cc_default_name(context);
+ 	}
+ 
++	if (!ccache_string) {
++		ret = EINVAL;
++		goto done;
++	}
++
+ 	DEBUG(10,("smb_krb5_renew_ticket: using %s as ccache\n", ccache_string));
+ 
+ 	/* FIXME: we should not fall back to defaults */
+@@ -1175,6 +1180,8 @@
+ 	{
+ 		krb5_creds creds;
+ 
++		ZERO_STRUCT(creds);
++
+ 		ret = krb5_get_renewed_creds(context, &creds, client, ccache, CONST_DISCARD(char *, service_string));
+ 		if (ret) {
+ 			DEBUG(10,("smb_krb5_renew_ticket: krb5_get_kdc_cred failed: %s\n", error_message(ret)));
+@@ -1202,7 +1209,7 @@
+ 		krb5_realm *client_realm;
+ 		krb5_creds *creds;
+ 
+-		memset(&creds_in, 0, sizeof(creds_in));
++		ZERO_STRUCT(creds_in);
+ 
+ 		ret = krb5_copy_principal(context, client, &creds_in.client);
+ 		if (ret) {
+@@ -1252,7 +1259,7 @@
+ 		krb5_free_creds(context, creds);
+ 	}
+ #else
+-#error NO_SUITABKE_KRB5_TICKET_RENEW_FUNCTION_AVAILABLE
++#error NO_SUITABLE_KRB5_TICKET_RENEW_FUNCTION_AVAILABLE
+ #endif
+ 
+ 
+@@ -1260,15 +1267,14 @@
+ 	if (client) {
+ 		krb5_free_principal(context, client);
+ 	}
++	if (ccache) {
++		krb5_cc_close(context, ccache);
++	}
+ 	if (context) {
+ 		krb5_free_context(context);
+ 	}
+-	if (ccache) {
+-		krb5_cc_close(context, ccache);
+-	}
+ 
+ 	return ret;
+-    
+ }
+ 
+  krb5_error_code smb_krb5_free_addresses(krb5_context context, smb_krb5_addresses *addr)
+
+Modified: branches/SAMBA_3_0_26/source/libsmb/clikrb5.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/libsmb/clikrb5.c	2007-06-22 14:50:15 UTC (rev 23587)
++++ branches/SAMBA_3_0_26/source/libsmb/clikrb5.c	2007-06-22 14:54:39 UTC (rev 23588)
+@@ -1151,6 +1151,11 @@
+ 		ccache_string = krb5_cc_default_name(context);
+ 	}
+ 
++	if (!ccache_string) {
++		ret = EINVAL;
++		goto done;
++	}
++
+ 	DEBUG(10,("smb_krb5_renew_ticket: using %s as ccache\n", ccache_string));
+ 
+ 	/* FIXME: we should not fall back to defaults */
+@@ -1175,6 +1180,8 @@
+ 	{
+ 		krb5_creds creds;
+ 
++		ZERO_STRUCT(creds);
++
+ 		ret = krb5_get_renewed_creds(context, &creds, client, ccache, CONST_DISCARD(char *, service_string));
+ 		if (ret) {
+ 			DEBUG(10,("smb_krb5_renew_ticket: krb5_get_kdc_cred failed: %s\n", error_message(ret)));
+@@ -1202,7 +1209,7 @@
+ 		krb5_realm *client_realm;
+ 		krb5_creds *creds;
+ 
+-		memset(&creds_in, 0, sizeof(creds_in));
++		ZERO_STRUCT(creds_in);
+ 
+ 		ret = krb5_copy_principal(context, client, &creds_in.client);
+ 		if (ret) {
+@@ -1252,7 +1259,7 @@
+ 		krb5_free_creds(context, creds);
+ 	}
+ #else
+-#error NO_SUITABKE_KRB5_TICKET_RENEW_FUNCTION_AVAILABLE
++#error NO_SUITABLE_KRB5_TICKET_RENEW_FUNCTION_AVAILABLE
+ #endif
+ 
+ 
+@@ -1260,15 +1267,14 @@
+ 	if (client) {
+ 		krb5_free_principal(context, client);
+ 	}
++	if (ccache) {
++		krb5_cc_close(context, ccache);
++	}
+ 	if (context) {
+ 		krb5_free_context(context);
+ 	}
+-	if (ccache) {
+-		krb5_cc_close(context, ccache);
+-	}
+ 
+ 	return ret;
+-    
+ }
+ 
+  krb5_error_code smb_krb5_free_addresses(krb5_context context, smb_krb5_addresses *addr)
+

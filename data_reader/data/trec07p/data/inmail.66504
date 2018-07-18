@@ -1,0 +1,139 @@
+From r-help-bounces@stat.math.ethz.ch  Tue Jun 26 13:03:44 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5QH3gL9013799
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 26 Jun 2007 13:03:43 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5QH34t3005025;
+	Tue, 26 Jun 2007 19:03:18 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=5.0 tests=AWL, BAYES_50,
+	DKIM_POLICY_SIGNSOME autolearn=no version=3.2.0
+Received: from markov.stats.ox.ac.uk (markov.stats.ox.ac.uk [163.1.210.1])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5QGrY6I000592
+	for <r-help@stat.math.ethz.ch>; Tue, 26 Jun 2007 18:53:34 +0200
+Received: from gannet.stats.ox.ac.uk (gannet.stats [163.1.211.17])
+	by markov.stats.ox.ac.uk (8.13.6/8.13.6) with ESMTP id l5QGrSt4003584; 
+	Tue, 26 Jun 2007 17:53:28 +0100 (BST)
+Date: Tue, 26 Jun 2007 17:53:28 +0100 (BST)
+From: Prof Brian Ripley <ripley@stats.ox.ac.uk>
+To: ivo welch <ivowel@gmail.com>
+In-Reply-To: <50d1c22d0706260758q435b761fvad66a523cce2cf9d@mail.gmail.com>
+Message-ID: <Pine.LNX.4.64.0706261751190.18303@gannet.stats.ox.ac.uk>
+References: <50d1c22d0706260758q435b761fvad66a523cce2cf9d@mail.gmail.com>
+MIME-Version: 1.0
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] Memory Experimentation: Rule of Thumb = 10-15 Times the
+ Memory
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+The R Data Import/Export Manual points out several ways in which you can
+use read.csv more efficiently.
+
+On Tue, 26 Jun 2007, ivo welch wrote:
+
+> dear R experts:
+>
+> I am of course no R experts, but use it regularly.  I thought I would
+> share some experimentation  with memory use.  I run a linux machine
+> with about 4GB of memory, and R 2.5.0.
+>
+> upon startup, gc() reports
+>
+>         used (Mb) gc trigger (Mb) max used (Mb)
+> Ncells 268755 14.4     407500 21.8   350000 18.7
+> Vcells 139137  1.1     786432  6.0   444750  3.4
+>
+> This is my baseline.  linux 'top' reports 48MB as baseline.  This
+> includes some of my own routines that are always loaded.  Good..
+>
+>
+> Next, I created a s.csv file with 22 variables and 500,000
+> observations, taking up an uncompressed disk space of 115MB.  The
+> resulting object.size() after a read.csv() is 84,002,712 bytes (80MB).
+>
+>> s= read.csv("s.csv");
+>> object.size(s);
+>
+> [1] 84002712
+>
+>
+> here is where things get more interesting.  after the read.csv() is
+> finished, gc() reports
+>
+>           used (Mb) gc trigger  (Mb) max used  (Mb)
+> Ncells   270505 14.5    8349948 446.0 11268682 601.9
+> Vcells 10639515 81.2   34345544 262.1 42834692 326.9
+>
+> I was a big surprised by this---R had 928MB intermittent memory in
+> use.  More interestingly, this is also similar to what linux 'top'
+> reports as memory use of the R process (919MB, probably 1024 vs. 1000
+> B/MB), even after the read.csv() is finished and gc() has been run.
+> Nothing seems to have been released back to the OS.
+>
+> Now,
+>
+>> rm(s)
+>> gc()
+>         used (Mb) gc trigger  (Mb) max used  (Mb)
+> Ncells 270541 14.5    6679958 356.8 11268755 601.9
+> Vcells 139481  1.1   27476536 209.7 42807620 326.6
+>
+> linux 'top' now reports 650MB of memory use (though R itself uses only
+> 15.6Mb).  My guess is that It leaves the trigger memory of 567MB plus
+> the base 48MB.
+>
+>
+> There are two interesting observations for me here:  first, to read a
+> .csv file, I need to have at least 10-15 times as much memory as the
+> file that I want to read---a lot more than the factor of 3-4 that I
+> had expected.  The moral is that IF R can read a .csv file, one need
+> not worry too much about running into memory constraints lateron.  {R
+> Developers---reducing read.csv's memory requirement a little would be
+> nice.  of course, you have more than enough on your plate, already.}
+>
+> Second, memory is not returned fully to the OS.  This is not
+> necessarily a bad thing, but good to know.
+>
+> Hope this helps...
+>
+> Sincerely,
+>
+> /iaw
+>
+> ______________________________________________
+> R-help@stat.math.ethz.ch mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-help
+> PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+> and provide commented, minimal, self-contained, reproducible code.
+>
+
+-- 
+Brian D. Ripley,                  ripley@stats.ox.ac.uk
+Professor of Applied Statistics,  http://www.stats.ox.ac.uk/~ripley/
+University of Oxford,             Tel:  +44 1865 272861 (self)
+1 South Parks Road,                     +44 1865 272866 (PA)
+Oxford OX1 3TG, UK                Fax:  +44 1865 272595
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

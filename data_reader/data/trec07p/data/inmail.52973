@@ -1,0 +1,175 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Jun  7 04:07:43 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5787ghB032139
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 7 Jun 2007 04:07:42 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 6C081162B6F
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu,  7 Jun 2007 08:07:36 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 66043162AC0; Thu,  7 Jun 2007 08:07:17 +0000 (GMT)
+Date: Thu, 07 Jun 2007 18:07:38 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070607080717.66043162AC0@lists.samba.org>
+Subject: Rev 493: there are now far too many controls for the controls
+	statistics fields to be useful in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 493
+revision-id: tridge@samba.org-20070607080738-9hj4i5vn18ur2987
+parent: tridge@samba.org-20070607080525-14g625qx3h5rvs40
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Thu 2007-06-07 18:07:38 +1000
+message:
+  there are now far too many controls for the controls statistics fields to be useful
+modified:
+  common/ctdb_control.c          ctdb_control.c-20070426122724-j6gkpiofhbwdin63-1
+  include/ctdb_private.h         ctdb_private.h-20061117234101-o3qt14umlg9en8z0-13
+  tools/ctdb_control.c           ctdb_control.c-20070426122705-9ehj1l5lu2gn9kuj-1
+=== modified file 'common/ctdb_control.c'
+--- a/common/ctdb_control.c	2007-06-07 08:05:25 +0000
++++ b/common/ctdb_control.c	2007-06-07 08:07:38 +0000
+@@ -52,7 +52,6 @@
+ 	switch (opcode) {
+ 	case CTDB_CONTROL_PROCESS_EXISTS: {
+ 		CHECK_CONTROL_DATA_SIZE(sizeof(pid_t));
+-		ctdb->statistics.controls.process_exists++;
+ 		return kill(*(pid_t *)indata.dptr, 0);
+ 	}
+ 
+@@ -71,7 +70,6 @@
+ 
+ 	case CTDB_CONTROL_STATISTICS: {
+ 		CHECK_CONTROL_DATA_SIZE(0);
+-		ctdb->statistics.controls.statistics++;
+ 		ctdb->statistics.memory_used = talloc_total_size(ctdb);
+ 		ctdb->statistics.frozen = (ctdb->freeze_mode == CTDB_FREEZE_FROZEN);
+ 		ctdb->statistics.recovering = (ctdb->recovery_mode == CTDB_RECOVERY_ACTIVE);
+@@ -147,7 +145,6 @@
+ 
+ 	case CTDB_CONTROL_PING:
+ 		CHECK_CONTROL_DATA_SIZE(0);
+-		ctdb->statistics.controls.ping++;
+ 		return ctdb->statistics.num_clients;
+ 
+ 	case CTDB_CONTROL_GET_DBNAME: {
+@@ -177,45 +174,36 @@
+ 	}
+ 
+ 	case CTDB_CONTROL_DB_ATTACH:
+-		ctdb->statistics.controls.attach++;
+ 		return ctdb_control_db_attach(ctdb, indata, outdata);
+ 
+ 	case CTDB_CONTROL_SET_CALL: {
+ 		struct ctdb_control_set_call *sc = 
+ 			(struct ctdb_control_set_call *)indata.dptr;
+-		ctdb->statistics.controls.set_call++;
+ 		CHECK_CONTROL_DATA_SIZE(sizeof(struct ctdb_control_set_call));
+ 		return ctdb_daemon_set_call(ctdb, sc->db_id, sc->fn, sc->id);
+ 	}
+ 
+ 	case CTDB_CONTROL_TRAVERSE_START:
+ 		CHECK_CONTROL_DATA_SIZE(sizeof(struct ctdb_traverse_start));
+-		ctdb->statistics.controls.traverse_start++;
+ 		return ctdb_control_traverse_start(ctdb, indata, outdata, srcnode);
+ 
+ 	case CTDB_CONTROL_TRAVERSE_ALL:
+-		ctdb->statistics.controls.traverse_all++;
+ 		return ctdb_control_traverse_all(ctdb, indata, outdata);
+ 
+ 	case CTDB_CONTROL_TRAVERSE_DATA:
+-		ctdb->statistics.controls.traverse_data++;
+ 		return ctdb_control_traverse_data(ctdb, indata, outdata);
+ 
+ 	case CTDB_CONTROL_REGISTER_SRVID:
+-		ctdb->statistics.controls.register_srvid++;
+ 		return daemon_register_message_handler(ctdb, client_id, srvid);
+ 
+ 	case CTDB_CONTROL_DEREGISTER_SRVID:
+-		ctdb->statistics.controls.deregister_srvid++;
+ 		return daemon_deregister_message_handler(ctdb, client_id, srvid);
+ 
+ 	case CTDB_CONTROL_ENABLE_SEQNUM:
+-		ctdb->statistics.controls.enable_seqnum++;
+ 		CHECK_CONTROL_DATA_SIZE(sizeof(uint32_t));
+ 		return ctdb_ltdb_enable_seqnum(ctdb, *(uint32_t *)indata.dptr);
+ 
+ 	case CTDB_CONTROL_UPDATE_SEQNUM:
+-		ctdb->statistics.controls.update_seqnum++;
+ 		CHECK_CONTROL_DATA_SIZE(sizeof(uint32_t));		
+ 		return ctdb_ltdb_update_seqnum(ctdb, *(uint32_t *)indata.dptr, srcnode);
+ 
+
+=== modified file 'include/ctdb_private.h'
+--- a/include/ctdb_private.h	2007-06-07 08:05:25 +0000
++++ b/include/ctdb_private.h	2007-06-07 08:07:38 +0000
+@@ -211,22 +211,6 @@
+ 		uint32_t req_control;
+ 	} client;
+ 	struct {
+-		uint32_t statistics;
+-		uint32_t get_config;
+-		uint32_t ping;
+-		uint32_t attach;
+-		uint32_t set_call;
+-		uint32_t process_exists;
+-		uint32_t traverse_start;
+-		uint32_t traverse_all;
+-		uint32_t traverse_data;
+-		uint32_t update_seqnum;
+-		uint32_t enable_seqnum;
+-		uint32_t set_seqnum_frequency;
+-		uint32_t register_srvid;
+-		uint32_t deregister_srvid;
+-	} controls;
+-	struct {
+ 		uint32_t call;
+ 		uint32_t control;
+ 		uint32_t traverse;
+
+=== modified file 'tools/ctdb_control.c'
+--- a/tools/ctdb_control.c	2007-06-07 06:48:31 +0000
++++ b/tools/ctdb_control.c	2007-06-07 08:07:38 +0000
+@@ -96,19 +96,6 @@
+ 		STATISTICS_FIELD(client.req_call),
+ 		STATISTICS_FIELD(client.req_message),
+ 		STATISTICS_FIELD(client.req_control),
+-		STATISTICS_FIELD(controls.statistics),
+-		STATISTICS_FIELD(controls.get_config),
+-		STATISTICS_FIELD(controls.ping),
+-		STATISTICS_FIELD(controls.attach),
+-		STATISTICS_FIELD(controls.set_call),
+-		STATISTICS_FIELD(controls.process_exists),
+-		STATISTICS_FIELD(controls.traverse_start),
+-		STATISTICS_FIELD(controls.traverse_all),
+-		STATISTICS_FIELD(controls.traverse_data),
+-		STATISTICS_FIELD(controls.update_seqnum),
+-		STATISTICS_FIELD(controls.enable_seqnum),
+-		STATISTICS_FIELD(controls.register_srvid),
+-		STATISTICS_FIELD(controls.deregister_srvid),
+ 		STATISTICS_FIELD(timeouts.call),
+ 		STATISTICS_FIELD(timeouts.control),
+ 		STATISTICS_FIELD(timeouts.traverse),
+

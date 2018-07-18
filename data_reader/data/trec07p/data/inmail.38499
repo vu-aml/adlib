@@ -1,0 +1,502 @@
+From sugar-bounces@laptop.org  Thu May 17 12:39:48 2007
+Return-Path: <sugar-bounces@laptop.org>
+Received: from pedal.laptop.org (pedal.laptop.org [18.85.2.148])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4HGdlqD001976
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 17 May 2007 12:39:47 -0400
+Received: from pedal.laptop.org (localhost [127.0.0.1])
+	by pedal.laptop.org (Postfix) with ESMTP id 846694EEC1;
+	Thu, 17 May 2007 12:39:16 -0400 (EDT)
+X-Original-To: sugar@laptop.org
+Delivered-To: sugar@laptop.org
+Received: from spam.laptop.org (spam.laptop.org [18.85.46.23])
+	by pedal.laptop.org (Postfix) with ESMTP id A5B654EEC1
+	for <sugar@laptop.org>; Thu, 17 May 2007 12:39:14 -0400 (EDT)
+X-ASG-Debug-ID: 1179419980-351100050000-3Xmyjt
+X-Barracuda-URL: http://18.85.46.23:8000/cgi-bin/mark.cgi
+X-Barracuda-Connect: ug-out-1314.google.com[66.249.92.172]
+X-Barracuda-Start-Time: 1179419980
+Received: from ug-out-1314.google.com (ug-out-1314.google.com [66.249.92.172])
+	by spam.laptop.org (Spam Firewall) with ESMTP id EBE2575F3
+	for <sugar@laptop.org>; Thu, 17 May 2007 12:39:40 -0400 (EDT)
+Received: by ug-out-1314.google.com with SMTP id j3so342665ugf
+	for <sugar@laptop.org>; Thu, 17 May 2007 09:39:39 -0700 (PDT)
+Received: by 10.67.21.11 with SMTP id y11mr369434ugi.1179419979918;
+	Thu, 17 May 2007 09:39:39 -0700 (PDT)
+Received: from ?192.168.0.5? ( [81.242.230.11])
+	by mx.google.com with ESMTP id y7sm770851ugc.2007.05.17.09.39.36;
+	Thu, 17 May 2007 09:39:37 -0700 (PDT)
+X-ASG-Orig-Subj: [PATCH] add invitation support
+From: Guillaume Desmottes <guillaume.desmottes@collabora.co.uk>
+To: sugar@laptop.org
+Content-Type: multipart/mixed; boundary="=-giULaNaa5eN+TX2lKScp"
+Date: Thu, 17 May 2007 18:39:34 +0200
+Message-Id: <1179419974.6982.19.camel@cass-lpt>
+Mime-Version: 1.0
+X-Mailer: Evolution 2.10.1 
+X-Barracuda-Bayes: INNOCENT GLOBAL 0.0000 1.0000 -2.0210
+X-Barracuda-Virus-Scanned: by Barracuda Spam Firewall at laptop.org
+X-Barracuda-Spam-Score: -2.02
+X-Barracuda-Spam-Status: No, SCORE=-2.02 using global scores of TAG_LEVEL=3.5
+	QUARANTINE_LEVEL=1000.0 KILL_LEVEL=5.5 tests=
+X-Barracuda-Spam-Report: Code version 3.1, rules version 3.1.17223
+	Rule breakdown below
+	pts rule name              description
+	---- ----------------------
+	--------------------------------------------------
+Subject: [sugar] [PATCH] add invitation support
+X-BeenThere: sugar@laptop.org
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Discussion of OLPC design,
+	desktop platform and user experience" <sugar.laptop.org>
+List-Unsubscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=unsubscribe>
+List-Archive: <http://mailman.laptop.org/pipermail/sugar>
+List-Post: <mailto:sugar@laptop.org>
+List-Help: <mailto:sugar-request@laptop.org?subject=help>
+List-Subscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=subscribe>
+Sender: sugar-bounces@laptop.org
+Errors-To: sugar-bounces@laptop.org
+
+
+--=-giULaNaa5eN+TX2lKScp
+Content-Type: text/plain
+Content-Transfer-Encoding: 7bit
+
+Hi,
+
+The following patch implements activity invitations in Sugar.
+You have to share the activity before be able to send invitations. This
+restriction is because currently we create the muc associated with an
+activity when we share it. That should be fixed in the futur.
+
+There are 2 ways to invite someone to an activity:
+- using the mesh view. You have to share your current activity then go
+to the mesh view, roll the cursor over a buddy and choose "invite".
+- after sharing, click on the invite button in the toolbar and select a
+contact. This widget is still very basic and probably needs some UI
+love.
+
+I reused existing code to display invitations so currently each invite
+is added in the activity toolbar. You can only accept an invite by
+clicking on it.
+The GUI should be able to reject invites and see informations about them
+(sender of the invite, ...).
+
+
+	G.
+
+
+--=-giULaNaa5eN+TX2lKScp
+Content-Disposition: attachment; filename=invite.patch
+Content-Type: text/x-patch; name=invite.patch; charset=UTF-8
+Content-Transfer-Encoding: 7bit
+
+diff --git a/services/presence/presenceservice.py b/services/presence/presenceservice.py
+index 6b67357..0eb96cb 100644
+--- a/services/presence/presenceservice.py
++++ b/services/presence/presenceservice.py
+@@ -31,6 +31,7 @@ from telepathy.constants import (CONNECTION_STATUS_CONNECTING, CONNECTION_STATUS
+ from server_plugin import ServerPlugin
+ from linklocal_plugin import LinkLocalPlugin
+ from sugar import util
++import psutils
+ 
+ from buddy import Buddy, ShellOwner, TestOwner
+ from activity import Activity
+@@ -236,10 +237,11 @@ class PresenceService(ExportedGObject):
+             if not activity.get_joined_buddies():
+                 self._remove_activity(activity)
+ 
+-    def _activity_invitation(self, tp, act_id):
++    def _activity_invitation(self, tp, act_id, sender_handle):
+         activity = self._activities.get(act_id)
++        buddy = self._handles_buddies[tp][sender_handle]
+         if activity:
+-            self.ActivityInvitation(activity.object_path())
++            self.ActivityInvitation(activity.object_path(), buddy.object_path())
+ 
+     def _private_invitation(self, tp, chan_path):
+         conn = tp.get_connection()
+@@ -261,8 +263,8 @@ class PresenceService(ExportedGObject):
+     def BuddyDisappeared(self, buddy):
+         pass
+ 
+-    @dbus.service.signal(_PRESENCE_INTERFACE, signature="o")
+-    def ActivityInvitation(self, activity):
++    @dbus.service.signal(_PRESENCE_INTERFACE, signature="oo")
++    def ActivityInvitation(self, activity, buddy):
+         pass
+ 
+     @dbus.service.signal(_PRESENCE_INTERFACE, signature="soo")
+@@ -318,6 +320,21 @@ class PresenceService(ExportedGObject):
+         conn = self._server_plugin.get_connection()
+         return str(conn.service_name), conn.object_path
+ 
++    @dbus.service.method(_PRESENCE_INTERFACE, in_signature="ss",
++            out_signature="")
++    def Invite(self, activity_id, buddy_key):
++        buddy = self._buddies.get(buddy_key)
++        if buddy is None:
++            raise NotFoundError("The buddy was not found")
++
++        # XXX: don't hardcode tp plugin
++        for handle, _buddy in self._handles_buddies[self._server_plugin].items():
++            if buddy is _buddy:
++                self._server_plugin.invite(activity_id, handle)
++                return
++
++        raise NotFoundError("Can't find buddy's handle")
++
+     def cleanup(self):
+         for tp in self._handles_buddies:
+             tp.cleanup()
+diff --git a/services/presence/server_plugin.py b/services/presence/server_plugin.py
+index cd03c01..a094a77 100644
+--- a/services/presence/server_plugin.py
++++ b/services/presence/server_plugin.py
+@@ -35,7 +35,7 @@ from telepathy.constants import (
+     CONNECTION_HANDLE_TYPE_NONE, CONNECTION_HANDLE_TYPE_CONTACT,
+     CONNECTION_STATUS_CONNECTED, CONNECTION_STATUS_DISCONNECTED, CONNECTION_STATUS_CONNECTING,
+     CONNECTION_HANDLE_TYPE_LIST, CONNECTION_HANDLE_TYPE_CONTACT, CONNECTION_HANDLE_TYPE_ROOM,
+-    CONNECTION_STATUS_REASON_AUTHENTICATION_FAILED)
++    CONNECTION_STATUS_REASON_AUTHENTICATION_FAILED, CHANNEL_GROUP_CHANGE_REASON_INVITED)
+ 
+ CONN_INTERFACE_BUDDY_INFO = 'org.laptop.Telepathy.BuddyInfo'
+ CONN_INTERFACE_ACTIVITY_PROPERTIES = 'org.laptop.Telepathy.ActivityProperties'
+@@ -99,7 +99,7 @@ class ServerPlugin(gobject.GObject):
+         'buddy-activities-changed':  (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
+                              ([gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT])),
+         'activity-invitation': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
+-                             ([gobject.TYPE_PYOBJECT])),
++                             ([gobject.TYPE_PYOBJECT, gobject.TYPE_INT])),
+         'private-invitation':  (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
+                              ([gobject.TYPE_PYOBJECT])),
+         'activity-properties-changed':  (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
+@@ -404,6 +404,10 @@ class ServerPlugin(gobject.GObject):
+ 
+     def _join_activity_create_channel_cb(self, activity_id, signal, handle, userdata, chan_path):
+         channel = Channel(self._conn._dbus_object._named_service, chan_path)
++        local_pending = channel[CHANNEL_INTERFACE_GROUP].GetLocalPendingMembers()
++        if local_pending:
++            # we have been invited to this room
++            channel[CHANNEL_INTERFACE_GROUP].AddMembers(local_pending, "")
+         self._joined_activities.append((activity_id, handle))
+         self._set_self_activities()
+         self.emit(signal, activity_id, channel, None, userdata)
+@@ -826,12 +830,12 @@ class ServerPlugin(gobject.GObject):
+             # hack
+             channel._valid_interfaces.add(CHANNEL_INTERFACE_GROUP)
+ 
+-            current, local_pending, remote_pending = channel[CHANNEL_INTERFACE_GROUP].GetAllMembers()
+-            
+-            if local_pending:
+-                for act_id, act_handle in self._activities.items():
+-                    if handle == act_handle:
+-                        self.emit("activity-invitation", act_id)
++            local_pendings = channel[CHANNEL_INTERFACE_GROUP].GetLocalPendingMembersWithInfo()
++            for requesting, sender, reason, msg in local_pendings:
++                if reason == CHANNEL_GROUP_CHANGE_REASON_INVITED:
++                    for act_id, act_handle in self._activities.items():
++                        if handle == act_handle:
++                            self.emit("activity-invitation", act_id, sender)
+ 
+         elif handle_type == CONNECTION_HANDLE_TYPE_CONTACT and \
+             channel_type in [CHANNEL_TYPE_TEXT, CHANNEL_TYPE_STREAMED_MEDIA]:
+@@ -863,3 +867,22 @@ class ServerPlugin(gobject.GObject):
+             if room == act_handle:
+                 self.emit("activity-properties-changed", act_id, properties)
+                 return
++
++    def _invite_create_channel_cb(self, activity_id, buddy_handle, chan_path):
++        channel = Channel(self._conn._dbus_object._named_service, chan_path)
++        channel[CHANNEL_INTERFACE_GROUP].AddMembers([buddy_handle], "")
++
++    def _invite_error_cb(self, activity_id, buddy_handle, err):
++        e = Exception("Error inviting to activity %s: %s" % (activity_id, err))
++        logging.debug(str(e))
++
++    def invite(self, activity_id, buddy_handle):
++        activity_handle = self._activities.get(activity_id)
++        if not activity_handle:
++            raise RuntimeError("Unknown activity %s: can't find handle.")
++            return
++
++        self._conn[CONN_INTERFACE].RequestChannel(CHANNEL_TYPE_TEXT,
++            CONNECTION_HANDLE_TYPE_ROOM, activity_handle, True,
++            reply_handler=lambda *args: self._invite_create_channel_cb(activity_id, buddy_handle, *args),
++            error_handler=lambda *args: self._invite_error_cb(activity_id, buddy_handle, *args))
+diff --git a/shell/model/MeshModel.py b/shell/model/MeshModel.py
+index 93e2a23..99e5695 100644
+--- a/shell/model/MeshModel.py
++++ b/shell/model/MeshModel.py
+@@ -44,6 +44,9 @@ class ActivityModel:
+     def get_title(self):
+         return self._activity.props.name
+ 
++    def get_icon(self):
++        return self._bundle.get_icon()
++
+ class MeshModel(gobject.GObject):
+     __gsignals__ = {
+         'activity-added':       (gobject.SIGNAL_RUN_FIRST,
+@@ -64,7 +67,9 @@ class MeshModel(gobject.GObject):
+                                  gobject.TYPE_NONE, ([gobject.TYPE_PYOBJECT])),
+         'mesh-added':           (gobject.SIGNAL_RUN_FIRST,
+                                  gobject.TYPE_NONE, ([gobject.TYPE_PYOBJECT])),
+-        'mesh-removed':         (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, ([]))
++        'mesh-removed':         (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, ([])),
++        'invite-added':     (gobject.SIGNAL_RUN_FIRST,
++                                 gobject.TYPE_NONE, ([gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT]))
+     }
+ 
+     def __init__(self):
+@@ -85,6 +90,10 @@ class MeshModel(gobject.GObject):
+                                self._buddy_appeared_cb)
+         self._pservice.connect("buddy-disappeared",
+                                self._buddy_disappeared_cb)
++        self._pservice.connect("buddy-disappeared",
++                               self._buddy_disappeared_cb)
++        self._pservice.connect("activity-invitation",
++                               self._activity_invitation_cb)
+ 
+         # Add any buddies the PS knows about already
+         for buddy in self._pservice.get_buddies():
+@@ -229,3 +238,15 @@ class MeshModel(gobject.GObject):
+             activity_model = self._activities[activity.props.id]
+             self.emit('activity-removed', activity_model)
+             del self._activities[activity.props.id]
++
++    def _activity_invitation_cb(self, pservice, activity, buddy):
++        if not self._activities.has_key(activity.props.id):
++            return
++
++        activity_model = self._activities[activity.props.id]
++
++        if not self._buddies[buddy.props.key]:
++            return
++
++        buddy_model = self._buddies[buddy.props.key]
++        self.emit('invite-added', activity_model, buddy_model)
+diff --git a/shell/model/Owner.py b/shell/model/Owner.py
+index 32879db..f0e0272 100644
+--- a/shell/model/Owner.py
++++ b/shell/model/Owner.py
+@@ -74,8 +74,3 @@ class ShellOwner(gobject.GObject):
+ 
+     def get_nick(self):
+         return self._nick
+-
+-    def _handle_invite(self, issuer, bundle_id, activity_id):
+-        """XMLRPC method, called when the owner is invited to an activity."""
+-        self._invites.add_invite(issuer, bundle_id, activity_id)
+-        return ''
+diff --git a/shell/model/ShellModel.py b/shell/model/ShellModel.py
+index 3556ccc..dd90c64 100644
+--- a/shell/model/ShellModel.py
++++ b/shell/model/ShellModel.py
+@@ -52,6 +52,8 @@ class ShellModel(gobject.GObject):
+         self._home = HomeModel()
+         self._devices = DevicesModel()
+ 
++        self._mesh.connect('invite-added', self._invite_added_cb)
++
+     def do_set_property(self, pspec, value):
+         if pspec.name == 'state':
+             self._state = value
+@@ -77,3 +79,7 @@ class ShellModel(gobject.GObject):
+ 
+     def get_devices(self):
+         return self._devices
++
++    def _invite_added_cb(self, mesh, activity, buddy):
++        invites = self.get_invites()
++        invites.add_invite(buddy, activity.get_service_name(), activity.get_id())
+diff --git a/shell/view/ActivityHost.py b/shell/view/ActivityHost.py
+index c7bbd2d..9ef3826 100644
+--- a/shell/view/ActivityHost.py
++++ b/shell/view/ActivityHost.py
+@@ -69,7 +69,8 @@ class ActivityHost:
+         self._activity.share(ignore_reply=True)
+ 
+     def invite(self, buddy):
+-        pass
++        key = buddy.get_key()
++        self._activity.invite(key)
+ 
+     def present(self):
+         self._window.activate(gtk.get_current_event_time())
+diff --git a/shell/view/BuddyMenu.py b/shell/view/BuddyMenu.py
+index 83a24c6..60179fb 100644
+--- a/shell/view/BuddyMenu.py
++++ b/shell/view/BuddyMenu.py
+@@ -88,14 +88,21 @@ class BuddyMenu(Menu):
+                                    'theme:stock-add'))
+ 
+         activity = shell_model.get_home().get_current_activity()
+-        if activity != None:
++        if activity is not None:
+             activity_ps = pservice.get_activity(activity.get_activity_id())
+ 
+-            # FIXME check that the buddy is not in the activity already
+-
+-            self.add_item(MenuItem(BuddyMenu.ACTION_INVITE,
+-                                   _('Invite'),
+-                                   'theme:stock-invite'))
++            if activity_ps is not None:
++                # PS doesn't know our current activity so it's not shared.
++                # Currently we can't invite buddies to a not shared activity
++                # as we need the muc
++
++                buddy_ps = self._buddy.get_buddy()
++                if buddy_ps not in activity_ps.get_joined_buddies():
++                    # No need to invite the buddy as he's already
++                    # in the activity
++                    self.add_item(MenuItem(BuddyMenu.ACTION_INVITE,
++                                           _('Invite'),
++                                           'theme:stock-invite'))
+ 
+     def _buddy_icon_changed_cb(self, buddy):
+         pass
+diff --git a/sugar/activity/activity.py b/sugar/activity/activity.py
+index 421d7ba..0c87b55 100644
+--- a/sugar/activity/activity.py
++++ b/sugar/activity/activity.py
+@@ -64,6 +64,15 @@ class ActivityToolbar(gtk.Toolbar):
+             self.share.set_sensitive(False)
+         self.share.show()
+ 
++        self.invite = ToolButton('stock-invite')
++        self.insert(self.invite, -1)
++        if activity.get_shared():
++            self.invite.set_sensitive(True)
++        else:
++            self.invite.set_sensitive(False)
++        self.invite.connect('clicked', self._invite_clicked_cb)
++        self.invite.show()
++
+         separator = gtk.SeparatorToolItem()
+         separator.props.draw = False
+         self.insert(separator, -1)
+@@ -100,6 +109,24 @@ class ActivityToolbar(gtk.Toolbar):
+ 
+     def _activity_shared_cb(self, activity):
+         self.share.set_sensitive(False)
++        self.invite.set_sensitive(True)
++
++    def _invite_clicked_cb(self, button):
++        menu = gtk.Menu()
++
++        ps = presenceservice.get_instance()
++        for buddy in ps.get_buddies():
++            menuitem = gtk.MenuItem(buddy.props.nick)
++            menuitem.connect('activate', self._invite_buddy_activate_cb, buddy)
++            menu.append(menuitem)
++            menuitem.show()
++
++        menu.attach_to_widget(button, None)
++        menu.popup(None, None, None, 1, gtk.get_current_event_time())
++
++    def _invite_buddy_activate_cb(self, item, buddy):
++        logging.debug('Requesting invit %s to activity %s.' % (buddy.props.nick, self._activity.get_id()))
++        self._activity.invite(buddy.props.key)
+ 
+ class EditToolbar(gtk.Toolbar):
+     def __init__(self):
+@@ -329,6 +356,14 @@ class Activity(Window, gtk.Container):
+                 raise
+         self.destroy()
+ 
++    def invite(self, buddy_key):
++        """Request to invit the given buddy into the activity."""
++
++        if self._shared_activity is None:
++            raise RuntimeError("Activity %s is not shared. Can't invit %s." % (self._activity_id, buddy.props.nick))
++
++        self._pservice.invite(self, buddy_key)
++
+ def get_bundle_name():
+     """Return the bundle name for the current process' bundle
+     """
+diff --git a/sugar/activity/activityservice.py b/sugar/activity/activityservice.py
+index b69ba83..a213664 100644
+--- a/sugar/activity/activityservice.py
++++ b/sugar/activity/activityservice.py
+@@ -87,3 +87,8 @@ class ActivityService(dbus.service.Object):
+     def set_active(self, active):
+         logging.debug('ActivityService.set_active: %s.' % active)
+         self._activity.props.active = active
++
++    @dbus.service.method(_ACTIVITY_INTERFACE,
++                        in_signature="s", out_signature="")
++    def invite(self, buddy_key):
++        self._activity.invite(buddy_key)
+diff --git a/sugar/presence/presenceservice.py b/sugar/presence/presenceservice.py
+index 621a289..955855f 100644
+--- a/sugar/presence/presenceservice.py
++++ b/sugar/presence/presenceservice.py
+@@ -51,7 +51,7 @@ class PresenceService(gobject.GObject):
+         'buddy-disappeared': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
+                         ([gobject.TYPE_PYOBJECT])),
+         'activity-invitation': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
+-                        ([gobject.TYPE_PYOBJECT])),
++                        ([gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT])),
+         'private-invitation': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
+                         ([gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT,
+                           gobject.TYPE_PYOBJECT])),
+@@ -195,14 +195,16 @@ class PresenceService(gobject.GObject):
+         """Callback for dbus event (forwards to method to emit GObject event)"""
+         gobject.idle_add(self._emit_buddy_disappeared_signal, object_path)
+ 
+-    def _emit_activity_invitation_signal(self, object_path):
++    def _emit_activity_invitation_signal(self, activity_path, buddy_path):
+         """Emit GObject event with presence.activity.Activity object"""
+-        self.emit('activity-invitation', self._new_object(object_path))
++        self.emit('activity-invitation', self._new_object(activity_path),
++                self._new_object(buddy_path))
+         return False
+ 
+-    def _activity_invitation_cb(self, object_path):
++    def _activity_invitation_cb(self, activity_path, buddy_path):
+         """Callback for dbus event (forwards to method to emit GObject event)"""
+-        gobject.idle_add(self._emit_activity_invitation_signal, object_path)
++        gobject.idle_add(self._emit_activity_invitation_signal, activity_path,
++                buddy_path)
+ 
+     def _emit_private_invitation_signal(self, bus_name, connection, channel):
+         """Emit GObject event with bus_name, connection and channel"""
+@@ -379,6 +381,19 @@ class PresenceService(gobject.GObject):
+ 
+         return bus_name, object_path
+ 
++    def _invite_cb(self, activity, buddy_key):
++        pass
++
++    def _invite_error_cb(self, activity, buddy_key, err):
++        pass
++
++    def invite(self, activity, buddy_key):
++        activity_id = activity.get_id()
++
++        self._ps.Invite(activity_id, buddy_key,
++                reply_handler=lambda *args: self._invite_cb(activity, buddy_key),
++                error_handler=lambda *args: self._invite_error_cb(activity, buddy_key, *args))
++
+ class _OfflineInterface( object ):
+     """Offline-presence-service interface
+     
+
+--=-giULaNaa5eN+TX2lKScp
+Content-Type: text/plain; charset="us-ascii"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+
+_______________________________________________
+Sugar mailing list
+Sugar@laptop.org
+http://mailman.laptop.org/mailman/listinfo/sugar
+
+--=-giULaNaa5eN+TX2lKScp--
+

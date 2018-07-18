@@ -1,0 +1,150 @@
+From beginners-return-91125-ktwarwic=speedy.uwaterloo.ca@perl.org  Fri Apr 27 10:14:56 2007
+Return-Path: <beginners-return-91125-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3REEs6w026497
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 27 Apr 2007 10:14:55 -0400
+Received: (qmail 22212 invoked by uid 514); 27 Apr 2007 14:14:49 -0000
+Mailing-List: contact beginners-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:beginners@perl.org>
+List-Help: <mailto:beginners-help@perl.org>
+List-Unsubscribe: <mailto:beginners-unsubscribe@perl.org>
+List-Subscribe: <mailto:beginners-subscribe@perl.org>
+List-Id: <beginners.perl.org>
+Delivered-To: mailing list beginners@perl.org
+Received: (qmail 22202 invoked from network); 27 Apr 2007 14:14:48 -0000
+Received: from x1a.develooper.com (HELO x1.develooper.com) (216.52.237.111)
+  by lists.develooper.com with SMTP; 27 Apr 2007 14:14:48 -0000
+Received: (qmail 24823 invoked by uid 225); 27 Apr 2007 14:14:48 -0000
+Delivered-To: beginners@perl.org
+Received: (qmail 24815 invoked by alias); 27 Apr 2007 14:14:47 -0000
+X-Spam-Status: No, hits=-4.4 required=8.0
+	tests=ALL_TRUSTED,BAYES_00,DK_POLICY_SIGNSOME
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: neutral (x1.develooper.com: local policy)
+Received: from x6.develooper.com (HELO lists.develooper.com) (63.251.223.186)
+    by la.mx.develooper.com (qpsmtpd/0.28) with SMTP; Fri, 27 Apr 2007 07:14:44 -0700
+Received: (qmail 22190 invoked by uid 515); 27 Apr 2007 14:14:41 -0000
+To: beginners@perl.org
+From: zentara <zentara@highstream.net>
+Subject: Re: Encryption
+Date: Fri, 27 Apr 2007 10:13:40 -0400
+Sender: Linux@lists.develooper.com
+Message-ID: <sn043319u1rbjlun3bp1jcdbbjv4f5mp15@4ax.com>
+References: <f0sg34$mtu$1@sea.gmane.org>
+X-Newsreader:  :  :/Li.nux English (American)
+X-No-Archive: yes
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Transfer-Encoding: 7bit
+X-Posted-By: 68.250.8.220
+Status: O
+Content-Length: 3056
+Lines: 105
+
+On Fri, 27 Apr 2007 11:33:47 +0200, andreas.moroder@sb-brixen.it
+(Andreas Moroder) wrote:
+
+>Hello,
+>
+>I have to calculate a hash of username and password in perl.
+>The calculation should be done this way:
+>
+>1. Concatenate the username and the password to produce a plaintext string;
+>2. Convert the plaintext string to uppercase characters;
+>3. Convert the plaintext string to multi-byte storage format; ASCII 
+>characters have the
+>high byte set to 0x00;
+>4. Encrypt the plaintext string (padded with 0s if necessary to the next 
+>even block length)
+>using the DES algorithm in cipher block chaining (CBC) mode with a fixed 
+>key value of
+>0x0090687678ABCDEF;
+>5. Encrypt the plaintext string again with DES-CBC, but using the last 
+>block of the output
+>of the previous step (ignoring parity bits) as the encryption key. The 
+>last block of the
+>output is converted into a printable string to produce the password hash 
+>value.
+>
+>Is it possible to implement this in perl ?
+>Is the Crypt-DES Module on CPAN the right module and how can I convert 
+>standard string to Multibyte storage ( UTF-16 ? )
+>An example ist
+>
+>User: example
+>password: test
+>hash: BDA63848A8C31752
+>
+>I don't need this script to hack anything, we would like to modify oru 
+>oracle paasword from a webfrontend.
+>
+>Thanks
+>Andreas
+
+I'm a bit unclear about step 5, but it should be doable in Perl once
+you determine the EXACT steps you need to take. Here are some tips
+to maybe get you through the first four steps.
+This my be far off from what Oracle needs, but it seems to work
+for your first 4 steps. Some questions remain, like do you need a salt?
+What do you use to convert back to plaintext hash? Base64encode?
+What does "ignore parity bits" mean?
+
+You may want to ask this on http://perlmonks.org, where more
+saavy encryption and Oracle monks hang out.  But make sure you
+can specify the EXACT steps needed. I'm sure it can be done.
+
+To be honest, I would assume that the Oracle designers have made this
+quite tricky to avoid hacking their passwords.
+
+#!/usr/bin/perl
+use warnings;
+use strict;
+use Crypt::CBC;
+use Encode;
+
+my $key = pack("H16", "0090687678ABCDEF");
+my $user = 'example';
+my $password = 'test';
+
+my $plaintext = uc($user.$password);
+print("$plaintext\n");
+
+#converted it to bytes via utf-16le (take a look at "perldoc
+perlunicode")
+my  $octets = encode("utf-16", $plaintext);
+print "utf16->  $octets\n";
+
+my $cipher = Crypt::CBC->new(
+   -key    => $key,
+   -cipher => 'DES',
+#   -salt   => 1,
+);
+
+my $ciphertext = $cipher->encrypt($octets);
+print("$ciphertext\n");
+
+my $recovered = $cipher->decrypt($ciphertext);
+print("$recovered\n");
+
+# step 5 I'm not sure of. What do you mean by 
+# encrypt plaintext again, ignoring parity bits,  
+# and what do you want to use to convert it to
+# plaintext... probably base64encoding?
+
+__END__
+
+
+
+
+
+-- 
+I'm not really a human, but I play one on earth.
+http://zentara.net/japh.html
+
+-- 
+To unsubscribe, e-mail: beginners-unsubscribe@perl.org
+For additional commands, e-mail: beginners-help@perl.org
+http://learn.perl.org/
+
+

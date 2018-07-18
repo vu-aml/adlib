@@ -1,0 +1,90 @@
+From perl6-all-return-81191-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue May  8 20:40:30 2007
+Return-Path: <perl6-all-return-81191-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l490eTqD022240
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 8 May 2007 20:40:29 -0400
+Received: (qmail 27076 invoked by uid 514); 9 May 2007 00:40:27 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 27071 invoked from network); 9 May 2007 00:40:27 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-0.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,KARMA_CONNECT_NEGATIVE,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: domain of jkeen@verizon.net designates 206.46.252.46 as permitted sender)
+Date: Tue, 08 May 2007 20:39:14 -0400
+From: James Keenan <jkeen@verizon.net>
+Subject: Re:  Re: Odd failure in t/postconfigure/02-revision_no_DEVELOPING.t
+To: Andy Spieherty <spiehera@lafayette.edu>
+Cc: Perl 6 Internals <perl6-internals@perl.org>
+Message-id: <B69AD971-BC7A-4534-9140-F1F51FE6D83D@verizon.net>
+MIME-version: 1.0 (Apple Message framework v752.2)
+X-Mailer: Apple Mail (2.752.2)
+Content-type: text/plain; charset=US-ASCII; delsp=yes; format=flowed
+Content-transfer-encoding: 7bit
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-1.1 required=8.0
+	tests=BAYES_05,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+
+Andy Spieherty wrote:
+ > The following oddity turned up today:
+ >
+ > t/postconfigure/02-revision_no_DEVELOPING........
+ > #     Failed test (t/postconfigure/02-revision_no_DEVELOPING.t at  
+line 51)
+ > #     '0'
+ > #         ne
+ > #     '0'
+ > # Looks like you failed 1 test of 16.
+ > dubious
+ > 	Test returned status 1 (wstat 256, 0x100)
+ >
+ > I really don't understand this message.
+ >
+
+1.  Can you say a bit more about the context in which you ran this  
+test?  'make test'?  'prove t/postconfigure/*.t'?  In particular, did  
+you run it *before* running Configure.pl or *afterwards*?
+
+2.  If you do 'make clean', then 'svn update', then re-run the test,  
+do you still get the error?
+
+3.  This test was tricky, and, in the course of developing it, I got  
+this same error several times.  The trickiness arises from the fact  
+that the underlying code being tested, lib/Parrot/Revision.pm, has  
+the name of a file in the Parrot distribution hard-coded into its  
+major subroutine:
+
+sub __get_revision {
+     return 0 unless ( -e 'DEVELOPING' );
+     ...
+}
+
+In my never-ending quest for complete code coverage, I had to devise  
+a way to test both branches in that return statement, i.e., test  
+under circumstances in which 'DEVELOPING' both does and -- here's the  
+tricky part -- does not exist.  The only way I could do the latter  
+was to copy the relevant files into a temporary directory and, for  
+certain tests, not copy 'DEVELOPING' along with them.  It's very  
+hackish, but it did enable me to get to full coverage of that statement.
+
+The fact that this test is in 't/postconfigure/' means that it is  
+meant to be run only *after* Configure.pl has executed (whether that  
+be immediately pre-make or as part of 'make test'.  A SKIP block  
+should come into play if you run this test *before* Configure.pl.
+
+Let me know what further results you get.  Thank you very much.
+kid51
+

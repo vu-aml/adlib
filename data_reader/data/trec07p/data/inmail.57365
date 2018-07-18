@@ -1,0 +1,159 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Jun 14 09:04:50 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5ED4nL9021838
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 14 Jun 2007 09:04:50 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id DF41F1639B1
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 14 Jun 2007 13:04:48 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL,UPPERCASE_25_50 autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id 4CF56163990; Thu, 14 Jun 2007 13:02:00 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070614130200.4CF56163990@lists.samba.org>
+Date: Thu, 14 Jun 2007 13:02:00 +0000 (GMT)
+Subject: svn commit: samba r23491 - in
+	branches/SAMBA_4_0/source/torture/raw: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-06-14 13:01:58 +0000 (Thu, 14 Jun 2007)
+New Revision: 23491
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23491
+
+Log:
+Split out the RENAME trans2 call into a separate test
+
+Modified:
+   branches/SAMBA_4_0/source/torture/raw/setfileinfo.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/torture/raw/setfileinfo.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/raw/setfileinfo.c	2007-06-14 12:33:40 UTC (rev 23490)
++++ branches/SAMBA_4_0/source/torture/raw/setfileinfo.c	2007-06-14 13:01:58 UTC (rev 23491)
+@@ -424,8 +424,71 @@
+ 
+ 	CHECK_CALL_PATH(MODE_INFORMATION, NT_STATUS_OK);
+ 	CHECK_VALUE(MODE_INFORMATION, mode_information, mode, 0);
+-#if 1
+-	printf("finally the rename_information level\n");
++
++#if 0
++	printf("test unix_basic level\n");
++	CHECK_CALL_FNUM(UNIX_BASIC, NT_STATUS_OK);
++	CHECK_CALL_PATH(UNIX_BASIC, NT_STATUS_OK);
++
++	printf("test unix_link level\n");
++	CHECK_CALL_FNUM(UNIX_LINK, NT_STATUS_OK);
++	CHECK_CALL_PATH(UNIX_LINK, NT_STATUS_OK);
++#endif
++
++done:
++	smb_raw_exit(cli->session);
++	smbcli_close(cli->tree, fnum);
++	if (NT_STATUS_IS_ERR(smbcli_unlink(cli->tree, fnum_fname))) {
++		printf("Failed to delete %s - %s\n", fnum_fname, smbcli_errstr(cli->tree));
++	}
++	if (NT_STATUS_IS_ERR(smbcli_unlink(cli->tree, path_fname))) {
++		printf("Failed to delete %s - %s\n", path_fname, smbcli_errstr(cli->tree));
++	}
++
++	torture_close_connection(cli);
++	talloc_free(mem_ctx);
++	return ret;
++}
++
++/*
++ * basic testing of all RAW_SFILEINFO_RENAME call
++ */
++BOOL torture_raw_sfileinfo_rename(struct torture_context *torture)
++{
++	struct smbcli_state *cli;
++	BOOL ret = True;
++	TALLOC_CTX *mem_ctx;
++	int fnum_saved, d_fnum, fnum2, fnum = -1;
++	char *fnum_fname;
++	char *fnum_fname_new;
++	char *path_fname;
++	char *path_fname_new;
++	union smb_fileinfo finfo1, finfo2;
++	union smb_setfileinfo sfinfo;
++	NTSTATUS status, status2;
++	const char *call_name;
++	BOOL check_fnum;
++	int n = time(NULL) % 100;
++	
++	asprintf(&path_fname, BASEDIR "\\fname_test_%d.txt", n);
++	asprintf(&path_fname_new, BASEDIR "\\fname_test_new_%d.txt", n);
++	asprintf(&fnum_fname, BASEDIR "\\fnum_test_%d.txt", n);
++	asprintf(&fnum_fname_new, BASEDIR "\\fnum_test_new_%d.txt", n);
++
++	if (!torture_open_connection(&cli, 0)) {
++		return False;
++	}
++
++	mem_ctx = talloc_init("torture_sfileinfo");
++
++	if (!torture_setup_dir(cli, BASEDIR)) {
++		return False;
++	}
++
++	RECREATE_BOTH;
++
++	ZERO_STRUCT(sfinfo);
++
+ 	smbcli_close(cli->tree, create_complex_file(cli, mem_ctx, fnum_fname_new));
+ 	smbcli_close(cli->tree, create_complex_file(cli, mem_ctx, path_fname_new));
+ 
+@@ -506,18 +569,7 @@
+ 	sfinfo.rename_information.in.root_fid = d_fnum;
+ 	CHECK_CALL_FNUM(RENAME_INFORMATION, NT_STATUS_INVALID_PARAMETER);
+ 	CHECK_STR(NAME_INFO, name_info, fname.s, fnum_fname);
+-#endif
+ 
+-#if 0
+-	printf("test unix_basic level\n");
+-	CHECK_CALL_FNUM(UNIX_BASIC, NT_STATUS_OK);
+-	CHECK_CALL_PATH(UNIX_BASIC, NT_STATUS_OK);
+-
+-	printf("test unix_link level\n");
+-	CHECK_CALL_FNUM(UNIX_LINK, NT_STATUS_OK);
+-	CHECK_CALL_PATH(UNIX_LINK, NT_STATUS_OK);
+-#endif
+-
+ done:
+ 	smb_raw_exit(cli->session);
+ 	smbcli_close(cli->tree, fnum);
+@@ -533,7 +585,6 @@
+ 	return ret;
+ }
+ 
+-
+ /* 
+    look for the w2k3 setpathinfo STANDARD bug
+ */
+

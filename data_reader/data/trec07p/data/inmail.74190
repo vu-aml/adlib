@@ -1,0 +1,191 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Jul  4 20:34:34 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l650YYL9019168
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 4 Jul 2007 20:34:34 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 2615F162C2A
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu,  5 Jul 2007 00:34:30 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.6 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 501)
+	id 54A76162BBC; Thu,  5 Jul 2007 00:34:13 +0000 (GMT)
+To: samba-cvs@samba.org
+From: abartlet@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070705003413.54A76162BBC@lists.samba.org>
+Date: Thu,  5 Jul 2007 00:34:13 +0000 (GMT)
+Subject: svn commit: samba r23715 - in branches/SAMBA_4_0/source:
+	scripting/libjs setup
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: abartlet
+Date: 2007-07-05 00:34:11 +0000 (Thu, 05 Jul 2007)
+New Revision: 23715
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23715
+
+Log:
+Make the provision-backend script print out the exact commands to run,
+to set up the LDAP backend.
+
+Andrew Bartlett
+
+Modified:
+   branches/SAMBA_4_0/source/scripting/libjs/provision.js
+   branches/SAMBA_4_0/source/setup/provision
+   branches/SAMBA_4_0/source/setup/provision-backend
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/scripting/libjs/provision.js
+===================================================================
+--- branches/SAMBA_4_0/source/scripting/libjs/provision.js	2007-07-05 00:12:24 UTC (rev 23714)
++++ branches/SAMBA_4_0/source/scripting/libjs/provision.js	2007-07-05 00:34:11 UTC (rev 23715)
+@@ -448,7 +448,7 @@
+ 	subobj.DNSNAME      = sprintf("%s.%s", 
+ 				      strlower(subobj.HOSTNAME), 
+ 				      subobj.DNSDOMAIN);
+-	rdn_list = split(".", subobj.DNSDOMAIN);
++	var rdn_list = split(".", subobj.DNSDOMAIN);
+ 	subobj.DOMAINDN     = "DC=" + join(",DC=", rdn_list);
+ 	subobj.ROOTDN       = subobj.DOMAINDN;
+ 	subobj.CONFIGDN     = "CN=Configuration," + subobj.ROOTDN;
+@@ -461,6 +461,8 @@
+ 	subobj.SECRETS_KEYTAB	= paths.keytab;
+ 
+ 	subobj.LDAPDIR = paths.ldapdir;
++	var ldap_path_list = split("/", paths.ldapdir);
++	subobj.LDAPI_URI = "ldapi://" + join("%2F", ldap_path_list) + "%2Fldapi";
+ 
+ 	return true;
+ }
+@@ -583,7 +585,7 @@
+ 	var modify_ok = setup_ldb_modify("provision_basedn_modify.ldif", info, samdb);
+ 	if (!modify_ok) {
+ 		if (!add_ok) {
+-			message("Failed to both add and modify " + subobj.DOMAINDN + " in target " + subobj.DOMAINDN_LDB + ": " + samdb.errstring() + "\n");
++			message("%s", "Failed to both add and modify " + subobj.DOMAINDN + " in target " + subobj.DOMAINDN_LDB + ": " + samdb.errstring() + "\n");
+ 			message("Perhaps you need to run the provision script with the --ldap-base-dn option, and add this record to the backend manually\n"); 
+ 		};
+ 		assert(modify_ok);
+@@ -595,7 +597,7 @@
+ 	var modify_ok = setup_ldb_modify("provision_configuration_basedn_modify.ldif", info, samdb);
+ 	if (!modify_ok) {
+ 		if (!add_ok) {
+-			message("Failed to both add and modify configuration dn: " + samdb.errstring() + "\n");
++			message("%s", "Failed to both add and modify " + subobj.CONFIGDN + " in target " + subobj.CONFIGDN_LDB + ": " + samdb.errstring() + "\n");
+ 			message("Perhaps you need to run the provision script with the --ldap-base-dn option, and add this record to the backend manually\n"); 
+ 			assert(modify_ok);
+ 		}
+@@ -608,7 +610,7 @@
+ 	var modify_ok = setup_ldb_modify("provision_schema_basedn_modify.ldif", info, samdb);
+ 	if (!modify_ok) {
+ 		if (!add_ok) {
+-			message("Failed to both add and modify schema dn:" + samdb.errstring() + "\n");
++			message("%s", "Failed to both add and modify " + subobj.SCHEMADN + " in target " + subobj.SCHEMADN_LDB + ": " + samdb.errstring() + "\n");
+ 			message("Perhaps you need to run the provision script with the --ldap-base-dn option, and add this record to the backend manually\n"); 
+ 			assert(modify_ok);
+ 		}
+
+Modified: branches/SAMBA_4_0/source/setup/provision
+===================================================================
+--- branches/SAMBA_4_0/source/setup/provision	2007-07-05 00:12:24 UTC (rev 23714)
++++ branches/SAMBA_4_0/source/setup/provision	2007-07-05 00:34:11 UTC (rev 23715)
+@@ -121,13 +121,19 @@
+ var ldapbackend = (options["ldap-backend"] != undefined);
+ var ldapmodule = (options["ldap-module"] != undefined);
+ var partitions_only = (options["partitions-only"] != undefined);
++var paths = provision_default_paths(subobj);
+ if (options["aci"] != undefined) {
+ 	message("set ACI: %s\n", subobj["ACI"]);
+ }
+ 
+ message("set DOMAIN SID: %s\n", subobj["DOMAINSID"]);
+ 
++provision_fix_subobj(subobj, paths);
++
+ if (ldapbackend) {
++	if (options["ldap-backend"] == "ldapi") {
++		subobj.LDAPBACKEND = subobj.LDAPI_URI;
++	}
+ 	if (!ldapmodule) {
+ 		subobj.LDAPMODULE = "entryUUID";
+ 	}
+@@ -137,7 +143,7 @@
+ 	subobj.CONFIGDN_MOD2 = "," + subobj.LDAPMODULE + ",paged_searches";
+ 	subobj.SCHEMADN_LDB = subobj.LDAPBACKEND;
+ 	subobj.SCHEMADN_MOD2 = "," + subobj.LDAPMODULE + ",paged_searches";
+-	message("LDAP module: %s backend: %s\n", subobj.LDAPMODULE, subobj.LDAPBACKEND);
++	message("LDAP module: %s on backend: %s\n", subobj.LDAPMODULE, subobj.LDAPBACKEND);
+ }
+ 
+ if (!provision_validate(subobj, message)) {
+@@ -146,7 +152,6 @@
+ 
+ var system_session = system_session();
+ var creds = options.get_credentials();
+-var paths = provision_default_paths(subobj);
+ message("Provisioning for %s in realm %s\n", subobj.DOMAIN, subobj.REALM);
+ message("Using administrator password: %s\n", subobj.ADMINPASS);
+ if (ldapbase) {
+
+Modified: branches/SAMBA_4_0/source/setup/provision-backend
+===================================================================
+--- branches/SAMBA_4_0/source/setup/provision-backend	2007-07-05 00:12:24 UTC (rev 23714)
++++ branches/SAMBA_4_0/source/setup/provision-backend	2007-07-05 00:34:11 UTC (rev 23715)
+@@ -98,6 +98,7 @@
+ 
+ var mapping;
+ var ext;
++var slapd_command;
+ if (options["ldap-backend-type"] == "fedora-ds") {
+ 	mapping = "schema-map-fedora-ds-1.0";
+ 	ext = "ldif";
+@@ -110,6 +111,8 @@
+ 	}
+ 	setup_file("fedorads.inf", message, subobj.LDAPDIR + "/fedorads.inf", subobj);
+ 	setup_file("fedorads-partitions.ldif", message, subobj.LDAPDIR + "/fedorads-partitions.ldif", subobj);
++
++	slapd_command = "(see documentation)";
+ } else if (options["ldap-backend-type"] == "openldap") {
+ 	provision_ldapbase(subobj, message, paths);
+ 	mapping = "schema-map-openldap-2.3";
+@@ -133,10 +136,16 @@
+ 	sys.mkdir(subobj.LDAPDBDIR + "/bdb-logs", 0700);
+ 	setup_file("DB_CONFIG", message, subobj.LDAPDBDIR + "/DB_CONFIG", subobj);
+ 	if (options["ldap-backend-port"] != undefined) {
+-		message("NOTE: OpenLDAP TCP ports are controlled on the command line, not in the generated config file\n");
++		message("\nStart slapd with: \n");
++		slapd_command = "slapd -f " + subobj.LDAPDIR + "/slapd.conf -h ldap://0.0.0.0:" + options["ldap-backend-port"] + " -h " + subobj.LDAPI_URI;
++	} else {
++		slapd_command = "slapd -f " + subobj.LDAPDIR + "/slapd.conf -h " + subobj.LDAPI_URI;
+ 	}
+ }
+-message("ad2oLschema --option=convert:target=" + options["ldap-backend-type"] + " -I " + lp.get("setup directory") + "/" + mapping + " -H tdb://" + tmp_schema_ldb + " -O " + subobj.LDAPDIR + "/backend-schema." + ext + "\n");
++var schema_command = "ad2oLschema --option=convert:target=" + options["ldap-backend-type"] + " -I " + lp.get("setup directory") + "/" + mapping + " -H tdb://" + tmp_schema_ldb + " -O " + subobj.LDAPDIR + "/backend-schema." + ext;
+ 
++message("\nCreate a suitable schema file with:\n%s\n", schema_command);
++message("\nStart slapd with: \n%s\n", slapd_command);
++
+ message("All OK\n");
+ return 0;
+

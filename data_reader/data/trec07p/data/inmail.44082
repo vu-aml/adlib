@@ -1,0 +1,182 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat May 26 04:16:51 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4Q8GpqD005691
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 26 May 2007 04:16:51 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id C2AB2162B74
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 26 May 2007 08:16:46 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.7 required=3.8 tests=AWL,BAYES_00,
+	DATE_IN_PAST_03_06,NO_REAL_NAME,NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id CE4CF162AED; Sat, 26 May 2007 08:16:25 +0000 (GMT)
+Date: Sat, 26 May 2007 14:01:08 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070526081625.CE4CF162AED@lists.samba.org>
+Subject: Rev 349: moved system specific ip code to system.c in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 349
+revision-id: tridge@samba.org-20070526040108-o5vdpfl6tel9ojku
+parent: tridge@samba.org-20070525142107-hy0e96coiupti95g
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Sat 2007-05-26 14:01:08 +1000
+message:
+  moved system specific ip code to system.c
+modified:
+  common/ctdb_recoverd.c         recoverd.c-20070503213540-bvxuyd9jm1f7ig90-1
+  include/ctdb_private.h         ctdb_private.h-20061117234101-o3qt14umlg9en8z0-13
+  takeover/ctdb_takeover.c       ctdb_takeover.c-20070525071636-a5n1ihghjtppy08r-2
+  takeover/system.c              system.c-20070525071636-a5n1ihghjtppy08r-3
+=== modified file 'common/ctdb_recoverd.c'
+--- a/common/ctdb_recoverd.c	2007-05-25 14:05:30 +0000
++++ b/common/ctdb_recoverd.c	2007-05-26 04:01:08 +0000
+@@ -666,9 +666,10 @@
+ 		return;
+ 	}
+ 
+-	/* wait for one second to collect all responses */
++	/* wait for a few seconds to collect all responses */
+ 	timed_out = 0;
+-	event_add_timed(ctdb->ev, mem_ctx, CONTROL_TIMEOUT(), timeout_func, ctdb);
++	event_add_timed(ctdb->ev, mem_ctx, timeval_current_ofs(3, 0), 
++			timeout_func, ctdb);
+ 	while (!timed_out) {
+ 		event_loop_once(ctdb->ev);
+ 	}
+
+=== modified file 'include/ctdb_private.h'
+--- a/include/ctdb_private.h	2007-05-25 11:27:26 +0000
++++ b/include/ctdb_private.h	2007-05-26 04:01:08 +0000
+@@ -894,6 +894,8 @@
+ 
+ /* from takeover/system.c */
+ int ctdb_sys_send_arp(const struct sockaddr_in *saddr, const char *iface);
++int ctdb_sys_take_ip(const char *ip, const char *interface);
++int ctdb_sys_release_ip(const char *ip, const char *interface);
+ 
+ int ctdb_set_public_addresses(struct ctdb_context *ctdb, const char *alist);
+ 
+
+=== modified file 'takeover/ctdb_takeover.c'
+--- a/takeover/ctdb_takeover.c	2007-05-25 14:21:07 +0000
++++ b/takeover/ctdb_takeover.c	2007-05-26 04:01:08 +0000
+@@ -73,16 +73,16 @@
+ {
+ 	int ret;
+ 	struct sockaddr_in *sin = (struct sockaddr_in *)indata.dptr;
+-	char *cmdstr;
+ 	struct ctdb_takeover_arp *arp;
+-
+-	cmdstr = talloc_asprintf(ctdb, "ip addr add %s/32 dev %s 2> /dev/null",
+-				 inet_ntoa(sin->sin_addr), ctdb->takeover.interface);
+-	CTDB_NO_MEMORY(ctdb, cmdstr);
+-
+-	DEBUG(0,("Taking over IP : %s\n", cmdstr));
+-	system(cmdstr);
+-	talloc_free(cmdstr);
++	char *ip = inet_ntoa(sin->sin_addr);
++
++	DEBUG(0,("Takover of IP %s on interface %s\n", ip, ctdb->takeover.interface));
++	ret = ctdb_sys_take_ip(ip, ctdb->takeover.interface);
++	if (ret != 0) {
++		DEBUG(0,(__location__ " Failed to takeover IP %s on interface %s\n",
++			 ip, ctdb->takeover.interface));
++		return -1;
++	}
+ 
+ 	if (!ctdb->takeover.last_ctx) {
+ 		ctdb->takeover.last_ctx = talloc_new(ctdb);
+@@ -107,21 +107,22 @@
+ int32_t ctdb_control_release_ip(struct ctdb_context *ctdb, TDB_DATA indata)
+ {
+ 	struct sockaddr_in *sin = (struct sockaddr_in *)indata.dptr;
+-	char *cmdstr;
+ 	TDB_DATA data;
+ 	char *ip = inet_ntoa(sin->sin_addr);
++	int ret;
++
++	DEBUG(0,("Release of IP %s on interface %s\n", ip, ctdb->takeover.interface));
+ 
+ 	/* stop any previous arps */
+ 	talloc_free(ctdb->takeover.last_ctx);
+ 	ctdb->takeover.last_ctx = NULL;
+ 
+-	cmdstr = talloc_asprintf(ctdb, "ip addr del %s/32 dev %s 2> /dev/null",
+-				 ip, ctdb->takeover.interface);
+-		
+-	DEBUG(0,("Releasing IP : %s\n", cmdstr));
+-	system(cmdstr);
+-
+-	talloc_free(cmdstr);
++	ret = ctdb_sys_release_ip(ip, ctdb->takeover.interface);
++	if (ret != 0) {
++		DEBUG(0,(__location__ " Failed to release IP %s on interface %s\n",
++			 ip, ctdb->takeover.interface));
++		return -1;
++	}
+ 
+ 	/* send a message to all clients of this node telling them
+ 	   that the cluster has been reconfigured and they should
+
+=== modified file 'takeover/system.c'
+--- a/takeover/system.c	2007-05-25 07:16:50 +0000
++++ b/takeover/system.c	2007-05-26 04:01:08 +0000
+@@ -126,3 +126,35 @@
+ 	close(s);
+ 	return 0;
+ }
++
++/*
++  takeover an IP on an interface
++ */
++int ctdb_sys_take_ip(const char *ip, const char *interface)
++{
++	char *cmdstr;
++	cmdstr = talloc_asprintf(NULL, "/sbin/ip addr add %s/32 dev %s 2> /dev/null",
++				 ip, interface);
++	if (cmdstr == NULL) {
++		return -1;
++	}
++	system(cmdstr);
++	talloc_free(cmdstr);
++	return 0;
++}
++
++/*
++  release an IP on an interface
++ */
++int ctdb_sys_release_ip(const char *ip, const char *interface)
++{
++	char *cmdstr;
++	cmdstr = talloc_asprintf(NULL, "/sbin/ip addr del %s/32 dev %s 2> /dev/null",
++				 ip, interface);
++	if (cmdstr == NULL) {
++		return -1;
++	}
++	system(cmdstr);
++	talloc_free(cmdstr);
++	return 0;
++}
+

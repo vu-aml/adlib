@@ -1,0 +1,143 @@
+From r-help-bounces@stat.math.ethz.ch  Mon Jun 18 18:11:10 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5IMB9L9022440
+	for <ktwarwic@flax9.uwaterloo.ca>; Mon, 18 Jun 2007 18:11:10 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5IMAXfh031065;
+	Tue, 19 Jun 2007 00:10:46 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.4 required=5.0 tests=AWL, DKIM_SIGNED,
+	DKIM_VERIFIED autolearn=no version=3.2.0
+Received: from wr-out-0506.google.com (wr-out-0506.google.com [64.233.184.228])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5IM9NEZ030648
+	for <r-help@stat.math.ethz.ch>; Tue, 19 Jun 2007 00:09:26 +0200
+Received: by wr-out-0506.google.com with SMTP id 25so1093328wry
+	for <r-help@stat.math.ethz.ch>; Mon, 18 Jun 2007 15:09:23 -0700 (PDT)
+Received: by 10.142.106.18 with SMTP id e18mr319709wfc.1182204562946;
+	Mon, 18 Jun 2007 15:09:22 -0700 (PDT)
+Received: by 10.143.155.18 with HTTP; Mon, 18 Jun 2007 15:09:22 -0700 (PDT)
+Message-ID: <eb555e660706181509s62fd8501w3a2dd8dc14c794d1@mail.gmail.com>
+Date: Mon, 18 Jun 2007 15:09:22 -0700
+From: "Deepayan Sarkar" <deepayan.sarkar@gmail.com>
+To: "Andy Bunn" <Andy.Bunn@wwu.edu>
+In-Reply-To: <B786254B2435F94E808B17CEC2A432F70803F08F@EVS1.univ.dir.wwu.edu>
+MIME-Version: 1.0
+Content-Disposition: inline
+References: <B786254B2435F94E808B17CEC2A432F70803F08F@EVS1.univ.dir.wwu.edu>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] Second y-axis in xyplot (lattice) where y1 and y2 have
+	different ranges
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+On 6/18/07, Andy Bunn <Andy.Bunn@wwu.edu> wrote:
+> Hi all,
+>
+> I realize this is asking a lot of lattice, but I want to add a second y
+> axis inside a xyplot and have y1 and y2 have different ranges. Given dat
+> below, I can add a second y axis by overlaying a new plot with
+> par(new=T) and label axis 4 with standard graphics. I've seen an example
+> for doing something similar in xyplot even though Deepayan has indicated
+> that lattice isn't the right tool for the job.
+>
+> However, is there a way to gracefully add a second y-axis to a xyplot
+> where y1 and y2 have different scales as in the example below? I've seen
+> the experimental tools to focus and modify lattice graphics but do not
+> know if these are applicable.
+
+You could use those, but one drawback there is that you don't get the
+usual benefit of automatic allocation of space. Here is a ``better''
+solution (as long as you realize that this is still a hack):
+
+[Note: this won't work if scales="free" or "sliced"]
+
+[...]
+
+>   dat2 <- data.frame(Year = rep(1751:2000,2),
+>                      Stuff = rep(rnorm(250),2),
+>                      Samples = rep(floor(seq(5,30,length.out=250)+
+>                        rnorm(250,5)),2),
+>                      Grp = c(rep('SiteOne',250),
+>                              rep('SiteTwo',250)))
+
+
+
+scale.pars <- function(x)
+{
+    c(mx = min(x), dx = diff(range(x)))
+}
+
+rescale <- function(x, pars = scale.pars(x))
+{
+    (x - pars["mx"]) / pars["dx"]
+}
+
+pars.Stuff <- scale.pars(dat2$Stuff)
+pars.Samples <- scale.pars(dat2$Samples)
+
+rng.Stuff <- range(dat2$Stuff)
+rng.Samples <- range(dat2$Samples)
+
+
+my.yscale.components <- function(lim, ...)
+{
+    ## template we will modify
+    ans <- yscale.components.default(lim, ...)
+    ## labels for Stuff in original scale
+    Stuff <- yscale.components.default(rng.Stuff, ...)
+    Stuff$left$ticks$at <-
+        rescale(Stuff$left$ticks$at, pars.Stuff)
+    Stuff$left$labels$at <-
+        rescale(Stuff$left$labels$at, pars.Stuff)
+    ## labels for Samples in original scale
+    Samples <- yscale.components.default(rng.Samples, ...)
+    Samples$left$ticks$at <-
+        rescale(Samples$left$ticks$at, pars.Samples)
+    Samples$left$labels$at <-
+        rescale(Samples$left$labels$at, pars.Samples)
+    ## modified 'components'
+    ans$left <- Stuff$left
+    ans$right <- Samples$left
+    ans
+}
+
+
+xyplot(rescale(Stuff, pars.Stuff) +
+           rescale(Samples, pars.Samples) ~ Year | Grp,
+       data=dat2,
+       panel = panel.superpose.2,
+
+       ## newlay added:
+       yscale.components = my.yscale.components,
+       scales = list(alternating = 3),
+
+       ylab = "Stuff",
+       legend = list(right =
+       list(fun = grid::textGrob("Samples", rot = 90))),
+       type = c('l', 'l'))
+
+
+-Deepayan
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

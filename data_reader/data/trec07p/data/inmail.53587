@@ -1,0 +1,240 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Jun  7 23:36:23 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l583aMhB010242
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 7 Jun 2007 23:36:23 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 9997016381C
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri,  8 Jun 2007 03:36:16 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-3.5 required=3.8 tests=ALL_TRUSTED,AWL,BAYES_00 
+	autolearn=ham version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from [?????$??P????w?$IPv6:::1] (dp [66.70.73.150])
+	by lists.samba.org (Postfix) with ESMTP id BD898162B71
+	for <samba-technical@lists.samba.org>;
+	Fri,  8 Jun 2007 03:35:34 +0000 (GMT)
+Mime-Version: 1.0 (Apple Message framework v752.3)
+Content-Transfer-Encoding: 7bit
+Message-Id: <DA041B37-7FC6-4390-A3E6-FD881A126592@samba.org>
+Content-Type: text/plain; charset=US-ASCII; delsp=yes; format=flowed
+To: samba-technical@lists.samba.org
+From: James Peach <jpeach@samba.org>
+Date: Thu, 7 Jun 2007 20:35:29 -0700
+X-Mailer: Apple Mail (2.752.3)
+Subject: [PATCH 1/4] Make sure groups[0] is the effective gid on FreeBSD. 
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+On BSD systems, the first gid passed to setgroups(2) should be the  
+effective
+gid. Make sure we grow the groups list when switching credentials to  
+guarantee
+this (as far as possible).
+---
+source/smbd/sec_ctx.c |  128 +++++++++++++++++++++++++++++++++++++ 
++-----------
+1 files changed, 100 insertions(+), 28 deletions(-)
+
+diff --git a/source/smbd/sec_ctx.c b/source/smbd/sec_ctx.c
+index be00db9..ca9a6f2 100644
+--- a/source/smbd/sec_ctx.c
++++ b/source/smbd/sec_ctx.c
+@@ -180,6 +180,70 @@ fail:
+}
+/ 
+************************************************************************ 
+****
++ Change our current credential to the given UNIX_USER_TOKEN. This  
+takes into
++ account platform-specific quirks surrounding the handling of the  
+supplementary
++ groups list.
++*********************************************************************** 
+*****/
++
++static BOOL apply_unix_token(const UNIX_USER_TOKEN *ut)
++{
++	int max = groups_max();
++
++#ifdef FREEBSD
++	/* Most (all?) BSD systems expect that the first element in the groups
++	 * list passed to setgroups(2) is the effective gid. See also bugzilla
++	 * bug #3990.
++	 */
++	if (ut->ngroups == NULL || ut->groups[0] != ut->gid) {
++		gid_t *new_grplist;
++
++		ut->groups = SMB_REALLOC_ARRAY(ut->groups, gid_t,
++						ut->ngroups + 1);
++		if (ut->groups == NULL)
++			smb_panic("realloc for group list failed");
++		}
++
++		/* If we already had a group list, shuffle it up to make room
++		 * for the leading effective GID.
++		 */
++		if (ut->ngroups != 0) {
++			memmove(ut->groups + 1, ut->groups,
++				(ut->ngroups + 1) * sizeof(gid_t));
++		}
++
++		ut->ngroups++;
++		ut->groups[0] = ut->gid;
++	}
++
++#endif /* FREEBSD */
++
++
++	/* Always truncate the groups list at the system maximum. On most
++	 * systems, setgroups(2) will fail with EINVAL otherwise.
++	 */
++	if (sys_setgroups((ut->ngroups > max) ? max : ut->ngroups,
++			    ut->groups) == -1) {
++		if (errno != ENOSYS) {
++			DEBUG(0, ("WARNING: failed to set group list "
++				"(%d groups) for UID %ld: %s\n",
++				ut->ngroups, (long)ut->uid, strerror(errno)));
++		}
++	}
++
++	/* If setgroups fails, it's bad, but it might not be the end of
++	 * the world. OTOH, we don't want to have a group list from
++	 * some other credential since that could grant access we might
++	 * not otherwise have.
++	 */
++
++	if (!become_id(ut->uid, ut->gid)) {
++		return False;
++	}
++
++	return True;
++}
++
++/ 
+************************************************************************ 
+****
+   Create a new security context on the stack.  It is the same as the  
+old
+   one.  User changes are done using the set_sec_ctx() function.
+************************************************************************ 
+****/
+@@ -192,7 +256,7 @@ BOOL push_sec_ctx(void)
+	if (sec_ctx_stack_ndx == MAX_SEC_CTX_DEPTH) {
+		DEBUG(0, ("Security context stack overflow!\n"));
+-		smb_panic("Security context stack overflow!\n");
++		smb_panic("Security context stack overflow!");
+	}
+	/* Store previous user context */
+@@ -243,30 +307,14 @@ void set_sec_ctx(uid_t uid, gid_t gid, int  
+ngroups, gid_t *groups, NT_USER_TOKEN
+	debug_nt_user_token(DBGC_CLASS, 5, token);
+	debug_unix_user_token(DBGC_CLASS, 5, uid, gid, ngroups, groups);
+-	gain_root();
+-
+-#ifdef HAVE_SETGROUPS
+-	sys_setgroups(ngroups, groups);
+-#endif
+-
+-	ctx_p->ut.ngroups = ngroups;
++	/* Stash the given NT token. */
+-	SAFE_FREE(ctx_p->ut.groups);
+	if (token && (token == ctx_p->token)) {
++		debug_nt_user_token(DBGC_CLASS, 0, token);
+		smb_panic("DUPLICATE_TOKEN");
+	}
+	TALLOC_FREE(ctx_p->token);
+-	
+-	if (ngroups) {
+-		ctx_p->ut.groups = (gid_t *)memdup(groups,
+-						   sizeof(gid_t) * ngroups);
+-		if (!ctx_p->ut.groups) {
+-			smb_panic("memdup failed");
+-		}
+-	} else {
+-		ctx_p->ut.groups = NULL;
+-	}
+	if (token) {
+		ctx_p->token = dup_nt_token(NULL, token);
+@@ -277,11 +325,31 @@ void set_sec_ctx(uid_t uid, gid_t gid, int  
+ngroups, gid_t *groups, NT_USER_TOKEN
+		ctx_p->token = NULL;
+	}
+-	become_id(uid, gid);
++	/* Create the new Unix user token. */
++
++	SAFE_FREE(ctx_p->ut.groups);
++
++	ctx_p->ut.ngroups = ngroups;
++	if (ngroups) {
++		ctx_p->ut.groups = (gid_t *)memdup(groups,
++						   sizeof(gid_t) * ngroups);
++		if (!ctx_p->ut.groups) {
++			smb_panic("memdup for groups list failed");
++		}
++	} else {
++		ctx_p->ut.groups = NULL;
++	}
+	ctx_p->ut.uid = uid;
+	ctx_p->ut.gid = gid;
++	/* Switch to our new Unix credential. */
++	gain_root();
++	if (!apply_unix_token(&ctx_p->ut)) {
++		debug_unix_user_token(DBGC_CLASS, 0, uid, gid, ngroups, groups);
++		smb_panic("failed to switch to a new user credential");
++	}
++
+	/* Update current_user stuff */
+	current_user.ut.uid = uid;
+@@ -315,7 +383,7 @@ BOOL pop_sec_ctx(void)
+	if (sec_ctx_stack_ndx == 0) {
+		DEBUG(0, ("Security context stack underflow!\n"));
+-		smb_panic("Security context stack underflow!\n");
++		smb_panic("Security context stack underflow!");
+	}
+	ctx_p = &sec_ctx_stack[sec_ctx_stack_ndx];
+@@ -334,15 +402,19 @@ BOOL pop_sec_ctx(void)
+	sec_ctx_stack_ndx--;
+-	gain_root();
+-
+	prev_ctx_p = &sec_ctx_stack[sec_ctx_stack_ndx];
+-#ifdef HAVE_SETGROUPS
+-	sys_setgroups(prev_ctx_p->ut.ngroups, prev_ctx_p->ut.groups);
+-#endif
+-
+-	become_id(prev_ctx_p->ut.uid, prev_ctx_p->ut.gid);
++	/* Switch to our new Unix credential. */
++	gain_root();
++	if (!apply_unix_token(&prev_ctx_p->ut)) {
++		DEBUG(0, ("failed to restore a user credential\n"));
++		debug_unix_user_token(DBGC_CLASS, 0,
++			prev_ctx_p->ut.uid,
++			prev_ctx_p->ut.gid,
++			prev_ctx_p->ut.ngroups,
++			prev_ctx_p->ut.groups);
++		smb_panic("failed to restore to a user credential");
++	}
+	/* Update current_user stuff */
+--
+1.5.2.1
+
+
+--
+James Peach | jpeach@samba.org
+
+

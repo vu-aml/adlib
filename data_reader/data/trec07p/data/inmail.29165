@@ -1,0 +1,129 @@
+From bounce-debian-laptop=ktwarwic=speedy.uwaterloo.ca@lists.debian.org  Sat May  5 03:43:38 2007
+Return-Path: <bounce-debian-laptop=ktwarwic=speedy.uwaterloo.ca@lists.debian.org>
+Received: from murphy.debian.org (murphy.debian.org [70.103.162.31])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l457hcqD024958
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 5 May 2007 03:43:38 -0400
+Received: from localhost (localhost [127.0.0.1])
+	by murphy.debian.org (Postfix) with QMQP
+	id 040082E7A0; Sat,  5 May 2007 02:43:35 -0500 (CDT)
+Old-Return-Path: <ead-debian-laptop@ixian.com>
+X-Spam-Checker-Version: SpamAssassin 3.1.4 (2006-07-26) on murphy.debian.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-7.0 required=4.0 tests=BAYES_00,IMPRONONCABLE_2,
+	LDOSUBSCRIBER autolearn=no version=3.1.4
+X-Original-To: debian-laptop@lists.debian.org
+Received: from ixian.com (ixian.com [66.160.193.106])
+	by murphy.debian.org (Postfix) with SMTP id 3122E2E749
+	for <debian-laptop@lists.debian.org>; Sat,  5 May 2007 02:43:30 -0500 (CDT)
+Message-Id: <1178350999.10736@bear.he.net>
+Date: Sat, 5 May 2007 00:43:19 -0700
+To: debian-laptop@lists.debian.org
+Subject: sound on IBM Thinkpad 600 (Type 2645-51U) under Etch (Debian 4.0r0)
+Disposition-Notification-To: ead@ixian.com
+From: Eric De Mund <ead-debian-laptop@ixian.com>
+Reply-To: Eric De Mund <ead@ixian.com>
+X-Rc-Virus: 2006-10-25_01
+X-Rc-Spam: 2007-05-03_01
+Resent-Message-ID: <ImbmKB.A.89F.mWDPGB@murphy>
+Resent-From: debian-laptop@lists.debian.org
+X-Mailing-List: <debian-laptop@lists.debian.org> archive/latest/31388
+X-Loop: debian-laptop@lists.debian.org
+List-Id: <debian-laptop.lists.debian.org>
+List-Post: <mailto:debian-laptop@lists.debian.org>
+List-Help: <mailto:debian-laptop-request@lists.debian.org?subject=help>
+List-Subscribe: <mailto:debian-laptop-request@lists.debian.org?subject=subscribe>
+List-Unsubscribe: <mailto:debian-laptop-request@lists.debian.org?subject=unsubscribe>
+Precedence: list
+Resent-Sender: debian-laptop-request@lists.debian.org
+Resent-Date: Sat,  5 May 2007 02:43:35 -0500 (CDT)
+
+All,
+
+Hello. I've finally managed to get sound working on my Thinkpad 600
+(Type 2645-51U) running Debian 4.0r0. I recently did a clean install of
+4.0r0 and thought I could get sound working by using the configuration
+file settings I'd had under 3.1r4, but that didn't work. Biggest thanks
+go to user "keenerd" at <http://bbs.archlinux.org/viewtopic.php?pid=238958>
+where he posted his successful configuration file settings for Arch Linux
+under the thread entitled "Thinkpad 600E and udev". I was able to take
+his settings and reduce them down to what I believe is a set of minimal
+configuration tweaks required to get the job done.
+
+Step by step, here's what I had to do under Debian 4.0r0:
+
+1a. % sudo apt-get install alsa-utils # This package might not be neces-
+                                      # sary; unlike under Debian 3.1r4,
+                                      # I never needed to run alsaconf.
+1b. % sudo apt-get install mpg123     # For my console sound test.
+1c. % sudo apt-get install xmms       # For my X Windows sound test.
+
+2.  Edited /etc/modules to include the snd-cs4236 module. Here is my
+    unified diff:
+
+    /-----------------------------
+    --- modules.orig 2007-04-30 01:47:43.000000000 -0700
+    +++ modules 2007-05-02 23:01:07.000000000 -0700
+    @@ -4,3 +4,4 @@
+    # at boot time, one per line. Lines beginning with "#" are ignored.
+
+    loop
+    +snd-cs4236
+    \-----------------------------
+
+    Incidentally, this was the same addition to /etc/modules that Debian
+    3.1r4 required, although my /etc/modules there started with modules
+    psmouse, mousedev, ide_generic, ide_cd, ide_disk, and ide_core,
+    instead of the sole module, loop, that Debian 4.0r0 started with.
+
+3.  Created /etc/modprobe.d/sound. Here is the file:
+
+    /-----------------------------
+    alias snd-card-0 snd-cs4236
+    options snd-cs4236 index=0 isapnp=0 port=0x530 cport=0x538 irq=5 dma1=1 \
+    dma2=0
+    \-----------------------------
+
+    keenerd seemed to need sb_port and fm_port settings to get sound
+    working on his Arch Linux system, but I omitted these, as shown
+    above, and my sound still worked.
+
+    Incidentally, this was the same /etc/modprobe.d/sound file that I
+    had under Debian 3.1r4.
+
+4.  Blacklisted the snd-cs4232 module. It seems that the cs4236 chip in
+    this laptop is and maybe always has been mistaken for a cs4232 chip;
+    it's my guess that this blacklisting step, which is the sole differ-
+    ence between my 3.1r4 and 4.0r0 configuration, prevents that misi-
+    dentification from taking place. (Well, perhaps not the sole differ-
+    ence: I'm also no longer required under 4.0r0--as I was under 3.1r4
+    --to have the alsa-utils package installed and I'm no longer re-
+    quired to invoke /usr/sbin/alsaconf.)
+
+    Here is the unified diff between the original and my new
+    /etc/modprobe.d/alsa-base-blacklist:
+
+    /-----------------------------
+    --- alsa-base-blacklist.orig 2007-02-26 09:05:24.000000000 -0800
+    +++ alsa-base-blacklist 2007-05-02 22:37:49.000000000 -0700
+    @@ -2,3 +2,4 @@
+    # blacklist snd-atiixp-modem
+    # blacklist snd-intel8x0m
+    # blacklist snd-via82xx-modem
+    +blacklist snd-cs4232
+    \-----------------------------
+
+That's it. If these steps don't work for you, make sure plug-and-play is
+disabled in your Thinkpad 600's BIOS.
+
+Cheers,
+Eric
+--
+Eric De Mund              |      Ixian Systems      |
+email: <ead@ixian.com>    | 650 Castro St, #120-210 | ICQ: 811788
+http://www.ixian.com/ead/ | Mountain View, CA 94041 | Y!M: ead0002
+
+
+-- 
+To UNSUBSCRIBE, email to debian-laptop-REQUEST@lists.debian.org
+with a subject of "unsubscribe". Trouble? Contact listmaster@lists.debian.org
+

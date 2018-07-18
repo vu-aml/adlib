@@ -1,0 +1,128 @@
+From r-help-bounces@stat.math.ethz.ch  Tue Jun 12 21:25:57 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5D1PtL9001663
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 12 Jun 2007 21:25:57 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5D1PO32026209;
+	Wed, 13 Jun 2007 03:25:33 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.5 required=5.0 tests=AWL, BAYES_60, DKIM_SIGNED,
+	DKIM_VERIFIED autolearn=no version=3.2.0
+Received: from py-out-1112.google.com (py-out-1112.google.com [64.233.166.183])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5D1OgLb026126
+	for <r-help@stat.math.ethz.ch>; Wed, 13 Jun 2007 03:24:42 +0200
+Received: by py-out-1112.google.com with SMTP id f31so68230pyh
+	for <r-help@stat.math.ethz.ch>; Tue, 12 Jun 2007 18:24:41 -0700 (PDT)
+Received: by 10.65.214.2 with SMTP id r2mr118889qbq.1181697881724;
+	Tue, 12 Jun 2007 18:24:41 -0700 (PDT)
+Received: by 10.64.193.16 with HTTP; Tue, 12 Jun 2007 18:24:41 -0700 (PDT)
+Message-ID: <874da0b40706121824q6e640901n380c7c535ed387c@mail.gmail.com>
+Date: Tue, 12 Jun 2007 20:24:41 -0500
+From: "Robert Wilkins" <irishhacker@gmail.com>
+To: r-help@stat.math.ethz.ch
+MIME-Version: 1.0
+Content-Disposition: inline
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Subject: [R] Awk and Vilno
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+In clinical trial data preparation and many other data situations, the
+statistical programmer needs to merge and re-merge multiple input
+files countless times. A syntax for merging files that is clear and
+concise is very important for the statistical programmer's
+productivity.
+
+Here is how Vilno does it:
+
+inlist dataset1 dataset2 dataset3 ;
+joinby variable1 variable2  where ( var3<=var4 ) ;
+
+Each column in a dataset has a variable name ( variable1, variable2,
+var3, var4 ).
+You are merging three input datafiles: dataset1, dataset2, and dataset3.
+The joinby statement asks for a many-to-many join, rather like the SQL
+SELECT statement.
+[ The mergeby statement asks for a many-to-one join , more efficient ]
+[ The readby statement asks for interleaving of rows, the rows don't
+"match up" ,
+  but one row goes under the preceding row (100 rows + 100 rows -> 200
+output rows ]
+The join( or merge ) is done with variable1*variable2 subgroups: A row
+from dataset1 where variable1=4 and variable2="Sam" can only match to
+a row from dataset2 where variable1=4 and variable2="Sam". Also, any
+match-ups where it is not the case that var3<=var4 are also excluded.
+
+Here's how the SAS datastep will do it:
+
+merge dataset1 dataset2 dataset3 ;
+by variable1 variable2 ;
+if ^( var3<=var4 ) then delete ;
+
+[Actually, the SAS datastep can only do a many-to-one join, but you
+can do a PROC SQL paragraph to do an SQL SELECT statement, then export
+the results to a SAS datastep afterwards.]
+
+The point is : there are lots of data preparation scenarios where
+large numbers of merges need to be done. This is an example where
+Vilno and SAS are easier to use than the competition. I'm sure an Awk
+programmer can come up with something, but the result would be
+awkward.
+
+You can also find other data preparation problems where the best tool
+is Awk. Looking through "Sed & Awk" (O'Reilly) gives a good idea. I'm
+not expert Awk-er sure, but I think I can see that Awk and Vilno are
+really like apples and oranges.
+
+For scanning inconsistently structured ASCII data files, where
+different rows have different column specifications, Awk is a better
+tool.
+
+For data problems that lend themselves to UNIX-style regular
+expressions, Awk, again, is a great tool.
+
+If you have a data manipulation problem that is incredibly simple,
+then converting an ascii data file to binary, and then back, may not
+seem worth it. Awk, again, wins. But the asciitobinary and
+binarytoascii statement ( there and back ) only takes 4 lines or so,
+so Vilno is really not that bad.
+
+Certain apsects of Vilno and SAS are a bit more user-friendly:
+Each column has a variable name, such as "PatientID".
+Awk uses $1, $2, $3 , as variable names for columns. Not user-friendly.
+In both Vilno and SAS (and SQL) the possibility of "MISSING" ( or
+"NULL" ) is built into the data values held in the columns. So you
+don't have to use separate boolean variables to track MISSING vs
+NOT-MISSING. Very convenient.
+
+Vilno does have a lot of functionality that is a lot harder to
+implement in most other programming languages. (You can implement that
+functionality, but it would take a ton of code - the three merge-in
+options for Vilno are an example).
+
+The upshot:
+
+Awk is a hammer.
+Vilno is a screwdriver.
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

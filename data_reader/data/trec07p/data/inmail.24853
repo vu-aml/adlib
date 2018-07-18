@@ -1,0 +1,224 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun Apr 29 20:54:06 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3U0s56w007242
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 29 Apr 2007 20:54:06 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 94D701638A2
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 30 Apr 2007 00:54:04 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL,UPPERCASE_25_50 autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 549)
+	id 80915162ACE; Mon, 30 Apr 2007 00:53:20 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jra@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070430005320.80915162ACE@lists.samba.org>
+Date: Mon, 30 Apr 2007 00:53:20 +0000 (GMT)
+Subject: svn commit: samba r22586 - in branches: SAMBA_3_0/source/rpc_server
+	SAMBA_3_0_25/source/rpc_server
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 5422
+Lines: 181
+
+Author: jra
+Date: 2007-04-30 00:53:17 +0000 (Mon, 30 Apr 2007)
+New Revision: 22586
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22586
+
+Log:
+Add a modified version of Simo's patch.
+Jeremy.
+
+Modified:
+   branches/SAMBA_3_0/source/rpc_server/srv_samr_nt.c
+   branches/SAMBA_3_0_25/source/rpc_server/srv_samr_nt.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/rpc_server/srv_samr_nt.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpc_server/srv_samr_nt.c	2007-04-30 00:48:20 UTC (rev 22585)
++++ branches/SAMBA_3_0/source/rpc_server/srv_samr_nt.c	2007-04-30 00:53:17 UTC (rev 22586)
+@@ -949,6 +949,7 @@
+ 	if (num_account == 0) {
+ 		DEBUG(5, ("_samr_enum_dom_users: enumeration handle over "
+ 			  "total entries\n"));
++		init_samr_r_enum_dom_users(r_u, q_u->start_idx, 0);
+ 		return NT_STATUS_OK;
+ 	}
+ 
+@@ -1708,7 +1709,7 @@
+ 	UNIHDR *hdr_name = NULL;
+ 	UNISTR2 *uni_name = NULL;
+ 	DOM_SID pol_sid;
+-	int num_rids = q_u->num_rids1;
++	int num_rids = (int)q_u->num_rids1;
+ 	uint32 acc_granted;
+ 	int i;
+ 
+@@ -1726,12 +1727,18 @@
+ 		return NT_STATUS_UNSUCCESSFUL;
+ 	}
+ 
+-	names = TALLOC_ZERO_ARRAY(p->mem_ctx, const char *, num_rids);
+-	attrs = TALLOC_ZERO_ARRAY(p->mem_ctx, enum lsa_SidType, num_rids);
+-	wire_attrs = TALLOC_ZERO_ARRAY(p->mem_ctx, uint32, num_rids);
++	if (num_rids) {
++		names = TALLOC_ZERO_ARRAY(p->mem_ctx, const char *, num_rids);
++		attrs = TALLOC_ZERO_ARRAY(p->mem_ctx, enum lsa_SidType, num_rids);
++		wire_attrs = TALLOC_ZERO_ARRAY(p->mem_ctx, uint32, num_rids);
+ 
+-	if ((num_rids != 0) && ((names == NULL) || (attrs == NULL) || (wire_attrs==NULL)))
+-		return NT_STATUS_NO_MEMORY;
++		if ((names == NULL) || (attrs == NULL) || (wire_attrs==NULL))
++			return NT_STATUS_NO_MEMORY;
++	} else {
++		names = NULL;
++		attrs = NULL;
++		wire_attrs = NULL;
++	}
+ 
+ 	become_root();  /* lookup_sid can require root privs */
+ 	r_u->status = pdb_lookup_rids(&pol_sid, num_rids, q_u->rid,
+@@ -3803,10 +3810,14 @@
+ 	    !sid_check_is_builtin(&info->sid))
+ 		return NT_STATUS_OBJECT_TYPE_MISMATCH;
+ 
+-	members = TALLOC_ARRAY(p->mem_ctx, DOM_SID, q_u->num_sids1);
++	if (q_u->num_sids1) {
++		members = TALLOC_ARRAY(p->mem_ctx, DOM_SID, q_u->num_sids1);
+ 
+-	if (members == NULL)
+-		return NT_STATUS_NO_MEMORY;
++		if (members == NULL)
++			return NT_STATUS_NO_MEMORY;
++	} else {
++		members = NULL;
++	}
+ 
+ 	for (i=0; i<q_u->num_sids1; i++)
+ 		sid_copy(&members[i], &q_u->sid[i].sid);
+@@ -3864,10 +3875,14 @@
+ 		return status;
+ 	}
+ 
+-	sid = TALLOC_ZERO_ARRAY(p->mem_ctx, DOM_SID2, num_sids);	
+-	if (num_sids!=0 && sid == NULL) {
+-		SAFE_FREE(sids);
+-		return NT_STATUS_NO_MEMORY;
++	if (num_sids) {
++		sid = TALLOC_ZERO_ARRAY(p->mem_ctx, DOM_SID2, num_sids);	
++		if (sid == NULL) {
++			SAFE_FREE(sids);
++			return NT_STATUS_NO_MEMORY;
++		}
++	} else {
++		sid = NULL;
+ 	}
+ 
+ 	for (i = 0; i < num_sids; i++) {
+
+Modified: branches/SAMBA_3_0_25/source/rpc_server/srv_samr_nt.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/rpc_server/srv_samr_nt.c	2007-04-30 00:48:20 UTC (rev 22585)
++++ branches/SAMBA_3_0_25/source/rpc_server/srv_samr_nt.c	2007-04-30 00:53:17 UTC (rev 22586)
+@@ -964,6 +964,7 @@
+ 	if (num_account == 0) {
+ 		DEBUG(5, ("_samr_enum_dom_users: enumeration handle over "
+ 			  "total entries\n"));
++		init_samr_r_enum_dom_users(r_u, q_u->start_idx, 0);
+ 		return NT_STATUS_OK;
+ 	}
+ 
+@@ -1723,7 +1724,7 @@
+ 	UNIHDR *hdr_name = NULL;
+ 	UNISTR2 *uni_name = NULL;
+ 	DOM_SID pol_sid;
+-	int num_rids = q_u->num_rids1;
++	int num_rids = (int)q_u->num_rids1;
+ 	uint32 acc_granted;
+ 	int i;
+ 	
+@@ -1741,12 +1742,18 @@
+ 		return NT_STATUS_UNSUCCESSFUL;
+ 	}
+ 
+-	names = TALLOC_ZERO_ARRAY(p->mem_ctx, const char *, num_rids);
+-	attrs = TALLOC_ZERO_ARRAY(p->mem_ctx, enum lsa_SidType, num_rids);
+-	wire_attrs = TALLOC_ZERO_ARRAY(p->mem_ctx, uint32, num_rids);
++	if (num_rids) {
++		names = TALLOC_ZERO_ARRAY(p->mem_ctx, const char *, num_rids);
++		attrs = TALLOC_ZERO_ARRAY(p->mem_ctx, enum lsa_SidType, num_rids);
++		wire_attrs = TALLOC_ZERO_ARRAY(p->mem_ctx, uint32, num_rids);
+ 
+-	if ((num_rids != 0) && ((names == NULL) || (attrs == NULL) || (wire_attrs==NULL)))
+-		return NT_STATUS_NO_MEMORY;
++		if ((names == NULL) || (attrs == NULL) || (wire_attrs==NULL))
++			return NT_STATUS_NO_MEMORY;
++	} else {
++		names = NULL;
++		attrs = NULL;
++		wire_attrs = NULL;
++	}
+ 
+ 	become_root();  /* lookup_sid can require root privs */
+ 	r_u->status = pdb_lookup_rids(&pol_sid, num_rids, q_u->rid,
+@@ -3818,10 +3825,14 @@
+ 	    !sid_check_is_builtin(&info->sid))
+ 		return NT_STATUS_OBJECT_TYPE_MISMATCH;
+ 
+-	members = TALLOC_ARRAY(p->mem_ctx, DOM_SID, q_u->num_sids1);
++	if (q_u->num_sids1) {
++		members = TALLOC_ARRAY(p->mem_ctx, DOM_SID, q_u->num_sids1);
+ 
+-	if (members == NULL)
+-		return NT_STATUS_NO_MEMORY;
++		if (members == NULL)
++			return NT_STATUS_NO_MEMORY;
++	} else {
++		members = NULL;
++	}
+ 
+ 	for (i=0; i<q_u->num_sids1; i++)
+ 		sid_copy(&members[i], &q_u->sid[i].sid);
+@@ -3879,10 +3890,14 @@
+ 		return status;
+ 	}
+ 
+-	sid = TALLOC_ZERO_ARRAY(p->mem_ctx, DOM_SID2, num_sids);	
+-	if (num_sids!=0 && sid == NULL) {
+-		SAFE_FREE(sids);
+-		return NT_STATUS_NO_MEMORY;
++	if (num_sids) {
++		sid = TALLOC_ZERO_ARRAY(p->mem_ctx, DOM_SID2, num_sids);	
++		if (sid == NULL) {
++			SAFE_FREE(sids);
++			return NT_STATUS_NO_MEMORY;
++		}
++	} else {
++		sid = NULL;
+ 	}
+ 
+ 	for (i = 0; i < num_sids; i++) {
+

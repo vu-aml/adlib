@@ -1,0 +1,113 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun Jun 24 03:58:05 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5O7w4L9029074
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 24 Jun 2007 03:58:04 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 63CAA162AFA
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 24 Jun 2007 07:58:01 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.3 required=3.8 tests=BAYES_40,FORGED_RCVD_HELO,
+	RCVD_IN_SORBS_DUL,SPF_HELO_PASS,SPF_PASS autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+X-Greylist: delayed 375 seconds by postgrey-1.24 at dp.samba.org;
+	Sun, 24 Jun 2007 07:57:25 GMT
+Received: from wiesinger.com (chello212186124096.11.vie.surfer.at
+	[212.186.124.96])
+	by lists.samba.org (Postfix) with ESMTP id 3092D162AC5
+	for <samba-technical@lists.samba.org>;
+	Sun, 24 Jun 2007 07:57:25 +0000 (GMT)
+Received: from bbs.intern (localhost [127.0.0.1])
+	by wiesinger.com (8.12.11.20060308/8.12.11) with ESMTP id
+	l5O7osrn007785; Sun, 24 Jun 2007 09:50:54 +0200
+Received: from localhost (gerhard@localhost)
+	by bbs.intern (8.12.11.20060308/8.12.11/Submit) with ESMTP id
+	l5O7osBK007781; Sun, 24 Jun 2007 09:50:54 +0200
+Date: Sun, 24 Jun 2007 09:50:54 +0200 (CEST)
+From: Gerhard Wiesinger <lists@wiesinger.com>
+To: openvpn-users@lists.sourceforge.net, samba-technical@lists.samba.org,
+   wireshark-users@wireshark.org
+Message-ID: <Pine.LNX.4.64.0706240921160.5442@bbs.intern>
+MIME-Version: 1.0
+Content-Type: TEXT/PLAIN; charset=US-ASCII; format=flowed
+X-MailScanner-Information-wiesinger.com: Please contact the ISP for more
+	information
+X-MailScanner-wiesinger.com: Found to be clean
+X-MailScanner-SpamCheck-wiesinger.com: not spam, SpamAssassin (score=-1.44,
+	required 4.5, autolearn=not spam, ALL_TRUSTED -1.44, AWL -0.00)
+X-MailScanner-From: lists@wiesinger.com
+Subject: Nasty problem on slow connection over OpenVPN with Samba
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Hello!
+
+I'm running openvpn (latest stable with UDP) between 2 internet 
+connections (A:4MBit download, 512kBit upload and B:3MBit download and 
+384kBit Upload). A is Linux (Fedora 7) and B is Windows XP SP2.
+
+Openvpn normally runs without any problem for years.
+
+Running netio (with some self written flushing patches for slow speed 
+connections for more accurate values) it gives the following performance:
+TCP connection established.
+Packet size  1k bytes:  33833 Byte/s Tx,  57856 Byte/s Rx.
+Packet size  2k bytes:  38690 Byte/s Tx,  57802 Byte/s Rx.
+Packet size  4k bytes:  37098 Byte/s Tx,  57936 Byte/s Rx.
+Packet size  8k bytes:  37923 Byte/s Tx,  58022 Byte/s Rx.
+Packet size 16k bytes:  37028 Byte/s Tx,  58070 Byte/s Rx.
+Packet size 32k bytes:  36081 Byte/s Tx,  58003 Byte/s Rx.
+Done.
+
+So this is quite a good performance from A to B with a downstream of 
+around 57kB/s. (At least sufficient for 320kBit/s downstream)
+
+I'm running Winamp to play MP3 files up to 320kBit/s (40kB/s). When 
+Bitrate gets high up to 320kBit I get very often some buffer underuns. (It 
+doesn't happen with 128kBit files). Stream is from A to B.
+
+So I tracked down the problem with wireshark and tcpdump to:
+TCP MSS size is ok (1343 Bytes)
+Captured on the Linux/Samba side:
+1.) Linux Samba Server sends a SMB Read Andx Response
+2.) 44ms later the correct tcp acknowledge is received (wireshark has no 
+error here)
+3.) 312ms later Linux sends out the packet (1) again. Why?
+4.) Afterwards a dup ack is received.
+
+Why does Linux resend packet 1 at 3?
+
+The dropouts happen when the retransmissions occour.
+
+Samba (3.0.25a) configuration looks like (relevant I think so):
+socket options = TCP_NODELAY SO_RCVBUF=65536 SO_SNDBUF=8192
+
+In general I would say that windows shares are slow over openvpn.
+
+If you need any further information please let me know.
+
+Any ideas?
+
+Thank you for the answer.
+
+Ciao,
+Gerhard
+
+--
+http://www.wiesinger.com/
+

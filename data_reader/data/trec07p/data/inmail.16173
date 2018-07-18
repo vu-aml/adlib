@@ -1,0 +1,292 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat Apr 21 17:30:51 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3LLUp0I032123
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 21 Apr 2007 17:30:51 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 3390A1638E4
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 21 Apr 2007 21:30:26 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 540)
+	id DDCDD162B01; Sat, 21 Apr 2007 21:29:31 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jerry@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070421212931.DDCDD162B01@lists.samba.org>
+Date: Sat, 21 Apr 2007 21:29:31 +0000 (GMT)
+Subject: svn commit: samba r22430 - in branches: SAMBA_3_0/source/nsswitch
+	SAMBA_3_0_25/source/nsswitch
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 7590
+Lines: 249
+
+Author: jerry
+Date: 2007-04-21 21:29:31 +0000 (Sat, 21 Apr 2007)
+New Revision: 22430
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22430
+
+Log:
+Add SID validate to sid2uid() and sid2gid() public entry points in winbindd
+Modified:
+   branches/SAMBA_3_0/source/nsswitch/winbindd_sid.c
+   branches/SAMBA_3_0_25/source/nsswitch/winbindd_sid.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/nsswitch/winbindd_sid.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/winbindd_sid.c	2007-04-21 21:27:59 UTC (rev 22429)
++++ branches/SAMBA_3_0/source/nsswitch/winbindd_sid.c	2007-04-21 21:29:31 UTC (rev 22430)
+@@ -183,6 +183,40 @@
+ 	request_ok(state);
+ }
+ 
++static void sid2uid_lookupsid_recv( void *private_data, BOOL success, 
++				    const char *domain_name, 
++				    const char *name, 
++				    enum lsa_SidType type)
++{
++	struct winbindd_cli_state *state =
++		talloc_get_type_abort(private_data, struct winbindd_cli_state);
++	DOM_SID sid;
++
++	if (!success) {
++		DEBUG(5, ("sid2uid_lookupsid_recv Could not convert get sid type for %s\n",
++			  state->request.data.sid));
++		request_error(state);
++		return;
++	}
++
++	if ( (type!=SID_NAME_USER) || (type!=SID_NAME_COMPUTER) ) {
++		DEBUG(5,("sid2uid_lookupsid_recv: Sid %s is not a user or a computer.\n", 
++			 state->request.data.sid));
++		request_error(state);
++		return;		
++	}
++
++	if (!string_to_sid(&sid, state->request.data.sid)) {
++		DEBUG(1, ("sid2uid_lookupsid_recv: Could not get convert sid %s from string\n",
++			  state->request.data.sid));
++		request_error(state);
++		return;
++	}
++	
++	/* always use the async interface (may block) */
++	winbindd_sid2uid_async(state->mem_ctx, &sid, sid2uid_recv, state);
++}
++
+ void winbindd_sid_to_uid(struct winbindd_cli_state *state)
+ {
+ 	DOM_SID sid;
+@@ -200,8 +234,11 @@
+ 		return;
+ 	}
+ 
+-	/* always use the async interface (may block) */
+-	winbindd_sid2uid_async(state->mem_ctx, &sid, sid2uid_recv, state);
++	/* Validate the SID as a user.  Hopefully this will hit cache.
++	   Needed to prevent DoS by exhausting the uid allocation
++	   range from random SIDs. */
++
++	winbindd_lookupsid_async( state->mem_ctx, &sid, sid2uid_lookupsid_recv, state );
+ }
+ 
+ /* Convert a sid to a gid.  We assume we only have one rid attached to the
+@@ -223,6 +260,43 @@
+ 	request_ok(state);
+ }
+ 
++static void sid2gid_lookupsid_recv( void *private_data, BOOL success, 
++				    const char *domain_name, 
++				    const char *name, 
++				    enum lsa_SidType type)
++{
++	struct winbindd_cli_state *state =
++		talloc_get_type_abort(private_data, struct winbindd_cli_state);
++	DOM_SID sid;
++
++	if (!success) {
++		DEBUG(5, ("sid2gid_lookupsid_recv: Could not convert get sid type for %s\n",
++			  state->request.data.sid));
++		request_error(state);
++		return;
++	}
++
++	if ( (type!=SID_NAME_DOM_GRP) || 
++	     (type!=SID_NAME_ALIAS) ||
++	     (type!=SID_NAME_WKN_GRP) ) 
++	{
++		DEBUG(5,("sid2gid_lookupsid_recv: Sid %s is not a group.\n", 
++			 state->request.data.sid));
++		request_error(state);
++		return;		
++	}
++
++	if (!string_to_sid(&sid, state->request.data.sid)) {
++		DEBUG(1, ("sid2gid_lookupsid_recv: Could not get convert sid %s from string\n",
++			  state->request.data.sid));
++		request_error(state);
++		return;
++	}
++	
++	/* always use the async interface (may block) */
++	winbindd_sid2gid_async(state->mem_ctx, &sid, sid2gid_recv, state);
++}
++
+ void winbindd_sid_to_gid(struct winbindd_cli_state *state)
+ {
+ 	DOM_SID sid;
+@@ -240,8 +314,11 @@
+ 		return;
+ 	}
+ 
+-	/* always use the async interface (may block) */
+-	winbindd_sid2gid_async(state->mem_ctx, &sid, sid2gid_recv, state);
++	/* Validate the SID as a group.  Hopefully this will hit cache.
++	   Needed to prevent DoS by exhausting the uid allocation
++	   range from random SIDs. */
++
++	winbindd_lookupsid_async( state->mem_ctx, &sid, sid2gid_lookupsid_recv, state );	
+ }
+ 
+ static void sids2xids_recv(void *private_data, BOOL success, void *data, int len)
+
+Modified: branches/SAMBA_3_0_25/source/nsswitch/winbindd_sid.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/nsswitch/winbindd_sid.c	2007-04-21 21:27:59 UTC (rev 22429)
++++ branches/SAMBA_3_0_25/source/nsswitch/winbindd_sid.c	2007-04-21 21:29:31 UTC (rev 22430)
+@@ -183,6 +183,40 @@
+ 	request_ok(state);
+ }
+ 
++static void sid2uid_lookupsid_recv( void *private_data, BOOL success, 
++				    const char *domain_name, 
++				    const char *name, 
++				    enum lsa_SidType type)
++{
++	struct winbindd_cli_state *state =
++		talloc_get_type_abort(private_data, struct winbindd_cli_state);
++	DOM_SID sid;
++
++	if (!success) {
++		DEBUG(5, ("sid2uid_lookupsid_recv Could not convert get sid type for %s\n",
++			  state->request.data.sid));
++		request_error(state);
++		return;
++	}
++
++	if ( (type!=SID_NAME_USER) || (type!=SID_NAME_COMPUTER) ) {
++		DEBUG(5,("sid2uid_lookupsid_recv: Sid %s is not a user or a computer.\n", 
++			 state->request.data.sid));
++		request_error(state);
++		return;		
++	}
++
++	if (!string_to_sid(&sid, state->request.data.sid)) {
++		DEBUG(1, ("sid2uid_lookupsid_recv: Could not get convert sid %s from string\n",
++			  state->request.data.sid));
++		request_error(state);
++		return;
++	}
++	
++	/* always use the async interface (may block) */
++	winbindd_sid2uid_async(state->mem_ctx, &sid, sid2uid_recv, state);
++}
++
+ void winbindd_sid_to_uid(struct winbindd_cli_state *state)
+ {
+ 	DOM_SID sid;
+@@ -200,8 +234,11 @@
+ 		return;
+ 	}
+ 
+-	/* always use the async interface (may block) */
+-	winbindd_sid2uid_async(state->mem_ctx, &sid, sid2uid_recv, state);
++	/* Validate the SID as a user.  Hopefully this will hit cache.
++	   Needed to prevent DoS by exhausting the uid allocation
++	   range from random SIDs. */
++
++	winbindd_lookupsid_async( state->mem_ctx, &sid, sid2uid_lookupsid_recv, state );
+ }
+ 
+ /* Convert a sid to a gid.  We assume we only have one rid attached to the
+@@ -223,6 +260,43 @@
+ 	request_ok(state);
+ }
+ 
++static void sid2gid_lookupsid_recv( void *private_data, BOOL success, 
++				    const char *domain_name, 
++				    const char *name, 
++				    enum lsa_SidType type)
++{
++	struct winbindd_cli_state *state =
++		talloc_get_type_abort(private_data, struct winbindd_cli_state);
++	DOM_SID sid;
++
++	if (!success) {
++		DEBUG(5, ("sid2gid_lookupsid_recv: Could not convert get sid type for %s\n",
++			  state->request.data.sid));
++		request_error(state);
++		return;
++	}
++
++	if ( (type!=SID_NAME_DOM_GRP) || 
++	     (type!=SID_NAME_ALIAS) ||
++	     (type!=SID_NAME_WKN_GRP) ) 
++	{
++		DEBUG(5,("sid2gid_lookupsid_recv: Sid %s is not a group.\n", 
++			 state->request.data.sid));
++		request_error(state);
++		return;		
++	}
++
++	if (!string_to_sid(&sid, state->request.data.sid)) {
++		DEBUG(1, ("sid2gid_lookupsid_recv: Could not get convert sid %s from string\n",
++			  state->request.data.sid));
++		request_error(state);
++		return;
++	}
++	
++	/* always use the async interface (may block) */
++	winbindd_sid2gid_async(state->mem_ctx, &sid, sid2gid_recv, state);
++}
++
+ void winbindd_sid_to_gid(struct winbindd_cli_state *state)
+ {
+ 	DOM_SID sid;
+@@ -240,8 +314,11 @@
+ 		return;
+ 	}
+ 
+-	/* always use the async interface (may block) */
+-	winbindd_sid2gid_async(state->mem_ctx, &sid, sid2gid_recv, state);
++	/* Validate the SID as a group.  Hopefully this will hit cache.
++	   Needed to prevent DoS by exhausting the uid allocation
++	   range from random SIDs. */
++
++	winbindd_lookupsid_async( state->mem_ctx, &sid, sid2gid_lookupsid_recv, state );	
+ }
+ 
+ static void sids2xids_recv(void *private_data, BOOL success, void *data, int len)
+

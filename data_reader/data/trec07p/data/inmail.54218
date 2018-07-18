@@ -1,0 +1,284 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Jun  8 17:32:01 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l58LW1L9001884
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 8 Jun 2007 17:32:01 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id DD446163A3F
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri,  8 Jun 2007 21:32:00 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-3.6 required=3.8 tests=ALL_TRUSTED,AWL,BAYES_00 
+	autolearn=ham version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from [?X???$??P???$??$IPv6:::1] (dp [66.70.73.150])
+	by lists.samba.org (Postfix) with ESMTP id EF291163829;
+	Fri,  8 Jun 2007 21:31:19 +0000 (GMT)
+Mime-Version: 1.0 (Apple Message framework v752.3)
+To: samba-technical@lists.samba.org
+Message-Id: <79318F57-A188-45B4-B9CA-B4FB32557CB9@samba.org>
+Content-Type: multipart/mixed; boundary=Apple-Mail-1--979873165
+From: James Peach <jpeach@samba.org>
+Date: Fri, 8 Jun 2007 14:31:13 -0700
+X-Mailer: Apple Mail (2.752.3)
+Cc: Jeremy Allison <jra@samba.org>
+Subject: [PATCH] refactor sys_setgroups and add BSD egid support
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+
+--Apple-Mail-1--979873165
+Content-Transfer-Encoding: 7bit
+Content-Type: text/plain;
+	charset=US-ASCII;
+	delsp=yes;
+	format=flowed
+
+Hi all,
+
+The attached patch refactors sys_setgroups according to Jeremy's  
+previous suggestion.
+
+  	- we add a primary_gid argument which is used to preserve the
+	effective GID when calling setgroups(2) on BSD systems
+	- we split the different setgroups/getgroups implementations into  
+separate
+	functions to clarify the ifdef paths
+
+
+
+--Apple-Mail-1--979873165
+Content-Transfer-Encoding: 7bit
+Content-Type: text/plain;
+	x-unix-mode=0644;
+	name=setgroups-bsd-refactor.txt
+Content-Disposition: attachment;
+	filename=setgroups-bsd-refactor.txt
+
+diff --git a/source/lib/system.c b/source/lib/system.c
+index d732150..2cc7ef6 100644
+--- a/source/lib/system.c
++++ b/source/lib/system.c
+@@ -889,15 +889,13 @@ int groups_max(void)
+ }
+ 
+ /**************************************************************************
+- Wrapper for getgroups. Deals with broken (int) case.
++ Wrap setgroups and getgroups for systems that declare getgroups() as
++ returning an array of gid_t, but actuall return an array of int.
+ ****************************************************************************/
+ 
+-int sys_getgroups(int setlen, gid_t *gidset)
++#if defined(HAVE_BROKEN_GETGROUPS)
++static int sys_broken_getgroups(int setlen, gid_t *gidset)
+ {
+-#if !defined(HAVE_BROKEN_GETGROUPS)
+-	return getgroups(setlen, gidset);
+-#else
+-
+ 	GID_T gid;
+ 	GID_T *group_list;
+ 	int i, ngroups;
+@@ -919,7 +917,7 @@ int sys_getgroups(int setlen, gid_t *gidset)
+ 	if (setlen == 0)
+ 		setlen = groups_max();
+ 
+-	if((group_list = (GID_T *)malloc(setlen * sizeof(GID_T))) == NULL) {
++	if((group_list = SMB_MALLOC_ARRAY(GID_T, setlen)) == NULL) {
+ 		DEBUG(0,("sys_getgroups: Malloc fail.\n"));
+ 		return -1;
+ 	}
+@@ -936,26 +934,10 @@ int sys_getgroups(int setlen, gid_t *gidset)
+ 
+ 	SAFE_FREE(group_list);
+ 	return ngroups;
+-#endif /* HAVE_BROKEN_GETGROUPS */
+ }
+ 
+-
+-/**************************************************************************
+- Wrapper for setgroups. Deals with broken (int) case. Automatically used
+- if we have broken getgroups.
+-****************************************************************************/
+-
+-int sys_setgroups(int setlen, gid_t *gidset)
++static int sys_broken_setgroups(gid_t primary_gid, int setlen, gid_t *gidset)
+ {
+-#if !defined(HAVE_SETGROUPS)
+-	errno = ENOSYS;
+-	return -1;
+-#endif /* HAVE_SETGROUPS */
+-
+-#if !defined(HAVE_BROKEN_GETGROUPS)
+-	return setgroups(setlen, gidset);
+-#else
+-
+ 	GID_T *group_list;
+ 	int i ; 
+ 
+@@ -972,7 +954,7 @@ int sys_setgroups(int setlen, gid_t *gidset)
+ 	 * GID_T array of size setlen.
+ 	 */
+ 
+-	if((group_list = (GID_T *)malloc(setlen * sizeof(GID_T))) == NULL) {
++	if((group_list = SMB_MALLOC_ARRAY(GID_T, setlen)) == NULL) {
+ 		DEBUG(0,("sys_setgroups: Malloc fail.\n"));
+ 		return -1;    
+ 	}
+@@ -989,7 +971,101 @@ int sys_setgroups(int setlen, gid_t *gidset)
+  
+ 	SAFE_FREE(group_list);
+ 	return 0 ;
++}
++
+ #endif /* HAVE_BROKEN_GETGROUPS */
++
++/* This is a list of systems that require the first GID passed to setgroups(2)
++ * to be the effective GID. If your system is one of these, add it here.
++ */
++#if defined (FREEBSD) || defined (DARWINOS)
++#define USE_BSD_SETGROUPS
++#endif
++
++#if defined(USE_BSD_SETGROUPS)
++/* Depending on the particular BSD implementation, the first GID that is
++ * passed to setgroups(2) will either be ignored or will set the credential's
++ * effective GID. In either case, the right thing to do is to guarantee that
++ * gidset[0] is the effective GID.
++ */
++static int sys_bsd_setgroups(gid_t primary_gid, int setlen, const gid_t *gidset)
++{
++	gid_t *new_gidset = NULL;
++	int max;
++	int ret;
++
++	/* setgroups(2) will fail with EINVAL if we pass too many groups. */
++	max = groups_max();
++
++	/* No group list, just make sure we are setting the efective GID. */
++	if (setlen == 0) {
++		return setgroups(1, &primary_gid);
++	}
++
++	/* If the primary gid is not the first array element, grow the array
++	 * and insert it at the front.
++	 */
++	if (gidset[0] != primary_gid) {
++	        gid_t *new_gidset;
++
++	        new_gidset = SMB_MALLOC_ARRAY(gid_t, setlen + 1);
++	        if (new_gidset == NULL) {
++			return -1;
++	        }
++
++		memcpy(new_gidset + 1, gidset, ((setlen + 1) * sizeof(gid_t)));
++		new_gidset[0] = primary_gid;
++		setlen++;
++	}
++
++#if defined(BROKEN_GETGROUPS)
++	ret = sys_broken_setgroups(max, new_gidset ? new_gidset : gidset);
++#else
++	ret = setgroups(max, new_gidset ? new_gidset : gidset);
++#endif
++
++	if (new_gidset) {
++		int errsav = errno;
++		SAFE_FREE(new_gidset);
++		errno = errsav;
++	}
++
++	return ret;
++}
++
++#endif /* USE_BSD_SETGROUPS */
++
++/**************************************************************************
++ Wrapper for getgroups. Deals with broken (int) case.
++****************************************************************************/
++
++int sys_getgroups(int setlen, gid_t *gidset)
++{
++#if defined(HAVE_BROKEN_GETGROUPS)
++	return sys_broken_getgroups(setlen, gidset);
++#else
++	return getgroups(setlen, gidset);
++#endif
++}
++
++/**************************************************************************
++ Wrapper for setgroups. Deals with broken (int) case and BSD case.
++****************************************************************************/
++
++int sys_setgroups(gid_t UNUSED(primary_gid), int setlen, gid_t *gidset)
++{
++#if !defined(HAVE_SETGROUPS)
++	errno = ENOSYS;
++	return -1;
++#endif /* HAVE_SETGROUPS */
++
++#if defined(HAVE_BROKEN_GETGROUPS)
++	return sys_broken_setgroups(setlen, gidset);
++#elif defined(USE_BSD_SETGROUPS)
++	return sys_bsd_setgroups(primary_gid, setlen, gidset);
++#else
++	return setgroups(setlen, gidset);
++#endif
+ }
+ 
+ /**************************************************************************
+diff --git a/source/lib/system_smbd.c b/source/lib/system_smbd.c
+index 509b2bb..0d62360 100644
+--- a/source/lib/system_smbd.c
++++ b/source/lib/system_smbd.c
+@@ -104,7 +104,7 @@ static int getgrouplist_internals(const char *user, gid_t gid, gid_t *groups,
+ 
+ 	restore_re_gid();
+ 
+-	if (sys_setgroups(ngrp_saved, gids_saved) != 0) {
++	if (sys_setgroups(gid, ngrp_saved, gids_saved) != 0) {
+ 		/* yikes! */
+ 		DEBUG(0,("ERROR: getgrouplist: failed to reset group list!\n"));
+ 		smb_panic("getgrouplist: failed to reset group list!\n");
+diff --git a/source/smbd/sec_ctx.c b/source/smbd/sec_ctx.c
+index fd79fbb..19dac0d 100644
+--- a/source/smbd/sec_ctx.c
++++ b/source/smbd/sec_ctx.c
+@@ -236,7 +236,7 @@ static void set_unix_security_ctx(uid_t uid, gid_t gid, int ngroups, gid_t *grou
+ 	/* Start context switch */
+ 	gain_root();
+ #ifdef HAVE_SETGROUPS
+-	sys_setgroups(ngroups, groups);
++	sys_setgroups(gid, ngroups, groups);
+ #endif
+ 	become_id(uid, gid);
+ 	/* end context switch */
+
+--Apple-Mail-1--979873165
+Content-Transfer-Encoding: 7bit
+Content-Type: text/plain;
+	charset=US-ASCII;
+	format=flowed
+
+
+--
+James Peach | jpeach@samba.org
+
+
+
+--Apple-Mail-1--979873165--
+

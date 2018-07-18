@@ -1,0 +1,177 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Jun 29 09:08:20 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5TD8JL9026055
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 29 Jun 2007 09:08:19 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 57E5C162C45
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 29 Jun 2007 13:08:16 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.4 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1017)
+	id 16F77162AC3; Fri, 29 Jun 2007 13:07:56 +0000 (GMT)
+To: samba-cvs@samba.org
+From: obnox@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070629130756.16F77162AC3@lists.samba.org>
+Date: Fri, 29 Jun 2007 13:07:56 +0000 (GMT)
+Subject: svn commit: samba r23657 - in branches: SAMBA_3_0/source/param
+	SAMBA_3_0/source/utils SAMBA_3_0_26/source/param
+	SAMBA_3_0_26/source/utils
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: obnox
+Date: 2007-06-29 13:07:54 +0000 (Fri, 29 Jun 2007)
+New Revision: 23657
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23657
+
+Log:
+Prevent setting of a global option in a share definition
+in "net conf setparm".
+
+Michael
+
+
+Modified:
+   branches/SAMBA_3_0/source/param/loadparm.c
+   branches/SAMBA_3_0/source/utils/net_conf.c
+   branches/SAMBA_3_0_26/source/param/loadparm.c
+   branches/SAMBA_3_0_26/source/utils/net_conf.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/param/loadparm.c
+===================================================================
+--- branches/SAMBA_3_0/source/param/loadparm.c	2007-06-29 12:30:41 UTC (rev 23656)
++++ branches/SAMBA_3_0/source/param/loadparm.c	2007-06-29 13:07:54 UTC (rev 23657)
+@@ -2789,6 +2789,24 @@
+ }
+ 
+ /***************************************************************************
++ Check whether the given name is the name of a global parameter.
++ Returns True for strings belonging to parameters of class
++ P_GLOBAL, False for all other strings, also for parametric options
++ and strings not belonging to any option.
++***************************************************************************/
++
++BOOL lp_parameter_is_global(const char *pszParmName)
++{
++	int num = map_parameter(pszParmName);
++
++	if (num >= 0) {
++		return (parm_table[num].p_class == P_GLOBAL);
++	}
++
++	return False;
++}
++
++/***************************************************************************
+  Map a parameter's string representation to something we can use. 
+  Returns False if the parameter string is not recognised, else TRUE.
+ ***************************************************************************/
+
+Modified: branches/SAMBA_3_0/source/utils/net_conf.c
+===================================================================
+--- branches/SAMBA_3_0/source/utils/net_conf.c	2007-06-29 12:30:41 UTC (rev 23656)
++++ branches/SAMBA_3_0/source/utils/net_conf.c	2007-06-29 13:07:54 UTC (rev 23657)
+@@ -178,12 +178,21 @@
+ 	}
+ 
+ 	if (registry_smbconf_valname_forbidden(valname)) {
+-		d_fprintf(stderr, "Parameter '%s' not allowed in registry.\n", 
++		d_fprintf(stderr, "Parameter '%s' not allowed in registry.\n",
+ 			  valname);
+ 		werr = WERR_INVALID_PARAM;
+ 		goto done;
+ 	}
+ 
++	if (!strequal(key->key->name, GLOBAL_NAME) &&
++	    lp_parameter_is_global(valname))
++	{
++		d_fprintf(stderr, "Global paramter '%s' not allowed in "
++			  "service definition.\n", valname);
++		werr = WERR_INVALID_PARAM;
++		goto done;
++	}
++
+ 	werr = reg_setvalue(key, valname, &val);
+ 	if (!W_ERROR_IS_OK(werr)) {
+ 		d_fprintf(stderr,
+
+Modified: branches/SAMBA_3_0_26/source/param/loadparm.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/param/loadparm.c	2007-06-29 12:30:41 UTC (rev 23656)
++++ branches/SAMBA_3_0_26/source/param/loadparm.c	2007-06-29 13:07:54 UTC (rev 23657)
+@@ -2790,6 +2790,24 @@
+ }
+ 
+ /***************************************************************************
++ Check whether the given name is the name of a global parameter.
++ Returns True for strings belonging to parameters of class
++ P_GLOBAL, False for all other strings, also for parametric options
++ and strings not belonging to any option.
++***************************************************************************/
++
++BOOL lp_parameter_is_global(const char *pszParmName)
++{
++	int num = map_parameter(pszParmName);
++
++	if (num >= 0) {
++		return (parm_table[num].p_class == P_GLOBAL);
++	}
++
++	return False;
++}
++
++/***************************************************************************
+  Map a parameter's string representation to something we can use. 
+  Returns False if the parameter string is not recognised, else TRUE.
+ ***************************************************************************/
+
+Modified: branches/SAMBA_3_0_26/source/utils/net_conf.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/utils/net_conf.c	2007-06-29 12:30:41 UTC (rev 23656)
++++ branches/SAMBA_3_0_26/source/utils/net_conf.c	2007-06-29 13:07:54 UTC (rev 23657)
+@@ -178,12 +178,21 @@
+ 	}
+ 
+ 	if (registry_smbconf_valname_forbidden(valname)) {
+-		d_fprintf(stderr, "Parameter '%s' not allowed in registry.\n", 
++		d_fprintf(stderr, "Parameter '%s' not allowed in registry.\n",
+ 			  valname);
+ 		werr = WERR_INVALID_PARAM;
+ 		goto done;
+ 	}
+ 
++	if (!strequal(key->key->name, GLOBAL_NAME) &&
++	    lp_parameter_is_global(valname))
++	{
++		d_fprintf(stderr, "Global paramter '%s' not allowed in "
++			  "service definition.\n", valname);
++		werr = WERR_INVALID_PARAM;
++		goto done;
++	}
++
+ 	werr = reg_setvalue(key, valname, &val);
+ 	if (!W_ERROR_IS_OK(werr)) {
+ 		d_fprintf(stderr,
+

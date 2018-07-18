@@ -1,0 +1,244 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Apr 17 08:27:49 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3HCRm0I027282
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 08:27:48 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id AEDD116397E
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 12:27:24 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.8 required=3.8 tests=AWL,BAYES_05,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id E9594162ABE; Tue, 17 Apr 2007 12:27:10 +0000 (GMT)
+Date: Tue, 17 Apr 2007 22:27:18 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070417122710.E9594162ABE@lists.samba.org>
+Subject: Rev 142: more DEBUG() calls in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 6759
+Lines: 204
+
+------------------------------------------------------------
+revno: 142
+revision-id: tridge@samba.org-20070417122717-55b27f525e956688
+parent: tridge@samba.org-20070417121650-abbb360fdc1b534d
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Tue 2007-04-17 22:27:17 +1000
+message:
+  more DEBUG() calls
+modified:
+  common/ctdb_daemon.c           ctdb_daemon.c-20070409200331-3el1kqgdb9m4ib0g-1
+  common/ctdb_ltdb.c             ctdb_ltdb.c-20061128065342-to93h6eejj5kon81-2
+  common/ctdb_message.c          ctdb_message.c-20070208224107-9dnio7x7z33prrmt-1
+  tests/ctdb_messaging.c         ctdb_messaging.c-20070411034205-6d6vne56pbih2x1p-1
+=== modified file 'common/ctdb_daemon.c'
+--- a/common/ctdb_daemon.c	2007-04-17 07:36:53 +0000
++++ b/common/ctdb_daemon.c	2007-04-17 12:27:17 +0000
+@@ -36,7 +36,7 @@
+ 	/* go into a wait loop to allow other nodes to complete */
+ 	event_loop_wait(ctdb->ev);
+ 
+-	printf("event_loop_wait() returned. this should not happen\n");
++	DEBUG(0,("event_loop_wait() returned. this should not happen\n"));
+ 	exit(1);
+ }
+ 
+@@ -118,7 +118,8 @@
+ 					    c->srvid, daemon_message_handler, 
+ 					    client);
+ 	if (res != 0) {
+-		printf("Failed to register handler %u in daemon\n", c->srvid);
++		DEBUG(0,(__location__ " Failed to register handler %u in daemon\n", 
++			 c->srvid));
+ 	}
+ }
+ 
+@@ -168,7 +169,7 @@
+ 	length = offsetof(struct ctdb_reply_fetch_lock, data) + state->call.reply_data.dsize;
+ 	r = ctdbd_allocate_pkt(client->ctdb, length);
+ 	if (r == NULL) {
+-		printf("Failed to allocate reply_call in ctdb daemon\n");
++		DEBUG(0,(__location__ " Failed to allocate reply_call in ctdb daemon\n"));
+ 		return;
+ 	}
+ 	memset(r, 0, offsetof(struct ctdb_reply_fetch_lock, data));
+@@ -183,7 +184,7 @@
+ 
+ 	res = ctdb_queue_send(client->queue, (uint8_t *)&r->hdr, r->hdr.length);
+ 	if (res != 0) {
+-		printf("Failed to queue packet from daemon to client\n");
++		DEBUG(0,(__location__ " Failed to queue packet from daemon to client\n"));
+ 	}
+ 	talloc_free(r);
+ }
+@@ -260,7 +261,7 @@
+ 	
+ 	res = ctdb_queue_send(client->queue, (uint8_t *)&r.hdr, r.hdr.length);
+ 	if (res != 0) {
+-		printf("Failed to queue a connect wait response\n");
++		DEBUG(0,(__location__ " Failed to queue a connect wait response\n"));
+ 		return;
+ 	}
+ }
+@@ -298,8 +299,8 @@
+ 	res = ctdb_daemon_send_message(client->ctdb, c->hdr.destnode,
+ 				       c->srvid, data);
+ 	if (res != 0) {
+-		printf("Failed to send message to remote node %u\n",
+-		       c->hdr.destnode);
++		DEBUG(0,(__location__ " Failed to send message to remote node %u\n",
++			 c->hdr.destnode));
+ 	}
+ }
+ 
+@@ -319,7 +320,8 @@
+ 
+ 	ctdb_db = find_ctdb_db(client->ctdb, c->db_id);
+ 	if (!ctdb_db) {
+-		printf("Unknown database in request. db_id==0x%08x",c->db_id);
++		DEBUG(0, (__location__ " Unknown database in request. db_id==0x%08x",
++			  c->db_id));
+ 		return;
+ 	}
+ 
+@@ -337,14 +339,14 @@
+ /* XXX this must be converted to fully async */
+ 	res = ctdb_daemon_call_recv(state, &call);
+ 	if (res != 0) {
+-		printf("ctdbd_call_recv() returned error\n");
++		DEBUG(0, (__location__ " ctdbd_call_recv() returned error\n"));
+ 		exit(1);
+ 	}
+ 
+ 	length = offsetof(struct ctdb_reply_call, data) + call.reply_data.dsize;
+ 	r = ctdbd_allocate_pkt(client->ctdb, length);
+ 	if (r == NULL) {
+-		printf("Failed to allocate reply_call in ctdb daemon\n");
++		DEBUG(0, (__location__ " Failed to allocate reply_call in ctdb daemon\n"));
+ 		return;
+ 	}
+ 	memset(r, 0, offsetof(struct ctdb_reply_call, data));
+@@ -358,7 +360,7 @@
+ 
+ 	res = ctdb_queue_send(client->queue, (uint8_t *)&r->hdr, r->hdr.length);
+ 	if (res != 0) {
+-		printf("Failed to queue packet from daemon to client\n");
++		DEBUG(0, (__location__ "Failed to queue packet from daemon to client\n"));
+ 	}
+ 	talloc_free(r);
+ }
+@@ -399,7 +401,8 @@
+ 		daemon_request_fetch_lock(client, (struct ctdb_req_fetch_lock *)hdr);
+ 		break;
+ 	default:
+-		printf("daemon: unrecognized operation:%d\n",hdr->operation);
++		DEBUG(0,(__location__ " daemon: unrecognized operation %d\n",
++			 hdr->operation));
+ 	}
+ 
+ done:
+@@ -481,10 +484,10 @@
+ 	/* XXX this is a good place to try doing some cleaning up before exiting */
+ 	cnt = read(*fd, &buf, 1);
+ 	if (cnt==0) {
+-		printf("parent process exited. filedescriptor dissappeared\n");
++		DEBUG(0,(__location__ " parent process exited. filedescriptor dissappeared\n"));
+ 		exit(1);
+ 	} else {
+-		printf("ctdb: did not expect data from parent process\n");
++		DEBUG(0,(__location__ " ctdb: did not expect data from parent process\n"));
+ 		exit(1);
+ 	}
+ }
+@@ -549,18 +552,18 @@
+ 	/* create a unix domain stream socket to listen to */
+ 	res = ux_socket_bind(ctdb);
+ 	if (res!=0) {
+-		printf("Failed to open CTDB unix domain socket\n");
++		DEBUG(0,(__location__ " Failed to open CTDB unix domain socket\n"));
+ 		exit(10);
+ 	}
+ 
+ 	res = pipe(&fd[0]);
+ 	if (res) {
+-		printf("Failed to open pipe for CTDB\n");
++		DEBUG(0,(__location__ " Failed to open pipe for CTDB\n"));
+ 		exit(1);
+ 	}
+ 	pid = fork();
+ 	if (pid==-1) {
+-		printf("Failed to fork CTDB daemon\n");
++		DEBUG(0,(__location__ " Failed to fork CTDB daemon\n"));
+ 		exit(1);
+ 	}
+ 
+
+=== modified file 'common/ctdb_ltdb.c'
+--- a/common/ctdb_ltdb.c	2007-04-17 06:20:32 +0000
++++ b/common/ctdb_ltdb.c	2007-04-17 12:27:17 +0000
+@@ -227,7 +227,7 @@
+ 	struct ctdb_req_header *hdr = p;
+ 	struct ctdb_context *ctdb = talloc_find_parent_bytype(p, struct ctdb_context);
+ 	ctdb_recv_pkt(ctdb, (uint8_t *)hdr, hdr->length);
+-	printf("PACKET REQUEUED\n");
++	DEBUG(0,(__location__ " PACKET REQUEUED\n"));
+ }
+ 
+ /*
+
+=== modified file 'common/ctdb_message.c'
+--- a/common/ctdb_message.c	2007-04-17 04:52:51 +0000
++++ b/common/ctdb_message.c	2007-04-17 12:27:17 +0000
+@@ -42,7 +42,8 @@
+ 		if (ml->srvid == srvid || ml->srvid == CTDB_SRVID_ALL) break;
+ 	}
+ 	if (ml == NULL) {
+-		printf("daemon vnn:%d  no msg handler for srvid=%u\n", ctdb_get_vnn(ctdb), srvid);
++		DEBUG(0,(__location__ " daemon vnn:%d  no msg handler for srvid=%u\n", 
++			 ctdb_get_vnn(ctdb), srvid));
+ 		/* no registered message handler */
+ 		return -1;
+ 	}
+@@ -86,7 +87,7 @@
+ 
+ 	res = ctdb_dispatch_message(m->ctdb, m->srvid, m->data);
+ 	if (res != 0) {
+-		printf("Failed to dispatch message for srvid=%u\n", m->srvid);
++		DEBUG(0, (__location__ " Failed to dispatch message for srvid=%u\n", m->srvid));
+ 	}
+ 	talloc_free(m);
+ }
+
+=== modified file 'tests/ctdb_messaging.c'
+--- a/tests/ctdb_messaging.c	2007-04-17 12:16:50 +0000
++++ b/tests/ctdb_messaging.c	2007-04-17 12:27:17 +0000
+@@ -130,7 +130,7 @@
+ 		for (j=0;j<num_clients;j++) {
+ 			printf("sending message to %d:%d\n", i, j);
+ 			sprintf(buf,"Message from %d to vnn:%d srvid:%d",ctdb_get_vnn(ctdb),i,j);
+-			data.dptr=buf;
++			data.dptr = (unsigned char *)buf;
+ 			data.dsize=strlen(buf)+1;
+ 			ctdb_send_message(ctdb, i, j, data);
+ 		}
+

@@ -1,0 +1,127 @@
+From perl6-all-return-80470-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue Apr 10 18:26:32 2007
+Return-Path: <perl6-all-return-80470-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3AMQV0I002708
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 10 Apr 2007 18:26:32 -0400
+Received: (qmail 28177 invoked by uid 514); 10 Apr 2007 22:26:07 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 28166 invoked from network); 10 Apr 2007 22:26:07 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+Delivered-To: perlmail-parrot-porters@onion.perl.org
+Delivered-To: parrot-porters@perl.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+Message-ID: <461C0EEF.1010107@perl.org>
+Date: Tue, 10 Apr 2007 15:25:51 -0700
+From: Allison Randal <allison@perl.org>
+User-Agent: Thunderbird 1.5.0.10 (Macintosh/20070221)
+MIME-Version: 1.0
+To: p2 <parrot-porters@perl.org>
+Subject: modifying classes after they're instantiated
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+X-Virus-Scanned: by amavisd-new at wgz.org
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+Status: O
+Content-Length: 3446
+Lines: 77
+
+Jonathan raised a question in the #parrotsketch meeting today about our 
+strategy for safely changing classes that already have instantiated 
+objects. The core problem is this: when you create a class,
+
+   .local pmc classobj, object
+   classobj = newclass 'Foo'
+
+instantiate an object from it,
+
+   object = classobj.'new'()
+
+and then modify the class,
+
+   classobj.'add_method'('bar', $P3)
+
+- At that point you want 'object' to still reference the old class, so 
+it can continue operating without disruption. No problem, you just don't 
+make any changes to it.
+
+- And we can create a new class object inside the add_method call and 
+redispatch the add_method to it, leaving the original class object 
+unmodified.
+
+- The problem is that after the call you want the 'classobj' variable to 
+contain the new class, rather than the old class. We don't have an 
+effective way of morphing that variable to the new class from within a 
+method call on that class. Or, more specifically, we do, but only by 
+altering the class itself, which will morph all references to the class, 
+including the references from the instantiated objects (which should 
+reference the old class instead).
+
+Some alternatives:
+
+1) Do away with safe morphing. Allow all dynamic changes to the class 
+even after it has been instantiated. Flag in the class that it's been 
+modified after instantiation, and require each object to check that flag 
+before it calls a method or accesses an attribute. When the class 
+changes, the object will have to reinitialize with the structure to 
+support the new class. Disadvantage: Lots of overhead on checking for 
+class modifications, even though modifying a class after it's 
+instantiated is actually pretty rare. (Not my favorite alternative.)
+
+2) Modify the class object so it stores "version" information about 
+itself (such as an array of pointers to previous class objects). The 
+instantiated object would store both a pointer to its class and a 
+version number for the class. Disadvantage: This adds more complexity to 
+the core object model than seems merited by a feature that's rarely 
+used. (Not my favorite alternative.)
+
+3) Modify the core PMC implementation so it tracks information about 
+which the different containers (registers, temporary variables, 
+namespace entries, etc.) that hold a particular PMC, and which 
+particular container was used to make the method call, so a method call 
+can modify the variable it was called on. Disadvantage: This isn't a 
+generally useful feature. (Not my favorite alternative.)
+
+4) Do away with automatic morphing. Attempting to make changes to a 
+class that's already been instantiated is not allowed (add_method, etc. 
+will throw an exception). This also eliminates the need for 
+remove_method, remove_attribute, remove_role, and remove_parent. To 
+modify a class that has instantiated objects you must clone it first:
+
+   classobj = newclass 'Foo'
+   object = classobj.'new'()
+
+   newclassobj = classobj.'clone'('exclude_methods'=>$P1)
+   newclassobj.'add_method'('bar', $P3)
+   object2 = newclassobj.'new'()
+
+And 'clone' could take an option specifying whether this particular 
+clone will replace the existing class in the namespace. Disadvantage: It 
+eliminates some of the DWIMery of the system. On the other hand, it 
+might make it easier to implement a language that doesn't allow 
+modifications to instantiated classes. (This is currently my favorite 
+alternative.)
+
+Allison
+

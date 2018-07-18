@@ -1,0 +1,600 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May  9 07:29:28 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l49BTRqD028340
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 9 May 2007 07:29:27 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 2CAF61638B5
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed,  9 May 2007 11:29:26 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.9 required=3.8 tests=AWL, BAYES_50, FORGED_RCVD_HELO,
+	RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: from pollux.warande.net (pollux.sshunet.nl [145.97.192.42])
+	by lists.samba.org (Postfix) with ESMTP id E9E87162AD4
+	for <samba-cvs@samba.org>; Wed,  9 May 2007 11:28:23 +0000 (GMT)
+Received: from localhost (localhost.localdomain [127.0.0.1])
+	by pollux.warande.net (Postfix) with ESMTP id 8E9E5580021
+	for <samba-cvs@samba.org>; Wed,  9 May 2007 13:28:23 +0200 (CEST)
+Received: from pollux.warande.net ([127.0.0.1])
+	by localhost (pollux [127.0.0.1]) (amavisd-new, port 10024)
+	with ESMTP id 12387-05 for <samba-cvs@samba.org>;
+	Wed, 9 May 2007 13:28:23 +0200 (CEST)
+Received: from ganieda.vernstok.nl (42pc197.sshunet.nl [145.97.197.42])
+	by pollux.warande.net (Postfix) with ESMTP
+	for <samba-cvs@samba.org>; Wed,  9 May 2007 13:28:23 +0200 (CEST)
+Received: by ganieda.vernstok.nl (Postfix, from userid 1000)
+	id 1317D5C4932; Wed,  9 May 2007 13:28:23 +0200 (CEST)
+To: samba-cvs@samba.org
+From: Jelmer Vernooij <jelmer@samba.org>
+Message-Id: <20070509112823.1317D5C4932@ganieda.vernstok.nl>
+Date: Wed,  9 May 2007 13:28:23 +0200 (CEST)
+X-Virus-Scanned: by amavisd-new-20030616-p10 (Debian) at sshunet.nl
+Subject: Rev 12126: Use talloc in loadparm. in
+	file:///home/jelmer/bzr.samba/SAMBA_4_0/
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+At file:///home/jelmer/bzr.samba/SAMBA_4_0/
+
+------------------------------------------------------------
+revno: 12126
+revision-id: jelmer@samba.org-20070509112813-hfcw7ovikq4o69bj
+parent: jelmer@samba.org-20070509105243-c8umb0w5w1d1ogsj
+committer: Jelmer Vernooij <jelmer@samba.org>
+branch nick: SAMBA_4_0
+timestamp: Wed 2007-05-09 13:28:13 +0200
+message:
+  Use talloc in loadparm.
+modified:
+  source/lib/util/util_str.c     svn-v2:13658@0c0555d6-39d7-0310-84fc-f1cc0bd64818-branches%2fSAMBA_4_0-source%2flib%2futil%2futil_str.c
+  source/param/loadparm.c        svn-v2:2@0c0555d6-39d7-0310-84fc-f1cc0bd64818-trunk-source%2fparam%2floadparm.c
+=== modified file 'source/lib/util/util_str.c'
+--- a/source/lib/util/util_str.c	2007-04-19 14:21:56 +0000
++++ b/source/lib/util/util_str.c	2007-05-09 11:28:13 +0000
+@@ -246,36 +246,23 @@
+ }
+ 
+ /**
+- Set a string value, allocing the space for the string
+-**/
+-static BOOL string_init(char **dest,const char *src)
+-{
+-	if (!src) src = "";
+-
+-	(*dest) = strdup(src);
+-	if ((*dest) == NULL) {
+-		DEBUG(0,("Out of memory in string_init\n"));
+-		return False;
+-	}
+-	return True;
+-}
+-
+-/**
+- Free a string value.
+-**/
+-_PUBLIC_ void string_free(char **s)
+-{
+-	if (s) SAFE_FREE(*s);
+-}
+-
+-/**
+  Set a string value, deallocating any existing space, and allocing the space
+  for the string
+ **/
+-_PUBLIC_ BOOL string_set(char **dest, const char *src)
++_PUBLIC_ BOOL string_set(TALLOC_CTX *mem_ctx, char **dest, const char *src)
+ {
+-	string_free(dest);
+-	return string_init(dest,src);
++	if (dest != NULL)
++		talloc_free(*dest);
++
++	if (src == NULL) 
++		src = "";
++
++	(*dest) = talloc_strdup(mem_ctx, src);
++	if ((*dest) == NULL) {
++		DEBUG(0,("Out of memory in string_set\n"));
++		return false;
++	}
++	return true;
+ }
+ 
+ /**
+
+=== modified file 'source/param/loadparm.c'
+--- a/source/param/loadparm.c	2007-05-09 10:52:43 +0000
++++ b/source/param/loadparm.c	2007-05-09 11:28:13 +0000
+@@ -598,7 +598,7 @@
+ 		     parm_table[i].type == P_USTRING) &&
+ 		    parm_table[i].ptr &&
+ 		    !(parm_table[i].flags & FLAG_CMDLINE)) {
+-			string_set(parm_table[i].ptr, "");
++			string_set(ctx, parm_table[i].ptr, "");
+ 		}
+ 	}
+ 
+@@ -974,30 +974,28 @@
+ 	if (lookup_service >= ctx->iNumServices) 
+ 		return NULL;
+ 	
+-	data = (lookup_service < 0) ? 
+-		Globals.param_opt : ctx->ServicePtrs[lookup_service]->param_opt;
+     
+ 	asprintf(&vfskey, "%s:%s", type, option);
+ 	strlower(vfskey);
+ 
+-	while (data) {
++	data = (lookup_service < 0) ? 
++		Globals.param_opt : ctx->ServicePtrs[lookup_service]->param_opt;
++	for (; data; data = data->next) {
+ 		if (strcmp(data->key, vfskey) == 0) {
+ 			free(vfskey);
+ 			return data->value;
+ 		}
+-		data = data->next;
+ 	}
+ 
+ 	if (lookup_service >= 0) {
+ 		/* Try to fetch the same option but from globals */
+ 		/* but only if we are not already working with Globals */
+-		data = Globals.param_opt;
+-		while (data) {
++		
++		for (data = Globals.param_opt; data; data = data->next) {
+ 			if (strcmp(data->key, vfskey) == 0) {
+ 				free(vfskey);
+ 				return data->value;
+ 			}
+-			data = data->next;
+ 		}
+ 	}
+ 
+@@ -1167,45 +1165,7 @@
+ 
+ static void free_service(struct service *pservice)
+ {
+-	int i;
+-        struct param_opt *data, *pdata;
+-	if (!pservice)
+-		return;
+-
+-	if (pservice->szService)
+-		DEBUG(5, ("free_service: Freeing service %s\n",
+-		       pservice->szService));
+-
+-	string_free(&pservice->szService);
+-	SAFE_FREE(pservice->copymap);
+-
+-	for (i = 0; parm_table[i].label; i++) {
+-		if ((parm_table[i].type == P_STRING ||
+-		     parm_table[i].type == P_USTRING) &&
+-		    parm_table[i].class == P_LOCAL) {
+-			string_free((char **)
+-				    (((char *)pservice) +
+-				     PTR_DIFF(parm_table[i].ptr, &sDefault)));
+-		} else if (parm_table[i].type == P_LIST &&
+-			   parm_table[i].class == P_LOCAL) {
+-			char ***listp = (char ***)(((char *)pservice) + 
+-						   PTR_DIFF(parm_table[i].ptr, &sDefault));
+-			talloc_free(*listp);
+-			*listp = NULL;
+-		}
+-	}
+-				
+-	DEBUG(5,("Freeing parametrics:\n"));
+-	data = pservice->param_opt;
+-	while (data) {
+-		DEBUG(5,("[%s = %s]\n", data->key, data->value));
+-		string_free(&data->key);
+-		string_free(&data->value);
+-		pdata = data->next;
+-		SAFE_FREE(data);
+-		data = pdata;
+-	}
+-
++	talloc_free_children(pservice);
+ 	ZERO_STRUCTP(pservice);
+ }
+ 
+@@ -1225,21 +1185,19 @@
+ 	tservice = *pservice;
+ 
+ 	/* it might already exist */
+-	if (name) {
++	if (name != NULL) {
+ 		i = getservicebyname(ctx, name, NULL);
+ 		if (i >= 0) {
+ 			/* Clean all parametric options for service */
+ 			/* They will be added during parsing again */
+ 			data = ctx->ServicePtrs[i]->param_opt;
+ 			while (data) {
+-				string_free(&data->key);
+-				string_free(&data->value);
+ 				pdata = data->next;
+-				SAFE_FREE(data);
++				talloc_free(data);
+ 				data = pdata;
+ 			}
+ 			ctx->ServicePtrs[i]->param_opt = NULL;
+-			return (i);
++			return i;
+ 		}
+ 	}
+ 
+@@ -1252,7 +1210,8 @@
+ 	if (i == ctx->iNumServices) {
+ 		struct service **tsp;
+ 		
+-		tsp = realloc_p(ctx->ServicePtrs, struct service *,	num_to_alloc);
++		tsp = talloc_realloc(ctx, ctx->ServicePtrs, struct service *, 
++							 num_to_alloc);
+ 					   
+ 		if (!tsp) {
+ 			DEBUG(0,("add_a_service: failed to enlarge ServicePtrs!\n"));
+@@ -1260,7 +1219,7 @@
+ 		}
+ 		else {
+ 			ctx->ServicePtrs = tsp;
+-			ctx->ServicePtrs[ctx->iNumServices] = malloc_p(struct service);
++			ctx->ServicePtrs[ctx->iNumServices] = talloc(ctx, struct service);
+ 		}
+ 		if (!ctx->ServicePtrs[ctx->iNumServices]) {
+ 			DEBUG(0,("add_a_service: out of memory!\n"));
+@@ -1276,8 +1235,8 @@
+ 	init_service(ctx->ServicePtrs[i]);
+ 	copy_service(ctx->ServicePtrs[i], &tservice, NULL);
+ 	if (name)
+-		string_set(&ctx->ServicePtrs[i]->szService, name);
+-	return (i);
++		string_set(ctx, &ctx->ServicePtrs[i]->szService, name);
++	return i;
+ }
+ 
+ /***************************************************************************
+@@ -1305,13 +1264,13 @@
+ 		string_sub(newHomedir,"%H", pszHomedir, sizeof(newHomedir)); 
+ 	}
+ 
+-	string_set(&ctx->ServicePtrs[i]->szPath, newHomedir);
++	string_set(ctx, &ctx->ServicePtrs[i]->szPath, newHomedir);
+ 
+ 	if (!(*(ctx->ServicePtrs[i]->comment))) {
+ 		pstring comment;
+ 		slprintf(comment, sizeof(comment) - 1,
+ 			 "Home directory of %s", user);
+-		string_set(&ctx->ServicePtrs[i]->comment, comment);
++		string_set(ctx, &ctx->ServicePtrs[i]->comment, comment);
+ 	}
+ 	ctx->ServicePtrs[i]->bAvailable = sDefault.bAvailable;
+ 	ctx->ServicePtrs[i]->bBrowseable = sDefault.bBrowseable;
+@@ -1319,7 +1278,7 @@
+ 	DEBUG(3, ("adding home's share [%s] for user '%s' at '%s'\n", pszHomename, 
+ 	       user, newHomedir));
+ 	
+-	return (True);
++	return true;
+ }
+ 
+ /***************************************************************************
+@@ -1348,9 +1307,9 @@
+ 	slprintf(comment, sizeof(comment) - 1,
+ 		 "%s Service (%s)", fstype, Globals.szServerString);
+ 
+-	string_set(&ctx->ServicePtrs[i]->szPath, tmpdir());
+-	string_set(&ctx->ServicePtrs[i]->comment, comment);
+-	string_set(&ctx->ServicePtrs[i]->fstype, fstype);
++	string_set(ctx, &ctx->ServicePtrs[i]->szPath, tmpdir());
++	string_set(ctx, &ctx->ServicePtrs[i]->comment, comment);
++	string_set(ctx, &ctx->ServicePtrs[i]->fstype, fstype);
+ 	ctx->ServicePtrs[i]->iMaxConnections = -1;
+ 	ctx->ServicePtrs[i]->bAvailable = true;
+ 	ctx->ServicePtrs[i]->bRead_only = true;
+@@ -1363,7 +1322,7 @@
+ 
+ 	DEBUG(3, ("adding hidden service %s\n", name));
+ 
+-	return (True);
++	return true;
+ }
+ 
+ /***************************************************************************
+@@ -1377,16 +1336,16 @@
+ 	int i = add_a_service(ctx, ctx->ServicePtrs[iDefaultService], pszPrintername);
+ 
+ 	if (i < 0)
+-		return (False);
++		return false;
+ 
+-	/* note that we do NOT default the availability flag to True - */
++	/* note that we do NOT default the availability flag to true - */
+ 	/* we take it from the default service passed. This allows all */
+ 	/* dynamic printers to be disabled by disabling the [printers] */
+ 	/* entry (if/when the 'available' keyword is implemented!).    */
+ 
+ 	/* the printer name is set to the service name. */
+-	string_set(&ctx->ServicePtrs[i]->szPrintername, pszPrintername);
+-	string_set(&ctx->ServicePtrs[i]->comment, comment);
++	string_set(ctx, &ctx->ServicePtrs[i]->szPrintername, pszPrintername);
++	string_set(ctx, &ctx->ServicePtrs[i]->comment, comment);
+ 	ctx->ServicePtrs[i]->bBrowseable = sDefault.bBrowseable;
+ 	/* Printers cannot be read_only. */
+ 	ctx->ServicePtrs[i]->bRead_only = false;
+@@ -1395,7 +1354,7 @@
+ 
+ 	DEBUG(3, ("adding printer service %s\n", pszPrintername));
+ 
+-	return (True);
++	return true;
+ }
+ 
+ /***************************************************************************
+@@ -1408,11 +1367,11 @@
+ 	int iIndex;
+ 
+ 	if (*pszParmName == '-')
+-		return (-1);
++		return -1;
+ 
+ 	for (iIndex = 0; parm_table[iIndex].label; iIndex++)
+ 		if (strwicmp(parm_table[iIndex].label, pszParmName) == 0)
+-			return (iIndex);
++			return iIndex;
+ 
+ 	/* Warn only if it isn't parametric option */
+ 	if (strchr(pszParmName, ':') == NULL)
+@@ -1420,7 +1379,7 @@
+ 	/* We do return 'fail' for parametric options as well because they are
+ 	   stored in different storage
+ 	 */
+-	return (-1);
++	return -1;
+ }
+ 
+ 
+@@ -1502,17 +1461,17 @@
+ 					break;
+ 
+ 				case P_STRING:
+-					string_set(dest_ptr,
++					string_set(pserviceDest, dest_ptr,
+ 						   *(char **)src_ptr);
+ 					break;
+ 
+ 				case P_USTRING:
+-					string_set(dest_ptr,
++					string_set(pserviceDest, dest_ptr,
+ 						   *(char **)src_ptr);
+ 					strupper(*(char **)dest_ptr);
+ 					break;
+ 				case P_LIST:
+-					*(const char ***)dest_ptr = str_list_copy(talloc_autofree_context(), 
++					*(const char ***)dest_ptr = str_list_copy(pserviceDest, 
+ 										  *(const char ***)src_ptr);
+ 					break;
+ 				default:
+@@ -1528,30 +1487,26 @@
+ 			       sizeof(int) * NUMPARAMETERS);
+ 	}
+ 	
+-	data = pserviceSource->param_opt;
+-	while (data) {
++	for (data = pserviceSource->param_opt; data; data = data->next) {
+ 		not_added = true;
+-		pdata = pserviceDest->param_opt;
+ 		/* Traverse destination */
+-		while (pdata) {
++		for (pdata = pserviceDest->param_opt; pdata; pdata = pdata->next) {
+ 			/* If we already have same option, override it */
+ 			if (strcmp(pdata->key, data->key) == 0) {
+-				string_free(&pdata->value);
+-				pdata->value = strdup(data->value);
++				talloc_free(&pdata->value);
++				pdata->value = talloc_strdup(pdata, data->value);
+ 				not_added = false;
+ 				break;
+ 			}
+-			pdata = pdata->next;
+ 		}
+ 		if (not_added) {
+-			paramo = malloc_p(struct param_opt);
++			paramo = talloc(pserviceDest, struct param_opt);
+ 			if (!paramo)
+ 				smb_panic("OOM");
+-			paramo->key = strdup(data->key);
+-			paramo->value = strdup(data->value);
++			paramo->key = talloc_strdup(paramo, data->key);
++			paramo->value = talloc_strdup(paramo, data->value);
+ 			DLIST_ADD(pserviceDest->param_opt, paramo);
+ 		}
+-		data = data->next;
+ 	}
+ }
+ 
+@@ -1609,18 +1564,18 @@
+ 	}
+ 
+ 	if (!f) {
+-		f = malloc_p(struct file_lists);
++		f = talloc(ctx, struct file_lists);
+ 		if (!f)
+ 			return;
+ 		f->next = ctx->file_lists;
+ 		f->name = strdup(fname);
+ 		if (!f->name) {
+-			SAFE_FREE(f);
++			talloc_free(f);
+ 			return;
+ 		}
+-		f->subfname = strdup(subfname);
++		f->subfname = talloc_strdup(f, subfname);
+ 		if (!f->subfname) {
+-			SAFE_FREE(f);
++			talloc_free(f);
+ 			return;
+ 		}
+ 		ctx->file_lists = f;
+@@ -1658,7 +1613,7 @@
+ 				 ("file %s modified: %s\n", n2,
+ 				  ctime(&mod_time)));
+ 			f->modtime = mod_time;
+-			SAFE_FREE(f->subfname);
++			talloc_free(f->subfname);
+ 			f->subfname = strdup(n2);
+ 			return true;
+ 		}
+@@ -1680,7 +1635,7 @@
+ 
+ 	add_to_file_list(ctx, pszParmValue, fname);
+ 
+-	string_set(ptr, fname);
++	string_set(ctx, ptr, fname);
+ 
+ 	if (file_exist(fname))
+ 		return (pm_process(fname, parse_section, parse_parameter, ctx));
+@@ -1701,7 +1656,7 @@
+ 	int iTemp;
+ 	struct service serviceTemp;
+ 
+-	string_set(ptr, pszParmValue);
++	string_set(ctx, ptr, pszParmValue);
+ 
+ 	init_service(&serviceTemp);
+ 
+@@ -1734,8 +1689,8 @@
+ static void init_copymap(struct service *pservice)
+ {
+ 	int i;
+-	SAFE_FREE(pservice->copymap);
+-	pservice->copymap = malloc_array_p(int, NUMPARAMETERS);
++	pservice->copymap = talloc_realloc(pservice, pservice->copymap, 
++									   int, NUMPARAMETERS);
+ 	if (!pservice->copymap)
+ 		DEBUG(0,
+ 		      ("Couldn't allocate copymap!! (size %d)\n",
+@@ -1754,20 +1709,24 @@
+ {
+ 	struct param_opt *paramo, *data;
+ 	char *name;
++	TALLOC_CTX *mem_ctx;
+ 
+ 	while (isspace((unsigned char)*pszParmName)) {
+ 		pszParmName++;
+ 	}
+ 
+ 	name = strdup(pszParmName);
+-	if (!name) return False;
++	if (name == NULL) 
++		return False;
+ 
+ 	strlower(name);
+ 
+ 	if (snum < 0) {
+ 		data = Globals.param_opt;
++		mem_ctx = lp_talloc; /* FIXME */
+ 	} else {
+ 		data = ctx->ServicePtrs[snum]->param_opt;
++		mem_ctx = ctx->ServicePtrs[snum];
+ 	}
+ 
+ 	/* Traverse destination */
+@@ -1780,19 +1739,19 @@
+ 				return True;
+ 			}
+ 
+-			free(paramo->value);
+-			paramo->value = strdup(pszParmValue);
++			talloc_free(paramo->value);
++			paramo->value = talloc_strdup(paramo, pszParmValue);
+ 			paramo->flags = flags;
+ 			free(name);
+ 			return True;
+ 		}
+ 	}
+ 
+-	paramo = malloc_p(struct param_opt);
++	paramo = talloc(mem_ctx, struct param_opt);
+ 	if (!paramo)
+ 		smb_panic("OOM");
+-	paramo->key = strdup(name);
+-	paramo->value = strdup(pszParmValue);
++	paramo->key = talloc_strdup(paramo, name);
++	paramo->value = talloc_strdup(paramo, pszParmValue);
+ 	paramo->flags = flags;
+ 	if (snum < 0) {
+ 		DLIST_ADD(Globals.param_opt, paramo);
+@@ -1823,7 +1782,7 @@
+ 			return lp_do_parameter_parametric(ctx, snum, pszParmName, pszParmValue, 0);
+ 		}
+ 		DEBUG(0, ("Ignoring unknown parameter \"%s\"\n", pszParmName));
+-		return (True);
++		return true;
+ 	}
+ 
+ 	if (parm_table[parmnum].flags & FLAG_DEPRECATED) {
+@@ -1834,7 +1793,7 @@
+ 	/* if the flag has been set on the command line, then don't allow override,
+ 	   but don't report an error */
+ 	if (parm_table[parmnum].flags & FLAG_CMDLINE) {
+-		return True;
++		return true;
+ 	}
+ 
+ 	def_ptr = parm_table[parmnum].ptr;
+@@ -1847,7 +1806,7 @@
+ 			DEBUG(0,
+ 			      ("Global parameter %s found in service section!\n",
+ 			       pszParmName));
+-			return (True);
++			return true;
+ 		}
+ 		parm_ptr =
+ 			((char *)ctx->ServicePtrs[snum]) + PTR_DIFF(def_ptr,
+@@ -1868,7 +1827,7 @@
+ 	/* if it is a special case then go ahead */
+ 	if (parm_table[parmnum].special) {
+ 		parm_table[parmnum].special(ctx, pszParmValue, (char **)parm_ptr);
+-		return (True);
++		return true;
+ 	}
+ 
+ 	/* now switch on the type of variable it is */
+@@ -1909,11 +1868,11 @@
+ 			break;
+ 
+ 		case P_STRING:
+-			string_set(parm_ptr, pszParmValue);
++			string_set(ctx, parm_ptr, pszParmValue);
+ 			break;
+ 
+ 		case P_USTRING:
+-			string_set(parm_ptr, pszParmValue);
++			string_set(ctx, parm_ptr, pszParmValue);
+ 			strupper(*(char **)parm_ptr);
+ 			break;
+ 
+@@ -1949,7 +1908,7 @@
+ 		}
+ 	}
+ 
+-	return (True);
++	return true;
+ }
+ 
+ /***************************************************************************
+

@@ -1,0 +1,134 @@
+From beginners-return-91485-ktwarwic=speedy.uwaterloo.ca@perl.org  Wed May  9 22:57:09 2007
+Return-Path: <beginners-return-91485-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4A2v7qD004405
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 9 May 2007 22:57:08 -0400
+Received: (qmail 19824 invoked by uid 514); 10 May 2007 02:57:01 -0000
+Mailing-List: contact beginners-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:beginners@perl.org>
+List-Help: <mailto:beginners-help@perl.org>
+List-Unsubscribe: <mailto:beginners-unsubscribe@perl.org>
+List-Subscribe: <mailto:beginners-subscribe@perl.org>
+List-Id: <beginners.perl.org>
+Delivered-To: mailing list beginners@perl.org
+Received: (qmail 19814 invoked from network); 10 May 2007 02:57:01 -0000
+Received: from x1a.develooper.com (HELO x1.develooper.com) (216.52.237.111)
+  by lists.develooper.com with SMTP; 10 May 2007 02:57:01 -0000
+Received: (qmail 20495 invoked by uid 225); 10 May 2007 02:57:00 -0000
+Delivered-To: beginners@perl.org
+Received: (qmail 20485 invoked by alias); 10 May 2007 02:57:00 -0000
+X-Spam-Status: No, hits=2.0 required=8.0
+	tests=BAYES_50,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_TESTING,DK_SIGNED,DK_VERIFIED,RCVD_IN_BH_CNKR,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+Received: from elasmtp-curtail.atl.sa.earthlink.net (HELO elasmtp-curtail.atl.sa.earthlink.net) (209.86.89.64)
+    by la.mx.develooper.com (qpsmtpd/0.28) with ESMTP; Wed, 09 May 2007 19:56:01 -0700
+DomainKey-Signature: a=rsa-sha1; q=dns; c=nofws;
+  s=dk20050327; d=earthlink.net;
+  b=sEJ08iyxSpA9oYSxdjhssM+5jLPEdF0NmaxWARIbNxXn2o+FJxVzMPEqu4qpMdJT;
+  h=Message-ID:Date:From:Reply-To:To:Subject:Cc:Mime-Version:Content-Type:Content-Transfer-Encoding:X-Mailer:X-ELNK-Trace:X-Originating-IP;
+Received: from [209.86.224.32] (helo=elwamui-cypress.atl.sa.earthlink.net)
+	by elasmtp-curtail.atl.sa.earthlink.net with asmtp (Exim 4.34)
+	id 1Hlyot-00082g-AF; Wed, 09 May 2007 22:55:55 -0400
+Received: from 218.20.6.172 by webmail.pas.earthlink.net with HTTP; Wed, 9 May 2007 22:55:55 -0400
+Message-ID: <31245191.1178765755317.JavaMail.root@elwamui-cypress.atl.sa.earthlink.net>
+Date: Wed, 9 May 2007 22:55:55 -0400 (EDT)
+From: Jeff Pang <pangj@earthlink.net>
+Reply-To: Jeff Pang <pangj@earthlink.net>
+To: Chas Owens <chas.owens@gmail.com>, Tom Allison <tom@tacocat.net>
+Subject: Re: forking problem with dbd::mysql
+Cc: beginners-list <beginners@perl.org>
+Mime-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 7bit
+X-Mailer: EarthLink Zoo Mail 1.0
+X-ELNK-Trace: 7070c57df59c6c2974bf435c0eb9d47811eb5c9aa44f2a664e703117b931c72251ff43d07c7984a0350badd9bab72f9c350badd9bab72f9c350badd9bab72f9c
+X-Originating-IP: 209.86.224.32
+
+-----Original Message-----
+>From: Chas Owens <chas.owens@gmail.com>
+>In his case there is not a portability issue.  What is not portable is
+>using the parent's handle inside the child, but he is opening a new
+>handle inside the child.  The problem was the auto-close behavior
+>which is made a non-problem by the flag.  You should never expect to
+>be able to use a database handle from one process inside another; it
+>may be possible, but you should not be surprised when it breaks.
+
+
+Let me also give a simple conclusion,
+
+1) Using InactiveDestroy to disable auto-close is the correct way.Where the dbh object go away first,then put the InactiveDestroy there.For example,this could work,
+
+use MyDB;  # a simple db class encapsulated from DBI
+
+my $db = MyDB->new;
+my $pid = fork;
+
+unless ($pid) {  # in child
+    $db->{dbh}->{InactiveDestroy} = 1;  # in child the dbh object would go away first
+    sleep 3;
+    exit 0;
+} else {  # in parent
+    while(1) {
+        my ($re) = $db->get_line("select 1");
+        print $re,"\n";
+        sleep 1;
+    }
+}
+
+__END__
+
+But this couldn't work,
+
+use MyDB;  # a simple db class encapsulated from DBI
+
+my $db = MyDB->new;
+my $pid = fork;
+
+unless ($pid) {  # in child
+    sleep 3;
+    exit 0;
+} else {  # in parent
+    $db->{dbh}->{InactiveDestroy} = 1;  # not useful here,dbh would break due to child exiting
+    while(1) {
+        my ($re) = $db->get_line("select 1");
+        print $re,"\n";
+        sleep 1;
+    }
+}
+
+__END__
+
+2) Not using InactiveDestroy,but re-creating a dbh object in child (the process go away first),is not useful.The dbh object in parent (the process which keep alive) would still break.Case is shown below,
+
+use MyDB;  # a simple db class encapsulated from DBI
+
+my $db = MyDB->new;
+my $pid = fork;
+
+unless ($pid) {  # in child
+    my $db = MyDB->new;  # re-create a dbh object
+    sleep 3;
+    exit 0;
+} else {  # in parent
+    while(1) {
+        my ($re) = $db->get_line("select 1");
+        print $re,"\n";
+        sleep 1;
+    }
+}
+
+__END__
+
+
+--
+mailto:pangj@earthlink.net
+http://home.arcor.de/jeffpang/
+
+-- 
+To unsubscribe, e-mail: beginners-unsubscribe@perl.org
+For additional commands, e-mail: beginners-help@perl.org
+http://learn.perl.org/
+
+

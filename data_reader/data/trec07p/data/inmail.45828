@@ -1,0 +1,209 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 29 01:53:34 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4T5rYhB026947
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 01:53:34 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 4D4DB162C26
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 05:53:29 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 7F973162BD1; Tue, 29 May 2007 05:52:20 +0000 (GMT)
+Date: Tue, 29 May 2007 14:46:30 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070529055220.7F973162BD1@lists.samba.org>
+Subject: Rev 379: merge from jim in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 379
+revision-id: tridge@samba.org-20070529044629-f0jyw51efi8ypu9a
+parent: tridge@samba.org-20070529035841-sdafwb84qcxmqt79
+parent: jmcd@samba.org-20070528153804-zoljm3ceqi97vcmj
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Tue 2007-05-29 14:46:29 +1000
+message:
+  merge from jim
+modified:
+  packaging/RHEL/makerpms.sh     makerpms.sh-20070527204758-biuh7znabuwan3zn-4
+  packaging/RHEL/setup/ctdb.init ctdb.init-20070527204758-biuh7znabuwan3zn-6
+  packaging/RHEL/setup/ctdb.sysconfig ctdb.sysconfig-20070527204758-biuh7znabuwan3zn-7
+    ------------------------------------------------------------
+    revno: 364.1.3
+    merged: jmcd@samba.org-20070528153804-zoljm3ceqi97vcmj
+    parent: jmcd@samba.org-20070528124547-t59kx019nnlfq3wn
+    committer: jmcd@samba.org
+    branch nick: ctdb-jmcd
+    timestamp: Mon 2007-05-28 11:38:04 -0400
+    message:
+      Next round of packaging updates:
+      
+      - Create/delete source symlink as needed during rpm build
+      - init script updates:
+      	- optional port, debuglevel, logfile
+      	- autodetect logfile location if smbd exists
+      	- build cluster_addresses file
+      	- create tmp dbdir (Tridge, do you want this to be a fixed location instead?)
+    ------------------------------------------------------------
+    revno: 364.1.2
+    merged: jmcd@samba.org-20070528124547-t59kx019nnlfq3wn
+    parent: jmcd@samba.org-20070527204818-p00c8jct78tgaxvt
+    parent: jmcd@samba.org-20070528124519-1l1a23g76csuf8xq
+    committer: jmcd@samba.org
+    branch nick: ctdb-jmcd
+    timestamp: Mon 2007-05-28 08:45:47 -0400
+    message:
+      updates from tridge
+    ------------------------------------------------------------
+    revno: 364.2.1
+    merged: jmcd@samba.org-20070528124519-1l1a23g76csuf8xq
+    parent: tridge@samba.org-20070527145110-4dwpd6btx287elvc
+    parent: tridge@samba.org-20070528101145-v3hxch4bnxdhp7g7
+    committer: jmcd@samba.org
+    branch nick: ctdb
+    timestamp: Mon 2007-05-28 08:45:19 -0400
+    message:
+      updates from tridge
+=== modified file 'packaging/RHEL/makerpms.sh'
+--- a/packaging/RHEL/makerpms.sh	2007-05-27 20:48:18 +0000
++++ b/packaging/RHEL/makerpms.sh	2007-05-28 15:38:04 +0000
+@@ -48,16 +48,20 @@
+ popd
+ 
+ pushd .
+-cd ../../../
+-chown -R ${USERID}.${GRPID} ctdb
++cd ../../
++BASEDIR=`basename $PWD`
++cd ..
++chown -R ${USERID}.${GRPID} $BASEDIR
+ if [ ! -d ctdb-${VERSION} ]; then
+-	ln -s ctdb ctdb-${VERSION} || exit 1
++	ln -s $BASEDIR ctdb-${VERSION} || exit 1
++	REMOVE_LN=$PWD/ctdb-$VERSION
+ fi
+ echo -n "Creating ctdb-${VERSION}.tar.bz2 ... "
+ tar --exclude=.bzr --exclude .bzrignore --exclude packaging -cf - ctdb-${VERSION}/. | bzip2 > ${SRCDIR}/ctdb-${VERSION}.tar.bz2
+ echo "Done."
+ if [ $? -ne 0 ]; then
+         echo "Build failed!"
++	[ ${REMOVE_LN} ] && rm $REMOVE_LN
+         exit 1
+ fi
+ 
+@@ -78,4 +82,5 @@
+ ${RPM} -ba --clean --rmsource $EXTRA_OPTIONS $SPECFILE
+ 
+ echo "$(basename $0): Done."
++[ ${REMOVE_LN} ] && rm $REMOVE_LN
+ 
+
+=== modified file 'packaging/RHEL/setup/ctdb.init'
+--- a/packaging/RHEL/setup/ctdb.init	2007-05-27 20:48:18 +0000
++++ b/packaging/RHEL/setup/ctdb.init	2007-05-28 15:38:04 +0000
+@@ -1,13 +1,9 @@
+ #!/bin/sh
+ #
+-# chkconfig: - 91 35
+-# description: Starts and stops the Samba smbd and nmbd daemons \
+-#	       used to provide SMB network services.
++# chkconfig: - 90 36
++# description: Starts and stops the clustered tdb daemon
+ #
+-# pidfile: /var/run/samba/smbd.pid
+-# pidfile: /var/run/samba/nmbd.pid
+-# config:  /etc/samba/smb.conf
+-
++# pidfile: /var/run/ctdbd/ctdbd.pid
+ 
+ # Source function library.
+ if [ -f /etc/init.d/functions ] ; then
+@@ -24,18 +20,48 @@
+ # Source networking configuration.
+ . /etc/sysconfig/network
+ 
++# There is no "default" config so we must have this file with 
++# CLUSTER_NODES and PUBLIC_ADDRESSES
+ if [ -f /etc/sysconfig/ctdb ]; then
+    . /etc/sysconfig/ctdb 
++   if [ -z $CLUSTER_NODES ] || [ -z $PUBLIC_ADDRESSES ]; then
++       exit 0
++   fi
++else
++    exit 0
+ fi
+ 
+ # Check that networking is up.
+ [ ${NETWORKING} = "no" ] && exit 0
+ 
+-# Check that smb.conf exists.
+-[ -f /etc/samba/smb.conf ] || exit 0
+-
+-RETVAL=0
+-
++
++CLUSTER_BASEDIR=`dirname $CLUSTER_NODES`
++CLUSTER_ADDRESSES=$CLUSTER_BASEDIR/cluster_addresses.txt
++[ -z $CTDB_PORT ] && CTDB_PORT=9001
++[ -z $DEBUGLEVEL ] && DEBUGLEVEL=0
++if [ -z $LOGFILE ]; then
++    LOGFILEBASE=`smbd -b | grep LOGFILEBASE | awk '{print $2}'`
++    if [ -z $LOGFILEBASE ]; then
++	echo "must have LOGFILE specified or smbd installed"
++	return 0
++    fi
++    LOGFILE=$LOGFILEBASE/log.ctdb
++fi
++
++# build the cluster addresses file
++TMP_ADDRESSES=`mktemp -t cluster_addresses.XXXXXXXX`
++rm -f $TMP_ADDRESSES
++for a in `egrep '^[[:alnum:]]' $CLUSTER_NODES`; do
++    echo "$a:$CTDB_PORT" >> $TMP_ADDRESSES
++done
++mv -f $TMP_ADDRESSES $CLUSTER_ADDRESSES
++
++# create the temporary local dbdir
++DBDIR=`mktemp -td ctdb.XXXXXXXX`
++CTDBOPTIONS="--nlist=$CLUSTER_ADDRESSES --public-addresses=$PUBLIC_ADDRESSES --public-interface=$PUBLIC_INTERFACE --dbdir=$DBDIR --logfile=$LOGFILE -d $DEBUGLEVEL"
++
++echo ctdbd $CTDBOPTIONS
++exit 0
+ 
+ start() {
+ 	echo -n $"Starting ctdbd services: "
+
+=== modified file 'packaging/RHEL/setup/ctdb.sysconfig'
+--- a/packaging/RHEL/setup/ctdb.sysconfig	2007-05-27 20:48:18 +0000
++++ b/packaging/RHEL/setup/ctdb.sysconfig	2007-05-28 15:38:04 +0000
+@@ -1,2 +1,8 @@
+ # Options to ctdbd
+-CTDBDOPTIONS="--nlist=/etc/samba/cluster_addresses.txt --dbdir=/var/lock/samba/ctdb --logfile=/var/log/samba/log.ctdb --public-addresses=/etc/samba/public_addresses.txt --public-interface=eth0"
++CLUSTER_NODES=/etc/samba/cluster_nodes.txt
++PUBLIC_ADDRESSES=/etc/samba/public_addresses.txt
++PUBLIC_INTERFACE=eth0
++#CTDB_PORT=9001
++#LOGFILE=/var/log/samba/log.ctdb
++#DEBUGLEVEL=0
++
+

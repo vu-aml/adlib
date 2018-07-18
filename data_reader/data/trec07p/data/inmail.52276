@@ -1,0 +1,87 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Jun  6 08:18:09 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l56CI8hB021260
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 6 Jun 2007 08:18:08 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id B9B301639C5
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed,  6 Jun 2007 12:18:02 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id B0051163820; Wed,  6 Jun 2007 12:17:33 +0000 (GMT)
+Date: Wed, 06 Jun 2007 21:27:09 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070606121733.B0051163820@lists.samba.org>
+Subject: Rev 483: ensure all nodes display disabled nodes correctly in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 483
+revision-id: tridge@samba.org-20070606112709-klp56ghkr55r3m4d
+parent: tridge@samba.org-20070606094625-rr6b22zkbeskchvj
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Wed 2007-06-06 21:27:09 +1000
+message:
+  ensure all nodes display disabled nodes correctly
+modified:
+  common/ctdb_monitor.c          ctdb_monitor.c-20070518100625-8jf4ft1mjzmb22ck-1
+  common/ctdb_recoverd.c         recoverd.c-20070503213540-bvxuyd9jm1f7ig90-1
+=== modified file 'common/ctdb_monitor.c'
+--- a/common/ctdb_monitor.c	2007-06-06 03:45:12 +0000
++++ b/common/ctdb_monitor.c	2007-06-06 11:27:09 +0000
+@@ -121,8 +121,9 @@
+ 	data.dptr = (uint8_t *)&c;
+ 	data.dsize = sizeof(c);
+ 
+-	/* tell the recmaster that something has changed */
+-	ctdb_daemon_send_message(ctdb, ctdb->recovery_master, CTDB_SRVID_NODE_FLAGS_CHANGED, data);
++	/* tell the other nodes that something has changed */
++	ctdb_daemon_send_message(ctdb, CTDB_BROADCAST_VNNMAP,
++				 CTDB_SRVID_NODE_FLAGS_CHANGED, data);
+ }
+ 
+ 
+
+=== modified file 'common/ctdb_recoverd.c'
+--- a/common/ctdb_recoverd.c	2007-06-06 01:13:24 +0000
++++ b/common/ctdb_recoverd.c	2007-06-06 11:27:09 +0000
+@@ -991,11 +991,15 @@
+ 		return;
+ 	}
+ 
+-	DEBUG(0,("Node %u has changed flags - now 0x%x\n", c->vnn, c->flags));
++	if (c->vnn != ctdb->vnn) {
++		DEBUG(0,("Node %u has changed flags - now 0x%x\n", c->vnn, c->flags));
++	}
+ 
+ 	nodemap->nodes[i].flags = c->flags;
+ 	
+-	if (ctdb->takeover.enabled) {
++	if (ctdb->recovery_master == ctdb->vnn &&
++	    ctdb->recovery_mode == CTDB_RECOVERY_NORMAL &&
++	    ctdb->takeover.enabled) {
+ 		ret = ctdb_takeover_run(ctdb, nodemap);
+ 		if (ret != 0) {
+ 			DEBUG(0, (__location__ " Unable to setup public takeover addresses\n"));
+

@@ -1,0 +1,98 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 15 01:15:23 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4F5FNqD000868
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 01:15:23 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 27A0F1638D4
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 05:15:21 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 3D2E5162AF3; Tue, 15 May 2007 05:14:55 +0000 (GMT)
+Date: Tue, 15 May 2007 14:08:59 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070515051455.3D2E5162AF3@lists.samba.org>
+Subject: Rev 305: fixed two more places where we don't correctly handle
+	write errors on sockets in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 305
+revision-id: tridge@samba.org-20070515040858-9m93t7zpjwvvc9sq
+parent: tridge@samba.org-20070515003328-ogsyrb3gnoyicfud
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Tue 2007-05-15 14:08:58 +1000
+message:
+  fixed two more places where we don't correctly handle write errors on sockets
+modified:
+  common/ctdb_io.c               ctdb_io.c-20070409200335-dzfc7f3rra5rcf60-1
+  tcp/tcp_connect.c              tcp_connect.c-20061128004937-x70q1cu5xzg5g2tm-1
+=== modified file 'common/ctdb_io.c'
+--- a/common/ctdb_io.c	2007-05-05 07:19:59 +0000
++++ b/common/ctdb_io.c	2007-05-15 04:08:58 +0000
+@@ -170,9 +170,11 @@
+ 		}
+ 
+ 		if (n == -1 && errno != EAGAIN && errno != EWOULDBLOCK) {
++			talloc_free(queue->fde);
++			queue->fde = NULL;
++			queue->fd = -1;
+ 			event_add_timed(queue->ctdb->ev, queue, timeval_zero(), 
+ 					queue_dead, queue);
+-			EVENT_FD_NOT_WRITEABLE(queue->fde);
+ 			return;
+ 		}
+ 		if (n <= 0) return;
+@@ -232,6 +234,9 @@
+ 	    !(queue->ctdb->flags & CTDB_FLAG_TORTURE)) {
+ 		ssize_t n = write(queue->fd, data, length2);
+ 		if (n == -1 && errno != EAGAIN && errno != EWOULDBLOCK) {
++			talloc_free(queue->fde);
++			queue->fde = NULL;
++			queue->fd = -1;
+ 			event_add_timed(queue->ctdb->ev, queue, timeval_zero(), 
+ 					queue_dead, queue);
+ 			/* yes, we report success, as the dead node is 
+
+=== modified file 'tcp/tcp_connect.c'
+--- a/tcp/tcp_connect.c	2007-05-15 00:33:28 +0000
++++ b/tcp/tcp_connect.c	2007-05-15 04:08:58 +0000
+@@ -49,9 +49,7 @@
+ 
+ 	/* start a new connect cycle to try to re-establish the
+ 	   link */
+-	close(tnode->fd);
+ 	ctdb_queue_set_fd(tnode->queue, -1);
+-	tnode->fd = -1;
+ 	event_add_timed(node->ctdb->ev, node, timeval_zero(), 
+ 			ctdb_tcp_node_connect, node);
+ }
+@@ -157,6 +155,7 @@
+ 	    errno != EINPROGRESS) {
+ 		/* try again once a second */
+ 		close(tnode->fd);
++		tnode->fd = -1;
+ 		event_add_timed(ctdb->ev, node, timeval_current_ofs(1, 0), 
+ 				ctdb_tcp_node_connect, node);
+ 		return;
+

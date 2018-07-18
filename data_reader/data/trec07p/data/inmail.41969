@@ -1,0 +1,218 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May 23 00:55:05 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4N4t4qD020979
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 23 May 2007 00:55:04 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 166AB1638CB
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 23 May 2007 04:55:01 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-2.0 required=3.8 tests=ALL_TRUSTED,AWL,BAYES_50 
+	autolearn=ham version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from [?????$??P??????$IPv6:::1] (dp [66.70.73.150])
+	by lists.samba.org (Postfix) with ESMTP id B1412162AE4;
+	Wed, 23 May 2007 04:54:04 +0000 (GMT)
+In-Reply-To: <20070426174427.GE26520@orion.universe>
+References: <20070426174427.GE26520@orion.universe>
+Mime-Version: 1.0 (Apple Message framework v752.3)
+Content-Type: text/plain; charset=US-ASCII; delsp=yes; format=flowed
+Message-Id: <3E2B7885-DF53-495D-B057-A9E0E815989C@samba.org>
+Content-Transfer-Encoding: 7bit
+From: James Peach <jpeach@samba.org>
+Date: Tue, 22 May 2007 21:53:59 -0700
+To: Ed Plese <ed@edplese.com>
+X-Mailer: Apple Mail (2.752.3)
+Cc: samba-technical@lists.samba.org
+Subject: Re: [PATCH] Shadow Copy Improvements
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+
+On 26/04/2007, at 10:44 AM, Ed Plese wrote:
+
+> Attached is a set of 3 patches that add fixes and improvements to the
+> existing shadow_copy VFS module.  I had previously sent a patch for  
+> a new
+> shadow_copy_zfs module with customizations specific to ZFS on  
+> Solaris but
+> these patches instead add generic improvements that should work  
+> with most
+> snapshot methods.
+>
+> I'd like give a big thanks to Alison Winters for contributing many  
+> of the
+> ideas for this patch as well as code and testing.
+
+Thankyou both, this is a nice patch. I have some comments below ...
+
+> The defaults for all of the new smb.conf parameters are set to values
+> that preserve backwards compatibility with the current module.
+>
+> The patches are:
+>
+> 1-dirent-fix.patch
+>   This fixes the module to work on systems that define struct  
+> dirent with
+>   d_name[1].  Solaris is an example of such a system and it causes the
+>   share to appear to be completely empty.
+
+This looks OK. I would prefer that you pad out the dirent structures  
+to guarantee a safe alignment, 8 or 16 bytes.
+
+> 2-sort.patch
+>   With the existing shadow_copy module the shadow copies are  
+> displayed in
+>   the Windows GUI in the order the server obtains them from readdir 
+> (3).
+>   On some systems and filesystems readdir(3) does not return files  
+> in any
+>   particular order which leads to the list in the GUI being  
+> unsorted and
+>   difficult to use.  This patch allows the list to be sorted based on
+>   a "sort" parameter specified for the module.  Allowed values are  
+> "asc"
+>   or "desc".  When not specified the current unsorted behavior is  
+> maintained.
+
+This looks fine too, though I think we should sort by default.
+
+> 3-paths.patch
+
+This needs a copyright attribution.
+
+>   This patch allows for various components of the snapshot paths to be
+>   easily customized.  Currently this must be done by creating  
+> scripts that
+>   will create the appropriate symbolic links every time a snapshot  
+> is taken
+>   and consequently clean up all of the symbolic links whenever a  
+> snapshot
+>   is deleted.  With this patch the path components are specified in  
+> the
+>   smb.conf file using the new parameters "path", "subpath",  
+> "format", and
+>   "localtime".  The defaults for all of the new parameters maintain  
+> the
+>   current behavior of the module.
+>
+
+In shadow_copy_opendir(), you are still using shadow_copy_match_name  
+to filter out shadow directories. It looks like this won't work  
+correctly with if you specify the format parameter.
+
+You should be able to cache the prefix created in  
+shadow_copy_file_to_snapshot_path since it's quite expensive to  
+create. Attaching this to handle->data should be sufficient.
+
+>   path - Specifies the path to the directory that contains the  
+> snapshots.
+>
+>   format - This is the format of the snapshot names in str[fp]time  
+> notation
+>       except that $ characters are used in place of % characters.
+
+Hmmm. We already use %$FOO to expand environment variables. Is it  
+possible for this to get unexpected results?
+
+>   subpath - The subdirectory under the snapshot that contains all  
+> of the
+>       files for this shadow copy.
+
+Can you elaborate on the need for both a "path" and a "subpath"  
+parameter? Why are they both necessary?
+
+>   localtime (boolean) - Treat the snapshot names as being in localtime
+>       instead of the default of GMT.
+>
+>   These probably aren't the clearest explanations of the parameters  
+> but the
+>   examples below should help to clear up any confusion.
+>
+> Some limitations include:
+>
+> * shadow copy does not work correctly when mapping a drive to a
+>   subdirectory of a share
+
+Could you add a comment noting this. A future enhancement might be to  
+check that the share is the root of a mounted filesystem when the  
+module loads.
+
+> * snapshot names are limited to expressions that can be expressed  
+> with the
+>   str[fp]time(3) functions and variable substitutions in smb.conf
+>
+> Example uses:
+>
+> Use with @GMT- directories or symbolic links in the share:
+>
+> [homes]
+>    public = no
+>    writable = yes
+>    printable = no
+>    vfs object = shadow_copy
+>
+>
+> A single large filesystem mounted at /home that contains all of the  
+> home
+> directories.  The snapshots reside in /snapshots/home.
+>
+> [homes]
+>    path = /home/%U
+>    public = no
+>    writable = yes
+>    printable = no
+>    vfs object = shadow_copy
+>    shadow_copy: path = /snapshots/home
+>    shadow_copy: subpath = %U
+>    shadow_copy: format = $Y.$m.$d-$H.$M.$S
+>    shadow_copy: sort = desc
+>    shadow_copy: localtime = yes
+>
+>
+> A separate ZFS filesystem for each home directory.
+>
+> [homes]
+>    path = /home/%U
+>    public = no
+>    writable = yes
+>    printable = no
+>    vfs object = shadow_copy
+>    shadow_copy: path = /home/%U/.zfs/snapshot
+>    shadow_copy: format = $Y.$m.$d-$H.$M.$S
+>    shadow_copy: sort = desc
+>    shadow_copy: localtime = yes
+
+As per the limitations noted above, these configs won't work  
+correctly, no?
+
+>
+>
+> Comments and feedback are welcome!
+>
+> Thanks,
+>
+> Ed Plese
+> <1-dirent-fix.patch>
+> <2-sort.patch>
+> <3-paths.patch>
+
+--
+James Peach | jpeach@samba.org
+
+

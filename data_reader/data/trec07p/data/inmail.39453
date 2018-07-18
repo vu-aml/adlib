@@ -1,0 +1,616 @@
+From perl6-all-return-81470-ktwarwic=speedy.uwaterloo.ca@perl.org  Fri May 18 23:02:07 2007
+Return-Path: <perl6-all-return-81470-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4J324qD021247
+	for <ktwarwic@flax9.uwaterloo.ca>; Fri, 18 May 2007 23:02:04 -0400
+Received: (qmail 26485 invoked by uid 514); 19 May 2007 03:02:00 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 26480 invoked from network); 19 May 2007 03:02:00 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=0.0 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+Message-ID: <464E67E8.8090702@perl.org>
+Date: Fri, 18 May 2007 19:58:48 -0700
+From: Allison Randal <allison@perl.org>
+User-Agent: Thunderbird 1.5.0.10 (Macintosh/20070221)
+MIME-Version: 1.0
+To: Mike Mattie <codermattie@gmail.com>
+Cc: parrot ML <perl6-internals@perl.org>
+Subject: Re: [RFC] extension guessing, functionally better loader behavior
+ ->  working install target
+References: <20070513224615.5f62e3ad@reforged>
+In-Reply-To: <20070513224615.5f62e3ad@reforged>
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+X-Virus-Scanned: by amavisd-new at wgz.org
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=6.7 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,KARMA_CONNECT_NEGATIVE,RCVD_IN_CBL,SPF_NEUTRAL
+
+I wanted to reply to this before you left on vacation, but Thunderbird 
+crashed taking several unfinished replies with it. (Fresh install, which 
+I hadn't yet configured to automatically save drafts.)
+
+So, the abbreviated version...
+
+Mike Mattie wrote:
+> Hello,
+> 
+> I have been working on implementing extension guessing consistently in parrot.
+> These changes make parrot much more usable, robust, flexible, and maintainable.
+> 
+> Usable:
+> 
+> the current parrot implementation requires the extension to be specified. First
+> what is a extension ? An extension is just a few extra characters tacked on
+> to a path. All things being right an extension implies a file format.
+> 
+> In parrot however a file extension is much more. It indicates which stage
+> of compilation for a module. A module may have multiple stages cached on
+> disk.
+> 
+> foo.pir  <- source
+> foo.pbc  <- bytecode compiled
+> 
+> The parrot implementation is completely backwards in that the user of
+> module "foo" cannot simply use "foo". The user has to explicitly hardwire
+> which stage of compilation they want along with the module name itself.
+> 
+> In using parrot there is no good reason for the compilation stage to
+> matter. (I know about the jit issues on web-servers, it is not relevant).
+> 
+> In fact having this information "filter-down" from the request to load
+> a module has broken the install target. There are several cases where
+> someone does ".load_bytecode "foo.pir"" because in the working-copy
+> they have both foo.pbc and foo.pir. In the install tree only
+> foo.pbc is installed.
+
+This can be solved by simply referencing the .pbc file and building the 
+PBC in the make process for a particular subsystem. Which is only to say 
+that automatic extension selection is an optional refinement, not a core 
+requirement.
+
+> So parrot is not able to load code that exists on disk, because parrot
+> must be explicitly told the exact compilation stage along with the
+> module, and some compilation stages aren't always useful (intermediate)
+> or available.
+> 
+> Two behavioral rules can be formulated to solve this problem:
+> 
+> Rule 1. When a user requests a module, parrot will load that module using
+>         whatever format/loader is available. (dlopen, bytecode loaders, compilers)
+> 
+> Rule 2. When a module is requested , for performance the most compiled form
+>         of that module will be chosen.
+> 
+>    This is in fact the behavior of perl5 , and I think it should be
+>    the behavior of perl6. In fact in discussing this on #perl6 someone
+>    mentioned that there is already perl5 code that relies on this behavior (strange?).
+
+My take on this is that we should have two opcodes. One that tries to 
+work out the extension for you, and one that is quite literal-minded. 
+When the "smart loader" isn't sufficiently smart, the code can fall back 
+to the literal-minded loader. For the sake of sane migration, 
+load_bytecode should continue to work as it always has, and we come up 
+with a new name for the new opcode. (load_bytecode is a misleading name 
+anyway.)
+
+
+> Rule 3:  PARROT_PREFER_SOURCE when this environment variable is exported parrot
+>          will reverse it's normal preference for low-level compiled forms , and
+>          prefer high level source forms.
+
+An environment variable should not be used to select the behavior of 
+Parrot opcodes. If both behaviors are useful, then provide both as 
+separate opcodes.
+
+> Flexible:
+> 
+> I am working on making parrot more flexible by allowing languages/compilers
+> to have a "namespace" within the loader. 
+> 
+> Please do *not* tie this part to the rest. It only exists in my working-tree 
+> and is easily ripped out of the rest of the proposal.
+> 
+> This is a more speculative feature, but I think a good one. While reading
+> pdd21 concerning HLL name-spaces and interoperability I decided to try
+> the time-machine experiment.
+> 
+> Fast-fowarding to a future where parrot rules the earth I see parrot
+> having byte-code loaders for a range of languages: java, CLR, python,
+> perl5, perl6, etc.
+> 
+> Each language has it's own runtime, a set of libraries, architecture
+> objects (machine-code) , bytecode objects, and source files. Parrot
+> can interpret all of these but there is no reason to re-implement them
+> all from source.
+> 
+> If each language could have a "namespace" within the loader then the
+> java runtime distributed by Sun/whoever could be used by parrot
+> without any collisions for the wheels that everyone has to re-invent
+> like string,file,io etc.
+
+I halfway get the impression that you're working backwards here. You 
+want to make extensions irrelevant, but once you do that, you need some 
+way to distinguish between different languages, so you add the 
+distinctions back in as directory hierarchy.
+
+There is some provision to specify a custom library that is loaded when 
+the HLL is selected in the second argument to .HLL. It's limited, and 
+not really used AFAIK.
+
+> Rule: when a loader namespace for a language has not been defined
+>       the default namespace "parrot" is used. If a lookup fails
+>       within the parrot namespace the load fails.
+
+What's the distinction between loader namespace and Parrot namespace?
+
+> RFC: I noticed compreg, and quickly scanned through HLLCompiler.
+>      compiler implies either a translation stage, a sequence of
+>      translation stages, or a language.
+> 
+>      Has the meanings been refined architecturally somewhere ?
+> 
+> Basically the lib_paths global which is currently built like this
+> 
+> fixed-array[
+>   paths,      -> resizable array of strings
+>   extensions, -> resizable array of strings (note how parrot already implements extension guessing)
+> ]
+> 
+> becomes this:
+> 
+> hash keyed by namespace {
+> 
+>   parrot -> fixed array of loaders [
+>      ARCH     /*dlopen loader*/       -> [ ... ]
+>      BYTECODE /* bytecode loaders */  -> [ ... ]
+>      SOURCE   /* source compilers */  -> fixed array [
+>                                          SEARCH_PATH  -> resizable array of strings
+>                                          SEARCH_EXT   -> resizable array of strings
+>   ]
+> }
+> 
+> With this new structure parrot has enough flexibility that it can construct a search space
+> for any language distribution, and can use them all within the same parrot instance without
+> collisions in the search space between languages.
+
+This doesn't quite work because you have to be able to load one 
+language's libraries from another language. So, you need to be able to 
+load Python's Mail.Filter and Perl's Mail::Filter (fictional examples) 
+at the same time and use them both within the same program.
+
+The directories on disk correspond to the Parrot namespace of the 
+libraries as a convention. You could potentially optimize the loading 
+operation by having a load of a Python module only search the Python HLL 
+directory. But, a user-defined module might not follow the convention.
+
+Similarly, there is a convention (not entirely consistent) that foo.pbc 
+is the compiled form of foo.pir, but that's not always the case, and 
+certainly not required.
+
+> It could also be used to implement binary compatibility. If "parrot" is versioned , say
+> as "parrot-pre" "parrot1" etc then the loader could support selecting a compatible version
+> of multiple runtime installs.
+
+What you haven't addressed (and what I consider the most important 
+problem to solve for library loading), is a mechanism for extending 
+Parrot's search path.
+
+If that were defined, then versioning would be a simple matter of 
+selecting an appropriate search path.
+
+> Maintainability:
+> 
+> This issue will get a bit more involved. the parrot loader is very alpha, aka put
+> together early in the development process. It let people explore the rest of the design 
+> space but a refactor is apparent throughout the code and API.
+
+This section is a mixture of code refactor ideas and architecture ideas. 
+Would be simpler to process the two separately, but I'll take a stab.
+
+
+
+> First let's focus on Parrot_locate_runtime_str.
+> 
+> current HEAD has this library.h:
+> 
+> typedef enum {
+>     PARROT_RUNTIME_FT_LIBRARY = 0x0001,
+>     PARROT_RUNTIME_FT_INCLUDE = 0x0002,
+>     PARROT_RUNTIME_FT_DYNEXT  = 0x0004,
+>     PARROT_RUNTIME_FT_PBC     = 0x0010,
+>     PARROT_RUNTIME_FT_PASM    = 0x0100,
+>     PARROT_RUNTIME_FT_PIR     = 0x0200,
+>     PARROT_RUNTIME_FT_PAST    = 0x0400,
+>     PARROT_RUNTIME_FT_SOURCE  = 0x0F00
+> } enum_runtime_ft;
+> 
+> There is one valuable idea to keep from this enum:
+> 
+> DYNEXT,LIBRARY,INCLUDE,SOURCE,
+> 
+> there are four basic loaders for parrot.
+> 
+> ARCH    : the platform loader for machine-code shared objects. aka ld
+> INCLUDE : macro/include pre-processing, link-editing on a translation unit level.
+> LIBRARY : bytecode loaders. parrot can support multiple bytecode loaders, extension will depend on language.
+> SOURCE  : something compiled
+> 
+> These are fundamental distinctions of interpretation that are sound across the current computing landscape.
+> We have link-loaders (machine specific), byte-code loaders (link editor internal to VM), and compilers:
+> generates objects for linking. INCLUDE is a special case for SOURCE, but necessary.
+> 
+> my new version looks like this:
+> 
+> /* enum_runtime_ft
+>  *
+>  * There are four basic paths for the loader.
+>  *
+>  * ARCH      : link-editor for an architecture shared object (machine code)
+>  * BYTECODE  : link-editor for bytecode linked into the virtual machine's
+>  *             op lists
+>  * INCLUDE   : a source form linked by a pre-processor creating translation-units
+>  *             for compilation
+>  * SOURCE    : source code compiled by the HLL framework
+>  *
+>  * These different paths for the loader are necessary to
+>  * resolve collisions in the library search space. For example
+>  * a module may have both a NCI part, and a HLL part:
+>  *
+>  * foo.so , foo.pbc
+>  */
+> 
+> typedef enum  {
+>     PARROT_RUNTIME_FT_ARCH     = 0x0001,
+>     PARROT_RUNTIME_FT_BYTECODE = 0x0002,
+>     PARROT_RUNTIME_FT_INCLUDE  = 0x0004
+>     PARROT_RUNTIME_FT_SOURCE   = 0x0006,
+>     PARROT_RUNTIME_FT_SIZE     = 4
+> } enum_runtime_ft;
+> 
+> 
+> by behavioral rule 1 Parrot should load whatever it can. Parrot_locate_runtime_file_str is a routine
+> that does the discovery of what is available. First cut would eliminate the distinction altogether,
+> pass of the discovery list to heuristic checks, and then select a loader.
+> 
+> However it is essential to keep the distinction between loaders at this level. A simple case would be
+> sqlite or a similar db wrapper. It likely has a ARCH component that glues the DB API to the languages
+> NCI API. It also has a language file that will export the interface and provide convenience/features
+> enhancing the DB API.
+> 
+> I this case loading a library ( a higher level concept than .load_bytecode ) would have a collision. This
+> scenario is not one file selected from a set of candidates, but two.
+> 
+> In the scenario of best form selected from candidates, multiple loaders can be selected in the mask
+> (think .pir | .pbc ) . In the case of more than one loader/format to completely load a module a 
+> single loader can be selected eliminating legitimate collisions that would parts of a multiple-format
+> module unreachable.
+> 
+> The enumeration of PBC etc is gone. Heuristics should be abstracted into a different stage of
+> loading. Each loader should provide header magic for a common routine to implement. This is punted
+> because parrot is simple enough. I want to fix library.c first without bogging down in a new
+> layer.
+
+PARROT_RUNTIME_FT_LIBRARY, PARROT_RUNTIME_FT_PASM, 
+PARROT_RUNTIME_FT_PIR, PARROT_RUNTIME_FT_PAST are never used at all. 
+PARROT_RUNTIME_FT_PAST can certainly go away, since it corresponded to 
+the old ast/ implementation which has been deleted.
+
+PARROT_RUNTIME_FT_INCLUDE is used once in imcc as an argument to 
+Parrot_locate_runtime_file.
+
+PARROT_RUNTIME_FT_DYNEXT is used in src/dynext.c as an argument to 
+Parrot_locate_runtime_file_str, and in src/library.c to select for 
+get_search_paths, and to select between try_load_path and 
+try_bytecode_extensions for setting the full name.
+
+PARROT_RUNTIME_FT_PBC is used in src/library.c to select for 
+get_search_paths, and in src/packfile.c passed to 
+Parrot_locate_runtime_file_str and to decide whether to call 
+PackFile_append_pbc.
+
+PARROT_RUNTIME_FT_SOURCE is used in src/library.c to select for 
+get_search_paths, and in src/packfile.c passed to 
+Parrot_locate_runtime_file_str. If it really does mean the *compiled* 
+form of anything, it could use a better name.
+
+Considering how rarely these flags are used, if you can adequately cover 
+the needed behavior, I have no objections to renaming the flags to 
+something more meaningful, and removing unused flags. (Though, I can't 
+see keeping the "RUNTIME_FT" naming convention if they no longer refer 
+to actual runtime file types.)
+
+I'm not sure ARCH is the most meaningful replacement for DYNEXT.
+
+(Note, there may be hardcoded constants still lingering around for these 
+scattered through the repository.)
+
+> enum_lib_paths:
+> 
+> This chunk below should simply not be in a header. It should be in the .c file. Other modules
+> need to access the information from iglobal->lib_paths, but they should do it through functions
+> provided in library.c there should be a library.pir or something like that for accessing
+> the information on a parrot level. 
+> 
+> typedef enum {
+>     PARROT_LIB_PATH_INCLUDE,            /* .include "foo" */
+>     PARROT_LIB_PATH_LIBRARY,            /* load_bytecode "bar" */
+>     PARROT_LIB_PATH_DYNEXT,             /* loadlib "baz" */
+>     PARROT_LIB_DYN_EXTS,                /* ".so", ".dylib" .. */
+>     /* must be last: */
+>     PARROT_LIB_PATH_SIZE
+> } enum_lib_paths;
+> 
+> I am already feeling the pain from the lack of insulation here. I am doing
+> a discovery in the rest of the tree for how this is used, more later on this.
+
+The main reason for having these in library.h is to avoid scattering 
+hardcoded values through the system. Aside from one reference in 
+src/dynext.c, the enum could be located in src/library.c (though, again, 
+there may be hardcoded constants littered through the system that really 
+should be using these flags or function calls instead).
+
+PARROT_LIB_PATH_INCLUDE is only used in src/library.c as a key to set 
+[IGLOBALS_LIB_PATHS; PARROT_LIB_PATH_INCLUDE] on interp->iglobals, and 
+as the default argument to get_search_paths.
+
+PARROT_LIB_PATH_LIBRARY is only used in src/library.c as a key to set 
+[IGLOBALS_LIB_PATHS; PARROT_LIB_PATH_INCLUDE] on interp->iglobals, as an 
+argument to get_search_paths, and in a comment in 
+t/compilers/imcc/syn/file.t.
+
+PARROT_LIB_PATH_DYNEXT is only used in src/library.c as a key to set 
+[IGLOBALS_LIB_PATHS; PARROT_LIB_PATH_DYNEXT] on interp->iglobals and as 
+an argument to get_search_paths.
+
+PARROT_LIB_DYN_EXTS is used in src/library.c as a key to set 
+[IGLOBALS_LIB_PATHS; PARROT_LIB_PATH_DYNEXT] on interp->iglobals and in 
+src/dynext.c as a key to retrieve the same value.
+
+PARROT_LIB_PATH_SIZE is only used in src/library.c to set the size of 
+the array that contains the above flags (stored at the key 
+[IGLOBALS_LIB_PATHS] on interp->iglobals).
+
+
+If the access in src/dynext.c can be replaced by a function call in 
+library.c, I see no reason not to move the enum out of the header, 
+though, I also don't see it as a big problem to leave it in the header.
+
+> This is the main focus of the effort.
+> 
+> PARROT_API STRING* Parrot_locate_runtime_file_str(Interp *, STRING *file_name,
+>         enum_runtime_ft);
+> 
+> The role is weakly defined.
+> 
+
+
+> <proposal>
+> Parrot_locate_runtime_file_str performs a search to find the best available form
+> of a code object.
+> 
+> PARROT_API STRING* Parrot_locate_runtime_file_str(Interp *,
+>                                                   STRING *object_name,
+>                                                   STRING *hll,
+>                                                   enum_runtime_ft *loader);
+> 
+> file_name is now object_name. A file name is the result of this function, not the input.
+
+Sane renaming.
+
+> The hll argument is the key to the HLL name-space. If the HLL name-space does not exist
+> or is null the default name-space is used. The default name-space is "parrot".
+
+Okay, this is adding the concept of HLL namespace to the loader, which 
+may be useful for bytecode files, though not necessarily, since they 
+specify their HLL namespace inside the file.
+
+> loader is passed as a pointer to a modifiable enum_ft_loader variable. As an argument
+> it is a bit-mask of loaders to consider when discovering a object file path. As a return
+> value it is the loader chosen. 
+
+<scratches head> Parrot_locate_runtime_file_str is only called twice in 
+src/dynext.c, once in src/packfile.c, and once in src/library.c. The 
+call in src/library.c is just a pass through from 
+Parrot_locate_runtime_file, which is only called once from 
+compilers/imcc/imcc.l (compilers/imcc/imclexer.c).
+
+In src/dynext.c, both calls are guaranteed to be 
+PARROT_RUNTIME_FT_DYNEXT, and in src/packfile.c it's either 
+PARROT_RUNTIME_FT_PBC or PARROT_RUNTIME_FT_SOURCE. The call in 
+compilers/imcc/imcc.l is guaranteed to be PARROT_RUNTIME_FT_INCLUDE.
+
+As refactors go, it would make more sense to simplify here. Something 
+like: entirely do away with the flags, make separate routines for 
+Parrot_locate_runtime_file_bytecode, Parrot_locate_runtime_file_include, 
+and Parrot_locate_runtime_file_dynext. (With the common functionality 
+between them factored out into helper functions.)
+
+I don't see the benefit of passing in a pointer to an enum of loaders 
+and passing back a loader. If we have code looking for a selected 
+loader, it would make more sense to define a function like 
+Parrot_locate_runtime_file_loader that just returns a pointer to the 
+selected loader. We really can't expect imcc.l to put together an enum 
+of loaders anyway. It makes more sense to contain that logic within 
+library.c.
+
+> The return value is the preferred object's path, or NULL if not found. Note that the 
+> returned path string has a hidden 0 making it suitable for direct use in C API calls 
+> (artifact of previous implementation).
+
+The current strategy of calling string_to_cstring before returning from 
+the C string version of the call is a standard Parrot interface. Best 
+not to mix STRING*s and C strings.
+
+> If NULL is returned the value of *loader
+> is semantically NULL, possibly modified, and should be reset by subsequent calls.
+
+Again, not a useful addition here.
+
+> The object_name is first tried as given, and then by extension guessing. Further
+> location attempts are influenced by the search path and extension lists in
+> iglobal[IGLOBAL_LIB_PATHS]. These lists are examined recursively breadth-first, 
+> by loader, by search paths, and then extensions.
+
+This I see as the core of your proposal, and would like to see a good 
+deal more on it. (Not so much a code patch, but how it would work from 
+the perspective of the user.)
+
+> The order of examination is influenced
+> by the PARROT_PREFER_SOURCE environment variable. When the variable is not
+> set The lowest level forms of the object will be tried up to the highest
+> level bounded by the loader mask. When the environment variable is defined
+> this order is reversed.
+
+Not influenced by an environment variable, but selectable by opcode, so 
+rethink how to pass the option around.
+
+> TODO: the extension , which is actually the stage of interpretation contained
+>       by the format is returned in the extension of the file. This should be
+>       returned as a optimization hint to heuristics.
+> 
+> TODO: instead of a string that is checked by stat() , a handle should be
+>       returned instead to close the classic access() race. Additional
+>       flags are needed for that such as NO_TTY and other basic cross-platform
+>       security checks. <-- huge warning. This should be a list within the search
+>       spaces index.
+> 
+> TODO: OS IO/VM hinting. some loaders could benefit from IO hinting such as
+>       mapped/streamed, use-once etc. depends on returning a handle and open flags.
+
+Interesting, need more detail (but not necessarily right now, since 
+they're beyond the current proposal).
+
+> </proposal>
+
+> Of particular benefit is gutting src/dynext.c:114 (get_path) which is almost a complete duplication
+> of Parrot_get_runtime_file_str's algorithm because extension guessing is implemented there. 
+> When get_path is considered , extension-guessing is not new behavior , rather a re-factor
+> of existing behavior to build a single API, documented/implemented in one place, that
+> provides safe/secure implementation consistent across loaders. HLL name-spacing is
+> a true feature on top of that re-factor.
+
+src/dynext.c's get_path currently calls Parrot_get_runtime_file_str. If 
+we went with the refactor splitting out Parrot_get_runtime_file_dynext, 
+then get_path could be completely gutted.
+
+
+> Refactoring parrot_init_library_paths:
+> 
+> This re-factor can be implemented independent of the Parrot_locate_runtime_str work. This completes
+> the changes necessary in parrot internals to get the install target to work the same as the working-copy.
+
+This section mixes together several design questions: install 
+configuration, HLL configuration, library search paths, etc.
+> 
+> Currently parrot_init_library instantiates in a very tedious way
+> 
+>     paths = pmc_new(interp, enum_class_ResizableStringArray);
+>     VTABLE_set_pmc_keyed_int(interp, lib_paths,
+>             PARROT_LIB_PATH_INCLUDE, paths);
+>     entry = CONST_STRING(interp, "runtime/parrot/include/");
+>     VTABLE_push_string(interp, paths, entry);
+>     entry = CONST_STRING(interp, "runtime/parrot/");
+>     VTABLE_push_string(interp, paths, entry);
+>                   ...........
+> 
+> It generates a table of paths within the working-copy, and a table for the install. It also has a hook
+> for vendors to append to the default search space. This is the crux of the working-tree and the install
+> being the same. Parrot_locate_runtime_str provides a virtual unified search space. When people request
+> an object such as "PGE" , or "PGE/util" the burden of hiding the difference between the paths in the
+> two trees is hardcoded here by hand with the parrot internal API in C.
+> 
+> I have ripped this out completely and replaced it with this:
+> 
+> #include "builtin-loader-paths.c"
+> 
+> void
+> parrot_init_library_paths(Interp *interp)
+> {
+>     PMC *iglobals, *lib_paths;
+> 
+>     if( query_load_prefer(interp) )
+>         load_prefer = PREFER_SOURCE;
+> 
+>     lib_paths = pmc_new(interp, enum_class_Hash);
+> 
+>     populate_builtin_library_paths(interp, lib_paths);
+> 
+>     iglobals = interp->iglobals;
+>     VTABLE_set_pmc_keyed_int(interp, iglobals,
+>                              IGLOBALS_LIB_PATHS, lib_paths);
+> }
+> I have a function with this signature that performs the traversal
+> of the new hll namespace'd lib_paths , creating intermediary data
+> structures as needed, and populating the structure.
+
+I do like the general idea of populating the lib_paths in a more dynamic 
+fashion than a long series of manually coded and statically compiled 
+calls to construct the table.
+
+Have you considered a strategy for modifying lib_paths at runtime?
+
+> and is contained in builtin-loader-paths.c which is a generated source created from a input file
+> looking like this:
+> [parrot]
+> 
+> # note: the search ./ entries can be used to discover who has not
+> #       migrated to this format. by removing this entry any part
+> #       of the tree not using a .paths file will break.
+> 
+> #----------------------------------------------------------------------
+> # shared objects
+> #----------------------------------------------------------------------
+> 
+> loader arch
+> 
+> install runtime/parrot/dynext/
+> build lib/parrot/dynext/
+> 
+> dlopen load so
+
+[...]
+
+If we're going to have configuration files, I'd prefer to have them in a 
+standard format (YAML?) than a custom format. But, I'm not sure that a 
+configuration file is a better way of setting installation options than 
+command-line flags. HLLs may have some form of configuration file, but 
+it hasn't been needed yet.
+
+
+> The extensions and the phase information could later be extended for
+> processing by other programs to generate HLLCompiler integration so
+> the the loader aspect does not get separated. A HLLCompiler-integration-generator
+> may be a worthy TODO.
+> 
+> The potential for the file is to integrate installation,loading, and maybe
+> even HLLCompiler integration in a single place that can be edited with
+> zero knowledge of parrot internals, only architecture.
+
+This "single location" I would say is Configure.pl, and also runtime 
+modification for loading and HLLCompiler.
+
+> Since my patches were going against the trunk I need to introduce changes incrementally,
+
+Yes, definitely, and much appreciated.
+
+Allison
+

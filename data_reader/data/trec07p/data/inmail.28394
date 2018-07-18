@@ -1,0 +1,200 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri May  4 05:46:27 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l449kRqD013912
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 4 May 2007 05:46:27 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id D7BF2163900
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri,  4 May 2007 09:46:26 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1004)
+	id 01D7F162BDC; Fri,  4 May 2007 09:46:17 +0000 (GMT)
+To: samba-cvs@samba.org
+From: gd@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070504094618.01D7F162BDC@lists.samba.org>
+Date: Fri,  4 May 2007 09:46:17 +0000 (GMT)
+Subject: svn commit: samba r22663 - in branches/SAMBA_3_0/source/libads: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: gd
+Date: 2007-05-04 09:46:17 +0000 (Fri, 04 May 2007)
+New Revision: 22663
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22663
+
+Log:
+Restructure kerberos_kinit_password_ext() error path.
+
+Guenther
+
+Modified:
+   branches/SAMBA_3_0/source/libads/kerberos.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/libads/kerberos.c
+===================================================================
+--- branches/SAMBA_3_0/source/libads/kerberos.c	2007-05-04 09:35:01 UTC (rev 22662)
++++ branches/SAMBA_3_0/source/libads/kerberos.c	2007-05-04 09:46:17 UTC (rev 22663)
+@@ -73,14 +73,16 @@
+ 	krb5_context ctx = NULL;
+ 	krb5_error_code code = 0;
+ 	krb5_ccache cc = NULL;
+-	krb5_principal me;
++	krb5_principal me = NULL;
+ 	krb5_creds my_creds;
+ 	krb5_get_init_creds_opt *opt = NULL;
+ 	smb_krb5_addresses *addr = NULL;
+ 
++	ZERO_STRUCT(my_creds);
++
+ 	initialize_krb5_error_table();
+ 	if ((code = krb5_init_context(&ctx)))
+-		return code;
++		goto out;
+ 
+ 	if (time_offset != 0) {
+ 		krb5_set_real_time(ctx, time(NULL) + time_offset, 0);
+@@ -91,21 +93,15 @@
+ 			getenv("KRB5_CONFIG")));
+ 
+ 	if ((code = krb5_cc_resolve(ctx, cache_name ? cache_name : krb5_cc_default_name(ctx), &cc))) {
+-		krb5_free_context(ctx);
+-		return code;
++		goto out;
+ 	}
+ 	
+ 	if ((code = smb_krb5_parse_name(ctx, principal, &me))) {
+-		krb5_cc_close(ctx, cc);
+-		krb5_free_context(ctx);	
+-		return code;
++		goto out;
+ 	}
+ 
+-	code = smb_krb5_get_init_creds_opt_alloc(ctx, &opt);
+-	if (code) {
+-		krb5_cc_close(ctx, cc);
+-		krb5_free_context(ctx);	
+-		return code;
++	if ((code = smb_krb5_get_init_creds_opt_alloc(ctx, &opt))) {
++		goto out;
+ 	}
+ 
+ 	krb5_get_init_creds_opt_set_renew_life(opt, renewable_time);
+@@ -117,55 +113,29 @@
+ 
+ #ifdef HAVE_KRB5_GET_INIT_CREDS_OPT_SET_PAC_REQUEST
+ 	if (request_pac) {
+-		code = krb5_get_init_creds_opt_set_pac_request(ctx, opt, (krb5_boolean)request_pac);
+-		if (code) {
+-			krb5_cc_close(ctx, cc);
+-			krb5_free_principal(ctx, me);
+-			krb5_free_context(ctx);
+-			return code;
++		if ((code = krb5_get_init_creds_opt_set_pac_request(ctx, opt, (krb5_boolean)request_pac))) {
++			goto out;
+ 		}
+ 	}
+ #endif
+ 	if (add_netbios_addr) {
+-		code = smb_krb5_gen_netbios_krb5_address(&addr);
+-		if (code) {
+-			krb5_cc_close(ctx, cc);
+-			krb5_free_principal(ctx, me);
+-			krb5_free_context(ctx);		
+-			return code;	
++		if ((code = smb_krb5_gen_netbios_krb5_address(&addr))) {
++			goto out;
+ 		}
+ 		krb5_get_init_creds_opt_set_address_list(opt, addr->addrs);
+ 	}
+ 
+ 	if ((code = krb5_get_init_creds_password(ctx, &my_creds, me, CONST_DISCARD(char *,password), 
+-						 kerb_prompter, NULL, 0, NULL, opt)))
+-	{
+-		smb_krb5_get_init_creds_opt_free(ctx, opt);
+-		smb_krb5_free_addresses(ctx, addr);
+-		krb5_cc_close(ctx, cc);
+-		krb5_free_principal(ctx, me);
+-		krb5_free_context(ctx);
+-		return code;
++						 kerb_prompter, NULL, 0, NULL, opt))) {
++		goto out;
+ 	}
+ 
+-	smb_krb5_get_init_creds_opt_free(ctx, opt);
+-
+ 	if ((code = krb5_cc_initialize(ctx, cc, me))) {
+-		smb_krb5_free_addresses(ctx, addr);
+-		krb5_free_cred_contents(ctx, &my_creds);
+-		krb5_cc_close(ctx, cc);
+-		krb5_free_principal(ctx, me);
+-		krb5_free_context(ctx);		
+-		return code;
++		goto out;
+ 	}
+ 	
+ 	if ((code = krb5_cc_store_cred(ctx, cc, &my_creds))) {
+-		krb5_cc_close(ctx, cc);
+-		smb_krb5_free_addresses(ctx, addr);
+-		krb5_free_cred_contents(ctx, &my_creds);
+-		krb5_free_principal(ctx, me);
+-		krb5_free_context(ctx);		
+-		return code;
++		goto out;
+ 	}
+ 
+ 	if (expire_time) {
+@@ -175,14 +145,24 @@
+ 	if (renew_till_time) {
+ 		*renew_till_time = (time_t) my_creds.times.renew_till;
+ 	}
+-
+-	krb5_cc_close(ctx, cc);
+-	smb_krb5_free_addresses(ctx, addr);
++ out:
+ 	krb5_free_cred_contents(ctx, &my_creds);
+-	krb5_free_principal(ctx, me);
+-	krb5_free_context(ctx);		
+-	
+-	return 0;
++	if (me) {
++		krb5_free_principal(ctx, me);
++	}
++	if (addr) {
++		smb_krb5_free_addresses(ctx, addr);
++	}
++ 	if (opt) {
++		smb_krb5_get_init_creds_opt_free(ctx, opt);
++	}
++	if (cc) {
++		krb5_cc_close(ctx, cc);
++	}
++	if (ctx) {
++		krb5_free_context(ctx);
++	}
++	return code;
+ }
+ 
+ 
+

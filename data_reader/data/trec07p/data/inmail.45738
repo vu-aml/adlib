@@ -1,0 +1,537 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon May 28 21:21:42 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4T1LfhB024827
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 28 May 2007 21:21:41 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 82833163819
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 01:21:36 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.5 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 501)
+	id D95E0162AE1; Tue, 29 May 2007 01:20:50 +0000 (GMT)
+To: samba-cvs@samba.org
+From: abartlet@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070529012050.D95E0162AE1@lists.samba.org>
+Date: Tue, 29 May 2007 01:20:50 +0000 (GMT)
+Subject: svn commit: samba r23177 - in branches/SAMBA_4_0/source:
+	lib/ldb/tools script scripting/ejs scripting/libjs setup
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: abartlet
+Date: 2007-05-29 01:20:47 +0000 (Tue, 29 May 2007)
+New Revision: 23177
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23177
+
+Log:
+Add in a new provision-backend script.  This helps set up the OpenLDAP or Fedora DS backend. 
+
+This required a new mkdir() call in ejs.
+
+We can now provision just the schema for ad2oLschema to operate on
+(with provision_schema(), without performing the whole provision, just
+to wipe it again (adjustments to 'make test' to come soon).
+
+Andrew Bartlett
+
+Added:
+   branches/SAMBA_4_0/source/setup/fedorads-partitions.ldif
+   branches/SAMBA_4_0/source/setup/fedorads.inf
+   branches/SAMBA_4_0/source/setup/provision-backend
+   branches/SAMBA_4_0/source/setup/slapd.conf
+Modified:
+   branches/SAMBA_4_0/source/lib/ldb/tools/ad2oLschema.c
+   branches/SAMBA_4_0/source/script/installmisc.sh
+   branches/SAMBA_4_0/source/scripting/ejs/smbcalls_sys.c
+   branches/SAMBA_4_0/source/scripting/libjs/provision.js
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/lib/ldb/tools/ad2oLschema.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/ldb/tools/ad2oLschema.c	2007-05-29 00:34:31 UTC (rev 23176)
++++ branches/SAMBA_4_0/source/lib/ldb/tools/ad2oLschema.c	2007-05-29 01:20:47 UTC (rev 23177)
+@@ -195,9 +195,11 @@
+ static struct ldb_dn *find_schema_dn(struct ldb_context *ldb, TALLOC_CTX *mem_ctx) 
+ {
+ 	const char *rootdse_attrs[] = {"schemaNamingContext", NULL};
++	const char *no_attrs[] = { NULL };
+ 	struct ldb_dn *schemadn;
+ 	struct ldb_dn *basedn = ldb_dn_new(mem_ctx, ldb, NULL);
+ 	struct ldb_result *rootdse_res;
++	struct ldb_result *schema_res;
+ 	int ldb_ret;
+ 	if (!basedn) {
+ 		return NULL;
+@@ -206,8 +208,25 @@
+ 	/* Search for rootdse */
+ 	ldb_ret = ldb_search(ldb, basedn, LDB_SCOPE_BASE, NULL, rootdse_attrs, &rootdse_res);
+ 	if (ldb_ret != LDB_SUCCESS) {
+-		printf("Search failed: %s\n", ldb_errstring(ldb));
+-		return NULL;
++		ldb_ret = ldb_search(ldb, basedn, LDB_SCOPE_SUBTREE, 
++				 "(&(objectClass=dMD)(cn=Schema))", 
++				 no_attrs, &schema_res);
++		if (ldb_ret) {
++			printf("cn=Schema Search failed: %s\n", ldb_errstring(ldb));
++			return NULL;
++		}
++
++		talloc_steal(mem_ctx, schema_res);
++
++		if (schema_res->count != 1) {
++			printf("Failed to find rootDSE");
++			return NULL;
++		}
++		
++		schemadn = talloc_steal(mem_ctx, schema_res->msgs[0]->dn);
++		talloc_free(schema_res);
++		return schemadn;
++		
+ 	}
+ 	
+ 	talloc_steal(mem_ctx, rootdse_res);
+
+Modified: branches/SAMBA_4_0/source/script/installmisc.sh
+===================================================================
+--- branches/SAMBA_4_0/source/script/installmisc.sh	2007-05-29 00:34:31 UTC (rev 23176)
++++ branches/SAMBA_4_0/source/script/installmisc.sh	2007-05-29 01:20:47 UTC (rev 23177)
+@@ -14,6 +14,8 @@
+ 
+ echo "Installing setup templates"
+ mkdir -p $SETUPDIR || exit 1
++cp setup/schema-map-* $SETUPDIR || exit 1
++cp setup/*.inf $SETUPDIR || exit 1
+ cp setup/*.ldif $SETUPDIR || exit 1
+ cp setup/*.zone $SETUPDIR || exit 1
+ cp setup/*.conf $SETUPDIR || exit 1
+
+Modified: branches/SAMBA_4_0/source/scripting/ejs/smbcalls_sys.c
+===================================================================
+--- branches/SAMBA_4_0/source/scripting/ejs/smbcalls_sys.c	2007-05-29 00:34:31 UTC (rev 23176)
++++ branches/SAMBA_4_0/source/scripting/ejs/smbcalls_sys.c	2007-05-29 01:20:47 UTC (rev 23177)
+@@ -305,7 +305,34 @@
+ 	return 0;
+ }
+ 
++/*
++  mkdir()
++  usage:
++     ok = sys.mkdir(dirname, mode);
++*/
++static int ejs_sys_mkdir(MprVarHandle eid, int argc, struct MprVar **argv)
++{
++	BOOL ret;
++	char *name;
++	if (argc != 2) {
++		ejsSetErrorMsg(eid, "sys_mkdir invalid arguments, need mkdir(dirname, mode)");
++		return -1;
++	}
++	if (!mprVarIsString(argv[0]->type)) {
++		ejsSetErrorMsg(eid, "sys_mkdir dirname not a string");
++		return -1;
++	}
++	if (!mprVarIsNumber(argv[1]->type)) {
++		ejsSetErrorMsg(eid, "sys_mkdir mode not a number");
++		return -1;
++	}
++	mprVarToString(&name, 0, NULL, argv[0]);
++	ret = mkdir(name, mprVarToNumber(argv[1]));
++	mpr_Return(eid, mprCreateBoolVar(ret == 0));
++	return 0;
++}
+ 
++
+ /*
+   return fields of a stat() call
+ */
+@@ -438,6 +465,7 @@
+ 	mprSetCFunction(obj, "ntgmtime", ejs_sys_ntgmtime);
+ 	mprSetCFunction(obj, "ldaptime", ejs_sys_ldaptime);
+ 	mprSetCFunction(obj, "httptime", ejs_sys_httptime);
++	mprSetCFunction(obj, "mkdir", ejs_sys_mkdir);
+ 	mprSetStringCFunction(obj, "unlink", ejs_sys_unlink);
+ 	mprSetStringCFunction(obj, "file_load", ejs_sys_file_load);
+ 	mprSetStringCFunction(obj, "file_save", ejs_sys_file_save);
+
+Modified: branches/SAMBA_4_0/source/scripting/libjs/provision.js
+===================================================================
+--- branches/SAMBA_4_0/source/scripting/libjs/provision.js	2007-05-29 00:34:31 UTC (rev 23176)
++++ branches/SAMBA_4_0/source/scripting/libjs/provision.js	2007-05-29 01:20:47 UTC (rev 23177)
+@@ -388,6 +388,7 @@
+ 	paths.ldap_basedn_ldif = lp.get("private dir") + "/" + subobj.DNSDOMAIN + ".ldif";
+ 	paths.ldap_config_basedn_ldif = lp.get("private dir") + "/" + subobj.DNSDOMAIN + "-config.ldif";
+ 	paths.ldap_schema_basedn_ldif = lp.get("private dir") + "/" + subobj.DNSDOMAIN + "-schema.ldif";
++	paths.ldapdir = lp.get("private dir") + "/ldap";
+ 	return paths;
+ }
+ 
+@@ -446,10 +447,11 @@
+ 	var rdns = split(",", subobj.DOMAINDN);
+ 	subobj.RDN_DC = substr(rdns[0], strlen("DC="));
+ 
+-	subobj.SAM_LDB		= paths.samdb;
+-	subobj.SECRETS_LDB	= paths.secrets;
++	subobj.SAM_LDB		= "tdb://" + paths.samdb;
+ 	subobj.SECRETS_KEYTAB	= paths.keytab;
+ 
++	subobj.LDAPDIR = paths.ldapdir;
++
+ 	return true;
+ }
+ 
+@@ -703,6 +705,53 @@
+ 	return true;
+ }
+ 
++/*
++  provision just the schema into a temporary ldb, so we can run ad2oLschema on it
++*/
++function provision_schema(subobj, message, tmp_schema_path, paths)
++{
++	var lp = loadparm_init();
++	var sys = sys_init();
++	var info = new Object();
++
++	var ok = provision_fix_subobj(subobj, message, paths);
++	assert(ok);
++
++	info.subobj = subobj;
++	info.message = message;
++
++	message("Setting up sam.ldb partitions\n");
++
++	/* This will erase anything in the tmp db */
++	var samdb = open_ldb(info, tmp_schema_path, true);
++
++	message("Adding schema container (permitted to fail)\n");
++	var add_ok = setup_add_ldif("provision_schema_basedn.ldif", info, samdb, true);
++	message("Modifying schema container\n");
++	var modify_ok = setup_ldb_modify("provision_schema_basedn_modify.ldif", info, samdb);
++	if (!modify_ok) {
++		if (!add_ok) {
++			message("Failed to both add and modify schema dn: + samdb.errstring() + "\n");
++			message("Perhaps you need to run the provision script with the --ldap-base-dn option, and add this record to the backend manually\n"); 
++			assert(modify_ok);
++		}
++		message("Failed to modify the schema container: " + samdb.errstring() + "\n");
++		assert(modify_ok);
++	}
++
++	message("Setting up sam.ldb Samba4 schema\n");
++	setup_add_ldif("schema_samba4.ldif", info, samdb, false);
++	message("Setting up sam.ldb AD schema\n");
++	setup_add_ldif("schema.ldif", info, samdb, false);
++
++	var commit_ok = samdb.transaction_commit();
++	if (!commit_ok) {
++		info.message("samdb commit failed: " + samdb.errstring() + "\n");
++		assert(commit_ok);
++	}
++	samdb.close();
++}
++
+ /* Write out a DNS zone file, from the info in the current database */
+ function provision_dns(subobj, message, paths, session_info, credentials)
+ {
+@@ -787,6 +836,7 @@
+ 	subobj.KRBTGTPASS   = randpass(12);
+ 	subobj.MACHINEPASS  = randpass(12);
+ 	subobj.ADMINPASS    = randpass(12);
++	subobj.LDAPMANAGERPASS     = randpass(12);
+ 	subobj.DEFAULTSITE  = "Default-First-Site-Name";
+ 	subobj.NEWGUID      = randguid;
+ 	subobj.NTTIME       = nttime;
+
+Added: branches/SAMBA_4_0/source/setup/fedorads-partitions.ldif
+===================================================================
+--- branches/SAMBA_4_0/source/setup/fedorads-partitions.ldif	2007-05-29 00:34:31 UTC (rev 23176)
++++ branches/SAMBA_4_0/source/setup/fedorads-partitions.ldif	2007-05-29 01:20:47 UTC (rev 23177)
+@@ -0,0 +1,28 @@
++dn: cn=\"${CONFIGDN}\",cn=mapping tree,cn=config
++objectclass: top
++objectclass: extensibleObject
++objectclass: nsMappingTree
++nsslapd-state: backend
++nsslapd-backend: configData
++cn: ${CONFIGDN}
++
++dn: cn=configData,cn=ldbm database,cn=plugins,cn=config
++objectclass: extensibleObject
++objectclass: nsBackendInstance
++nsslapd-suffix: ${CONFIGDN}
++cn: configData
++
++dn: cn=\"${SCHEMADN}\",cn=mapping tree,cn=config
++objectclass: top
++objectclass: extensibleObject
++objectclass: nsMappingTree
++nsslapd-state: backend
++nsslapd-backend: schemaData
++cn: ${SCHEMADN}
++
++dn: cn=schemaData,cn=ldbm database,cn=plugins,cn=config
++objectclass: extensibleObject
++objectclass: nsBackendInstance
++nsslapd-suffix: ${SCHEMADN}
++cn: schemaData
++
+
+Added: branches/SAMBA_4_0/source/setup/fedorads.inf
+===================================================================
+--- branches/SAMBA_4_0/source/setup/fedorads.inf	2007-05-29 00:34:31 UTC (rev 23176)
++++ branches/SAMBA_4_0/source/setup/fedorads.inf	2007-05-29 01:20:47 UTC (rev 23177)
+@@ -0,0 +1,26 @@
++[General]
++SuiteSpotUserID = ${ROOT}
++FullMachineName=   ${HOSTNAME}.${DNSDOMAIN}
++ServerRoot=   ${LDAPDIR}
++
++[slapd]
++ldapifilepath=${LDAPDIR}/ldapi
++Suffix= ${DOMAINDN}
++RootDN= cn=Manager,${DOMAINDN}
++RootDNPwd= ${LDAPMANAGERPASS}
++ServerIdentifier= samba4
++
++inst_dir= ${LDAPDIR}/slapd-samba4
++config_dir= ${LDAPDIR}/slapd-samba4
++schema_dir= ${LDAPDIR}/slapd-samba4/schema
++lock_dir= ${LDAPDIR}/slapd-samba4/lock
++log_dir= ${LDAPDIR}/slapd-samba4/logs
++run_dir= ${LDAPDIR}/slapd-samba4/logs
++db_dir= ${LDAPDIR}/slapd-samba4/db
++bak_dir= ${LDAPDIR}/slapd-samba4/bak
++tmp_dir= ${LDAPDIR}/slapd-samba4/tmp
++ldif_dir= ${LDAPDIR}/slapd-samba4/ldif
++cert_dir= ${LDAPDIR}/slapd-samba4
++
++start_server= 0
++install_full_schema= 0
+\ No newline at end of file
+
+Added: branches/SAMBA_4_0/source/setup/provision-backend
+===================================================================
+--- branches/SAMBA_4_0/source/setup/provision-backend	2007-05-29 00:34:31 UTC (rev 23176)
++++ branches/SAMBA_4_0/source/setup/provision-backend	2007-05-29 01:20:47 UTC (rev 23177)
+@@ -0,0 +1,114 @@
++#!/bin/sh
++exec smbscript "$0" ${1+"$@"}
++/*
++	provision a Samba4 server
++	Copyright Andrew Tridgell 2005
++	Released under the GNU GPL v2 or later
++*/
++
++options = GetOptions(ARGV,
++		"POPT_AUTOHELP",
++		"POPT_COMMON_SAMBA",
++		"POPT_COMMON_VERSION",
++		"POPT_COMMON_CREDENTIALS",
++		'realm=s',
++		'host-name=s',
++		'ldap-manager-pass=s',
++		'root=s',
++		'quiet',
++		'ldap-backend-type=s');
++
++if (options == undefined) {
++   println("Failed to parse options");
++   return -1;
++}
++
++sys = sys_init();
++
++libinclude("base.js");
++libinclude("provision.js");
++
++/*
++  print a message if quiet is not set
++*/
++function message()
++{
++	if (options["quiet"] == undefined) {
++		print(vsprintf(arguments));
++	}
++}
++
++/*
++ show some help
++*/
++function ShowHelp()
++{
++	print("
++Samba4 provisioning
++
++provision [options]
++ --realm	REALM		set realm
++ --host-name	HOSTNAME	set hostname
++ --ldap-manager-pass	PASSWORD	choose LDAP Manager password (otherwise random)
++ --root         USERNAME	choose 'root' unix username
++ --quiet			Be quiet
++ --ldap-backend-type LDAPSERVER     Select either \"openldap\" or \"fedora-ds\" as a target to configure
++ --ldap-module= MODULE          LDB mapping module to use for the LDAP backend
++You must provide at least a realm and ldap-backend-type
++
++");
++	exit(1);
++}
++
++if (options['host-name'] == undefined) {
++	options['host-name'] = hostname();
++}
++
++/*
++   main program
++*/
++if (options["realm"] == undefined ||
++    options["ldap-backend-type"] == undefined ||
++    options["host-name"] == undefined) {
++	ShowHelp();
++}
++
++/* cope with an initially blank smb.conf */
++var lp = loadparm_init();
++lp.set("realm", options.realm);
++lp.reload();
++
++var subobj = provision_guess();
++for (r in options) {
++	var key = strupper(join("", split("-", r)));
++	subobj[key] = options[r];
++}
++
++var ldapbackend = (options["ldap-backend-type"] != undefined);
++
++var paths = provision_default_paths(subobj);
++provision_fix_subobj(subobj, message, paths);
++message("Provisioning LDAP backend for %s in realm %s into %s\n", subobj.HOSTNAME, subobj.REALM, subobj.LDAPDIR);
++message("Using LDAP Manager password: %s\n", subobj.LDAPMANAGERPASS);
++
++var tmp_schema_ldb = subobj.LDAPDIR + "/schema-tmp.ldb";
++sys.mkdir(subobj.LDAPDIR, 0700);
++
++provision_schema(subobj, message, tmp_schema_ldb, paths);
++
++var mapping;
++var ext;
++if (options["ldap-backend-type"] == "fedora-ds") {
++	mapping = "schema-map-fedora-ds-1.0";
++	ext = "ldif";
++	setup_file("fedorads.inf", message, subobj.LDAPDIR + "/fedorads.inf", subobj);
++	setup_file("fedorads-partitions.ldif", message, subobj.LDAPDIR + "/fedorads-partitions.ldif", subobj);
++} else if (options["ldap-backend-type"] == "openldap") {
++	mapping = "schema-map-openldap-2.3";
++	ext = "schema";
++	setup_file("slapd.conf", message, subobj.LDAPDIR + "/slapd.conf", subobj);
++}
++message("ad2oLschema --option=convert:target=" + options["ldap-backend-type"] + " -I " + lp.get("setup directory") + "/" + mapping + " -H tdb://" + tmp_schema_ldb + " -O " + subobj.LDAPDIR + "/backend-schema." + ext + "\n");
++
++message("All OK\n");
++return 0;
+
+
+Property changes on: branches/SAMBA_4_0/source/setup/provision-backend
+___________________________________________________________________
+Name: svn:executable
+   + *
+
+Added: branches/SAMBA_4_0/source/setup/slapd.conf
+===================================================================
+--- branches/SAMBA_4_0/source/setup/slapd.conf	2007-05-29 00:34:31 UTC (rev 23176)
++++ branches/SAMBA_4_0/source/setup/slapd.conf	2007-05-29 01:20:47 UTC (rev 23177)
+@@ -0,0 +1,73 @@
++loglevel 0
++
++include ${LDAPDIR}/backend-schema.schema
++
++pidfile		${LDAPDIR}/slapd.pid
++argsfile	${LDAPDIR}/slapd.args
++sasl-realm ${DNSDOMAIN}
++access to * by * write
++
++allow update_anon
++
++authz-regexp
++          uid=([^,]*),cn=${DNSDOMAIN},cn=digest-md5,cn=auth
++          ldap:///${DOMAINDN}??sub?(samAccountName=\$1)
++
++authz-regexp
++          uid=([^,]*),cn=([^,]*),cn=digest-md5,cn=auth
++          ldap:///${DOMAINDN}??sub?(samAccountName=\$1)
++
++include $modconf
++
++defaultsearchbase \"${DOMAINDN}\"
++
++backend		bdb
++database        bdb
++suffix		\"cn=Schema,cn=Configuration,${DOMAINDN}\"
++directory	${LDAPDIR}/db/schema
++index           objectClass eq
++index           samAccountName eq
++index name eq
++index objectCategory eq
++index lDAPDisplayName eq
++index subClassOf eq
++
++database        bdb
++suffix		\"cn=Configuration,${DOMAINDN}\"
++directory	${LDAPDIR}/db/config
++index           objectClass eq
++index           samAccountName eq
++index name eq
++index objectSid eq
++index objectCategory eq
++index nCName eq pres
++index subClassOf eq
++index dnsRoot eq
++index nETBIOSName eq pres
++
++database        bdb
++suffix		\"${DOMAINDN}\"
++rootdn          \"cn=Manager,${DOMAINDN}\"
++rootpw          ${LDAPMANAGERPASS}
++directory	${LDAPDIR}/db/user
++index           objectClass eq
++index           samAccountName eq
++index name eq
++index objectSid eq
++index objectCategory eq
++index member eq
++index uidNumber eq
++index gidNumber eq
++index unixName eq
++index privilege eq
++index nCName eq pres
++index lDAPDisplayName eq
++index subClassOf eq
++index dnsRoot eq
++index nETBIOSName eq pres
++
++#syncprov is stable in OpenLDAP 2.3, and available in 2.2.  
++#We only need this for the contextCSN attribute anyway....
++overlay syncprov
++syncprov-checkpoint 100 10
++syncprov-sessionlog 100
+

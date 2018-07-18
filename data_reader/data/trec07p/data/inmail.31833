@@ -1,0 +1,111 @@
+From perl6-all-return-81184-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue May  8 18:51:40 2007
+Return-Path: <perl6-all-return-81184-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l48MpdqD021294
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 8 May 2007 18:51:39 -0400
+Received: (qmail 32109 invoked by uid 514); 8 May 2007 22:51:37 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 32104 invoked from network); 8 May 2007 22:51:37 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+X-Virus-Scanned: by both ClamAV and Kaspersky at http://aliencamel.com/
+Message-ID: <4640B856.1020102@perl.org>
+Date: Tue, 08 May 2007 10:50:14 -0700
+From: Allison Randal <allison@perl.org>
+User-Agent: Thunderbird 1.5.0.10 (Macintosh/20070221)
+MIME-Version: 1.0
+To: Klaas-Jan Stol <parrotcode@gmail.com>
+CC: perl6-internals@perl.org
+Subject: Re: PIR syntax methods ambiguity
+References: <7b0e52b40705032235q20a0cce9pdd5c80cc6d08e2f4@mail.gmail.com>
+In-Reply-To: <7b0e52b40705032235q20a0cce9pdd5c80cc6d08e2f4@mail.gmail.com>
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-1.9 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_NEUTRAL
+
+Klaas-Jan Stol wrote:
+> hi,
+> IIRC (currently no pc around to check, but I realized this issue when
+> reading on objects pdd), calling a method in PIR can be done as follows:
+> 
+> $P0.'someMethod'()
+> 
+> but also:
+> 
+> .local string meth  /* or maybe a pmc ?*/
+> meth = 'someMethod'
+> $P0.meth()
+
+This is a long-standing IMCC issue and also affects subs. The PMC 
+variant also works:
+
+.local pmc meth
+meth = # fetch the method object
+$P0.meth()
+
+> However, this looks like as if the object in $P0 has a method called 
+> 'meth',
+> just as a class object has methods like 'inspect', and 'roles'. This is 
+> imho
+> a bit unfortunate, it makes this syntax a bit ambiguous.
+> It gets tricky if you have some variable that goes by the same name, like
+> 'inspect', or 'roles'.
+
+An annoyance I've been caught by before.
+
+> So, I would suggest to disallow arbitrary objects holding methods for this
+> syntax; only allow for strings as method names, or barenames if they are
+> known to be methods on the PMC.
+
+That doesn't quite get around the problem, because you still have the 
+ambiguity, "sometimes it's one thing and sometimes it's another". And if 
+barenames are allowed for the methods that are defined, what if you 
+write some code passing in a named variable containing a string method 
+name, and then update the object to have a method of that same name?
+
+
+
+We could entirely disallow barenames, so it's always either a quoted 
+string or a variable.
+
+But even that doesn't solve the problem, because currently if the method 
+name is a string PMC:
+
+   $P0 = new String
+   $P0 = "hello"
+   object.$P0()
+
+It tries to treat the PMC as a method object and gives you the error 
+"invoke() not implemented in class 'String'".
+
+We need more distinctions in the PIR syntactic sugar. On the drive home 
+from the last Portland Perl Mongers meeting I was kicking around 
+something a little Perl 6-ish.
+
+   object.method() # bareword methodname
+   object~method() # string variable name (string or PMC)
+   object!method() # invoke PMC method object
+
+But those differences are really hard to see. So, this lingers on as an 
+unresolved question.
+
+Allison
+

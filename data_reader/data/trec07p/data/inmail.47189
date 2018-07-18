@@ -1,0 +1,248 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May 30 17:17:41 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4ULHfhB019383
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 30 May 2007 17:17:41 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 52989163832
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 30 May 2007 21:17:36 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=3.8 tests=BAYES_00,FORGED_RCVD_HELO,
+	RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from borges.dodds.net (dsl093-039-086.pdx1.dsl.speakeasy.net
+	[66.93.39.86]) by lists.samba.org (Postfix) with ESMTP id 14353162AC4
+	for <samba-technical@lists.samba.org>;
+	Wed, 30 May 2007 21:17:12 +0000 (GMT)
+Received: by borges.dodds.net (Postfix, from userid 1000)
+	id 9AB991587CF; Wed, 30 May 2007 14:17:11 -0700 (PDT)
+Date: Wed, 30 May 2007 14:17:11 -0700
+From: Steve Langasek <vorlon@debian.org>
+To: Christian Perrier <bubulle@debian.org>
+Message-ID: <20070530211711.GF15314@borges.dodds.net>
+References: <20070530203400.GL5824@kheops.homeunix.org>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+In-Reply-To: <20070530203400.GL5824@kheops.homeunix.org>
+User-Agent: Mutt/1.5.13 (2006-08-11)
+Cc: samba-technical@lists.samba.org
+Subject: Re: [PATCH 4/10] Debian patch: add an option to not update mtab for
+	smbmount
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+On Wed, May 30, 2007 at 10:34:00PM +0200, Christian Perrier wrote:
+> The attached patch is currently used in Debian.
+
+> It adds a "-n" option to smbmount so that it does not update
+> /etc/mtab. I can't find a real evidence of why this was needed.
+
+> Please note that the patch adds the option but does not update the
+> manpage.
+
+samba (2.2.3a-7) unstable; urgency=medium
+
+  [...]
+  * Applied patch from Urban Widmark <urban@teststation.com>
+    (smbfs upstream maintainer) to add a '-n' option to smbmount
+    that does the same as mount's '-n'. (Closes: #139590)
+  [...]
+
+The original bug report was that smbfs could not be used when the root
+filesystem was mounted read-only, which is a valid use and supported by
+mount when using other fs types that don't do their own writing to
+/etc/mtab.  I don't know why Urban never included this upstream though.
+
+-- 
+Steve Langasek                   Give me a lever long enough and a Free OS
+Debian Developer                   to set it on, and I can move the world.
+vorlon@debian.org                                   http://www.debian.org/
+
+> Goal: Add an option to not update mtab
+> 
+> Fixes: ?
+> 
+> Status wrt upstream: Should be forwarded
+> 
+> Note: Part of no-longer maintained smbfs stuff?
+>       The manpages are not modified
+> 
+> Index: samba-3.0.25a/source/client/smbmnt.c
+> ===================================================================
+> --- samba-3.0.25a.orig/source/client/smbmnt.c	2007-05-26 07:46:33.492644419 +0200
+> +++ samba-3.0.25a/source/client/smbmnt.c	2007-05-26 07:46:33.848647257 +0200
+> @@ -44,6 +44,7 @@
+>  static uid_t mount_uid;
+>  static gid_t mount_gid;
+>  static int mount_ro;
+> +static int no_mtab;
+>  static unsigned mount_fmask;
+>  static unsigned mount_dmask;
+>  static int user_mount;
+> @@ -56,6 +57,7 @@
+>          printf("Usage: smbmnt mount-point [options]\n");
+>  	printf("Version %s\n\n",SAMBA_VERSION_STRING);
+>          printf("-s share       share name on server\n"
+> +               "-n             don't update /etc/mtab\n"
+>                 "-r             mount read-only\n"
+>                 "-u uid         mount as uid\n"
+>                 "-g gid         mount as gid\n"
+> @@ -70,7 +72,7 @@
+>  {
+>          int opt;
+>  
+> -        while ((opt = getopt (argc, argv, "s:u:g:rf:d:o:")) != EOF)
+> +        while ((opt = getopt (argc, argv, "s:u:g:nrf:d:o:")) != EOF)
+>  	{
+>                  switch (opt)
+>  		{
+> @@ -87,6 +89,9 @@
+>  				mount_gid = strtol(optarg, NULL, 0);
+>  			}
+>                          break;
+> +		case 'n':
+> +			no_mtab = 1;
+> +			break;
+>                  case 'r':
+>                          mount_ro = 1;
+>                          break;
+> @@ -291,36 +296,38 @@
+>  		return -1;
+>  	}
+>  	
+> -        if ((fd = open(MOUNTED"~", O_RDWR|O_CREAT|O_EXCL, 0600)) == -1)
+> -        {
+> -                fprintf(stderr, "Can't get "MOUNTED"~ lock file");
+> -                return 1;
+> -        }
+> -        close(fd);
+> +	if (!no_mtab) {
+> +		if ((fd = open(MOUNTED"~", O_RDWR|O_CREAT|O_EXCL, 0600)) == -1)
+> +		{
+> +			fprintf(stderr, "Can't get "MOUNTED"~ lock file");
+> +			return 1;
+> +		}
+> +		close(fd);
+>  	
+> -        if ((mtab = setmntent(MOUNTED, "a+")) == NULL)
+> -        {
+> -                fprintf(stderr, "Can't open " MOUNTED);
+> -                return 1;
+> -        }
+> +		if ((mtab = setmntent(MOUNTED, "a+")) == NULL)
+> +		{
+> +			fprintf(stderr, "Can't open " MOUNTED);
+> +			return 1;
+> +		}
+>  
+> -        if (addmntent(mtab, &ment) == 1)
+> -        {
+> -                fprintf(stderr, "Can't write mount entry");
+> -                return 1;
+> -        }
+> -        if (fchmod(fileno(mtab), 0644) == -1)
+> -        {
+> -                fprintf(stderr, "Can't set perms on "MOUNTED);
+> -                return 1;
+> -        }
+> -        endmntent(mtab);
+> +		if (addmntent(mtab, &ment) == 1)
+> +		{
+> +			fprintf(stderr, "Can't write mount entry");
+> +			return 1;
+> +		}
+> +		if (fchmod(fileno(mtab), 0644) == -1)
+> +		{
+> +			fprintf(stderr, "Can't set perms on "MOUNTED);
+> +			return 1;
+> +		}
+> +		endmntent(mtab);
+>  
+> -        if (unlink(MOUNTED"~") == -1)
+> -        {
+> -                fprintf(stderr, "Can't remove "MOUNTED"~");
+> -                return 1;
+> -        }
+> +		if (unlink(MOUNTED"~") == -1)
+> +		{
+> +			fprintf(stderr, "Can't remove "MOUNTED"~");
+> +			return 1;
+> +		}
+> +	}
+>  
+>  	return 0;
+>  }	
+> Index: samba-3.0.25a/source/client/smbmount.c
+> ===================================================================
+> --- samba-3.0.25a.orig/source/client/smbmount.c	2007-05-26 07:46:32.692638041 +0200
+> +++ samba-3.0.25a/source/client/smbmount.c	2007-05-26 07:46:33.884647544 +0200
+> @@ -48,6 +48,7 @@
+>  static int mount_ro;
+>  static unsigned mount_fmask;
+>  static unsigned mount_dmask;
+> +static BOOL no_mtab = False;
+>  static BOOL use_kerberos;
+>  /* TODO: Add code to detect smbfs version in kernel */
+>  static BOOL status32_smbfs = False;
+> @@ -273,6 +274,9 @@
+>                  return;
+>          }
+>  
+> +	if (no_mtab)
+> +		return;
+> +
+>          if ((fd = open(MOUNTED"~", O_RDWR|O_CREAT|O_EXCL, 0600)) == -1) {
+>                  DEBUG(0,("%d: Can't get "MOUNTED"~ lock file", sys_getpid()));
+>                  return;
+> @@ -470,6 +474,9 @@
+>  	args[i++] = "-s";
+>  	args[i++] = svc2;
+>  
+> +	if (no_mtab) {
+> +		args[i++] = "-n";
+> +	}
+>  	if (mount_ro) {
+>  		args[i++] = "-r";
+>  	}
+> @@ -665,7 +672,7 @@
+>  ****************************************************************************/
+>  static void usage(void)
+>  {
+> -	printf("Usage: mount.smbfs service mountpoint [-o options,...]\n");
+> +	printf("Usage: mount.smbfs service mountpoint [-n] [-o options,...]\n");
+>  
+>  	printf("Version %s\n\n",SAMBA_VERSION_STRING);
+>  
+> @@ -742,8 +749,13 @@
+>  	argc -= 2;
+>  	argv += 2;
+>  
+> -	opt = getopt(argc, argv, "o:");
+> -	if(opt != 'o') {
+> +	opt = getopt(argc, argv, "no:");
+> +	if (opt == 'n') {
+> +		DEBUG(3,("No mtab!\n"));
+> +		no_mtab = True;
+> +		opt = getopt(argc, argv, "o:");
+> +	}
+> +	if (opt != 'o') {
+>  		return;
+>  	}
+>  
+

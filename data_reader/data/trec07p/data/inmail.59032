@@ -1,0 +1,189 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat Jun 16 18:53:08 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5GMr8L9020307
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 16 Jun 2007 18:53:08 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 3A8C31638A0
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 16 Jun 2007 22:53:07 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 535)
+	id 71C91162AC5; Sat, 16 Jun 2007 22:52:52 +0000 (GMT)
+To: samba-cvs@samba.org
+From: idra@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070616225252.71C91162AC5@lists.samba.org>
+Date: Sat, 16 Jun 2007 22:52:52 +0000 (GMT)
+Subject: svn commit: samba r23527 - in branches: SAMBA_3_0/source/client
+	SAMBA_3_0_25/source/client SAMBA_3_0_26/source/client
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: idra
+Date: 2007-06-16 22:52:51 +0000 (Sat, 16 Jun 2007)
+New Revision: 23527
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23527
+
+Log:
+
+Use existing escaping function pointed by James
+
+
+Modified:
+   branches/SAMBA_3_0/source/client/smbspool.c
+   branches/SAMBA_3_0_25/source/client/smbspool.c
+   branches/SAMBA_3_0_26/source/client/smbspool.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/client/smbspool.c
+===================================================================
+--- branches/SAMBA_3_0/source/client/smbspool.c	2007-06-16 19:58:17 UTC (rev 23526)
++++ branches/SAMBA_3_0/source/client/smbspool.c	2007-06-16 22:52:51 UTC (rev 23527)
+@@ -603,35 +603,11 @@
+ 
+ static char *uri_unescape_alloc(const char *uritok)
+ {
+-	char *t, *ret;
+-	const char *p;
+-	long int val;
+-	char eval[3];
++	char *ret;
+ 
+-	ret = (char *)SMB_MALLOC(strlen(uritok)+1);
+-
++	ret = (char *)SMB_STRDUP(uritok);
+ 	if (!ret) return NULL;
+ 
+-	eval[2] = '\0';
+-
+-	for (p = uritok, t = ret; *p; p++, t++) {
+-		if (*p == '%') { /* unescape hex */
+-			p++;
+-			eval[0] = *p;
+-			p++;
+-			eval[1] = *p;
+-			val = strtol(eval, NULL, 16);
+-			if ((val == LONG_MIN || val == LONG_MAX) && errno == ERANGE) {
+-				SAFE_FREE(ret);
+-				return NULL;
+-			}
+-			*t = (char)val;
+-		} else {
+-			*t = *p;
+-		}
+-	}
+-
+-	*t = '\0'; /*terminate*/
+-
++	rfc1738_unescape(ret);
+ 	return ret;
+ }
+
+Modified: branches/SAMBA_3_0_25/source/client/smbspool.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/client/smbspool.c	2007-06-16 19:58:17 UTC (rev 23526)
++++ branches/SAMBA_3_0_25/source/client/smbspool.c	2007-06-16 22:52:51 UTC (rev 23527)
+@@ -603,35 +603,11 @@
+ 
+ static char *uri_unescape_alloc(const char *uritok)
+ {
+-	char *t, *ret;
+-	const char *p;
+-	long int val;
+-	char eval[3];
++	char *ret;
+ 
+-	ret = (char *)SMB_MALLOC(strlen(uritok)+1);
+-
++	ret = (char *)SMB_STRDUP(uritok);
+ 	if (!ret) return NULL;
+ 
+-	eval[2] = '\0';
+-
+-	for (p = uritok, t = ret; *p; p++, t++) {
+-		if (*p == '%') { /* unescape hex */
+-			p++;
+-			eval[0] = *p;
+-			p++;
+-			eval[1] = *p;
+-			val = strtol(eval, NULL, 16);
+-			if ((val == LONG_MIN || val == LONG_MAX) && errno == ERANGE) {
+-				SAFE_FREE(ret);
+-				return NULL;
+-			}
+-			*t = (char)val;
+-		} else {
+-			*t = *p;
+-		}
+-	}
+-
+-	*t = '\0'; /*terminate*/
+-
++	rfc1738_unescape(ret);
+ 	return ret;
+ }
+
+Modified: branches/SAMBA_3_0_26/source/client/smbspool.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/client/smbspool.c	2007-06-16 19:58:17 UTC (rev 23526)
++++ branches/SAMBA_3_0_26/source/client/smbspool.c	2007-06-16 22:52:51 UTC (rev 23527)
+@@ -603,35 +603,11 @@
+ 
+ static char *uri_unescape_alloc(const char *uritok)
+ {
+-	char *t, *ret;
+-	const char *p;
+-	long int val;
+-	char eval[3];
++	char *ret;
+ 
+-	ret = (char *)SMB_MALLOC(strlen(uritok)+1);
+-
++	ret = (char *)SMB_STRDUP(uritok);
+ 	if (!ret) return NULL;
+ 
+-	eval[2] = '\0';
+-
+-	for (p = uritok, t = ret; *p; p++, t++) {
+-		if (*p == '%') { /* unescape hex */
+-			p++;
+-			eval[0] = *p;
+-			p++;
+-			eval[1] = *p;
+-			val = strtol(eval, NULL, 16);
+-			if ((val == LONG_MIN || val == LONG_MAX) && errno == ERANGE) {
+-				SAFE_FREE(ret);
+-				return NULL;
+-			}
+-			*t = (char)val;
+-		} else {
+-			*t = *p;
+-		}
+-	}
+-
+-	*t = '\0'; /*terminate*/
+-
++	rfc1738_unescape(ret);
+ 	return ret;
+ }
+

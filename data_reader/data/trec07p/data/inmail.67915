@@ -1,0 +1,154 @@
+From r-help-bounces@stat.math.ethz.ch  Wed Jun 27 21:37:50 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5S1beL9003349
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 27 Jun 2007 21:37:45 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5S1b3gH006008;
+	Thu, 28 Jun 2007 03:37:14 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.4 required=5.0 tests=AWL, BAYES_50,
+	DKIM_POLICY_SIGNSOME autolearn=no version=3.2.0
+Received: from disco (disco.wu-wien.ac.at [137.208.56.16])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5S1W9Rj003940
+	for <r-help@stat.math.ethz.ch>; Thu, 28 Jun 2007 03:32:09 +0200
+Received: from zeileis by disco with local (Exim 3.36 #1 (Debian))
+	id 1I3iuQ-0005Eo-00; Thu, 28 Jun 2007 03:34:58 +0200
+Date: Thu, 28 Jun 2007 03:34:58 +0200
+From: Achim Zeileis <Achim.Zeileis@wu-wien.ac.at>
+To: D G Rossiter <rossiter@itc.nl>
+Message-Id: <20070628033458.e7babf40.Achim.Zeileis@wu-wien.ac.at>
+In-Reply-To: <4E1EDA98-6048-4144-8168-6EC48D992C20@itc.nl>
+References: <4E1EDA98-6048-4144-8168-6EC48D992C20@itc.nl>
+X-Mailer: Sylpheed version 2.3.0beta5 (GTK+ 2.8.20; i486-pc-linux-gnu)
+Mime-Version: 1.0
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: Friedrich.Leisch@stat.uni-muenchen.de, r-help@stat.math.ethz.ch
+Subject: Re: [R] Sweave bug? when writing figures / deleting variable in
+ chunk
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+On Wed, 27 Jun 2007 21:06:04 -0400 D G Rossiter wrote:
+
+> I have found a quite strange (to me) behaviour in Sweave. It only  
+> occurs in the following situation:
+> 
+> 1. define a variable in one chunk
+> 2. use it within a subsequent figure-generating chunk
+> 3. delete it at the end of that same chunk
+> Then the Sweave driver chokes, not finding the variable name when  
+> generating the figure
+
+Sweave() executes figure chunks more than once because they might
+also create printed output. If you create both EPS and PDF graphics, it
+executes them three times (print + EPS + PDF). Hence, data
+manipulations should be avoided in figure chunks.
+
+I was also once bitten by this when I permuted columns of a table prior
+to plotting and never obtained the desired order...
+
+Fritz, maybe this is worth an entry in the FAQ?
+Z
+
+> Example:
+> 
+> % document bug2.Rnw
+> \documentclass{article}
+> \usepackage{Sweave}
+> \begin{document}
+> \SweaveOpts{eps=false}
+> <<>>=
+> sel <- 1:5
+> @
+> <<fig=T>>=
+> plot(trees[sel,])
+> rm(sel)
+> @
+> \end{document}
+> 
+> Try to sweave:
+> 
+>  > Sweave("bug2.Rnw")
+> Writing to file bug2.tex
+> Processing code chunks ...
+> 1 : echo term verbatim
+> 2 : echo term verbatim pdf
+> Error: no function to return from, jumping to top level
+> Error in plot(trees[sel, ]) : error in evaluating the argument 'x'
+> in selecting a method for function 'plot'
+> Error in driver$runcode(drobj, chunk, chunkopts) :
+> 	Error in plot(trees[sel, ]) : error in evaluating the
+> argument 'x' in selecting a method for function 'plot'
+> 
+> The generated .tex is complete up through the rm() but no figure is  
+> generated. The file bug2-002.pdf is incomplete (corrupt).
+> 
+> ...
+> \begin{Schunk}
+> \begin{Sinput}
+>  > plot(trees[sel, ])
+>  > rm(sel)
+> \end{Sinput}
+> \end{Schunk}
+> 
+> The following ALL eliminate the problem:
+> 
+> 0. Executing the code directly, also with ESS
+> 1. <<fig=F>>
+> 2. moving rm(sel) to a separate, later code chunk
+> 3. Stangle the source and then source it
+> 4. don't use a variable, i.e. in this case:  plot(trees[1:5,])
+> 
+> It seems that Sweave is executing the rm(sel)  before it uses it in  
+> the trees[sel,].
+> 
+> Technical details: R 2.5.0, Mac OS X 10.4.10, PPC
+> Same behaviour in stand-alone R for Mac and for R within Aquamacs  
+> using ESS
+> 
+> Workaround: I am putting any deletions into a later code chunk. This  
+> only has the disadvantage of making more chunks, so now that I know  
+> what's happening it's no big deal. But it's driving me crazy... am I  
+> missing something? Thanks!
+> 
+> D. G. Rossiter
+> Senior University Lecturer
+> Department of Earth Systems Analysis
+> International Institute for Geo-Information Science and Earth  
+> Observation (ITC)
+> Hengelosestraat 99
+> PO Box 6, 7500 AA Enschede, The Netherlands
+> Phone:	+31-(0)53 4874 499
+> Fax:	+31-(0)53 4874 336
+> mailto:rossiter--at--itc.nl,  Internet: http://www.itc.nl/personal/ 
+> rossiter
+> 
+> ______________________________________________
+> R-help@stat.math.ethz.ch mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-help
+> PLEASE do read the posting guide
+> http://www.R-project.org/posting-guide.html and provide commented,
+> minimal, self-contained, reproducible code.
+>
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

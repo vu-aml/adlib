@@ -1,0 +1,145 @@
+From perl6-all-return-80618-ktwarwic=speedy.uwaterloo.ca@perl.org  Sun Apr 15 18:29:32 2007
+Return-Path: <perl6-all-return-80618-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3FMTU0I030520
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 15 Apr 2007 18:29:31 -0400
+Received: (qmail 25461 invoked by uid 514); 15 Apr 2007 22:29:06 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 25456 invoked from network); 15 Apr 2007 22:29:06 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+Delivered-To: perlmail-parrot-porters@onion.perl.org
+Delivered-To: parrot-porters@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+Message-ID: <4622A711.4030509@jnthn.net>
+Date: Sun, 15 Apr 2007 23:28:33 +0100
+From: Jonathan Worthington <jonathan@jnthn.net>
+User-Agent: Thunderbird 1.5.0.10 (Windows/20070221)
+MIME-Version: 1.0
+To: parrot-porters@perl.org
+Subject: PDD15 implementation status
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+Status: O
+Content-Length: 2916
+Lines: 96
+
+Hi,
+
+With much of PDD15 implemented, I thought it'd be good to explain how 
+far along we are (and aren't) as the next release approaches. Here's 
+some code examples.
+
+---
+# You can initialize a class with a hash...
+$P0 = new 'Hash'
+
+# Set name Will also associate with Monkey namespace nested in current NS.
+# You can set $P0['namespace'] instead (or as well) to specify a full keyed
+# namespace, which is taken to be from the HLL root.
+$P0['name'] = 'Monkey'
+
+# Make an array of attributes.
+$P1 = new 'ResizableStringArray'
+$P1[0] = 'banana'
+$P0['attributes'] = $P1
+
+# Let's create a class!
+$P1 = new 'Class', $P0
+
+# You can add stuff to it later too, provided it ain't instantiated yet.
+$P2 = find_global 'say_ook'
+add_method $P1, 'say_ook', $P2
+
+# Add parents...
+$P2 = get_class 'Primate'
+add_parent $P1, $P2
+
+# Create a role...
+$P0 = new 'Hash'
+$P0['name'] = 'JungleActivities'
+$P2 = new 'Role', $P0
+$P3 = find_global 'ja_swing'
+add_method $P2, 'swing', $P3
+
+# And compose it in! If we wanted to resolve conflicts, can use 
+'add_role' method.
+add_role $P1, $P2
+
+# Instantiate it.
+$P2 = $P2.new()
+
+# Call methods and get/set attributes just as before.
+$P2.swing()
+$P3 = new 'Banana'
+setattribute $P2, 'banana', $P3
+$P2.say_ook()
+
+# Inspect a class to find out about its guts.
+$P3 = inspect $P1
+$P4 = inspect $P1, 'attributes'
+
+# Here's now to instantiate a class associated with a given namespace...
+$P5 = get_class [ 'Creation', 'Animals', 'Monkey' ]
+$P6 = $P5.new()
+---
+
+Excuse any typo's in the above. As you can see, fairly capable. However, 
+there's still some work to do and limitations.
+
+* addattribute segfaults if passed a PDD15 class. I'll fix that 
+tomorrow, if nobody beats me to it
+
+* Oh, and the Role PMC doesn't do the name/namespace stuff right yet; 
+it's mostly a case of looking at the Class PMC and stealing stuff. 
+Doable before release...again, please beat me to it. ;-)
+
+* The Object PMC is missing some vtable methods and its guts need 
+sorting out - also probably doable before release - I'll have time for 
+this pre-release too
+
+* You can't inherit from a PMC yet. Depends on needed stuff being spec'd 
+and implemented.
+
+* Overriding of vtable methods ain't implemented yet
+
+* Attribute composition from roles ain't implemented yet
+
+So I think we're looking at having PDD15 usable by some people in this 
+release, but not being able to inherit from PMCs is going to prevent a 
+lot of people jumping over to it just yet. It'll probably be a little 
+while before we can really deprecate ParrotClass and ParrotObject. What 
+we certainly need is more test coverage and feedback from people using 
+the new stuff.
+
+I'm aware that I probably have the most in-depth knowledge of the PDD15 
+implementation. Parrot's losing me for pretty much all of May, so if 
+anyone has questions on the code, please try and catch me about them 
+within the next week, either on list or IRC.
+
+Have fun,
+
+Jonathan
+

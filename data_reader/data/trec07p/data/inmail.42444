@@ -1,0 +1,145 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May 23 17:14:40 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4NLEdqD029883
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 23 May 2007 17:14:39 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id D776D162C2D
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 23 May 2007 21:14:35 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 549)
+	id 6F932162C20; Wed, 23 May 2007 21:14:06 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jra@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070523211406.6F932162C20@lists.samba.org>
+Date: Wed, 23 May 2007 21:14:06 +0000 (GMT)
+Subject: svn commit: samba r23099 - in
+	branches/SAMBA_4_0/source/torture/basic: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: jra
+Date: 2007-05-23 21:14:05 +0000 (Wed, 23 May 2007)
+New Revision: 23099
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23099
+
+Log:
+New interesting delete on close tests :-).
+This will break all delete tests on the build farm
+until I check in my server patch.
+Jeremy.
+
+Modified:
+   branches/SAMBA_4_0/source/torture/basic/delete.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/torture/basic/delete.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/basic/delete.c	2007-05-23 20:48:53 UTC (rev 23098)
++++ branches/SAMBA_4_0/source/torture/basic/delete.c	2007-05-23 21:14:05 UTC (rev 23099)
+@@ -1197,6 +1197,66 @@
+ 	return correct;
+ }
+ 
++/* Test 20a ... */
++static bool deltest20a(struct torture_context *tctx, struct smbcli_state *cli1, struct smbcli_state *cli2)
++{
++	int fnum1 = -1;
++	int fnum2 = -1;
++	bool correct = True;
++
++	del_clean_area(cli1, cli2);
++
++	/* Test 20a. */
++
++	/* Ensure the file doesn't already exist. */
++	smbcli_close(cli1->tree, fnum1);
++	smbcli_close(cli1->tree, fnum2);
++	smbcli_setatr(cli1->tree, fname, 0, 0);
++	smbcli_unlink(cli1->tree, fname);
++
++	/* Firstly open and create with all access */
++	fnum1 = smbcli_nt_create_full(cli1->tree, fname, 0, 
++				      SEC_RIGHTS_FILE_ALL,
++				      FILE_ATTRIBUTE_NORMAL,
++				      NTCREATEX_SHARE_ACCESS_READ|
++				      NTCREATEX_SHARE_ACCESS_WRITE|
++				      NTCREATEX_SHARE_ACCESS_DELETE,
++				      NTCREATEX_DISP_CREATE, 
++				      0, 0);
++	torture_assert(tctx, fnum1 != -1, talloc_asprintf(tctx, "open - 1 of %s failed (%s)", 
++		       fname, smbcli_errstr(cli1->tree)));
++
++	/* Next open with all access, but add delete on close. */
++	fnum2 = smbcli_nt_create_full(cli2->tree, fname, 0, 
++				      SEC_RIGHTS_FILE_ALL,
++				      FILE_ATTRIBUTE_NORMAL,
++				      NTCREATEX_SHARE_ACCESS_READ|
++				      NTCREATEX_SHARE_ACCESS_WRITE|
++				      NTCREATEX_SHARE_ACCESS_DELETE,
++				      NTCREATEX_DISP_OPEN,
++				      NTCREATEX_OPTIONS_DELETE_ON_CLOSE, 0);
++	
++	torture_assert(tctx, fnum2 != -1, talloc_asprintf(tctx, "open - 2 of %s failed (%s)", 
++		       fname, smbcli_errstr(cli2->tree)));
++
++	/* The delete on close bit is *not* reported as being set. */
++	correct &= check_delete_on_close(tctx, cli1, fnum1, fname, False, __location__);
++	correct &= check_delete_on_close(tctx, cli2, fnum2, fname, False, __location__);
++
++	smbcli_close(cli1->tree, fnum1);
++
++	correct &= check_delete_on_close(tctx, cli2, fnum2, fname, False, __location__);
++
++	smbcli_close(cli2->tree, fnum2);
++
++	/* See if the file is deleted - should be.... */
++	fnum1 = smbcli_open(cli1->tree, fname, O_RDWR, DENY_NONE);
++	torture_assert(tctx, fnum1 == -1, talloc_asprintf(tctx, "open of %s succeeded (should fail) - %s", 
++		       fname, smbcli_errstr(cli1->tree)));
++
++	return correct;
++}
++
+ /* Test 21 ... */
+ static bool deltest21(struct torture_context *tctx)
+ {
+@@ -1337,7 +1397,7 @@
+ 
+ 	return correct;
+ }
+-	
++
+ /*
+   Test delete on close semantics.
+  */
+@@ -1367,6 +1427,7 @@
+ 	torture_suite_add_2smb_test(suite, "deltest18", deltest18);
+ 	torture_suite_add_2smb_test(suite, "deltest19", deltest19);
+ 	torture_suite_add_2smb_test(suite, "deltest20", deltest20);
++	torture_suite_add_2smb_test(suite, "deltest20a", deltest20a);
+ 	torture_suite_add_simple_test(suite, "deltest21", deltest21);
+ 	torture_suite_add_simple_test(suite, "deltest22", deltest22);
+ 
+

@@ -1,0 +1,62 @@
+From perl6-all-return-82147-ktwarwic=speedy.uwaterloo.ca@perl.org  Wed Jun 20 15:51:07 2007
+Return-Path: <perl6-all-return-82147-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l5KJp4L9014132
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 20 Jun 2007 15:51:05 -0400
+Received: (qmail 23763 invoked by uid 514); 20 Jun 2007 19:51:02 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 23758 invoked from network); 20 Jun 2007 19:51:02 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: softfail (x1.develooper.com: transitioning domain of chromatic@wgz.org does not designate 63.251.223.186 as permitted sender)
+Delivered-To: perlmail-parrot-porters@onion.perl.org
+Delivered-To: parrot-porters@perl.org
+Received-SPF: pass (x1.develooper.com: domain of chromatic@wgz.org designates 63.105.17.39 as permitted sender)
+From: chromatic <chromatic@wgz.org>
+Organization: Snafu
+To: parrot-porters@perl.org
+Subject: Re: [svn:parrot] r19183 - in trunk: languages/m4/lib/Parrot/Test languages/plumhead/lib/Parrot/Test languages/plumhead/lib/Parrot/Test/Plumhead lib/Parrot
+Date: Wed, 20 Jun 2007 12:50:12 -0700
+User-Agent: KMail/1.9.6
+Cc: Bernhard Schmalhofer <Bernhard.Schmalhofer@gmx.de>
+References: <20070620193908.D55B1CB9E1@x12.develooper.com>
+In-Reply-To: <20070620193908.D55B1CB9E1@x12.develooper.com>
+MIME-Version: 1.0
+Content-Type: text/plain;
+  charset="utf-8"
+Content-Disposition: inline
+Message-Id: <200706201250.12520.chromatic@wgz.org>
+X-Virus-Scanned: by amavisd-new at wgz.org
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.0 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_SOFTFAIL
+Content-Transfer-Encoding: 8bit
+X-MIME-Autoconverted: from base64 to 8bit by flax9.uwaterloo.ca id l5KJp4L9014132
+
+On Wednesday 20 June 2007 12:39:08 bernhard@cvs.perl.org wrote:
+> Modified: trunk/lib/Parrot/Test.pm> ===========================================================================>=== --- trunk/lib/Parrot/Test.pm    (original)> +++ trunk/lib/Parrot/Test.pm    Wed Jun 20 12:39:06 2007
+> @@ -411,6 +412,76 @@>      return $path;>  }>  > +> +# These functions are only used by various> +# Parrot::Test::<lang> modules.> +# See RT#43266> +# This implementation is experimental and currently only works> +# for languages/plumhead> +sub generate_languages_functions {> +> +    my %test_map = (> +        output_is   => 'is_eq',> +        output_like => 'like',> +        output_isnt => 'isnt_eq'> +    );> +> +    foreach my $func ( keys %test_map ) {> +    > +        my $test_sub = sub {> +            my $self = shift;> +            my ( $code, $output, $desc, %options ) = @_;> +    > +            my $count = $self->{builder}->current_test() + 1;> +    > +            # These are the thing that depend on the actual language> implementation +            my $out_fn    = $self->get_out_fn( $count,  >  \%options ); +            my $lang_fn   = $self->get_lang_fn( $count,  >  \%options ); +            my @test_prog = $self->get_test_prog( $count,> \%options ); +> +            Parrot::Test::write_code_to_file( $code, $lang_fn );> +    > +            # set a TODO for Test::Builder to find> +            my $skip_why = $self->skip_why( \%options );> +            if ($skip_why) {> +                $self->{builder}->skip($skip_why);> +            }> +            else {> +    > +                # STDERR is written into same output file> +                my $exit_code = Parrot::Test::run_command(> +                    \@test_prog,> +                    CD     => $self->{relpath},> +                    STDOUT => $out_fn,> +                    STDERR => $out_fn> +                );> +    > +                my $meth = $test_map{$func};> +    > +                # That's the reason for:   no strict 'refs';> +                my $pass = $self->{builder}->$meth(> Parrot::Test::slurp_file($out_fn), $output, $desc ); +              
+That line works under strict 'refs'; all method lookups are symbolic in Perl 5.
+>  unless ($pass) {> +                    my $diag = '';> +                    my $test_prog = join ' && ', @test_prog;> +                    $diag .= "'$test_prog' failed with exit code> $exit_code." if $exit_code; +                  >  $self->{builder}->diag($diag) if $diag;> +                }> +            }
+I think this code eats segfaults, as per RT #39197.
+There's a lot of opportunity for refactoring and cleanup in the Parrot::Test modules.  There's too much duplication as it is.
+-- c
+

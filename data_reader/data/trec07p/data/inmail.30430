@@ -1,0 +1,386 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon May  7 05:44:27 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l479iQqD029802
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 7 May 2007 05:44:26 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 547D716382A
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon,  7 May 2007 09:44:25 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.3 required=3.8 tests=ALL_TRUSTED,AWL,BAYES_50,
+	INFO_TLD,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: from [127.0.0.1] (dp [66.70.73.150])
+	by lists.samba.org (Postfix) with ESMTP id A2282162ABF;
+	Mon,  7 May 2007 09:44:04 +0000 (GMT)
+Message-ID: <463EF4D3.9040402@samba.org>
+Date: Mon, 07 May 2007 11:43:47 +0200
+From: Guenther Deschner <gd@samba.org>
+Organization: Samba Team
+User-Agent: Thunderbird 1.5.0.10 (X11/20070302)
+MIME-Version: 1.0
+To: krbdev@mit.edu
+Content-Type: multipart/mixed; boundary="------------040708070503050001010202"
+Cc: samba-technical@samba.org
+Subject: [PATCH] krb5_get_init_creds_opt_get_error and krb5_copy_error
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+This is a multi-part message in MIME format.
+--------------040708070503050001010202
+Content-Type: text/plain; charset=UTF-8; format=flowed
+Content-Transfer-Encoding: 8bit
+
+Hello,
+
+attached is a patch that adds two new krb5_* calls: 
+krb5_get_init_creds_opt_get_error() and krb5_copy_error(). These two 
+calls already exist in Heimdal Kerberos (since version 0.8).
+
+The reason for adding these calls is to enable the caller to retrieve 
+the full krb5_error packet after a failed AS-REQ from a Windows KDC.
+
+Windows KDCs add extended 32bit NTSTATUS codes into the krb5_error edata 
+as a KRB5_PADATA_PW_SALT. (see here: 
+http://marc.info/?l=samba-technical&m=114263219025559&w=2) to transport 
+more fine-grained error conditions (e.g. based on Windows account 
+restrictions).
+
+Having access to these NTSTATUS codes is extremely valuable for Samba as 
+a krb5 client, notably for the error handling in the kerberized 
+pam_winbind module where it used currently when the system krb5 library 
+(currently only Heimdal > 0.8) offers it.
+
+Can these calls be added to MIT kerberos? The patch is against MIT 
+kerberos 1.6.1 and has been valgrinded and tested on fedora core 6 x86_64.
+
+Thanks,
+Guenther
+-- 
+Günther Deschner                    GPG-ID: 8EE11688
+Red Hat                         gdeschner@redhat.com
+Samba Team                              gd@samba.org
+
+--------------040708070503050001010202
+Content-Type: text/x-patch;
+ name="mit.diff"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline;
+ filename="mit.diff"
+
+--- krb5-1.6.1.orig/src/include/k5-int.h	2007-02-06 00:44:34.000000000 +0100
++++ krb5-1.6.1/src/include/k5-int.h	2007-05-04 15:04:28.000000000 +0200
+@@ -1056,6 +1056,7 @@ void krb5_free_etype_info
+ typedef struct _krb5_gic_opt_private {
+     int num_preauth_data;
+     krb5_gic_opt_pa_data *preauth_data;
++    krb5_error *krberror;
+ } krb5_gic_opt_private;
+ 
+ typedef struct _krb5_gic_opt_ext {
+--- krb5-1.6.1.orig/src/include/krb5/krb5.hin	2007-02-13 06:18:37.000000000 +0100
++++ krb5-1.6.1/src/include/krb5/krb5.hin	2007-05-04 23:21:37.000000000 +0200
+@@ -1654,6 +1654,10 @@ krb5_error_code KRB5_CALLCONV krb5_copy_
+ 	(krb5_context,
+ 		const krb5_checksum *,
+ 		krb5_checksum **);
++krb5_error_code KRB5_CALLCONV krb5_copy_error
++	(krb5_context,
++		const krb5_error *,
++		krb5_error **);
+ #if KRB5_PRIVATE
+ void krb5_init_ets
+ 	(krb5_context);
+@@ -2504,6 +2508,12 @@ krb5_get_init_creds_opt_set_change_passw
+ (krb5_get_init_creds_opt *opt,
+ 		int prompt);
+ 
++krb5_error_code KRB5_CALLCONV
++krb5_get_init_creds_opt_get_error
++(krb5_context context,
++		krb5_get_init_creds_opt *opt,
++		krb5_error **error);
++
+ /* Generic preauth option attribute/value pairs */
+ typedef struct _krb5_gic_opt_pa_data {
+     char *attr;
+--- krb5-1.6.1.orig/src/lib/krb5/krb/get_in_tkt.c	2007-02-06 00:45:17.000000000 +0100
++++ krb5-1.6.1/src/lib/krb5/krb/get_in_tkt.c	2007-05-05 01:55:48.000000000 +0200
+@@ -1137,6 +1137,10 @@ krb5_get_init_creds(krb5_context context
+ 	    if (ret) {
+ 		/* couldn't come up with anything better */
+ 		ret = err_reply->error + ERROR_TABLE_BASE_krb5;
++
++		if (options) {
++		    set_gic_opt_ext_krberror(context, options, err_reply);
++		}
+ 	    }
+ 	    krb5_free_error(context, err_reply);
+ 	    err_reply = NULL;
+--- krb5-1.6.1.orig/src/lib/krb5/krb/gic_opt.c	2007-02-06 00:45:17.000000000 +0100
++++ krb5-1.6.1/src/lib/krb5/krb/gic_opt.c	2007-05-05 01:48:42.000000000 +0200
+@@ -103,6 +103,9 @@ krb5_get_init_creds_opt_set_change_passw
+ static void
+ free_gic_opt_ext_preauth_data(krb5_context context,
+ 			      krb5_gic_opt_ext *opte);
++static void
++free_gic_opt_ext_krberror(krb5_context context,
++			  krb5_gic_opt_ext *opte);
+ 
+ static krb5_error_code
+ krb5int_gic_opte_private_alloc(krb5_context context, krb5_gic_opt_ext *opte)
+@@ -117,6 +120,7 @@ krb5int_gic_opte_private_alloc(krb5_cont
+     /* Allocate any private stuff */
+     opte->opt_private->num_preauth_data = 0;
+     opte->opt_private->preauth_data = NULL;
++    opte->opt_private->krberror = NULL;
+     return 0;
+ }
+ 
+@@ -129,6 +133,8 @@ krb5int_gic_opte_private_free(krb5_conte
+     /* Free up any private stuff */
+     if (opte->opt_private->preauth_data != NULL)
+ 	free_gic_opt_ext_preauth_data(context, opte);
++    if (opte->opt_private->krberror != NULL)
++        free_gic_opt_ext_krberror(context, opte);
+     free(opte->opt_private);
+     opte->opt_private = NULL;
+     return 0;
+@@ -426,3 +432,74 @@ krb5_get_init_creds_opt_free_pa(krb5_con
+     }
+     free(preauth_data);
+ }
++
++static void
++free_gic_opt_ext_krberror(krb5_context context,
++			  krb5_gic_opt_ext *opte)
++{
++    if (NULL == opte || !krb5_gic_opt_is_extended(opte))
++	return;
++    if (NULL == opte->opt_private || NULL == opte->opt_private->krberror)
++	return;
++    krb5_free_error(context, opte->opt_private->krberror);
++    opte->opt_private->krberror = NULL;
++}
++
++krb5_error_code
++set_gic_opt_ext_krberror(krb5_context context,
++			 krb5_gic_opt_ext *opte,
++			 const krb5_error *krberror)
++{
++    krb5_error_code ret;
++
++    if (NULL == opte->opt_private || !krb5_gic_opt_is_extended(opte))
++	return 0;
++
++    free_gic_opt_ext_krberror(context, opte);
++
++    ret = krb5_copy_error(context, krberror, &opte->opt_private->krberror);
++    if (ret) {
++        opte->opt_private->krberror = NULL;
++    }
++    return ret;
++}
++
++/*
++ * This function allows to get the krb5_error packet. 
++ * The krb5_error returned from this function
++ * should be freed by calling krb5_free_error().
++ *
++ * The 'opt' pointer supplied to this function must have been
++ * obtained using krb5_get_init_creds_opt_alloc()
++ */
++krb5_error_code KRB5_CALLCONV
++krb5_get_init_creds_opt_get_error(krb5_context context,
++				  krb5_get_init_creds_opt *opt,
++				  krb5_error **error)
++{
++    krb5_error_code retval;
++    krb5_gic_opt_ext *opte;
++    krb5_error *p = NULL;
++
++    retval = krb5int_gic_opt_to_opte(context, opt, &opte, 0,
++				     "krb5_get_init_creds_opt_get_error");
++    if (retval)
++	return retval;
++
++    if (error == NULL)
++	return EINVAL;
++
++    *error = NULL;
++
++    if (opte->opt_private->krberror == NULL)
++	return 0;
++
++    retval = krb5_copy_error(context, opte->opt_private->krberror, &p);
++    if (retval) {
++    	return retval;
++    }
++
++    *error = p;
++    return 0;
++}
++
+--- krb5-1.6.1.orig/src/lib/krb5/krb/Makefile.in	2007-02-13 06:18:04.000000000 +0100
++++ krb5-1.6.1/src/lib/krb5/krb/Makefile.in	2007-05-04 15:04:28.000000000 +0200
+@@ -29,6 +29,7 @@ STLIBOBJS= \
+ 	copy_athctr.o	\
+ 	copy_cksum.o    \
+ 	copy_creds.o	\
++	copy_error.o	\
+ 	copy_data.o	\
+ 	copy_key.o	\
+ 	copy_princ.o	\
+--- krb5-1.6.1.orig/src/lib/krb5/libkrb5.exports	2007-02-13 06:18:04.000000000 +0100
++++ krb5-1.6.1/src/lib/krb5/libkrb5.exports	2007-05-04 23:22:16.000000000 +0200
+@@ -334,6 +334,7 @@ krb5_copy_keyblock
+ krb5_copy_keyblock_contents
+ krb5_copy_principal
+ krb5_copy_ticket
++krb5_copy_error
+ krb5_create_secure_file
+ krb5_crypto_us_timeofday
+ krb5_decode_kdc_rep
+@@ -440,6 +441,7 @@ krb5_get_init_creds_opt_alloc
+ krb5_get_init_creds_opt_free
+ krb5_get_init_creds_opt_free_pa
+ krb5_get_init_creds_opt_get_pa
++krb5_get_init_creds_opt_get_error
+ krb5_get_init_creds_opt_init
+ krb5_get_init_creds_opt_set_address_list
+ krb5_get_init_creds_opt_set_change_password_prompt
+--- krb5-1.6.1.orig/src/lib/krb5_32.def	2007-02-13 06:18:04.000000000 +0100
++++ krb5-1.6.1/src/lib/krb5_32.def	2007-05-04 23:22:44.000000000 +0200
+@@ -111,6 +111,7 @@ krb5_c_string_to_key_with_params
+ 	krb5_copy_keyblock_contents
+ 	krb5_copy_principal
+ 	krb5_copy_ticket
++	krb5_copy_error
+ 	krb5_decode_ticket
+ 	krb5_decrypt
+ 	krb5_deltat_to_string
+@@ -159,6 +160,7 @@ krb5_c_string_to_key_with_params
+ 	krb5_get_init_creds_opt_free
+ 	krb5_get_init_creds_opt_free_pa
+ 	krb5_get_init_creds_opt_get_pa
++	krb5_get_init_creds_opt_get_error
+ 	krb5_get_init_creds_opt_init
+ 	krb5_get_init_creds_opt_set_pa
+ 	krb5_get_init_creds_opt_set_address_list
+--- /dev/null	2007-05-05 20:03:50.620327277 +0200
++++ krb5-1.6.1/src/lib/krb5/krb/copy_error.c	2007-05-05 02:03:31.000000000 +0200
+@@ -0,0 +1,96 @@
++/*
++ * lib/krb5/krb/copy_error.c
++ *
++ * Copyright 1990,1991 by the Massachusetts Institute of Technology.
++ * All Rights Reserved.
++ *
++ * Export of this software from the United States of America may
++ *   require a specific license from the United States Government.
++ *   It is the responsibility of any person or organization contemplating
++ *   export to obtain such a license before exporting.
++ * 
++ * WITHIN THAT CONSTRAINT, permission to use, copy, modify, and
++ * distribute this software and its documentation for any purpose and
++ * without fee is hereby granted, provided that the above copyright
++ * notice appear in all copies and that both that copyright notice and
++ * this permission notice appear in supporting documentation, and that
++ * the name of M.I.T. not be used in advertising or publicity pertaining
++ * to distribution of the software without specific, written prior
++ * permission.  Furthermore if you modify this software you must label
++ * your software as modified software and not distribute it in such a
++ * fashion that it might be confused with the original M.I.T. software.
++ * M.I.T. makes no representations about the suitability of
++ * this software for any purpose.  It is provided "as is" without express
++ * or implied warranty.
++ * 
++ *
++ * krb5_copy_error() routine.
++ */
++
++#include "k5-int.h"
++
++krb5_error_code KRB5_CALLCONV
++krb5_copy_error(krb5_context context, const krb5_error *from, krb5_error **to)
++{
++    krb5_error *temperr;
++    krb5_error_code ret;
++
++    if (to == NULL)
++	return EINVAL;
++
++    *to = NULL;
++
++    temperr = (krb5_error *)malloc(sizeof(krb5_error));
++    if (temperr == NULL)
++	return ENOMEM;
++
++    memset(temperr, '\0', sizeof(krb5_error));
++
++    temperr->magic = from->magic;
++
++    temperr->ctime = from->ctime;
++    temperr->stime = from->stime;
++    temperr->cusec = from->cusec;
++    temperr->susec = from->susec;
++
++    temperr->error = from->error;
++
++    if (from->client) {
++	ret = krb5_copy_principal(context, from->client, &temperr->client);
++	if (ret) {
++	    krb5_xfree(temperr);
++	    return ret;
++	}
++    } else {
++	temperr->client = NULL;
++    }
++
++    if (from->server) {
++	ret = krb5_copy_principal(context, from->server, &temperr->server);
++	if (ret) {
++	    krb5_xfree(temperr);
++	    return ret;
++	}
++    } else {
++	temperr->server = NULL;
++    }
++
++    if (&from->text) {
++	ret = krb5int_copy_data_contents(context, &from->text, &temperr->text);
++	if (ret) {
++	    krb5_xfree(temperr);
++	    return ret;
++	}
++    }
++
++    if (&from->e_data) {
++	ret = krb5int_copy_data_contents(context, &from->e_data, &temperr->e_data);
++	if (ret) {
++	    krb5_xfree(temperr);
++	    return ret;
++	}
++    }
++
++    *to = temperr;
++    return 0;
++}
+
+--------------040708070503050001010202--
+

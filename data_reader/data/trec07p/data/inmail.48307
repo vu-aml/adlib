@@ -1,0 +1,110 @@
+From perl6-all-return-81701-ktwarwic=speedy.uwaterloo.ca@perl.org  Fri Jun  1 02:11:06 2007
+Return-Path: <perl6-all-return-81701-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l516B4hB005659
+	for <ktwarwic@flax9.uwaterloo.ca>; Fri, 1 Jun 2007 02:11:04 -0400
+Received: (qmail 18935 invoked by uid 514); 1 Jun 2007 06:10:58 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 18930 invoked from network); 1 Jun 2007 06:10:58 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=0.9 required=8.0
+	tests=BAYES_05,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,KARMA_CONNECT_NEGATIVE,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Delivered-To: parrotbug-followup@parrotcode.org
+Received-SPF: pass (x1.develooper.com: domain of mark@glines.org designates 72.36.206.66 as permitted sender)
+Date: Thu, 31 May 2007 23:09:54 -0700
+From: Mark Glines <mark@glines.org>
+To: perl6-internals@perl.org
+Cc: parrotbug-followup@parrotcode.org, bugs-bitbucket@netlabs.develooper.com
+Subject: Re: [perl #42938] [BUG] allocation failures in res_lea.c
+Message-ID: <20070531230954.59217ae9@chirp>
+In-Reply-To: <rt-3.6.HEAD-12281-1178996726-291.42938-72-0@perl.org>
+References: <RT-Ticket-42938@perl.org>
+	<46460EC3.2090008@perl.org>
+	<rt-3.6.HEAD-12281-1178996726-291.42938-72-0@perl.org>
+Organization: Glines.org
+X-Mailer: Claws Mail 2.9.0 (GTK+ 2.10.12; i686-pc-linux-gnu)
+X-Useless-Header: yay!
+Mime-Version: 1.0
+Content-Type: multipart/mixed; boundary=MP_Q1mLRdmhDVC2VD80wY2N2RJ
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=1.3 required=8.0
+	tests=BAYES_20,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,KARMA_CONNECT_NEGATIVE,SPF_HELO_PASS,SPF_PASS
+
+--MP_Q1mLRdmhDVC2VD80wY2N2RJ
+Content-Type: text/plain; charset=US-ASCII
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+
+On Sat, 12 May 2007 12:05:26 -0700
+Allison Randal (via RT) <parrotbug-followup@parrotcode.org> wrote:
+> On x86 Linux (Ubuntu), this configuration fails 2 tests:
+> 
+> t/library/string_utils.t    0   134    29    4  13.79%  28-29
+> t/op/stringu.t              2   512    25    2   8.00%  1 19
+> 
+> Both tests are failing with the error:
+> 
+> parrot: src/encodings/utf8.c:271: utf8_encode_and_advance: Assertion 
+> `i->bytepos <= (s)->obj.u._b._buflen' failed.
+
+Reproduced on Gentoo.  Before patch, results are as above.
+
+After patch:
+
+t/library/string_utils....ok
+t/op/stringu..............ok
+
+The code in utf8_encode_and_advance is beautiful.  It basically says,
+add a utf8 character to the buffer.  Ok, now did we overrun the buffer?
+CRASH!
+
+It seems safer to check the buffer size *before* writing to it, so
+here's a patch to do so.  Is it the right fix?  I thought so when I
+was doing it, but now I'm not so sure; it does introduce a const
+warning.  Maybe we can resolve that with a cast; maybe its the wrong
+solution to the problem.  Please provide guidance.
+
+Might be worth it to prereserve 8 bytes or so, to avoid having to
+realloc as often, if this will be called a lot.  Currently it just
+reallocs the minimum necessary to fit the existing string, the new
+character and a null terminator.
+
+Mark
+
+--MP_Q1mLRdmhDVC2VD80wY2N2RJ
+Content-Type: text/x-patch; name=rt42938_fix_library_string_utils_t.diff
+Content-Transfer-Encoding: 7bit
+Content-Disposition: attachment;
+ filename=rt42938_fix_library_string_utils_t.diff
+
+=== src/encodings/utf8.c
+==================================================================
+--- src/encodings/utf8.c	(revision 20520)
++++ src/encodings/utf8.c	(local)
+@@ -264,6 +264,9 @@
+     const STRING *s = i->str;
+     unsigned char *new_pos, *pos;
+ 
++    if(i->bytepos + UNISKIP(c) >= PObj_buflen(s)) {
++        Parrot_reallocate_string(interp, i->str, i->bytepos + UNISKIP(c) + 1);
++    }
+     pos = (unsigned char *)s->strstart + i->bytepos;
+     new_pos = utf8_encode(pos, c);
+     i->bytepos += (new_pos - pos);
+
+--MP_Q1mLRdmhDVC2VD80wY2N2RJ--
+

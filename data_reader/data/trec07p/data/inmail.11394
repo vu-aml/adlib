@@ -1,0 +1,3080 @@
+From perl6-all-return-80655-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue Apr 17 10:50:07 2007
+Return-Path: <perl6-all-return-80655-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3HEnb0I028980
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 10:49:40 -0400
+Received: (qmail 30803 invoked by uid 514); 17 Apr 2007 14:49:10 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 30798 invoked from network); 17 Apr 2007 14:49:10 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: Steve Peters (via RT) <parrotbug-followup@parrotcode.org>
+X-RT-NewTicket: yes
+To: bugs-bitbucket@netlabs.develooper.com
+Resent-To: perl6-internals@perl.org
+Mail-Followup-To: perl6-internals@perl.org
+Reply-To: perl6-internals@perl.org
+Date: Tue, 17 Apr 2007 07:48:03 -0700
+Subject: [perl #42584] [PATCH] Cleanup C++ keywords in Parrot 
+In-Reply-To: <20070417144549.GA366@kirk.peters.homeunix.org>
+References: <RT-Ticket-42584@perl.org> <20070417144549.GA366@kirk.peters.homeunix.org>
+Message-ID: <rt-3.6.HEAD-1687-1176821283-1119.42584-72-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #42584
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: steve@fisharerojo.org
+MIME-Version: 1.0
+X-RT-Original-Encoding: utf-8
+Content-type: multipart/mixed; boundary="----------=_1176821284-1687-158"
+Resent-Message-Id: <20070417144807.0E2ED2AFEC@x3.develooper.com>
+Resent-Date: Tue, 17 Apr 2007 07:48:07 -0700 (PDT)
+Resent-From: rt-steve=fisharerojo.org@netlabs.develooper.com
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-4.4 required=8.0
+	tests=ALL_TRUSTED,BAYES_00,DK_POLICY_SIGNSOME
+Status: O
+Content-Length: 110746
+Lines: 3023
+
+------------=_1176821284-1687-158
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+# New Ticket Created by  Steve Peters 
+# Please include the string:  [perl #42584]
+# in the subject line of all future correspondence about this issue. 
+# <URL: http://rt.perl.org/rt3/Ticket/Display.html?id=42584 >
+
+
+This is a big patch to clean up most of the keyword collisions between
+Parrot function names, variables, and parameters with C++ keywords.
+The collisions I cleaned up included names like
+
+    class
+    namespace
+    this
+    typename
+
+This patch also includes some additional cleanups that help with compiling
+Parrot with a C++ compiler.
+
+This has been tested with both Solaris CC 5.8 and Linux gcc 4.1.1 and
+passes all tests.
+
+Enjoy!
+
+Steve Peters
+steve@fisharerojo.org
+
+------------=_1176821284-1687-158
+Content-Type: text/plain; charset="us-ascii"; name="class_and_namespace.diff"
+Content-Disposition: inline; filename="class_and_namespace.diff"
+Content-Transfer-Encoding: 7bit
+RT-Attachment: 42584/246757/110625
+
+Index: src/trace.c
+===================================================================
+--- src/trace.c	(revision 18263)
++++ src/trace.c	(working copy)
+@@ -72,7 +72,7 @@
+     if (PObj_on_free_list_TEST(pmc)) {
+         PIO_eprintf(debugger, "**************** PMC is on free list *****\n");
+     }
+-    if (pmc->vtable->class == pmc) {
++    if (pmc->vtable->pmc_class == pmc) {
+         STRING * const name = trace_class_name(interp, pmc);
+         PIO_eprintf(debugger, "Class=%Ss:PMC(%#p)", name, pmc);
+     }
+Index: src/exit.c
+===================================================================
+--- src/exit.c	(revision 18263)
++++ src/exit.c	(working copy)
+@@ -40,7 +40,7 @@
+     /* XXX  we might want locking around the list access.   I'm sure this
+      * will be the least of the threading issues. */
+ 
+-    handler_node_t* const new_node = mem_sys_allocate(sizeof (handler_node_t));
++    handler_node_t* const new_node = mem_allocate_typed(handler_node_t);
+ 
+     new_node->function = function;
+     new_node->arg = arg;
+Index: src/embed.c
+===================================================================
+--- src/embed.c	(revision 18263)
++++ src/embed.c	(working copy)
+@@ -325,7 +325,7 @@
+                 break;
+             chunk_size = 1024;
+             program_code =
+-                mem_sys_realloc(program_code, program_size + chunk_size);
++                (char *)mem_sys_realloc(program_code, program_size + chunk_size);
+ 
+             if (!program_code) {
+                 PIO_eprintf(interp,
+@@ -358,7 +358,7 @@
+         }
+ 
+         program_code =
+-            mmap(0, program_size, PROT_READ, MAP_SHARED, fd, (off_t)0);
++            (char *)mmap(0, program_size, PROT_READ, MAP_SHARED, fd, (off_t)0);
+ 
+         if (program_code == (void *)MAP_FAILED) {
+             Parrot_warn(interp, PARROT_WARNINGS_IO_FLAG,
+Index: src/ops/pmc.ops
+===================================================================
+--- src/ops/pmc.ops	(revision 18263)
++++ src/ops/pmc.ops	(working copy)
+@@ -79,45 +79,45 @@
+ }
+ 
+ op new(out PMC, inconst STR) {
+-    STRING *class = $2;
+-    INTVAL type = pmc_type(interp, class);
++    STRING *_class = $2;
++    INTVAL type = pmc_type(interp, _class);
+     if (!type)
+-        type = pmc_type(interp, class);
++        type = pmc_type(interp, _class);
+     if (type <= 0)
+         real_exception(interp, NULL, NO_CLASS,
+-            "Class '%Ss' not found", class);
++            "Class '%Ss' not found", _class);
+   $1 = pmc_new(interp, type);
+   goto NEXT();
+ }
+ 
+ op new(out PMC, inconst STR, in PMC) {
+-    STRING *class = $2;
+-    INTVAL type = pmc_type(interp, class);
++    STRING *_class = $2;
++    INTVAL type = pmc_type(interp, _class);
+     if (!type)
+-        type = pmc_type(interp, class);
++        type = pmc_type(interp, _class);
+     if (type <= 0)
+         real_exception(interp, NULL, NO_CLASS,
+-            "Class '%Ss' not found", class);
++            "Class '%Ss' not found", _class);
+     $1 = pmc_new_init(interp, type, $3);
+     goto NEXT();
+ }
+ 
+ inline op new(out PMC, inconst PMC) :object_classes {
+-    PMC *class = $2;
+-    INTVAL type = pmc_type_p(interp, class);
++    PMC *_class = $2;
++    INTVAL type = pmc_type_p(interp, _class);
+     if (type <= 0)
+         real_exception(interp, NULL, NO_CLASS,
+-            "Class '%Ss' not found", readable_name(interp, class));
++            "Class '%Ss' not found", readable_name(interp, _class));
+     $1 = pmc_new(interp, type);
+     goto NEXT();
+ }
+ 
+ op new(out PMC, inconst PMC, in PMC) {
+-    PMC *class = $2;
+-    INTVAL type = pmc_type_p(interp, class);
++    PMC *_class = $2;
++    INTVAL type = pmc_type_p(interp, _class);
+     if (type <= 0)
+         real_exception(interp, NULL, NO_CLASS,
+-            "Class '%Ss' not found", readable_name(interp, class));
++            "Class '%Ss' not found", readable_name(interp, _class));
+     $1 = pmc_new_init(interp, type, $3);
+     goto NEXT();
+ }
+@@ -201,15 +201,15 @@
+     else if ((n = VTABLE_elements(interp, $2)) <= 0)
+         $1 = 0;
+     else {
+-        PMC *class = interp->class_hash;
++        PMC *_class = interp->class_hash;
+         INTVAL i;
+         for (i = 0; i < n; ++i) {
+             STRING *part = VTABLE_get_string_keyed_int(interp, $2, i);
+-            class = VTABLE_get_pmc_keyed_str(interp, class, part);
+-            if (PMC_IS_NULL(class))
++            _class = VTABLE_get_pmc_keyed_str(interp, _class, part);
++            if (PMC_IS_NULL(_class))
+                 break;
+         }
+-        $1 = PMC_IS_NULL(class) ? 0 : PMC_int_val(class);
++        $1 = PMC_IS_NULL(_class) ? 0 : PMC_int_val(_class);
+     }
+     goto NEXT();
+ }
+Index: src/ops/core.ops
+===================================================================
+--- src/ops/core.ops	(revision 18263)
++++ src/ops/core.ops	(working copy)
+@@ -120,9 +120,9 @@
+ }
+ 
+ inline op check_events__() :internal {
+-    opcode_t *this = CUR_OPCODE;
+-    this = HANDLE_EVENTS(interp, this);
+-    goto ADDRESS(this);   /* force this being a branch op */
++    opcode_t *_this = CUR_OPCODE;
++    _this = HANDLE_EVENTS(interp, _this);
++    goto ADDRESS(_this);   /* force this being a branch op */
+ }
+ 
+ inline op wrapper__() :internal {
+@@ -132,13 +132,13 @@
+ }
+ 
+ inline op prederef__() :internal {
+-    opcode_t *this = CUR_OPCODE;
++    opcode_t *_this = CUR_OPCODE;
+     if (interp->run_core & PARROT_CGOTO_CORE) {
+         /* must be CGP then - check for events in not yet prederefed code */
+-        this = CHECK_EVENTS(interp, this);
++        _this = CHECK_EVENTS(interp, _this);
+     }
+     do_prederef((void**)cur_opcode, interp, op_lib.core_type);
+-    goto ADDRESS(this); /* force this being a branch op */
++    goto ADDRESS(_this); /* force this being a branch op */
+ }
+ 
+ inline op reserved(inconst INT) {
+@@ -498,35 +498,35 @@
+ 
+ 
+ op set_args(inconst PMC) {
+-    opcode_t * const this = CUR_OPCODE;
++    opcode_t * const _this = CUR_OPCODE;
+     PMC * const signature = $1;
+     INTVAL argc;
+ 
+     /* for now just point to the opcode */
+-    interp->current_args = this;
++    interp->current_args = _this;
+     argc = SIG_ELEMS(signature);
+     goto OFFSET(argc + 2);
+ }
+ 
+ op get_results(inconst PMC) {
+-    opcode_t * const this = CUR_OPCODE;
++    opcode_t * const _this = CUR_OPCODE;
+     PMC * const signature = $1;
+     INTVAL argc;
+ 
+-    CONTEXT(interp->ctx)->current_results = this;
++    CONTEXT(interp->ctx)->current_results = _this;
+     argc = SIG_ELEMS(signature);
+     goto OFFSET(argc + 2);
+ }
+ 
+ op get_params(inconst PMC) {
+-    opcode_t * const this = CUR_OPCODE;
++    opcode_t * const _this = CUR_OPCODE;
+     parrot_context_t *caller_ctx, *ctx;
+     PMC * ccont;
+     PMC * const signature = $1;
+     INTVAL argc;
+     opcode_t *src_indexes, *dst_indexes;
+ 
+-    interp->current_params = this;
++    interp->current_params = _this;
+     ctx = CONTEXT(interp->ctx);
+     ccont = ctx->current_cont;
+ 
+@@ -553,14 +553,14 @@
+ }
+ 
+ op set_returns(inconst PMC) {
+-    opcode_t * const this = CUR_OPCODE;
++    opcode_t * const _this = CUR_OPCODE;
+     parrot_context_t *ctx;
+     PMC *ccont;
+     PMC *signature = $1;
+     INTVAL argc;
+     opcode_t *src_indexes, *dest_indexes;
+ 
+-    interp->current_returns = this;
++    interp->current_returns = _this;
+     ctx = CONTEXT(interp->ctx);
+     ccont = ctx->current_cont;
+ 
+Index: src/ops/experimental.ops
+===================================================================
+--- src/ops/experimental.ops	(revision 18263)
++++ src/ops/experimental.ops	(working copy)
+@@ -256,7 +256,7 @@
+ 
+ op classname(out PMC, invar PMC) :object_base {
+     PMC *ns = Parrot_NameSpace_nci_get_name(interp,
+-                                    VTABLE_namespace(interp, $2));
++                                    VTABLE_pmc_namespace(interp, $2));
+     if (PMC_IS_NULL(ns) || VTABLE_elements(interp, ns) < 2)
+     {
+         real_exception(interp, NULL, NO_CLASS,
+@@ -354,7 +354,7 @@
+     if (typ < 1 || typ >= interp->n_vtable_max)
+         real_exception(interp, NULL, E_ValueError,
+                 "type number out of range");
+-    $1 = interp->vtables[typ]->class;
++    $1 = interp->vtables[typ]->pmc_class;
+     goto NEXT();
+ }
+ 
+@@ -369,13 +369,13 @@
+ =cut
+ 
+ op new(out PMC, in INT, in STR) {
+-  PMC *class;
++  PMC *_class;
+   if ($2 <= 0 || $2 >= interp->n_vtable_max) {
+     real_exception(interp, 0, NO_CLASS,
+                    "Illegal PMC enum (%d) in new", (int)$2);
+   }
+-  class = interp->vtables[$2]->class;
+-  $1 = VTABLE_new_from_string(interp, class, $3, 0);
++  _class = interp->vtables[$2]->pmc_class;
++  $1 = VTABLE_new_from_string(interp, _class, $3, 0);
+   goto NEXT();
+ }
+ 
+@@ -392,7 +392,7 @@
+ 
+ op instantiate(out PMC) {
+   opcode_t* arg_op;
+-  PMC *sig, *class;
++  PMC *sig, *_class;
+   int typ;
+ 
+   arg_op = interp->current_args;
+@@ -413,18 +413,18 @@
+               real_exception(interp, NULL, E_ValueError,
+                       "Illegal PMC enum (%d) in instantiate", typ);
+           }
+-          class = interp->vtables[typ]->class;
++          _class = interp->vtables[typ]->pmc_class;
+           break;
+       case PARROT_ARG_P:
+-          class = REG_PMC(arg_op[2]);
++          _class = REG_PMC(arg_op[2]);
+           break;
+       default:
+           internal_exception(UNIMPLEMENTED,
+                   "uninplement class argument in instantiate");
+-          class = NULL; /* just for cc */
++          _class = NULL; /* just for cc */
+           break;
+   }
+-  $1 = VTABLE_instantiate(interp, class, sig);
++  $1 = VTABLE_instantiate(interp, _class, sig);
+   interp->current_args = NULL;
+   goto NEXT();
+ }
+Index: src/ops/object.ops
+===================================================================
+--- src/ops/object.ops	(revision 18263)
++++ src/ops/object.ops	(working copy)
+@@ -197,8 +197,8 @@
+ }
+ 
+ inline op isa(out INT, invar PMC, in PMC) :object_base {
+-    PMC *class = Parrot_class_lookup_p(interp, $3);
+-    $1 = Parrot_object_isa(interp, $2, class);
++    PMC *_class = Parrot_class_lookup_p(interp, $3);
++    $1 = Parrot_object_isa(interp, $2, _class);
+     goto NEXT();
+ }
+ 
+@@ -279,79 +279,79 @@
+ =cut
+ 
+ op subclass(out PMC, inconst PMC) :object_classes {
+-  PMC *class = Parrot_class_lookup_p(interp, $2);
++  PMC *_class = Parrot_class_lookup_p(interp, $2);
+   opcode_t *next = expr NEXT();
+-  if (PMC_IS_NULL(class)) {
++  if (PMC_IS_NULL(_class)) {
+     STRING *name = readable_name(interp, $2);
+     real_exception(interp, next, NO_CLASS,
+                 "Class '%Ss' doesn't exist", name);
+   }
+-  $1 = VTABLE_subclass(interp, class, PMCNULL);
++  $1 = VTABLE_subclass(interp, _class, PMCNULL);
+   goto ADDRESS(next);
+ }
+ 
+ op subclass(out PMC, in STR) :object_classes {
+-  PMC *class = Parrot_class_lookup(interp, $2);
++  PMC *_class = Parrot_class_lookup(interp, $2);
+   opcode_t *next = expr NEXT();
+-  if (PMC_IS_NULL(class)) {
++  if (PMC_IS_NULL(_class)) {
+     real_exception(interp, next, NO_CLASS,
+                 "Class '%Ss' doesn't exist", $2);
+   }
+-  $1 = VTABLE_subclass(interp, class, PMCNULL);
++  $1 = VTABLE_subclass(interp, _class, PMCNULL);
+   goto ADDRESS(next);
+ }
+ 
+ 
+ op subclass(out PMC, inconst PMC, in STR) :object_classes {
+-  PMC *class = Parrot_class_lookup_p(interp, $2);
++  PMC *_class = Parrot_class_lookup_p(interp, $2);
+   PMC *subname_p;
+   opcode_t *next = expr NEXT();
+-  if (PMC_IS_NULL(class)) {
++  if (PMC_IS_NULL(_class)) {
+     STRING *name = readable_name(interp, $2);
+     real_exception(interp, next, NO_CLASS,
+                 "Class '%Ss' doesn't exist", name);
+   }
+   subname_p = pmc_new(interp, enum_class_String);
+   VTABLE_set_string_native(interp, subname_p, $3);
+-  $1 = VTABLE_subclass(interp, class, subname_p);
++  $1 = VTABLE_subclass(interp, _class, subname_p);
+   goto NEXT();
+ }
+ 
+ op subclass(out PMC, in STR, in STR) :object_classes {
+-  PMC *class = Parrot_class_lookup(interp, $2);
++  PMC *_class = Parrot_class_lookup(interp, $2);
+   PMC *subname_p;
+   opcode_t *next = expr NEXT();
+-  if (PMC_IS_NULL(class)) {
++  if (PMC_IS_NULL(_class)) {
+     real_exception(interp, next, NO_CLASS,
+                 "Class '%Ss' doesn't exist", $2);
+   }
+   subname_p = pmc_new(interp, enum_class_String);
+   VTABLE_set_string_native(interp, subname_p, $3);
+-  $1 = VTABLE_subclass(interp, class, subname_p);
++  $1 = VTABLE_subclass(interp, _class, subname_p);
+   goto ADDRESS(next);
+ }
+ 
+ 
+ op subclass(out PMC, inconst PMC, in PMC) :object_classes {
+-  PMC *class = Parrot_class_lookup_p(interp, $2);
++  PMC *_class = Parrot_class_lookup_p(interp, $2);
+   opcode_t *next = expr NEXT();
+-  if (PMC_IS_NULL(class)) {
++  if (PMC_IS_NULL(_class)) {
+     STRING *name = readable_name(interp, $2);
+     real_exception(interp, next, NO_CLASS,
+                 "Class '%Ss' doesn't exist", name);
+   }
+-  $1 = VTABLE_subclass(interp, class, $3);
++  $1 = VTABLE_subclass(interp, _class, $3);
+   goto ADDRESS(next);
+ }
+ 
+ op subclass(out PMC, in STR, in PMC) :object_classes {
+-  PMC *class = Parrot_class_lookup(interp, $2);
++  PMC *_class = Parrot_class_lookup(interp, $2);
+   opcode_t *next = expr NEXT();
+-  if (PMC_IS_NULL(class)) {
++  if (PMC_IS_NULL(_class)) {
+     real_exception(interp, next, NO_CLASS, "Class '%s' doesn't exist",
+                 string_to_cstring(interp, $2));
+   }
+-  $1 = VTABLE_subclass(interp, class, $3);
++  $1 = VTABLE_subclass(interp, _class, $3);
+   goto ADDRESS(next);
+ }
+ 
+@@ -367,27 +367,27 @@
+ =cut
+ 
+ inline op getclass(out PMC, in STR) :object_classes {
+-  PMC *class = Parrot_class_lookup(interp, $2);
++  PMC *_class = Parrot_class_lookup(interp, $2);
+   opcode_t *next = expr NEXT();
+-  if (PMC_IS_NULL(class)) {
++  if (PMC_IS_NULL(_class)) {
+     real_exception(interp, next, NO_CLASS, "Class '%s' doesn't exist",
+                 string_to_cstring(interp, $2));
+   }
+   else
+-    $1 = class;
++    $1 = _class;
+   goto ADDRESS(next);
+ }
+ 
+ inline op getclass(out PMC, in PMC) :object_classes {
+-  PMC *class = Parrot_class_lookup_p(interp, $2);
++  PMC *_class = Parrot_class_lookup_p(interp, $2);
+   opcode_t *next = expr NEXT();
+-  if (PMC_IS_NULL(class)) {
++  if (PMC_IS_NULL(_class)) {
+     STRING *name = readable_name(interp, $2);
+     real_exception(interp, next, NO_CLASS,
+          "Class '%Ss' doesn't exist", name);
+   }
+   else
+-    $1 = class;
++    $1 = _class;
+   goto ADDRESS(next);
+ }
+ 
+@@ -402,7 +402,7 @@
+ =cut
+ 
+ inline op get_class(out PMC, in STR) :object_classes {
+-  PMC *class = PMCNULL;
++  PMC *_class = PMCNULL;
+   opcode_t *next = expr NEXT();
+ 
+   /* Look up a namespace with the given name within the current
+@@ -411,19 +411,19 @@
+       CONTEXT(interp->ctx)->current_namespace, $2);
+   if (!PMC_IS_NULL(ns))
+       Parrot_PCCINVOKE(interp, ns,
+-          string_from_const_cstring(interp, "get_class", 0), "->P", &class);
++          string_from_const_cstring(interp, "get_class", 0), "->P", &_class);
+ 
+   /* If class is not found, throw an exception; otherwise, put it in $1. */
+-  if (PMC_IS_NULL(class))
++  if (PMC_IS_NULL(_class))
+       real_exception(interp, next, NO_CLASS, "Class '%Ss' doesn't exist", $2);
+   else
+-      $1 = class;
++      $1 = _class;
+ 
+   goto ADDRESS(next);
+ }
+ 
+ inline op get_class(out PMC, in PMC) :object_classes {
+-  PMC *class = PMCNULL;
++  PMC *_class = PMCNULL;
+   opcode_t *next = expr NEXT();
+ 
+   /* If we were not passed a namespace PMC, look it up, otherwise just use
+@@ -437,18 +437,20 @@
+   /* If we have got a namespace, get the class associated with it, if any. */
+   if (!PMC_IS_NULL(ns))
+       Parrot_PCCINVOKE(interp, ns,
+-          string_from_const_cstring(interp, "get_class", 0), "->P", &class);
++          string_from_const_cstring(interp, "get_class", 0), "->P", &_class);
+ 
+   /* If class is not found, throw an exception; otherwise, put it in $1. */
+-  if (PMC_IS_NULL(class)) {
++  if (PMC_IS_NULL(_class)) {
+       STRING *name = readable_name(interp, $2);
+       real_exception(interp, next, NO_CLASS, "Class '%Ss' doesn't exist", name);
+   }
+   else {
+-      $1 = class;
++      $1 = _class;
+   }
+ 
+   goto ADDRESS(next);
++  /* Shouldn't be reached */
++  return NULL;
+ }
+ 
+ ###############################################################################
+Index: src/ops/string.ops
+===================================================================
+--- src/ops/string.ops	(revision 18263)
++++ src/ops/string.ops	(working copy)
+@@ -679,7 +679,7 @@
+ =cut
+ 
+ inline op find_not_cclass(out INT, in INT, in STR, in INT, in INT) {
+-  $1 = Parrot_string_find_not_cclass(interp, $2, $3, $4, $5);
++$1 = Parrot_string_find_not_cclass(interp, $2, $3, $4, $5);
+   goto NEXT();
+ }
+ 
+Index: src/pmc.c
+===================================================================
+--- src/pmc.c	(revision 18263)
++++ src/pmc.c	(working copy)
+@@ -434,38 +434,38 @@
+      *
+      * create a constant PMC
+      */
+-    PMC * const class = get_new_pmc_header(interp, type,
++    PMC * const _class = get_new_pmc_header(interp, type,
+                                            PObj_constant_FLAG);
+     /* If we are a second thread, we may get the same object as the
+      * original because we have a singleton. Just set the singleton to
+      * be our class object, but don't mess with its vtable.
+      */
+     if ((interp->vtables[type]->flags & VTABLE_PMC_IS_SINGLETON)
+-        && (class == class->vtable->class)) {
+-        interp->vtables[type]->class = class;
+-        return class;
++        && (_class == _class->vtable->pmc_class)) {
++        interp->vtables[type]->pmc_class = _class;
++        return _class;
+     }
+-    if (PObj_is_PMC_EXT_TEST(class)) {
++    if (PObj_is_PMC_EXT_TEST(_class)) {
+         /* if the PMC has a PMC_EXT structure,
+          * return it to the pool/arena
+          * we don't need it - basically only the vtable is important
+          */
+         Small_Object_Pool * const ext_pool =
+             interp->arena_base->pmc_ext_pool;
+-        if (PMC_sync(class))
+-            mem_internal_free(PMC_sync(class));
+-        ext_pool->add_free_object(interp, ext_pool, class->pmc_ext);
++        if (PMC_sync(_class))
++            mem_internal_free(PMC_sync(_class));
++        ext_pool->add_free_object(interp, ext_pool, _class->pmc_ext);
+     }
+-    class->pmc_ext = NULL;
+-    DOD_flag_CLEAR(is_special_PMC, class);
+-    PMC_pmc_val(class)   = (void*)0xdeadbeef;
+-    PMC_struct_val(class)= (void*)0xdeadbeef;
++    _class->pmc_ext = NULL;
++    DOD_flag_CLEAR(is_special_PMC, _class);
++    PMC_pmc_val(_class)   = (void*)0xdeadbeef;
++    PMC_struct_val(_class)= (void*)0xdeadbeef;
+ 
+-    PObj_is_PMC_shared_CLEAR(class);
++    PObj_is_PMC_shared_CLEAR(_class);
+ 
+-    interp->vtables[type]->class = class;
++    interp->vtables[type]->pmc_class = _class;
+ 
+-    return class;
++    return _class;
+ }
+ 
+ /*
+@@ -484,7 +484,7 @@
+     VTABLE *vtable;
+     STRING *class_name, *isa;
+     INTVAL pos, parent_type, total;
+-    PMC *class, *mro;
++    PMC *_class, *mro;
+     PMC *ns;
+ 
+     vtable = interp->vtables[type];
+@@ -516,11 +516,11 @@
+                     CONTEXT(interp->ctx)->current_namespace,
+                     class_name, ns);
+         }
+-        class = vtable->class;
+-        if (!class) {
+-            class = create_class_pmc(interp, parent_type);
++        _class = vtable->pmc_class;
++        if (!_class) {
++            _class = create_class_pmc(interp, parent_type);
+         }
+-        VTABLE_push_pmc(interp, mro, class);
++        VTABLE_push_pmc(interp, mro, _class);
+         if (pos >= total)
+             break;
+         len = string_str_index(interp, isa,
+Index: src/builtin.c
+===================================================================
+--- src/builtin.c	(revision 18263)
++++ src/builtin.c	(working copy)
+@@ -29,7 +29,7 @@
+     const char *signature;      /* e.g. PP */
+     const char *c_ns;           /* namespace */
+     STRING *meth_name;          /* internal name e.g. '__cos' */
+-    STRING *namespace;          /* same */
++    STRING *_namespace;          /* same */
+ } Builtins;
+ 
+ #define N_BUILTINS (int)(sizeof (builtins) / sizeof (builtins[0]))
+@@ -116,7 +116,7 @@
+         builtins[i].meth_name = const_string(interp,
+                 builtins[i].c_name);
+ #endif
+-        builtins[i].namespace = const_string(interp,
++        builtins[i]._namespace = const_string(interp,
+                 builtins[i].c_ns);
+     }
+ }
+@@ -250,7 +250,7 @@
+                                     func);
+     else
+         return Parrot_find_global_s(interp,
+-                                    builtins[i].namespace,
++                                    builtins[i]._namespace,
+                                     builtins[i].meth_name);
+ }
+ 
+Index: src/string.c
+===================================================================
+--- src/string.c	(revision 18263)
++++ src/string.c	(working copy)
+@@ -2028,7 +2028,7 @@
+             Parrot_fixed_8_encoding_ptr, Parrot_ascii_charset_ptr, 0);
+     /* more work TODO */
+     ENCODING_ITER_INIT(interp, src, &iter);
+-    dp = result->strstart;
++    dp = (unsigned char *)result->strstart;
+     for (i = 0; len > 0; --len) {
+         UINTVAL c = iter.get_and_advance(interp, &iter);
+         if (c < 0x7f) {
+@@ -2038,7 +2038,7 @@
+                 charlen += len * 2 + 16;
+                 Parrot_reallocate_string(interp, result, charlen);
+                 /* start can change */
+-                dp = result->strstart;
++                dp = (unsigned char *)result->strstart;
+             }
+             switch (c) {
+                 case '\\':
+@@ -2094,7 +2094,7 @@
+         i += hex->strlen;
+         /* and usable len */
+         charlen = PObj_buflen(result);
+-        dp = result->strstart;
++        dp = (unsigned char *)result->strstart;
+         assert(i < charlen);
+     }
+     result->bufused = result->strlen = i;
+@@ -2360,8 +2360,7 @@
+ */
+ 
+ INTVAL
+-Parrot_string_is_cclass(Interp *interp, PARROT_CCLASS_FLAGS flags,
+-                        STRING *s, UINTVAL offset)
++Parrot_string_is_cclass(Interp *interp, INTVAL flags, STRING *s, UINTVAL offset)
+ {
+     if (!string_length(interp, s))
+         return 0;
+@@ -2369,8 +2368,8 @@
+ }
+ 
+ INTVAL
+-Parrot_string_find_cclass(Interp *interp, PARROT_CCLASS_FLAGS flags,
+-                          STRING *s, UINTVAL offset, UINTVAL count)
++Parrot_string_find_cclass(Interp *interp, INTVAL flags, STRING *s,
++                          UINTVAL offset, UINTVAL count)
+ {
+     if (!s)
+         return -1;
+@@ -2378,8 +2377,8 @@
+ }
+ 
+ INTVAL
+-Parrot_string_find_not_cclass(Interp *interp, PARROT_CCLASS_FLAGS flags,
+-                              STRING *s, UINTVAL offset, UINTVAL count)
++Parrot_string_find_not_cclass(Interp *interp, INTVAL flags, STRING *s,
++                              UINTVAL offset, UINTVAL count)
+ {
+     if (!s)
+         return -1;
+Index: src/charset/iso-8859-1.c
+===================================================================
+--- src/charset/iso-8859-1.c	(revision 18263)
++++ src/charset/iso-8859-1.c	(working copy)
+@@ -142,7 +142,7 @@
+     }
+ 
+     Parrot_unmake_COW(interp, source_string);
+-    buffer = source_string->strstart;
++    buffer = (unsigned char *)source_string->strstart;
+     for (offset = 0; offset < source_string->strlen; offset++) {
+         unsigned int c = buffer[offset]; /* XXX use encoding ? */
+         if (c >= 0xe0 && c != 0xf7)
+@@ -162,7 +162,7 @@
+         return;
+     }
+     Parrot_unmake_COW(interp, source_string);
+-    buffer = source_string->strstart;
++    buffer = (unsigned char *)source_string->strstart;
+     for (offset = 0; offset < source_string->strlen; offset++) {
+         unsigned int c = buffer[offset];
+         if (c >= 0xc0 && c != 0xd7 && c <= 0xde)
+@@ -184,7 +184,7 @@
+         return;
+     }
+     Parrot_unmake_COW(interp, source_string);
+-    buffer = source_string->strstart;
++    buffer = (unsigned char *)source_string->strstart;
+     c = buffer[0];
+     if (c >= 0xe0 && c != 0xf7)
+         c &= ~0x20;
+@@ -212,7 +212,7 @@
+         return;
+     }
+     Parrot_unmake_COW(interp, source_string);
+-    buffer = source_string->strstart;
++    buffer = (unsigned char *)source_string->strstart;
+     c = buffer[0];
+     if (c >= 0xe0 && c != 0xf7)
+         c &= ~0x20;
+@@ -231,7 +231,7 @@
+         return;
+     }
+     Parrot_unmake_COW(interp, source_string);
+-    buffer = source_string->strstart;
++    buffer = (unsigned char *)source_string->strstart;
+     c = buffer[0];
+     if (c >= 0xc0 && c != 0xd7 && c <= 0xde)
+         c &= ~0x20;
+Index: src/charset/ascii.c
+===================================================================
+--- src/charset/ascii.c	(revision 18263)
++++ src/charset/ascii.c	(working copy)
+@@ -95,7 +95,7 @@
+         /* the string can't grow - replace inplace */
+         dest = src;
+     }
+-    p = dest->strstart;
++    p = (unsigned char *)dest->strstart;
+     ENCODING_ITER_INIT(interp, src, &iter);
+     for (offs = 0; offs < len; ++offs) {
+         c = iter.get_and_advance(interp, &iter);
+Index: src/bignum.c
+===================================================================
+--- src/bignum.c	(revision 18263)
++++ src/bignum.c	(working copy)
+@@ -199,7 +199,7 @@
+                  BN_CONTEXT *context);
+ int BN_align(PINTD_ BIGNUM* one, BIGNUM* two);
+ INTVAL BN_nonfatal(PINTD_ BN_CONTEXT *context, BN_EXCEPTIONS except,
+-                   char *msg);
++                   const char *msg);
+ int BN_set_verybig(PINTD_ BIGNUM* bn, BN_CONTEXT *context);
+ 
+ /*
+@@ -582,7 +582,7 @@
+ */
+ 
+ INTVAL
+-BN_nonfatal(PINTD_ BN_CONTEXT *context, BN_EXCEPTIONS except, char *msg) {
++BN_nonfatal(PINTD_ BN_CONTEXT *context, BN_EXCEPTIONS except, const char *msg) {
+     /* See extended standard for details */
+     switch (except) {
+     case BN_CONVERSION_OVERFLOW :
+@@ -693,7 +693,7 @@
+ /*
+ 
+ =item C<void
+-BN_exception(PINTD_ BN_EXCEPTIONS exception, char* message)>
++BN_exception(PINTD_ BN_EXCEPTIONS exception, const char* message)>
+ 
+ Throw `exception'. Should be accessed via a C<BN_EXCEPT> macro, this
+ version is provided until Parrot exceptions are sorted out properly.
+@@ -703,7 +703,7 @@
+ */
+ 
+ void
+-BN_exception(PINTD_ BN_EXCEPTIONS exception, char* message) {
++BN_exception(PINTD_ BN_EXCEPTIONS exception, const char* message) {
+     printf("Exception %d %s\n", exception, message);
+     exit(0);
+ }
+Index: src/encodings/utf16.c
+===================================================================
+--- src/encodings/utf16.c	(revision 18263)
++++ src/encodings/utf16.c	(working copy)
+@@ -167,7 +167,7 @@
+ static UINTVAL
+ get_byte(Interp *interp, const STRING *src, UINTVAL offset)
+ {
+-    unsigned char *contents = src->strstart;
++    unsigned char *contents = (unsigned char *)src->strstart;
+     if (offset >= src->bufused) {
+ /*        internal_exception(0,
+                 "get_byte past the end of the buffer (%i of %i)",
+@@ -185,7 +185,7 @@
+     if (offset >= src->bufused) {
+         internal_exception(0, "set_byte past the end of the buffer");
+     }
+-    contents = src->strstart;
++    contents = (unsigned char *)src->strstart;
+     contents[offset] = (unsigned char)byte;
+ }
+ 
+Index: src/encodings/fixed_8.c
+===================================================================
+--- src/encodings/fixed_8.c	(revision 18263)
++++ src/encodings/fixed_8.c	(working copy)
+@@ -46,7 +46,7 @@
+ static UINTVAL
+ get_byte(Interp *interp, const STRING *source_string, UINTVAL offset)
+ {
+-    unsigned char *contents = source_string->strstart;
++    unsigned char *contents = (unsigned char *)source_string->strstart;
+     if (offset >= source_string->bufused) {
+ /*        internal_exception(0,
+                 "get_byte past the end of the buffer (%i of %i)",
+@@ -64,7 +64,7 @@
+     if (offset >= source_string->bufused) {
+         internal_exception(0, "set_byte past the end of the buffer");
+     }
+-    contents = source_string->strstart;
++    contents = (unsigned char *)source_string->strstart;
+     contents[offset] = (unsigned char)byte;
+ }
+ 
+Index: src/encodings/utf8.c
+===================================================================
+--- src/encodings/utf8.c	(revision 18263)
++++ src/encodings/utf8.c	(working copy)
+@@ -331,7 +331,7 @@
+     }
+     else {
+         Parrot_reallocate_string(interp, dest, src_len);
+-        p = dest->strstart;
++        p = (unsigned char *)dest->strstart;
+     }
+     if (src->charset == Parrot_ascii_charset_ptr) {
+         for (dest_len = 0; dest_len < src_len; ++dest_len) {
+@@ -354,7 +354,7 @@
+                 else {
+                     result->bufused = dest_pos;
+                     Parrot_reallocate_string(interp, dest, dest_len);
+-                    p = dest->strstart;
++                    p = (unsigned char *)dest->strstart;
+                 }
+             }
+ 
+@@ -397,7 +397,7 @@
+ static UINTVAL
+ get_byte(Interp *interp, const STRING *src, UINTVAL offset)
+ {
+-    unsigned char *contents = src->strstart;
++    unsigned char *contents = (unsigned char *)src->strstart;
+     if (offset >= src->bufused) {
+ /*        internal_exception(0,
+                 "get_byte past the end of the buffer (%i of %i)",
+@@ -415,7 +415,7 @@
+     if (offset >= src->bufused) {
+         internal_exception(0, "set_byte past the end of the buffer");
+     }
+-    contents = src->strstart;
++    contents = (unsigned char *)src->strstart;
+     contents[offset] = (unsigned char)byte;
+ }
+ 
+Index: src/objects.c
+===================================================================
+--- src/objects.c	(revision 18263)
++++ src/objects.c	(working copy)
+@@ -54,7 +54,7 @@
+ 
+ PMC*
+ Parrot_find_vtable_meth(Interp* interp, PMC *pmc, STRING *meth) {
+-    PMC *class = pmc;
++    PMC *_class = pmc;
+     PMC *ns = NULL;
+     PMC *mro;
+     PMC *key;
+@@ -68,16 +68,16 @@
+ 
+     /* Get class. */
+     if (PObj_is_object_TEST(pmc)) {
+-        class = GET_CLASS((Buffer *)PMC_data(pmc), pmc);
++        _class = GET_CLASS((Buffer *)PMC_data(pmc), pmc);
+     }
+ 
+     /* Get MRO and iterate over it to find method with a matching
+        vtable index. */
+-    mro = class->vtable->mro;
++    mro = _class->vtable->mro;
+     n = VTABLE_elements(interp, mro);
+     for (i = 0; i < n; ++i) {
+-        class = VTABLE_get_pmc_keyed_int(interp, mro, i);
+-        ns = VTABLE_namespace(interp, class);
++        _class = VTABLE_get_pmc_keyed_int(interp, mro, i);
++        ns = VTABLE_pmc_namespace(interp, _class);
+         if (!PMC_IS_NULL(ns)) {
+             k = VTABLE_elements(interp, ns);
+             key = VTABLE_nextkey_keyed(interp, key_new(interp), ns,
+@@ -170,7 +170,7 @@
+    it. Horribly destructive, and definitely not a good thing to do if
+    there are instantiated objects for the class */
+ static void
+-rebuild_attrib_stuff(Interp *interp, PMC *class)
++rebuild_attrib_stuff(Interp *interp, PMC *_class)
+ {
+     INTVAL cur_offset;
+     SLOTTYPE *class_slots;
+@@ -182,7 +182,7 @@
+     PMC *attribs;
+     INTVAL attr_count;
+ #ifndef NDEBUG
+-    PMC * const orig_class = class;
++    PMC * const orig_class = _class;
+ #endif
+ 
+     /* attrib count isn't set yet, a GC caused by concat could
+@@ -190,11 +190,11 @@
+      */
+     Parrot_block_DOD(interp);
+ 
+-    class_slots      = PMC_data_typed(class, SLOTTYPE *);
++    class_slots      = PMC_data_typed(_class, SLOTTYPE *);
+     attr_offset_hash = pmc_new(interp, enum_class_Hash);
+-    set_attrib_num(class, class_slots, PCD_ATTRIBUTES, attr_offset_hash);
++    set_attrib_num(_class, class_slots, PCD_ATTRIBUTES, attr_offset_hash);
+ 
+-    mro = class->vtable->mro;
++    mro = _class->vtable->mro;
+     n_mro = VTABLE_elements(interp, mro);
+ 
+     /*
+@@ -202,14 +202,14 @@
+      */
+     cur_offset = 0;
+     for (n_class = n_mro - 1; n_class >= 0; --n_class) {
+-        class = VTABLE_get_pmc_keyed_int(interp, mro, n_class);
+-        if (!PObj_is_class_TEST(class)) {
++        _class = VTABLE_get_pmc_keyed_int(interp, mro, n_class);
++        if (!PObj_is_class_TEST(_class)) {
+             /* this Class isa PMC - no attributes there
+             */
+             continue;
+         }
+ 
+-        class_slots = PMC_data_typed(class, SLOTTYPE *);
++        class_slots = PMC_data_typed(_class, SLOTTYPE *);
+         classname   = VTABLE_get_string(interp,
+                     get_attrib_num(class_slots, PCD_CLASS_NAME));
+         attribs = get_attrib_num(class_slots, PCD_CLASS_ATTRIBUTES);
+@@ -239,18 +239,18 @@
+     }
+ 
+ #ifndef NDEBUG
+-    assert(class == orig_class);
++    assert(_class == orig_class);
+ #endif
+ 
+     /* And note the totals */
+-    CLASS_ATTRIB_COUNT(class) = cur_offset;
++    CLASS_ATTRIB_COUNT(_class) = cur_offset;
+     Parrot_unblock_DOD(interp);
+ }
+ 
+ /*
+ 
+ =item C<static PMC *find_vtable_override_byname(Interp *interp,
+-                                                PMC *class,
++                                                PMC *_class,
+                                                 STRING *method_name)>
+ 
+ Tries to locate a PIR override method for the given v-table method in the
+@@ -261,13 +261,13 @@
+ */
+ 
+ static PMC*
+-find_vtable_override_byname(Interp *interp, PMC *class,
++find_vtable_override_byname(Interp *interp, PMC *_class,
+                             PMC *class_name, STRING *method_name)
+ {
+     /* First try it in the :vtable namespace. */
+     STRING *no_underscores = string_substr(interp, method_name,
+         2, method_name->strlen - 2, NULL, 0);
+-    PMC *res = Parrot_find_vtable_meth(interp, class, no_underscores);
++    PMC *res = Parrot_find_vtable_meth(interp, _class, no_underscores);
+     if (!PMC_IS_NULL(res))
+         return res;
+ 
+@@ -277,7 +277,7 @@
+ 
+ /*
+ 
+-=item C<static void create_deleg_pmc_vtable(Interp *, PMC *class,
++=item C<static void create_deleg_pmc_vtable(Interp *, PMC *_class,
+                                             PMC *class_name, int full)>
+ 
+ Create a vtable that dispatches either to the contained PMC in the first
+@@ -289,7 +289,7 @@
+ */
+ 
+ static void
+-create_deleg_pmc_vtable(Interp *interp, PMC *class,
++create_deleg_pmc_vtable(Interp *interp, PMC *_class,
+         PMC *class_name, int full)
+ {
+     int i;
+@@ -297,7 +297,7 @@
+     STRING meth_str;
+     DECL_CONST_CAST;
+ 
+-    PMC * const vtable_pmc = get_attrib_num((SLOTTYPE*)PMC_data(class),
++    PMC * const vtable_pmc = get_attrib_num((SLOTTYPE*)PMC_data(_class),
+                                             PCD_OBJECT_VTABLE);
+     VTABLE * const vtable           =
+         (VTABLE * const)PMC_struct_val(vtable_pmc);
+@@ -318,7 +318,7 @@
+         meth_str.strstart = const_cast(meth);
+         meth_str.strlen = meth_str.bufused = strlen(meth);
+         meth_str.hashval = 0;
+-        if (find_vtable_override_byname(interp, class, class_name, &meth_str)) {
++        if (find_vtable_override_byname(interp, _class, class_name, &meth_str)) {
+             /*
+              * the method exists; keep the ParrotObject aka delegate vtable slot
+              */
+@@ -429,7 +429,7 @@
+     /*
+      * ParrotClass is the baseclass anyway, so build just a new class
+      */
+-    if (base_class == interp->vtables[enum_class_ParrotClass]->class) {
++    if (base_class == interp->vtables[enum_class_ParrotClass]->pmc_class) {
+         return pmc_new_init(interp, enum_class_ParrotClass, name);
+     }
+     parent_is_class = PObj_is_class_TEST(base_class);
+@@ -510,7 +510,7 @@
+ /*
+ 
+ =item C<void
+-Parrot_new_class(Interp *interp, PMC *class, PMC *class_name)>
++Parrot_new_class(Interp *interp, PMC *_class, PMC *class_name)>
+ 
+ Creates a new class, named C<class_name>.
+ 
+@@ -519,7 +519,7 @@
+ */
+ 
+ void
+-Parrot_new_class(Interp *interp, PMC *class, PMC *name)
++Parrot_new_class(Interp *interp, PMC *_class, PMC *name)
+ {
+     SLOTTYPE *class_array;
+     PMC *mro;
+@@ -528,12 +528,12 @@
+     fail_if_exist(interp, name);
+ 
+     /* Hang an array off the data pointer, empty of course */
+-    set_attrib_array_size(class, PCD_MAX);
+-    class_array = PMC_data_typed(class, SLOTTYPE *);
+-    /* set_attrib_flags(class); init does it */
++    set_attrib_array_size(_class, PCD_MAX);
++    class_array = PMC_data_typed(_class, SLOTTYPE *);
++    /* set_attrib_flags(_class); init does it */
+ 
+     /* Our parent class array has nothing in it */
+-    set_attrib_num(class, class_array, PCD_PARENTS,
++    set_attrib_num(_class, class_array, PCD_PARENTS,
+                    pmc_new(interp, enum_class_ResizablePMCArray));
+     /* TODO create all class structures in constant PMC pool
+      */
+@@ -543,19 +543,19 @@
+      * first entry is this class itself
+      */
+     mro = pmc_new(interp, enum_class_ResizablePMCArray);
+-    VTABLE_push_pmc(interp, mro, class);
++    VTABLE_push_pmc(interp, mro, _class);
+ 
+     /* no attributes yet
+      */
+-    set_attrib_num(class, class_array, PCD_CLASS_ATTRIBUTES,
++    set_attrib_num(_class, class_array, PCD_CLASS_ATTRIBUTES,
+             pmc_new(interp, enum_class_ResizablePMCArray));
+ 
+     /* Set the classname */
+-    set_attrib_num(class, class_array, PCD_CLASS_NAME, name);
++    set_attrib_num(_class, class_array, PCD_CLASS_NAME, name);
+ 
+-    parrot_class_register(interp, name, class, NULL, mro);
++    parrot_class_register(interp, name, _class, NULL, mro);
+ 
+-    rebuild_attrib_stuff(interp, class);
++    rebuild_attrib_stuff(interp, _class);
+ }
+ 
+ /*
+@@ -578,7 +578,7 @@
+ {
+     const INTVAL type = pmc_type(interp, class_name);
+     if (type > 0) {
+-        PMC * const pmc = interp->vtables[type]->class;
++        PMC * const pmc = interp->vtables[type]->pmc_class;
+         assert(pmc);
+         return pmc;
+     }
+@@ -590,7 +590,7 @@
+ {
+     const INTVAL type = pmc_type_p(interp, class_name);
+     if (type > 0) {
+-        PMC * const pmc = interp->vtables[type]->class;
++        PMC * const pmc = interp->vtables[type]->pmc_class;
+         assert(pmc);
+         return pmc;
+     }
+@@ -661,7 +661,7 @@
+     /* Set the vtable's type to the newly allocated type */
+     new_vtable->base_type = new_type;
+     /* And cache our class PMC in the vtable so we can find it later */
+-    new_vtable->class =  new_class;
++    new_vtable->pmc_class =  new_class;
+     new_vtable->mro = mro;
+ 
+     if (parent_vtable->ro_variant_vtable)
+@@ -695,7 +695,7 @@
+     if (new_vtable->ro_variant_vtable) {
+         VTABLE * const ro_vt = new_vtable->ro_variant_vtable;
+         ro_vt->base_type = new_vtable->base_type;
+-        ro_vt->class = new_vtable->class;
++        ro_vt->pmc_class = new_vtable->pmc_class;
+         ro_vt->mro = new_vtable->mro;
+         ro_vt->_namespace = new_vtable->_namespace;
+     }
+@@ -718,7 +718,7 @@
+             Parrot_clone_vtable(interp, parent_vtable->ro_variant_vtable);
+     new_vtable->base_type = new_type;
+     new_vtable->mro = mro;
+-    new_vtable->class =  new_class;
++    new_vtable->pmc_class =  new_class;
+ 
+     set_attrib_num(new_class, (SLOTTYPE*)PMC_data(new_class), PCD_OBJECT_VTABLE,
+             vtable_pmc = constant_pmc_new(interp, enum_class_VtableCache));
+@@ -729,14 +729,14 @@
+     if (new_vtable->ro_variant_vtable) {
+         VTABLE * const ro_vt = new_vtable->ro_variant_vtable;
+         ro_vt->base_type = new_vtable->base_type;
+-        ro_vt->class = new_vtable->class;
++        ro_vt->pmc_class = new_vtable->pmc_class;
+         ro_vt->mro = new_vtable->mro;
+         ro_vt->_namespace = new_vtable->_namespace;
+     }
+ }
+ 
+ static PMC*
+-get_init_meth(Interp *interp, PMC *class,
++get_init_meth(Interp *interp, PMC *_class,
+           STRING *prop_str , STRING **meth_str)
+ {
+     STRING *meth;
+@@ -746,12 +746,12 @@
+     *meth_str = NULL;
+ #if 0
+     PMC *prop;
+-    prop = VTABLE_getprop(interp, class, prop_str);
++    prop = VTABLE_getprop(interp, _class, prop_str);
+     if (!VTABLE_defined(interp, prop))
+         return NULL;
+     meth = VTABLE_get_string(interp, prop);
+ #else
+-    props = PMC_metadata(class);
++    props = PMC_metadata(_class);
+     if (!props)
+         return NULL;
+     b = parrot_hash_get_bucket(interp,
+@@ -762,16 +762,16 @@
+ #endif
+     *meth_str = meth;
+ 
+-    ns = VTABLE_namespace(interp, class);
++    ns = VTABLE_pmc_namespace(interp, _class);
+     method = VTABLE_get_pmc_keyed_str(interp, ns, meth);
+     return PMC_IS_NULL(method) ? NULL : method;
+ }
+ 
+ 
+ static void
+-do_initcall(Interp *interp, PMC* class, PMC *object, PMC *init)
++do_initcall(Interp *interp, PMC* _class, PMC *object, PMC *init)
+ {
+-    PMC * const classsearch_array = class->vtable->mro;
++    PMC * const classsearch_array = _class->vtable->mro;
+     PMC *parent_class;
+     INTVAL i, nparents;
+     /*
+@@ -781,7 +781,7 @@
+      * XXX isn't CONSTRUCT for creating new objects?
+      */
+     STRING *meth_str;
+-    PMC *meth = get_init_meth(interp, class,
++    PMC *meth = get_init_meth(interp, _class,
+             CONST_STRING(interp, "CONSTRUCT"), &meth_str);
+     int default_meth;
+ 
+@@ -843,9 +843,9 @@
+                 meth_str   = CONST_STRING(interp, "__init");
+                 meth_str_v = CONST_STRING(interp, "init");
+             }
+-            ns = VTABLE_namespace(interp, parent_class);
++            ns = VTABLE_pmc_namespace(interp, parent_class);
+             /* can't use find_method, it walks mro */
+-            meth = Parrot_find_vtable_meth(interp, class,
++            meth = Parrot_find_vtable_meth(interp, _class,
+                 meth_str_v);
+             if (PMC_IS_NULL(meth))
+                 meth = VTABLE_get_pmc_keyed_str(interp, ns, meth_str);
+@@ -905,16 +905,16 @@
+     SLOTTYPE *new_object_array;
+     INTVAL attrib_count, i;
+ 
+-    PMC * const class = object->vtable->class;
++    PMC * const _class = object->vtable->pmc_class;
+     /*
+      * put in the real vtable
+      */
+-    PMC * const vtable_pmc = get_attrib_num((SLOTTYPE *)PMC_data(class),
++    PMC * const vtable_pmc = get_attrib_num((SLOTTYPE *)PMC_data(_class),
+                                             PCD_OBJECT_VTABLE);
+     object->vtable         = (VTABLE *)PMC_struct_val(vtable_pmc);
+ 
+     /* Grab the attribute count from the class */
+-    attrib_count = CLASS_ATTRIB_COUNT(class);
++    attrib_count = CLASS_ATTRIB_COUNT(_class);
+ 
+     /* Build the array that hangs off the new object */
+     /* First presize it */
+@@ -934,13 +934,13 @@
+     /* We really ought to call the class init routines here...
+      * this assumes that an object isa delegate
+      */
+-    do_initcall(interp, class, object, init);
++    do_initcall(interp, _class, object, init);
+ }
+ 
+ /*
+ 
+ =item C<PMC *
+-Parrot_add_parent(Interp *interp, PMC *class,
++Parrot_add_parent(Interp *interp, PMC *_class,
+            PMC *parent)>
+ 
+ Add the parent class to the current class' parent list. This also
+@@ -1017,7 +1017,7 @@
+ 
+ /* create C3 MRO */
+ static PMC*
+-create_class_mro(Interp *interp, PMC *class)
++create_class_mro(Interp *interp, PMC *_class)
+ {
+     PMC *lparents, *bases;
+     INTVAL i;
+@@ -1028,10 +1028,10 @@
+     PMC * const lall = pmc_new(interp, enum_class_ResizablePMCArray);
+     PMC * const lc = pmc_new(interp, enum_class_ResizablePMCArray);
+ 
+-    VTABLE_push_pmc(interp, lc, class);
++    VTABLE_push_pmc(interp, lc, _class);
+     VTABLE_push_pmc(interp, lall, lc);
+ 
+-    bases = get_attrib_num(PMC_data(class), PCD_PARENTS);
++    bases = get_attrib_num(PMC_data(_class), PCD_PARENTS);
+     for (i = 0; i < VTABLE_elements(interp, bases); ++i) {
+         PMC * const base = VTABLE_get_pmc_keyed_int(interp, bases, i);
+         PMC * const lmap = PObj_is_class_TEST(base) ?
+@@ -1044,39 +1044,39 @@
+ }
+ 
+ PMC *
+-Parrot_add_parent(Interp *interp, PMC *class, PMC *parent)
++Parrot_add_parent(Interp *interp, PMC *_class, PMC *parent)
+ {
+     PMC *current_parent_array;
+ 
+-    if (!PObj_is_class_TEST(class))
++    if (!PObj_is_class_TEST(_class))
+         internal_exception(1, "Class isn't a ParrotClass");
+-    if (!PObj_is_class_TEST(parent) && parent == parent->vtable->class) {
++    if (!PObj_is_class_TEST(parent) && parent == parent->vtable->pmc_class) {
+         /* Permit inserting non-classes so at least thaw'ing classes
+          * is easy. Adding these parents after classes have been
+          * subclassed is dangerous, however.
+          */
+         PMC *class_name;
+ 
+-        if (CLASS_ATTRIB_COUNT(class) != 0) {
++        if (CLASS_ATTRIB_COUNT(_class) != 0) {
+             internal_exception(1, "Subclassing built-in type too late");
+         }
+-        Parrot_add_attribute(interp, class,
++        Parrot_add_attribute(interp, _class,
+             CONST_STRING(interp, "__value"));
+         class_name = pmc_new(interp, enum_class_String);
+         VTABLE_set_string_native(interp, class_name,
+-            VTABLE_name(interp, class));
+-        create_deleg_pmc_vtable(interp, class, class_name, 1);
++            VTABLE_name(interp, _class));
++        create_deleg_pmc_vtable(interp, _class, class_name, 1);
+     } else if (!PObj_is_class_TEST(parent)) {
+         internal_exception(1, "Parent isn't a ParrotClass");
+     }
+ 
+ 
+-    current_parent_array = get_attrib_num(PMC_data(class), PCD_PARENTS);
++    current_parent_array = get_attrib_num(PMC_data(_class), PCD_PARENTS);
+     VTABLE_push_pmc(interp, current_parent_array, parent);
+ 
+-    class->vtable->mro = create_class_mro(interp, class);
++    _class->vtable->mro = create_class_mro(interp, _class);
+ 
+-    rebuild_attrib_stuff(interp, class);
++    rebuild_attrib_stuff(interp, _class);
+     return NULL;
+ }
+ 
+@@ -1167,7 +1167,7 @@
+ /*
+ 
+ =item C<PMC *
+-Parrot_find_method_with_cache(Interp *interp, PMC *class,
++Parrot_find_method_with_cache(Interp *interp, PMC *_class,
+                               STRING *method_name)>
+ 
+ Find a method PMC for a named method, given the class PMC, current
+@@ -1179,13 +1179,13 @@
+ the name in the global stash.
+ 
+ =item C<PMC *
+-Parrot_find_method_direct(Interp *interp, PMC *class,
++Parrot_find_method_direct(Interp *interp, PMC *_class,
+                               STRING *method_name)>
+ 
+ Find a method PMC for a named method, given the class PMC, current
+ interpreter, and name of the method. Don't use a possible method cache.
+ 
+-=item void Parrot_invalidate_method_cache(Interp *, STRING *class)
++=item void Parrot_invalidate_method_cache(Interp *, STRING *_class)
+ 
+ Clear method cache for the given class. If class is NULL, caches for
+ all classes are invalidated.
+@@ -1257,7 +1257,7 @@
+ }
+ 
+ void
+-Parrot_invalidate_method_cache(Interp *interp, STRING *class, STRING *meth)
++Parrot_invalidate_method_cache(Interp *interp, STRING *_class, STRING *meth)
+ {
+     INTVAL type;
+ 
+@@ -1267,11 +1267,11 @@
+         return;
+     if (interp->resume_flag & RESUME_INITIAL)
+         return;
+-    if (!class) {
++    if (!_class) {
+         invalidate_all_caches(interp);
+         return;
+     }
+-    type = pmc_type(interp, class);
++    type = pmc_type(interp, _class);
+     if (type < 0)
+         return;
+     if (type == 0) {
+@@ -1288,14 +1288,14 @@
+  *       If this hash is implemented mark it during DOD
+  */
+ PMC *
+-Parrot_find_method_direct(Interp *interp, PMC *class,
++Parrot_find_method_direct(Interp *interp, PMC *_class,
+                               STRING *method_name)
+ {
+-    return find_method_direct(interp, class, method_name);
++    return find_method_direct(interp, _class, method_name);
+ }
+ 
+ PMC *
+-Parrot_find_method_with_cache(Interp *interp, PMC *class,
++Parrot_find_method_with_cache(Interp *interp, PMC *_class,
+                               STRING *method_name)
+ {
+ 
+@@ -1308,15 +1308,15 @@
+     assert(method_name != 0);
+ 
+ #if DISABLE_METH_CACHE
+-    return find_method_direct(interp, class, method_name);
++    return find_method_direct(interp, _class, method_name);
+ #endif
+ 
+     is_const = PObj_constant_TEST(method_name);
+     if (!is_const) {
+-        return find_method_direct(interp, class, method_name);
++        return find_method_direct(interp, _class, method_name);
+     }
+     mc = interp->caches;
+-    type = class->vtable->base_type;
++    type = _class->vtable->base_type;
+     bits = (((UINTVAL) method_name->strstart) >> 2) & TBL_SIZE_MASK;
+     if (type >= mc->mc_size) {
+         if (mc->idx) {
+@@ -1345,7 +1345,7 @@
+         e = e->next;
+     }
+     if (!e) {
+-        PMC * const found = find_method_direct(interp, class, method_name);
++        PMC * const found = find_method_direct(interp, _class, method_name);
+         /* when here no or no correct entry was at [bits] */
+         e = mem_allocate_typed(Meth_cache_entry);
+         if (old)
+@@ -1364,7 +1364,7 @@
+ #  define TRACE_FM(i, c, m, sub)
+ #else
+ static void
+-debug_trace_find_meth(Interp *interp, PMC *class, STRING *name, PMC *sub)
++debug_trace_find_meth(Interp *interp, PMC *_class, STRING *name, PMC *sub)
+ {
+     STRING *class_name;
+     const char *result;
+@@ -1372,13 +1372,13 @@
+ 
+     if (!Interp_trace_TEST(interp, PARROT_TRACE_FIND_METH_FLAG))
+         return;
+-    if (PObj_is_class_TEST(class)) {
+-        SLOTTYPE * const class_array = PMC_data_typed(class, SLOTTYPE *);
++    if (PObj_is_class_TEST(_class)) {
++        SLOTTYPE * const class_array = PMC_data_typed(_class, SLOTTYPE *);
+         PMC *const class_name_pmc = get_attrib_num(class_array, PCD_CLASS_NAME);
+         class_name = PMC_str_val(class_name_pmc);
+     }
+     else
+-        class_name = class->vtable->whoami;
++        class_name = _class->vtable->whoami;
+     if (sub) {
+         if (sub->vtable->base_type == enum_class_NCI)
+             result = "NCI";
+@@ -1399,39 +1399,39 @@
+ #endif
+ 
+ static PMC *
+-find_method_direct_1(Interp *interp, PMC *class,
++find_method_direct_1(Interp *interp, PMC *_class,
+                               STRING *method_name)
+ {
+     PMC* method, *ns;
+     INTVAL i;
+ 
+-    PMC * const mro = class->vtable->mro;
++    PMC * const mro = _class->vtable->mro;
+     const INTVAL n = VTABLE_elements(interp, mro);
+     for (i = 0; i < n; ++i) {
+-        class = VTABLE_get_pmc_keyed_int(interp, mro, i);
+-        ns = VTABLE_namespace(interp, class);
++        _class = VTABLE_get_pmc_keyed_int(interp, mro, i);
++        ns = VTABLE_pmc_namespace(interp, _class);
+         method = VTABLE_get_pmc_keyed_str(interp, ns, method_name);
+-        TRACE_FM(interp, class, method_name, method);
++        TRACE_FM(interp, _class, method_name, method);
+         if (!PMC_IS_NULL(method)) {
+             return method;
+         }
+     }
+-    TRACE_FM(interp, class, method_name, NULL);
++    TRACE_FM(interp, _class, method_name, NULL);
+     return NULL;
+ }
+ 
+ static PMC *
+-find_method_direct(Interp *interp, PMC *class,
++find_method_direct(Interp *interp, PMC *_class,
+                               STRING *method_name)
+ {
+-    PMC * const found = find_method_direct_1(interp, class, method_name);
++    PMC * const found = find_method_direct_1(interp, _class, method_name);
+     STRING * s1, *s2;
+     if (found)
+         return found;
+     s1 = CONST_STRING(interp, "__get_string");
+     s2 = CONST_STRING(interp, "__get_repr");
+     if (string_equal(interp, method_name, s1) == 0)
+-        return find_method_direct_1(interp, class, s2);
++        return find_method_direct_1(interp, _class, s2);
+     return NULL;
+ }
+ 
+@@ -1452,7 +1452,7 @@
+ /*
+ 
+ =item C<INTVAL
+-Parrot_add_attribute(Interp *interp, PMC* class, STRING* attr)>
++Parrot_add_attribute(Interp *interp, PMC* _class, STRING* attr)>
+ 
+ Adds the attribute C<attr> to the class.
+ 
+@@ -1467,12 +1467,12 @@
+    subclassed, but it'll do for now */
+ 
+ INTVAL
+-Parrot_add_attribute(Interp *interp, PMC* class, STRING* attr)
++Parrot_add_attribute(Interp *interp, PMC* _class, STRING* attr)
+ {
+     STRING *full_attr_name;
+     char *c_error;
+ 
+-    SLOTTYPE * const class_array = (SLOTTYPE *)PMC_data(class);
++    SLOTTYPE * const class_array = (SLOTTYPE *)PMC_data(_class);
+     STRING * const class_name = VTABLE_get_string(interp,
+             get_attrib_num(class_array, PCD_CLASS_NAME));
+     PMC * const attr_array = get_attrib_num(class_array, PCD_CLASS_ATTRIBUTES);
+@@ -1495,7 +1495,7 @@
+      * TODO check if someone is trying to add attributes to a parent class
+      * while there are already child class attrs
+      */
+-    idx = CLASS_ATTRIB_COUNT(class)++;
++    idx = CLASS_ATTRIB_COUNT(_class)++;
+     VTABLE_set_integer_keyed_str(interp, attr_hash,
+             attr, idx);
+     VTABLE_set_integer_keyed_str(interp, attr_hash,
+@@ -1541,7 +1541,7 @@
+ static INTVAL
+ attr_str_2_num(Interp *interp, PMC *object, STRING *attr)
+ {
+-    PMC *class;
++    PMC *_class;
+     PMC *attr_hash;
+     SLOTTYPE *class_array;
+     HashBucket *b;
+@@ -1554,15 +1554,15 @@
+         internal_exception(INTERNAL_NOT_IMPLEMENTED,
+                 "Can't set non-core object attribs yet");
+ 
+-    class = GET_CLASS((SLOTTYPE *)PMC_data(object), object);
++    _class = GET_CLASS((SLOTTYPE *)PMC_data(object), object);
+     if (PObj_is_PMC_shared_TEST(object)) {
+         /* XXX Shared objects have the 'wrong' class stored in them
+          * (because of the reference to the namespace and because it
+          * references PMCs that may go away),
+          * since we actually want one from the current interpreter. */
+-        class = VTABLE_get_class(interp, object);
++        _class = VTABLE_get_class(interp, object);
+     }
+-    class_array = (SLOTTYPE *)PMC_data(class);
++    class_array = (SLOTTYPE *)PMC_data(_class);
+     attr_hash = get_attrib_num(class_array, PCD_ATTRIBUTES);
+     b = parrot_hash_get_bucket(interp,
+                 (Hash*) PMC_struct_val(attr_hash), attr);
+@@ -1643,7 +1643,7 @@
+ }
+ 
+ INTVAL
+-Parrot_class_offset(Interp *interp, PMC *object, STRING *class) {
++Parrot_class_offset(Interp *interp, PMC *object, STRING *_class) {
+     PMC *class_pmc, *mro, *attribs;
+     INTVAL offset, i, n, attr_count;
+ 
+@@ -1654,7 +1654,7 @@
+     attribs = get_attrib_num(PMC_data(class_pmc), PCD_CLASS_ATTRIBUTES);
+     attr_count = VTABLE_elements(interp, attribs);
+     offset = PMC_int_val(object) - attr_count;
+-    if (!string_equal(interp, VTABLE_name(interp, class_pmc), class))
++    if (!string_equal(interp, VTABLE_name(interp, class_pmc), _class))
+         return offset;
+     /* now check mro */
+     mro = class_pmc->vtable->mro;
+@@ -1665,7 +1665,7 @@
+         attr_count = VTABLE_elements(interp, attribs);
+         offset -= attr_count;
+         if (!string_equal(interp,
+-                    VTABLE_name(interp, class_pmc), class))
++                    VTABLE_name(interp, class_pmc), _class))
+             return offset;
+     }
+     return -1;  /* error is catched in opcode */
+@@ -1674,7 +1674,7 @@
+ /*
+ 
+ =item C<PMC *Parrot_find_class_constructor(Interp *interp,
+-                                           STRING *class, INTVAL classtoken)>
++                                           STRING *_class, INTVAL classtoken)>
+ 
+ Find and return the constructor method PMC for the named sub. The
+ classtoken is an identifier for the class used for fast lookup, or 0
+@@ -1685,35 +1685,35 @@
+ 
+ */
+ 
+-PMC *Parrot_find_class_constructor(Interp *interp, STRING *class,
++PMC *Parrot_find_class_constructor(Interp *interp, STRING *_class,
+                               INTVAL classtoken)
+ {
+     return NULL;
+ }
+ 
+-PMC *Parrot_find_class_destructor(Interp *interp, STRING *class,
++PMC *Parrot_find_class_destructor(Interp *interp, STRING *_class,
+                              INTVAL classtoken)
+ {
+     return NULL;
+ }
+ 
+-PMC *Parrot_find_class_fallback(Interp *interp, STRING *class,
++PMC *Parrot_find_class_fallback(Interp *interp, STRING *_class,
+                                 INTVAL classtoken)
+ {
+     return NULL;
+ }
+ 
+-void Parrot_set_class_constructor(Interp *interp, STRING *class,
++void Parrot_set_class_constructor(Interp *interp, STRING *_class,
+                                   INTVAL classtoken, STRING *method)
+ {
+ }
+ 
+-void Parrot_set_class_destructor(Interp *interp, STRING *class,
++void Parrot_set_class_destructor(Interp *interp, STRING *_class,
+                                  INTVAL classtoken, STRING *method)
+ {
+ }
+ 
+-void Parrot_set_class_fallback(Interp *interp, STRING *class,
++void Parrot_set_class_fallback(Interp *interp, STRING *_class,
+                                INTVAL classtoken, STRING *method)
+ {
+ }
+@@ -1725,7 +1725,7 @@
+ 
+ /*
+ 
+-=item C<PMC* Parrot_ComputeMRO_C3(Interp *interp, PMC *class)>
++=item C<PMC* Parrot_ComputeMRO_C3(Interp *interp, PMC *_class)>
+ 
+ Computes the C3 linearization for the given class.
+ 
+@@ -1807,7 +1807,7 @@
+     return result;
+ }
+ 
+-PMC* Parrot_ComputeMRO_C3(Interp *interp, PMC *class)
++PMC* Parrot_ComputeMRO_C3(Interp *interp, PMC *_class)
+ {
+     PMC *result;
+     PMC *merge_list = pmc_new(interp, enum_class_ResizablePMCArray);
+@@ -1815,7 +1815,7 @@
+     int i, parent_count;
+ 
+     /* Now get immediate parents list. */
+-    Parrot_PCCINVOKE(interp, class, string_from_const_cstring(interp, "parents", 0),
++    Parrot_PCCINVOKE(interp, _class, string_from_const_cstring(interp, "parents", 0),
+         "->P", &immediate_parents);
+     if (immediate_parents == NULL) {
+         real_exception(interp, NULL, METH_NOT_FOUND,
+@@ -1827,7 +1827,7 @@
+     {
+         /* No parents - MRO just contains this class. */
+         result = pmc_new(interp, enum_class_ResizablePMCArray);
+-        VTABLE_push_pmc(interp, result, class);
++        VTABLE_push_pmc(interp, result, _class);
+         return result;
+     }
+ 
+@@ -1849,7 +1849,7 @@
+         return PMCNULL;
+ 
+     /* Merged result needs this class on the start, and then we're done. */
+-    VTABLE_unshift_pmc(interp, result, class);
++    VTABLE_unshift_pmc(interp, result, _class);
+     return result;
+ }
+ 
+Index: src/pmc/smop_class.pmc
+===================================================================
+--- src/pmc/smop_class.pmc	(revision 18263)
++++ src/pmc/smop_class.pmc	(working copy)
+@@ -60,7 +60,7 @@
+     METHOD void class_init_2()
+     {
+             int i;
+-            PMC* class = pmc_new(interp, enum_class_SMOP_Class);
++            PMC* _class = pmc_new(interp, enum_class_SMOP_Class);
+             PMC* class_meta;
+             PMC* class_string;
+             PMC* attributes = pmc_new(interp, enum_class_ResizablePMCArray);
+@@ -71,20 +71,20 @@
+                 PMC* attribute = pmc_new(interp, enum_class_SMOP_Attribute);
+                 STRING *attrib_name = string_from_const_cstring(interp, attribute_names[i], 0);
+                 PCCINVOKE(interp, attribute, "name", STRING* attrib_name);
+-                PCCINVOKE(interp, attribute, "class", PMC* class);
++                PCCINVOKE(interp, attribute, "class", PMC* _class);
+                 VTABLE_push_pmc(interp, attributes, attribute);
+             }
+ 
+             /* we sidestep the MetaModel bootstrap problem by building the MetaClass manually */
+ 
+-            (PMC* class_meta) = PCCINVOKE(interp, class, "new");
++            (PMC* class_meta) = PCCINVOKE(interp, _class, "new");
+             class_string = pmc_new(interp, enum_class_String);
+             VTABLE_set_string_native(interp, class_string,
+                     string_from_const_cstring(interp, "Class", 0));
+             VTABLE_set_attr_str(interp, class_meta,
+                     string_from_const_cstring(interp, attribute_names[0], 0), class_string);
+             VTABLE_set_attr_str(interp, class_meta,
+-                    string_from_const_cstring(interp, attribute_names[2], 0), class);
++                    string_from_const_cstring(interp, attribute_names[2], 0), _class);
+             VTABLE_init(interp,class_meta);
+             VTABLE_set_attr_str(interp, class_meta,
+                     string_from_const_cstring(interp, attribute_names[3], 0), attributes);
+Index: src/pmc/classobject.h
+===================================================================
+--- src/pmc/classobject.h	(revision 18263)
++++ src/pmc/classobject.h	(working copy)
+@@ -13,7 +13,7 @@
+ /* Class PMC's underlying struct. */
+ typedef struct Parrot_Class {
+     STRING *name;         /* The name of the class. */
+-    PMC *namespace;       /* The namespace it's linked to, if any. */
++    PMC *_namespace;      /* The namespace it's linked to, if any. */
+     int instantiated;     /* Any instantiations since last modification? */
+     PMC *parents;         /* Immediate parent classes. */
+     PMC *all_parents;     /* Cached list of ourself and all parents, in MRO order. */
+@@ -32,7 +32,7 @@
+ 
+ /* Object PMC's underlying struct. */
+ typedef struct Parrot_Object {
+-    PMC *class;          /* The class this is an instance of. */
++    PMC *_class;          /* The class this is an instance of. */
+     PMC *attrib_store;   /* The attributes store - a resizable PMC array. */
+ } Parrot_Object;
+ 
+Index: src/pmc/class.pmc
+===================================================================
+--- src/pmc/class.pmc	(revision 18263)
++++ src/pmc/class.pmc	(working copy)
+@@ -92,10 +92,10 @@
+ STRING* Parrot_Class_get_fq_classname(Parrot_Interp interp, Parrot_Class *class_info) {
+     STRING *fq_class = string_from_cstring(interp, "", 0);
+     STRING *seperator = string_from_const_cstring(interp, "::", 0);
+-    if (!PMC_IS_NULL(class_info->namespace)) {
++    if (!PMC_IS_NULL(class_info->_namespace)) {
+         /* If we have a namespace name, make a key from its name. */
+         /* XXX BAD AND WRONG! Need to call get_name method properly! */
+-        PMC *fq_name = Parrot_NameSpace_nci_get_name(interp, class_info->namespace);
++        PMC *fq_name = Parrot_NameSpace_nci_get_name(interp, class_info->_namespace);
+         int elements = VTABLE_elements(interp, fq_name);
+         int j;
+         for (j = 0; j < elements; j++) {
+@@ -116,8 +116,8 @@
+ /* This function builds the attribute index (table to map class name and
+  * attribute name to an index) for the current class. */
+ static void build_attrib_index(Parrot_Interp interp, PMC *self) {
+-    Parrot_Class *class = PARROT_CLASS(self);
+-    int num_classes = VTABLE_elements(interp, class->all_parents);
++    Parrot_Class *_class = PARROT_CLASS(self);
++    int num_classes = VTABLE_elements(interp, _class->all_parents);
+     int i;
+     int cur_index = 0;
+     PMC *table = pmc_new(interp, enum_class_Hash);
+@@ -125,7 +125,7 @@
+     /* We will go over the list of all parents to construct the table. */
+     for (i = 0; i < num_classes; i++) {
+        /* Get the class and its attribute metadata hash. */
+-        PMC *cur_class = VTABLE_get_pmc_keyed_int(interp, class->all_parents, i);
++        PMC *cur_class = VTABLE_get_pmc_keyed_int(interp, _class->all_parents, i);
+         Parrot_Class *class_info = PARROT_CLASS(cur_class);
+         PMC *attribs = class_info->attrib_metadata;
+         PMC *iter = VTABLE_get_iter(interp, attribs);
+@@ -153,15 +153,15 @@
+     }
+ 
+     /* Store built table and invalidate cache. */
+-    class->attrib_index = table;
+-    class->attrib_cache = pmc_new(interp, enum_class_Hash);
++    _class->attrib_index = table;
++    _class->attrib_cache = pmc_new(interp, enum_class_Hash);
+ }
+ 
+ 
+ /* Takes a hash and initializes the class based on it. */
+ static void init_class_from_hash(Parrot_Interp interp, PMC *self, PMC *info)
+ {
+-    Parrot_Class *class = PARROT_CLASS(self);
++    Parrot_Class *_class = PARROT_CLASS(self);
+     int have_name, have_ns;
+     PMC *old_ns;
+     int i;
+@@ -177,69 +177,69 @@
+         string_from_const_cstring(interp, "namespace", 0));
+ 
+     /* Take a copy of the current namespace the class is attached to. */
+-    old_ns = class->namespace;
++    old_ns = _class->_namespace;
+ 
+     /* Otherwise, let's roll! If we have a namespace and a name, set both. */
+     if (have_name && have_ns) {
+         /* If we weren't passed a NameSpace PMC, assume it's something we have
+          * to look one up with and do so. */
+-        PMC *namespace = VTABLE_get_pmc_keyed_str(interp, info,
++        PMC *_namespace = VTABLE_get_pmc_keyed_str(interp, info,
+             string_from_const_cstring(interp, "namespace", 0));
+-        if (!VTABLE_isa(interp, namespace, string_from_const_cstring(interp, "NameSpace", 0)))
+-            namespace = Parrot_make_namespace_autobase(interp, namespace);
++        if (!VTABLE_isa(interp, _namespace, string_from_const_cstring(interp, "NameSpace", 0)))
++            _namespace = Parrot_make_namespace_autobase(interp, _namespace);
+ 
+         /* If we get something null back it's an error; otherwise, store it. */
+-        if (!PMC_IS_NULL(namespace))
+-            class->namespace = namespace;
++        if (!PMC_IS_NULL(_namespace))
++            _class->_namespace = _namespace;
+         else
+             real_exception(interp, NULL, E_NameError, "Namespace not found");
+ 
+         /* Set a (string) name. */
+-        class->name = VTABLE_get_string_keyed_str(interp, info,
++        _class->name = VTABLE_get_string_keyed_str(interp, info,
+             string_from_const_cstring(interp, "name", 0));
+     }
+ 
+     /* Otherwise, we may just have a name. */
+     else if (have_name) {
+         /* Set the name. */
+-        class->name = VTABLE_get_string_keyed_str(interp, info,
++        _class->name = VTABLE_get_string_keyed_str(interp, info,
+             string_from_const_cstring(interp, "name", 0));
+ 
+         /* Namespace is nested in the current namespace and with the name of
+          * the class. */
+-        class->namespace = Parrot_make_namespace_keyed_str(interp,
+-            CONTEXT(interp->ctx)->current_namespace, class->name);
++        _class->_namespace = Parrot_make_namespace_keyed_str(interp,
++            CONTEXT(interp->ctx)->current_namespace, _class->name);
+     }
+ 
+     /* Otherwise, we may just have a namespace. */
+     else if (have_ns) {
+         /* If we weren't passed a NameSpace PMC, assume it's something we have
+          * to look one up with and do so. */
+-        PMC *namespace = VTABLE_get_pmc_keyed_str(interp, info,
++        PMC *_namespace = VTABLE_get_pmc_keyed_str(interp, info,
+             string_from_const_cstring(interp, "namespace", 0));
+-        if (!VTABLE_isa(interp, namespace, string_from_const_cstring(interp, "NameSpace", 0)))
+-            namespace = Parrot_make_namespace_autobase(interp, namespace);
++        if (!VTABLE_isa(interp, _namespace, string_from_const_cstring(interp, "NameSpace", 0)))
++            _namespace = Parrot_make_namespace_autobase(interp, _namespace);
+ 
+         /* If we get something null back it's an error; otherwise, store it. */
+-        if (!PMC_IS_NULL(namespace))
+-            class->namespace = namespace;
++        if (!PMC_IS_NULL(_namespace))
++            _class->_namespace = _namespace;
+         else
+             real_exception(interp, NULL, E_NameError, "Namespace not found");
+ 
+         /* Name is that of the most nested part of the namespace. */
+-        class->name = VTABLE_get_string(interp, namespace);
++        _class->name = VTABLE_get_string(interp, _namespace);
+     }
+ 
+     /* If we were attached to a namespce and are now attached to a new one,
+      * need to unset ourselves in the old namespace. */
+-    if (!PMC_IS_NULL(old_ns) && class->namespace != old_ns)
++    if (!PMC_IS_NULL(old_ns) && _class->_namespace != old_ns)
+         Parrot_PCCINVOKE(interp, old_ns,
+             string_from_const_cstring(interp, "set_class", 0),
+             "P->", PMCNULL);
+ 
+     /* Link namespace to this class, if there is one. */
+-    if (!PMC_IS_NULL(class->namespace))
+-        Parrot_PCCINVOKE(interp, class->namespace,
++    if (!PMC_IS_NULL(_class->_namespace))
++        Parrot_PCCINVOKE(interp, _class->_namespace,
+             string_from_const_cstring(interp, "set_class", 0),
+             "P->", self);
+ 
+@@ -247,7 +247,7 @@
+     if (VTABLE_exists_keyed_str(interp, info,
+         string_from_const_cstring(interp, "resolve_method", 0))) {
+         /* Set it. */
+-        class->resolve_method = VTABLE_get_pmc_keyed_str(interp, info,
++        _class->resolve_method = VTABLE_get_pmc_keyed_str(interp, info,
+             string_from_const_cstring(interp, "resolve_method", 0));
+     }
+ 
+@@ -343,7 +343,7 @@
+ */
+ 
+     void init() {
+-        Parrot_Class *class = NULL;
++        Parrot_Class *_class = NULL;
+ 
+         /* Set flags for custom DOD mark and destroy. */
+         PObj_custom_mark_SET(SELF);
+@@ -353,28 +353,28 @@
+         PObj_is_class_SET(SELF);
+ 
+         /* Set up the object. */
+-        class                  = mem_sys_allocate_zeroed(sizeof(Parrot_Class));
+-        class->name            = CONST_STRING(interp, "");
+-        class->namespace       = PMCNULL;
+-        class->instantiated    = 0;
+-        class->parents         = pmc_new(interp, enum_class_ResizablePMCArray);
+-        class->all_parents     = pmc_new(interp, enum_class_ResizablePMCArray);
+-        class->roles           = pmc_new(interp, enum_class_ResizablePMCArray);
+-        class->methods         = pmc_new(interp, enum_class_Hash);
+-        class->vtable_methods  = pmc_new(interp, enum_class_Hash);
+-        class->attrib_metadata = pmc_new(interp, enum_class_Hash);
+-        class->attrib_index    = PMCNULL;
+-        class->attrib_cache    = PMCNULL;
+-        class->resolve_method  = pmc_new(interp, enum_class_ResizablePMCArray);
++        _class = mem_allocate_zeroed_typed(Parrot_Class);
++        _class->name            = CONST_STRING(interp, "");
++        _class->_namespace       = PMCNULL;
++        _class->instantiated    = 0;
++        _class->parents         = pmc_new(interp, enum_class_ResizablePMCArray);
++        _class->all_parents     = pmc_new(interp, enum_class_ResizablePMCArray);
++        _class->roles           = pmc_new(interp, enum_class_ResizablePMCArray);
++        _class->methods         = pmc_new(interp, enum_class_Hash);
++        _class->vtable_methods  = pmc_new(interp, enum_class_Hash);
++        _class->attrib_metadata = pmc_new(interp, enum_class_Hash);
++        _class->attrib_index    = PMCNULL;
++        _class->attrib_cache    = PMCNULL;
++        _class->resolve_method  = pmc_new(interp, enum_class_ResizablePMCArray);
+ 
+         /* We put ourself on the all parents list. */
+-        VTABLE_push_pmc(interp, class->all_parents, SELF);
++        VTABLE_push_pmc(interp, _class->all_parents, SELF);
+ 
+-        PMC_data(SELF)         = class;
++        PMC_data(SELF)         = _class;
+     }
+ 
+     void init_pmc(PMC* init_data) {
+-        Parrot_Class *class = NULL;
++        Parrot_Class *_class = NULL;
+ 
+         /* Set up the object. */
+         SELF.init();
+@@ -410,29 +410,29 @@
+ */
+ 
+     void mark() {
+-        Parrot_Class *class = PARROT_CLASS(SELF);
+-        if (class->name)
+-            pobject_lives(interp, (PObj*)class->name);
+-        if (class->namespace)
+-            pobject_lives(interp, (PObj*)class->namespace);
+-        if (class->parents)
+-            pobject_lives(interp, (PObj*)class->parents);
+-        if (class->all_parents)
+-            pobject_lives(interp, (PObj*)class->all_parents);
+-        if (class->roles)
+-            pobject_lives(interp, (PObj*)class->roles);
+-        if (class->methods)
+-            pobject_lives(interp, (PObj*)class->methods);
+-        if (class->vtable_methods)
+-            pobject_lives(interp, (PObj*)class->vtable_methods);
+-        if (class->attrib_metadata)
+-            pobject_lives(interp, (PObj*)class->attrib_metadata);
+-        if (class->attrib_index)
+-            pobject_lives(interp, (PObj*)class->attrib_index);
+-        if (class->attrib_cache)
+-            pobject_lives(interp, (PObj*)class->attrib_cache);
+-        if (class->resolve_method)
+-            pobject_lives(interp, (PObj*)class->resolve_method);
++        Parrot_Class *_class = PARROT_CLASS(SELF);
++        if (_class->name)
++            pobject_lives(interp, (PObj*)_class->name);
++        if (_class->_namespace)
++            pobject_lives(interp, (PObj*)_class->_namespace);
++        if (_class->parents)
++            pobject_lives(interp, (PObj*)_class->parents);
++        if (_class->all_parents)
++            pobject_lives(interp, (PObj*)_class->all_parents);
++        if (_class->roles)
++            pobject_lives(interp, (PObj*)_class->roles);
++        if (_class->methods)
++            pobject_lives(interp, (PObj*)_class->methods);
++        if (_class->vtable_methods)
++            pobject_lives(interp, (PObj*)_class->vtable_methods);
++        if (_class->attrib_metadata)
++            pobject_lives(interp, (PObj*)_class->attrib_metadata);
++        if (_class->attrib_index)
++            pobject_lives(interp, (PObj*)_class->attrib_index);
++        if (_class->attrib_cache)
++            pobject_lives(interp, (PObj*)_class->attrib_cache);
++        if (_class->resolve_method)
++            pobject_lives(interp, (PObj*)_class->resolve_method);
+     }
+ 
+ 
+@@ -451,18 +451,18 @@
+ 
+     void add_attribute(STRING *name, PMC *type)
+     {
+-        Parrot_Class *class = PARROT_CLASS(SELF);
++        Parrot_Class *_class = PARROT_CLASS(SELF);
+         PMC *new_attribute = pmc_new(interp, enum_class_Hash);
+ 
+         /* If we've been instantiated already, need a new class. */
+-        if (class->instantiated) {
++        if (_class->instantiated) {
+             /* XXX Unimplemented! */
+             real_exception(interp, NULL, E_NotImplementedError,
+                 "Modifications to already instantiated classes not allowed yet.");
+         }
+ 
+         /* If we've already got an attribute of this name, it's an error. */
+-        if (VTABLE_exists_keyed_str(interp, class->attrib_metadata, name)) {
++        if (VTABLE_exists_keyed_str(interp, _class->attrib_metadata, name)) {
+             real_exception(interp, NULL, INVALID_OPERATION,
+                 "An attribute of this name already exists.");
+         }
+@@ -476,7 +476,7 @@
+         }
+ 
+         /* Enter the attribute in the attributes array. */
+-        VTABLE_set_pmc_keyed_str(interp, class->attrib_metadata, name, new_attribute);
++        VTABLE_set_pmc_keyed_str(interp, _class->attrib_metadata, name, new_attribute);
+     }
+ 
+ /*
+@@ -490,17 +490,17 @@
+ */
+     void add_method(STRING *name, PMC *sub)
+     {
+-        Parrot_Class *class = PARROT_CLASS(SELF);
++        Parrot_Class *_class = PARROT_CLASS(SELF);
+ 
+         /* If we have already added a method with this name... */
+-        if (VTABLE_exists_keyed_str(interp, class->methods, name)) {
++        if (VTABLE_exists_keyed_str(interp, _class->methods, name)) {
+             /* XXX Need to handle multi methods here. */
+             real_exception(interp, NULL, E_NotImplementedError,
+                 "A method of this name already exists. It may have been supplied by a role.");
+         }
+         else {
+             /* Enter it into the table. */
+-            VTABLE_set_pmc_keyed_str(interp, class->methods, name, sub);
++            VTABLE_set_pmc_keyed_str(interp, _class->methods, name, sub);
+         }
+     }
+ 
+@@ -515,10 +515,10 @@
+ */
+     void add_parent(PMC *parent)
+     {
+-        Parrot_Class *class = PARROT_CLASS(SELF);
++        Parrot_Class *_class = PARROT_CLASS(SELF);
+ 
+         /* If we've been instantiated already, need a new class. */
+-        if (class->instantiated) {
++        if (_class->instantiated) {
+             /* XXX Unimplemented! */
+             real_exception(interp, NULL, E_NotImplementedError,
+                 "Modifications to already instantiated classes not allowed yet.");
+@@ -535,7 +535,7 @@
+         /* XXX Check we don't already have this parent. */
+ 
+         /* Add to the list of our immediate parents. */
+-        VTABLE_push_pmc(interp, class->parents, parent);
++        VTABLE_push_pmc(interp, _class->parents, parent);
+     }
+ 
+ /*
+@@ -550,11 +550,11 @@
+ */
+     void add_role(PMC *role)
+     {
+-        Parrot_Class *class = PARROT_CLASS(SELF);
++        Parrot_Class *_class = PARROT_CLASS(SELF);
+ 
+         /* Do the composition. */
+         Parrot_ComposeRole(interp, role, PMCNULL, 0, PMCNULL, 0,
+-                           class->methods, class->roles);
++                           _class->methods, _class->roles);
+     }
+ 
+ /*
+@@ -599,29 +599,29 @@
+ */
+     PMC* inspect_str(STRING *what)
+     {
+-        Parrot_Class *class = PARROT_CLASS(SELF);
++        Parrot_Class *_class = PARROT_CLASS(SELF);
+ 
+         /* What should we return? */
+         PMC *found;
+         if (string_equal(interp, what, CONST_STRING(interp, "name")) == 0) {
+             found = pmc_new(interp, enum_class_String);
+-            VTABLE_set_string_native(interp, found, class->name);
++            VTABLE_set_string_native(interp, found, _class->name);
+         }
+         else if (string_equal(interp, what, CONST_STRING(interp, "namespace")) == 0) {
+             /* Should not clone this. */
+-            return class->namespace;
++            return _class->_namespace;
+         }
+         else if (string_equal(interp, what, CONST_STRING(interp, "attributes")) == 0) {
+-            found = class->attrib_metadata;
++            found = _class->attrib_metadata;
+         }
+         else if (string_equal(interp, what, CONST_STRING(interp, "methods")) == 0) {
+-            found = class->methods;
++            found = _class->methods;
+         }
+         else if (string_equal(interp, what, CONST_STRING(interp, "parents")) == 0) {
+-            found = class->parents;
++            found = _class->parents;
+         }
+         else if (string_equal(interp, what, CONST_STRING(interp, "roles")) == 0) {
+-            found = class->roles;
++            found = _class->roles;
+         }
+         else {
+             real_exception(interp, NULL, INVALID_OPERATION,
+@@ -675,7 +675,7 @@
+ 
+     PMC* clone()
+     {
+-        Parrot_Class *class = PARROT_CLASS(SELF);
++        Parrot_Class *_class = PARROT_CLASS(SELF);
+ 
+         /* Create the new class PMC, of the same type of this one (we may
+          * have been subclassed). */
+@@ -685,12 +685,12 @@
+          * not copy name/namespace related stuff (need anonymous clone) or
+          * stuff that gets computed on the first instantiation. */
+         Parrot_Class *new_class = PARROT_CLASS(copy);
+-        new_class->parents = VTABLE_clone(interp, class->parents);
+-        new_class->roles = VTABLE_clone(interp, class->roles);
+-        new_class->methods = VTABLE_clone(interp, class->methods);
+-        new_class->vtable_methods = VTABLE_clone(interp, class->vtable_methods);
+-        new_class->attrib_metadata = VTABLE_clone(interp, class->attrib_metadata);
+-        new_class->resolve_method = VTABLE_clone(interp, class->resolve_method);
++        new_class->parents = VTABLE_clone(interp, _class->parents);
++        new_class->roles = VTABLE_clone(interp, _class->roles);
++        new_class->methods = VTABLE_clone(interp, _class->methods);
++        new_class->vtable_methods = VTABLE_clone(interp, _class->vtable_methods);
++        new_class->attrib_metadata = VTABLE_clone(interp, _class->attrib_metadata);
++        new_class->resolve_method = VTABLE_clone(interp, _class->resolve_method);
+ 
+         /* Return cloned class. */
+         return copy;
+@@ -737,7 +737,7 @@
+ 
+ */
+     PCCMETHOD void name(STRING *name :optional, int got_name :opt_flag) {
+-        Parrot_Class *class = PARROT_CLASS(SELF);
++        Parrot_Class *_class = PARROT_CLASS(SELF);
+         STRING *ret_name = NULL;
+ 
+         if (got_name) {
+@@ -749,22 +749,22 @@
+             init_class_from_hash(interp, SELF, naming_hash);
+         }
+ 
+-        ret_name = class->name;
++        ret_name = _class->name;
+         PCCRETURN(STRING *ret_name);
+     }
+ 
+ /*
+ 
+-=item C<void namespace()>
++=item C<void pmc_namespace()>
+ 
+ Gets the namespace that this class is attached to.
+ 
+ =cut
+ 
+ */
+-    PCCMETHOD void namespace(PMC *namespace :optional, int got_name :opt_flag) {
+-        Parrot_Class *class = PARROT_CLASS(SELF);
+-        PMC *ret_namespace = class->namespace;
++    PCCMETHOD void pmc_namespace(PMC *namespace :optional, int got_name :opt_flag) {
++        Parrot_Class *_class = PARROT_CLASS(SELF);
++        PMC *ret_namespace = _class->_namespace;
+         PCCRETURN(PMC *ret_namespace);
+     }
+ 
+@@ -844,8 +844,8 @@
+ 
+         /* Initialize the object's underlying structure, pointing it to this
+          * class. */
+-        obj_guts = mem_sys_allocate_zeroed(sizeof(Parrot_Object));
+-        obj_guts->class = SELF;
++        obj_guts = mem_allocate_zeroed_typed(Parrot_Object);
++        obj_guts->_class = SELF;
+         obj_guts->attrib_store = pmc_new(interp, enum_class_ResizablePMCArray);
+         PMC_data(obj) = obj_guts;
+ 
+Index: src/pmc/object.pmc
+===================================================================
+--- src/pmc/object.pmc	(revision 18263)
++++ src/pmc/object.pmc	(working copy)
+@@ -119,8 +119,8 @@
+ */
+     void mark() {
+         Parrot_Object *obj = PARROT_OBJECT(SELF);
+-        if (obj->class)
+-            pobject_lives(interp, (PObj*)obj->class);
++        if (obj->_class)
++            pobject_lives(interp, (PObj*)obj->_class);
+         if (obj->attrib_store)
+             pobject_lives(interp, (PObj*)obj->attrib_store);
+     }
+@@ -139,7 +139,7 @@
+         Parrot_Object *obj = PARROT_OBJECT(SELF);
+ 
+         /* Look up the index. */
+-        INTVAL index = get_attrib_index(interp, obj->class, name);
++        INTVAL index = get_attrib_index(interp, obj->_class, name);
+ 
+         /* If lookup failed, exception. */
+         if (index == -1) {
+@@ -165,7 +165,7 @@
+         Parrot_Object *obj = PARROT_OBJECT(SELF);
+ 
+         /* Look up the index. */
+-        INTVAL index = get_attrib_index(interp, obj->class, name);
++        INTVAL index = get_attrib_index(interp, obj->_class, name);
+ 
+         /* If lookup failed, exception. */
+         if (index == -1) {
+@@ -188,7 +188,7 @@
+     PMC* find_method(STRING *name)
+     {
+         Parrot_Object *obj = PARROT_OBJECT(SELF);
+-        Parrot_Class *class = PARROT_CLASS(obj->class);
++        Parrot_Class *class = PARROT_CLASS(obj->_class);
+         PMC *method = PMCNULL;
+ 
+         /* Walk and search. One day, we'll use the cache first. */
+@@ -221,7 +221,7 @@
+     PMC* get_class()
+     {
+         Parrot_Object *obj = PARROT_OBJECT(SELF);
+-        return obj->class;
++        return obj->_class;
+     }
+ 
+ /*
+Index: src/pmc/parrotinterpreter.pmc
+===================================================================
+--- src/pmc/parrotinterpreter.pmc	(revision 18263)
++++ src/pmc/parrotinterpreter.pmc	(working copy)
+@@ -77,10 +77,10 @@
+ 
+         last_remove = s->n_vtable_max;
+         for (i = s->n_vtable_max - 1; i >= start; --i) {
+-            if (s->vtables[i] && s->vtables[i]->class &&
+-                PObj_is_class_TEST(s->vtables[i]->class)) {
++            if (s->vtables[i] && s->vtables[i]->pmc_class &&
++                PObj_is_class_TEST(s->vtables[i]->pmc_class)) {
+                 STRING *class_name;
+-                class_name = VTABLE_name(s, s->vtables[i]->class);
++                class_name = VTABLE_name(s, s->vtables[i]->pmc_class);
+                 assert(VTABLE_exists_keyed_str(d, d->class_hash, class_name));
+                 VTABLE_delete_keyed_str(d, d->class_hash, class_name);
+                 if (last_remove == i + 1) {
+@@ -107,12 +107,12 @@
+     }
+     if (flags & PARROT_CLONE_CLASSES) {
+         INTVAL i;        for (i = 0; i < s->n_vtable_max; ++i) {
+-            if (s->vtables[i] && s->vtables[i]->class &&
+-                    PObj_is_class_TEST(s->vtables[i]->class)) {
++            if (s->vtables[i] && s->vtables[i]->pmc_class &&
++                    PObj_is_class_TEST(s->vtables[i]->pmc_class)) {
+                 /* Cloning the class into the new interpreter ought
+                  * to be sufficient to instantiate the class.
+                  */
+-                (void) Parrot_clone(d, s->vtables[i]->class);
++                (void) Parrot_clone(d, s->vtables[i]->pmc_class);
+             }
+         }
+     }
+Index: src/pmc/delegate.pmc
+===================================================================
+--- src/pmc/delegate.pmc	(revision 18263)
++++ src/pmc/delegate.pmc	(working copy)
+@@ -187,7 +187,7 @@
+         return SELF->vtable->whoami;
+     }
+ 
+-    PMC* namespace() {
++    PMC* pmc_namespace() {
+         return SELF->vtable->_namespace;
+     }
+ 
+Index: src/pmc/deleg_pmc.pmc
+===================================================================
+--- src/pmc/deleg_pmc.pmc	(revision 18263)
++++ src/pmc/deleg_pmc.pmc	(working copy)
+@@ -79,7 +79,7 @@
+         return SUPER(method_name);
+     }
+ 
+-    PMC* namespace() {
++    PMC* pmc_namespace() {
+         return SELF->vtable->_namespace;
+     }
+ 
+Index: src/pmc/parrotclass.pmc
+===================================================================
+--- src/pmc/parrotclass.pmc	(revision 18263)
++++ src/pmc/parrotclass.pmc	(working copy)
+@@ -291,7 +291,7 @@
+                 if (!PObj_is_class_TEST(parent_class)) {
+                     assert(!parent_not_class);
+                     parent_not_class++;
+-                    parent_class = parent_class->vtable->class;
++                    parent_class = parent_class->vtable->pmc_class;
+                 }
+                 Parrot_add_parent(INTERP, class, parent_class);
+             }
+Index: src/pmc/parrotobject.pmc
+===================================================================
+--- src/pmc/parrotobject.pmc	(revision 18263)
++++ src/pmc/parrotobject.pmc	(working copy)
+@@ -94,12 +94,12 @@
+          */
+         if ((UINTVAL)SELF->vtable == 0xdeadbeef)
+             return;
+-        class = SELF->vtable->class;
++        class = SELF->vtable->pmc_class;
+         if ((UINTVAL)class->vtable == 0xdeadbeef)
+             return;
+         if (PObj_get_FLAGS(SELF) & PObj_need_finalize_FLAG) {
+             fin = CONST_STRING(INTERP, "__finalize");
+-            ns = VTABLE_namespace(interp, class);
++            ns = VTABLE_pmc_namespace(interp, class);
+             meth = VTABLE_get_pmc_keyed_str(interp, ns, fin);
+             if (!PMC_IS_NULL(meth)) {
+                 /*
+@@ -247,7 +247,7 @@
+                  */
+                 int type_num = SELF->vtable->base_type;
+ 
+-                return INTERP->vtables[type_num]->class;
++                return INTERP->vtables[type_num]->pmc_class;
+             }
+          }
+         return (PMC*) Parrot_run_meth_fromc_args(interp, sub,
+@@ -581,7 +581,7 @@
+          */
+         {
+             PMC *new_class;
+-            new_class = ret->vtable->class;
++            new_class = ret->vtable->pmc_class;
+             assert(new_class);
+             assert(ret->vtable->share_ro == Parrot_ParrotObject_share_ro);
+             SET_CLASS((SLOTTYPE *) PMC_data(ret), ret, new_class);
+@@ -618,7 +618,7 @@
+         class_data = (PMC **)PMC_data(SELF);
+ 
+         /* 1) visit class */
+-        pos = &SELF->vtable->class;
++        pos = &SELF->vtable->pmc_class;
+         info->thaw_ptr = pos;
+         (info->visit_pmc_now)(INTERP, *pos, info);
+ 
+@@ -646,8 +646,8 @@
+     }
+ 
+     void thawfinish(visit_info *info) {
+-        PMC *class = SELF->vtable->class;
+-        PMC *vtable_pmc = get_attrib_num((SLOTTYPE *)PMC_data(class),
++        PMC *_class = SELF->vtable->pmc_class;
++        PMC *vtable_pmc = get_attrib_num((SLOTTYPE *)PMC_data(_class),
+                 PCD_OBJECT_VTABLE);
+         SELF->vtable = PMC_struct_val(vtable_pmc);
+         set_attrib_flags(SELF);
+Index: src/pmc/resizablebooleanarray.pmc
+===================================================================
+--- src/pmc/resizablebooleanarray.pmc	(revision 18263)
++++ src/pmc/resizablebooleanarray.pmc	(working copy)
+@@ -48,6 +48,7 @@
+ */
+ 
+     INTVAL get_integer_keyed_int(INTVAL key) {
++        INTVAL offsetkey;
+         /* Try to make negative index into a real index */
+         if (key < 0) {
+             key = SELF.elements() + key;
+@@ -59,7 +60,7 @@
+         }
+ 
+         /* Check if key is greater than allocated size */
+-        INTVAL offsetkey = key + PMC_int_val2(SELF);
++        offsetkey = key + PMC_int_val2(SELF);
+         if (offsetkey >= PMC_int_val(SELF))
+             DYNSELF.set_integer_native(key+1);
+ 
+@@ -207,9 +208,10 @@
+ 
+             /* Allocate an extra allocation unit of space in new array */
+             INTVAL oldbitalloc, oldmemsize, newbitalloc, newmemsize;
++            Parrot_UInt1 * sdNew = NULL;
+             newbitalloc = ((PMC_int_val(SELF) + MIN_ALLOC) / MIN_ALLOC + 1) * MIN_ALLOC;
+             newmemsize = newbitalloc / BITS_PER_CHAR;
+-            Parrot_UInt1 * const sdNew = mem_sys_allocate_zeroed(newmemsize);
++            sdNew = mem_sys_allocate_zeroed(newmemsize);
+ 
+             /* Copy contents of old array to new array, moving the head
+              * position forward by one allocation unit (in bytes). */
+@@ -262,13 +264,15 @@
+         if (PMC_int_val2(SELF) >= MIN_ALLOC) {
+             /* Allocate one allocation unit less of space in new array */
+             INTVAL oldbitalloc, oldmemsize, newbitalloc, newmemsize;
++            Parrot_UInt1 * sdNew = NULL;
++            Parrot_UInt1 * sdOld = NULL;
+             newbitalloc = ((PMC_int_val(SELF) - MIN_ALLOC) / MIN_ALLOC + 1) * MIN_ALLOC;
+             newmemsize = newbitalloc / BITS_PER_CHAR;
+-            Parrot_UInt1 * const sdNew = mem_sys_allocate_zeroed(newmemsize);
++            sdNew = mem_sys_allocate_zeroed(newmemsize);
+ 
+             /* Copy contents of old array to new array, move the head position
+              * offset back by one allocation unit (in bytes) */
+-            Parrot_UInt1 * const sdOld = PMC_data(SELF);
++            sdOld = PMC_data(SELF);
+             mem_sys_memmove(sdNew, sdOld + (MIN_ALLOC / BITS_PER_CHAR), newmemsize);
+ 
+             /* Replace old array with new array, and free old array */
+Index: src/pmc/default.pmc
+===================================================================
+--- src/pmc/default.pmc	(revision 18263)
++++ src/pmc/default.pmc	(working copy)
+@@ -465,7 +465,7 @@
+ 
+ /*
+ 
+-=item C<PMC* namespace>
++=item C<PMC* pmc_namespace>
+ 
+ Return the namespace for this PMC.
+ 
+@@ -482,7 +482,7 @@
+ 
+ */
+ 
+-    PMC* namespace() {
++    PMC* pmc_namespace() {
+         return SELF->vtable->_namespace;
+     }
+ 
+Index: src/pmc/super.pmc
+===================================================================
+--- src/pmc/super.pmc	(revision 18263)
++++ src/pmc/super.pmc	(working copy)
+@@ -94,7 +94,7 @@
+     }
+ 
+     PMC* find_method(STRING* name) {
+-        PMC *mro, *class;
++        PMC *mro, *_class;
+ 
+         PMC * const obj = PMC_pmc_val(SELF);
+         if (PMC_IS_NULL(obj)) {
+@@ -103,8 +103,8 @@
+         }
+         interp->current_object = obj;
+         mro = obj->vtable->mro;
+-        class = VTABLE_get_pmc_keyed_int(INTERP, mro, 1);
+-        return VTABLE_find_method(INTERP, class, name);
++        _class = VTABLE_get_pmc_keyed_int(INTERP, mro, 1);
++        return VTABLE_find_method(INTERP, _class, name);
+     }
+ }
+ 
+Index: src/pmc/parrotio.pmc
+===================================================================
+--- src/pmc/parrotio.pmc	(revision 18263)
++++ src/pmc/parrotio.pmc	(working copy)
+@@ -43,7 +43,7 @@
+ */
+ 
+     METHOD INTVAL say(STRING *s) {
+-        PMC *out = SELF == interp->vtables[enum_class_ParrotIO]->class ?
++        PMC *out = SELF == interp->vtables[enum_class_ParrotIO]->pmc_class ?
+             PIO_STDOUT(INTERP) : SELF;
+         INTVAL r = PIO_putps(INTERP, out, s);
+         r  += PIO_puts(INTERP, out, "\n");
+Index: src/datatypes.c
+===================================================================
+--- src/datatypes.c	(revision 18263)
++++ src/datatypes.c	(working copy)
+@@ -35,9 +35,9 @@
+ */
+ 
+ INTVAL
+-Parrot_get_datatype_enum(Interp *interp, STRING *typename)
++Parrot_get_datatype_enum(Interp *interp, STRING *_typename)
+ {
+-    char *type = string_to_cstring(interp, typename);
++    char *type = string_to_cstring(interp, _typename);
+     int i;
+ 
+     for (i = enum_first_type; i < enum_last_type; i++) {
+Index: src/thread.c
+===================================================================
+--- src/thread.c	(revision 18263)
++++ src/thread.c	(working copy)
+@@ -167,7 +167,7 @@
+         PMC *vtable_cache;
+ 
+         /* keep the original vtable from going away... */
+-        vtable_cache = ((PMC**)PMC_data(pmc->vtable->class))[PCD_OBJECT_VTABLE];
++        vtable_cache = ((PMC**)PMC_data(pmc->vtable->pmc_class))[PCD_OBJECT_VTABLE];
+         assert(vtable_cache->vtable->base_type == enum_class_VtableCache);
+         add_pmc_sync(interp, vtable_cache);
+         PObj_is_PMC_shared_SET(vtable_cache);
+@@ -176,7 +176,7 @@
+         LOCK_INTERPRETER(master);
+         type_num = pmc->vtable->base_type;
+         SET_CLASS((SLOTTYPE*) PMC_data(pmc), pmc,
+-                  master->vtables[type_num]->class);
++                  master->vtables[type_num]->pmc_class);
+         UNLOCK_INTERPRETER(master);
+     }
+     else {
+Index: src/dynext.c
+===================================================================
+--- src/dynext.c	(revision 18263)
++++ src/dynext.c	(working copy)
+@@ -124,7 +124,7 @@
+                                                      PARROT_LIB_DYN_EXTS);
+ 
+     if (lib == NULL) {
+-        *handle = Parrot_dlopen(NULL);
++        *handle = Parrot_dlopen((char *)NULL);
+         if (*handle) {
+             return string_from_const_cstring(interp, "", 0);
+         }
+@@ -178,7 +178,7 @@
+     full_name = Parrot_locate_runtime_file_str(interp, lib,
+             PARROT_RUNTIME_FT_DYNEXT);
+     if (full_name) {
+-        *handle = Parrot_dlopen(full_name->strstart);
++        *handle = Parrot_dlopen((char *)full_name->strstart);
+         if (*handle) {
+             return full_name;
+         }
+@@ -288,7 +288,7 @@
+         string_cstring_free(cinit_func_name);
+     }
+     else {
+-        load_func = (void *)NULL;
++        load_func = NULL;
+         init_func = NULL;
+     }
+ 
+@@ -331,7 +331,7 @@
+ static PMC *make_string_pmc(Interp *interp, STRING *string) {
+     PMC *ret;
+     ret = VTABLE_new_from_string(interp,
+-        interp->vtables[enum_class_String]->class,
++        interp->vtables[enum_class_String]->pmc_class,
+         string, PObj_constant_FLAG);
+     return ret;
+ }
+@@ -373,10 +373,10 @@
+         if (d->n_libs != s->n_libs) {
+             INTVAL i;
+             if (d->all_op_libs)
+-                d->all_op_libs = mem_sys_realloc(d->all_op_libs,
++                d->all_op_libs = (op_lib_t **)mem_sys_realloc(d->all_op_libs,
+                     sizeof (op_lib_t *) * s->n_libs);
+             else
+-                d->all_op_libs = mem_sys_allocate(sizeof (op_lib_t *) *
++                d->all_op_libs = (op_lib_t **)mem_sys_allocate(sizeof (op_lib_t *) *
+                     s->n_libs);
+             for (i = d->n_libs; i < s->n_libs; ++i)
+                 d->all_op_libs[i] = s->all_op_libs[i];
+Index: src/mmd.c
+===================================================================
+--- src/mmd.c	(revision 18263)
++++ src/mmd.c	(working copy)
+@@ -1127,7 +1127,7 @@
+ mmd_search_classes(Interp *interp, STRING *meth, PMC *arg_tuple,
+         PMC *cl, INTVAL start_at_parent)
+ {
+-    PMC *pmc, *mro, *class;
++    PMC *pmc, *mro, *_class;
+     INTVAL i, n, type1;
+ 
+     /*
+@@ -1145,8 +1145,8 @@
+         mro = interp->vtables[type1]->mro;
+         n = VTABLE_elements(interp, mro);
+         for (i = start_at_parent; i < n; ++i) {
+-            class = VTABLE_get_pmc_keyed_int(interp, mro, i);
+-            pmc = Parrot_find_method_with_cache(interp, class, meth);
++            _class = VTABLE_get_pmc_keyed_int(interp, mro, i);
++            pmc = Parrot_find_method_with_cache(interp, _class, meth);
+             if (pmc) {
+                 /*
+                  * mmd_is_hidden would consider all previous candidates
+@@ -1575,7 +1575,7 @@
+     const char *short_name;
+     char signature[6], val_sig;
+     STRING *meth_name, *_sub;
+-    PMC *method, *multi, *class, *multi_sig;
++    PMC *method, *multi, *_class, *multi_sig;
+ 
+     assert(type != enum_class_Null && type != enum_class_delegate &&
+             type != enum_class_Ref  && type != enum_class_SharedRef &&
+@@ -1607,15 +1607,15 @@
+     if (memcmp(short_name, "__i_", 4) == 0)
+         signature[0] = 'v';
+     meth_name = const_string(interp, short_name);
+-    class = interp->vtables[type]->class;
+-    method = Parrot_find_method_direct(interp, class, meth_name);
++    _class = interp->vtables[type]->pmc_class;
++    method = Parrot_find_method_direct(interp, _class, meth_name);
+     if (!method) {
+         /* first method */
+         method = constant_pmc_new(interp, enum_class_NCI);
+         VTABLE_set_pointer_keyed_str(interp, method,
+                 const_string(interp, signature),
+                 F2DPTR(func_ptr));
+-        VTABLE_add_method(interp, class, meth_name, method);
++        VTABLE_add_method(interp, _class, meth_name, method);
+     }
+     else {
+         _sub = CONST_STRING(interp, "Sub");
+@@ -1623,7 +1623,7 @@
+         if (method->vtable->base_type == enum_class_NCI) {
+             /* convert first to a multi */
+             multi = constant_pmc_new(interp, enum_class_MultiSub);
+-            VTABLE_add_method(interp, class, meth_name, multi);
++            VTABLE_add_method(interp, _class, meth_name, multi);
+             VTABLE_push_pmc(interp, multi, method);
+         }
+         else {
+Index: src/pmc_freeze.c
+===================================================================
+--- src/pmc_freeze.c	(revision 18263)
++++ src/pmc_freeze.c	(working copy)
+@@ -1430,7 +1430,7 @@
+      */
+     LVALUE_CAST(char *, image->strstart) -= bufused;
+     image->bufused = bufused;
+-    assert(image->strstart >= PObj_bufstart(image));
++    assert(image->strstart >= (char *)PObj_bufstart(image));
+ 
+     if (dod_block) {
+         Parrot_unblock_DOD(interp);
+Index: src/exceptions.c
+===================================================================
+--- src/exceptions.c	(revision 18263)
++++ src/exceptions.c	(working copy)
+@@ -121,7 +121,7 @@
+     fprintf(stderr, "Architecture: %s\n", PARROT_ARCHNAME);
+     fprintf(stderr, "JIT Capable : %s\n", JIT_CAPABLE ? "Yes" : "No");
+     if (interp)
+-        fprintf(stderr, "Interp Flags: %#x\n", interp->flags);
++        fprintf(stderr, "Interp Flags: %#x\n", (unsigned int)interp->flags);
+     else
+         fprintf(stderr, "Interp Flags: (no interpreter)\n");
+     fprintf(stderr, "Exceptions  : %s\n", "(missing from core)");
+@@ -646,8 +646,7 @@
+ 
+ */
+ void
+-do_exception(Interp *interp,
+-        exception_severity severity, long error)
++do_exception(Interp *interp, INTVAL severity, long error)
+ {
+     Parrot_exception * const the_exception = interp->exceptions;
+ 
+Index: src/io/io_mmap.c
+===================================================================
+--- src/io/io_mmap.c	(revision 18263)
++++ src/io/io_mmap.c	(working copy)
+@@ -122,7 +122,8 @@
+     if (s->strstart && PObj_sysmem_TEST(s))
+         mem_sys_free(PObj_bufstart(s));
+     PObj_get_FLAGS(s) |= PObj_external_FLAG;
+-    PObj_bufstart(s) = s->strstart = io->b.startb + io->fpos;
++    PObj_bufstart(s) = io->b.startb + io->fpos;
++    s->strstart =  (char *) io->b.startb + io->fpos;
+     len = s->bufused ? s->bufused : io->b.size;
+     io->fpos += len;
+     PObj_buflen(s) = s->strlen = len;
+Index: src/io/io_buf.c
+===================================================================
+--- src/io/io_buf.c	(revision 18263)
++++ src/io/io_buf.c	(working copy)
+@@ -303,7 +303,7 @@
+         to_write = io->b.next - io->b.startb;
+ 
+         /* Flush to next layer */
+-        fake.strstart = io->b.startb;
++        fake.strstart = (char *)io->b.startb;
+         fake.bufused = to_write;
+         wrote = PIO_write_down(interp, PIO_DOWNLAYER(l), io, &fake);
+         if (wrote == (long)to_write) {
+@@ -345,7 +345,7 @@
+     size_t got;
+     PIOOFF_T pos = io->fpos;
+     STRING fake, *s;
+-    fake.strstart = b->startb;
++    fake.strstart = (char *)b->startb;
+     fake.bufused  = b->size;
+     s = &fake;
+ 
+@@ -410,7 +410,7 @@
+     if (!s->strstart) {
+         Parrot_allocate_string(interp, s, len);
+     }
+-    out_buf = s->strstart;
++    out_buf = (unsigned char *)s->strstart;
+     /* read Data from buffer */
+     if (b->flags & PIO_BF_READBUF) {
+         const size_t avail = b->endb - b->next;
+@@ -446,7 +446,7 @@
+             STRING fake;
+             STRING *sf = &fake;
+ 
+-            fake.strstart = out_buf;
++            fake.strstart = (char *)out_buf;
+             fake.bufused  = len;
+             got = PIO_read_down(interp, PIO_DOWNLAYER(l), io, &sf);
+             s->strlen = s->bufused = current + got;
+Index: src/extend.c
+===================================================================
+--- src/extend.c	(revision 18263)
++++ src/extend.c	(working copy)
+@@ -661,7 +661,7 @@
+ 
+ /*
+ 
+-=item C<Parrot_Int Parrot_PMC_typenum(Parrot_INTERP interp, const char *class)>
++=item C<Parrot_Int Parrot_PMC_typenum(Parrot_INTERP interp, const char *_class)>
+ 
+ Returns the internal identifier that represents the named class.
+ 
+@@ -669,10 +669,10 @@
+ 
+ */
+ 
+-Parrot_Int Parrot_PMC_typenum(Parrot_INTERP interp, const char *class) {
++Parrot_Int Parrot_PMC_typenum(Parrot_INTERP interp, const char *_class) {
+     Parrot_Int retval;
+     PARROT_CALLIN_START(interp);
+-    retval = pmc_type(interp, string_from_cstring(interp, class, 0));
++    retval = pmc_type(interp, string_from_cstring(interp, _class, 0));
+     PARROT_CALLIN_END(interp);
+     return retval;
+ }
+Index: vtable.tbl
+===================================================================
+--- vtable.tbl	(revision 18263)
++++ vtable.tbl	(working copy)
+@@ -14,7 +14,7 @@
+ void morph(INTVAL type) :write
+ void mark()
+ void destroy()
+-PMC* namespace()
++PMC* pmc_namespace()
+ 
+ # XXX FIXME should this be marked as writing?
+ PMC* getprop(STRING* key)
+@@ -371,7 +371,7 @@
+ PMC* get_anonymous_subclass()
+ 
+ ## Deprecated
+-void become_parent(PMC* class)
++void become_parent(PMC* _class)
+ ## Deprecated
+ PMC* subclass(PMC* name)
+ 
+Index: lib/Parrot/Pmc2c.pm
+===================================================================
+--- lib/Parrot/Pmc2c.pm	(revision 18263)
++++ lib/Parrot/Pmc2c.pm	(working copy)
+@@ -263,10 +263,10 @@
+         #
+         # Note that this trick won't work if the singleton inherits from something else
+         # (because the MRO will still be shared).
+-        unless ( $self->implements('namespace') or $self->{super}{'namespace'} ne 'default' ) {
++        unless ( $self->implements('pmc_namespace') or $self->{super}{'pmc_namespace'} ne 'default' ) {
+             push @{ $self->{methods} },
+                 {
+-                meth       => 'namespace',
++                meth       => 'pmc_namespace',
+                 parameters => '',
+                 body       => '{ return INTERP->vtables[SELF->vtable->base_type]->_namespace; }',
+                 loc        => 'vtable',
+@@ -275,7 +275,7 @@
+                 line       => 1,
+                 attrs      => {},
+                 };
+-            $self->{has_method}{namespace} = $#{ $self->{methods} };
++            $self->{has_method}{pmc_namespace} = $#{ $self->{methods} };
+         }
+     }
+ 
+Index: lib/Parrot/Vtable.pm
+===================================================================
+--- lib/Parrot/Vtable.pm	(revision 18263)
++++ lib/Parrot/Vtable.pm	(working copy)
+@@ -166,7 +166,7 @@
+     UINTVAL flags;          /* Flags. Duh */
+     STRING *does_str;       /* space-separated list of interfaces */
+     STRING *isa_str;        /* space-separated list of classes */
+-    PMC    *class;          /* for PMCs: a PMC of that type
++    PMC    *pmc_class;      /* for PMCs: a PMC of that type
+                                for objects: the class PMC */
+     PMC    *mro;            /* array PMC of [class, parents ... ] */
+     struct _vtable *ro_variant_vtable; /* A variant of this vtable with the
+Index: lib/Parrot/Pmc2c/StmRef.pm
+===================================================================
+--- lib/Parrot/Pmc2c/StmRef.pm	(revision 18263)
++++ lib/Parrot/Pmc2c/StmRef.pm	(working copy)
+@@ -15,7 +15,7 @@
+     PMC *real_pmc;
+     Parrot_STM_PMC_handle handle;
+ 
+-    assert(pmc->vtable->class != pmc);
++    assert(pmc->vtable->pmc_class != pmc);
+ 
+     handle = PMC_struct_val(pmc);
+ EOC
+Index: include/parrot/sub.h
+===================================================================
+--- include/parrot/sub.h	(revision 18263)
++++ include/parrot/sub.h	(working copy)
+@@ -102,8 +102,6 @@
+ #define Sub_comp_INIT_SET(o) Sub_comp_flag_SET(PF_INIT, o)
+ #define Sub_comp_INIT_CLEAR(o) Sub_comp_flag_CLEAR(PF_INIT, o)
+ 
+-union parrot_context_t;
+-
+ /*
+  * a flag to signal a Sub that a new RetContinuation should be created
+  */
+@@ -157,7 +155,7 @@
+     size_t   end_offs;
+ 
+     INTVAL   HLL_id;             /* see src/hll.c XXX or per segment? */
+-    PMC      *namespace;         /* where this Sub is in - this is either
++    PMC      *_namespace;        /* where this Sub is in - this is either
+                                   * a String or a [Key] and describes
+                                   * the relative path in the NameSpace
+                                   */
+Index: include/parrot/string_funcs.h
+===================================================================
+--- include/parrot/string_funcs.h	(revision 18263)
++++ include/parrot/string_funcs.h	(working copy)
+@@ -112,11 +112,11 @@
+ PARROT_API void string_downcase_inplace(Interp *, STRING *);
+ PARROT_API void string_titlecase_inplace(Interp *, STRING *);
+ 
+-PARROT_API INTVAL Parrot_string_is_cclass(Interp *, PARROT_CCLASS_FLAGS,
++PARROT_API INTVAL Parrot_string_is_cclass(Interp *, INTVAL,
+         STRING *, UINTVAL offset);
+-PARROT_API INTVAL Parrot_string_find_cclass(Interp *, PARROT_CCLASS_FLAGS,
++PARROT_API INTVAL Parrot_string_find_cclass(Interp *, INTVAL,
+         STRING *, UINTVAL offset, UINTVAL count);
+-PARROT_API INTVAL Parrot_string_find_not_cclass(Interp *, PARROT_CCLASS_FLAGS,
++PARROT_API INTVAL Parrot_string_find_not_cclass(Interp *, INTVAL,
+         STRING *, UINTVAL offset, UINTVAL count);
+ PARROT_API INTVAL Parrot_string_is_whitespace(Interp *, STRING *, INTVAL offset);
+ PARROT_API INTVAL Parrot_string_is_digit(Interp *, STRING *, INTVAL offset);
+Index: include/parrot/pobj.h
+===================================================================
+--- include/parrot/pobj.h	(revision 18263)
++++ include/parrot/pobj.h	(working copy)
+@@ -78,7 +78,7 @@
+ struct parrot_string_t {
+     pobj_t obj;
+     UINTVAL bufused;
+-    void *strstart;
++    char *strstart;
+     UINTVAL strlen;
+     /*    parrot_string_representation_t representation;*/
+     void *encoding; /* These should be of type ENCODING * and CHARSET *
+Index: include/parrot/objects.h
+===================================================================
+--- include/parrot/objects.h	(revision 18263)
++++ include/parrot/objects.h	(working copy)
+@@ -55,7 +55,7 @@
+ PARROT_API void Parrot_set_class_constructor(Parrot_Interp, STRING *, INTVAL, STRING *);
+ PARROT_API void Parrot_set_class_destructor(Parrot_Interp, STRING *, INTVAL, STRING *);
+ PARROT_API void Parrot_set_class_fallback(Parrot_Interp, STRING *, INTVAL, STRING *);
+-PARROT_API void Parrot_invalidate_method_cache(Interp*, STRING *class, STRING *meth);
++PARROT_API void Parrot_invalidate_method_cache(Interp*, STRING *_class, STRING *meth);
+ PARROT_API STRING *readable_name(Parrot_Interp, PMC *);
+ PARROT_API int Parrot_get_vtable_index(Interp *, const char *name);
+ PARROT_API PMC *Parrot_find_vtable_meth(Interp* interp, PMC *pmc, STRING *meth);
+@@ -95,16 +95,16 @@
+ 
+ #  define CLASS_ATTRIB_COUNT(cl) PMC_int_val2(cl)
+ #  define SET_CLASS(arr, obj, cl) \
+-       obj->vtable->class = cl
++       obj->vtable->pmc_class = cl
+ #  define GET_CLASS(arr, obj) \
+-       obj->vtable->class
++       obj->vtable->pmc_class
+ 
+ 
+ /* ************************************************************************ */
+ /* ********* BELOW HERE IS NEW PPD15 IMPLEMENTATION RELATED STUFF ********* */
+ /* ************************************************************************ */
+ 
+-PARROT_API PMC* Parrot_ComputeMRO_C3(Interp *interp, PMC *class);
++PARROT_API PMC* Parrot_ComputeMRO_C3(Interp *interp, PMC *_class);
+ 
+ PARROT_API void Parrot_ComposeRole(Interp *interp, PMC *role,
+                                    PMC *without, int got_without,
+Index: include/parrot/interpreter.h
+===================================================================
+--- include/parrot/interpreter.h	(revision 18263)
++++ include/parrot/interpreter.h	(working copy)
+@@ -314,7 +314,7 @@
+     int         n_libs;                       /* count of libs below */
+     op_lib_t  **all_op_libs;                  /* all loaded opcode libraries */
+ 
+-    Interp_flags flags;                       /* Various interpreter flags that
++    INTVAL flags;                             /* Various interpreter flags that
+                                                * signal that runops should do
+                                                * something */
+ 
+Index: include/parrot/exceptions.h
+===================================================================
+--- include/parrot/exceptions.h	(revision 18263)
++++ include/parrot/exceptions.h	(working copy)
+@@ -181,7 +181,7 @@
+ /*
+  * internal exception handling
+  */
+-PARROT_API void do_exception(Parrot_Interp, exception_severity severity, long error);
++PARROT_API void do_exception(Parrot_Interp, INTVAL severity, long error);
+ PARROT_API void new_internal_exception(Parrot_Interp);
+ PARROT_API void free_internal_exception(Parrot_Interp);
+ 
+Index: compilers/imcc/pbc.c
+===================================================================
+--- compilers/imcc/pbc.c	(revision 18263)
++++ compilers/imcc/pbc.c	(working copy)
+@@ -539,7 +539,7 @@
+     /* TODO use CONST_STRING */
+     decl_lex = const_string(interp, "declare_lex_preg");
+     lex_info_id = Parrot_get_ctx_HLL_type(interp, enum_class_LexInfo);
+-    lex_info_class = interp->vtables[lex_info_id]->class;
++    lex_info_class = interp->vtables[lex_info_id]->pmc_class;
+     decl_lex_meth = VTABLE_find_method(interp,
+             lex_info_class, decl_lex);
+     if (!decl_lex_meth) {
+@@ -960,7 +960,7 @@
+         s = string_unescape_cstring(interp, r->name + 1, '\'', NULL);
+     else
+         s = string_unescape_cstring(interp, r->name, 0, NULL);
+-    class = interp->vtables[r->pmc_type]->class;
++    class = interp->vtables[r->pmc_type]->pmc_class;
+     p = VTABLE_new_from_string(interp, class, s, PObj_constant_FLAG);
+     /* append PMC constant */
+     k = PDB_extend_const_table(interp);
+Index: t/pmc/class.t
+===================================================================
+--- t/pmc/class.t	(revision 18263)
++++ t/pmc/class.t	(working copy)
+@@ -83,7 +83,7 @@
+   ok_3:
+     say 'ok 3 - name() with too many args fails'
+ 
+-    $P1 = $P0.'namespace'()
++    $P1 = $P0.'pmc_namespace'()
+     if $P1 == 'Alex' goto ok_4
+     print 'not '
+ ok_4:
+
+------------=_1176821284-1687-158--
+

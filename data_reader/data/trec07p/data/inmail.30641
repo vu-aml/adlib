@@ -1,0 +1,215 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon May  7 11:20:28 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l47FKRqD032729
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 7 May 2007 11:20:27 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 9A0FC1639A3
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon,  7 May 2007 15:20:26 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 620)
+	id BDF68162ACA; Mon,  7 May 2007 15:19:54 +0000 (GMT)
+To: samba-cvs@samba.org
+From: metze@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070507151954.BDF68162ACA@lists.samba.org>
+Date: Mon,  7 May 2007 15:19:54 +0000 (GMT)
+Subject: svn commit: samba r22748 - in branches/SAMBA_4_0/source: auth
+	lib/messaging libcli scripting/ejs winbind wrepl_server
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: metze
+Date: 2007-05-07 15:19:53 +0000 (Mon, 07 May 2007)
+New Revision: 22748
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22748
+
+Log:
+fix memleaks by passing an mem_ctx to
+irpc_servers_byname()
+
+metze
+Modified:
+   branches/SAMBA_4_0/source/auth/auth_winbind.c
+   branches/SAMBA_4_0/source/lib/messaging/irpc.h
+   branches/SAMBA_4_0/source/lib/messaging/messaging.c
+   branches/SAMBA_4_0/source/libcli/finddcs.c
+   branches/SAMBA_4_0/source/scripting/ejs/smbcalls_rpc.c
+   branches/SAMBA_4_0/source/winbind/wb_dom_info.c
+   branches/SAMBA_4_0/source/wrepl_server/wrepl_apply_records.c
+   branches/SAMBA_4_0/source/wrepl_server/wrepl_scavenging.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/auth/auth_winbind.c
+===================================================================
+--- branches/SAMBA_4_0/source/auth/auth_winbind.c	2007-05-07 15:07:49 UTC (rev 22747)
++++ branches/SAMBA_4_0/source/auth/auth_winbind.c	2007-05-07 15:19:53 UTC (rev 22748)
+@@ -162,7 +162,10 @@
+ 	const struct auth_usersupplied_info *user_info_new;
+ 	struct netr_IdentityInfo *identity_info;
+ 
+-	winbind_servers = irpc_servers_byname(ctx->auth_ctx->msg_ctx, "winbind_server");
++	s = talloc(mem_ctx, struct winbind_check_password_state);
++	NT_STATUS_HAVE_NO_MEMORY(s);
++
++	winbind_servers = irpc_servers_byname(ctx->auth_ctx->msg_ctx, s, "winbind_server");
+ 	if ((winbind_servers == NULL) || (winbind_servers[0].id == 0)) {
+ 		DEBUG(0, ("Winbind authentication for [%s]\\[%s] failed, " 
+ 			  "no winbind_server running!\n",
+@@ -170,9 +173,6 @@
+ 		return NT_STATUS_NO_LOGON_SERVERS;
+ 	}
+ 
+-	s = talloc(mem_ctx, struct winbind_check_password_state);
+-	NT_STATUS_HAVE_NO_MEMORY(s);
+-
+ 	if (user_info->flags & USER_INFO_INTERACTIVE_LOGON) {
+ 		struct netr_PasswordInfo *password_info;
+ 
+
+Modified: branches/SAMBA_4_0/source/lib/messaging/irpc.h
+===================================================================
+--- branches/SAMBA_4_0/source/lib/messaging/irpc.h	2007-05-07 15:07:49 UTC (rev 22747)
++++ branches/SAMBA_4_0/source/lib/messaging/irpc.h	2007-05-07 15:19:53 UTC (rev 22748)
+@@ -117,7 +117,7 @@
+ 		   int callnum, void *r, TALLOC_CTX *ctx);
+ 
+ NTSTATUS irpc_add_name(struct messaging_context *msg_ctx, const char *name);
+-struct server_id *irpc_servers_byname(struct messaging_context *msg_ctx, const char *name);
++struct server_id *irpc_servers_byname(struct messaging_context *msg_ctx, TALLOC_CTX *mem_ctx, const char *name);
+ void irpc_remove_name(struct messaging_context *msg_ctx, const char *name);
+ NTSTATUS irpc_send_reply(struct irpc_message *m, NTSTATUS status);
+ 
+
+Modified: branches/SAMBA_4_0/source/lib/messaging/messaging.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/messaging/messaging.c	2007-05-07 15:07:49 UTC (rev 22747)
++++ branches/SAMBA_4_0/source/lib/messaging/messaging.c	2007-05-07 15:19:53 UTC (rev 22748)
+@@ -961,7 +961,8 @@
+ /*
+   return a list of server ids for a server name
+ */
+-struct server_id *irpc_servers_byname(struct messaging_context *msg_ctx, 
++struct server_id *irpc_servers_byname(struct messaging_context *msg_ctx,
++				      TALLOC_CTX *mem_ctx,
+ 				      const char *name)
+ {
+ 	struct tdb_wrap *t;
+@@ -985,7 +986,7 @@
+ 		return NULL;
+ 	}
+ 	count = rec.dsize / sizeof(struct server_id);
+-	ret = talloc_array(msg_ctx, struct server_id, count+1);
++	ret = talloc_array(mem_ctx, struct server_id, count+1);
+ 	if (ret == NULL) {
+ 		tdb_unlock_bystring(t->tdb, name);
+ 		talloc_free(t);
+
+Modified: branches/SAMBA_4_0/source/libcli/finddcs.c
+===================================================================
+--- branches/SAMBA_4_0/source/libcli/finddcs.c	2007-05-07 15:07:49 UTC (rev 22747)
++++ branches/SAMBA_4_0/source/libcli/finddcs.c	2007-05-07 15:19:53 UTC (rev 22748)
+@@ -133,7 +133,7 @@
+ 		return;
+ 	}
+ 
+-	nbt_servers = irpc_servers_byname(state->msg_ctx, "nbt_server");
++	nbt_servers = irpc_servers_byname(state->msg_ctx, state, "nbt_server");
+ 	if ((nbt_servers == NULL) || (nbt_servers[0].id == 0)) {
+ 		fallback_node_status(state);
+ 		return;
+
+Modified: branches/SAMBA_4_0/source/scripting/ejs/smbcalls_rpc.c
+===================================================================
+--- branches/SAMBA_4_0/source/scripting/ejs/smbcalls_rpc.c	2007-05-07 15:07:49 UTC (rev 22747)
++++ branches/SAMBA_4_0/source/scripting/ejs/smbcalls_rpc.c	2007-05-07 15:19:53 UTC (rev 22748)
+@@ -88,7 +88,7 @@
+ 		return -1;
+ 	}
+ 
+-	p->dest_ids = irpc_servers_byname(p->msg_ctx, p->server_name);
++	p->dest_ids = irpc_servers_byname(p->msg_ctx, p, p->server_name);
+ 	if (p->dest_ids == NULL || p->dest_ids[0].id == 0) {
+ 		talloc_free(p);
+ 		status = NT_STATUS_OBJECT_NAME_NOT_FOUND;
+
+Modified: branches/SAMBA_4_0/source/winbind/wb_dom_info.c
+===================================================================
+--- branches/SAMBA_4_0/source/winbind/wb_dom_info.c	2007-05-07 15:07:49 UTC (rev 22747)
++++ branches/SAMBA_4_0/source/winbind/wb_dom_info.c	2007-05-07 15:19:53 UTC (rev 22748)
+@@ -96,7 +96,7 @@
+ 	if (!composite_is_ok(state->ctx)) return;
+ 
+ 	nbt_servers = irpc_servers_byname(state->service->task->msg_ctx,
+-					  "nbt_server");
++					  state, "nbt_server");
+ 	if ((nbt_servers == NULL) || (nbt_servers[0].id == 0)) {
+ 		composite_error(state->ctx, NT_STATUS_NO_LOGON_SERVERS);
+ 		return;
+
+Modified: branches/SAMBA_4_0/source/wrepl_server/wrepl_apply_records.c
+===================================================================
+--- branches/SAMBA_4_0/source/wrepl_server/wrepl_apply_records.c	2007-05-07 15:07:49 UTC (rev 22747)
++++ branches/SAMBA_4_0/source/wrepl_server/wrepl_apply_records.c	2007-05-07 15:19:53 UTC (rev 22748)
+@@ -911,7 +911,7 @@
+ 	DEBUG(4,("late release demand record %s\n",
+ 		 nbt_name_string(state, &state->replica.name)));
+ 
+-	nbt_servers = irpc_servers_byname(state->msg_ctx, "nbt_server");
++	nbt_servers = irpc_servers_byname(state->msg_ctx, state, "nbt_server");
+ 	if ((nbt_servers == NULL) || (nbt_servers[0].id == 0)) {
+ 		return NT_STATUS_INTERNAL_ERROR;
+ 	}
+@@ -1051,7 +1051,7 @@
+ 	talloc_steal(state, replica->owner);
+ 	talloc_steal(state, replica->addresses);
+ 
+-	nbt_servers = irpc_servers_byname(state->msg_ctx, "nbt_server");
++	nbt_servers = irpc_servers_byname(state->msg_ctx, state, "nbt_server");
+ 	if ((nbt_servers == NULL) || (nbt_servers[0].id == 0)) {
+ 		return NT_STATUS_INTERNAL_ERROR;
+ 	}
+@@ -1113,7 +1113,7 @@
+ 	DEBUG(4,("release demand record %s\n",
+ 		 nbt_name_string(mem_ctx, &replica->name)));
+ 
+-	nbt_servers = irpc_servers_byname(partner->service->task->msg_ctx, "nbt_server");
++	nbt_servers = irpc_servers_byname(partner->service->task->msg_ctx, mem_ctx, "nbt_server");
+ 	if ((nbt_servers == NULL) || (nbt_servers[0].id == 0)) {
+ 		return NT_STATUS_INTERNAL_ERROR;
+ 	}
+
+Modified: branches/SAMBA_4_0/source/wrepl_server/wrepl_scavenging.c
+===================================================================
+--- branches/SAMBA_4_0/source/wrepl_server/wrepl_scavenging.c	2007-05-07 15:07:49 UTC (rev 22747)
++++ branches/SAMBA_4_0/source/wrepl_server/wrepl_scavenging.c	2007-05-07 15:19:53 UTC (rev 22748)
+@@ -390,7 +390,7 @@
+ 	struct verify_state *s;
+ 	struct server_id *nbt_servers;
+ 
+-	nbt_servers = irpc_servers_byname(service->task->msg_ctx, "nbt_server");
++	nbt_servers = irpc_servers_byname(service->task->msg_ctx, tmp_mem, "nbt_server");
+ 	if ((nbt_servers == NULL) || (nbt_servers[0].id == 0)) {
+ 		return NT_STATUS_INTERNAL_ERROR;
+ 	}
+

@@ -1,0 +1,324 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Apr 30 12:52:55 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3UGqt6w015137
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 30 Apr 2007 12:52:55 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id D2810163853
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 30 Apr 2007 16:52:53 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.7 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 501)
+	id 22CEB162AD5; Mon, 30 Apr 2007 16:52:33 +0000 (GMT)
+To: samba-cvs@samba.org
+From: abartlet@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070430165233.22CEB162AD5@lists.samba.org>
+Date: Mon, 30 Apr 2007 16:52:33 +0000 (GMT)
+Subject: svn commit: samba r22612 - in branches/SAMBA_4_0/source/winbind: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 11229
+Lines: 282
+
+Author: abartlet
+Date: 2007-04-30 16:52:30 +0000 (Mon, 30 Apr 2007)
+New Revision: 22612
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22612
+
+Log:
+Fix more cases where we have uninitialised values in the
+composite_context, because we don't use the creation function.
+
+Andrew Bartlett
+
+Modified:
+   branches/SAMBA_4_0/source/winbind/wb_async_helpers.c
+   branches/SAMBA_4_0/source/winbind/wb_cmd_getdcname.c
+   branches/SAMBA_4_0/source/winbind/wb_cmd_list_trustdom.c
+   branches/SAMBA_4_0/source/winbind/wb_cmd_lookupname.c
+   branches/SAMBA_4_0/source/winbind/wb_cmd_lookupsid.c
+   branches/SAMBA_4_0/source/winbind/wb_cmd_userdomgroups.c
+   branches/SAMBA_4_0/source/winbind/wb_cmd_usersids.c
+   branches/SAMBA_4_0/source/winbind/wb_dom_info_trusted.c
+   branches/SAMBA_4_0/source/winbind/wb_pam_auth.c
+   branches/SAMBA_4_0/source/winbind/wb_sam_logon.c
+   branches/SAMBA_4_0/source/winbind/wb_sid2domain.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/winbind/wb_async_helpers.c
+===================================================================
+--- branches/SAMBA_4_0/source/winbind/wb_async_helpers.c	2007-04-30 16:32:17 UTC (rev 22611)
++++ branches/SAMBA_4_0/source/winbind/wb_async_helpers.c	2007-04-30 16:52:30 UTC (rev 22612)
+@@ -60,8 +60,8 @@
+ 	struct composite_context *c, *creq;
+ 	struct get_schannel_creds_state *state;
+ 
+-	c = talloc_zero(mem_ctx, struct composite_context);
+-	if (c == NULL) return NULL;
++	c = composite_create(mem_ctx, ev);
++	if (c == NULL) goto failed;
+ 
+ 	state = talloc(c, struct get_schannel_creds_state);
+ 	if (state == NULL) {
+@@ -69,9 +69,7 @@
+ 		goto failed;
+ 	}
+ 
+-	c->state = COMPOSITE_STATE_IN_PROGRESS;
+ 	c->private_data = state;
+-	c->event_ctx = ev;
+ 
+ 	state->wks_creds = wks_creds;
+ 
+@@ -268,11 +266,8 @@
+ 	struct lsa_lookupsids_state *state;
+ 	int i;
+ 
+-	result = talloc(mem_ctx, struct composite_context);
++	result = composite_create(mem_ctx, lsa_pipe->conn->event_ctx);
+ 	if (result == NULL) goto failed;
+-	result->state = COMPOSITE_STATE_IN_PROGRESS;
+-	result->async.fn = NULL;
+-	result->event_ctx = lsa_pipe->conn->event_ctx;
+ 
+ 	state = talloc(result, struct lsa_lookupsids_state);
+ 	if (state == NULL) goto failed;
+@@ -428,11 +423,8 @@
+ 	struct lsa_String *lsa_names;
+ 	int i;
+ 
+-	result = talloc(mem_ctx, struct composite_context);
++	result = composite_create(mem_ctx, lsa_pipe->conn->event_ctx);
+ 	if (result == NULL) goto failed;
+-	result->state = COMPOSITE_STATE_IN_PROGRESS;
+-	result->async.fn = NULL;
+-	result->event_ctx = lsa_pipe->conn->event_ctx;
+ 
+ 	state = talloc(result, struct lsa_lookupnames_state);
+ 	if (state == NULL) goto failed;
+@@ -563,11 +555,8 @@
+ 	struct cmd_checkmachacc_state *state;
+ 	struct wbsrv_service *service = call->wbconn->listen_socket->service;
+ 
+-	result = talloc(call, struct composite_context);
++	result = composite_create(mem_ctx, call->event_ctx;
+ 	if (result == NULL) goto failed;
+-	result->state = COMPOSITE_STATE_IN_PROGRESS;
+-	result->async.fn = NULL;
+-	result->event_ctx = call->event_ctx;
+ 
+ 	state = talloc(result, struct cmd_checkmachacc_state);
+ 	if (state == NULL) goto failed;
+@@ -641,11 +630,8 @@
+ 	struct rpc_request *req;
+ 	struct samr_getuserdomgroups_state *state;
+ 
+-	result = talloc(mem_ctx, struct composite_context);
++	result = composite_create(mem_ctx, samr_pipe->conn->event_ctx);
+ 	if (result == NULL) goto failed;
+-	result->state = COMPOSITE_STATE_IN_PROGRESS;
+-	result->async.fn = NULL;
+-	result->event_ctx = samr_pipe->conn->event_ctx;
+ 
+ 	state = talloc(result, struct samr_getuserdomgroups_state);
+ 	if (state == NULL) goto failed;
+
+Modified: branches/SAMBA_4_0/source/winbind/wb_cmd_getdcname.c
+===================================================================
+--- branches/SAMBA_4_0/source/winbind/wb_cmd_getdcname.c	2007-04-30 16:32:17 UTC (rev 22611)
++++ branches/SAMBA_4_0/source/winbind/wb_cmd_getdcname.c	2007-04-30 16:52:30 UTC (rev 22612)
+@@ -44,11 +44,8 @@
+ 	struct composite_context *result, *ctx;
+ 	struct cmd_getdcname_state *state;
+ 
+-	result = talloc(mem_ctx, struct composite_context);
++	result = composite_create(mem_ctx, service->task->event_ctx);
+ 	if (result == NULL) goto failed;
+-	result->state = COMPOSITE_STATE_IN_PROGRESS;
+-	result->async.fn = NULL;
+-	result->event_ctx = service->task->event_ctx;
+ 
+ 	state = talloc(result, struct cmd_getdcname_state);
+ 	if (state == NULL) goto failed;
+
+Modified: branches/SAMBA_4_0/source/winbind/wb_cmd_list_trustdom.c
+===================================================================
+--- branches/SAMBA_4_0/source/winbind/wb_cmd_list_trustdom.c	2007-04-30 16:32:17 UTC (rev 22611)
++++ branches/SAMBA_4_0/source/winbind/wb_cmd_list_trustdom.c	2007-04-30 16:52:30 UTC (rev 22612)
+@@ -52,11 +52,8 @@
+ 	struct composite_context *result, *ctx;
+ 	struct cmd_list_trustdom_state *state;
+ 
+-	result = talloc_zero(mem_ctx, struct composite_context);
++	result = composite_create(mem_ctx, service->task->event_ctx);
+ 	if (result == NULL) goto failed;
+-	result->state = COMPOSITE_STATE_IN_PROGRESS;
+-	result->async.fn = NULL;
+-	result->event_ctx = service->task->event_ctx;
+ 
+ 	state = talloc(result, struct cmd_list_trustdom_state);
+ 	if (state == NULL) goto failed;
+
+Modified: branches/SAMBA_4_0/source/winbind/wb_cmd_lookupname.c
+===================================================================
+--- branches/SAMBA_4_0/source/winbind/wb_cmd_lookupname.c	2007-04-30 16:32:17 UTC (rev 22611)
++++ branches/SAMBA_4_0/source/winbind/wb_cmd_lookupname.c	2007-04-30 16:52:30 UTC (rev 22612)
+@@ -44,11 +44,8 @@
+ 	struct composite_context *result, *ctx;
+ 	struct cmd_lookupname_state *state;
+ 
+-	result = talloc(mem_ctx, struct composite_context);
++	result = composite_create(mem_ctx, service->task->event_ctx);
+ 	if (result == NULL) goto failed;
+-	result->state = COMPOSITE_STATE_IN_PROGRESS;
+-	result->async.fn = NULL;
+-	result->event_ctx = service->task->event_ctx;
+ 
+ 	state = talloc(result, struct cmd_lookupname_state);
+ 	if (state == NULL) goto failed;
+
+Modified: branches/SAMBA_4_0/source/winbind/wb_cmd_lookupsid.c
+===================================================================
+--- branches/SAMBA_4_0/source/winbind/wb_cmd_lookupsid.c	2007-04-30 16:32:17 UTC (rev 22611)
++++ branches/SAMBA_4_0/source/winbind/wb_cmd_lookupsid.c	2007-04-30 16:52:30 UTC (rev 22612)
+@@ -43,11 +43,9 @@
+ 	struct composite_context *result, *ctx;
+ 	struct cmd_lookupsid_state *state;
+ 
+-	result = talloc(mem_ctx, struct composite_context);
++
++	result = composite_create(mem_ctx, service->task->event_ctx);
+ 	if (result == NULL) goto failed;
+-	result->state = COMPOSITE_STATE_IN_PROGRESS;
+-	result->async.fn = NULL;
+-	result->event_ctx = service->task->event_ctx;
+ 
+ 	state = talloc(result, struct cmd_lookupsid_state);
+ 	if (state == NULL) goto failed;
+
+Modified: branches/SAMBA_4_0/source/winbind/wb_cmd_userdomgroups.c
+===================================================================
+--- branches/SAMBA_4_0/source/winbind/wb_cmd_userdomgroups.c	2007-04-30 16:32:17 UTC (rev 22611)
++++ branches/SAMBA_4_0/source/winbind/wb_cmd_userdomgroups.c	2007-04-30 16:52:30 UTC (rev 22612)
+@@ -45,11 +45,8 @@
+ 	struct composite_context *result, *ctx;
+ 	struct cmd_userdomgroups_state *state;
+ 
+-	result = talloc(mem_ctx, struct composite_context);
++	result = composite_create(mem_ctx, service->task->event_ctx);
+ 	if (result == NULL) goto failed;
+-	result->state = COMPOSITE_STATE_IN_PROGRESS;
+-	result->async.fn = NULL;
+-	result->event_ctx = service->task->event_ctx;
+ 
+ 	state = talloc(result, struct cmd_userdomgroups_state);
+ 	if (state == NULL) goto failed;
+
+Modified: branches/SAMBA_4_0/source/winbind/wb_cmd_usersids.c
+===================================================================
+--- branches/SAMBA_4_0/source/winbind/wb_cmd_usersids.c	2007-04-30 16:32:17 UTC (rev 22611)
++++ branches/SAMBA_4_0/source/winbind/wb_cmd_usersids.c	2007-04-30 16:52:30 UTC (rev 22612)
+@@ -57,11 +57,9 @@
+ 	struct composite_context *result, *ctx;
+ 	struct cmd_usersids_state *state;
+ 
+-	result = talloc(mem_ctx, struct composite_context);
++
++	result = composite_create(mem_ctx, service->task->event_ctx);
+ 	if (result == NULL) goto failed;
+-	result->state = COMPOSITE_STATE_IN_PROGRESS;
+-	result->async.fn = NULL;
+-	result->event_ctx = service->task->event_ctx;
+ 
+ 	state = talloc(result, struct cmd_usersids_state);
+ 	if (state == NULL) goto failed;
+
+Modified: branches/SAMBA_4_0/source/winbind/wb_dom_info_trusted.c
+===================================================================
+--- branches/SAMBA_4_0/source/winbind/wb_dom_info_trusted.c	2007-04-30 16:32:17 UTC (rev 22611)
++++ branches/SAMBA_4_0/source/winbind/wb_dom_info_trusted.c	2007-04-30 16:52:30 UTC (rev 22612)
+@@ -52,11 +52,8 @@
+ 	struct composite_context *result, *ctx;
+ 	struct trusted_dom_info_state *state;
+ 
+-	result = talloc(mem_ctx, struct composite_context);
++	result = composite_create(mem_ctx, service->task->event_ctx);
+ 	if (result == NULL) goto failed;
+-	result->state = COMPOSITE_STATE_IN_PROGRESS;
+-	result->async.fn = NULL;
+-	result->event_ctx = service->task->event_ctx;
+ 
+ 	state = talloc(result, struct trusted_dom_info_state);
+ 	if (state == NULL) goto failed;
+
+Modified: branches/SAMBA_4_0/source/winbind/wb_pam_auth.c
+===================================================================
+--- branches/SAMBA_4_0/source/winbind/wb_pam_auth.c	2007-04-30 16:32:17 UTC (rev 22611)
++++ branches/SAMBA_4_0/source/winbind/wb_pam_auth.c	2007-04-30 16:52:30 UTC (rev 22612)
+@@ -71,11 +71,8 @@
+ 	struct composite_context *result, *ctx;
+ 	struct pam_auth_crap_state *state;
+ 
+-	result = talloc(mem_ctx, struct composite_context);
++	result = composite_create(mem_ctx, service->task->event_ctx);
+ 	if (result == NULL) goto failed;
+-	result->state = COMPOSITE_STATE_IN_PROGRESS;
+-	result->async.fn = NULL;
+-	result->event_ctx = service->task->event_ctx;
+ 
+ 	state = talloc(result, struct pam_auth_crap_state);
+ 	if (state == NULL) goto failed;
+
+Modified: branches/SAMBA_4_0/source/winbind/wb_sam_logon.c
+===================================================================
+--- branches/SAMBA_4_0/source/winbind/wb_sam_logon.c	2007-04-30 16:32:17 UTC (rev 22611)
++++ branches/SAMBA_4_0/source/winbind/wb_sam_logon.c	2007-04-30 16:52:30 UTC (rev 22612)
+@@ -73,7 +73,7 @@
+ }
+ 
+ /*
+-    Finish the connection to the DC
++    Having finished making the connection to the DC
+     Send of a SamLogon request to authenticate a user.
+ */
+ static void wb_sam_logon_recv_domain(struct composite_context *creq)
+
+Modified: branches/SAMBA_4_0/source/winbind/wb_sid2domain.c
+===================================================================
+--- branches/SAMBA_4_0/source/winbind/wb_sid2domain.c	2007-04-30 16:32:17 UTC (rev 22611)
++++ branches/SAMBA_4_0/source/winbind/wb_sid2domain.c	2007-04-30 16:52:30 UTC (rev 22612)
+@@ -64,11 +64,8 @@
+ 	struct composite_context *result, *ctx;
+ 	struct sid2domain_state *state;
+ 
+-	result = talloc_zero(mem_ctx, struct composite_context);
++	result = composite_create(mem_ctx, service->task->event_ctx);
+ 	if (result == NULL) goto failed;
+-	result->state = COMPOSITE_STATE_IN_PROGRESS;
+-	result->async.fn = NULL;
+-	result->event_ctx = service->task->event_ctx;
+ 
+ 	state = talloc(result, struct sid2domain_state);
+ 	if (state == NULL) goto failed;
+

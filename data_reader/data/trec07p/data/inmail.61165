@@ -1,0 +1,215 @@
+From perl6-all-return-82128-ktwarwic=speedy.uwaterloo.ca@perl.org  Wed Jun 20 04:33:02 2007
+Return-Path: <perl6-all-return-82128-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l5K8WxL9007777
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 20 Jun 2007 04:33:00 -0400
+Received: (qmail 4067 invoked by uid 514); 20 Jun 2007 08:32:57 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 4061 invoked from network); 20 Jun 2007 08:32:56 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-language-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-language
+List-Id: <perl6-language.perl.org>
+Delivered-To: mailing list perl6-language@perl.org
+Delivered-To: perl6-language@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+Date: Wed, 20 Jun 2007 10:32:20 +0200
+From: Mark Overmeer <mark@overmeer.net>
+To: Damian Conway <damian@conway.org>
+Cc: "perl6-language@perl.org" <perl6-language@perl.org>
+Subject: Re: Referring to source code within Perldoc: the new A<> code
+Message-ID: <20070620083220.GX16156@earth.overmeer.net>
+Mail-Followup-To: Damian Conway <damian@conway.org>,
+	"perl6-language@perl.org" <perl6-language@perl.org>
+References: <4678B887.8090303@conway.org>
+Mime-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+In-Reply-To: <4678B887.8090303@conway.org>
+Organization: MARKOV Solutions
+User-Agent: Mutt/1.5.9i
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+
+* Damian Conway (damian@conway.org) [070620 05:17]:
+> Feedback and suggestions are most welcome.
+
+Clear and usable, in the boundaries you set to yourself.
+
+Just my thoughts.  A lot of questions and speculation, you do
+not need to answer all.  I'll try to only comment on this design,
+and not restart our usual discussion.
+
+> role Transaction {
+> =alias class  A<role>
+> 
+>    state Int $trans_counter;
+> =alias V<my Int>  A<state Int>
+> 
+> =DESCRIPTION
+> The A<my Int> variable is used to track the total number of transactions
+> active at any one time. The value of A<my Int> is incremented by the
+> A<class> C<BUILD> submethod and decremented by the A<class> destructor.
+
+This is exactly the form of documentation you do *not* want the
+user to write, for various reasons:
+
+  * it is stylish quite bad to repeat words like 'variable', 'class',
+    or 'method' in nearly every sentence.  It makes manual-pages
+    painfully unpleasant.
+
+  * The explicit naming of the class name in method and attribute
+    descriptions is in general a bad idea: by inheritance, you get
+    sub-classes which also provide this method.  In the people's
+    mind (I mean "normal people", not our "perl guru"), this
+    requires continuous translations which distracts from the message.
+
+ <h1>class Transaction</h1>
+ <p>The transaction class defines the following methods and attributes.</p>
+
+ <p>The $trans_counter variable is used to track the total number of
+ transactions active at any one time. The value of $trans_counter is
+ incremented by the Transaction BUILD submethod and decremented by
+ the Transaction destructor.</p>
+
+ <p>The $max variable reports the number of Transaction objects which
+ are allowed to be processed in parallel.  This is a constant value,
+ which defaults to 10.</p>
+ 
+    and so on.  For many pages long.  What, IMO, you want is a clean
+    and condensed way of expressing.  At least I would prefer output
+    in this shape:
+
+ <h1>class Transaction</h1>
+ <p>The transaction class defines the following methods and attributes.</p>
+
+ <ul>
+ <dt>private attribute $trans_counter</dd>
+ <dd>tracks the number of transactions actions active at any one time. The
+     value is incremented by BUILD() and decremented at Transaction
+     destruction.</dd>
+ <dt>public attribute $max (read-only, default 10)</dt>
+ <dd>the number of transactions are allowed to be processed in
+     parallel.</dd>
+
+    Concise, correct, and complete.
+    Of course, adapted to the features of the output channel, using
+    templates and style-sheets in the document generating tools.
+
+  * How do you see this syntactically work in combination with the
+    item list? At least the POD(5) needed that.  I need a combined
+    example.
+
+  * Having aliases is pratical, for referencing.  However, in this
+    latter example it is used to help the programmer to shoot himself
+    in the foot.  If you allow people to say "class" each time they
+    mean "role", or "function" where it is "method", then on the long
+    run people will start making avoidable programming mistakes.
+
+    In the chosen approach, this abuse cannot be avoidable. But it
+    may be a wise not to promote it by using it as example.
+
+  * Using ambient back-references this way probably requires a
+    two-pass document generator. AFAIK this is not required for the
+    design of POD6 so far.
+
+  * the A<(..)> syntax is nice, but has a few dangers.  Serious
+    problems.  Your examples are a bit brief.  A little larger:
+
+         method eat(Food $meal) {...}
+
+       =for DESCRIPTION
+       The A<method>() method has the following argument list: A<(..)>
+
+    Now the method gets implemented:
+
+         method eat(Food $meal) {
+            if($manger.isFull) { $manger.clean }
+         }
+
+       =for DESCRIPTION
+       The A<method>() method has the following argument list: A<(..)>
+
+    Oops... now the argument list became (without warning)
+    "$manger.isFull"   So, either you impose a strict doc order, forcing
+    people into "your style", or people have to use an alias everywhere,
+    bulking the file. More subtle examples of this problem can be
+    created, for instance when the method defines a return type
+
+  * In the manual-page of my sub-class, I want to refer to the
+    documentation of specific attributes and methods.  How?
+    Can I also refer to elements in distributions which are not
+    mine, so where I cannot add X<> or such?  For instance,
+    when I inherit from a core Perl class?
+
+  * In my sub-class, I want to enlist automatically the methods
+    and attributes which are inherited.  Automatically of course,
+    because I want to avoid mistakes.  In case of multi-level
+    inheritance, some way I need to know and show where each is
+    defined. How?
+    For instance, if your look at IO::File in Perl5, it defines
+    some own method, but then simply says: see also IO::Handle
+    and IO::Seekable.  IO::Handle says: see also perlfunc and
+    perlvar.  The more extended your OO model is, (Perl6's
+    structure is probably much more extended), the more levels
+    of hierarchy you get.  Are users able to understand this?
+    Are developers able to maintain manual interface description
+    lists without mistakes?
+    Is the shown syntax sufficient for tools to create it
+    automatically?  As decided, of course without looking at
+    the perl code itself.
+
+Your design goal of A<> is to avoid replication of code information,
+in which you succeeded.  Now your write
+
+         method eat(Food $meal) {...}
+
+     =for DESCRIPTION
+     The A<method>() method has the following argument list: A<(..)>
+
+In stead of
+
+         method eat(Food $meal) {...}
+
+     =for DESCRIPTION
+     The eat() method has the following argument list: Food $meal. 
+
+What I would like is to get rit of the replication of that description
+line as well, using back-end specific templates/style-sheets.
+
+What about:
+
+      =definition
+         method eat(Food $meal) {...}
+
+      =for DESCRIPTION
+      ...
+
+In this case, the Perl and POD are using the text in the file
+in an overlapping way, but still the Perl6 and POD6 parsers are
+fully seperate.  This will open a whole new realm of possible
+simplifications.
+-- 
+Regards,
+
+               MarkOv
+
+------------------------------------------------------------------------
+       Mark Overmeer MSc                                MARKOV Solutions
+       Mark@Overmeer.net                          solutions@overmeer.net
+http://Mark.Overmeer.net                   http://solutions.overmeer.net
+

@@ -1,0 +1,121 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May 23 13:24:47 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4NHOkqD027785
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 23 May 2007 13:24:46 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 446031638AF
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 23 May 2007 17:24:42 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-3.3 required=3.8 tests=ALL_TRUSTED,AWL,BAYES_00 
+	autolearn=ham version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from [IPv6:::1] (dp [66.70.73.150])
+	by lists.samba.org (Postfix) with ESMTP id 28E25162ADE;
+	Wed, 23 May 2007 17:24:04 +0000 (GMT)
+Message-Id: <3BA26E1B-7CAF-4DE3-9122-34AE74CFF783@samba.org>
+From: James Peach <jpeach@samba.org>
+To: Bjoern Jacke <bjoern@j3e.de>
+In-Reply-To: <20070523162147.GB27064@j3e.de>
+Content-Type: text/plain; charset=US-ASCII; format=flowed; delsp=yes
+Content-Transfer-Encoding: 7bit
+Mime-Version: 1.0 (Apple Message framework v885)
+Date: Wed, 23 May 2007 10:24:03 -0700
+References: <E1HqAgy-0006kM-5q@intern.SerNet.DE> <46545C09.1040002@samba.org>
+	<E1Hqsla-00041L-Hu@intern.SerNet.DE>
+	<E092813C-25D9-41EE-A623-FD9664CD0240@samba.org>
+	<20070523162147.GB27064@j3e.de>
+X-Mailer: Apple Mail (2.885)
+Cc: samba-technical@lists.samba.org
+Subject: Re: setgroups problems on FreeBSD - proposed fix
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+On May 23, 2007, at 9:21 AM, Bjoern Jacke wrote:
+
+> Hi James,
+>
+> On Wed, May 23, 2007 at 08:35:46AM -0700, James Peach wrote:
+>> FWIW, Darwin does the same as FreeBSD ...
+>
+> maybe you can bring some light into the dark here: I did some tests  
+> with
+> Darwin (OS X with most recent patches) to see how it behaves with the
+> maximum number of supplementary groups. sysctl says ngroups max is 16
+> like on all *BSD systems.
+>
+> I saw that it is quite difficult to actually add any new groups on an
+> OS X client machine. I found that it is possible to add groups if you
+> download 50MB ServerAdminTools from Apple and connect to the  
+> "localhost"
+> server with the workgroup manager tool. This was the only way I found
+> out on OS X to add new groups, is there an easier way to create/manage
+> groups?
+
+I use dscl and dseditgroup, but the ServerAdmin tools are what you are  
+supposed to use. I think that most users of desktop system don't have  
+much need to be adding groups :)
+
+http://developer.apple.com/documentation/Darwin/Reference/ManPages/man1/dscl.1.html
+http://developer.apple.com/documentation/Darwin/Reference/ManPages/man8/dseditgroup.8.html
+
+> Then I put myself into 17 newly created groups but "id" was saying  
+> that
+> I would only be in 15 groups (including the group which is reported
+> to be my primary group - but I don't know if OS X is actually making a
+> difference between primary and supplementary groups internally, does  
+> it?).
+
+The kernel cred has an array of 16 groups and the first element is  
+your primary gid. I don't know whether the kernel treats these any  
+differently when making authorisation decisions.
+
+> So on OS X it only seems to be possible to have 14 supplementary  
+> groups
+> at all. Is this by design?
+
+The answer is both yes and no :)
+
+Darwin has true nested groups and users can be in an unlimited number  
+of groups. Unfortunately calling setgroups(2) disables this behaviour  
+and gives you 1 primary + 15 supplementary. This is for standards  
+conformance reasons.
+
+Now normally what happens is that the Directory Services guarantees to  
+answer the question "is user X a member of group Y". It does not  
+provide a method to enumerate all the groups a user is a member of,  
+and I don't know a way to do that. In this case, the supplementary  
+groups list is best thought of as a group membership cache (though  
+there are also other levels of caching involved). When the kernel  
+needs to make an authorisation decision that might depend on the user  
+being a member of a specific group, it calls out to Directory Services  
+to check the user's group membership.
+
+http://developer.apple.com/documentation/Darwin/Reference/ManPages/man8/memberd.8.html
+
+So every process gets on the memberd path by default. If you call  
+setgroups or otherwise mess with your credential, you get kicked off  
+the memberd path. getgroups(2) will simply not return your full group  
+list if you have more than 16.
+
+If you did through the Darwin mailing lists, there is probably a post  
+from Terry Lambert explaining this better than I can.
+
+--
+James Peach | jpeach@samba.org
+

@@ -1,0 +1,141 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Apr 16 19:03:00 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3GN2x0I020218
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 16 Apr 2007 19:03:00 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 73E4B1638D1
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 16 Apr 2007 23:02:34 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,RCVD_IN_DSBL,
+	UNPARSEABLE_RELAY autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: from mail.SerNet.de (mail.SerNet.DE [193.175.80.2])
+	by lists.samba.org (Postfix) with ESMTP id 7DA11162ACD
+	for <samba-cvs@samba.org>; Mon, 16 Apr 2007 23:01:57 +0000 (GMT)
+Received: from intern.SerNet.DE by mail.SerNet.DE with esmtp (Exim 4.51 #1)
+	for samba-cvs@samba.org
+	id 1HdaCr-0005yo-0X; Tue, 17 Apr 2007 01:01:57 +0200
+Received: by intern.SerNet.DE
+	id 1HdaCq-0002Ho-Nz; Tue, 17 Apr 2007 01:01:56 +0200
+Received: by intern.SerNet.DE
+	id 1HdaCq-0002Hj-6I; Tue, 17 Apr 2007 01:01:56 +0200
+Received: from mad by nirvana.sernet.private with local (Exim 4.63)
+	(envelope-from <ma@sernet.de>)
+	id 1HdaCp-0001mI-Ip; Tue, 17 Apr 2007 01:01:55 +0200
+To: samba-cvs@samba.org
+From: Michael Adam <ma@sernet.de>
+Date: Tue, 17 Apr 2007 01:01:55 +0200
+Message-Id: <E1HdaCq-0002Ho-Nz@intern.SerNet.DE>
+Organization: SerNet GmbH, Goettingen, Germany
+Subject: Rev 5364: Changes of the registry also trigger a reload of
+	smb.conf. in http://samba.sernet.de/ma/bzr/SAMBA_3_0-registry.bzr/
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2807
+Lines: 88
+
+At http://samba.sernet.de/ma/bzr/SAMBA_3_0-registry.bzr/
+
+------------------------------------------------------------
+revno: 5364
+revision-id: ma@sernet.de-20070416230151-bfcfb70d496cc600
+parent: ma@sernet.de-20070415225054-98f15a01f998d3c6
+committer: Michael Adam <ma@sernet.de>
+branch nick: SAMBA_3_0-registry.bzr
+timestamp: Tue 2007-04-17 01:01:51 +0200
+message:
+  Changes of the registry also trigger a reload of smb.conf.
+  
+  This is a first slighty hacked version of a registry watcher
+  in lp_file_list_changed. It uses the regdb sequence number
+  to decide whether the contents of the registry has changed.
+  The hack here is that the call to "registry_init_regdb()" 
+  is now there in process_registry_shares() and and in 
+  lp_file_list_changed(). It is needed in the latter function
+  because when a new smbd process is started, lp_file_list_changed 
+  is called before lp_load(). Maybe, I have to think of a better
+  place to call regdb_init()... 
+modified:
+  source/param/loadparm.c        loadparm.c-20060530022627-1efa1edb3eb0e897
+=== modified file 'source/param/loadparm.c'
+--- a/source/param/loadparm.c	2007-04-15 22:30:33 +0000
++++ b/source/param/loadparm.c	2007-04-16 23:01:51 +0000
+@@ -80,6 +80,9 @@
+ #define INCLUDE_REGISTRY_NAME "registry"
+ #endif
+ 
++static int regdb_last_seqnum = 0;
++static BOOL include_registry_globals = False;
++
+ /* some helpful bits */
+ #define LP_SNUM_OK(i) (((i) >= 0) && ((i) < iNumServices) && (ServicePtrs != NULL) && ServicePtrs[(i)]->valid)
+ #define VALID(i) (ServicePtrs != NULL && ServicePtrs[i]->valid)
+@@ -3084,6 +3087,24 @@
+ 
+  	DEBUG(6, ("lp_file_list_changed()\n"));
+ 
++
++	/* hack - should't this go somewhere else?!
++	 * now it is here and in process_registry_globals. 
++	 * so whichever function is called first wil init the
++ 	 * regdb. here we need it for querying the regdb seqnum */
++	if (!registry_init_regdb()) {
++		DEBUG(1, ("Error initializing the registry.\n"));
++		return False;
++	}
++
++	if (include_registry_globals &&
++	    (regdb_last_seqnum != regdb_get_seqnum()))
++	{
++		DEBUGADD(6, ("regdb seqnum changed: old = %d, new = %d\n",
++			     regdb_last_seqnum, regdb_get_seqnum()));
++		return True;
++	}
++
+ 	while (f) {
+ 		pstring n2;
+ 		time_t mod_time;
+@@ -3193,6 +3214,8 @@
+ 		smb_panic("Failed to create talloc context!");
+ 	}
+ 
++	include_registry_globals = True;
++
+ 	/* It might not bee to clean to have the initialization here.
+ 	 * If the registry is already initialized, it does not do
+ 	 * any harm. */
+@@ -3231,7 +3254,7 @@
+ 			pfunc(valname, value->v.sz.str);
+ 			break;
+ 		default:
+-			/* ignore */
++			/* ignore other types */
+ 			break;
+ 		}
+ 		TALLOC_FREE(value);
+@@ -3240,6 +3263,8 @@
+ 
+ 	ret = pfunc("registry shares", "yes");
+ 
++	regdb_last_seqnum = regdb_get_seqnum();
++
+ done:
+ 	talloc_destroy(ctx);
+ 	return ret;
+

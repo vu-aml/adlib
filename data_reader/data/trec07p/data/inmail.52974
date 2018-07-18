@@ -1,0 +1,157 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Jun  7 04:07:55 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5787shB032145
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 7 Jun 2007 04:07:54 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 6D29F162B71
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu,  7 Jun 2007 08:07:48 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 6C653162AC1; Thu,  7 Jun 2007 08:07:17 +0000 (GMT)
+Date: Thu, 07 Jun 2007 18:05:26 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070607080717.6C653162AC1@lists.samba.org>
+Subject: Rev 492: get all the tunables at once in recovery daemon in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 492
+revision-id: tridge@samba.org-20070607080525-14g625qx3h5rvs40
+parent: tridge@samba.org-20070607064831-cs6ed30jggx07qp9
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Thu 2007-06-07 18:05:25 +1000
+message:
+  get all the tunables at once in recovery daemon
+modified:
+  common/ctdb_client.c           ctdb_client.c-20070411010216-3kd8v37k61steeya-1
+  common/ctdb_control.c          ctdb_control.c-20070426122724-j6gkpiofhbwdin63-1
+  common/ctdb_recoverd.c         recoverd.c-20070503213540-bvxuyd9jm1f7ig90-1
+  include/ctdb_private.h         ctdb_private.h-20061117234101-o3qt14umlg9en8z0-13
+=== modified file 'common/ctdb_client.c'
+--- a/common/ctdb_client.c	2007-06-07 05:18:55 +0000
++++ b/common/ctdb_client.c	2007-06-07 08:05:25 +0000
+@@ -1946,3 +1946,33 @@
+ 	return 0;
+ }
+ 
++
++/*
++  get all tunables
++ */
++int ctdb_ctrl_get_all_tunables(struct ctdb_context *ctdb, 
++			       struct timeval timeout, 
++			       uint32_t destnode,
++			       struct ctdb_tunable *tunables)
++{
++	TDB_DATA outdata;
++	int ret;
++	int32_t res;
++
++	ret = ctdb_control(ctdb, destnode, 0, CTDB_CONTROL_GET_ALL_TUNABLES, 0, tdb_null, ctdb,
++			   &outdata, &res, &timeout, NULL);
++	if (ret != 0 || res != 0) {
++		DEBUG(0,(__location__ " ctdb_control for get all tunables failed\n"));
++		return -1;
++	}
++
++	if (outdata.dsize != sizeof(*tunables)) {
++		DEBUG(0,(__location__ " bad data size %u in ctdb_ctrl_get_all_tunables should be %u\n",
++			 outdata.dsize, sizeof(*tunables)));
++		return -1;		
++	}
++
++	*tunables = *(struct ctdb_tunable *)outdata.dptr;
++	talloc_free(outdata.dptr);
++	return 0;
++}
+
+=== modified file 'common/ctdb_control.c'
+--- a/common/ctdb_control.c	2007-06-07 05:18:55 +0000
++++ b/common/ctdb_control.c	2007-06-07 08:05:25 +0000
+@@ -80,6 +80,13 @@
+ 		return 0;
+ 	}
+ 
++	case CTDB_CONTROL_GET_ALL_TUNABLES: {
++		CHECK_CONTROL_DATA_SIZE(0);
++		outdata->dptr = (uint8_t *)&ctdb->tunable;
++		outdata->dsize = sizeof(ctdb->tunable);
++		return 0;
++	}
++
+ 	case CTDB_CONTROL_DUMP_MEMORY: {
+ 		CHECK_CONTROL_DATA_SIZE(0);
+ 		talloc_report_full(ctdb, stdout);
+
+=== modified file 'common/ctdb_recoverd.c'
+--- a/common/ctdb_recoverd.c	2007-06-07 06:48:31 +0000
++++ b/common/ctdb_recoverd.c	2007-06-07 08:05:25 +0000
+@@ -1031,18 +1031,11 @@
+ 	ctdb_wait_timeout(ctdb, ctdb->tunable.recover_interval);
+ 
+ 	/* get relevant tunables */
+-	ctdb_ctrl_get_tunable(ctdb, CONTROL_TIMEOUT(), CTDB_CURRENT_NODE, 
+-			      "RecoverTimeout", &ctdb->tunable.recover_timeout);
+-	ctdb_ctrl_get_tunable(ctdb, CONTROL_TIMEOUT(), CTDB_CURRENT_NODE, 
+-			      "RecoverInterval", &ctdb->tunable.recover_interval);
+-	ctdb_ctrl_get_tunable(ctdb, CONTROL_TIMEOUT(), CTDB_CURRENT_NODE, 
+-			      "ElectionTimeout", &ctdb->tunable.election_timeout);
+-	ctdb_ctrl_get_tunable(ctdb, CONTROL_TIMEOUT(), CTDB_CURRENT_NODE, 
+-			      "TakeoverTimeout", &ctdb->tunable.takeover_timeout);
+-	ctdb_ctrl_get_tunable(ctdb, CONTROL_TIMEOUT(), CTDB_CURRENT_NODE, 
+-			      "RecoveryGracePeriod", &ctdb->tunable.recovery_grace_period);
+-	ctdb_ctrl_get_tunable(ctdb, CONTROL_TIMEOUT(), CTDB_CURRENT_NODE, 
+-			      "RecoveryBanPeriod", &ctdb->tunable.recovery_ban_period);
++	ret = ctdb_ctrl_get_all_tunables(ctdb, CONTROL_TIMEOUT(), CTDB_CURRENT_NODE, &ctdb->tunable);
++	if (ret != 0) {
++		DEBUG(0,("Failed to get tunables - retrying\n"));
++		goto again;
++	}
+ 
+ 	vnn = ctdb_ctrl_getvnn(ctdb, CONTROL_TIMEOUT(), CTDB_CURRENT_NODE);
+ 	if (vnn == (uint32_t)-1) {
+
+=== modified file 'include/ctdb_private.h'
+--- a/include/ctdb_private.h	2007-06-07 06:34:33 +0000
++++ b/include/ctdb_private.h	2007-06-07 08:05:25 +0000
+@@ -419,6 +419,7 @@
+ 		    CTDB_CONTROL_LIST_TUNABLES           = 50,
+ 		    CTDB_CONTROL_GET_PUBLIC_IPS          = 51,
+ 		    CTDB_CONTROL_MODIFY_FLAGS            = 52,
++		    CTDB_CONTROL_GET_ALL_TUNABLES        = 53,
+ };
+ 
+ /*
+@@ -1032,4 +1033,9 @@
+ 
+ int32_t ctdb_control_modflags(struct ctdb_context *ctdb, TDB_DATA indata);
+ 
++int ctdb_ctrl_get_all_tunables(struct ctdb_context *ctdb, 
++			       struct timeval timeout, 
++			       uint32_t destnode,
++			       struct ctdb_tunable *tunables);
++
+ #endif
+

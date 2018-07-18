@@ -1,0 +1,148 @@
+From beginners-return-93056-ktwarwic=speedy.uwaterloo.ca@perl.org  Wed Jul  4 17:36:37 2007
+Return-Path: <beginners-return-93056-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l64LaZL9015824
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 4 Jul 2007 17:36:36 -0400
+Received: (qmail 14837 invoked by uid 514); 4 Jul 2007 21:36:26 -0000
+Mailing-List: contact beginners-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:beginners@perl.org>
+List-Help: <mailto:beginners-help@perl.org>
+List-Unsubscribe: <mailto:beginners-unsubscribe@perl.org>
+List-Subscribe: <mailto:beginners-subscribe@perl.org>
+List-Id: <beginners.perl.org>
+Delivered-To: mailing list beginners@perl.org
+Received: (qmail 14828 invoked from network); 4 Jul 2007 21:36:26 -0000
+Received: from x1a.develooper.com (HELO x1.develooper.com) (216.52.237.111)
+  by lists.develooper.com with SMTP; 4 Jul 2007 21:36:26 -0000
+Received: (qmail 29884 invoked by uid 225); 4 Jul 2007 21:36:25 -0000
+Delivered-To: beginners@perl.org
+Received: (qmail 29877 invoked by alias); 4 Jul 2007 21:36:25 -0000
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: domain of krahnj@telus.net designates 199.185.220.222 as permitted sender)
+Received: from outbound03.telus.net (HELO outbound03.telus.net) (199.185.220.222)
+    by la.mx.develooper.com (qpsmtpd/0.28) with ESMTP; Wed, 04 Jul 2007 14:36:20 -0700
+Received: from priv-edtnaa05.telusplanet.net ([154.20.131.28])
+          by priv-edtnes86.telusplanet.net
+          (InterMail vM.7.08.02.00 201-2186-121-20061213) with ESMTP
+          id <20070704213616.RGPR997.priv-edtnes86.telusplanet.net@priv-edtnaa05.telusplanet.net>
+          for <beginners@perl.org>; Wed, 4 Jul 2007 15:36:16 -0600
+Received: from [154.20.131.28] (d154-20-131-28.bchsia.telus.net [154.20.131.28])
+	by priv-edtnaa05.telusplanet.net (BorderWare MXtreme Infinity Mail Firewall) with ESMTP id 3CXREMM8NG
+	for <beginners@perl.org>; Wed,  4 Jul 2007 15:36:16 -0600 (MDT)
+Message-ID: <468C12CE.1080006@telus.net>
+Date: Wed, 04 Jul 2007 14:36:14 -0700
+From: "John W. Krahn" <krahnj@telus.net>
+User-Agent: Thunderbird 1.5.0.12 (X11/20070604)
+MIME-Version: 1.0
+To: Perl beginners <beginners@perl.org>
+Subject: Re: Howto decode an arp entry to hex
+References: <468BFA5A.4090904@sipman.net>
+In-Reply-To: <468BFA5A.4090904@sipman.net>
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+
+Bernard wrote:
+> Hi,
+
+Hello,
+
+> When I try to get the arp table from any type of device (oid 
+> 1.3.6.1.2.1.4.22.1.3) with the snmp_util module, it  returns the 6 
+> character, instead of the hex byte value.
+> 
+> How can I convert a 6 byte word into the hex equivalent like 
+> 00:0a:8b:bd:62:8a.
+
+$ perl -le'
+my $data = "\x00\x0a\x8b\xbd\x62\x8a";
+( my $new = unpack "H*", $data ) =~ s/(..)(?=..)/$1:/g;
+print $new;
+'
+00:0a:8b:bd:62:8a
+
+
+> Any help greatly appreciated
+> 
+> #!/usr/bin/perl
+
+You should let perl help you too!
+
+use warnings;
+use strict;
+
+
+> use SNMP_util;
+> 
+> 
+> my $IPADDR = $ARGV[0] || die "Oops, no ipaddr specified....";
+> my $COMM = $ARGV[1] || die "Oops, no community specified....";
+> my $OID = $ARGV[2] || die "Oops, no oid specified....";
+
+Although that *will* technically work, you are using the wrong logical 
+operator.  The logical or operator (||) has higher precedence than the 
+assignment operator (=).
+
+The usual idiom is to use '||' for assignment:
+
+my $var = $ARGV[0] || 'some default value';
+
+And to use 'or' for flow control:
+
+my $var = $ARGV[0] or die "Opps\n";
+
+
+> print("Getting info for $IPADDR with comm $COMM ($OID)\n");
+> 
+> $HOST = $COMM . "@" . $IPADDR;
+> $SNMPVER = "1";
+> $SNMPSTR = "$HOST" . ":::::" . "$SNMPVER";
+> print("Getting table.\n");
+> 
+> $length = length($OID);
+> $oid = $OID;
+>    $oid = substr($oid,0,$length);
+
+Why not simply:
+
+my $oid = substr $OID, 0, length $OID;
+
+Which is just a long way of saying:
+
+my $oid = $OID;
+
+
+> print "Trying 'getnext' on $host with $oid\n";
+> while ( substr($oid,0,$length) eq $OID ) {
+>  my @ret = &snmpgetnext($SNMPSTR, "$oid");
+
+You shouldn't prefix a subroutine name with an ampersand.
+
+perldoc perlsub
+
+
+>  foreach my $desc (@ret) {
+>    ($oid, $desc) = split(':', $desc, 2);
+>    $testStr = substr($oid,0,$length);
+>    if ( substr($oid,0,$length) eq $OID ) {
+>      print "$oid = $desc ($testStr)')\n";
+>    }
+>  }
+> }
+
+
+
+John
+-- 
+Perl isn't a toolbox, but a small machine shop where you
+can special-order certain sorts of tools at low cost and
+in short order.                            -- Larry Wall
+
+-- 
+To unsubscribe, e-mail: beginners-unsubscribe@perl.org
+For additional commands, e-mail: beginners-help@perl.org
+http://learn.perl.org/
+
+

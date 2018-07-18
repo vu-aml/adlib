@@ -1,0 +1,146 @@
+From perl6-all-return-81554-ktwarwic=speedy.uwaterloo.ca@perl.org  Wed May 23 14:12:59 2007
+Return-Path: <perl6-all-return-81554-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4NICvqD028178
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 23 May 2007 14:12:58 -0400
+Received: (qmail 11203 invoked by uid 514); 23 May 2007 18:12:53 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 11198 invoked from network); 23 May 2007 18:12:53 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-language-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-language
+List-Id: <perl6-language.perl.org>
+Delivered-To: mailing list perl6-language@perl.org
+Delivered-To: perl6-language@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: larry@cvs.develooper.com
+To: perl6-language@perl.org
+Subject: [svn:perl6-synopsis] r14401 - doc/trunk/design/syn
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Message-Id: <20070523181134.DEB98CB9B8@x12.develooper.com>
+Date: Wed, 23 May 2007 11:11:34 -0700 (PDT)
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-1.1 required=8.0
+	tests=BAYES_05,SPF_PASS
+
+Author: larry
+Date: Wed May 23 11:11:34 2007
+New Revision: 14401
+
+Modified:
+   doc/trunk/design/syn/S02.pod
+
+Log:
+Clarifications suggested by Jonathan Lang++ and spinclad++.
+
+
+Modified: doc/trunk/design/syn/S02.pod
+==============================================================================
+--- doc/trunk/design/syn/S02.pod	(original)
++++ doc/trunk/design/syn/S02.pod	Wed May 23 11:11:34 2007
+@@ -738,11 +738,11 @@
+     List        Lazy Perl list (composed of immutables and iterators)
+     Seq         Completely evaluated (hence immutable) sequence
+     Range       A pair of Ordered endpoints; gens immutables when iterated
+-    Set         Unordered group of values that allows no duplicates
+-    Bag         Unordered group of values that allows duplicates
+-    Junction    Sets with additional behaviors
+-    Pair        Two elements that serve as key/value in a one-element Mapping
+-    Mapping     Pair set with no duplicate keys
++    Set         Unordered collection of values that allows no duplicates
++    Bag         Unordered collection of values that allows duplicates
++    Junction    Set with additional behaviors
++    Pair        A single key-to-value association
++    Mapping     Set of Pairs with no duplicate keys
+     Signature   Function parameters (left-hand side of a binding)
+     Capture     Function call arguments (right-hand side of a binding)
+     Blob        An undifferentiated mass of bits
+@@ -1053,7 +1053,7 @@
+ Perl 6 includes a system of B<sigils> to mark the fundamental
+ structural type of a variable:
+ 
+-    $   scalar
++    $   scalar (object)
+     @   ordered array
+     %   unordered hash (associative array)
+     &   code/rule/token/regex
+@@ -1082,16 +1082,54 @@
+ =item *
+ 
+ Sigils indicate overall interface, not the exact type of the bound
+-object.  Hence, C<@x> may be bound to an object of the C<Array>
+-class, but it may also be bound to any object that does the C<Array>
+-role, such as a C<List>, C<Seq>, C<Range>, C<Set>, C<Bag>, C<Buf>,
+-C<Capture>, and so on.  Likewise, C<%x> may be bound to a C<Pair>,
+-C<Mapping>, C<Set>, C<Bag>, C<KeyHash>, C<Capture>, and so on.
+-And C<&x> may be bound to any kind of C<Block> or C<Routine>.
+-The implicit container type is checked at binding time.  If you wish
+-to bind an object that doesn't yet do the appropriate role, you must
+-either stick with the generic C<$> sigil, or mix in the appropriate
+-role before binding to a more specific sigil.
++object.  Different sigils imply different minimal abilities.
++
++C<$x> may be bound to any object, including any object that can be
++bound to any other sigil.  Such a scalar variable is always treated as
++a singular item in any kind of list context, regardless of whether the
++object is essentially composite or unitary.  It will not automatically
++dereference to its contents unless placed explicitly in some kind of
++dereferencing context.  In particular, when interpolating into list
++context, C<$x> never expands its object to anything other than the
++object itself as a single item, even if the object is a container
++object containing multiple items.
++
++C<@x> may be bound to an object of the C<Array> class, but it may also
++be bound to any object that does the C<Positional> role, such as a
++C<List>, C<Seq>, C<Range>, C<Buf>, or C<Capture>.  The C<Positional>
++role implies the ability to support C<< postcircumfix:<[ ]> >>.
++
++Likewise, C<%x> may be bound to any object that does the C<Associative>
++role, such as C<Pair>, C<Mapping>, C<Set>, C<Bag>, C<KeyHash>, or
++C<Capture>.  The C<Associative> role implies the ability to support
++C<< postcircumfix:<{ }> >>.
++
++C<&x> may be bound to any object that does the C<Callable> role, such
++as any C<Block> or C<Routine>.  The C<Callable> role implies the ability
++to support C<< postcircumfix:<( )> >>.
++
++C<::x> may be bound to any object that does the C<Abstraction> role,
++such as a typename, package, module, class, role, grammar, or any other
++protoobject with C<.HOW> hooks.  This C<Abstraction> role implies the
++ability to do various symbol table and/or typological manipulations which
++may or may not be supported by any given abstraction.  Mostly though it
++just means that you want to give some abstraction an official name that
++you can then use later in the compilation without any sigil.
++
++In any case, the minimal container role implied by the sigil is
++checked at binding time at the latest, and may fail earlier (such
++as at compile time) if a semantic error can be detected sooner.
++If you wish to bind an object that doesn't yet do the appropriate
++role, you must either stick with the generic C<$> sigil, or mix in
++the appropriate role before binding to a more specific sigil.
++
++An object is allowed to support both C<Positional> and C<Associative>.
++An object that does not support C<Positional> may not be bound directly
++to C<@x>.  However, any construct such as C<%x> that can interpolate
++the contents of such an object into list context can automatically
++construct a list value that may then be bound to an array variable.
++Subscripting such a list does not imply subscripting back into the
++original object.
+ 
+ =item *
+ 
+

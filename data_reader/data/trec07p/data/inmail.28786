@@ -1,0 +1,174 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri May  4 15:15:13 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l44JFCqD019093
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 4 May 2007 15:15:12 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 2F1A5163869
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri,  4 May 2007 19:15:12 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 549)
+	id 6BD4F162ABE; Fri,  4 May 2007 19:14:53 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jra@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070504191453.6BD4F162ABE@lists.samba.org>
+Date: Fri,  4 May 2007 19:14:53 +0000 (GMT)
+Subject: svn commit: samba r22673 - in branches: SAMBA_3_0/source/rpc_parse
+	SAMBA_3_0_25/source/rpc_parse SAMBA_3_0_26/source/rpc_parse
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: jra
+Date: 2007-05-04 19:14:51 +0000 (Fri, 04 May 2007)
+New Revision: 22673
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22673
+
+Log:
+Fix for Jerry's reversion. We still need to check size
+before talloc.
+Jeremy.
+
+Modified:
+   branches/SAMBA_3_0/source/rpc_parse/parse_samr.c
+   branches/SAMBA_3_0_25/source/rpc_parse/parse_samr.c
+   branches/SAMBA_3_0_26/source/rpc_parse/parse_samr.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/rpc_parse/parse_samr.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpc_parse/parse_samr.c	2007-05-04 18:59:51 UTC (rev 22672)
++++ branches/SAMBA_3_0/source/rpc_parse/parse_samr.c	2007-05-04 19:14:51 UTC (rev 22673)
+@@ -4838,9 +4838,14 @@
+ 		if(!prs_uint32("num_sids1", ps, depth, &r_u->num_sids1))
+ 			return False;
+ 
+-		ptr_sid = TALLOC_ARRAY(ps->mem_ctx, uint32, r_u->num_sids1);
+-		if (!ptr_sid) {
+-			return False;
++		/* We must always use talloc here even when marshalling. */
++		if (r_u->num_sids1) {
++			ptr_sid = TALLOC_ARRAY(ps->mem_ctx, uint32, r_u->num_sids1);
++			if (!ptr_sid) {
++				return False;
++			}
++		} else {
++			ptr_sid = NULL;
+ 		}
+ 		
+ 		for (i = 0; i < r_u->num_sids1; i++) {
+@@ -4850,7 +4855,14 @@
+ 		}
+ 		
+ 		if (UNMARSHALLING(ps)) {
+-			r_u->sid = TALLOC_ARRAY(ps->mem_ctx, DOM_SID2, r_u->num_sids1);
++			if (r_u->num_sids1) {
++				r_u->sid = TALLOC_ARRAY(ps->mem_ctx, DOM_SID2, r_u->num_sids1);
++				if (!r_u->sid) {
++					return False;
++				}
++			} else {
++				r_u->sid = NULL;
++			}
+ 		}
+ 		
+ 		for (i = 0; i < r_u->num_sids1; i++) {
+
+Modified: branches/SAMBA_3_0_25/source/rpc_parse/parse_samr.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/rpc_parse/parse_samr.c	2007-05-04 18:59:51 UTC (rev 22672)
++++ branches/SAMBA_3_0_25/source/rpc_parse/parse_samr.c	2007-05-04 19:14:51 UTC (rev 22673)
+@@ -4768,9 +4768,14 @@
+ 		if(!prs_uint32("num_sids1", ps, depth, &r_u->num_sids1))
+ 			return False;
+ 
+-		ptr_sid = TALLOC_ARRAY(ps->mem_ctx, uint32, r_u->num_sids1);
+-		if (!ptr_sid) {
+-			return False;
++		/* We must always use talloc here even when marshalling. */
++		if (r_u->num_sids1) {
++			ptr_sid = TALLOC_ARRAY(ps->mem_ctx, uint32, r_u->num_sids1);
++			if (!ptr_sid) {
++				return False;
++			}
++		} else {
++			ptr_sid = NULL;
+ 		}
+ 		
+ 		for (i = 0; i < r_u->num_sids1; i++) {
+@@ -4780,7 +4785,14 @@
+ 		}
+ 		
+ 		if (UNMARSHALLING(ps)) {
+-			r_u->sid = TALLOC_ARRAY(ps->mem_ctx, DOM_SID2, r_u->num_sids1);
++			if (r_u->num_sids1) {
++				r_u->sid = TALLOC_ARRAY(ps->mem_ctx, DOM_SID2, r_u->num_sids1);
++				if (!r_u->sid) {
++					return False;
++				}
++			} else {
++				r_u->sid = NULL;
++			}
+ 		}
+ 		
+ 		for (i = 0; i < r_u->num_sids1; i++) {
+
+Modified: branches/SAMBA_3_0_26/source/rpc_parse/parse_samr.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/rpc_parse/parse_samr.c	2007-05-04 18:59:51 UTC (rev 22672)
++++ branches/SAMBA_3_0_26/source/rpc_parse/parse_samr.c	2007-05-04 19:14:51 UTC (rev 22673)
+@@ -4768,9 +4768,14 @@
+ 		if(!prs_uint32("num_sids1", ps, depth, &r_u->num_sids1))
+ 			return False;
+ 
+-		ptr_sid = TALLOC_ARRAY(ps->mem_ctx, uint32, r_u->num_sids1);
+-		if (!ptr_sid) {
+-			return False;
++		/* We must always use talloc here even when marshalling. */
++		if (r_u->num_sids1) {
++			ptr_sid = TALLOC_ARRAY(ps->mem_ctx, uint32, r_u->num_sids1);
++			if (!ptr_sid) {
++				return False;
++			}
++		} else {
++			ptr_sid = NULL;
+ 		}
+ 		
+ 		for (i = 0; i < r_u->num_sids1; i++) {
+@@ -4780,7 +4785,14 @@
+ 		}
+ 		
+ 		if (UNMARSHALLING(ps)) {
+-			r_u->sid = TALLOC_ARRAY(ps->mem_ctx, DOM_SID2, r_u->num_sids1);
++			if (r_u->num_sids1) {
++				r_u->sid = TALLOC_ARRAY(ps->mem_ctx, DOM_SID2, r_u->num_sids1);
++				if (!r_u->sid) {
++					return False;
++				}
++			} else {
++				r_u->sid = NULL;
++			}
+ 		}
+ 		
+ 		for (i = 0; i < r_u->num_sids1; i++) {
+

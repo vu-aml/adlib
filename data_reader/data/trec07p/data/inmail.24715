@@ -1,0 +1,250 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun Apr 29 16:42:32 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3TKgW6w004595
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 29 Apr 2007 16:42:32 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 418721638AE
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 29 Apr 2007 20:42:31 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 1115F162AD5; Sun, 29 Apr 2007 20:42:08 +0000 (GMT)
+Date: Sun, 29 Apr 2007 22:42:23 +0200
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070429204208.1115F162AD5@lists.samba.org>
+Subject: Rev 222: saner logfile code in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 5914
+Lines: 210
+
+------------------------------------------------------------
+revno: 222
+revision-id: tridge@samba.org-20070429204223-p3irof22u7mgolo6
+parent: tridge@samba.org-20070429141940-kxbij0fq3pj33qvn
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Sun 2007-04-29 22:42:23 +0200
+message:
+  saner logfile code
+  testing of ctdbd
+modified:
+  Makefile.in                    makefile.in-20061117234101-o3qt14umlg9en8z0-1
+  common/cmdline.c               cmdline.c-20070416041216-w1zvz91bkdsgjckw-1
+  common/ctdb.c                  ctdb.c-20061127094323-t50f58d65iaao5of-2
+  direct/ctdbd.c                 ctdbd.c-20070411085044-dqmhr6mfeexnyt4m-1
+  direct/ctdbd.sh                ctdbd.sh-20070411085038-phusiewluwzyqjpc-2
+  include/ctdb.h                 ctdb.h-20061117234101-o3qt14umlg9en8z0-11
+  include/ctdb_private.h         ctdb_private.h-20061117234101-o3qt14umlg9en8z0-13
+  tests/run_tests.sh             run_tests.sh-20070428085745-ec2w6vybjf07vtvg-1
+=== modified file 'Makefile.in'
+--- a/Makefile.in	2007-04-28 15:13:02 +0000
++++ b/Makefile.in	2007-04-29 20:42:23 +0000
+@@ -7,6 +7,7 @@
+ includedir = @includedir@
+ libdir = @libdir@
+ bindir = @bindir@
++localstatedir = @localstatedir@
+ VPATH = @srcdir@:@tdbdir@:@tallocdir@:@libreplacedir@
+ srcdir = @srcdir@
+ builddir = @builddir@
+@@ -14,7 +15,7 @@
+ 
+ CFLAGS=-g -I$(srcdir)/include -Iinclude -Ilib/util -I$(srcdir) \
+        -I@tallocdir@ -I@tdbdir@/include -I@libreplacedir@ \
+-	-DLIBDIR=\"$(libdir)\" -DSHLIBEXT=\"@SHLIBEXT@\" -DUSE_MMAP=1 @CFLAGS@
++	-DVARDIR=\"$(localstatedir)\" -DUSE_MMAP=1 @CFLAGS@
+ 
+ LIB_FLAGS=@LDFLAGS@ -Llib @LIBS@ -lpopt @INFINIBAND_LIBS@
+ 
+
+=== modified file 'common/cmdline.c'
+--- a/common/cmdline.c	2007-04-27 08:43:52 +0000
++++ b/common/cmdline.c	2007-04-29 20:42:23 +0000
+@@ -36,6 +36,7 @@
+ 	int self_connect;
+ 	const char *db_dir;
+ 	int torture;
++	const char *logfile;
+ } ctdb_cmdline = {
+ 	.nlist = NULL,
+ 	.transport = "tcp",
+@@ -43,7 +44,8 @@
+ 	.socketname = CTDB_PATH,
+ 	.self_connect = 0,
+ 	.db_dir = NULL,
+-	.torture = 0
++	.torture = 0,
++	.logfile = NULL
+ };
+ 
+ 
+@@ -56,6 +58,7 @@
+ 	{ "debug", 'd', POPT_ARG_INT, &LogLevel, 0, "debug level"},
+ 	{ "dbdir", 0, POPT_ARG_STRING, &ctdb_cmdline.db_dir, 0, "directory for the tdb files", NULL },
+ 	{ "torture", 0, POPT_ARG_NONE, &ctdb_cmdline.torture, 0, "enable nastiness in library", NULL },
++	{ "logfile", 0, POPT_ARG_STRING, &ctdb_cmdline.logfile, 0, "log file location", "filename" },
+ 	{ NULL }
+ };
+ 
+@@ -80,6 +83,12 @@
+ 		exit(1);
+ 	}
+ 
++	ret = ctdb_set_logfile(ctdb, ctdb_cmdline.logfile);
++	if (ret == -1) {
++		printf("ctdb_set_logfile failed - %s\n", ctdb_errstr(ctdb));
++		exit(1);
++	}
++
+ 	if (ctdb_cmdline.self_connect) {
+ 		ctdb_set_flags(ctdb, CTDB_FLAG_SELF_CONNECT);
+ 	}
+
+=== modified file 'common/ctdb.c'
+--- a/common/ctdb.c	2007-04-28 16:18:33 +0000
++++ b/common/ctdb.c	2007-04-29 20:42:23 +0000
+@@ -35,6 +35,27 @@
+ 	return 0;
+ }
+ 
++/*
++  choose the logfile location
++*/
++int ctdb_set_logfile(struct ctdb_context *ctdb, const char *logfile)
++{
++	ctdb->logfile = talloc_strdup(ctdb, logfile);
++	if (ctdb->logfile != NULL) {
++		int fd;
++		close(1);
++		fd = open(ctdb->logfile, O_WRONLY|O_APPEND|O_CREAT, 0666);
++		if (fd == -1) {
++			abort();
++		}
++		if (fd != 1) {
++			dup2(fd, 1);
++			close(fd);
++		}
++	}
++	return 0;
++}
++
+ 
+ /*
+   set some ctdb flags
+
+=== modified file 'direct/ctdbd.c'
+--- a/direct/ctdbd.c	2007-04-29 14:19:40 +0000
++++ b/direct/ctdbd.c	2007-04-29 20:42:23 +0000
+@@ -24,6 +24,7 @@
+ #include "popt.h"
+ #include "system/wait.h"
+ #include "cmdline.h"
++#include "../include/ctdb_private.h"
+ 
+ static void block_signal(int signum)
+ {
+@@ -83,6 +84,13 @@
+ 
+ 	ctdb = ctdb_cmdline_init(ev);
+ 
++	/* useful default logfile */
++	if (ctdb->logfile == NULL) {
++		char *name = talloc_asprintf(ctdb, "%s/log.ctdb.%u", VARDIR, ctdb->vnn);
++		ctdb_set_logfile(ctdb, name);
++		talloc_free(name);
++	}
++
+ 	/* attach to the list of databases */
+ 	s = talloc_strdup(ctdb, db_list);
+ 	for (tok=strtok(s, ", "); tok; tok=strtok(NULL, ", ")) {
+
+=== modified file 'direct/ctdbd.sh'
+--- a/direct/ctdbd.sh	2007-04-19 00:24:11 +0000
++++ b/direct/ctdbd.sh	2007-04-29 20:42:23 +0000
+@@ -3,6 +3,28 @@
+ killall -q ctdbd
+ 
+ echo "Starting 2 ctdb daemons"
+-bin/ctdbd --nlist direct/nodes.txt --listen 127.0.0.2:9001 &
+-bin/ctdbd --nlist direct/nodes.txt --listen 127.0.0.1:9001 &
++bin/ctdbd --nlist direct/nodes.txt --listen 127.0.0.2:9001
++bin/ctdbd --nlist direct/nodes.txt --listen 127.0.0.1:9001
++
++echo "Testing ping"
++bin/ctdb_control ping || exit 1
++
++echo "Testing status"
++bin/ctdb_control status all || exit 1
++
++echo "Testing statusreset"
++bin/ctdb_control statusreset all || exit 1
++
++echo "Testing debug"
++bin/ctdb_control debug all 5 || exit 1
++bin/ctdb_control debuglevel || exit 1
++bin/ctdb_control debug all 0 || exit 1
++bin/ctdb_control debuglevel || exit 1
++
++echo "Testing map calls"
++bin/ctdb_control getvnnmap 0 || exit 1
++bin/ctdb_control getdbmap 0 || exit 1
++
++killall -q ctdbd
++
+ 
+
+=== modified file 'include/ctdb.h'
+--- a/include/ctdb.h	2007-04-29 14:19:40 +0000
++++ b/include/ctdb.h	2007-04-29 20:42:23 +0000
+@@ -259,4 +259,6 @@
+ 
+ int ctdb_status_reset(struct ctdb_context *ctdb, uint32_t destnode);
+ 
++int ctdb_set_logfile(struct ctdb_context *ctdb, const char *logfile);
++
+ #endif
+
+=== modified file 'include/ctdb_private.h'
+--- a/include/ctdb_private.h	2007-04-29 14:19:40 +0000
++++ b/include/ctdb_private.h	2007-04-29 20:42:23 +0000
+@@ -176,6 +176,7 @@
+ 	const char *name;
+ 	const char *db_directory;
+ 	const char *transport;
++	const char *logfile;
+ 	uint32_t vnn; /* our own vnn */
+ 	uint32_t num_nodes;
+ 	uint32_t num_connected;
+
+=== modified file 'tests/run_tests.sh'
+--- a/tests/run_tests.sh	2007-04-28 16:18:33 +0000
++++ b/tests/run_tests.sh	2007-04-29 20:42:23 +0000
+@@ -3,6 +3,7 @@
+ tests/fetch.sh 4 || exit 1
+ tests/bench.sh 4 || exit 1
+ tests/test.sh || exit 1
++direct/ctdbd.sh || exit 1
+ 
+ echo "All OK"
+ exit 0
+

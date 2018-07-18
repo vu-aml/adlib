@@ -1,0 +1,100 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Jun 19 22:53:09 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5K2r7L9004930
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 19 Jun 2007 22:53:08 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id DD806162C19
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 20 Jun 2007 02:53:05 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.6 required=3.8 tests=BAYES_00,NO_MORE_FUNN,
+	RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+X-Greylist: delayed 1356 seconds by postgrey-1.24 at dp.samba.org;
+	Wed, 20 Jun 2007 02:52:35 GMT
+Received: from mail.miraclelinux.com (ns.miraclelinux.com [219.118.163.66])
+	by lists.samba.org (Postfix) with ESMTP id 92C20162AC3
+	for <samba-technical@samba.org>; Wed, 20 Jun 2007 02:52:35 +0000 (GMT)
+Received: from mail.miraclelinux.com (localhost.localdomain [127.0.0.1])
+	by localhost (Postfix) with SMTP id 0F515737AC
+	for <samba-technical@samba.org>; Wed, 20 Jun 2007 11:29:56 +0900 (JST)
+Received: from [10.1.1.246] (dhcp-0246.miraclelinux.com [10.1.1.246])
+	by mail.miraclelinux.com (Postfix) with ESMTP id D678B73673
+	for <samba-technical@samba.org>; Wed, 20 Jun 2007 11:29:55 +0900 (JST)
+Message-ID: <4678906D.6090206@miraclelinux.com>
+Date: Wed, 20 Jun 2007 11:26:53 +0900
+From: Atsushi Nakabayashi <nakabayashi@miraclelinux.com>
+User-Agent: Thunderbird 1.5.0.9 (X11/20061215)
+MIME-Version: 1.0
+To: samba-technical@samba.org
+Content-Type: multipart/mixed; boundary="------------050100010706030705030403"
+X-PMX-Version: 5.3.1.294258, Antispam-Engine: 2.5.1.298604,
+	Antispam-Data: 2007.6.19.190533
+Subject: Memory leaks
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+This is a multi-part message in MIME format.
+--------------050100010706030705030403
+Content-Type: text/plain; charset=UTF-8; format=flowed
+Content-Transfer-Encoding: 7bit
+
+Hi, samba-tech,
+
+ I have found a memory leak in the error route of the samba-3.0.24.
+
+ --- source/nmbd/nmbd_winsserver.c
+ 2327         /* We will do the writing in a child process to ensure 
+that the parent doesn't block while this is done */
+ 2328         if (background) {
+ 2329                 CatchChild();
+ 2330                 if (sys_fork()) {
+ 2331                         return;
+ 2332                 }
+ 2333                 if (tdb_reopen(wins_tdb)) {
+ 2334                         DEBUG(0,("wins_write_database: tdb_reopen 
+failed. Error was %s\n",
+ 2335                                 strerror(errno)));
+ 2336                         return;
+ 2337                 }
+
+ The child process is not released, when the tdb_reopen function returns 
+false(-1).
+
+
+--------------050100010706030705030403
+Content-Type: text/x-patch;
+ name="samba-3.0.24-memleak.patch"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline;
+ filename="samba-3.0.24-memleak.patch"
+
+diff -uNrp samba-3.0.24.org/source/nmbd/nmbd_winsserver.c samba-3.0.24/source/nmbd/nmbd_winsserver.c
+--- samba-3.0.24.org/source/nmbd/nmbd_winsserver.c	2007-06-19 23:38:38.000000000 +0900
++++ samba-3.0.24/source/nmbd/nmbd_winsserver.c	2007-06-19 23:39:05.000000000 +0900
+@@ -2333,6 +2333,7 @@ void wins_write_database(time_t t, BOOL 
+ 		if (tdb_reopen(wins_tdb)) {
+ 			DEBUG(0,("wins_write_database: tdb_reopen failed. Error was %s\n",
+ 				strerror(errno)));
++				_exit(0);
+ 			return;
+ 		}
+ 	}
+
+--------------050100010706030705030403--
+

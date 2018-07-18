@@ -1,0 +1,122 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Apr 27 09:13:59 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3RDDw6w025743
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 27 Apr 2007 09:13:59 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 24109163905
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 27 Apr 2007 13:13:58 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 40510162AD4; Fri, 27 Apr 2007 13:13:34 +0000 (GMT)
+Date: Fri, 27 Apr 2007 14:49:45 +0200
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070427131334.40510162AD4@lists.samba.org>
+Subject: Rev 200: nicer testing of control data size in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2221
+Lines: 81
+
+------------------------------------------------------------
+revno: 200
+revision-id: tridge@samba.org-20070427124944-2j7heznacmw08fim
+parent: tridge@samba.org-20070427124545-ndyfb1xifibkme1t
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Fri 2007-04-27 14:49:44 +0200
+message:
+  nicer testing of control data size
+modified:
+  common/ctdb_control.c          ctdb_control.c-20070426122724-j6gkpiofhbwdin63-1
+=== modified file 'common/ctdb_control.c'
+--- a/common/ctdb_control.c	2007-04-27 12:08:12 +0000
++++ b/common/ctdb_control.c	2007-04-27 12:49:44 +0000
+@@ -33,6 +33,13 @@
+ 	void *private_data;
+ };
+ 
++#define CHECK_CONTROL_DATA_SIZE(size) do { \
++ if (indata.dsize != sizeof(pid_t)) { \
++	 DEBUG(0,(__location__ " Invalid data in opcode %u\n", opcode)); \
++	 return -1; \
++ } \
++ } while (0)
++
+ /*
+   process a control request
+  */
+@@ -43,15 +50,13 @@
+ 	switch (opcode) {
+ 	case CTDB_CONTROL_PROCESS_EXISTS: {
+ 		pid_t pid;
+-		if (indata.dsize != sizeof(pid_t)) {
+-			DEBUG(0,(__location__ " Invalid data in CTDB_CONTROL_PROCESS_EXISTS\n"));
+-			return -1;
+-		}
++		CHECK_CONTROL_DATA_SIZE(sizeof(pid));
+ 		pid = *(pid_t *)indata.dptr;
+ 		return kill(pid, 0);
+ 	}
+ 
+ 	case CTDB_CONTROL_STATUS: {
++		CHECK_CONTROL_DATA_SIZE(0);
+ 		outdata->dptr = (uint8_t *)&ctdb->status;
+ 		outdata->dsize = sizeof(ctdb->status);
+ 		return 0;
+@@ -59,7 +64,7 @@
+ 
+ 	case CTDB_CONTROL_GETVNNMAP: {
+ 		uint32_t i, len;
+-
++		CHECK_CONTROL_DATA_SIZE(0);
+ 		len = 2+ctdb->vnn_map->size;
+ 		outdata->dsize = 4*len;
+ 		outdata->dptr = (unsigned char *)talloc_array(outdata, uint32_t, len);
+@@ -95,22 +100,21 @@
+ 	}
+ 
+ 	case CTDB_CONTROL_CONFIG: {
++		CHECK_CONTROL_DATA_SIZE(0);
+ 		outdata->dptr = (uint8_t *)ctdb;
+ 		outdata->dsize = sizeof(*ctdb);
+ 		return 0;
+ 	}
+ 
+ 	case CTDB_CONTROL_PING:
++		CHECK_CONTROL_DATA_SIZE(0);
+ 		return 0;
+ 
+ 	case CTDB_CONTROL_GETDBPATH: {
+ 		uint32_t db_id;
+ 		struct ctdb_db_context *ctdb_db;
+ 
+-		if (indata.dsize != sizeof(uint32_t)) {
+-			DEBUG(0,(__location__ " Invalid data in CTDB_CONTROL_GETDBPATH\n"));
+-			return -1;
+-		}
++		CHECK_CONTROL_DATA_SIZE(db_id);
+ 		db_id = *(uint32_t *)indata.dptr;
+ 		ctdb_db = find_ctdb_db(ctdb, db_id);
+ 		if (ctdb_db == NULL) return -1;
+

@@ -1,0 +1,143 @@
+From perl6-all-return-80764-ktwarwic=speedy.uwaterloo.ca@perl.org  Sat Apr 21 21:25:40 2007
+Return-Path: <perl6-all-return-80764-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3M1Pc0I001429
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 21 Apr 2007 21:25:38 -0400
+Received: (qmail 4152 invoked by uid 514); 22 Apr 2007 01:25:13 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 4147 invoked from network); 22 Apr 2007 01:25:13 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: softfail (x1.develooper.com: transitioning domain of chromatic@wgz.org does not designate 63.251.223.186 as permitted sender)
+Delivered-To: perlmail-parrot-porters@onion.perl.org
+Delivered-To: parrot-porters@perl.org
+Received-SPF: pass (x1.develooper.com: domain of chromatic@wgz.org designates 63.105.17.39 as permitted sender)
+From: chromatic <chromatic@wgz.org>
+Organization: Snafu
+To: parrot-porters@perl.org
+Subject: I Don't Understand The Context Allocation/Destruction Code
+Date: Sat, 21 Apr 2007 18:24:18 -0700
+User-Agent: KMail/1.9.5
+MIME-Version: 1.0
+Content-Type: text/plain;
+  charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+Message-Id: <200704211824.18554.chromatic@wgz.org>
+X-Virus-Scanned: by amavisd-new at wgz.org
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO,SPF_PASS
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-1.1 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO,SPF_SOFTFAIL
+Status: O
+Content-Length: 3241
+Lines: 90
+
+Parrot_alloc_context() performs some calculations about the number of 
+registers used to determine how much memory to allocate:
+
+    const size_t size_n = sizeof (FLOATVAL) * n_regs_used[REGNO_NUM];
+    const size_t size_nip = size_n +
+        sizeof (INTVAL) *   n_regs_used[REGNO_INT] +
+        sizeof (PMC*) *     n_regs_used[REGNO_PMC];
+    size_t reg_alloc = size_nip +
+        sizeof (STRING*) *  n_regs_used[REGNO_STR];
+
+Then it calculates a slot value:
+
+    const int slot = (reg_alloc + 7) >> 3;
+    reg_alloc = slot << 3;
+
+This is where I start not to understand.  Why reg_alloc + 7?  Why shift left 
+and right by 3?
+
+It gets less clear.  The interpreter holds a structure for context memory with 
+a free list (an array of void pointers) and the number of free slots, 
+presumably in this list.
+
+After all of that calculation of slot, the function uses it as an index into 
+the free list.
+
+I don't understand that at all.
+
+I do understand the purpose of the resizing code, but not how slot relates to 
+it:
+
+    if (slot >= interp->ctx_mem.n_free_slots) {
+        const int n = slot + 1;
+        int i;
+
+        interp->ctx_mem.free_list = (void **)mem_sys_realloc(
+                interp->ctx_mem.free_list, n * sizeof (void*));
+
+        for (i = interp->ctx_mem.n_free_slots; i < n; ++i)
+            interp->ctx_mem.free_list[i] = NULL;
+        interp->ctx_mem.n_free_slots = n;
+    }
+
+This is doubly weird because when Parrot initializes the free list in 
+create_initial_context(), it allocates a small number of free slots:
+
+#define INITIAL_FREE_SLOTS 8
+
+    interp->ctx_mem.n_free_slots = INITIAL_FREE_SLOTS;
+    interp->ctx_mem.free_list    =
+        (void **)mem_sys_allocate(INITIAL_FREE_SLOTS * sizeof (void *));
+
+    for (i = 0; i < INITIAL_FREE_SLOTS; ++i)
+        interp->ctx_mem.free_list[i] = NULL;
+
+The result is that the free_list extends quite a bit over the initial 
+allocation, but it's mostly just an array of null.  It's fairly sparse apart 
+from that.
+
+Here's another curious thing when allocating a context:
+
+    ptr = interp->ctx_mem.free_list[slot];
+    old = CONTEXT(interp->ctx);
+    if (ptr) {
+        interp->ctx_mem.free_list[slot] = *(void **) ptr;
+    }
+
+I wish I could tell you what the assignments to and from ptr do here, but I 
+can't, nor what they signify.  There's a similar form to free a context:
+
+        ptr = ctxp;
+        slot = ctxp->regs_mem_size >> 3;
+
+        assert(slot < interp->ctx_mem.n_free_slots);
+        *(void **)ptr = interp->ctx_mem.free_list[slot];
+        interp->ctx_mem.free_list[slot] = ptr;
+
+I originally thought the free_list was an array of recycled contexts to avoid 
+malloc() and free() pairs by reusing already-allocated-but-unused memory, but 
+now I can't tell what it's doing.  I tried to change this into a linked list, 
+but that failed with invalid reads.
+
+My best guess is that this is an odd way to store contexts of a specific size 
+in an array structure so that they're reusable with our new variable-sized 
+register sets... but the code is unclear and undocumented.  I think it's also 
+leaking memory.
+
+I'd like to find a simpler scheme, if it's possible.  Otherwise, I'd like to 
+figure out what's going on so we can at least explain it somehow.
+
+-- c
+

@@ -1,0 +1,125 @@
+From perl6-all-return-80418-ktwarwic=speedy.uwaterloo.ca@perl.org  Sun Apr  8 22:23:28 2007
+Return-Path: <perl6-all-return-80418-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l392NQ0I008572
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 8 Apr 2007 22:23:27 -0400
+Received: (qmail 30692 invoked by uid 514); 9 Apr 2007 02:23:02 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 30687 invoked from network); 9 Apr 2007 02:23:02 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: James Keenan (via RT) <parrotbug-followup@parrotcode.org>
+X-RT-NewTicket: yes
+To: bugs-bitbucket@netlabs.develooper.com
+Resent-To: perl6-internals@perl.org
+Mail-Followup-To: perl6-internals@perl.org
+Reply-To: perl6-internals@perl.org
+Date: Sun, 08 Apr 2007 19:22:16 -0700
+Subject: [perl #42362] [TODO]:  Unit tests for modules used during configuration 
+In-Reply-To: <8524E53A-3C00-42C3-800D-6583F10C7C44@verizon.net>
+References: <RT-Ticket-42362@perl.org> <8524E53A-3C00-42C3-800D-6583F10C7C44@verizon.net>
+Message-ID: <rt-3.6.HEAD-1687-1176085336-569.42362-72-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #42362
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: jkeen@verizon.net
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+X-RT-Original-Encoding: utf-8
+Resent-Message-Id: <20070409022216.D3BFA2B01F@x3.develooper.com>
+Resent-Date: Sun,  8 Apr 2007 19:22:16 -0700 (PDT)
+Resent-From: rt-jkeen=verizon.net@netlabs.develooper.com
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-4.4 required=8.0
+	tests=ALL_TRUSTED,BAYES_00,DK_POLICY_SIGNSOME
+Status: O
+Content-Length: 2499
+Lines: 69
+
+# New Ticket Created by  James Keenan 
+# Please include the string:  [perl #42362]
+# in the subject line of all future correspondence about this issue. 
+# <URL: http://rt.perl.org/rt3/Ticket/Display.html?id=42362 >
+
+
+Suppose that I run the tests in t/configure/*.t with Devel::Cover:
+
+$> cover -delete coverage/configure/
+$> PERL5OPT=-MDevel::Cover=-db,coverage/configure prove t/configure/ 
+*.t "$@"
+$> cover coverage/configure/ -ignore_re '^(t\/configure|\/usr|lib\/(?! 
+Parrot))'
+or
+$> cover coverage/configure/ -ignore_re '^(t\/configure|\/usr|lib\/(?! 
+Parrot))' -report=text > coverage/analysis.configure.txt
+
+The resulting coverage analysis suggests that considerable code in  
+the config/*/*.pm tree is not reached by these tests.  Here's an  
+excerpt; see attachment for more.
+
+---------------------------- ------ ------ ------ ------ ------  
+------ ------
+File                           stmt   bran   cond    sub    pod    
+time  total
+---------------------------- ------ ------ ------ ------ ------  
+------ ------
+config/auto/aio.pm             45.5    0.0    n/a   83.3    n/a     
+0.1   42.6
+config/auto/alignptrs.pm       42.9    0.0    0.0   85.7    n/a     
+0.0   35.8
+config/auto/byteorder.pm       53.6    0.0    n/a   83.3    n/a     
+0.0   50.0
+config/auto/cgoto.pm           41.7    0.0    0.0   83.3    n/a     
+0.0   37.0
+config/auto/cpu.pm             58.1    0.0    n/a   85.7    n/a     
+0.0   52.2
+
+In every case I've examined, the runsteps() method is untested by the  
+test suite in question.  Writing a test for that method would usually  
+boost subroutine coverage to 100% and would go along way toward  
+getting decent statement coverage.
+
+Are these modules touched by tests in some other location?  Ack-ing a  
+sample of them from the top level in my sandbox suggests not.
+
+##### START ACK #####
+[parrot] 517 $ ack --nohtml --nophp 'auto(\/|::)python'
+config/auto/python.pm
+6:config/auto/python - Check whether python is there
+18:package auto::python;
+
+Configure.pl
+345:    auto::python
+##### END ACK #####
+
+Assignment:
+
+Write unit tests for each module found under config/.
+
+Such tests should be run in a 'pre-Configure.pl' state, i.e., they  
+should be executable at the point after checking out a Parrot  
+repository branch and before you have invoked Configure.pl.
+
+Any files or directories created while running such tests should be  
+created in temporary directories that are automatically cleaned up at  
+the end of a single test script's execution.
+
+kid51
+

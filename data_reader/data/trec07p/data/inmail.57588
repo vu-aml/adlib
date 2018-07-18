@@ -1,0 +1,197 @@
+From r-help-bounces@stat.math.ethz.ch  Thu Jun 14 13:51:35 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5EHpYL9024764
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 14 Jun 2007 13:51:34 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5EHoLOK003621;
+	Thu, 14 Jun 2007 19:50:30 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.0 required=5.0 tests=BAYES_50, DKIM_SIGNED,
+	DKIM_VERIFIED autolearn=no version=3.2.0
+Received: from wa-out-1112.google.com (wa-out-1112.google.com [209.85.146.181])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5EHoEEl003596
+	for <r-help@stat.math.ethz.ch>; Thu, 14 Jun 2007 19:50:15 +0200
+Received: by wa-out-1112.google.com with SMTP id j37so813352waf
+	for <r-help@stat.math.ethz.ch>; Thu, 14 Jun 2007 10:50:13 -0700 (PDT)
+Received: by 10.114.61.1 with SMTP id j1mr2057363waa.1181843413827;
+	Thu, 14 Jun 2007 10:50:13 -0700 (PDT)
+Received: by 10.114.133.18 with HTTP; Thu, 14 Jun 2007 10:50:13 -0700 (PDT)
+Message-ID: <13e802630706141050g144ff7fu63b4c6778f66c50e@mail.gmail.com>
+Date: Thu, 14 Jun 2007 12:50:13 -0500
+From: "Paul Johnson" <pauljohn32@gmail.com>
+To: r-help@stat.math.ethz.ch, "Frank Liu" <frankcsliu@gmail.com>
+MIME-Version: 1.0
+Content-Disposition: inline
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Subject: [R] random effects in logistic regression (lmer)-- identification
+	question
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+Hello R users!
+
+I've been experimenting with lmer to estimate a  mixed model with a
+dichotomous dependent variable.  The goal is to fit a hierarchical
+model in which we compare the effect of individual and city-level
+variables.  I've run up against a conceptual problem that I expect one
+of you can clear up for me.
+
+The question is about random effects in the context of a model fit
+with a binomial family and logit link.  Unlike an ordinary linear
+regression, there is no way to estimate an individual level random
+error in the linear predictor
+
+z_i = a + b*x_i + e_i
+
+because the variance of e_i is unidentified.  The standard deviation
+of the logistic is pi*s/3, and we assume s=1, so the standard
+deviation is assumed to be pi/3 (just a bit bigger than 1, if you are
+comparing against the Standard Normal).  The logistic fitting process
+sets the variance of the error and the parameters a and b are
+"rescaled" accordingly.
+
+As a result, there is an implicit individual-level random effect
+within a logistic model.  There is a good explanation of this issue in
+Tony Lancaster's textbook An Introduction to Modern Bayesian
+Econometrics.
+
+So we usually end up thinking about a linear predictor in a logistic
+regression like so
+
+z_i = a + b*x_i
+
+Random effects can be estimated for "groups" or "clusters" of
+observations.  If j is a grouping variable, then we estimate
+
+z_i = a + b*x_i + u_j
+
+The variance component here is, as far as I understand, measured on
+the same scale as the logistic distribution's standard deviation.
+
+Currently, I'm working on a project in which there are observations
+collected in many cities, represented by a variable PLACE.  We are
+comparing the effect of several variables on a response for each of
+the values of a RACE variable.  RACE is dichotomized into "White" and
+"Nonwhite" by the people who collect the data.
+
+For Nonwhites only, we can estimate the effect of individual level
+predictors (x) on the output (y).
+
+fm1 <- lmer( y ~ x + (1 | PLACE), data=dat, , family=binomial, subset=
+Race %in% c("Nonwhite"))
+
+The random effect in this model indicates the variance caused by a
+Nonwhite's location on the response variable.
+
+Random effects:
+ Groups  Name        Variance Std.Dev.
+ PLACE (Intercept) 0.047326 0.21754
+
+Suppose I estimate models for the 2 races in a combined model like this:
+
+fm1 <- lmer( y ~ -1 + Race / (x) + (-1 + Race | PLACE), data=dat,
+family=binomial)
+
+This gives fixed effects estimates that are pretty easy for
+nonstatisticians to understand.  One can look and see the effect of a
+variable x on people of different races.
+
+But the random effect is a bit hard to understand.  Since the Race
+variable is dichotomous, My aim was to see if the variance of the
+random effect is different for the 2 racial categories. Here are the
+estimates:
+
+Random effects:
+ Groups  Name                      Variance  Std.Dev. Corr
+ PLACE RACE_ALLWhite      0.0095429 0.097688
+             RACE_ALLNonwhite 0.1286597 0.358692 1.000
+
+I can't quite grasp what the correlation means.  I BELIEVE the
+variance values indicate that the experiences of whites are
+homogeneous across cities, because the variance is negligible for
+them, while the experiences of Nonwhites are much more city-dependent.
+
+What does it mean when the correlation is 1.0?  The correlation takes
+on that value when there are no city-level variables in this model, so
+I GUESS that it means that all city-level variation is attributed to
+the random effect. What do you think?
+
+If i put in some city level predictors, then the estimates of the
+variance components change--they essentially disappear to the minimum
+values--and the correlation is not 1.0 anymore.
+
+Random effects:
+ Groups  Name          Variance Std.Dev.   Corr
+ PLACE  RACEWhite    5e-10    2.2361e-05
+          RACENonwhite   5e-10    2.2361e-05 0.001
+
+This indicates that, after adding in the city level variables, the
+unaccounted for city-level  variation is very small.  Correct?
+
+Now, back to the idea that there is always an implicit individual
+level random effect in a logistic regression. Is it meaningful to ask
+"is that individual level random effect different for people of
+different races?"  If so, How can I estimate that?  If e_i is the
+implicit random error, can I ask for another random effect for
+Nonwhites only, say u_iN, in a model like so:
+
+z_i = a + b*x_i + e_i + u_iN
+
+Suppose the unique respondent number is ID and we create a new variable
+
+NonwhiteID = 0 for Nonwhites
+                 = ID for Nonwhites
+
+Here's my idea about how to check to see if the individual level
+variance component for Nonwhites is different from the "baseline" of
+Whites by fitting this:
+
+fm1 <- lmer( y ~ -1 + Race / (x) + (-1 + Race | PLACE) + (1 |
+NonwhiteID), data=dat, family=binomial)
+
+Here, again, I leave out the city-level variables.
+
+Random effects:
+ Groups  Name          Variance   Std.Dev.   Corr
+ NonwhiteID (Intercept)   5.0000e-10 2.2361e-05
+ PLACE RACEWhite       1.0575e-02 1.0283e-01
+         RACENonwhite        1.2880e-01 3.5889e-01 1.000
+number of obs: 6201, groups: NonwhiteID, 1736; PLACE, 33
+
+The variance component estimated for NonwhiteID means that the
+variance observed among Nonwhite respondents is not substantially
+different from the implicit, unestimated individual level random
+error.  However, it still appears that there is a substantial place
+effect, for Nonwhites only.
+
+Do I understand that right?
+
+Well, thanks in advance, as usual.
+
+-- 
+Paul E. Johnson
+Professor, Political Science
+1541 Lilac Lane, Room 504
+University of Kansas
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

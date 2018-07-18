@@ -1,0 +1,199 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Apr 19 09:13:58 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3JDDv0I024739
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 19 Apr 2007 09:13:57 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 2F044163D2C
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 19 Apr 2007 13:13:33 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.5 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1004)
+	id C7D05163941; Thu, 19 Apr 2007 13:13:09 +0000 (GMT)
+To: samba-cvs@samba.org
+From: gd@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070419131309.C7D05163941@lists.samba.org>
+Date: Thu, 19 Apr 2007 13:13:09 +0000 (GMT)
+Subject: svn commit: samba r22370 - in branches/SAMBA_3_0_25/source: .
+	include libads libsmb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 5353
+Lines: 156
+
+Author: gd
+Date: 2007-04-19 13:13:09 +0000 (Thu, 19 Apr 2007)
+New Revision: 22370
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22370
+
+Log:
+Merge -r21777:21779 from 3_0 to fix the build with Heimdal 0.8.
+
+Guenther
+
+Modified:
+   branches/SAMBA_3_0_25/source/configure.in
+   branches/SAMBA_3_0_25/source/include/includes.h
+   branches/SAMBA_3_0_25/source/libads/kerberos.c
+   branches/SAMBA_3_0_25/source/libsmb/clikrb5.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0_25/source/configure.in
+===================================================================
+--- branches/SAMBA_3_0_25/source/configure.in	2007-04-19 12:51:04 UTC (rev 22369)
++++ branches/SAMBA_3_0_25/source/configure.in	2007-04-19 13:13:09 UTC (rev 22370)
+@@ -3564,6 +3564,26 @@
+ 	    [Whether the krb5_ticket structure contains the kvno and enctype])
+   fi
+ 
++  AC_CACHE_CHECK(whether krb5_get_init_creds_opt_free takes a context argument,
++	  smb_krb5_creds_opt_free_context,
++	  [
++		AC_TRY_COMPILE([
++		    #include <krb5.h>],
++		    [
++			krb5_context ctx;
++			krb5_get_init_creds_opt *opt = NULL;
++			krb5_get_init_creds_opt_free(ctx, opt);
++		    ],
++		    [smb_krb5_creds_opt_free_context=yes],
++		    [smb_krb5_creds_opt_free_context=no]
++		)
++	  ])
++
++  if test x"$smb_krb5_creds_opt_free_context" = x"yes" ; then
++	AC_DEFINE(KRB5_CREDS_OPT_FREE_REQUIRES_CONTEXT, 1,
++	    [Whether krb5_get_init_creds_opt_free takes a context argument])
++  fi
++
+   AC_CACHE_CHECK(whether krb5_verify_checksum takes 7 arguments, smb_krb5_verify_checksum, [
+     AC_TRY_COMPILE([
+ 	#include <krb5.h>],
+
+Modified: branches/SAMBA_3_0_25/source/include/includes.h
+===================================================================
+--- branches/SAMBA_3_0_25/source/include/includes.h	2007-04-19 12:51:04 UTC (rev 22369)
++++ branches/SAMBA_3_0_25/source/include/includes.h	2007-04-19 13:13:09 UTC (rev 22370)
+@@ -1191,8 +1191,11 @@
+ void smb_krb5_free_error(krb5_context context, krb5_error *krberror);
+ krb5_error_code handle_krberror_packet(krb5_context context,
+                                          krb5_data *packet);
+-void krb5_get_init_creds_opt_free(krb5_get_init_creds_opt *opt);
+-krb5_error_code krb5_get_init_creds_opt_alloc(krb5_context context, krb5_get_init_creds_opt **opt);
++
++void smb_krb5_get_init_creds_opt_free(krb5_context context,
++				    krb5_get_init_creds_opt *opt);
++krb5_error_code smb_krb5_get_init_creds_opt_alloc(krb5_context context,
++				    krb5_get_init_creds_opt **opt);
+ krb5_error_code smb_krb5_mk_error(krb5_context context,
+ 					krb5_error_code error_code,
+ 					const krb5_principal server,
+
+Modified: branches/SAMBA_3_0_25/source/libads/kerberos.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/libads/kerberos.c	2007-04-19 12:51:04 UTC (rev 22369)
++++ branches/SAMBA_3_0_25/source/libads/kerberos.c	2007-04-19 13:13:09 UTC (rev 22370)
+@@ -101,7 +101,7 @@
+ 		return code;
+ 	}
+ 
+-	code = krb5_get_init_creds_opt_alloc(ctx, &opt);
++	code = smb_krb5_get_init_creds_opt_alloc(ctx, &opt);
+ 	if (code) {
+ 		krb5_cc_close(ctx, cc);
+ 		krb5_free_context(ctx);	
+@@ -140,7 +140,7 @@
+ 	if ((code = krb5_get_init_creds_password(ctx, &my_creds, me, CONST_DISCARD(char *,password), 
+ 						 kerb_prompter, NULL, 0, NULL, opt)))
+ 	{
+-		krb5_get_init_creds_opt_free(opt);
++		smb_krb5_get_init_creds_opt_free(ctx, opt);
+ 		smb_krb5_free_addresses(ctx, addr);
+ 		krb5_cc_close(ctx, cc);
+ 		krb5_free_principal(ctx, me);
+@@ -148,7 +148,7 @@
+ 		return code;
+ 	}
+ 
+-	krb5_get_init_creds_opt_free(opt);
++	smb_krb5_get_init_creds_opt_free(ctx, opt);
+ 
+ 	if ((code = krb5_cc_initialize(ctx, cc, me))) {
+ 		smb_krb5_free_addresses(ctx, addr);
+
+Modified: branches/SAMBA_3_0_25/source/libsmb/clikrb5.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/libsmb/clikrb5.c	2007-04-19 12:51:04 UTC (rev 22369)
++++ branches/SAMBA_3_0_25/source/libsmb/clikrb5.c	2007-04-19 13:13:09 UTC (rev 22370)
+@@ -1399,9 +1399,14 @@
+ 	return ret;
+ }
+ 
+-#ifndef HAVE_KRB5_GET_INIT_CREDS_OPT_ALLOC 
+- krb5_error_code krb5_get_init_creds_opt_alloc(krb5_context context, krb5_get_init_creds_opt **opt)
++ krb5_error_code smb_krb5_get_init_creds_opt_alloc(krb5_context context,
++					    krb5_get_init_creds_opt **opt)
+ {
++#ifdef HAVE_KRB5_GET_INIT_CREDS_OPT_ALLOC
++	/* Heimdal or modern MIT version */
++	return krb5_get_init_creds_opt_alloc(context, opt);
++#else
++	/* Historical MIT version */
+ 	krb5_get_init_creds_opt *my_opt;
+ 
+ 	*opt = NULL;
+@@ -1414,16 +1419,28 @@
+ 
+ 	*opt =  my_opt;
+ 	return 0;
++#endif /* HAVE_KRB5_GET_INIT_CREDS_OPT_ALLOC  */
+ }
++
++ void smb_krb5_get_init_creds_opt_free(krb5_context context,
++				krb5_get_init_creds_opt *opt)
++{
++#ifdef HAVE_KRB5_GET_INIT_CREDS_OPT_FREE
++
++#ifdef KRB5_CREDS_OPT_FREE_REQUIRES_CONTEXT
++	/* Modern MIT version */
++	krb5_get_init_creds_opt_free(context, opt);
++#else
++	/* Heimdal version */
++	krb5_get_init_creds_opt_free(opt);
+ #endif
+ 
+-#ifndef HAVE_KRB5_GET_INIT_CREDS_OPT_FREE 
+- void krb5_get_init_creds_opt_free(krb5_get_init_creds_opt *opt)
+-{
++#else /* HAVE_KRB5_GET_INIT_CREDS_OPT_FREE */
++	/* Historical MIT version */
+ 	SAFE_FREE(opt);
+ 	opt = NULL;
++#endif /* HAVE_KRB5_GET_INIT_CREDS_OPT_FREE */
+ }
+-#endif
+ 
+  krb5_error_code smb_krb5_mk_error(krb5_context context,
+ 				krb5_error_code error_code,
+

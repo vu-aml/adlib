@@ -132,17 +132,7 @@ class BinaryGreedy(Adversary):
 
     def minimize_transform(self, xi: np.array, i):
         xk = np.copy(xi)
-        # print('xk shape '+str(xk.shape)+  " i = "+ str(i))
-        # xk[i] -= self.step_size * (self.weight_vector[i] + self.lambda_val *
-        #          (xk[i] - xi[i]))
-        # print('f\'= '+ str(self.weight_vector[i]) + ' xk[i]= '+str(xk[i]) +
-        #       ' xi[i]= '+str(xi[i]))
-
-        # newxki = 1 - xi[i]
-        # print('minimize_decision= ' + str(newxki))
         xk[i] = 1 - xi[i]
-        # np.put(xk, [i], [newxki])
-        # print('new xk[i]= ' +str(xk[i]))
         return xk
 
     def transform_cost(self, x: np.array, xi: np.array):

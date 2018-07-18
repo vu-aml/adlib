@@ -1,0 +1,698 @@
+From perl6-all-return-80500-ktwarwic=speedy.uwaterloo.ca@perl.org  Thu Apr 12 05:06:29 2007
+Return-Path: <perl6-all-return-80500-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3C96P0I027967
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 12 Apr 2007 05:06:26 -0400
+Received: (qmail 4942 invoked by uid 514); 12 Apr 2007 09:06:01 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 4937 invoked from network); 12 Apr 2007 09:06:01 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+Message-ID: <461DF638.1030603@rblasch.org>
+Date: Thu, 12 Apr 2007 11:04:56 +0200
+From: Ron Blaschke <mailing-lists@rblasch.org>
+Reply-To: ron@rblasch.org
+User-Agent: Thunderbird 2.0.0.0 (Windows/20070326)
+MIME-Version: 1.0
+To: perl6-internals@perl.org
+Subject: [Proposed PATCH] Change libparrot Names and Locations
+Content-Type: multipart/mixed;
+ boundary="------------090203070308020801020002"
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=0.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO,URIBL_OB_SURBL
+Status: O
+Content-Length: 23060
+Lines: 652
+
+--------------090203070308020801020002
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+
+Attached is a proposed patch to change the libparrot names and locations 
+for Windows.  I have tested the changes for "core" Parrot on Win32 
+Visual C++, Cygwin GCC, MinGW GCC and Ubuntu GCC.
+
+Minor Changes
+-------------
+
+* libparrot_(static|shared) now contains the path to the library, not 
+the library name.  This lines up better with the F<Makefile>, too.
+
+     -LIBPARROT_STATIC    = @blib_dir@/@libparrot_static@
+     +LIBPARROT_STATIC    = @libparrot_static@
+
+
+* Ordered arguments for linking miniparrot and parrot.  For some reason 
+Cygwin's gcc doesn't reorder them.
+
+* Removed reference to F<libparrot.def>, file doesn't exist
+
+
+Now for the real changes:
+
+Background
+----------
+
+One key difference between Visual C++ and GCC (or better PE and ELF?) is 
+that the link-time library and runtime library are different files, 
+though I guess this is somewhat comparable to ELF's soname?
+
+Visual C++ uses two libraries for dynamic linking: library.lib for 
+linking (import library), library.dll during runtime (DLL).  The base 
+name doesn't have to be the same, to you can have a F<foo.lib> and a 
+F<bar.dll>.
+library.dll must be found in the DLL search order, usually it's best to 
+put it into the same directory as the executable.  There's no prefix.
+
+There's no versioning scheme, but if multiple versions are expected it's 
+best to include the number in the name.  For example, F<msvcr80.dll> 
+(Microsoft Visual C++ C Runtime Library 8.0) or F<perl58.dll>.
+
+References
+     Dynamic-Link Library Search Order
+       http://msdn2.microsoft.com/en-us/library/ms682586.aspx
+
+
+Win32 / Visual C++
+------------------
+
+The static library is now at F<blib/lib/libparrot.lib>, the import 
+library at F<blib/lib/parrot.lib>.  The DLL is now at 
+F<parrot$MAJOR.$MINOR.dll>.
+
+
+Win32 / Cygwin
+--------------
+
+Cygwin is a mix between Windows and UNIX, which shows here too.  The 
+static library is now at F<blib/lib/libparrot.a>.  The import library is 
+at F<blib/lib/libparrot.dll.a>, the DLL at F<cygparrot$MAJOR.$MINOR.dll> 
+(yes, that's a 'cyg' prefix here).
+
+
+References
+     Cygwin User's Guide - Building and Using DLLs
+       http://www.cygwin.com/cygwin-ug-net/dll.html
+
+     ld and WIN32 (cygwin/mingw)
+http://www.redhat.com/docs/manuals/enterprise/RHEL-4-Manual/gnu-linker/win32.html
+
+
+Win32 / MinGW (GCC)
+-------------------
+
+The static library is F<blib/lib/libparrot.a>, the import library 
+F<blib/lib/libparrot.dll.a> and the DLL F<parrot$MAJOR.$MINOR.dll>.
+
+
+References
+
+     ld and WIN32 (cygwin/mingw)
+http://www.redhat.com/docs/manuals/enterprise/RHEL-4-Manual/gnu-linker/win32.html
+
+
+make test
+---------
+There are some test failures, but I don't think they are related to the 
+changes.
+
+
+Ubuntu (r18140)
+---------------
+Failed Test              Stat Wstat Total Fail  Failed  List of Failed
+-------------------------------------------------------------------------------
+t/configure/01-options.t  255 65280    33   48 145.45%  10-33
+8 tests and 577 subtests skipped.
+Failed 1/275 test scripts, 99.64% okay. 24/6768 subtests failed, 99.65% 
+okay.
+
+Visual C++ 8.0 (r18140)
+-----------------------
+All tests successful, 21 tests and 592 subtests skipped.
+Files=275, Tests=6767, 43030 wallclock secs ( 0.00 cusr +  0.00 csys = 
+0.00 CPU)
+
+MinGW (r18120)
+--------------
+Failed Test        Stat Wstat Total Fail  Failed  List of Failed
+-------------------------------------------------------------------------------
+t/op/arithmetics.t    1   256    26    1   3.85%  7
+t/op/sprintf.t                  308    1   0.32%  157
+t/pmc/complex.t      15  3840    53   15  28.30%  38-49 51-53
+t/pmc/float.t         1   256    42    1   2.38%  23
+23 tests and 594 subtests skipped.
+Failed 4/275 test scripts, 98.55% okay. 18/6714 subtests failed, 99.73% 
+okay.
+
+Cygwin (r18140)
+---------------
+Failed Test               Stat Wstat Total Fail  Failed  List of Failed
+-------------------------------------------------------------------------------
+t/codingstd/cppcomments.t               ??   ??       %  ??
+t/op/trans.t                 1   256    21    1   4.76%  13
+t/pmc/os.t                   2   512    15    2  13.33%  6 9
+t/stm/runtime.t              1   256     5    1  20.00%  4
+
+Ron
+
+--------------090203070308020801020002
+Content-Type: text/plain;
+ name="win32_libparrot.patch"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline;
+ filename="win32_libparrot.patch"
+
+Index: ext/Parrot-Embed/Build.PL
+===================================================================
+--- ext/Parrot-Embed/Build.PL	(revision 18140)
++++ ext/Parrot-Embed/Build.PL	(working copy)
+@@ -118,7 +118,7 @@
+ 	}
+ 
+     $vars{Cflags} .= ' -I' . catdir( ($updir) x 2, 'include' );
+-    $vars{Libs}   .= $^O =~ /Win32/ ? ' ..\..\libparrot.lib' : " -L$libp";
++    $vars{Libs}   .= $^O =~ /Win32/ ? ' ..\..\parrot.lib' : " -L$libp";
+ 
+ 	return @vars{qw( Cflags Libs )};
+ }
+Index: tools/build/ln_rel_sf.pl
+===================================================================
+--- tools/build/ln_rel_sf.pl	(revision 0)
++++ tools/build/ln_rel_sf.pl	(revision 0)
+@@ -0,0 +1,67 @@
++#!perl
++
++use strict;
++use warnings;
++
++use File::Spec;
++use File::Basename;
++
++sub usage {
++    my ($arg) = @_;
++    print "Missing argument: $arg\n";
++    print "usage: ln_rel_sf <target> <source>\n";
++    print "    target  existing destination of link\n";
++    print "    source  link source to be created\n";
++
++    exit 1;
++}
++
++my ($target, $source) = @ARGV;
++
++if (!defined $target) {
++    usage('target');
++}
++
++if (!defined $source) {
++    usage('source');
++}
++
++
++my $link = File::Spec->abs2rel(
++               File::Spec->rel2abs($target), 
++               dirname $target
++           ); 
++
++if (-e $source) {
++    unlink $source or die "Can't delete $source: $!";
++}
++
++exit !symlink $link, $source;
++
++
++# Copyright (C) 2007, The Perl Foundation.
++# $Id:$
++
++=head1 NAME
++
++tools/build/ln_rel_sf.pl - Makes a symbolic link
++
++=head1 SYNOPSIS
++
++    % perl tools/build/ln_rel_sf.pl target source
++
++=head1 DESCRIPTION
++
++Creates a symbolic link at F<source> to point to F<target>.  Note that
++F<target> is the target path, not the link.  The link will be the relative
++path from source to target.
++
++=cut
++
++
++# Local Variables:
++#   mode: cperl
++#   cperl-indent-level: 4
++#   fill-column: 100
++# End:
++# vim: expandtab shiftwidth=4:
+
+Property changes on: tools\build\ln_rel_sf.pl
+___________________________________________________________________
+Name: svn:eol-style
+   + native
+
+Index: lib/Parrot/IO/File.pm
+===================================================================
+--- lib/Parrot/IO/File.pm	(revision 18140)
++++ lib/Parrot/IO/File.pm	(working copy)
+@@ -248,7 +248,6 @@
+     my $self = shift;
+ 
+     # CFLAGS
+-    # libparrot.def
+     # Makefile
+     # myconfig
+ 
+@@ -264,7 +263,7 @@
+     return 1
+         if $self->suffix =~ /^(?:dump|html|flag|o)$/o
+         or $self->name =~
+-/^(?:perl6-config|libparrot.def|CFLAGS|myconfig|(?:core_pmcs|exec_(?:cpu|dep)|fingerprint|jit_(?:cpu|emit)|nci|platform(?:_interface)?)\.[ch]|(?:charclass|feature)\.h)$/o
++/^(?:perl6-config|CFLAGS|myconfig|(?:core_pmcs|exec_(?:cpu|dep)|fingerprint|jit_(?:cpu|emit)|nci|platform(?:_interface)?)\.[ch]|(?:charclass|feature)\.h)$/o
+         or $self->parent->name eq 'ops'
+         and $self->suffix =~ /^(?:c|pod)$/;
+ 
+Index: config/init/defaults.pm
+===================================================================
+--- config/init/defaults.pm	(revision 18140)
++++ config/init/defaults.pm	(working copy)
+@@ -119,11 +119,11 @@
+         sym_import => '',
+ 
+         # Library build directory
+-        blib_dir => 'blib/lib',
++        blib_dir => File::Spec->catdir('blib', 'lib'),
+ 
+         # libparrot library names
+-        libparrot_static => 'libparrot' . $Config{_a},
+-        libparrot_shared => 'libparrot.' . $Config{so},
++        libparrot_static => File::Spec->catfile('blib', 'lib', 'libparrot'  . $Config{_a}),
++        libparrot_shared => File::Spec->catfile('blib', 'lib', 'libparrot.' . $Config{so}),
+ 
+         # does the system know about static/dynamic linking?
+         has_static_linking  => 1,
+Index: config/init/hints/freebsd.pm
+===================================================================
+--- config/init/hints/freebsd.pm	(revision 18140)
++++ config/init/hints/freebsd.pm	(working copy)
+@@ -6,6 +6,8 @@
+ use strict;
+ use warnings;
+ 
++use File::Spec;
++
+ sub runstep {
+     my ( $self, $conf ) = @_;
+ 
+@@ -28,6 +30,8 @@
+ 
+     $libs .= ' -pthread';
+ 
++    my $blib_dir = $conf->data->get('blib_dir');
++
+     $conf->data->set(
+         libs  => $libs,
+         link  => 'g++',
+@@ -35,8 +39,8 @@
+ 
+         has_dynamic_linking    => 1,
+         parrot_is_shared       => 1,
+-        libparrot_shared       => 'libparrot$(SHARE_EXT).$(SOVERSION)',
+-        libparrot_shared_alias => 'libparrot$(SHARE_EXT)',
++        libparrot_shared       => File::Spec->catfile($blib_dir, 'libparrot$(SHARE_EXT).$(SOVERSION)'),
++        libparrot_shared_alias => File::Spec->catfile($blib_dir, 'libparrot$(SHARE_EXT)'),
+         libparrot_soname       => '-Wl,-soname=libparrot$(SHARE_EXT).$(SOVERSION)',
+     );
+ }
+Index: config/init/hints/darwin.pm
+===================================================================
+--- config/init/hints/darwin.pm	(revision 18140)
++++ config/init/hints/darwin.pm	(working copy)
+@@ -6,6 +6,8 @@
+ use strict;
+ use warnings;
+ 
++use File::Spec;
++
+ sub runstep {
+     my ( $self, $conf ) = @_;
+ 
+@@ -27,6 +29,8 @@
+     $ldflags =~ s/-flat_namespace\s*//;
+     $ldflags .= " -flat_namespace ";
+ 
++    my $blib_dir = $conf->data->get('blib_dir');
++
+     $conf->data->set(
+         darwin              => 1,
+         ccflags             => $ccflags,
+@@ -45,8 +49,8 @@
+         # XXX when built against a dynamic libparrot installable_parrot records
+         # the path to the blib version of the library
+         parrot_is_shared       => 0,
+-        libparrot_shared       => 'libparrot.$(SOVERSION)$(SHARE_EXT)',
+-        libparrot_shared_alias => 'libparrot$(SHARE_EXT)',
++        libparrot_shared       => File::Spec->catfile($blib_dir, 'libparrot.$(SOVERSION)$(SHARE_EXT)'),
++        libparrot_shared_alias => File::Spec->catfile($blib_dir, 'libparrot$(SHARE_EXT)'),
+ 
+         # This variable needs renaming to be more general
+         # XXX ugly hack for rpath_lib in config/inter/libparrot.pm
+Index: config/init/hints/linux.pm
+===================================================================
+--- config/init/hints/linux.pm	(revision 18140)
++++ config/init/hints/linux.pm	(working copy)
+@@ -7,6 +7,7 @@
+ use warnings;
+ 
+ use Config;
++use File::Spec;
+ 
+ sub runstep {
+     my ( $self, $conf ) = @_;
+@@ -71,6 +72,9 @@
+         $cflags .= ' -D_GNU_SOURCE';
+     }
+ 
++
++    my $blib_dir = $conf->data->get('blib_dir');
++
+     $conf->data->set(
+         ccflags        => $cflags,
+         libs           => $libs,
+@@ -84,8 +88,8 @@
+ 
+         has_dynamic_linking    => 1,
+         parrot_is_shared       => 1,
+-        libparrot_shared       => 'libparrot$(SHARE_EXT).$(SOVERSION)',
+-        libparrot_shared_alias => 'libparrot$(SHARE_EXT)',
++        libparrot_shared       => File::Spec->catfile($blib_dir, 'libparrot$(SHARE_EXT).$(SOVERSION)'),
++        libparrot_shared_alias => File::Spec->catfile($blib_dir, 'libparrot$(SHARE_EXT)'),
+         libparrot_soname       => '-Wl,-soname=libparrot$(SHARE_EXT).$(SOVERSION)',
+     );
+ 
+Index: config/init/hints/cygwin.pm
+===================================================================
+--- config/init/hints/cygwin.pm	(revision 18140)
++++ config/init/hints/cygwin.pm	(working copy)
+@@ -17,6 +17,10 @@
+     my $build_dir = $conf->data->get('build_dir');
+     $build_dir =~ s/ /\\ /g;
+ 
++    my $blib_dir = $conf->data->get('blib_dir');
++
++    my $dll_name_version = join '.', $conf->data->get(qw( MAJOR MINOR ));
++
+     # A note about building shared libraries:  Perl5 uses the 'ld2' tool, which
+     # is installed as part of the perl5 installation.  So far, it appears
+     # parrot can get by with simply using gcc -shared, so we override the
+@@ -24,16 +28,19 @@
+     # If this later causes problems, it might be worth revisiting.
+     # A. Spieherty 9/9/2002
+     $conf->data->set(
+-        build_dir           => $build_dir,
+-        ld                  => 'gcc',
+-        ld_share_flags      => '-shared',
+-        ld_load_flags       => '-shared',
+-        libs                => $libs,
+-        has_static_linking  => 0,
+-        has_dynamic_linking => 1,
+-        parrot_is_shared    => 1,
+-        sym_export          => '__declspec(dllexport)',
+-        sym_import          => '__declspec(dllimport)'
++        build_dir              => $build_dir,
++        ld                     => 'gcc',
++        ld_share_flags         => '-shared -Wl,--export-all-symbols -Wl,--out-implib=' 
++                                    . File::Spec->catfile($blib_dir, 'libparrot.dll.a'),
++        ld_load_flags          => '-shared',
++        libs                   => $libs,
++        has_static_linking     => 1,
++        has_dynamic_linking    => 1,
++        parrot_is_shared       => 1,
++        libparrot_static       => File::Spec->catfile($blib_dir,  'libparrot.a'),
++        libparrot_shared       => File::Spec->catfile($build_dir, "cygparrot$dll_name_version.dll"),
++        sym_export             => '__declspec(dllexport)',
++        sym_import             => '__declspec(dllimport)'
+     );
+ 
+     # inet_aton needs to be defined on Cygwin.
+Index: config/init/hints/mswin32.pm
+===================================================================
+--- config/init/hints/mswin32.pm	(revision 18140)
++++ config/init/hints/mswin32.pm	(working copy)
+@@ -5,6 +5,8 @@
+ 
+ use strict;
+ use warnings;
++
++use File::Spec;
+ use Win32;
+ 
+ sub runstep {
+@@ -35,6 +37,10 @@
+         $conf->data->set( build_dir => Win32::GetShortPathName($build_dir) );
+     }
+ 
++    my $blib_dir = $conf->data->get('blib_dir');
++
++    my $dll_name_version = join '.', $conf->data->get(qw( MAJOR MINOR ));
++
+     if ($is_msvc) {
+ 
+         # Check the output of cl.exe to see if it contains the
+@@ -53,7 +59,7 @@
+             o          => '.obj',
+             cc_o_out   => '-Fo',
+             cc_exe_out => '-out:',
+-            cc_ldflags => '/link',
++            cc_ldflags => '-link',
+ 
+             make_c => q{$(PERL) -e "chdir shift @ARGV;}
+                 . q{system '$(MAKE)', '-nologo', @ARGV; exit $$? >> 8;"},
+@@ -62,16 +68,15 @@
+             # ZI messes with __LINE__
+             cc_debug            => '-Zi',
+             ld_debug            => '-debug',
+-            ld_share_flags      => '-dll',
++            ld_share_flags      => '-dll -implib:' . File::Spec->catfile($blib_dir, 'parrot.lib'),
+             ld_load_flags       => '-dll',
+             ld_out              => '-out:',
+             ldflags             => '-nologo -nodefaultlib',
+-            libparrot_static    => 'libparrot' . $conf->data->get('a'),
+-            libparrot_shared    => 'libparrot$(SHARE_EXT)',
++            libparrot_static    => File::Spec->catfile($blib_dir, 'libparrot' . $conf->data->get('a')),
++            libparrot_shared    => 'parrot' . $dll_name_version . '$(SHARE_EXT)',
+             ar_flags            => '',
+             ar_out              => '-out:',
+             slash               => '\\',
+-            blib_dir            => 'blib\\lib',
+             ccflags             => $ccflags,
+             ccwarn              => '',
+             has_dynamic_linking => 1,
+@@ -81,12 +86,18 @@
+             sym_import => '__declspec(dllimport)'
+         );
+ 
+-        # If we are building shared, need to include dynamic libparrot.lib, otherwise
++
++        # If we are building shared, need to include dynamic parrot.lib, otherwise
+         # the static libparrot.lib.
+         if ( $conf->data->get('parrot_is_shared') ) {
+-            $conf->data->set( libparrot_ldflags => 'libparrot$(A)' );
++            $conf->data->set( libparrot_ldflags => '-libpath:' 
++                . File::Spec->rel2abs($blib_dir) . ' parrot.lib' );
++        } else {
++            $conf->data->set( libparrot_ldflags => '-libpath:' 
++                . File::Spec->rel2abs($blib_dir) . ' libparrot.lib' );
+         }
+ 
++
+         # 'link' needs to be link.exe, not cl.exe.
+         # This makes 'link' and 'ld' the same.
+         $conf->data->set( link => $conf->data->get('ld') );
+@@ -201,13 +212,17 @@
+         else {
+             warn "unknown configuration";
+         }
++        
++        my $build_dir = $conf->data->get('build_dir');
+ 
+         $conf->data->set(
+             parrot_is_shared    => 1,
+             has_dynamic_linking => 1,
+             ld_load_flags       => '-shared ',
+-            ld_share_flags      => '-shared ',
+-            libparrot_ldflags   => $conf->data->get('build_dir') . '/libparrot.dll',
++            ld_share_flags      => '-shared -Wl,--out-implib='
++                                    . File::Spec->catfile($blib_dir, 'libparrot.dll.a'),
++            libparrot_static    => File::Spec->catfile($blib_dir,  'libparrot' . $conf->data->get('a')),
++            libparrot_shared    => File::Spec->catfile($build_dir, "parrot$dll_name_version.dll"),
+             ncilib_link_extra   => 'src/libnci_test.def',
+             sym_export          => '__declspec(dllexport)',
+             sym_import          => '__declspec(dllimport)',
+Index: config/gen/makefiles/root.in
+===================================================================
+--- config/gen/makefiles/root.in	(revision 18140)
++++ config/gen/makefiles/root.in	(working copy)
+@@ -518,10 +518,9 @@
+ INSTALLABLEPDB      = $(CUR_DIR)/installable_pdb$(EXE)
+ 
+ # Libraries
+-LIBPARROT_STATIC    = @blib_dir@/@libparrot_static@
++LIBPARROT_STATIC    = @libparrot_static@
+ #CONDITIONED_LINE(darwin):export DYLD_LIBRARY_PATH := @blib_dir@:$(DYLD_LIBRARY_PATH)
+-#CONDITIONED_LINE(win32):LIBPARROT_SHARED  = @libparrot_shared@
+-#INVERSE_CONDITIONED_LINE(win32):LIBPARROT_SHARED  = @blib_dir@/@libparrot_shared@
++LIBPARROT_SHARED  = @libparrot_shared@
+ 
+ # This line controls whether a static or shared library is built
+ LIBPARROT           = @libparrot@
+@@ -764,22 +763,23 @@
+     lib/Parrot/OpLib/core.pm $(SRC_DIR)/parrot_config$(O) \
+     $(MINIPARROT)
+ 	$(LINK) @ld_out@$@ \
+-    $(IMCC_DIR)/main$(O) @rpath_blib@ $(ALL_PARROT_LIBS) $(LINKFLAGS) $(LINK_DYNAMIC) \
+-    $(SRC_DIR)/parrot_config$(O)
++    $(IMCC_DIR)/main$(O) $(SRC_DIR)/parrot_config$(O) \
++    @rpath_blib@ $(ALL_PARROT_LIBS) $(LINKFLAGS) $(LINK_DYNAMIC)
++    
+ #
+ # TODO build the real miniparrot
+ #
+ $(MINIPARROT) : $(IMCC_DIR)/main$(O) $(GEN_HEADERS) $(LIBPARROT) \
+     lib/Parrot/OpLib/core.pm $(SRC_DIR)/null_config$(O)
+-	$(LINK) @ld_out@$@ $(IMCC_DIR)/main$(O) \
+-    @rpath_blib@ $(ALL_PARROT_LIBS) $(LINKFLAGS) $(SRC_DIR)/null_config$(O)
++	$(LINK) @ld_out@$@ $(IMCC_DIR)/main$(O) $(SRC_DIR)/null_config$(O) \
++    @rpath_blib@ $(ALL_PARROT_LIBS) $(LINKFLAGS)
+ 
+ $(INSTALLABLEPARROT) : $(IMCC_DIR)/main$(O) $(GEN_HEADERS) $(LIBPARROT) \
+     lib/Parrot/OpLib/core.pm $(SRC_DIR)/install_config$(O) \
+     $(PARROT)
+ 	$(LINK) @ld_out@$@ \
+-    $(IMCC_DIR)/main$(O) \
+-    $(ALL_PARROT_LIBS) $(LINKFLAGS) $(SRC_DIR)/install_config$(O)
++    $(IMCC_DIR)/main$(O) $(SRC_DIR)/install_config$(O) \
++    $(ALL_PARROT_LIBS) $(LINKFLAGS)
+ 
+ $(SRC_DIR)/parrot_config.c :  runtime/parrot/include/config.fpmc \
+     $(BUILD_TOOLS_DIR)/parrot_config_c.pl
+@@ -834,7 +834,7 @@
+ 	$(MKPATH) @blib_dir@
+ 	$(LD) $(LD_SHARE_FLAGS) $(LDFLAGS) @ld_out@$@ @libparrot_soname@ \
+     $(O_FILES) $(C_LIBS) $(ICU_SHARED)
+-#CONDITIONED_LINE(libparrot_shared_alias):	( cd @blib_dir@ ; ln -sf @libparrot_shared@ @libparrot_shared_alias@ )
++#CONDITIONED_LINE(libparrot_shared_alias):	perl tools/build/ln_rel_sf.pl @libparrot_shared@ @libparrot_shared_alias@
+ 
+ 
+ #
+Index: config/gen/makefiles/dynpmc_pl.in
+===================================================================
+--- config/gen/makefiles/dynpmc_pl.in	(revision 18140)
++++ config/gen/makefiles/dynpmc_pl.in	(working copy)
+@@ -39,10 +39,6 @@
+ if ($^O eq 'MSWin32') {
+     # Paths need quoting as they may contain spaces.
+     $PATHQUOTE = '"';
+-
+-    unless ($CC =~ /gcc/i) {
+-        $LIBPARROT = '@build_dir@/libparrot@a@';
+-    }
+ }
+ 
+ # PMC2C Config
+@@ -94,7 +90,7 @@
+         "$LD ".
+         '@ld_out@' . $target . " " .
+         join(" ", map {"$PATHQUOTE$_$PATHQUOTE"} @$sources) .
+-        " $liblist $LDFLAGS $LD_LOAD_FLAGS $PATHQUOTE$LIBPARROT$PATHQUOTE";
++        " $liblist $LDFLAGS $LD_LOAD_FLAGS $LIBPARROT";
+ }
+ 
+ our $NOW = time();
+Index: config/gen/makefiles/dynoplibs_pl.in
+===================================================================
+--- config/gen/makefiles/dynoplibs_pl.in	(revision 18140)
++++ config/gen/makefiles/dynoplibs_pl.in	(working copy)
+@@ -39,10 +39,6 @@
+ if ($^O eq 'MSWin32') {
+     # Paths need quoting as they may contain spaces.
+     $PATHQUOTE = q["];
+-
+-    unless ($CC =~ /gcc/i) {
+-        $LIBPARROT = '@build_dir@/libparrot@a@';
+-    }
+ }
+ 
+ # OPS2C Config
+@@ -93,7 +89,7 @@
+         "$LD ".
+         "@ld_out@" . $target . " " .
+         join(" ", map {"$PATHQUOTE$_$PATHQUOTE"} @$sources) .
+-        " $liblist $LDFLAGS $LD_LOAD_FLAGS $PATHQUOTE$LIBPARROT$PATHQUOTE";
++        " $liblist $LDFLAGS $LD_LOAD_FLAGS $LIBPARROT";
+ }
+ 
+ our $NOW = time();
+Index: config/gen/makefiles/parrot_embed.in
+===================================================================
+--- config/gen/makefiles/parrot_embed.in	(revision 18140)
++++ config/gen/makefiles/parrot_embed.in	(working copy)
+@@ -4,6 +4,7 @@
+ use Cwd;
+ use Config;
+ use File::Copy;
++use File::Spec;
+ use ExtUtils::MakeMaker;
+ 
+ copy( 'lib/Parrot/Embed.xs', 'Embed.xs' );
+@@ -15,24 +16,16 @@
+ $config{PARROT}          = '..@slash@..@slash@parrot@exe@';
+ $config{C_LIBS}          = '@libs@';
+ $config{INCLUDE}         = "$config{PARROTDIR}/include";
+-#INVERSE_CONDITIONED_LINE(win32):$config{ALL_PARROT_LIBS} = "@libparrot_ldflags@ $config{C_LIBS}";
++$config{ALL_PARROT_LIBS} = "@libparrot_ldflags@ $config{C_LIBS}";
+ $config{ABS_PARROTDIR}   = Cwd::realpath(
+                                File::Spec->rel2abs( $config{PARROTDIR} ) );
+ $config{LDDLFLAGS}       = $Config{lddlflags};
+ 
+-if ($config{CC} eq 'cl')
+-{
+-    $config{LDDLFLAGS} .= qq| -libpath:"$config{ABS_PARROTDIR} "|
+-        .  File::Spec->catfile( $config{ABS_PARROTDIR}, 'libparrot.lib' );
+-}
+-
+ WriteMakefile(
+     'NAME'         => 'Parrot::Embed',
+     'VERSION_FROM' => 'lib/Parrot/Embed.pm',
+     'PREREQ_PM'    => { 'ExtUtils::CBuilder' => 0 },
+-#CONDITIONED_LINE(win32):    'LIBS'         => [ $config{C_LIBS} ],
+-#CONDITIONED_LINE(win32):    'OBJECT'       => "@libparrot_ldflags@ Embed@o@",
+-#INVERSE_CONDITIONED_LINE(win32):    'LIBS'         => [ $config{ALL_PARROT_LIBS} ],
++    'LIBS'         => [ $config{ALL_PARROT_LIBS} ],
+     'INC'          => "-I$config{INCLUDE}",
+     'PM'           => { map { $_ => "blib/$_" } <lib/Parrot/*pm> },
+     'clean'        => { FILES => '*.xs t/greet.pbc' },
+
+--------------090203070308020801020002--
+

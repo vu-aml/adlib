@@ -1,0 +1,167 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Apr 10 19:00:26 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3AN0P0I002952
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 10 Apr 2007 19:00:25 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id BB54F16381A
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 10 Apr 2007 23:00:02 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.3 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 540)
+	id F04A1162B70; Tue, 10 Apr 2007 22:59:43 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jerry@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070410225943.F04A1162B70@lists.samba.org>
+Date: Tue, 10 Apr 2007 22:59:43 +0000 (GMT)
+Subject: svn commit: samba r22159 - in branches: SAMBA_3_0/source/nsswitch
+	SAMBA_3_0_25/source/nsswitch
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 3377
+Lines: 124
+
+Author: jerry
+Date: 2007-04-10 22:59:42 +0000 (Tue, 10 Apr 2007)
+New Revision: 22159
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22159
+
+Log:
+BUG 4501 (second half of fix): Just disable the
+uid/gid allocation if no idmap alloca backend has been 
+defined and we are not using a 3.0.24 idmap backend 
+compatible configuration.
+
+
+Modified:
+   branches/SAMBA_3_0/source/nsswitch/idmap.c
+   branches/SAMBA_3_0_25/source/nsswitch/idmap.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/nsswitch/idmap.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/idmap.c	2007-04-10 21:14:44 UTC (rev 22158)
++++ branches/SAMBA_3_0/source/nsswitch/idmap.c	2007-04-10 22:59:42 UTC (rev 22159)
+@@ -259,7 +259,7 @@
+ 	char *compat_backend = NULL;
+ 	char *compat_params = NULL;
+ 	const char **dom_list = NULL;
+-	char *alloc_backend;
++	char *alloc_backend = NULL;
+ 	BOOL default_already_defined = False;
+ 	BOOL pri_dom_is_in_list = False;
+ 	int compat = 0;
+@@ -561,11 +561,11 @@
+ 	}
+ 
+ 
+-	/***************************
+-	 * initialize alloc module
+-	 */
+-	DEBUG(1, ("Initializing idmap alloc module\n"));
++	/* Initialize alloc module */
+ 
++	DEBUG(3, ("Initializing idmap alloc module\n"));
++
++	alloc_backend = NULL;
+ 	if (compat) {
+ 		alloc_backend = talloc_strdup(idmap_ctx, compat_backend);
+ 	} else {
+@@ -573,12 +573,11 @@
+ 		
+ 		if (ab && (ab[0] != '\0')) {
+ 			alloc_backend = talloc_strdup(idmap_ctx, lp_idmap_alloc_backend());
+-		} else {
+-			alloc_backend = talloc_strdup(idmap_ctx, "tdb");
+ 		}
+ 	}
+-	IDMAP_CHECK_ALLOC(alloc_backend);
+ 
++	if ( alloc_backend ) {
++
+ 	alloc_methods = get_alloc_methods(alloc_backends, alloc_backend);
+ 	if ( ! alloc_methods) {
+ 		ret = smb_probe_module("idmap", alloc_backend);
+@@ -603,6 +602,7 @@
+ 		else
+ 			ret = NT_STATUS_UNSUCCESSFUL;
+ 	}
++	}
+ 
+ 	/* cleanpu temporary strings */
+ 	TALLOC_FREE( compat_backend );
+
+Modified: branches/SAMBA_3_0_25/source/nsswitch/idmap.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/nsswitch/idmap.c	2007-04-10 21:14:44 UTC (rev 22158)
++++ branches/SAMBA_3_0_25/source/nsswitch/idmap.c	2007-04-10 22:59:42 UTC (rev 22159)
+@@ -259,7 +259,7 @@
+ 	char *compat_backend = NULL;
+ 	char *compat_params = NULL;
+ 	const char **dom_list = NULL;
+-	char *alloc_backend;
++	char *alloc_backend = NULL;
+ 	BOOL default_already_defined = False;
+ 	BOOL pri_dom_is_in_list = False;
+ 	int compat = 0;
+@@ -561,11 +561,11 @@
+ 	}
+ 
+ 
+-	/***************************
+-	 * initialize alloc module
+-	 */
+-	DEBUG(1, ("Initializing idmap alloc module\n"));
++	/* Initialize alloc module */
+ 
++	DEBUG(3, ("Initializing idmap alloc module\n"));
++
++	alloc_backend = NULL;
+ 	if (compat) {
+ 		alloc_backend = talloc_strdup(idmap_ctx, compat_backend);
+ 	} else {
+@@ -573,12 +573,11 @@
+ 		
+ 		if (ab && (ab[0] != '\0')) {
+ 			alloc_backend = talloc_strdup(idmap_ctx, lp_idmap_alloc_backend());
+-		} else {
+-			alloc_backend = talloc_strdup(idmap_ctx, "tdb");
+ 		}
+ 	}
+-	IDMAP_CHECK_ALLOC(alloc_backend);
+ 
++	if ( alloc_backend ) {
++
+ 	alloc_methods = get_alloc_methods(alloc_backends, alloc_backend);
+ 	if ( ! alloc_methods) {
+ 		ret = smb_probe_module("idmap", alloc_backend);
+@@ -603,6 +602,7 @@
+ 		else
+ 			ret = NT_STATUS_UNSUCCESSFUL;
+ 	}
++	}
+ 
+ 	/* cleanpu temporary strings */
+ 	TALLOC_FREE( compat_backend );
+

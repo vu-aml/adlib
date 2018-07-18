@@ -1,0 +1,93 @@
+From perl6-all-return-81820-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue Jun  5 09:33:20 2007
+Return-Path: <perl6-all-return-81820-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l55DXHhB009480
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 5 Jun 2007 09:33:18 -0400
+Received: (qmail 18010 invoked by uid 514); 5 Jun 2007 13:33:10 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 18005 invoked from network); 5 Jun 2007 13:33:10 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: domain of mark@glines.org designates 72.36.206.66 as permitted sender)
+Date: Tue, 5 Jun 2007 06:32:18 -0700
+From: Mark Glines <mark@glines.org>
+To: Joshua Isom <jrisom@gmail.com>
+Cc: chromatic <chromatic@wgz.org>, perl6-internals@perl.org
+Subject: LD_LIBRARY_PATH required on FreeBSD (was: Re: GC bug on
+ freebsd/x86, triggered by a perl6 test)
+Message-ID: <20070605063218.14b326c4@chirp>
+In-Reply-To: <8b561d9cbd5f529a2865ca5a099fe146@gmail.com>
+References: <20070604124945.36989852@chirp>
+	<200706041307.18113.chromatic@wgz.org>
+	<8b561d9cbd5f529a2865ca5a099fe146@gmail.com>
+Organization: Glines.org
+X-Mailer: Claws Mail 2.9.0 (GTK+ 2.10.12; i686-pc-linux-gnu)
+X-Useless-Header: yay!
+Mime-Version: 1.0
+Content-Type: text/plain; charset=US-ASCII
+Content-Transfer-Encoding: 7bit
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-0.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,KARMA_CONNECT_NEGATIVE,SPF_HELO_PASS,SPF_PASS
+
+On Tue, 5 Jun 2007 01:13:36 -0500
+Joshua Isom <jrisom@gmail.com> wrote:
+
+> After a little prodding around, I think the problem is that the
+> dynops aren't build with the rpath.  I don't know how "proper" the
+> following patch is(i.e. linux doesn't seem to have a problem so
+> either this is right or the other way is right), but it does the
+> trick.
+
+
+> -our $LDFLAGS = q[@ldflags@ @ld_debug@];
+> +our $LDFLAGS = q[@ldflags@ @ld_debug@ @rpath_blib@];
+
+Sorry, but this patch didn't change anything for me.  The libparrot.so
+link line looks the same (maybe because its linking with cc, not ld),
+and I still need to specify an LD_LIBRARY_PATH when invoking parrot
+from a subdir, later on.
+
+Since it works on linux but not freebsd, and since freebsd seems to
+have the same tools available as linux, could it just be a difference
+in the hints files?
+
+paranoid@chirp ~/parrot $ grep rpath config/init/hints/freebsd.pm config/init/hints/linux.pm
+config/init/hints/freebsd.pm:        rpath => '-Wl,-R',
+config/init/hints/linux.pm:        rpath          => '-Wl,-rpath=',
+
+On the other hand, I don't see an actual "-Wl,-rpath=" clause on the
+linker line for a linux build, either.  And the result works on linux
+without any LD_LIBRARY_PATH hints, but not on freebsd.
+
+Linker line under linux:
+
+i686-pc-linux-gnu-gcc -shared -L/usr/local/lib -fPIC -L/usr/local/lib
+-o blib/lib/libparrot.so.0.4.12 -Wl,-soname=libparrot.so.0.4.12 [long
+list of objects] -lpthread -lnsl -ldl -lm -lcrypt -lutil -lrt -lgmp
+-lreadline -lncurses -lpthread -lm -L/usr/lib  -licuuc -licudata
+-lpthread -lm
+
+Linker line under freebsd:
+
+cc -shared  -L/usr/local/lib -Wl,-E -L/usr/local/lib -o
+blib/lib/libparrot.so.0.4.12 -Wl,-soname=libparrot.so.0.4.12 [long list
+of objects] -lm -lcrypt -lutil -pthread -lreadline
+
+Mark
+

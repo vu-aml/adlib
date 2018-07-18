@@ -1,0 +1,168 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon May 14 09:32:23 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4EDWMqD022364
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 14 May 2007 09:32:22 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 6AE4116388D
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 14 May 2007 13:32:20 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1017)
+	id D768D162AFD; Mon, 14 May 2007 13:31:42 +0000 (GMT)
+To: samba-cvs@samba.org
+From: obnox@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070514133142.D768D162AFD@lists.samba.org>
+Date: Mon, 14 May 2007 13:31:42 +0000 (GMT)
+Subject: svn commit: samba r22847 - in branches/SAMBA_3_0/source/nsswitch: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: obnox
+Date: 2007-05-14 13:31:42 +0000 (Mon, 14 May 2007)
+New Revision: 22847
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22847
+
+Log:
+The new validate_panic function calls exit (instead of setting
+a global error flag an returning), so cleanups and returns 
+subsequent to calls of smb_panic_fn have become unnecessary.
+
+
+Modified:
+   branches/SAMBA_3_0/source/nsswitch/winbindd_cache.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/nsswitch/winbindd_cache.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/winbindd_cache.c	2007-05-14 13:01:28 UTC (rev 22846)
++++ branches/SAMBA_3_0/source/nsswitch/winbindd_cache.c	2007-05-14 13:31:42 UTC (rev 22847)
+@@ -224,7 +224,6 @@
+ 
+ 	if (!centry_check_bytes(centry, 4)) {
+ 		smb_panic_fn("centry_uint32");
+-		return (uint32)-1;
+ 	}
+ 	ret = IVAL(centry->data, centry->ofs);
+ 	centry->ofs += 4;
+@@ -239,7 +238,6 @@
+ 	uint16 ret;
+ 	if (!centry_check_bytes(centry, 2)) {
+ 		smb_panic_fn("centry_uint16");
+-		return (uint16)-1;
+ 	}
+ 	ret = CVAL(centry->data, centry->ofs);
+ 	centry->ofs += 2;
+@@ -254,7 +252,6 @@
+ 	uint8 ret;
+ 	if (!centry_check_bytes(centry, 1)) {
+ 		smb_panic_fn("centry_uint8");
+-		return (uint8)-1;
+ 	}
+ 	ret = CVAL(centry->data, centry->ofs);
+ 	centry->ofs += 1;
+@@ -269,7 +266,6 @@
+ 	NTTIME ret;
+ 	if (!centry_check_bytes(centry, 8)) {
+ 		smb_panic_fn("centry_nttime");
+-		return (NTTIME)-1;
+ 	}
+ 	ret = IVAL(centry->data, centry->ofs);
+ 	centry->ofs += 4;
+@@ -303,13 +299,11 @@
+ 
+ 	if (!centry_check_bytes(centry, (size_t)len)) {
+ 		smb_panic_fn("centry_string");
+-		return NULL;
+ 	}
+ 
+ 	ret = TALLOC_ARRAY(mem_ctx, char, len+1);
+ 	if (!ret) {
+ 		smb_panic_fn("centry_string out of memory\n");
+-		return NULL;
+ 	}
+ 	memcpy(ret,centry->data + centry->ofs, len);
+ 	ret[len] = 0;
+@@ -340,7 +334,6 @@
+ 	ret = TALLOC_ARRAY(mem_ctx, char, 16);
+ 	if (!ret) {
+ 		smb_panic_fn("centry_hash out of memory\n");
+-		return NULL;
+ 	}
+ 	memcpy(ret,centry->data + centry->ofs, 16);
+ 	centry->ofs += 16;
+@@ -1111,8 +1104,6 @@
+ 	(*info) = TALLOC_ARRAY(mem_ctx, WINBIND_USERINFO, *num_entries);
+ 	if (! (*info)) {
+ 		smb_panic_fn("query_user_list out of memory");
+-		centry_free(centry);
+-		return NT_STATUS_NO_MEMORY;
+ 	}
+ 	for (i=0; i<(*num_entries); i++) {
+ 		(*info)[i].acct_name = centry_string(centry, mem_ctx);
+@@ -1229,8 +1220,6 @@
+ 	(*info) = TALLOC_ARRAY(mem_ctx, struct acct_info, *num_entries);
+ 	if (! (*info)) {
+ 		smb_panic_fn("enum_dom_groups out of memory");
+-		centry_free(centry);
+-		return NT_STATUS_NO_MEMORY;
+ 	}
+ 	for (i=0; i<(*num_entries); i++) {
+ 		fstrcpy((*info)[i].acct_name, centry_string(centry, mem_ctx));
+@@ -1305,8 +1294,6 @@
+ 	(*info) = TALLOC_ARRAY(mem_ctx, struct acct_info, *num_entries);
+ 	if (! (*info)) {
+ 		smb_panic_fn("enum_dom_groups out of memory");
+-		centry_free(centry);
+-		return NT_STATUS_NO_MEMORY;
+ 	}
+ 	for (i=0; i<(*num_entries); i++) {
+ 		fstrcpy((*info)[i].acct_name, centry_string(centry, mem_ctx));
+@@ -1724,8 +1711,6 @@
+ 	(*user_gids) = TALLOC_ARRAY(mem_ctx, DOM_SID, *num_groups);
+ 	if (! (*user_gids)) {
+ 		smb_panic_fn("lookup_usergroups out of memory");
+-		centry_free(centry);
+-		return NT_STATUS_NO_MEMORY;
+ 	}
+ 	for (i=0; i<(*num_groups); i++) {
+ 		centry_sid(centry, mem_ctx, &(*user_gids)[i]);
+@@ -1893,8 +1878,6 @@
+ 
+ 	if (! (*sid_mem) || ! (*names) || ! (*name_types)) {
+ 		smb_panic_fn("lookup_groupmem out of memory");
+-		centry_free(centry);
+-		return NT_STATUS_NO_MEMORY;
+ 	}
+ 
+ 	for (i=0; i<(*num_names); i++) {
+@@ -1990,8 +1973,6 @@
+  
+ 		if (! (*dom_sids) || ! (*names) || ! (*alt_names)) {
+ 			smb_panic_fn("trusted_domains out of memory");
+-			centry_free(centry);
+-			return NT_STATUS_NO_MEMORY;
+  		}
+ 	} else {
+ 		(*names) = NULL;
+

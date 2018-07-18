@@ -1,0 +1,153 @@
+From beginners-return-92692-ktwarwic=speedy.uwaterloo.ca@perl.org  Sat Jun 23 06:26:35 2007
+Return-Path: <beginners-return-92692-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l5NAPsL9017562
+	for <ktwarwic@flax9.uwaterloo.ca>; Sat, 23 Jun 2007 06:25:55 -0400
+Received: (qmail 31050 invoked by uid 514); 23 Jun 2007 10:25:44 -0000
+Mailing-List: contact beginners-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:beginners@perl.org>
+List-Help: <mailto:beginners-help@perl.org>
+List-Unsubscribe: <mailto:beginners-unsubscribe@perl.org>
+List-Subscribe: <mailto:beginners-subscribe@perl.org>
+List-Id: <beginners.perl.org>
+Delivered-To: mailing list beginners@perl.org
+Received: (qmail 31041 invoked from network); 23 Jun 2007 10:25:44 -0000
+Received: from x1a.develooper.com (HELO x1.develooper.com) (216.52.237.111)
+  by lists.develooper.com with SMTP; 23 Jun 2007 10:25:44 -0000
+Received: (qmail 9615 invoked by uid 225); 23 Jun 2007 10:25:43 -0000
+Delivered-To: beginners@perl.org
+Received: (qmail 9601 invoked by alias); 23 Jun 2007 10:25:42 -0000
+X-Spam-Status: No, hits=-1.9 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_NEUTRAL
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: neutral (x1.develooper.com: local policy)
+Received: from mail-in-01.arcor-online.net (HELO mail-in-01.arcor-online.net) (151.189.21.41)
+    by la.mx.develooper.com (qpsmtpd/0.28) with ESMTP; Sat, 23 Jun 2007 03:25:33 -0700
+Received: from mail-in-08-z2.arcor-online.net (mail-in-08-z2.arcor-online.net [151.189.8.20])
+	by mail-in-01.arcor-online.net (Postfix) with ESMTP id 809FC15C7AC
+	for <beginners@perl.org>; Sat, 23 Jun 2007 12:25:28 +0200 (CEST)
+Received: from mail-in-09.arcor-online.net (mail-in-09.arcor-online.net [151.189.21.49])
+	by mail-in-08-z2.arcor-online.net (Postfix) with ESMTP id 6F453212FAF
+	for <beginners@perl.org>; Sat, 23 Jun 2007 12:25:28 +0200 (CEST)
+Received: from localhost (dslb-084-056-106-235.pools.arcor-ip.net [84.56.106.235])
+	(Authenticated sender: micha105@arcor.de)
+	by mail-in-09.arcor-online.net (Postfix) with ESMTP id 3E6B93BE23
+	for <beginners@perl.org>; Sat, 23 Jun 2007 12:25:28 +0200 (CEST)
+From: Michael Scondo <michael.scondo@phil.stud.uni-erlangen.de>
+To: beginners@perl.org
+Subject: strange unexpected deadlock
+Date: Sat, 23 Jun 2007 12:20:37 +0000
+User-Agent: KMail/1.9.5
+MIME-Version: 1.0
+Content-Type: text/plain;
+  charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+Message-Id: <200706231220.37892.michael.scondo@phil.stud.uni-erlangen.de>
+X-Virus-Scanned: ClamAV 0.90.3/3506/Sat Jun 23 09:49:14 2007 on mail-in-09.arcor-online.net
+X-Virus-Status: Clean
+
+Hi,
+I'm trying to make myself familiar with threads.
+
+However, I encountered some unexpected behaviour of locks/cond_wait I wasn't 
+able to figure out.
+Could someone explain to me what's happening ??
+Thanks, Michael
+
+
+---------------------- 
+
+#!/usr/bin/perl -w
+use threads;
+use threads::shared;
+
+share( $x );
+share( $y );
+
+sub thread1{
+		print "1\n";
+		lock $x;
+		print "locked x: 1\n";
+		cond_wait $x;
+		print "thread1\n";
+		lock $y;
+		cond_signal $y;
+		print "t1\n";
+}
+
+sub thread2{
+		sleep 1;
+		lock $y;
+#		{ 
+			lock $x;
+			print "locked x: 2\n";
+			cond_signal $x;
+#		}
+		print "thread2\n";
+		sleep 1;
+		cond_wait $y;
+		print "t2\n";
+}
+
+my $t1 = threads->create( "thread1" );
+my $t2 = threads->create( "thread2" );
+
+$t1->join;
+$t2->join;
+
+print "exit.\n";
+
+---------------------
+
+
+I expected the script to have a output like:
+---
+1
+locked x: 1
+locked x: 2
+thread2
+thread1
+t1
+t2
+exit.
+---
+Instead it hangs in the function thread1, at cond_wait $x,
+so here's the actual output.
+---
+1
+locked x: 1
+locked x: 2
+thread2
+---
+
+If I uncomment the two brackets of the function thread2, it works again. Which 
+I cannot understand.
+
+---
+sub thread2{
+		sleep 1;
+		lock $y;
+		{ 
+			lock $x;
+			print "locked x: 2\n";
+			cond_signal $x;
+		}
+		print "thread2\n";
+		sleep 1;
+		cond_wait $y;
+		print "t2\n";
+}
+
+
+
+
+
+
+-- 
+To unsubscribe, e-mail: beginners-unsubscribe@perl.org
+For additional commands, e-mail: beginners-help@perl.org
+http://learn.perl.org/
+
+

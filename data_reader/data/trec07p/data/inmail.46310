@@ -1,0 +1,161 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 29 15:51:10 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4TJp9hB002846
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 15:51:10 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 68F65162C22
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 19:51:04 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.4 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 540)
+	id 8ED0A162ACD; Tue, 29 May 2007 19:48:36 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jerry@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070529194836.8ED0A162ACD@lists.samba.org>
+Date: Tue, 29 May 2007 19:48:36 +0000 (GMT)
+Subject: svn commit: samba r23227 - in
+	branches/SAMBA_3_0_26/source/rpc_server: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: jerry
+Date: 2007-05-29 19:48:34 +0000 (Tue, 29 May 2007)
+New Revision: 23227
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23227
+
+Log:
+merge current user to pipe_user changes on the lsa server pipe
+Modified:
+   branches/SAMBA_3_0_26/source/rpc_server/srv_lsa_nt.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0_26/source/rpc_server/srv_lsa_nt.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/rpc_server/srv_lsa_nt.c	2007-05-29 19:36:13 UTC (rev 23226)
++++ branches/SAMBA_3_0_26/source/rpc_server/srv_lsa_nt.c	2007-05-29 19:48:34 UTC (rev 23227)
+@@ -544,7 +544,7 @@
+ 	lsa_get_generic_sd(p->mem_ctx, &psd, &sd_size);
+ 
+ 	if(!se_access_check(psd, p->pipe_user.nt_user_token, des_access, &acc_granted, &status)) {
+-		if (geteuid() != 0) {
++		if (p->pipe_user.ut.uid != sec_initial_uid()) {
+ 			return status;
+ 		}
+ 		DEBUG(4,("ACCESS should be DENIED (granted: %#010x;  required: %#010x)\n",
+@@ -554,7 +554,7 @@
+ 
+ 	/* This is needed for lsa_open_account and rpcclient .... :-) */
+ 
+-	if (geteuid() == 0)
++	if (p->pipe_user.ut.uid == sec_initial_uid())
+ 		acc_granted = POLICY_ALL_ACCESS;
+ 
+ 	/* associate the domain SID with the (unique) handle. */
+@@ -875,7 +875,12 @@
+ 
+ 		if (name->type == SID_NAME_UNKNOWN) {
+ 			name->dom_idx = -1;
+-			/* unknown sids should return the string representation of the SID */
++			/* Unknown sids should return the string
++			 * representation of the SID. Windows 2003 behaves
++			 * rather erratic here, in many cases it returns the
++			 * RID as 8 bytes hex, in others it returns the full
++			 * SID. We (Jerry/VL) could not figure out which the
++			 * hard cases are, so leave it with the SID.  */
+ 			name->name = talloc_asprintf(p->mem_ctx, "%s", 
+ 			                             sid_string_static(sids[i]));
+ 			if (name->name == NULL) {
+@@ -1769,7 +1774,6 @@
+ 	struct lsa_info *info = NULL;
+ 	SE_PRIV mask;
+ 	PRIVILEGE_SET *set = NULL;
+-	struct current_user user;
+ 
+ 	/* find the connection policy handle. */
+ 	if (!find_policy_by_hnd(p, &q_u->pol, (void **)(void *)&info))
+@@ -1778,8 +1782,7 @@
+ 	/* check to see if the pipe_user is root or a Domain Admin since 
+ 	   account_pol.tdb was already opened as root, this is all we have */
+ 	   
+-	get_current_user( &user, p );
+-	if ( user.ut.uid != sec_initial_uid() 
++	if ( p->pipe_user.ut.uid != sec_initial_uid() 
+ 		&& !nt_token_check_domain_rid( p->pipe_user.nt_user_token, DOMAIN_GROUP_RID_ADMINS ) )
+ 	{
+ 		return NT_STATUS_ACCESS_DENIED;
+@@ -1810,7 +1813,6 @@
+ 	struct lsa_info *info = NULL;
+ 	SE_PRIV mask;
+ 	PRIVILEGE_SET *set = NULL;
+-	struct current_user user;
+ 
+ 	/* find the connection policy handle. */
+ 	if (!find_policy_by_hnd(p, &q_u->pol, (void **)(void *)&info))
+@@ -1819,8 +1821,7 @@
+ 	/* check to see if the pipe_user is root or a Domain Admin since 
+ 	   account_pol.tdb was already opened as root, this is all we have */
+ 	   
+-	get_current_user( &user, p );
+-	if ( user.ut.uid != sec_initial_uid()
++	if ( p->pipe_user.ut.uid != sec_initial_uid()
+ 		&& !nt_token_check_domain_rid( p->pipe_user.nt_user_token, DOMAIN_GROUP_RID_ADMINS ) ) 
+ 	{
+ 		return NT_STATUS_ACCESS_DENIED;
+@@ -1971,7 +1972,6 @@
+ 	DOM_SID sid;
+ 	fstring privname;
+ 	UNISTR4_ARRAY *uni_privnames = q_u->rights;
+-	struct current_user user;
+ 	
+ 
+ 	/* find the connection policy handle. */
+@@ -1981,8 +1981,7 @@
+ 	/* check to see if the pipe_user is a Domain Admin since 
+ 	   account_pol.tdb was already opened as root, this is all we have */
+ 	   
+-	get_current_user( &user, p );
+-	if ( user.ut.uid != sec_initial_uid()
++	if ( p->pipe_user.ut.uid != sec_initial_uid()
+ 		&& !nt_token_check_domain_rid( p->pipe_user.nt_user_token, DOMAIN_GROUP_RID_ADMINS ) ) 
+ 	{
+ 		return NT_STATUS_ACCESS_DENIED;
+@@ -2029,7 +2028,6 @@
+ 	DOM_SID sid;
+ 	fstring privname;
+ 	UNISTR4_ARRAY *uni_privnames = q_u->rights;
+-	struct current_user user;
+ 	
+ 
+ 	/* find the connection policy handle. */
+@@ -2039,8 +2037,7 @@
+ 	/* check to see if the pipe_user is a Domain Admin since 
+ 	   account_pol.tdb was already opened as root, this is all we have */
+ 	   
+-	get_current_user( &user, p );
+-	if ( user.ut.uid != sec_initial_uid()
++	if ( p->pipe_user.ut.uid != sec_initial_uid()
+ 		&& !nt_token_check_domain_rid( p->pipe_user.nt_user_token, DOMAIN_GROUP_RID_ADMINS ) )
+ 	{
+ 		return NT_STATUS_ACCESS_DENIED;
+

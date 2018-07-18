@@ -1,0 +1,114 @@
+From r-help-bounces@stat.math.ethz.ch  Sun Apr 15 17:39:42 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3FLde0I030103
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 15 Apr 2007 17:39:41 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3FLbnNx012635;
+	Sun, 15 Apr 2007 23:38:22 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.2 required=5.0 tests=AWL, BAYES_50,
+	FORGED_RCVD_HELO autolearn=no version=3.1.8
+Received: from mailhost.agrsci.dk (smtpgw.agrsci.dk [130.226.173.160])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3FLbciK012604
+	for <r-help@stat.math.ethz.ch>; Sun, 15 Apr 2007 23:37:39 +0200
+Received: from djfpost01.djf.agrsci.dk ([172.20.0.150]) by mailhost.agrsci.dk
+	with Microsoft SMTPSVC(6.0.3790.1830); 
+	Sun, 15 Apr 2007 23:37:37 +0200
+X-MimeOLE: Produced By Microsoft Exchange V6.5
+Content-class: urn:content-classes:message
+MIME-Version: 1.0
+Date: Sun, 15 Apr 2007 23:37:37 +0200
+Message-ID: <C83C5E3DEEE97E498B74729A33F6EAEC03878727@DJFPOST01.djf.agrsci.dk>
+X-MS-Has-Attach: 
+X-MS-TNEF-Correlator: 
+Thread-Topic: unable to find inherited method for function "edges",
+	for signature "ugsh", "missing"
+Thread-Index: Acd/pklqWCqitb0KR3+8kEPtEvDxcw==
+From: =?iso-8859-1?Q?S=F8ren_H=F8jsgaard?= <Soren.Hojsgaard@agrsci.dk>
+To: <r-help@stat.math.ethz.ch>
+X-OriginalArrivalTime: 15 Apr 2007 21:37:37.0877 (UTC)
+	FILETIME=[498F3850:01C77FA6]
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+X-MIME-Autoconverted: from quoted-printable to 8bit by hypatia.math.ethz.ch id
+	l3FLbciK012604
+Subject: [R] unable to find inherited method for function "edges",
+	for signature "ugsh", "missing"
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="iso-8859-1"
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+Content-Transfer-Encoding: 8bit
+X-MIME-Autoconverted: from quoted-printable to 8bit by speedy.uwaterloo.ca id l3FLde0I030103
+Status: O
+Content-Length: 2139
+Lines: 56
+
+I am new to using S4 methods and have run into this problem (on Windows XP using R 2.4.1): I am writing a package in which I use the graph package. I define my own classes of graphs as:
+ 
+setOldClass("graphsh")
+setOldClass("ugsh")
+setIs("ugsh",  "graphsh")
+ 
+(I know that I "should have" used setClass instead - and I will eventually - but right now I am just puzzled about the reason for my problem...) I need an 'edges' method for ugsh graphs, so I set:
+ 
+if (!isGeneric("edges")) {
+  if (is.function("edges")) 
+    fun <- edges
+  else 
+    fun <- function(object,which) standardGeneric("edges")
+  setGeneric("edges", fun)
+}
+setMethod("edges", signature(object = "graphsh"),
+          function(object, which) {
+            .links(object)
+             })
+
+I can get this to work in the sense that it passes R cmd check. However, if I add the following (to me innocently looking function) to my package I get problems:
+ 
+nodeJoint <- function(bn, set, normalize=TRUE){
+  vars <- set
+  a    <- vallabels(gmd)[vars]
+  levs <- as.data.frame(table(a))
+  levs <- levs[,1:length(a)]
+  levs2 <- do.call("cbind",lapply(levs, as.character))
+  p<-sapply(1:nrow(levs2), function(i)
+            pevidence(enterEvidence(bn, nodes=vars, states=levs2[i,]))
+            )
+  if (normalize)
+    p <- p / sum(p)
+  
+  levs$.p <- p
+  return(levs)
+}
+
+When running R cmd check I get:
+> ug <- ugsh(c("me","ve"),c("me","al"),c("ve","al"),c("al","an"),c("al","st"),c("an","st"))
+> edges(ug)
+Error in function (classes, fdef, mtable)  :
+        unable to find an inherited method for function "edges", for signature "ugsh", "missing"
+Execution halted
+
+(I never use the function nodeJoint in my .Rd files, so it just "sits there"  and causes problems. 
+ 
+I am puzzled about what the error message means and about why this function causes problems. Can anyone help. Thanks in advance.
+ 
+Søren
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

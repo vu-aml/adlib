@@ -1,0 +1,260 @@
+From perl6-all-return-82035-ktwarwic=speedy.uwaterloo.ca@perl.org  Sun Jun 17 15:05:57 2007
+Return-Path: <perl6-all-return-82035-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l5HJ5tL9009680
+	for <ktwarwic@flax9.uwaterloo.ca>; Sun, 17 Jun 2007 15:05:56 -0400
+Received: (qmail 29056 invoked by uid 514); 17 Jun 2007 19:05:52 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 29051 invoked from network); 17 Jun 2007 19:05:51 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: moderator for perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: Ron Blaschke (via RT) <parrotbug-followup@parrotcode.org>
+X-RT-NewTicket: yes
+To: bugs-bitbucket@netlabs.develooper.com
+Resent-To: perl6-internals@perl.org
+Mail-Followup-To: perl6-internals@perl.org
+Reply-To: perl6-internals@perl.org
+Date: Sun, 17 Jun 2007 11:21:22 -0700
+Subject: [perl #43235] [PATCH][Win32] Fix Environment Variables Handling 
+In-Reply-To: <46757B65.1030809@rblasch.org>
+References: <RT-Ticket-43235@perl.org> <46757B65.1030809@rblasch.org>
+Message-ID: <rt-3.6.HEAD-7948-1182104483-1960.43235-72-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #43235
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: ron@rblasch.org
+MIME-Version: 1.0
+X-RT-Original-Encoding: utf-8
+Content-type: multipart/mixed; boundary="----------=_1182104483-7948-44"
+Resent-Message-Id: <20070617182123.A0E672AFFC@x3.develooper.com>
+Resent-Date: Sun, 17 Jun 2007 11:21:23 -0700 (PDT)
+Resent-From: rt-ron=rblasch.org@netlabs.develooper.com
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+
+------------=_1182104483-7948-44
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+# New Ticket Created by  Ron Blaschke 
+# Please include the string:  [perl #43235]
+# in the subject line of all future correspondence about this issue. 
+# <URL: http://rt.perl.org/rt3/Ticket/Display.html?id=43235 >
+
+
+Attached patch should take care of tickets #37301 and #40972.
+
+Windows XP - Visual C++ 8
+
+$ runtests -v t\pmc\env.t
+t\pmc\env......
+1..12
+ok 1 - all Envs are ident
+ok 2 - getenv
+ok 3 - setenv/getenv
+ok 4 - envs are all the same
+ok 5 - gone/delete
+ok 6 - iterate
+ok 7 - exists/delete
+ok 8 - check whether interface is done
+ok 9 - get_integer()
+ok 10 - get_number()
+ok 11 - getenv - null key
+ok 12 - setenv/getenv - PMC key
+ok
+All tests successful.
+Files=1, Tests=12,  1 wallclock secs ( 0.00 cusr +  0.00 csys =  0.00 CPU)
+
+
+Windows XP - MinGW (GCC)
+
+$ runtests -v t\pmc\env.t
+t\pmc\env......
+1..12
+ok 1 - all Envs are ident
+ok 2 - getenv
+ok 3 - setenv/getenv
+ok 4 - envs are all the same
+ok 5 - gone/delete
+ok 6 - iterate
+ok 7 - exists/delete
+ok 8 - check whether interface is done
+ok 9 - get_integer()
+ok 10 - get_number()
+ok 11 - getenv - null key
+ok 12 - setenv/getenv - PMC key
+ok
+All tests successful.
+Files=1, Tests=12,  2 wallclock secs ( 0.00 cusr +  0.00 csys =  0.00 CPU)
+
+Ron
+
+------------=_1182104483-7948-44
+Content-Type: text/plain; charset="ascii"; name="win32_env.patch"
+Content-Disposition: inline; filename="win32_env.patch"
+Content-Transfer-Encoding: 7bit
+RT-Attachment: 43235/263415/115092
+
+Index: t/pmc/env.t
+===================================================================
+--- t/pmc/env.t	(revision 19066)
++++ t/pmc/env.t	(working copy)
+@@ -92,11 +92,7 @@
+ ok 2
+ OUT
+ 
+-SKIP:
+-{
+-    skip 'iterator not available on win32' => 1
+-        if 'MSWin32' eq $^O;
+-    pasm_output_is( <<'CODE', <<OUT, "iterate" );
++pasm_output_is( <<'CODE', <<OUT, "iterate" );
+     new P0, .Env
+     set P0["PARROT_1"], "hello"
+     set P0["PARROT_2"], "polly"
+@@ -121,10 +117,8 @@
+ CODE
+ ok
+ OUT
+-}
+ 
+ SKIP: {
+-
+     # This will not work on our unsetenv implementation
+     skip( "no native unsetenv", 1 ) unless $PConfig{"unsetenv"};
+     pasm_output_is( <<'CODE', <<OUT, "exists/delete" );
+@@ -173,10 +167,7 @@
+ 0
+ OUTPUT
+ 
+-SKIP: {
+-    skip 'not changing environment on windows', 2 if $^O eq 'MSWin32';
+-
+-    pir_output_is( << 'CODE', << 'OUTPUT', "get_integer()" );
++pir_output_is( << 'CODE', << 'OUTPUT', "get_integer()" );
+ .sub main
+     .local pmc env
+     .local int num_before, num_after, num_diff
+@@ -197,7 +188,7 @@
+ 3
+ OUTPUT
+ 
+-    pir_output_is( << 'CODE', << 'OUTPUT', "get_number()" );
++pir_output_is( << 'CODE', << 'OUTPUT', "get_number()" );
+ .sub main
+     .local pmc env
+     .local num num_before, num_after, num_diff
+@@ -217,7 +208,6 @@
+ CODE
+ 3.000000
+ OUTPUT
+-}
+ 
+ pasm_output_is( <<'CODE', <<OUT, "getenv - null key" );
+     new P0, .Env
+Index: config/gen/platform/win32/env.c
+===================================================================
+--- config/gen/platform/win32/env.c	(revision 19066)
++++ config/gen/platform/win32/env.c	(working copy)
+@@ -1,14 +1,59 @@
+ /*
++  On Windows there are two ways to access the environment.  Either through the
++  Windows environment block, using GetEnvironmentVariable, 
++  SetEnvironmentVariable and GetEnvironmentStrings, or the C runtime using
++  _getenv, _putenv and _environ.
++
++  Changes through the C runtime are reflected in the environment block, but
++  changes in the environment block are NOT reflected in the C runtime!
++
++  To keep both in sync we always update environment variables through the C
++  runtime.  Getting an environment variable can be done either way,
++  whichever is more convenient.
++*/
++
++/*
+ ** Parrot_setenv()
+ */
+ 
+ void
+ Parrot_setenv(const char *name, const char *value)
+ {
+-    SetEnvironmentVariable(name, value);
++    assert(name  != NULL);
++    assert(value != NULL);
++
++    { 
++        const int name_len  = strlen(name );
++        const int value_len = strlen(value);
++
++        {
++            char * const envstring = malloc(
++                    name_len     /* name  */
++                    + 1          /* '='   */
++                    + value_len  /* value */
++                    + 1          /* string terminator */
++            );
++            if (envstring == NULL) {
++                /* TODO: Shouldn't we tell anyone that we failed? */
++                return;
++            }
++
++            /* Save a bit of time, by using the fact we already have the
++            lengths, avoiding strcat */
++            strcpy(envstring,                name );
++            strcpy(envstring + name_len,     "="  );
++            strcpy(envstring + name_len + 1, value);
++
++            if (_putenv(envstring) == 0) {
++                /* success */
++            } else {
++                /* TODO: Shouldn't we tell anyone that we failed? */
++            }
++            free(envstring);
++        }
++    }
+ }
+ 
+-
+ char *
+ Parrot_getenv(const char *name, int *free_it)
+ {
+@@ -25,10 +70,15 @@
+ 
+     return buffer;
+ }
++
+ void
+ Parrot_unsetenv(const char *name)
+ {
+-    SetEnvironmentVariable(name, NULL);
++/* You can remove a variable from the environment by specifying an empty
++   string -- in other words, by specifying only varname=.
++       -- _putenv, _wputenv (CRT) documentation
++*/
++    Parrot_setenv(name, "");
+ }
+ 
+ /*
+
+------------=_1182104483-7948-44--
+

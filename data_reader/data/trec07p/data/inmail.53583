@@ -1,0 +1,83 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Jun  7 23:21:03 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l583L3hB010135
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 7 Jun 2007 23:21:03 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 979A9162C28
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri,  8 Jun 2007 03:20:56 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.6 required=3.8 tests=BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1006)
+	id E4CB8162ACC; Fri,  8 Jun 2007 03:20:09 +0000 (GMT)
+To: samba-cvs@samba.org
+From: lha@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070608032009.E4CB8162ACC@lists.samba.org>
+Date: Fri,  8 Jun 2007 03:20:09 +0000 (GMT)
+Subject: svn commit: lorikeet r718 - in trunk/heimdal: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: lha
+Date: 2007-06-08 03:20:08 +0000 (Fri, 08 Jun 2007)
+New Revision: 718
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=lorikeet&rev=718
+
+Log:
+Heimdal import script.
+
+Added:
+   trunk/heimdal/IMPORT-HEIMDAL.sh
+
+
+Changeset:
+Added: trunk/heimdal/IMPORT-HEIMDAL.sh
+===================================================================
+--- trunk/heimdal/IMPORT-HEIMDAL.sh	2007-05-30 06:19:52 UTC (rev 717)
++++ trunk/heimdal/IMPORT-HEIMDAL.sh	2007-06-08 03:20:08 UTC (rev 718)
+@@ -0,0 +1,25 @@
++#!/bin/sh
++
++hpath=svn://svn.h5l.se/heimdal/trunk/heimdal
++spath=svn+ssh://svn.samba.org/data/svn/lorikeet/trunk/heimdal
++
++echo "heimdal import `date`" > log
++svn checkout $hpath heimdal-import >> log || exit 1
++svn checkout $spath heimdal-lorikeet >> log || exit 1
++cd heimdal-import || exit 1
++autoreconf -f -i >> log || exit 1
++./configure >> log  || exit 1
++make dist >> log || exit 1
++name=`make print-distdir`
++test "X$name" = "X" && exit 1
++gzip -dc $name.tar.gz | tar xf - || exit 1
++(cd $name && find . -name '*.cat[0-9]' -print | xargs rm) || exit 1
++(cd $name && tar cf - * ) | (cd ../heimdal-lorikeet && tar xf - ) || exit 1
++cd ../heimdal-lorikeet
++svn status | grep '^\?' | cut -b2- | xargs svn add
++(cd lib/roken && perl -pi -e 's,"roken.h",\<roken.h\>,g' *.c)
++
++echo "now run patch < heimdal-lorikeet.diff and fix up the damage"
++
++exit 0
++
+

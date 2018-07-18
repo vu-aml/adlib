@@ -1,0 +1,161 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 29 21:19:07 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4U1J7hB007059
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 21:19:07 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 7BDEF162AF4
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 30 May 2007 01:19:02 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 7DC21162ACC; Wed, 30 May 2007 01:18:00 +0000 (GMT)
+Date: Wed, 30 May 2007 11:00:43 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070530011800.7DC21162ACC@lists.samba.org>
+Subject: Rev 394: moved onnode into ctdb from s3 examples/ctdb in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 394
+revision-id: tridge@samba.org-20070530010043-bgbx18q3o24ksgtn
+parent: tridge@samba.org-20070530002116-kz22u8npsxt6hhom
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Wed 2007-05-30 11:00:43 +1000
+message:
+  moved onnode into ctdb from s3 examples/ctdb
+added:
+  tools/onnode.rsh               onnode.rsh-20070530010004-83j66tszzvsimcn2-1
+  tools/onnode.ssh               onnode.ssh-20070530010004-83j66tszzvsimcn2-3
+modified:
+  packaging/RHEL/ctdb.spec       ctdb.spec-20070527204758-biuh7znabuwan3zn-3
+=== added file 'tools/onnode.rsh'
+--- a/tools/onnode.rsh	1970-01-01 00:00:00 +0000
++++ b/tools/onnode.rsh	2007-05-30 01:00:43 +0000
+@@ -0,0 +1,43 @@
++#!/bin/sh
++# onnode script for rsh
++
++if [ $# -lt 2 ]; then
++cat <<EOF
++Usage: onnode <nodenum|all> <command>
++EOF
++exit 1
++fi
++
++NODE="$1"
++shift
++SCRIPT="$*"
++
++NODES=/etc/ctdb/nodes
++
++NUMNODES=`egrep '^[[:alnum:]]' $NODES | wc -l`
++MAXNODE=`expr $NUMNODES - 1`
++
++if [ $NODE = "all" ]; then
++    for a in `egrep '^[[:alnum:]]' $NODES`; do
++	if [ -f "$SCRIPT" ]; then
++	    rsh $a at -f $SCRIPT now
++	else
++	    rsh $a $SCRIPT
++	fi
++    done
++    exit 0
++fi
++
++if [ $NODE -gt $MAXNODE ]; then
++    echo "Node $NODE doesn't exist"
++    exit 1
++fi
++
++NODEPLUSONE=`expr $NODE + 1`
++a=`egrep '^[[:alnum:]]' $NODES | head -$NODEPLUSONE | tail -1`
++
++if [ -f "$SCRIPT" ]; then
++    exec rsh $a at -f $SCRIPT now
++else
++    exec rsh $a $SCRIPT
++fi
+
+=== added file 'tools/onnode.ssh'
+--- a/tools/onnode.ssh	1970-01-01 00:00:00 +0000
++++ b/tools/onnode.ssh	2007-05-30 01:00:43 +0000
+@@ -0,0 +1,43 @@
++#!/bin/sh
++# onnode script for ssh
++
++if [ $# -lt 2 ]; then
++cat <<EOF
++Usage: onnode <nodenum|all> <command>
++EOF
++exit 1
++fi
++
++NODE="$1"
++shift
++SCRIPT="$*"
++
++NODES=/etc/ctdb/nodes
++
++NUMNODES=`egrep '^[[:alnum:]]' $NODES | wc -l`
++MAXNODE=`expr $NUMNODES - 1`
++
++if [ $NODE = "all" ]; then
++    for a in `egrep '^[[:alnum:]]' $NODES`; do
++	if [ -f "$SCRIPT" ]; then
++	    ssh $a at -f $SCRIPT now
++	else
++	    ssh $a $SCRIPT
++	fi
++    done
++    exit 0
++fi
++
++if [ $NODE -gt $MAXNODE ]; then
++    echo "Node $NODE doesn't exist"
++    exit 1
++fi
++
++NODEPLUSONE=`expr $NODE + 1`
++a=`egrep '^[[:alnum:]]' $NODES | head -$NODEPLUSONE | tail -1`
++
++if [ -f "$SCRIPT" ]; then
++    exec ssh $a at -f $SCRIPT now
++else
++    exec ssh $a $SCRIPT
++fi
+
+=== modified file 'packaging/RHEL/ctdb.spec'
+--- a/packaging/RHEL/ctdb.spec	2007-05-29 12:53:28 +0000
++++ b/packaging/RHEL/ctdb.spec	2007-05-30 01:00:43 +0000
+@@ -66,6 +66,9 @@
+ install -m644 setup/ctdb.sysconfig $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig/ctdb
+ install -m755 setup/ctdb.init $RPM_BUILD_ROOT%{initdir}/ctdb
+ install -m755 tools/events $RPM_BUILD_ROOT%{_sysconfdir}/ctdb/events
++install -m755 tools/onnode.ssh $RPM_BUILD_ROOT%{_bindir}
++install -m755 tools/onnode.rsh $RPM_BUILD_ROOT%{_bindir}
++ln -sf %{_bindir}/onnode.ssh onnode
+ 
+ # unfortunately samba3 needs ctdb_private.h too
+ install -m644 include/ctdb_private.h %{_includedir}/ctdb_private.h
+

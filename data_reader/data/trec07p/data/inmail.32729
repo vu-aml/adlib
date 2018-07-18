@@ -1,0 +1,134 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May  9 21:27:42 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4A1RgqD003646
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 9 May 2007 21:27:42 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id ECA1616384C
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 10 May 2007 01:27:40 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1005)
+	id E13B6162AF4; Thu, 10 May 2007 01:27:22 +0000 (GMT)
+To: samba-cvs@samba.org
+From: derrell@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070510012722.E13B6162AF4@lists.samba.org>
+Date: Thu, 10 May 2007 01:27:22 +0000 (GMT)
+Subject: svn commit: samba r22772 - in branches/SAMBA_3_0/source: .
+	lib/replace
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: derrell
+Date: 2007-05-10 01:27:18 +0000 (Thu, 10 May 2007)
+New Revision: 22772
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22772
+
+Log:
+
+- Still working on the fact that readahead() is not declared (on at least one
+  OS) but is available for linking.  Instead of running configure tests with
+  -Werror-implicit-function-declaration in developer mode (which may lead to
+  different library functions being used in developer mode than when not in
+  developer mode), add tests for whether readahead is declared.  If not,
+  provide a replacement declaration in lib/replace.
+
+Modified:
+   branches/SAMBA_3_0/source/configure.in
+   branches/SAMBA_3_0/source/lib/replace/README
+   branches/SAMBA_3_0/source/lib/replace/libreplace.m4
+   branches/SAMBA_3_0/source/lib/replace/replace.h
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/configure.in
+===================================================================
+--- branches/SAMBA_3_0/source/configure.in	2007-05-09 21:38:41 UTC (rev 22771)
++++ branches/SAMBA_3_0/source/configure.in	2007-05-10 01:27:18 UTC (rev 22772)
+@@ -1337,19 +1337,6 @@
+ # implicit declaration warnings without failing the test (in developer mode)
+ ac_no_error_on_warning_CFLAGS="${CFLAGS}"
+ 
+-# Since --enable-developer causes warnings to be treated as errors during
+-# compilation, we should avoid using features that will fail to compile.
+-#
+-# We don't want to enable this earlier because the built-in functions such as
+-# memset fail to configure properly.
+-
+-if test x"$samba_cv_HAVE_Werror_implicit_function_declaration" = x"yes" -a \
+-        x"$developer" = xyes; then
+-  CFLAGS="${CFLAGS} -Werror-implicit-function-declaration"
+-  ac_compile='$CC -c $CFLAGS $CPPFLAGS conftest.$ac_ext >&5'
+-  ac_link='$CC -o conftest$ac_exeext $CFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
+-fi
+-
+ echo -n "checking for GPFS GPL libs... "
+ save_LIBS="$LIBS"
+ LIBS="$LIBS -lgpfs_gpl"
+
+Modified: branches/SAMBA_3_0/source/lib/replace/README
+===================================================================
+--- branches/SAMBA_3_0/source/lib/replace/README	2007-05-09 21:38:41 UTC (rev 22771)
++++ branches/SAMBA_3_0/source/lib/replace/README	2007-05-10 01:27:18 UTC (rev 22772)
+@@ -55,6 +55,11 @@
+ socketpair
+ strptime
+ 
++These external declarations are provided for those systems which lack the
++declaration but provide the function:
++
++readahead
++
+ Types:
+ bool
+ socklen_t
+
+Modified: branches/SAMBA_3_0/source/lib/replace/libreplace.m4
+===================================================================
+--- branches/SAMBA_3_0/source/lib/replace/libreplace.m4	2007-05-09 21:38:41 UTC (rev 22771)
++++ branches/SAMBA_3_0/source/lib/replace/libreplace.m4	2007-05-10 01:27:18 UTC (rev 22772)
+@@ -155,6 +155,7 @@
+ AC_HAVE_DECL(setresuid, [#include <unistd.h>])
+ AC_HAVE_DECL(setresgid, [#include <unistd.h>])
+ AC_HAVE_DECL(errno, [#include <errno.h>])
++AC_HAVE_DECL(readahead, [#include <fcntl.h>])
+ 
+ AC_CACHE_CHECK([for secure mkstemp],samba_cv_HAVE_SECURE_MKSTEMP,[
+ AC_TRY_RUN([#include <stdlib.h>
+
+Modified: branches/SAMBA_3_0/source/lib/replace/replace.h
+===================================================================
+--- branches/SAMBA_3_0/source/lib/replace/replace.h	2007-05-09 21:38:41 UTC (rev 22771)
++++ branches/SAMBA_3_0/source/lib/replace/replace.h	2007-05-10 01:27:18 UTC (rev 22772)
+@@ -111,6 +111,11 @@
+ extern int errno;
+ #endif
+ 
++#if defined(HAVE_LINUX_READAHEAD) && ! defined(HAVE_READAHEAD_DECL)
++ssize_t readahead(int fd, off64_t offset, size_t count);
++#endif
++
++
+ #ifndef HAVE_STRDUP
+ #define strdup rep_strdup
+ char *rep_strdup(const char *s);
+

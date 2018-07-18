@@ -1,0 +1,143 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Apr 25 19:59:46 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3PNxk6w005492
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 25 Apr 2007 19:59:46 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 8E0BC163AA2
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 25 Apr 2007 23:59:45 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.7 required=3.8 tests=BAYES_20,RCVD_IN_DSBL,
+	SPF_PASS autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from mail.gmx.net (mail.gmx.net [213.165.64.20])
+	by lists.samba.org (Postfix) with SMTP id 94D781638AB
+	for <samba-technical@lists.samba.org>;
+	Wed, 25 Apr 2007 23:58:46 +0000 (GMT)
+Received: (qmail invoked by alias); 25 Apr 2007 23:58:45 -0000
+Received: from Xc497.x.pppool.de (EHLO [192.168.1.2]) [89.59.196.151]
+	by mail.gmx.net (mp050) with SMTP; 26 Apr 2007 01:58:45 +0200
+X-Authenticated: #20629184
+X-Provags-ID: V01U2FsdGVkX1+BLPpAWGCB0OTMegmcr7srQfAFkj3tkENXB6h5o8
+	BFC0obLtTyn6Ow
+Message-ID: <462FEB35.6080705@gmx.de>
+Date: Thu, 26 Apr 2007 01:58:45 +0200
+From: Johannes Bauer <dfnsonfsduifb@gmx.de>
+User-Agent: Thunderbird 1.5.0.10 (X11/20070313)
+MIME-Version: 1.0
+To: samba-technical@lists.samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 7bit
+X-Y-GMX-Trusted: 0
+Subject: libsmbclient: smbc_stat buffer overflow
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2372
+Lines: 89
+
+Hello list,
+
+I've recently encountered a problem with libsmbclient which causes the
+smb_stat function to write over the "struct stat" buffer exactly 8 bytes
+on x86_32 (i686) systems. x86_64 seems not to be affected.
+
+Affected versions:
+  3.0.22 (Ubuntu)
+  3.0.24 (Gentoo)
+  3.0.24 (Gentoo, different system)
+
+This program demonstrates the problem (replace //joeserver/transfer by a
+valid samba share, of course):
+
+#include <stdio.h>
+#include <errno.h>
+#include <sys/time.h>
+#include <string.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <libsmbclient.h>
+
+struct smbstat {
+	struct stat stat;
+	unsigned char pad[16];
+};
+
+static void Authentication_Function(const char *pServer, const char
+*pShare, char *pWorkgroup, int workgroup_len, char *pUsername, int
+username_len, char *pPassword, int password_len) {
+    strncpy(pUsername, "guest", username_len);
+    strncpy(pPassword, "", password_len);
+}
+
+int main(int argc, char **argv) {
+	int dir;
+	struct smbc_dirent *Directory_Entry;
+	char Buffer[256];
+
+	if (smbc_init(Authentication_Function, 0) != 0) {
+		fprintf(stderr, "smblister: Could not initialize smbc-library.\n");
+		exit(6);
+	}
+
+	dir = smbc_opendir("smb://joeserver/transfer");
+	
+	while ((Directory_Entry = smbc_readdir(dir)) != NULL) {
+		if (Directory_Entry->smbc_type == SMBC_FILE) {
+			int i;
+			off_t Filesize;
+			struct smbstat Filestats;
+			memset(&Filestats, 0x63, sizeof(struct smbstat));
+			snprintf(Buffer, sizeof(Buffer), "smb://joeserver/transfer/%s",
+Directory_Entry->name);
+			if (!smbc_stat(Buffer, (struct stat*)&Filestats)) {
+				Filesize = Filestats.stat.st_size;
+			} else {
+				Filesize = 0;
+			}
+			printf("%s %ld\n", Directory_Entry->name, Filesize);
+			for (i = 0; i < 16; i++) printf("%02x ", Filestats.pad[i]);
+			printf("\n");
+		}
+	}
+	
+	smbc_closedir(dir);
+	return 0;
+}
+
+And the output on an i686 machine:
+
+out.bmp 3932214
+16 2f 00 00 00 00 00 00 63 63 63 63 63 63 63 63
+x.pdf 296844
+14 09 00 00 00 00 00 00 63 63 63 63 63 63 63 63
+
+Clearly it can be seen that the first eight bytes of "pad" become
+overwritten.
+
+I've traced this error down to this point - it has, of course,
+catastrophal consequences: programs using the smb_stat sometimes showed
+chrashing (segfaults) und undefined behaviour (defect samba contexts).
+Exploitation of this bug seems unlinkely, however.
+
+Please tell me what you think.
+Thank you,
+Greetings,
+Johannes
+
+

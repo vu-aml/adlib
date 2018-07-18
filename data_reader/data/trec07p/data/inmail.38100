@@ -1,0 +1,98 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May 16 22:42:33 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4H2gWqD026643
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 16 May 2007 22:42:32 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 22C1B162BC4
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 17 May 2007 02:42:30 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id CC28B162BBC; Thu, 17 May 2007 02:42:14 +0000 (GMT)
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070517024214.CC28B162BBC@lists.samba.org>
+Date: Thu, 17 May 2007 02:42:14 +0000 (GMT)
+Subject: svn commit: samba r22964 - in branches/SAMBA_4_0/source/lib/events:
+	.
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: tridge
+Date: 2007-05-17 02:42:14 +0000 (Thu, 17 May 2007)
+New Revision: 22964
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22964
+
+Log:
+
+log an error on epoll_create failing on reopen
+
+Modified:
+   branches/SAMBA_4_0/source/lib/events/events_aio.c
+   branches/SAMBA_4_0/source/lib/events/events_epoll.c
+   branches/SAMBA_4_0/source/lib/events/events_standard.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/lib/events/events_aio.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/events/events_aio.c	2007-05-17 02:38:07 UTC (rev 22963)
++++ branches/SAMBA_4_0/source/lib/events/events_aio.c	2007-05-17 02:42:14 UTC (rev 22964)
+@@ -108,8 +108,9 @@
+ 	struct fd_event *fde;
+ 
+ 	close(aio_ev->epoll_fd);
+-	aio_ev->epoll_fd = epoll_create(64);
++	aio_ev->epoll_fd = epoll_create(MAX_AIO_QUEUE_DEPTH);
+ 	if (aio_ev->epoll_fd == -1) {
++		DEBUG(0,("Failed to recreate epoll handle after fork\n"));
+ 		return;
+ 	}
+ 	aio_ev->pid = getpid();
+
+Modified: branches/SAMBA_4_0/source/lib/events/events_epoll.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/events/events_epoll.c	2007-05-17 02:38:07 UTC (rev 22963)
++++ branches/SAMBA_4_0/source/lib/events/events_epoll.c	2007-05-17 02:42:14 UTC (rev 22964)
+@@ -109,6 +109,7 @@
+ 	close(epoll_ev->epoll_fd);
+ 	epoll_ev->epoll_fd = epoll_create(64);
+ 	if (epoll_ev->epoll_fd == -1) {
++		DEBUG(0,("Failed to recreate epoll handle after fork\n"));
+ 		return;
+ 	}
+ 	epoll_ev->pid = getpid();
+
+Modified: branches/SAMBA_4_0/source/lib/events/events_standard.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/events/events_standard.c	2007-05-17 02:38:07 UTC (rev 22963)
++++ branches/SAMBA_4_0/source/lib/events/events_standard.c	2007-05-17 02:42:14 UTC (rev 22964)
+@@ -126,6 +126,7 @@
+ 	close(std_ev->epoll_fd);
+ 	std_ev->epoll_fd = epoll_create(64);
+ 	if (std_ev->epoll_fd == -1) {
++		DEBUG(0,("Failed to recreate epoll handle after fork\n"));
+ 		return;
+ 	}
+ 	std_ev->pid = getpid();
+

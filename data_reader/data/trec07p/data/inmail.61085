@@ -1,0 +1,155 @@
+From r-help-bounces@stat.math.ethz.ch  Wed Jun 20 01:16:04 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5K5G3L9005960
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 20 Jun 2007 01:16:04 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5K5EZix023930;
+	Wed, 20 Jun 2007 07:14:47 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.2 required=5.0 tests=AWL, BAYES_50, DKIM_SIGNED,
+	DKIM_VERIFIED, SARE_URI_EQUALS autolearn=no version=3.2.0
+Received: from ug-out-1314.google.com (ug-out-1314.google.com [66.249.92.170])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5K5ET34023910
+	for <r-help@stat.math.ethz.ch>; Wed, 20 Jun 2007 07:14:29 +0200
+Received: by ug-out-1314.google.com with SMTP id m3so251659uge
+	for <r-help@stat.math.ethz.ch>; Tue, 19 Jun 2007 22:14:29 -0700 (PDT)
+Received: by 10.66.224.3 with SMTP id w3mr1007073ugg.1182316468688;
+	Tue, 19 Jun 2007 22:14:28 -0700 (PDT)
+Received: by 10.67.106.14 with HTTP; Tue, 19 Jun 2007 22:14:28 -0700 (PDT)
+Message-ID: <971536df0706192214t4a5597cbi45027fc73ba321ec@mail.gmail.com>
+Date: Wed, 20 Jun 2007 01:14:28 -0400
+From: "Gabor Grothendieck" <ggrothendieck@gmail.com>
+To: "Alan Jackson" <Rhelp@ajackson.org>
+In-Reply-To: <20070619203749.460075d7@nova.oplnk.net>
+MIME-Version: 1.0
+Content-Disposition: inline
+References: <20070619203749.460075d7@nova.oplnk.net>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] making a Time of Day axis
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+Here it is with a few improvements:
+- use as.is=TRUE on read.table to get character columns rather than factor
+- use xaxt = FALSE rather than axes = FALSE to eliminate axis(2)
+- use h$mids where h is the output of hist to avoid lots of tedious calcs
+- eliminate all that attaching and detaching
+- eliminate strptime
+
+DF <- read.table("input.dat", header = TRUE, as.is = TRUE)
+DF$Time <- times(paste(DF$Time, "00", sep = ":"))
+tod <- as.numeric(subset(DF, Trip == "m")$Time)
+h <- hist(tod, xaxt = "n", main = "Morning Bus Arrival Times",
+	xlab = "Time", col = "blue");
+axis(1, h$mids, sub(":00$", "", times(h$mids)))
+
+Although not used subsequently just in case you need it in
+computations that you did not show:
+
+DF$Date <- chron(DF$Date)
+DF$DateTime <- chron(DF$Date, DF$Time)
+
+
+On 6/19/07, Alan Jackson <Rhelp@ajackson.org> wrote:
+> I am wrestling with time and date data. I came up with a way to plot and
+> label a histogram with "time of day" on the x-axis, but it seemed like a
+> lot more work than should be necessary. Is there a better way to do what
+> I am trying to do?
+>
+> require(chron)
+> #       read input data
+> data = read.table("input.dat", header=T)
+> #       Create date-time and chron objects
+> datetime = strptime(paste(data[,3], data[,2]),format="%m/%d/%y %H:%M")
+> time = times(paste(as.vector(data[,2]), ":00",sep=""))
+> #       Put it all into a data frame
+> data = data.frame(time, datetime, data$Trip)
+> names(data) = c("Time","DateTime","Trip")
+> attach(data)
+> #       Create time of day array
+> times = as.numeric(chron(times = Time))
+> tod = subset(times, Trip=='m');
+> #       Plot base histogram
+> hist(tod, axes=F, main="Morning Bus Arrival Times", xlab="Time", col="blue");
+> axis(2);
+> #       where are the tics to be?
+> tics = seq(min(tod), max(tod), (max(tod)-min(tod))/5);
+> #       build a labeled x-axis for the plot
+> axis(1, tics, labels=sub(":00$","",as.character(chron(times=tics, out.format="h:m:s"))));
+>
+> #       cleanup
+> detach(data)
+>
+> --- Data ---
+> Trip Time Date
+> a 15:55 05/15/07
+> m  5:47 05/16/07
+> a 15:54 05/16/07
+> m  5:47 05/17/07
+> a 15:59 05/17/07
+> m  5:50 05/21/07
+> m  5:50 05/22/07
+> a 16:00 05/22/07
+> m  5:48 05/23/07
+> m  5:50 05/24/07
+> a 16:00 05/24/07
+> m  5:48 05/25/07
+> m  5:48 05/29/07
+> a 15:59 05/29/07
+> m  5:46 05/30/07
+> m  5:45 05/31/07
+> a 16:05 05/31/07
+> m  5:47 06/04/07
+> a 15:53 06/04/07
+> m  5:46 06/05/07
+> m  5:47 06/06/07
+> a 15:53 06/06/07
+> m  5:47 06/07/07
+> a 15:51 06/07/07
+> m  5:45 06/08/07
+> f 15:22 06/08/07
+> m  5:48 06/11/07
+> m  5:46 06/12/07
+> m  5:48 06/13/07
+> m  5:47 06/18/07
+> a 15:53 06/18/07
+> m  5:47 06/19/07
+> a 15:55 06/19/07
+>
+>
+> --
+> -----------------------------------------------------------------------
+> | Alan K. Jackson            | To see a World in a Grain of Sand      |
+> | alan@ajackson.org          | And a Heaven in a Wild Flower,         |
+> | www.ajackson.org           | Hold Infinity in the palm of your hand |
+> | Houston, Texas             | And Eternity in an hour. - Blake       |
+>
+> ______________________________________________
+> R-help@stat.math.ethz.ch mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-help
+> PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+> and provide commented, minimal, self-contained, reproducible code.
+>
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

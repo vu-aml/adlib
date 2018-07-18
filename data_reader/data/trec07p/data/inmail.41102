@@ -1,0 +1,139 @@
+From perl6-all-return-81505-ktwarwic=speedy.uwaterloo.ca@perl.org  Mon May 21 19:01:07 2007
+Return-Path: <perl6-all-return-81505-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4LN14qD004877
+	for <ktwarwic@flax9.uwaterloo.ca>; Mon, 21 May 2007 19:01:05 -0400
+Received: (qmail 26524 invoked by uid 514); 21 May 2007 23:01:00 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 26519 invoked from network); 21 May 2007 23:01:00 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: domain of chromatic@wgz.org designates 63.105.17.39 as permitted sender)
+From: chromatic <chromatic@wgz.org>
+Organization: Snafu
+To: perl6-internals@perl.org
+Subject: Re: [perl #37303] [PATCH] Relaxing parrot dependency on parrot_config
+Date: Mon, 21 May 2007 13:24:07 -0700
+User-Agent: KMail/1.9.6
+Cc: Nick Glencross <nickg@glencros.demon.co.uk>
+References: <rt-37303@perl> <rt-3.0.11-37303-121770.14.6132411990429@perl.org> <433E563D.1080500@glencros.demon.co.uk>
+In-Reply-To: <433E563D.1080500@glencros.demon.co.uk>
+MIME-Version: 1.0
+Content-Type: text/plain;
+  charset="utf-8"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+Message-Id: <200705211324.07414.chromatic@wgz.org>
+X-Virus-Scanned: by amavisd-new at wgz.org
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=1.4 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,RCVD_IN_CBL,SPF_PASS
+
+On Saturday 01 October 2005 02:26:21 Nick Glencross wrote:
+
+> > I've been wanting to relax the dependency that parrot's core has on
+> > parrot_config.
+
+> I'm not sure that the patch made it into RT. Here it is again, with a
+> small tweak to a Makefile dependency.
+
+> src/config.c will need to be 'svn add'ed when applying the patch, and
+> Configure rerun to recreate the top-level Makefile.
+
+Thanks!  I'll check in this patch in a little bit.  Meanwhile I want to 
+comment on a few small nits that I'll clean up before I apply it.
+
++
++    print << "EOF";
++const char* parrot_config_ptr   = 0;
+
+Per coding standards, the pointer star needs to go on the variable name.
+
++        printf "0x%02x", ord($_);
++        ++$i;
++        print ', ', if ($i < scalar(@c));
++        print "\n    " unless $i % 8;
+
+The scalar() here is unnecessary.  No big deal.
+
+Index: src/config.c
+===================================================================
+--- src/config.c        (revision 0)
++++ src/config.c        (revision 0)
+@@ -0,0 +1,63 @@
++/*
++  Copyright: 2005 The Perl Foundation.  All Rights Reserved.
++  $Id$
+
+I'll change the date to 2007.
+
++static const char  *parrot_config_private_ptr  = NULL;
++static unsigned int parrot_config_private_size = 0;
+
+Eventually it might be better to move these variables into the parent 
+interpreter.  For now, I don't think anyone's embedding multiple Parrots into 
+a single program.
+
++parrot_get_config_string(Interp* interpreter)
++{
++    if (!parrot_config_private_ptr)
++        return NULL;
++
++    return string_from_const_cstring(interpreter,
++                                     parrot_config_private_ptr,
++                                     parrot_config_private_size);
++}
+
+I don't remember what the memory allocation characteristics are of 
+string_from_const_cstring(), so these functions may need comments 
+saying "It's your responsibility to free this string."
+
+Index: src/pmc_freeze.c
+===================================================================
+--- src/pmc_freeze.c    (revision 9273)
++++ src/pmc_freeze.c    (working copy)
+@@ -712,7 +712,7 @@
+     else {
+         if (string_length(interpreter, s) < PACKFILE_HEADER_BYTES) {
+             real_exception(interpreter, NULL, E_IOError,
+-                    "bad string too thaw");
++                    "bad string to thaw");
+         }
+         mem_sys_memcopy(pf->header, s->strstart, PACKFILE_HEADER_BYTES);
+         PackFile_assign_transforms(pf);
+
+This looks like part of a separate patch.
+
+===================================================================
+--- imcc/main.c (revision 9273)
++++ imcc/main.c (working copy)
+@@ -459,6 +459,8 @@
+     char *sourcefile;
+     char *output;
+ 
++    parrot_set_config_string(parrot_config_ptr,parrot_config_size);
++
+     Interp *interp = Parrot_new(NULL);
+
+The new line should come after the variable declarations, per my understanding 
+of C89.  This is difficult to remember.  Stupid C89.
+
+Good patch!
+
+-- c
+

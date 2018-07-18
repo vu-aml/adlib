@@ -1,0 +1,100 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon May 21 20:43:55 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4M0htqD005832
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 21 May 2007 20:43:55 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 0B44716385E
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 22 May 2007 00:43:51 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 77A46162BD4; Tue, 22 May 2007 00:43:12 +0000 (GMT)
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070522004312.77A46162BD4@lists.samba.org>
+Date: Tue, 22 May 2007 00:43:12 +0000 (GMT)
+Subject: svn commit: samba r23058 - in
+	branches/SAMBA_4_0/source/libcli/cldap: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: tridge
+Date: 2007-05-22 00:43:10 +0000 (Tue, 22 May 2007)
+New Revision: 23058
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23058
+
+Log:
+
+the cldap code was getting too intimate with the internals of struct
+asn1_context. A hangover from when it wasn't a allocated structure
+
+Modified:
+   branches/SAMBA_4_0/source/libcli/cldap/cldap.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/libcli/cldap/cldap.c
+===================================================================
+--- branches/SAMBA_4_0/source/libcli/cldap/cldap.c	2007-05-21 23:35:14 UTC (rev 23057)
++++ branches/SAMBA_4_0/source/libcli/cldap/cldap.c	2007-05-22 00:43:10 UTC (rev 23058)
+@@ -100,7 +100,6 @@
+ 		talloc_free(tmp_ctx);
+ 		return;
+ 	}
+-	talloc_steal(tmp_ctx, asn1->data);
+ 
+ 	ldap_msg = talloc(tmp_ctx, struct ldap_message);
+ 	if (ldap_msg == NULL) {
+@@ -129,8 +128,7 @@
+ 		return;
+ 	}
+ 
+-	req->asn1 = asn1;
+-	talloc_steal(req, asn1->data);
++	req->asn1 = talloc_steal(req, asn1);
+ 	req->asn1->ofs = 0;
+ 
+ 	req->state = CLDAP_REQUEST_DONE;
+@@ -312,6 +310,10 @@
+ 	req->timeout     = io->in.timeout;
+ 	req->num_retries = io->in.retries;
+ 	req->is_reply    = False;
++	req->asn1        = asn1_init(req);
++	if (!req->asn1) {
++		goto failed;
++	}
+ 
+ 	req->dest = socket_address_from_strings(req, cldap->sock->backend_name,
+ 						io->in.dest_address, lp_cldap_port());
+@@ -376,6 +378,10 @@
+ 	req->cldap       = cldap;
+ 	req->state       = CLDAP_REQUEST_SEND;
+ 	req->is_reply    = True;
++	req->asn1        = asn1_init(req);
++	if (!req->asn1) {
++		goto failed;
++	}
+ 
+ 	req->dest        = io->dest;
+ 	if (talloc_reference(req, io->dest) == NULL) goto failed;
+

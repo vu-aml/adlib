@@ -1,0 +1,135 @@
+From beginners-return-91063-ktwarwic=speedy.uwaterloo.ca@perl.org  Wed Apr 25 21:00:19 2007
+Return-Path: <beginners-return-91063-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3Q10I6w006074
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 25 Apr 2007 21:00:18 -0400
+Received: (qmail 22425 invoked by uid 514); 26 Apr 2007 01:00:10 -0000
+Mailing-List: contact beginners-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:beginners@perl.org>
+List-Help: <mailto:beginners-help@perl.org>
+List-Unsubscribe: <mailto:beginners-unsubscribe@perl.org>
+List-Subscribe: <mailto:beginners-subscribe@perl.org>
+List-Id: <beginners.perl.org>
+Delivered-To: mailing list beginners@perl.org
+Received: (qmail 22416 invoked from network); 26 Apr 2007 01:00:09 -0000
+Received: from x1a.develooper.com (HELO x1.develooper.com) (216.52.237.111)
+  by lists.develooper.com with SMTP; 26 Apr 2007 01:00:09 -0000
+Received: (qmail 13557 invoked by uid 225); 26 Apr 2007 01:00:08 -0000
+Delivered-To: beginners@perl.org
+Received: (qmail 13515 invoked by alias); 26 Apr 2007 01:00:06 -0000
+X-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: domain of krahnj@telus.net designates 204.209.205.55 as permitted sender)
+Received: from defout.telus.net (HELO defout.telus.net) (204.209.205.55)
+    by la.mx.develooper.com (qpsmtpd/0.28) with ESMTP; Wed, 25 Apr 2007 18:00:03 -0700
+Received: from priv-edmwaa06.telusplanet.net ([154.20.156.154])
+          by priv-edmwes33.telusplanet.net
+          (InterMail vM.7.08.02.00 201-2186-121-20061213) with ESMTP
+          id <20070426005959.VEDS24854.priv-edmwes33.telusplanet.net@priv-edmwaa06.telusplanet.net>
+          for <beginners@perl.org>; Wed, 25 Apr 2007 18:59:59 -0600
+Received: from [154.20.156.154] (d154-20-156-154.bchsia.telus.net [154.20.156.154])
+	by priv-edmwaa06.telusplanet.net (BorderWare MXtreme Infinity Mail Firewall) with ESMTP id 4AF5HF3WPC
+	for <beginners@perl.org>; Wed, 25 Apr 2007 18:59:59 -0600 (MDT)
+Message-ID: <462FF987.7030507@telus.net>
+Date: Wed, 25 Apr 2007 17:59:51 -0700
+From: "John W. Krahn" <krahnj@telus.net>
+User-Agent: Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.7.13) Gecko/20060411
+X-Accept-Language: en-us, en
+MIME-Version: 1.0
+To: Perl Beginners <beginners@perl.org>
+Subject: Re: cat (.sh) in Perl
+References: <ca5781c80704251553w4066a185od1931630e4a04531@mail.gmail.com> <200704260138.02996.seanie@wdcc.org.uk>
+In-Reply-To: <200704260138.02996.seanie@wdcc.org.uk>
+X-Enigmail-Version: 0.90.1.0
+X-Enigmail-Supports: pgp-inline, pgp-mime
+Content-Type: text/plain; charset=us-ascii
+Content-Transfer-Encoding: 7bit
+Status: O
+Content-Length: 2782
+Lines: 82
+
+Seanie wrote:
+> yitzle wrote:
+>>`cat m.top.html m.mid.html m.arc.html m.bot.html > blah`
+>>How can this be done without a system call?
+> 
+> As a general rule, if your script contains 'system()' anywhere in it, you've 
+> done it wrong. This is especially true for simple file operations such as 
+> the above, and for anything else CPAN has yet to fail me. I can't remember 
+> the last time I was forced to shell out to get something done.
+> 
+>>Here's my first guess:
+>>@doc = ();
+>>for (qw/m.top.html m.mid.html m.arc.html m.bot.html/) {
+>>	open $FILE,"<","$root/$_";
+>>	my @tmp = <$FILE>;
+>>	@doc = (@doc,@tmp);
+>>	close $FILE;
+>>}
+>>open $FILE,">","blah";
+>>print $FILE $_ foreach(@doc);
+>>close $FILE;
+>>
+>>Is there something I'm missing?
+> 
+> Quite a lot, yes.
+> 
+> Always use the strict and warnings pragmas, no exceptions, and test to ensure 
+> operations on files, sockets etc have worked before moving on.
+> You don't need to loop your file contents in, and then loop them back out 
+> again separately later; one for loop will suffice for both.
+> Your syntax for the open() statements is a bit dodgy too :-)
+
+Perl defines the syntax so you must mean something else?  :-)
+
+> Here's a fairly verbose chunk of code that ought to do what you want:
+> 
+> use strict;
+> use warnings;
+> open OUTFILE, ">blah" or die "error creating output file\n";
+
+You should also include the $! or $^E variable in the error message so you
+know *why* it failed.
+
+> for my $infile (qw|m.top.html m.mid.html m.arc.html m.bot.html|){
+>   die "$infile not found" unless -r "$root/$infile"; # or use next to skip it
+
+$infile could exist and not be readable so the message "$infile not found"
+does not accurately describe the problem and if you are logged in as root then
+the file is readable reguardless.  Also you have a race condition where the
+file could be made unreadable between that statement and the next one.
+
+>   open INFILE, "<$root/$infile" or die "error opening input file\n";
+
+See above about $! and/or $^E.
+
+>   print OUTFILE while (<INFILE>);
+>   close INFILE;
+>   }
+> close OUTFILE;
+> 
+> Keep in mind that there are plenty of other ways of doing this, some terser 
+> than others. You can even do this:
+> 
+> perl -pe m.top.html m.mid.html m.arc.html m.bot.html > blah
+> 
+> ....which is Perl doing a very convincing cat impression.
+
+Except that you are saying that 'm.top.html' is a Perl program that perl
+should compile and run (which will probably produce a *lot* of error messages.)
+
+
+
+John
+-- 
+Perl isn't a toolbox, but a small machine shop where you can special-order
+certain sorts of tools at low cost and in short order.       -- Larry Wall
+
+-- 
+To unsubscribe, e-mail: beginners-unsubscribe@perl.org
+For additional commands, e-mail: beginners-help@perl.org
+http://learn.perl.org/
+
+

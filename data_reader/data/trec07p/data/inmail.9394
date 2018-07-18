@@ -1,0 +1,126 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun Apr 15 13:06:26 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3FH6P0I027496
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 15 Apr 2007 13:06:25 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 18182163847
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 15 Apr 2007 17:06:01 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.4 required=3.8 tests=AWL,BAYES_00,RCVD_IN_DSBL,
+	UNPARSEABLE_RELAY autolearn=no version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: from mail.SerNet.de (mail1.SerNet.DE [193.175.80.2])
+	by lists.samba.org (Postfix) with ESMTP id 9377C162ADE
+	for <samba-technical@samba.org>; Sun, 15 Apr 2007 17:05:33 +0000 (GMT)
+Received: from intern.SerNet.DE by mail.SerNet.DE with esmtp (Exim 4.51 #1)
+	id 1Hd8AO-00002F-UZ; Sun, 15 Apr 2007 19:05:32 +0200
+Received: by intern.SerNet.DE
+	id 1Hd8AO-0006Ms-6M; Sun, 15 Apr 2007 19:05:32 +0200
+Received: by intern.SerNet.DE
+	id 1Hd8AN-0006Mp-RX; Sun, 15 Apr 2007 19:05:32 +0200
+Received: from vlendec by delphin.sernet.de with local (Exim 4.51)
+	id 1Hd8Bg-00019q-C5; Sun, 15 Apr 2007 19:06:52 +0200
+Date: Sun, 15 Apr 2007 19:06:52 +0200
+From: Volker Lendecke <Volker.Lendecke@SerNet.DE>
+To: ronniesahlberg@gmail.com
+Mime-Version: 1.0
+Content-Type: multipart/signed; micalg=pgp-sha1;
+	protocol="application/pgp-signature"; boundary="OaZoDhBhXzo6bW1J"
+Content-Disposition: inline
+User-Agent: Mutt/1.5.9i
+Message-Id: <E1Hd8AO-0006Ms-6M@intern.SerNet.DE>
+Organization: SerNet GmbH, Goettingen, Germany
+Cc: samba-technical@samba.org
+Subject: http://www.samba.sernet.de/vl/bzr/3_0-ctdb/
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: Volker.Lendecke@SerNet.DE
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 1732
+Lines: 68
+
+
+--OaZoDhBhXzo6bW1J
+Content-Type: multipart/mixed; boundary="uXxzq0nDebZQVNAZ"
+Content-Disposition: inline
+
+
+--uXxzq0nDebZQVNAZ
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+
+Hi!
+
+Under $(SUBJECT) you find the current port of the
+vl-messaging branch that makes use of Ronnie's latest
+fetch_lock/store_unlock operations of ctdb. Thanks a lot for
+that!
+
+It survives fetching a file, so ntcreate and is_locked seems
+to work.
+
+You have to apply the attached patch to Ronnie's tree under
+http://samba.org/~tridge/ronnie/ctdb/ to make this run.
+
+Volker
+
+--uXxzq0nDebZQVNAZ
+Content-Type: text/x-patch; charset=us-ascii
+Content-Disposition: attachment; filename="ctdb.diff"
+Content-Transfer-Encoding: quoted-printable
+
+=3D=3D=3D modified file 'direct/ctdbd.c'
+--- direct/ctdbd.c	2007-04-15 04:39:23 +0000
++++ direct/ctdbd.c	2007-04-15 14:12:18 +0000
+@@ -128,7 +128,15 @@
+ 	}
+=20
+ 	/* attach to a specific database */
+-	ctdb_db =3D ctdb_attach(ctdb, "test.tdb", TDB_DEFAULT, O_RDWR|O_CREAT|O_T=
+RUNC, 0666);
++	ctdb_db =3D ctdb_attach(ctdb, "brlock.tdb", TDB_DEFAULT,
++			      O_RDWR|O_CREAT|O_TRUNC, 0666);
++	if (!ctdb_db) {
++		printf("ctdb_attach failed - %s\n", ctdb_errstr(ctdb));
++		exit(1);
++	}
++
++	ctdb_db =3D ctdb_attach(ctdb, "locking.tdb", TDB_DEFAULT,
++			      O_RDWR|O_CREAT|O_TRUNC, 0666);
+ 	if (!ctdb_db) {
+ 		printf("ctdb_attach failed - %s\n", ctdb_errstr(ctdb));
+ 		exit(1);
+
+
+--uXxzq0nDebZQVNAZ--
+
+--OaZoDhBhXzo6bW1J
+Content-Type: application/pgp-signature
+Content-Disposition: inline
+
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.2 (GNU/Linux)
+
+iD8DBQFGIlurpZr5CauZH5wRAqMBAJ43GQ0b1Vdx79EsAaBrGJ0dskZngwCfSBDo
+vIX6BpdYnsDpD2U5O9k/OrY=
+=UrYK
+-----END PGP SIGNATURE-----
+
+--OaZoDhBhXzo6bW1J--
+

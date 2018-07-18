@@ -1,0 +1,160 @@
+From sugar-bounces@laptop.org  Thu May 24 07:45:11 2007
+Return-Path: <sugar-bounces@laptop.org>
+Received: from pedal.laptop.org (pedal.laptop.org [18.85.2.148])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4OBjAqD005147
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 24 May 2007 07:45:11 -0400
+Received: from pedal.laptop.org (localhost [127.0.0.1])
+	by pedal.laptop.org (Postfix) with ESMTP id D074A4F69A;
+	Thu, 24 May 2007 07:44:25 -0400 (EDT)
+X-Original-To: sugar@laptop.org
+Delivered-To: sugar@laptop.org
+Received: from spam.laptop.org (spam.laptop.org [18.85.46.23])
+	by pedal.laptop.org (Postfix) with ESMTP id 55ED14F69A
+	for <sugar@laptop.org>; Thu, 24 May 2007 07:44:24 -0400 (EDT)
+X-ASG-Debug-ID: 1180007103-63ff00050000-3Xmyjt
+X-Barracuda-URL: http://18.85.46.23:8000/cgi-bin/mark.cgi
+X-Barracuda-Connect: dhansak.collabora.co.uk[195.10.223.134]
+X-Barracuda-Start-Time: 1180007103
+X-Barracuda-Encrypted: DHE-RSA-AES256-SHA
+Received: from dhansak.collabora.co.uk (dhansak.collabora.co.uk
+	[195.10.223.134])
+	(using TLSv1 with cipher DHE-RSA-AES256-SHA (256/256 bits))
+	(No client certificate requested)
+	by spam.laptop.org (Spam Firewall) with ESMTP id CDDAAEF26
+	for <sugar@laptop.org>; Thu, 24 May 2007 07:45:03 -0400 (EDT)
+Received: by dhansak.collabora.co.uk (Postfix, from userid 1014)
+	id 17C1B309068D; Thu, 24 May 2007 12:45:02 +0100 (BST)
+Date: Thu, 24 May 2007 12:44:55 +0100
+From: Simon McVittie <simon.mcvittie@collabora.co.uk>
+To: sugar@laptop.org
+X-ASG-Orig-Subj: [PATCH] services/presence/server_plugin: implement
+	_new_channel_cb asynchronously
+Message-ID: <20070524114455.GA19121@celebrin.pseudorandom.co.uk>
+Mail-Followup-To: sugar@laptop.org
+MIME-Version: 1.0
+Content-Disposition: inline
+User-Agent: Mutt/1.5.13 (2006-08-11)
+X-Barracuda-Bayes: INNOCENT GLOBAL 0.0000 1.0000 -2.0210
+X-Barracuda-Virus-Scanned: by Barracuda Spam Firewall at laptop.org
+X-Barracuda-Spam-Score: -1.52
+X-Barracuda-Spam-Status: No, SCORE=-1.52 using global scores of TAG_LEVEL=3.5
+	QUARANTINE_LEVEL=1000.0 KILL_LEVEL=5.5 tests=BSF_RULE7568M
+X-Barracuda-Spam-Report: Code version 3.1, rules version 3.1.17876
+	Rule breakdown below
+	pts rule name              description
+	---- ----------------------
+	--------------------------------------------------
+	0.50 BSF_RULE7568M          BODY: Custom Rule 7568M
+Subject: [sugar] [PATCH] services/presence/server_plugin: implement
+	_new_channel_cb asynchronously
+X-BeenThere: sugar@laptop.org
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Discussion of OLPC design,
+	desktop platform and user experience" <sugar.laptop.org>
+List-Unsubscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=unsubscribe>
+List-Archive: <http://mailman.laptop.org/pipermail/sugar>
+List-Post: <mailto:sugar@laptop.org>
+List-Help: <mailto:sugar-request@laptop.org?subject=help>
+List-Subscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: sugar-bounces@laptop.org
+Errors-To: sugar-bounces@laptop.org
+
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA1
+
+- ---
+ services/presence/server_plugin.py |   56 +++++++++++++++++++++++++++---------
+ 1 files changed, 42 insertions(+), 14 deletions(-)
+
+diff --git a/services/presence/server_plugin.py b/services/presence/server_plugin.py
+index 49280e3..2871df8 100644
+- --- a/services/presence/server_plugin.py
++++ b/services/presence/server_plugin.py
+@@ -905,24 +905,52 @@ class ServerPlugin(gobject.GObject):
+         _logger.debug("Handle %s: current activity now %s" % (handle, activity))
+         self._buddy_properties_changed_cb(handle, prop)
+ 
+- -    def _new_channel_cb(self, object_path, channel_type, handle_type, handle, suppress_handler):
++    def _new_channel_cb(self, object_path, channel_type, handle_type, handle,
++                        suppress_handler):
+         """Handle creation of a new channel
+         """
+- -        if handle_type == CONNECTION_HANDLE_TYPE_ROOM and channel_type == CHANNEL_TYPE_TEXT:
+- -            channel = Channel(self._conn._dbus_object._named_service, object_path)
++        if (handle_type == CONNECTION_HANDLE_TYPE_ROOM and
++            channel_type == CHANNEL_TYPE_TEXT):
++            def ready(channel):
+ 
+- -            # hack
+- -            channel._valid_interfaces.add(CHANNEL_INTERFACE_GROUP)
+- -
+- -            current, local_pending, remote_pending = channel[CHANNEL_INTERFACE_GROUP].GetAllMembers()
+- -            
+- -            if local_pending:
+- -                for act_id, act_handle in self._activities.items():
++                for act_id, act_handle in self._activities.iteritems():
+                     if handle == act_handle:
+- -                        self.emit("activity-invitation", act_id)
+- -
+- -        elif handle_type == CONNECTION_HANDLE_TYPE_CONTACT and \
+- -            channel_type in [CHANNEL_TYPE_TEXT, CHANNEL_TYPE_STREAMED_MEDIA]:
++                        break
++                    else:
++                        return
++
++                def members_changed(message, added, removed, local_pending,
++                                    remote_pending, actor, reason):
++                    # FIXME: if contacts were added, who don't have this
++                    # activity in their PEP node for whatever reason, then
++                    # emit buddy-activities-changed for them (otherwise they
++                    # could be in an activity while pretending they weren't,
++                    # which would be crazy)
++                    pass
++
++                def got_all_members(current, local_pending, remote_pending):
++                    if local_pending:
++                        for act_id, act_handle in self._activities.iteritems():
++                            if handle == act_handle:
++                                self.emit('activity-invitation', act_id)
++                def got_all_members_err(e):
++                    logger.debug('Unable to get channel members for %s:',
++                                 object_path, exc_info=1)
++
++                # hook the MembersChanged signal so we get told when people
++                # join/leave
++                group = channel[CHANNEL_INTERFACE_GROUP]
++                group.connect_to_signal('MembersChanged', members_changed)
++                group.GetAllMembers(reply_handler=got_all_members,
++                                    error_handler=got_all_members_err)
++
++            # we throw away the channel as soon as ready() finishes
++            Channel(self._conn.service_name, object_path,
++                    ready_handler=ready)
++
++        elif (handle_type == CONNECTION_HANDLE_TYPE_CONTACT and
++              channel_type in (CHANNEL_TYPE_TEXT,
++                               CHANNEL_TYPE_STREAMED_MEDIA)):
+             self.emit("private-invitation", object_path)
+ 
+     def update_activity_properties(self, act_id):
+- -- 
+1.5.2-rc3.GIT
+
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.6 (GNU/Linux)
+Comment: OpenPGP key: http://www.pseudorandom.co.uk/2003/contact/ or pgp.net
+
+iD8DBQFGVXq3WSc8zVUw7HYRAuSGAKC2exySPjDM1VQ+3g6/2LIsvCrPigCgvGWs
+nCJ3O+BD29et0Rb5vaiMRko=
+=kx/X
+-----END PGP SIGNATURE-----
+_______________________________________________
+Sugar mailing list
+Sugar@laptop.org
+http://mailman.laptop.org/mailman/listinfo/sugar
+

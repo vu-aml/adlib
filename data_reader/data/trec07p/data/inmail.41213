@@ -1,0 +1,158 @@
+From perl6-all-return-81516-ktwarwic=speedy.uwaterloo.ca@perl.org  Mon May 21 22:13:33 2007
+Return-Path: <perl6-all-return-81516-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4M2DXqD006633
+	for <ktwarwic@flax9.uwaterloo.ca>; Mon, 21 May 2007 22:13:33 -0400
+Received: (qmail 15437 invoked by uid 514); 22 May 2007 02:13:28 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 15432 invoked from network); 22 May 2007 02:13:28 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-0.2 required=8.0
+	tests=BAYES_40,DKIM_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+Delivered-To: perlmail-parrot-porters@onion.perl.org
+Delivered-To: parrot-porters@perl.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+Message-ID: <46524BE9.7030808@perl.org>
+Date: Mon, 21 May 2007 18:48:25 -0700
+From: Allison Randal <allison@perl.org>
+User-Agent: Thunderbird 1.5.0.10 (Macintosh/20070221)
+MIME-Version: 1.0
+To: p2 <parrot-porters@perl.org>
+Subject: PMC architecture discussion
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+X-Virus-Scanned: by amavisd-new at wgz.org
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=4.7 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,RCVD_IN_CBL,SPF_NEUTRAL
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=0.0 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+
+I've been reviewing the PMC proposals on hand to finish off the PMC PDD. 
+Here are a few thoughts on the matter, for mailing list discussion. 
+Overall, the current structure of PMCs is sound, and allows a good bit 
+of flexibility.
+
+I'd like to do away with the PMC_DATA_IN_EXT flag so the "DPOINTER 
+*data;" struct element is always in the PMC struct instead of being 
+sometimes in the PMC struct and sometimes in the PMC_EXT struct. Access 
+is all hidden behind macros anyway, so the change shouldn't affect 
+anything outside of include/parrot/pobj.h. And, PMC_DATA_IN_EXT is 
+currently set to 1 in include/parrot/pobj.h, and never unset anywhere in 
+the repository.
+
+On variable-sized PMCs, I generally agree with the goals the proposal is 
+trying to accomplish, but I want to tackle these goals in a simpler way. 
+One of the goals mentioned for the proposal was to shrink down the size 
+of PMCs, but it's hard to get much smaller than a struct containing 1 
+struct, 1 pointer to a struct, and a pointer to the vtable, where both 
+of the 2 contained structs can be null.
+
+So, rather than making the core PMC struct variable sized, I want to 
+make one of its contained structs variable sized. This is already a 
+common practice, storing a structure pointer in PMC_data. I also want to 
+eliminate the union value from the pobj_t struct. The concept that a PMC 
+contains either a buffer, 2 pointers, 2 ints, a float val, or a string 
+val, and that these all must overlap in storage is shortsighted. One 
+thing that would convince me otherwise is the argument that it's good to 
+have some core PMC data accessible without a pointer dereference. 
+Standing against that is the fact that we're currently allocating (a 
+small piece of) memory for every PMC that may never be used.
+
+This is the current implementation:
+
+     struct PMC {
+         pobj_t obj;
+         VTABLE *vtable;
+  #if ! PMC_DATA_IN_EXT
+         DPOINTER *data;
+  #endif
+         struct PMC_EXT *pmc_ext;
+     };
+
+---
+     typedef struct pobj_t {
+         UnionVal u;
+         Parrot_UInt flags;
+     } pobj_t;
+
+---
+     struct PMC_EXT {
+  #if PMC_DATA_IN_EXT
+         DPOINTER *data;
+  #endif
+         PMC *_metadata;
+         struct _Sync *_synchronize;
+         PMC *_next_for_GC;
+     };
+
+This is an alternate structure I'm considering:
+
+     struct PMC {
+         Parrot_UInt flags;
+         DPOINTER *data;          /* Modifiable for each PMC */
+         VTABLE *vtable;
+         struct PMC_EXT *pmc_ext; /* auxiliary data */
+     };
+
+---
+     struct PMC_EXT {
+         PMC *_roles;                /* runtime roles */
+         PMC *_metadata;             /* properties, replaced by a role */
+         struct _Sync *_synchronize; /* [to be deprecated, see STM] */
+         PMC *_next_for_GC;          /* [GC hack, may be replaced] */
+     };
+
+
+(flags could move into the PMC_EXT struct, depending on whether we think 
+it will be frequently accessed. It's a question of speed of access 
+versus size of the core PMC allocation.)
+
+Combining this with the proposal to give PMCs a vtable function 
+responsible for constructing the PMC: calling the C<new> opcode 
+constructs the core PMC struct for all PMCs, and then calls the 
+C<construct> (or C<create>) vtable function. Each PMC that overrides 
+C<construct> creates its own struct to store in C<data>. The C<default> 
+PMC's C<construct> does nothing. C<construct> is separated from C<init> 
+so they can be overridden separately.
+
+To accommodate low-level role composition, the C<data> struct for a PMC 
+isn't defined directly in C, it's defined with a bit of Pmc2c syntactic 
+sugar. Pmc2c takes all the struct members defined in the PMC and in any 
+compile-time roles and builds them into one struct for the PMC. Also 
+included are any struct members defined in inherited PMCs. (A PMC is not 
+permitted to redefine any struct members defined in parents, and roles 
+may not contain struct members of the same name. Yes, this is rather 
+strict, but it is C.)
+
+For backward compatibility, some of the first defined roles will provide 
+  the simple structures that the union of the current implementation can 
+contain without being a union type (a buffer, 2 pointers, 2 ints, a 
+float val, or a string val).
+
+Low-level PMCs can also have roles composed at runtime, but these are 
+entirely different creatures. They are added through the C<add_role> 
+vtable function and live in a PMC data structure that hangs off the 
+PMC_EXT struct. Runtime composed roles are Role PMCs or subclasses of 
+the Role PMC.
+
+Thoughts and comments welcome.
+
+Allison
+

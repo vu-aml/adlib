@@ -1,0 +1,221 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Jun 21 13:06:35 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5LH6ZL9026706
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 21 Jun 2007 13:06:35 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id F1C64163826
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 21 Jun 2007 17:06:32 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 535)
+	id 54649162AD2; Thu, 21 Jun 2007 17:06:02 +0000 (GMT)
+To: samba-cvs@samba.org
+From: idra@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070621170602.54649162AD2@lists.samba.org>
+Date: Thu, 21 Jun 2007 17:06:02 +0000 (GMT)
+Subject: svn commit: samba r23571 - in branches: SAMBA_3_0/source/client
+	SAMBA_3_0_25/source/client SAMBA_3_0_26/source/client
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: idra
+Date: 2007-06-21 17:05:59 +0000 (Thu, 21 Jun 2007)
+New Revision: 23571
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23571
+
+Log:
+
+Fix, parsing of multi byte share names.
+Thanks to SATOH Fumiyasu
+Fixes 4720
+
+Jerry,
+this is a showstopper for 3.0.25b, please grab it into
+SAMBA_3_0_RELEASE before cuting the tarballs.
+
+Simo.
+
+
+Modified:
+   branches/SAMBA_3_0/source/client/client.c
+   branches/SAMBA_3_0_25/source/client/client.c
+   branches/SAMBA_3_0_26/source/client/client.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/client/client.c
+===================================================================
+--- branches/SAMBA_3_0/source/client/client.c	2007-06-21 15:41:19 UTC (rev 23570)
++++ branches/SAMBA_3_0/source/client/client.c	2007-06-21 17:05:59 UTC (rev 23571)
+@@ -3970,14 +3970,6 @@
+ 		/* if the service has not yet been specified lets see if it is available in the popt stack */
+ 		if (!service_opt && poptPeekArg(pc)) {
+ 			pstrcpy(service, poptGetArg(pc));
+-			/* Convert any '/' characters in the service name to '\' characters */
+-			string_replace(service, '/','\\');
+-
+-			if (count_chars(service,'\\') < 3) {
+-				d_printf("\n%s: Not enough '\\' characters in service\n",service);
+-				poptPrintUsage(pc, stderr, 0);
+-				exit(1);
+-			}
+ 			service_opt = True;
+ 		}
+ 
+@@ -4065,14 +4057,6 @@
+ 	/* if the service has not yet been specified lets see if it is available in the popt stack */
+ 	if (!service_opt && poptPeekArg(pc)) {
+ 		pstrcpy(service, poptGetArg(pc));
+-		/* Convert any '/' characters in the service name to '\' characters */
+-		string_replace(service, '/','\\');
+-
+-		if (count_chars(service,'\\') < 3) {
+-			d_printf("\n%s: Not enough '\\' characters in service\n",service);
+-			poptPrintUsage(pc, stderr, 0);
+-			exit(1);
+-		}
+ 		service_opt = True;
+ 	}
+ 
+@@ -4111,6 +4095,16 @@
+ 	}
+ 	
+ 	load_interfaces();
++
++	if (service_opt) {
++		/* Convert any '/' characters in the service name to '\' characters */
++		string_replace(service, '/','\\');
++		if (count_chars(service,'\\') < 3) {
++			d_printf("\n%s: Not enough '\\' characters in service\n",service);
++			poptPrintUsage(pc, stderr, 0);
++			exit(1);
++		}
++	}
+ 	
+ 	if ( strlen(new_workgroup) != 0 )
+ 		set_global_myworkgroup( new_workgroup );
+
+Modified: branches/SAMBA_3_0_25/source/client/client.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/client/client.c	2007-06-21 15:41:19 UTC (rev 23570)
++++ branches/SAMBA_3_0_25/source/client/client.c	2007-06-21 17:05:59 UTC (rev 23571)
+@@ -3921,14 +3921,6 @@
+ 		/* if the service has not yet been specified lets see if it is available in the popt stack */
+ 		if (!service_opt && poptPeekArg(pc)) {
+ 			pstrcpy(service, poptGetArg(pc));
+-			/* Convert any '/' characters in the service name to '\' characters */
+-			string_replace(service, '/','\\');
+-
+-			if (count_chars(service,'\\') < 3) {
+-				d_printf("\n%s: Not enough '\\' characters in service\n",service);
+-				poptPrintUsage(pc, stderr, 0);
+-				exit(1);
+-			}
+ 			service_opt = True;
+ 		}
+ 
+@@ -4016,14 +4008,6 @@
+ 	/* if the service has not yet been specified lets see if it is available in the popt stack */
+ 	if (!service_opt && poptPeekArg(pc)) {
+ 		pstrcpy(service, poptGetArg(pc));
+-		/* Convert any '/' characters in the service name to '\' characters */
+-		string_replace(service, '/','\\');
+-
+-		if (count_chars(service,'\\') < 3) {
+-			d_printf("\n%s: Not enough '\\' characters in service\n",service);
+-			poptPrintUsage(pc, stderr, 0);
+-			exit(1);
+-		}
+ 		service_opt = True;
+ 	}
+ 
+@@ -4062,6 +4046,16 @@
+ 	}
+ 	
+ 	load_interfaces();
++
++	if (service_opt) {
++		/* Convert any '/' characters in the service name to '\' characters */
++		string_replace(service, '/','\\');
++		if (count_chars(service,'\\') < 3) {
++			d_printf("\n%s: Not enough '\\' characters in service\n",service);
++			poptPrintUsage(pc, stderr, 0);
++			exit(1);
++		}
++	}
+ 	
+ 	if ( strlen(new_workgroup) != 0 )
+ 		set_global_myworkgroup( new_workgroup );
+
+Modified: branches/SAMBA_3_0_26/source/client/client.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/client/client.c	2007-06-21 15:41:19 UTC (rev 23570)
++++ branches/SAMBA_3_0_26/source/client/client.c	2007-06-21 17:05:59 UTC (rev 23571)
+@@ -3921,14 +3921,6 @@
+ 		/* if the service has not yet been specified lets see if it is available in the popt stack */
+ 		if (!service_opt && poptPeekArg(pc)) {
+ 			pstrcpy(service, poptGetArg(pc));
+-			/* Convert any '/' characters in the service name to '\' characters */
+-			string_replace(service, '/','\\');
+-
+-			if (count_chars(service,'\\') < 3) {
+-				d_printf("\n%s: Not enough '\\' characters in service\n",service);
+-				poptPrintUsage(pc, stderr, 0);
+-				exit(1);
+-			}
+ 			service_opt = True;
+ 		}
+ 
+@@ -4016,14 +4008,6 @@
+ 	/* if the service has not yet been specified lets see if it is available in the popt stack */
+ 	if (!service_opt && poptPeekArg(pc)) {
+ 		pstrcpy(service, poptGetArg(pc));
+-		/* Convert any '/' characters in the service name to '\' characters */
+-		string_replace(service, '/','\\');
+-
+-		if (count_chars(service,'\\') < 3) {
+-			d_printf("\n%s: Not enough '\\' characters in service\n",service);
+-			poptPrintUsage(pc, stderr, 0);
+-			exit(1);
+-		}
+ 		service_opt = True;
+ 	}
+ 
+@@ -4062,6 +4046,16 @@
+ 	}
+ 	
+ 	load_interfaces();
++
++	if (service_opt) {
++		/* Convert any '/' characters in the service name to '\' characters */
++		string_replace(service, '/','\\');
++		if (count_chars(service,'\\') < 3) {
++			d_printf("\n%s: Not enough '\\' characters in service\n",service);
++			poptPrintUsage(pc, stderr, 0);
++			exit(1);
++		}
++	}
+ 	
+ 	if ( strlen(new_workgroup) != 0 )
+ 		set_global_myworkgroup( new_workgroup );
+

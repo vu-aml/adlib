@@ -1,0 +1,93 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat May 19 12:29:29 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4JGTTqD028272
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 19 May 2007 12:29:29 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 22168162C3E
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 19 May 2007 16:29:26 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-3.3 required=3.8 tests=ALL_TRUSTED,AWL,BAYES_00 
+	autolearn=ham version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: from [?????$??P???Y??$IPv6:::1] (dp [66.70.73.150])
+	by lists.samba.org (Postfix) with ESMTP id EB274162AD1;
+	Sat, 19 May 2007 16:28:46 +0000 (GMT)
+In-Reply-To: <20070518001546.GA21561@samba1>
+References: <C7AEE99A-DD49-4CDC-B533-90F5F730D7E3@samba.org>
+	<20070518001546.GA21561@samba1>
+Mime-Version: 1.0 (Apple Message framework v752.3)
+Content-Type: text/plain; charset=US-ASCII; delsp=yes; format=flowed
+Message-Id: <5EEEE566-71F5-4C51-906E-83676622C5D2@samba.org>
+Content-Transfer-Encoding: 7bit
+From: James Peach <jpeach@samba.org>
+Date: Sat, 19 May 2007 09:28:45 -0700
+To: Jeremy Allison <jra@samba.org>
+X-Mailer: Apple Mail (2.752.3)
+Cc: samba-technical@samba.org
+Subject: Re: should get_nt_acl_no_snum really avoid VFS modules?
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+On 17/05/2007, at 5:15 PM, Jeremy Allison wrote:
+
+> On Thu, May 17, 2007 at 03:17:57PM -0700, James Peach wrote:
+>> Hi Jeremy,
+>>
+>> I just bumped into the get_nt_acl_no_snum() function, and it seems
+>> that this always calls the POSIX ACL implementation.
+>>
+>> Since there's no guarantee that the file it is checking access to is
+>> on a POSIX filesystem or that the platform even supports POSIX ACLs,
+>> shouldn't this call SMB_VFS_GET_NT_ACL instead of get_nt_acl()?
+>
+> This is a local api for local people, there's nothing for
+> you here ! :-).
+>
+> Seriously it's designed for smbd internal use, knowing it's
+> accessing a local filesystem.... So I think it's just expecting
+> a "standard" unix permset to be mapped into an NT ACL.
+
+Hmm, so it doesn't really want to do what it actually does then?
+
+> It doesn't matter if the path doesn't support POSIX ACLs
+> as it'll translate mode_t into an NT ACL.
+
+But if there is a non-Posix ACL, then whoever calls this probably has  
+a reasonable expectation that the ACL actually does something.
+
+I think that this should either explicitly look only at the mode bits  
+or go through the SMB_VFS_GET_NT_ACL path. Do yo have a preference?
+
+>> And shouldn't it use the dirname of the path it is checking for the
+>> fake connectpath, rather than '/', since they could be different
+>> filesystem types? And even that is a bit wonky, because it probably
+>> assumes that the global ACLs module is appropriate for this path,
+>> which might not be true.
+>>
+>> If you give me a hint, I'll code up a patch :)
+>
+> Hmmmm. Is it causing you grief at the moment ?
+
+Not yet, though I guess it's possible that one day someone will call  
+that code :) I was looking into ACL support and this looked weird.
+
+--
+James Peach | jpeach@samba.org
+
+

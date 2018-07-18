@@ -1,0 +1,215 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Jun 22 07:21:17 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5MBLHL9005515
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 22 Jun 2007 07:21:17 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 1C4AC16381D
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 22 Jun 2007 11:21:15 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1004)
+	id 58419162C38; Fri, 22 Jun 2007 11:20:40 +0000 (GMT)
+To: samba-cvs@samba.org
+From: gd@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070622112040.58419162C38@lists.samba.org>
+Date: Fri, 22 Jun 2007 11:20:40 +0000 (GMT)
+Subject: svn commit: samba r23582 - in branches: SAMBA_3_0/source/include
+	SAMBA_3_0/source/libsmb SAMBA_3_0_25/source/include
+	SAMBA_3_0_25/source/libsmb SAMBA_3_0_26/source/include
+	SAMBA_3_0_26/source/libsmb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: gd
+Date: 2007-06-22 11:20:37 +0000 (Fri, 22 Jun 2007)
+New Revision: 23582
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23582
+
+Log:
+Fix event based krb5 ticket refreshing in winbindd.
+
+We were incorrectly using the renew_till timestamp instead of the renewed
+ticket's endtime to calculate the next refreshing date.
+
+Guenther
+
+Modified:
+   branches/SAMBA_3_0/source/include/includes.h
+   branches/SAMBA_3_0/source/libsmb/clikrb5.c
+   branches/SAMBA_3_0_25/source/include/includes.h
+   branches/SAMBA_3_0_25/source/libsmb/clikrb5.c
+   branches/SAMBA_3_0_26/source/include/includes.h
+   branches/SAMBA_3_0_26/source/libsmb/clikrb5.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/include/includes.h
+===================================================================
+--- branches/SAMBA_3_0/source/include/includes.h	2007-06-22 11:03:48 UTC (rev 23581)
++++ branches/SAMBA_3_0/source/include/includes.h	2007-06-22 11:20:37 UTC (rev 23582)
+@@ -1184,7 +1184,7 @@
+ int cli_krb5_get_ticket(const char *principal, time_t time_offset, 
+ 			DATA_BLOB *ticket, DATA_BLOB *session_key_krb5, uint32 extra_ap_opts, const char *ccname, time_t *tgs_expire);
+ PAC_LOGON_INFO *get_logon_info_from_pac(PAC_DATA *pac_data);
+-krb5_error_code smb_krb5_renew_ticket(const char *ccache_string, const char *client_string, const char *service_string, time_t *new_start_time);
++krb5_error_code smb_krb5_renew_ticket(const char *ccache_string, const char *client_string, const char *service_string, time_t *expire_time);
+ krb5_error_code kpasswd_err_to_krb5_err(krb5_error_code res_code);
+ krb5_error_code smb_krb5_gen_netbios_krb5_address(smb_krb5_addresses **kerb_addr);
+ krb5_error_code smb_krb5_free_addresses(krb5_context context, smb_krb5_addresses *addr);
+
+Modified: branches/SAMBA_3_0/source/libsmb/clikrb5.c
+===================================================================
+--- branches/SAMBA_3_0/source/libsmb/clikrb5.c	2007-06-22 11:03:48 UTC (rev 23581)
++++ branches/SAMBA_3_0/source/libsmb/clikrb5.c	2007-06-22 11:20:37 UTC (rev 23582)
+@@ -1134,7 +1134,7 @@
+  krb5_error_code smb_krb5_renew_ticket(const char *ccache_string,	/* FILE:/tmp/krb5cc_0 */
+ 				       const char *client_string,	/* gd@BER.SUSE.DE */
+ 				       const char *service_string,	/* krbtgt/BER.SUSE.DE@BER.SUSE.DE */
+-				       time_t *new_start_time)
++				       time_t *expire_time)
+ {
+ 	krb5_error_code ret;
+ 	krb5_context context = NULL;
+@@ -1189,8 +1189,8 @@
+ 	
+ 		ret = krb5_cc_store_cred(context, ccache, &creds);
+ 
+-		if (new_start_time) {
+-			*new_start_time = (time_t) creds.times.renew_till;
++		if (expire_time) {
++			*expire_time = (time_t) creds.times.endtime;
+ 		}
+ 
+ 		krb5_free_cred_contents(context, &creds);
+@@ -1247,8 +1247,8 @@
+ 	
+ 		ret = krb5_cc_store_cred(context, ccache, creds);
+ 
+-		if (new_start_time) {
+-			*new_start_time = (time_t) creds->times.renew_till;
++		if (expire_time) {
++			*expire_time = (time_t) creds->times.endtime;
+ 		}
+ 						
+ 		krb5_free_cred_contents(context, &creds_in);
+
+Modified: branches/SAMBA_3_0_25/source/include/includes.h
+===================================================================
+--- branches/SAMBA_3_0_25/source/include/includes.h	2007-06-22 11:03:48 UTC (rev 23581)
++++ branches/SAMBA_3_0_25/source/include/includes.h	2007-06-22 11:20:37 UTC (rev 23582)
+@@ -1182,7 +1182,7 @@
+ int cli_krb5_get_ticket(const char *principal, time_t time_offset, 
+ 			DATA_BLOB *ticket, DATA_BLOB *session_key_krb5, uint32 extra_ap_opts, const char *ccname, time_t *tgs_expire);
+ PAC_LOGON_INFO *get_logon_info_from_pac(PAC_DATA *pac_data);
+-krb5_error_code smb_krb5_renew_ticket(const char *ccache_string, const char *client_string, const char *service_string, time_t *new_start_time);
++krb5_error_code smb_krb5_renew_ticket(const char *ccache_string, const char *client_string, const char *service_string, time_t *expire_time);
+ krb5_error_code kpasswd_err_to_krb5_err(krb5_error_code res_code);
+ krb5_error_code smb_krb5_gen_netbios_krb5_address(smb_krb5_addresses **kerb_addr);
+ krb5_error_code smb_krb5_free_addresses(krb5_context context, smb_krb5_addresses *addr);
+
+Modified: branches/SAMBA_3_0_25/source/libsmb/clikrb5.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/libsmb/clikrb5.c	2007-06-22 11:03:48 UTC (rev 23581)
++++ branches/SAMBA_3_0_25/source/libsmb/clikrb5.c	2007-06-22 11:20:37 UTC (rev 23582)
+@@ -1095,7 +1095,7 @@
+  krb5_error_code smb_krb5_renew_ticket(const char *ccache_string,	/* FILE:/tmp/krb5cc_0 */
+ 				       const char *client_string,	/* gd@BER.SUSE.DE */
+ 				       const char *service_string,	/* krbtgt/BER.SUSE.DE@BER.SUSE.DE */
+-				       time_t *new_start_time)
++				       time_t *expire_time)
+ {
+ 	krb5_error_code ret;
+ 	krb5_context context = NULL;
+@@ -1150,8 +1150,8 @@
+ 	
+ 		ret = krb5_cc_store_cred(context, ccache, &creds);
+ 
+-		if (new_start_time) {
+-			*new_start_time = (time_t) creds.times.renew_till;
++		if (expire_time) {
++			*expire_time = (time_t) creds.times.endtime;
+ 		}
+ 
+ 		krb5_free_cred_contents(context, &creds);
+@@ -1208,8 +1208,8 @@
+ 	
+ 		ret = krb5_cc_store_cred(context, ccache, creds);
+ 
+-		if (new_start_time) {
+-			*new_start_time = (time_t) creds->times.renew_till;
++		if (expire_time) {
++			*expire_time = (time_t) creds->times.endtime;
+ 		}
+ 						
+ 		krb5_free_cred_contents(context, &creds_in);
+
+Modified: branches/SAMBA_3_0_26/source/include/includes.h
+===================================================================
+--- branches/SAMBA_3_0_26/source/include/includes.h	2007-06-22 11:03:48 UTC (rev 23581)
++++ branches/SAMBA_3_0_26/source/include/includes.h	2007-06-22 11:20:37 UTC (rev 23582)
+@@ -1188,7 +1188,7 @@
+ int cli_krb5_get_ticket(const char *principal, time_t time_offset, 
+ 			DATA_BLOB *ticket, DATA_BLOB *session_key_krb5, uint32 extra_ap_opts, const char *ccname, time_t *tgs_expire);
+ PAC_LOGON_INFO *get_logon_info_from_pac(PAC_DATA *pac_data);
+-krb5_error_code smb_krb5_renew_ticket(const char *ccache_string, const char *client_string, const char *service_string, time_t *new_start_time);
++krb5_error_code smb_krb5_renew_ticket(const char *ccache_string, const char *client_string, const char *service_string, time_t *expire_time);
+ krb5_error_code kpasswd_err_to_krb5_err(krb5_error_code res_code);
+ krb5_error_code smb_krb5_gen_netbios_krb5_address(smb_krb5_addresses **kerb_addr);
+ krb5_error_code smb_krb5_free_addresses(krb5_context context, smb_krb5_addresses *addr);
+
+Modified: branches/SAMBA_3_0_26/source/libsmb/clikrb5.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/libsmb/clikrb5.c	2007-06-22 11:03:48 UTC (rev 23581)
++++ branches/SAMBA_3_0_26/source/libsmb/clikrb5.c	2007-06-22 11:20:37 UTC (rev 23582)
+@@ -1134,7 +1134,7 @@
+  krb5_error_code smb_krb5_renew_ticket(const char *ccache_string,	/* FILE:/tmp/krb5cc_0 */
+ 				       const char *client_string,	/* gd@BER.SUSE.DE */
+ 				       const char *service_string,	/* krbtgt/BER.SUSE.DE@BER.SUSE.DE */
+-				       time_t *new_start_time)
++				       time_t *expire_time)
+ {
+ 	krb5_error_code ret;
+ 	krb5_context context = NULL;
+@@ -1189,8 +1189,8 @@
+ 	
+ 		ret = krb5_cc_store_cred(context, ccache, &creds);
+ 
+-		if (new_start_time) {
+-			*new_start_time = (time_t) creds.times.renew_till;
++		if (expire_time) {
++			*expire_time = (time_t) creds.times.endtime;
+ 		}
+ 
+ 		krb5_free_cred_contents(context, &creds);
+@@ -1247,8 +1247,8 @@
+ 	
+ 		ret = krb5_cc_store_cred(context, ccache, creds);
+ 
+-		if (new_start_time) {
+-			*new_start_time = (time_t) creds->times.renew_till;
++		if (expire_time) {
++			*expire_time = (time_t) creds->times.endtime;
+ 		}
+ 						
+ 		krb5_free_cred_contents(context, &creds_in);
+

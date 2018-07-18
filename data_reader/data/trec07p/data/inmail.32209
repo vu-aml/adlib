@@ -1,0 +1,255 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May  9 07:41:07 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l49Bf6qD028453
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 9 May 2007 07:41:06 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 4370416386F
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed,  9 May 2007 11:41:05 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.3 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id 690DD162AEB; Wed,  9 May 2007 11:40:49 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070509114049.690DD162AEB@lists.samba.org>
+Date: Wed,  9 May 2007 11:40:49 +0000 (GMT)
+Subject: svn commit: samba r22767 - in branches/SAMBA_3_0/source: passdb
+	rpc_server utils
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-05-09 11:40:48 +0000 (Wed, 09 May 2007)
+New Revision: 22767
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22767
+
+Log:
+Argl. Typed in 'svn ci' in the wrong branch. Revert.
+
+Modified:
+   branches/SAMBA_3_0/source/passdb/pdb_interface.c
+   branches/SAMBA_3_0/source/rpc_server/srv_samr_nt.c
+   branches/SAMBA_3_0/source/utils/net_sam.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/passdb/pdb_interface.c
+===================================================================
+--- branches/SAMBA_3_0/source/passdb/pdb_interface.c	2007-05-09 11:39:55 UTC (rev 22766)
++++ branches/SAMBA_3_0/source/passdb/pdb_interface.c	2007-05-09 11:40:48 UTC (rev 22767)
+@@ -904,28 +904,35 @@
+ 	return pdb->del_groupmem(pdb, mem_ctx, group_rid, member_rid);
+ }
+ 
++BOOL pdb_find_alias(const char *name, DOM_SID *sid)
++{
++	struct pdb_methods *pdb = pdb_get_methods();
++	return NT_STATUS_IS_OK(pdb->find_alias(pdb, name, sid));
++}
++
+ NTSTATUS pdb_create_alias(const char *name, uint32 *rid)
+ {
+ 	struct pdb_methods *pdb = pdb_get_methods();
+ 	return pdb->create_alias(pdb, name, rid);
+ }
+ 
+-NTSTATUS pdb_delete_alias(const DOM_SID *sid)
++BOOL pdb_delete_alias(const DOM_SID *sid)
+ {
+ 	struct pdb_methods *pdb = pdb_get_methods();
+-	return pdb->delete_alias(pdb, sid);
++	return NT_STATUS_IS_OK(pdb->delete_alias(pdb, sid));
++							    
+ }
+ 
+-NTSTATUS pdb_get_aliasinfo(const DOM_SID *sid, struct acct_info *info)
++BOOL pdb_get_aliasinfo(const DOM_SID *sid, struct acct_info *info)
+ {
+ 	struct pdb_methods *pdb = pdb_get_methods();
+-	return pdb->get_aliasinfo(pdb, sid, info);
++	return NT_STATUS_IS_OK(pdb->get_aliasinfo(pdb, sid, info));
+ }
+ 
+-NTSTATUS pdb_set_aliasinfo(const DOM_SID *sid, struct acct_info *info)
++BOOL pdb_set_aliasinfo(const DOM_SID *sid, struct acct_info *info)
+ {
+ 	struct pdb_methods *pdb = pdb_get_methods();
+-	return pdb->set_aliasinfo(pdb, sid, info);
++	return NT_STATUS_IS_OK(pdb->set_aliasinfo(pdb, sid, info));
+ }
+ 
+ NTSTATUS pdb_add_aliasmem(const DOM_SID *alias, const DOM_SID *member)
+
+Modified: branches/SAMBA_3_0/source/rpc_server/srv_samr_nt.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpc_server/srv_samr_nt.c	2007-05-09 11:39:55 UTC (rev 22766)
++++ branches/SAMBA_3_0/source/rpc_server/srv_samr_nt.c	2007-05-09 11:40:48 UTC (rev 22767)
+@@ -1354,7 +1354,7 @@
+ 	DOM_SID   sid;
+ 	struct acct_info info;
+ 	uint32    acc_granted;
+-	NTSTATUS status;
++	BOOL ret;
+ 
+ 	r_u->status = NT_STATUS_OK;
+ 
+@@ -1368,11 +1368,11 @@
+ 	}
+ 
+ 	become_root();
+-	status = pdb_get_aliasinfo(&sid, &info);
++	ret = pdb_get_aliasinfo(&sid, &info);
+ 	unbecome_root();
+ 	
+-	if ( !NT_STATUS_IS_OK(status))
+-		return status;
++	if ( !ret )
++		return NT_STATUS_NO_SUCH_ALIAS;
+ 
+ 	if ( !(r_u->ctr = TALLOC_ZERO_P( p->mem_ctx, ALIAS_INFO_CTR )) ) 
+ 		return NT_STATUS_NO_MEMORY;
+@@ -4301,7 +4301,7 @@
+ 	uint32 acc_granted;
+ 	SE_PRIV se_rights;
+ 	BOOL can_add_accounts;
+-	NTSTATUS status;
++	BOOL ret;
+ 	DISP_INFO *disp_info = NULL;
+ 
+ 	DEBUG(5, ("_samr_delete_dom_alias: %d\n", __LINE__));
+@@ -4340,15 +4340,15 @@
+ 		become_root();
+ 
+ 	/* Have passdb delete the alias */
+-	status = pdb_delete_alias(&alias_sid);
++	ret = pdb_delete_alias(&alias_sid);
+ 	
+ 	if ( can_add_accounts )
+ 		unbecome_root();
+ 		
+ 	/******** END SeAddUsers BLOCK *********/
+ 
+-	if ( !NT_STATUS_IS_OK(status))
+-		return status;
++	if ( !ret )
++		return NT_STATUS_ACCESS_DENIED;
+ 
+ 	if (!close_policy_hnd(p, &q_u->alias_pol))
+ 		return NT_STATUS_OBJECT_NAME_INVALID;
+@@ -4693,8 +4693,8 @@
+ 	struct acct_info info;
+ 	ALIAS_INFO_CTR *ctr;
+ 	uint32 acc_granted;
++	BOOL ret;
+ 	BOOL can_mod_accounts;
+-	NTSTATUS status;
+ 	DISP_INFO *disp_info = NULL;
+ 
+ 	if (!get_lsa_policy_samr_sid(p, &q_u->alias_pol, &group_sid, &acc_granted, &disp_info))
+@@ -4709,16 +4709,18 @@
+ 	/* get the current group information */
+ 
+ 	become_root();
+-	status = pdb_get_aliasinfo( &group_sid, &info );
++	ret = pdb_get_aliasinfo( &group_sid, &info );
+ 	unbecome_root();
+ 
+-	if ( !NT_STATUS_IS_OK(status))
+-		return status;
++	if ( !ret ) {
++		return NT_STATUS_NO_SUCH_ALIAS;
++	}
+ 
+ 	switch (ctr->level) {
+ 		case 2:
+ 		{
+ 			fstring group_name, acct_name;
++			NTSTATUS status;
+ 
+ 			/* We currently do not support renaming groups in the
+ 			   the BUILTIN domain.  Refer to util_builtin.c to understand 
+@@ -4774,17 +4776,18 @@
+         if ( can_mod_accounts )
+                 become_root();
+ 
+-        status = pdb_set_aliasinfo( &group_sid, &info );
++        ret = pdb_set_aliasinfo( &group_sid, &info );
+ 
+         if ( can_mod_accounts )
+                 unbecome_root();
+ 
+         /******** End SeAddUsers BLOCK *********/
+ 
+-	if (NT_STATUS_IS_OK(status))
++	if (ret) {
+ 		force_flush_samr_cache(disp_info);
++	}
+ 
+-	return status;
++	return ret ? NT_STATUS_OK : NT_STATUS_ACCESS_DENIED;
+ }
+ 
+ /*********************************************************************
+
+Modified: branches/SAMBA_3_0/source/utils/net_sam.c
+===================================================================
+--- branches/SAMBA_3_0/source/utils/net_sam.c	2007-05-09 11:39:55 UTC (rev 22766)
++++ branches/SAMBA_3_0/source/utils/net_sam.c	2007-05-09 11:40:48 UTC (rev 22767)
+@@ -580,7 +580,7 @@
+ 	DOM_SID sid;
+         enum lsa_SidType type;
+         const char *dom, *name;
+-	NTSTATUS status;
++	int ret;
+ 
+ 	if (argc != 1) {
+ 		d_fprintf(stderr, "usage: net sam deletelocalgroup <name>\n");
+@@ -589,7 +589,7 @@
+ 
+ 	if (!lookup_name(tmp_talloc_ctx(), argv[0], LOOKUP_NAME_ISOLATED,
+ 			 &dom, &name, &sid, &type)) {
+-		d_fprintf(stderr, "Could not find %s.\n", argv[0]);
++		d_fprintf(stderr, "Could not find name %s.\n", argv[0]);
+ 		return -1;
+ 	}
+ 
+@@ -599,13 +599,12 @@
+ 		return -1;
+ 	}
+ 
+-	status = pdb_delete_alias(&sid);
++	ret = pdb_delete_alias(&sid);
+ 
+-	if (!NT_STATUS_IS_OK(status)) {
+-                d_fprintf(stderr, "Deleting local group %s failed with %s\n",
+-                          argv[0], nt_errstr(status));
+-                return -1;
+-        }
++	if ( !ret ) {
++		d_fprintf(stderr, "Could not delete local group %s.\n", argv[0]);
++		return -1;
++	}
+ 
+ 	d_printf("Deleted local group %s.\n", argv[0]);
+ 
+

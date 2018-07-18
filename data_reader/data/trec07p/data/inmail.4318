@@ -1,0 +1,245 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Apr 12 17:11:14 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3CLBD0I002172
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 12 Apr 2007 17:11:14 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id C59A5163877
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 12 Apr 2007 21:10:50 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.6 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 535)
+	id E6FEF162AD4; Thu, 12 Apr 2007 21:10:14 +0000 (GMT)
+To: samba-cvs@samba.org
+From: idra@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070412211014.E6FEF162AD4@lists.samba.org>
+Date: Thu, 12 Apr 2007 21:10:14 +0000 (GMT)
+Subject: svn commit: samba r22204 - in branches: SAMBA_3_0/source/nsswitch
+	SAMBA_3_0_25/source/nsswitch
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 6149
+Lines: 202
+
+Author: idra
+Date: 2007-04-12 21:10:06 +0000 (Thu, 12 Apr 2007)
+New Revision: 22204
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22204
+
+Log:
+
+Workaround to quickly close bug #4508
+This hack makes thing work, but we will need to try again to
+make the getpw* calls fully async, that's the real fix.
+
+
+Modified:
+   branches/SAMBA_3_0/source/nsswitch/idmap.c
+   branches/SAMBA_3_0/source/nsswitch/winbindd.c
+   branches/SAMBA_3_0/source/nsswitch/winbindd_dual.c
+   branches/SAMBA_3_0_25/source/nsswitch/idmap.c
+   branches/SAMBA_3_0_25/source/nsswitch/winbindd.c
+   branches/SAMBA_3_0_25/source/nsswitch/winbindd_dual.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/nsswitch/idmap.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/idmap.c	2007-04-12 19:54:15 UTC (rev 22203)
++++ branches/SAMBA_3_0/source/nsswitch/idmap.c	2007-04-12 21:10:06 UTC (rev 22204)
+@@ -84,6 +84,24 @@
+ 	return NULL;
+ }
+ 
++/* part of a quick hack to avoid loops, need to be sorted out correctly later on */
++static BOOL idmap_in_own_child;
++
++static BOOL idmap_is_in_own_child(void)
++{
++	return idmap_in_own_child;
++}
++
++void reset_idmap_in_own_child(void)
++{
++	idmap_in_own_child = False;
++}
++
++void set_idmap_in_own_child(void)
++{
++	idmap_in_own_child = True;
++}
++
+ /**********************************************************************
+  Allow a module to register itself as a method.
+ **********************************************************************/
+@@ -801,13 +819,18 @@
+ 	if ( ! NT_STATUS_IS_OK(ret)) {
+ 		return NT_STATUS_NONE_MAPPED;
+ 	}
+-	
+-	/* by default calls to winbindd are disabled
+-	   the following call will not recurse so this is safe */
+-	winbind_on();
+-	wbret = winbind_lookup_sid(ctx, map->sid, &domname, &name, &sid_type);
+-	winbind_off();
+ 
++	/* quick hack to make things work, will need proper fix later on */	
++	if (idmap_is_in_own_child()) {
++		/* by default calls to winbindd are disabled
++		   the following call will not recurse so this is safe */
++		winbind_on();
++		wbret = winbind_lookup_sid(ctx, map->sid, &domname, &name, &sid_type);
++		winbind_off();
++	} else {
++		wbret = winbindd_lookup_name_by_sid(ctx, map->sid, &domname, &name, &sid_type);
++	}
++
+ 	/* check if this is a valid SID and then map it */
+ 	if (wbret) {
+ 		switch (sid_type) {
+@@ -1395,3 +1418,4 @@
+ 
+ 	return ret;
+ }
++
+
+Modified: branches/SAMBA_3_0/source/nsswitch/winbindd.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/winbindd.c	2007-04-12 19:54:15 UTC (rev 22203)
++++ branches/SAMBA_3_0/source/nsswitch/winbindd.c	2007-04-12 21:10:06 UTC (rev 22204)
+@@ -1010,6 +1010,9 @@
+ 
+ 	namecache_enable();
+ 
++	/* quick hack to avoid a loop in idmap, proper fix later */
++	reset_idmap_in_own_child();
++
+ 	/* Winbind daemon initialisation */
+ 
+ 	if ( ! NT_STATUS_IS_OK(idmap_init_cache()) ) {
+
+Modified: branches/SAMBA_3_0/source/nsswitch/winbindd_dual.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/winbindd_dual.c	2007-04-12 19:54:15 UTC (rev 22203)
++++ branches/SAMBA_3_0/source/nsswitch/winbindd_dual.c	2007-04-12 21:10:06 UTC (rev 22204)
+@@ -921,6 +921,9 @@
+ 			child);
+ 	}
+ 
++	/* quick hack to avoid a loop in idmap, proper fix later */
++	set_idmap_in_own_child();
++
+ 	while (1) {
+ 
+ 		int ret;
+
+Modified: branches/SAMBA_3_0_25/source/nsswitch/idmap.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/nsswitch/idmap.c	2007-04-12 19:54:15 UTC (rev 22203)
++++ branches/SAMBA_3_0_25/source/nsswitch/idmap.c	2007-04-12 21:10:06 UTC (rev 22204)
+@@ -84,6 +84,24 @@
+ 	return NULL;
+ }
+ 
++/* part of a quick hack to avoid loops, need to be sorted out correctly later on */
++static BOOL idmap_in_own_child;
++
++static BOOL idmap_is_in_own_child(void)
++{
++	return idmap_in_own_child;
++}
++
++void reset_idmap_in_own_child(void)
++{
++	idmap_in_own_child = False;
++}
++
++void set_idmap_in_own_child(void)
++{
++	idmap_in_own_child = True;
++}
++
+ /**********************************************************************
+  Allow a module to register itself as a method.
+ **********************************************************************/
+@@ -801,13 +819,18 @@
+ 	if ( ! NT_STATUS_IS_OK(ret)) {
+ 		return NT_STATUS_NONE_MAPPED;
+ 	}
+-	
+-	/* by default calls to winbindd are disabled
+-	   the following call will not recurse so this is safe */
+-	winbind_on();
+-	wbret = winbind_lookup_sid(ctx, map->sid, &domname, &name, &sid_type);
+-	winbind_off();
+ 
++	/* quick hack to make things work, will need proper fix later on */	
++	if (idmap_is_in_own_child()) {
++		/* by default calls to winbindd are disabled
++		   the following call will not recurse so this is safe */
++		winbind_on();
++		wbret = winbind_lookup_sid(ctx, map->sid, &domname, &name, &sid_type);
++		winbind_off();
++	} else {
++		wbret = winbindd_lookup_name_by_sid(ctx, map->sid, &domname, &name, &sid_type);
++	}
++
+ 	/* check if this is a valid SID and then map it */
+ 	if (wbret) {
+ 		switch (sid_type) {
+@@ -1395,3 +1418,4 @@
+ 
+ 	return ret;
+ }
++
+
+Modified: branches/SAMBA_3_0_25/source/nsswitch/winbindd.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/nsswitch/winbindd.c	2007-04-12 19:54:15 UTC (rev 22203)
++++ branches/SAMBA_3_0_25/source/nsswitch/winbindd.c	2007-04-12 21:10:06 UTC (rev 22204)
+@@ -1010,6 +1010,9 @@
+ 
+ 	namecache_enable();
+ 
++	/* quick hack to avoid a loop in idmap, proper fix later */
++	reset_idmap_in_own_child();
++
+ 	/* Winbind daemon initialisation */
+ 
+ 	if ( ! NT_STATUS_IS_OK(idmap_init_cache()) ) {
+
+Modified: branches/SAMBA_3_0_25/source/nsswitch/winbindd_dual.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/nsswitch/winbindd_dual.c	2007-04-12 19:54:15 UTC (rev 22203)
++++ branches/SAMBA_3_0_25/source/nsswitch/winbindd_dual.c	2007-04-12 21:10:06 UTC (rev 22204)
+@@ -921,6 +921,9 @@
+ 			child);
+ 	}
+ 
++	/* quick hack to avoid a loop in idmap, proper fix later */
++	set_idmap_in_own_child();
++
+ 	while (1) {
+ 
+ 		int ret;
+

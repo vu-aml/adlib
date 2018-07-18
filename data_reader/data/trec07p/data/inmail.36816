@@ -1,0 +1,118 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 15 09:43:23 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4FDhNqD005565
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 09:43:23 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id ADA1A1638FB
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 13:43:20 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1004)
+	id 0B032162C2D; Tue, 15 May 2007 13:42:54 +0000 (GMT)
+To: samba-cvs@samba.org
+From: gd@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070515134254.0B032162C2D@lists.samba.org>
+Date: Tue, 15 May 2007 13:42:54 +0000 (GMT)
+Subject: svn commit: samba r22901 - in branches: SAMBA_3_0/source/nsswitch
+	SAMBA_3_0_25/source/nsswitch SAMBA_3_0_26/source/nsswitch
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: gd
+Date: 2007-05-15 13:42:53 +0000 (Tue, 15 May 2007)
+New Revision: 22901
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22901
+
+Log:
+When an AD account has UF_DONT_REQUIRE_PREAUTH set we need to fallback to ntlm
+in the kerberized PAM_AUTH.
+
+Guenther
+
+Modified:
+   branches/SAMBA_3_0/source/nsswitch/winbindd_pam.c
+   branches/SAMBA_3_0_25/source/nsswitch/winbindd_pam.c
+   branches/SAMBA_3_0_26/source/nsswitch/winbindd_pam.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/nsswitch/winbindd_pam.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/winbindd_pam.c	2007-05-15 12:18:17 UTC (rev 22900)
++++ branches/SAMBA_3_0/source/nsswitch/winbindd_pam.c	2007-05-15 13:42:53 UTC (rev 22901)
+@@ -566,6 +566,14 @@
+ 		http_timestring(ticket_lifetime), (int)ticket_lifetime, 
+ 		http_timestring(renewal_until), (int)renewal_until));
+ 
++	/* we cannot continue with krb5 when UF_DONT_REQUIRE_PREAUTH is set,
++	 * in that case fallback to NTLM - gd */ 
++
++	if ((ticket_lifetime == 0) && (renewal_until == 0)) {
++		result = NT_STATUS_INVALID_LOGON_TYPE;
++		goto failed;
++	}
++
+ 	client_princ = talloc_strdup(state->mem_ctx, global_myname());
+ 	if (client_princ == NULL) {
+ 		result = NT_STATUS_NO_MEMORY;
+
+Modified: branches/SAMBA_3_0_25/source/nsswitch/winbindd_pam.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/nsswitch/winbindd_pam.c	2007-05-15 12:18:17 UTC (rev 22900)
++++ branches/SAMBA_3_0_25/source/nsswitch/winbindd_pam.c	2007-05-15 13:42:53 UTC (rev 22901)
+@@ -579,6 +579,14 @@
+ 		http_timestring(ticket_lifetime), (int)ticket_lifetime, 
+ 		http_timestring(renewal_until), (int)renewal_until));
+ 
++	/* we cannot continue with krb5 when UF_DONT_REQUIRE_PREAUTH is set,
++	 * in that case fallback to NTLM - gd */ 
++
++	if ((ticket_lifetime == 0) && (renewal_until == 0)) {
++		result = NT_STATUS_INVALID_LOGON_TYPE;
++		goto failed;
++	}
++
+ 	client_princ = talloc_strdup(state->mem_ctx, global_myname());
+ 	if (client_princ == NULL) {
+ 		result = NT_STATUS_NO_MEMORY;
+
+Modified: branches/SAMBA_3_0_26/source/nsswitch/winbindd_pam.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/nsswitch/winbindd_pam.c	2007-05-15 12:18:17 UTC (rev 22900)
++++ branches/SAMBA_3_0_26/source/nsswitch/winbindd_pam.c	2007-05-15 13:42:53 UTC (rev 22901)
+@@ -594,6 +594,14 @@
+ 		http_timestring(ticket_lifetime), (int)ticket_lifetime, 
+ 		http_timestring(renewal_until), (int)renewal_until));
+ 
++	/* we cannot continue with krb5 when UF_DONT_REQUIRE_PREAUTH is set,
++	 * in that case fallback to NTLM - gd */ 
++
++	if ((ticket_lifetime == 0) && (renewal_until == 0)) {
++		result = NT_STATUS_INVALID_LOGON_TYPE;
++		goto failed;
++	}
++
+ 	client_princ = talloc_strdup(state->mem_ctx, global_myname());
+ 	if (client_princ == NULL) {
+ 		result = NT_STATUS_NO_MEMORY;
+

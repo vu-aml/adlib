@@ -1,0 +1,133 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon May 21 13:39:37 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4LHdaqD001876
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 21 May 2007 13:39:36 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 4C4F81638A1
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 21 May 2007 17:39:33 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 620)
+	id 5FC11162BCA; Mon, 21 May 2007 17:39:06 +0000 (GMT)
+To: samba-cvs@samba.org
+From: metze@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070521173906.5FC11162BCA@lists.samba.org>
+Date: Mon, 21 May 2007 17:39:06 +0000 (GMT)
+Subject: svn commit: samba r23045 - in
+	branches/SAMBA_4_0/source/smb_server/smb2: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: metze
+Date: 2007-05-21 17:39:05 +0000 (Mon, 21 May 2007)
+New Revision: 23045
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23045
+
+Log:
+forward SMB2 oplock breaks to the client
+
+metze
+Modified:
+   branches/SAMBA_4_0/source/smb_server/smb2/receive.c
+   branches/SAMBA_4_0/source/smb_server/smb2/tcon.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/smb_server/smb2/receive.c
+===================================================================
+--- branches/SAMBA_4_0/source/smb_server/smb2/receive.c	2007-05-21 17:23:56 UTC (rev 23044)
++++ branches/SAMBA_4_0/source/smb_server/smb2/receive.c	2007-05-21 17:39:05 UTC (rev 23045)
+@@ -44,7 +44,7 @@
+ 	return -1;
+ }
+ 
+-static struct smb2srv_request *smb2srv_init_request(struct smbsrv_connection *smb_conn)
++struct smb2srv_request *smb2srv_init_request(struct smbsrv_connection *smb_conn)
+ {
+ 	struct smb2srv_request *req;
+ 
+
+Modified: branches/SAMBA_4_0/source/smb_server/smb2/tcon.c
+===================================================================
+--- branches/SAMBA_4_0/source/smb_server/smb2/tcon.c	2007-05-21 17:23:56 UTC (rev 23044)
++++ branches/SAMBA_4_0/source/smb_server/smb2/tcon.c	2007-05-21 17:39:05 UTC (rev 23045)
+@@ -31,9 +31,56 @@
+ /*
+   send an oplock break request to a client
+ */
+-static NTSTATUS smb2srv_send_oplock_break(void *p, struct ntvfs_handle *ntvfs, uint8_t level)
++static NTSTATUS smb2srv_send_oplock_break(void *p, struct ntvfs_handle *h, uint8_t level)
+ {
+-	DEBUG(0,("TODO: we don't pass SMB2 oplock breaks to the Clients yet!\n"));
++	struct smbsrv_handle *handle = talloc_get_type(h->frontend_data.private_data,
++						       struct smbsrv_handle);
++	struct smb2srv_request *req;
++	NTSTATUS status;
++
++	/* setup a dummy request structure */
++	req = smb2srv_init_request(handle->tcon->smb_conn);
++	NT_STATUS_HAVE_NO_MEMORY(req);
++
++	req->in.buffer		= talloc_size(req, NBT_HDR_SIZE + SMB2_MIN_SIZE);
++	NT_STATUS_HAVE_NO_MEMORY(req->in.buffer);
++	req->in.size		= NBT_HDR_SIZE + SMB2_MIN_SIZE;
++	req->in.allocated	= req->in.size;
++
++	req->in.hdr		= req->in.buffer+ NBT_HDR_SIZE;
++	req->in.body		= req->in.hdr	+ SMB2_HDR_BODY;
++	req->in.body_size	= req->in.size	- (SMB2_HDR_BODY+NBT_HDR_SIZE);
++	req->in.dynamic 	= NULL;
++
++	req->seqnum		= UINT64_MAX;
++
++	SIVAL(req->in.hdr, 0,				SMB2_MAGIC);
++	SSVAL(req->in.hdr, SMB2_HDR_LENGTH,		SMB2_HDR_BODY);
++	SSVAL(req->in.hdr, SMB2_HDR_PAD1,		0);
++	SIVAL(req->in.hdr, SMB2_HDR_STATUS,		0);
++	SSVAL(req->in.hdr, SMB2_HDR_OPCODE,		SMB2_OP_BREAK);
++	SSVAL(req->in.hdr, SMB2_HDR_UNKNOWN1,		0);
++	SIVAL(req->in.hdr, SMB2_HDR_FLAGS,		0);
++	SIVAL(req->in.hdr, SMB2_HDR_CHAIN_OFFSET,	0);
++	SBVAL(req->in.hdr, SMB2_HDR_SEQNUM,		0);
++	SIVAL(req->in.hdr, SMB2_HDR_PID,		0);
++	SIVAL(req->in.hdr, SMB2_HDR_TID,		0);
++	SBVAL(req->in.hdr, SMB2_HDR_UID,		0);
++	memset(req->in.hdr+SMB2_HDR_SIG, 0, 16);
++
++	SSVAL(req->in.body, 0, 2);
++
++	status = smb2srv_setup_reply(req, 0x18, False, 0);
++	NT_STATUS_NOT_OK_RETURN(status);
++
++	SSVAL(req->out.hdr, SMB2_HDR_UNKNOWN1,	0x0000);
++
++	SSVAL(req->out.body, 0x02, 0x0001);
++	SIVAL(req->out.body, 0x04, 0x00000000);
++	smb2srv_push_handle(req->out.body, 0x08, h);
++
++	smb2srv_send_reply(req);
++
+ 	return NT_STATUS_OK;
+ }
+ 
+

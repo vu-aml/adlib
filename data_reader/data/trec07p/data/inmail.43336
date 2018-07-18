@@ -1,0 +1,124 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri May 25 00:02:48 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4P42mqD014207
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 25 May 2007 00:02:48 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id DB4CA162BD9
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 25 May 2007 04:02:43 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.5 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL,UPPERCASE_25_50 autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 540)
+	id 45AA7162AC8; Fri, 25 May 2007 04:02:26 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jerry@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070525040226.45AA7162AC8@lists.samba.org>
+Date: Fri, 25 May 2007 04:02:26 +0000 (GMT)
+Subject: svn commit: samba r23130 - in branches/SAMBA_3_0_RELEASE: .
+	source/include source/libsmb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: jerry
+Date: 2007-05-25 04:02:25 +0000 (Fri, 25 May 2007)
+New Revision: 23130
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23130
+
+Log:
+merge Derrell's change from SAMBA_3_0_25 svn r23120
+Modified:
+   branches/SAMBA_3_0_RELEASE/WHATSNEW.txt
+   branches/SAMBA_3_0_RELEASE/source/include/nterr.h
+   branches/SAMBA_3_0_RELEASE/source/libsmb/clierror.c
+   branches/SAMBA_3_0_RELEASE/source/libsmb/clitrans.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0_RELEASE/WHATSNEW.txt
+===================================================================
+--- branches/SAMBA_3_0_RELEASE/WHATSNEW.txt	2007-05-24 23:38:46 UTC (rev 23129)
++++ branches/SAMBA_3_0_RELEASE/WHATSNEW.txt	2007-05-25 04:02:25 UTC (rev 23130)
+@@ -98,8 +98,10 @@
+     * BUG 4599: Fix failure when setting attributes.
+     * BUG 4634: Type of the size parameter to getpeername in
+       libsmbclient code was wrong.
++    * Fix libsmbclient interaction with links on Vista and properly
++      detect non-NTSTATUS errors.
++    
+ 
+-
+ o   Jim McDonough <jmcd@us.ibm.com>
+     * BUG 4630: Fix special case of unix_to_nt_time() for TIME_T_MAX
+       and the output from http_timestring().
+
+Modified: branches/SAMBA_3_0_RELEASE/source/include/nterr.h
+===================================================================
+--- branches/SAMBA_3_0_RELEASE/source/include/nterr.h	2007-05-24 23:38:46 UTC (rev 23129)
++++ branches/SAMBA_3_0_RELEASE/source/include/nterr.h	2007-05-25 04:02:25 UTC (rev 23130)
+@@ -30,6 +30,9 @@
+ #define STATUS_NO_MORE_FILES              NT_STATUS(0x80000006)
+ #define NT_STATUS_NO_MORE_ENTRIES         NT_STATUS(0x8000001a)
+ 
++/* Vista Status codes. */
++#define STATUS_INACCESSIBLE_SYSTEM_SHORTCUT         NT_STATUS(0x8000002d)
++
+ #define STATUS_MORE_ENTRIES               NT_STATUS(0x0105)
+ #define STATUS_SOME_UNMAPPED              NT_STATUS(0x0107)
+ #define ERROR_INVALID_PARAMETER		  NT_STATUS(0x0057)
+
+Modified: branches/SAMBA_3_0_RELEASE/source/libsmb/clierror.c
+===================================================================
+--- branches/SAMBA_3_0_RELEASE/source/libsmb/clierror.c	2007-05-24 23:38:46 UTC (rev 23129)
++++ branches/SAMBA_3_0_RELEASE/source/libsmb/clierror.c	2007-05-25 04:02:25 UTC (rev 23130)
+@@ -380,6 +380,15 @@
+ 		return cli_errno_from_nt(status);
+         }
+ 
++        /*
++         * Yuck!  A special case for this Vista error.  Since its high-order
++         * byte isn't 0xc0, it doesn't match cli_is_nt_error() above.
++         */
++        status = cli_nt_error(cli);
++        if (NT_STATUS_V(status) == NT_STATUS_V(STATUS_INACCESSIBLE_SYSTEM_SHORTCUT)) {
++            return EACCES;
++        }
++
+ 	/* for other cases */
+ 	return EINVAL;
+ }
+
+Modified: branches/SAMBA_3_0_RELEASE/source/libsmb/clitrans.c
+===================================================================
+--- branches/SAMBA_3_0_RELEASE/source/libsmb/clitrans.c	2007-05-24 23:38:46 UTC (rev 23129)
++++ branches/SAMBA_3_0_RELEASE/source/libsmb/clitrans.c	2007-05-25 04:02:25 UTC (rev 23130)
+@@ -197,7 +197,9 @@
+ 	 */
+ 	status = cli_nt_error(cli);
+ 	
+-	if (NT_STATUS_IS_ERR(status) || NT_STATUS_EQUAL(status,STATUS_NO_MORE_FILES)) {
++	if (NT_STATUS_IS_ERR(status) ||
++            NT_STATUS_EQUAL(status,STATUS_NO_MORE_FILES) ||
++            NT_STATUS_EQUAL(status,STATUS_INACCESSIBLE_SYSTEM_SHORTCUT)) {
+ 		goto out;
+ 	}
+ 
+

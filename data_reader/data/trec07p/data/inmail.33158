@@ -1,0 +1,130 @@
+From sugar-bounces@laptop.org  Thu May 10 11:32:51 2007
+Return-Path: <sugar-bounces@laptop.org>
+Received: from pedal.laptop.org (pedal.laptop.org [18.85.2.148])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4AFWoqD011069
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 10 May 2007 11:32:50 -0400
+Received: from pedal.laptop.org (localhost [127.0.0.1])
+	by pedal.laptop.org (Postfix) with ESMTP id 2CD4A4F6AF;
+	Thu, 10 May 2007 11:32:34 -0400 (EDT)
+X-Original-To: sugar@laptop.org
+Delivered-To: sugar@laptop.org
+Received: from spam.laptop.org (spam.laptop.org [18.85.46.23])
+	by pedal.laptop.org (Postfix) with ESMTP id D00794F6AF
+	for <sugar@laptop.org>; Thu, 10 May 2007 11:32:32 -0400 (EDT)
+X-ASG-Debug-ID: 1178811165-450f000c0000-3Xmyjt
+X-Barracuda-URL: http://18.85.46.23:8000/cgi-bin/mark.cgi
+X-Barracuda-Connect: dhansak.collabora.co.uk[195.10.223.134]
+X-Barracuda-Start-Time: 1178811165
+X-Barracuda-Encrypted: DHE-RSA-AES256-SHA
+Received: from dhansak.collabora.co.uk (dhansak.collabora.co.uk
+	[195.10.223.134])
+	(using TLSv1 with cipher DHE-RSA-AES256-SHA (256/256 bits))
+	(No client certificate requested)
+	by spam.laptop.org (Spam Firewall) with ESMTP id A472E98D8
+	for <sugar@laptop.org>; Thu, 10 May 2007 11:32:46 -0400 (EDT)
+Received: by dhansak.collabora.co.uk (Postfix, from userid 1014)
+	id 8773530B00BA; Thu, 10 May 2007 16:32:45 +0100 (BST)
+Date: Thu, 10 May 2007 16:32:35 +0100
+From: Simon McVittie <simon.mcvittie@collabora.co.uk>
+To: sugar@laptop.org
+X-ASG-Orig-Subj: Obtaining Buddy objects as contacts are encountered
+Message-ID: <20070510153235.GA30162@celebrin.pseudorandom.co.uk>
+MIME-Version: 1.0
+Content-Disposition: inline
+User-Agent: Mutt/1.5.13 (2006-08-11)
+X-Barracuda-Bayes: INNOCENT GLOBAL 0.0001 1.0000 -2.0204
+X-Barracuda-Virus-Scanned: by Barracuda Spam Firewall at laptop.org
+X-Barracuda-Spam-Score: -1.52
+X-Barracuda-Spam-Status: No, SCORE=-1.52 using global scores of TAG_LEVEL=3.5
+	QUARANTINE_LEVEL=1000.0 KILL_LEVEL=5.5 tests=BSF_RULE7568M
+X-Barracuda-Spam-Report: Code version 3.1, rules version 3.1.16552
+	Rule breakdown below
+	pts rule name              description
+	---- ----------------------
+	--------------------------------------------------
+	0.50 BSF_RULE7568M          BODY: Custom Rule 7568M
+Subject: [sugar] Obtaining Buddy objects as contacts are encountered
+X-BeenThere: sugar@laptop.org
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Discussion of OLPC design,
+	desktop platform and user experience" <sugar.laptop.org>
+List-Unsubscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=unsubscribe>
+List-Archive: <http://mailman.laptop.org/pipermail/sugar>
+List-Post: <mailto:sugar@laptop.org>
+List-Help: <mailto:sugar-request@laptop.org?subject=help>
+List-Subscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: sugar-bounces@laptop.org
+Errors-To: sugar-bounces@laptop.org
+
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA1
+
+At the moment the Presence Service API assumes we're subscribed to the
+presence of every contact we'll ever encounter, which obviously can't scale to
+a school.
+
+When child joins an activity we're in, the presence service needs to be able
+to give us a Buddy object for them without making network round-trips -
+otherwise the activity will have no way to identify them. We can't just ignore
+them (omit them from the GUI) until we've made network round-trips to ask
+the server about them, because they might start participating in the activity
+before we get the server's reply, and it would be confusing to get messages
+from an apparently nonexistent buddy (also, activity authors are
+unlikely to handle this correctly).
+
+At the same time, we don't want to have two Buddy objects in the PS process
+representing the same child, and have to do some sort of coalescing process
+when we work out that they actually represent the same person; so from just
+the information we immediately have when we first encounter someone,
+we should be able to make the decision whether two contacts are in fact the
+same.
+
+For the server case, the JID is constructed as follows:
+
+	hex(sha1(public key)) + '@' + configured server
+
+To avoid spoofing we need to require that the server will only create new
+accounts (or almost equivalently, allow login to an account) if the client can
+demonstrate knowledge of a private key for which the public key's hex SHA-1
+is the username part of the desired JID.
+
+For the link-local (mesh) case, I believe the idea is that the public key
+and other OLPC info is in the mDNS record, so by the time we can interact with
+someone, we already have all relevant information about them? If so, and we
+put the corresponding server-JID in the mDNS record, then we can again always
+know which child we're talking to.
+
+Again, to avoid spoofing we need to require that the mDNS record demonstrates
+knowledge of the private key; perhaps it could include a signature of the IP
+address or IP:port or whatever, and a timestamp, made using the private key.
+
+Given this, we should be able to create Buddy objects from arbitrary Telepathy
+handles (a handle represents the unique ID on the instant messaging system)
+and know at least whether they're distinct; the Buddy object can then have
+signals it emits as its alias, colour, etc. arrive. The worst case in the GUI
+will be that a grey XO with no name appears and starts participating, and
+shortly afterwards, its colour changes to the right colour and it gains the
+right alias.
+
+Thoughts?
+	Simon
+- -- 
+Simon McVittie, Collabora Ltd.: http://www.collabora.co.uk/
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.6 (GNU/Linux)
+Comment: OpenPGP key: http://www.pseudorandom.co.uk/2003/contact/ or pgp.net
+
+iD8DBQFGQzsTWSc8zVUw7HYRAh0vAKC9jDBXbJRaLSV9+YMeF/SMdn/+aQCg7Tkh
+2QSiCi/K46rR+pRVEbOdb8k=
+=m749
+-----END PGP SIGNATURE-----
+_______________________________________________
+Sugar mailing list
+Sugar@laptop.org
+http://mailman.laptop.org/mailman/listinfo/sugar
+

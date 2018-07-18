@@ -1,0 +1,114 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat May 12 05:59:16 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4C9xGqD009505
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 12 May 2007 05:59:16 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 72424163830
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 12 May 2007 09:59:14 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 50FFF162AC5; Sat, 12 May 2007 09:58:35 +0000 (GMT)
+Date: Sat, 12 May 2007 19:55:56 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070512095835.50FFF162AC5@lists.samba.org>
+Subject: Rev 290: the retry client code is no longer needed now that we use
+	a freeze on recovery in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 290
+revision-id: tridge@samba.org-20070512095555-59wxjjrspw50l8s9
+parent: tridge@samba.org-20070512095518-py0kxx2oypiqunse
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Sat 2007-05-12 19:55:55 +1000
+message:
+  the retry client code is no longer needed now that we use a freeze on recovery
+modified:
+  common/ctdb_daemon.c           ctdb_daemon.c-20070409200331-3el1kqgdb9m4ib0g-1
+=== modified file 'common/ctdb_daemon.c'
+--- a/common/ctdb_daemon.c	2007-05-12 08:08:50 +0000
++++ b/common/ctdb_daemon.c	2007-05-12 09:55:55 +0000
+@@ -334,31 +334,10 @@
+ }
+ 
+ 
+-struct ctdb_client_retry {
+-	struct ctdb_client *client;
+-	struct ctdb_req_call *call;
+-};
+-
+ static void daemon_request_call_from_client(struct ctdb_client *client, 
+ 					    struct ctdb_req_call *c);
+ 
+ /*
+-  triggered after a one second delay, retrying a client packet
+-  that was deferred because of the daemon being in recovery mode
+- */
+-static void retry_client_packet(struct event_context *ev, struct timed_event *te, 
+-				struct timeval t, void *private_data)
+-{
+-	struct ctdb_client_retry *retry = talloc_get_type(private_data, struct ctdb_client_retry);
+-
+-	daemon_request_call_from_client(retry->client, retry->call);
+-
+-	talloc_free(retry);
+-}
+-
+-
+-
+-/*
+   this is called when the ctdb daemon received a ctdb request call
+   from a local client over the unix domain socket
+  */
+@@ -374,29 +353,6 @@
+ 	int ret;
+ 	struct ctdb_context *ctdb = client->ctdb;
+ 
+-	if (ctdb->recovery_mode != CTDB_RECOVERY_NORMAL) {
+-		struct ctdb_client_retry *retry;
+-		
+-		DEBUG(0,(__location__ " ctdb call %u from client"
+-			 " while we are in recovery mode. Deferring it\n", 
+-			 c->hdr.reqid)); 
+-
+-		/* hang the event and the structure off client */
+-		retry = talloc(client, struct ctdb_client_retry);
+-		CTDB_NO_MEMORY_VOID(ctdb, retry);
+-		retry->client = client;
+-		retry->call   = c;
+-		
+-		/* this ensures that after the retry happens we
+-		   eventually free this request */
+-		talloc_steal(retry, c);
+-		
+-		event_add_timed(ctdb->ev, retry, timeval_current_ofs(1,0), retry_client_packet, retry);
+-		return;
+-	}
+-
+-
+-
+ 	ctdb->status.total_calls++;
+ 	ctdb->status.pending_calls++;
+ 
+

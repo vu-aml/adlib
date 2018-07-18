@@ -1,0 +1,162 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri May 25 08:21:59 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4PCLwqD027911
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 25 May 2007 08:21:58 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 90D171639AF
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 25 May 2007 12:21:54 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 3BC43162AD1; Fri, 25 May 2007 12:21:30 +0000 (GMT)
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070525122130.3BC43162AD1@lists.samba.org>
+Date: Fri, 25 May 2007 12:21:30 +0000 (GMT)
+Subject: svn commit: samba r23142 - in
+	branches/SAMBA_4_0/source/torture/raw: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: tridge
+Date: 2007-05-25 12:21:29 +0000 (Fri, 25 May 2007)
+New Revision: 23142
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23142
+
+Log:
+added error checking and reconnect on echo replies
+
+Modified:
+   branches/SAMBA_4_0/source/torture/raw/lockbench.c
+   branches/SAMBA_4_0/source/torture/raw/openbench.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/torture/raw/lockbench.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/raw/lockbench.c	2007-05-25 11:59:52 UTC (rev 23141)
++++ branches/SAMBA_4_0/source/torture/raw/lockbench.c	2007-05-25 12:21:29 UTC (rev 23142)
+@@ -244,6 +244,22 @@
+ }
+ 
+ 
++static void echo_completion(struct smbcli_request *req)
++{
++	struct benchlock_state *state = talloc_get_type(req->async.private, 
++							struct benchlock_state);
++	NTSTATUS status = smbcli_request_simple_recv(req);
++	if (NT_STATUS_EQUAL(status, NT_STATUS_END_OF_FILE)) {
++		talloc_free(state->tree);
++		state->tree = NULL;
++		num_connected--;	
++		DEBUG(0,("reopening connection to %s\n", state->dest_host));
++		event_add_timed(state->ev, state->mem_ctx, 
++				timeval_current_ofs(1,0), 
++				reopen_connection, state);
++	}
++}
++
+ static void report_rate(struct event_context *ev, struct timed_event *te, 
+ 			struct timeval t, void *private_data)
+ {
+@@ -258,16 +274,21 @@
+ 	fflush(stdout);
+ 	event_add_timed(ev, state, timeval_current_ofs(1, 0), report_rate, state);
+ 
++	if (!state[i].tree) {
++		return;
++	}
++
+ 	/* send an echo on each interface to ensure it stays alive - this helps
+ 	   with IP takeover */
+ 	for (i=0;i<nprocs;i++) {
+ 		struct smb_echo p;
+-		p.in.repeat_count = 0;
++		struct smbcli_request *req;
++		p.in.repeat_count = 1;
+ 		p.in.size = 0;
+ 		p.in.data = NULL;
+-		if (state[i].tree) {
+-			smb_raw_echo_send(state[i].tree->session->transport, &p);
+-		}
++		req = smb_raw_echo_send(state[i].tree->session->transport, &p);
++		req->async.private = state;
++		req->async.fn      = echo_completion;
+ 	}
+ }
+ 
+
+Modified: branches/SAMBA_4_0/source/torture/raw/openbench.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/raw/openbench.c	2007-05-25 11:59:52 UTC (rev 23141)
++++ branches/SAMBA_4_0/source/torture/raw/openbench.c	2007-05-25 12:21:29 UTC (rev 23142)
+@@ -284,6 +284,22 @@
+ 	}
+ }
+ 
++static void echo_completion(struct smbcli_request *req)
++{
++	struct benchopen_state *state = talloc_get_type(req->async.private, 
++							struct benchopen_state);
++	NTSTATUS status = smbcli_request_simple_recv(req);
++	if (NT_STATUS_EQUAL(status, NT_STATUS_END_OF_FILE)) {
++		talloc_free(state->tree);
++		state->tree = NULL;
++		num_connected--;	
++		DEBUG(0,("reopening connection to %s\n", state->dest_host));
++		event_add_timed(state->ev, state->mem_ctx, 
++				timeval_current_ofs(1,0), 
++				reopen_connection, state);
++	}
++}
++
+ static void report_rate(struct event_context *ev, struct timed_event *te, 
+ 			struct timeval t, void *private_data)
+ {
+@@ -298,16 +314,21 @@
+ 	fflush(stdout);
+ 	event_add_timed(ev, state, timeval_current_ofs(1, 0), report_rate, state);
+ 
++	if (!state[i].tree) {
++		return;
++	}
++
+ 	/* send an echo on each interface to ensure it stays alive - this helps
+ 	   with IP takeover */
+ 	for (i=0;i<nprocs;i++) {
+ 		struct smb_echo p;
+-		p.in.repeat_count = 0;
++		struct smbcli_request *req;
++		p.in.repeat_count = 1;
+ 		p.in.size = 0;
+ 		p.in.data = NULL;
+-		if (state[i].tree) {
+-			smb_raw_echo_send(state[i].tree->session->transport, &p);
+-		}
++		req = smb_raw_echo_send(state[i].tree->session->transport, &p);
++		req->async.private = state;
++		req->async.fn      = echo_completion;
+ 	}
+ }
+ 
+

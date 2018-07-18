@@ -1,0 +1,180 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Apr 11 01:11:52 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3B5Bp0I012952
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 11 Apr 2007 01:11:51 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 898D916382C
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 11 Apr 2007 05:11:28 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.9 required=3.8 tests=AWL,BAYES_50,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 4AD18162B01; Wed, 11 Apr 2007 05:10:39 +0000 (GMT)
+Date: Wed, 11 Apr 2007 14:26:14 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070411051039.4AD18162B01@lists.samba.org>
+Subject: Rev 90: fixed sending messages to ourselves in non-daemon mode in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 4079
+Lines: 139
+
+------------------------------------------------------------
+revno: 90
+revision-id: tridge@samba.org-20070411042614-eada54e55ac13cf8
+parent: tridge@samba.org-20070411040501-043570f3088576d6
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Wed 2007-04-11 14:26:14 +1000
+message:
+  fixed sending messages to ourselves in non-daemon mode
+modified:
+  common/ctdb_message.c          ctdb_message.c-20070208224107-9dnio7x7z33prrmt-1
+  include/ctdb_private.h         ctdb_private.h-20061117234101-o3qt14umlg9en8z0-13
+=== modified file 'common/ctdb_message.c'
+--- a/common/ctdb_message.c	2007-04-11 04:05:01 +0000
++++ b/common/ctdb_message.c	2007-04-11 04:26:14 +0000
+@@ -30,42 +30,101 @@
+ 
+ 
+ /*
+-  called when a CTDB_REQ_MESSAGE packet comes in
+-
+   this dispatches the messages to the registered ctdb message handler
+ */
+-void ctdb_request_message(struct ctdb_context *ctdb, struct ctdb_req_header *hdr)
++static int ctdb_dispatch_message(struct ctdb_context *ctdb, uint32_t srvid, TDB_DATA data)
+ {
+-	struct ctdb_req_message *c = (struct ctdb_req_message *)hdr;
+ 	struct ctdb_message_list *ml;
+-	TDB_DATA data;
+ 
+ 	/* XXX we need a must faster way of finding the matching srvid
+ 	   - maybe a tree? */
+ 	for (ml=ctdb->message_list;ml;ml=ml->next) {
+-		if (ml->srvid == c->srvid) break;
++		if (ml->srvid == srvid) break;
+ 	}
+ 	if (ml == NULL) {
+-		printf("no msg handler\n");
++		printf("no msg handler for srvid=%u\n", srvid);
+ 		/* no registered message handler */
+-		return;
++		return -1;
+ 	}
+ 
++	ml->message_handler(ctdb, srvid, data, ml->message_private);
++	return 0;
++}
++
++
++/*
++  called when a CTDB_REQ_MESSAGE packet comes in
++*/
++void ctdb_request_message(struct ctdb_context *ctdb, struct ctdb_req_header *hdr)
++{
++	struct ctdb_req_message *c = (struct ctdb_req_message *)hdr;
++	TDB_DATA data;
++
+ 	data.dptr = &c->data[0];
+ 	data.dsize = c->datalen;
+-	ml->message_handler(ctdb, c->srvid, data, ml->message_private);
+-}
+-
++
++	ctdb_dispatch_message(ctdb, c->srvid, data);
++}
++
++/*
++  this local messaging handler is ugly, but is needed to prevent
++  recursion in ctdb_send_message() when the destination node is the
++  same as the source node
++ */
++struct ctdb_local_message {
++	struct ctdb_context *ctdb;
++	uint32_t srvid;
++	TDB_DATA data;
++};
++
++static void ctdb_local_message_trigger(struct event_context *ev, struct timed_event *te, 
++				       struct timeval t, void *private)
++{
++	struct ctdb_local_message *m = talloc_get_type(private, 
++						       struct ctdb_local_message);
++	int res;
++
++	res = ctdb_dispatch_message(m->ctdb, m->srvid, m->data);
++	if (res != 0) {
++		printf("Failed to dispatch message for srvid=%u\n", m->srvid);
++	}
++	talloc_free(m);
++}
++
++static int ctdb_local_message(struct ctdb_context *ctdb, uint32_t srvid, TDB_DATA data)
++{
++	struct ctdb_local_message *m;
++	m = talloc(ctdb, struct ctdb_local_message);
++	CTDB_NO_MEMORY(ctdb, m);
++
++	m->ctdb = ctdb;
++	m->srvid = srvid;
++	m->data  = data;
++	m->data.dptr = talloc_memdup(m, m->data.dptr, m->data.dsize);
++	if (m->data.dptr == NULL) {
++		talloc_free(m);
++		return -1;
++	}
++
++	/* this needs to be done as an event to prevent recursion */
++	event_add_timed(ctdb->ev, m, timeval_zero(), ctdb_local_message_trigger, m);
++	return 0;
++}
+ 
+ /*
+   send a ctdb message
+ */
+ int ctdb_daemon_send_message(struct ctdb_context *ctdb, uint32_t vnn,
+-		      uint32_t srvid, TDB_DATA data)
++			     uint32_t srvid, TDB_DATA data)
+ {
+ 	struct ctdb_req_message *r;
+ 	int len;
+ 
++	/* see if this is a message to ourselves */
++	if (vnn == ctdb->vnn && !(ctdb->flags & CTDB_FLAG_SELF_CONNECT)) {
++		return ctdb_local_message(ctdb, srvid, data);
++	}
++
+ 	len = offsetof(struct ctdb_req_message, data) + data.dsize;
+ 	r = ctdb->methods->allocate_pkt(ctdb, len);
+ 	CTDB_NO_MEMORY(ctdb, r);
+
+=== modified file 'include/ctdb_private.h'
+--- a/include/ctdb_private.h	2007-04-11 04:05:01 +0000
++++ b/include/ctdb_private.h	2007-04-11 04:26:14 +0000
+@@ -381,4 +381,5 @@
+ int ctdb_daemon_send_message(struct ctdb_context *ctdb, uint32_t vnn,
+ 			     uint32_t srvid, TDB_DATA data);
+ 
++
+ #endif
+

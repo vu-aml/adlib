@@ -1,0 +1,147 @@
+From r-help-bounces@stat.math.ethz.ch  Wed May 30 23:55:39 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4V3tbhB022892
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 30 May 2007 23:55:39 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4V3s9Mt025231;
+	Thu, 31 May 2007 05:54:23 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.0 required=5.0 tests=AWL, BAYES_50,
+	DKIM_POLICY_SIGNSOME autolearn=no version=3.2.0
+Received: from tajo.ucsd.edu (tajo.ucsd.edu [137.110.122.165])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4V3rtNu025171
+	(version=TLSv1/SSLv3 cipher=DHE-RSA-AES256-SHA bits=256 verify=NO)
+	for <r-help@stat.math.ethz.ch>; Thu, 31 May 2007 05:53:56 +0200
+Received: from cberry (helo=localhost)
+	by tajo.ucsd.edu with local-esmtp (Exim 4.60)
+	(envelope-from <cberry@tajo.ucsd.edu>)
+	id 1Htbnc-0000di-EP; Wed, 30 May 2007 20:58:08 -0700
+Date: Wed, 30 May 2007 20:58:08 -0700
+From: "Charles C. Berry" <cberry@tajo.ucsd.edu>
+To: Chrisitan Falde <cfalde@hotmail.com>
+In-Reply-To: <BAY144-W11ED41E12E6F42F6BD707BC62E0@phx.gbl>
+Message-ID: <Pine.LNX.4.64.0705302047140.2449@tajo.ucsd.edu>
+References: <BAY144-W11ED41E12E6F42F6BD707BC62E0@phx.gbl>
+MIME-Version: 1.0
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] Generating Data using Formulas
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+
+Christian,
+
+The formula language is not suited to such recursive useage 
+AFAICS.
+
+You can _vectorize_ your code like this:
+
+cmat <- outer( 1:25, 1:25, function(y,x) ifelse( x>y, 0, 0.8^(y-x) ) )
+res <- replicate(1000,{
+ 	y <- 1 + cmat %*% rnorm(25)
+ 	coef(lm(y[-1]~y[-25]))
+ 			})
+rowMeans(res) # mean of 1000 replicates
+
+HTH,
+
+Chuck
+
+On Tue, 29 May 2007, Chrisitan Falde wrote:
+
+> Hello,
+>
+> My name is Christian Falde.  I am new to R.
+>
+> My problem is this.  I am attempting to learn R on my own. In so doing I 
+> am using some problems from Davidson and MacKinnon Econometric Theory 
+> and Methods to do so.  This is because I can already do the some of the 
+> problems in SAS so I am attempting to rework them using R. Seemed 
+> logical to me, now I am stuck and its really bugging me.
+>
+>
+> The problem is this
+>
+> Generate a data set sample size of 25 with the formula y=1+.8*y(t-1)+ u. 
+> Where y is the dependent, y(t-1) is the dependent variable lagged one 
+> peroid, and u is the classical error term.  Assume y0=0 and the u is 
+> NID(0,1). Use this sample to compute the OLS estimates B1 (1) and 
+> B2(.8).  Repeat at least 100 times and find the average of the B's. 
+> Use these average to estimate the bias of the ols estimators.
+>
+> To start I did the following non lagged program.
+>
+> final<-function(i,j){x<-function(i) {10*i}
+> y<-function(i,j) {1+.8*10*i+100*rnorm(j)}
+> datathreeone<- data.frame(replicate(100,coef(lm(y(i,j)~x(i)))))
+> rowMeans(datathreeone)}
+> final(1:25,25)
+> final(1:50,50)
+> final(1:100,100)
+> final(1:200,200)
+> final(1:10000,10000)
+>
+>
+> Now the "only" thing I need to to is change ".8*10*i"  which is 
+> exogenous to ".8* y(t-1) ".
+>
+> There are two reasons why I did it this way. I needed the rnorm(i) to 
+> generate a new set of u's each replication, and I wanted to be able to 
+> use the function as i did to make the results more concise.
+>
+> For the lag in SAS we used an if then else logic relating to the number 
+> of observation.  This in R would have to be linked to the invisable row 
+> number.  I think I need an index variable for the row.  Perhaps, sorry 
+> thinking while typing.
+>
+> Another reason why I am stuck, the lag function was seemingly straight forward.
+>
+> lag (x, k=1)
+>
+> yet x has to be a matrix so when I tried to do it like above with y as a 
+> function R complained.
+>
+> I have been working on this for a couple of days now so everything is 
+> begining to not make sense.  It just seems to me to get the matrix to 
+> work out I would need to have two matrices.
+>
+> dependent        and           explanatory
+> y1                 =     sum (  1 +.8*0 + 100*rnorm(i))
+> y2                 =     sum ( 1 +.8* (dependent row 1) + 100*rnorm(i))
+> etc
+>
+> I just am not sure how to do that.
+>
+> Please help and thank you for your time,
+>
+> christian falde
+>
+[snip]
+
+Charles C. Berry                        (858) 534-2098
+                                          Dept of Family/Preventive Medicine
+E mailto:cberry@tajo.ucsd.edu	         UC San Diego
+http://biostat.ucsd.edu/~cberry/         La Jolla, San Diego 92093-0901
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

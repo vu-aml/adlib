@@ -1,0 +1,147 @@
+From r-help-bounces@stat.math.ethz.ch  Sat Jun 30 01:21:57 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5U5LuL9002923
+	for <ktwarwic@flax9.uwaterloo.ca>; Sat, 30 Jun 2007 01:21:56 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5U5KFXb005263;
+	Sat, 30 Jun 2007 07:20:34 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=1.0 required=5.0 tests=AWL, BAYES_50,
+	DKIM_POLICY_SIGNSOME, DKIM_SIGNED,
+	WEIRD_QUOTING autolearn=no version=3.2.0
+Received: from web39707.mail.mud.yahoo.com (web39707.mail.mud.yahoo.com
+	[209.191.106.53])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with SMTP id l5U5K6Zb005220
+	for <r-help@stat.math.ethz.ch>; Sat, 30 Jun 2007 07:20:07 +0200
+Received: (qmail 7879 invoked by uid 60001); 30 Jun 2007 05:20:06 -0000
+X-YMail-OSG: 2QmcpFoVM1lTcG5.Az6QhDVc9QW.n5hXhLk1S_tfP6H0tBSS.TVR9W17qIiZYNN2RhEkZeZnsVqQONFUMtpz1OQHifxm2c0uyET7IF.xLP_d3IZaHKU-
+Received: from [66.91.227.183] by web39707.mail.mud.yahoo.com via HTTP;
+	Fri, 29 Jun 2007 22:20:06 PDT
+Date: Fri, 29 Jun 2007 22:20:06 -0700 (PDT)
+From: Stephen Tucker <brown_emu@yahoo.com>
+To: "Spilak,Jacqueline \[Edm\]" <Jacqueline.Spilak@EC.gc.ca>,
+   r-help@stat.math.ethz.ch
+In-Reply-To: <4A6AB38B55B49C44A22E021A83CBEDDB015EB9FF@sr-pnr-exch3.prairie.int.ec.gc.ca>
+MIME-Version: 1.0
+Message-ID: <523378.7539.qm@web39707.mail.mud.yahoo.com>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Subject: Re: [R] Assign name to a name
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+You can just create another variable which contains the "names" you want:
+
+
+## let
+Year <- c(rep(1999,2),rep(2000,2),rep(2001,3))
+
+## one alternative
+getYearCode1 <- function(yr) {
+  # yr can be a vector
+  ifelse(yr==1999,"Year1",
+         ifelse(yr==2000,"Year2",
+                ifelse(yr==2001,"Year3")))
+}
+
+## another alternative
+## more appropriate since you probably want 
+## a single value returned
+getYearCode2 <- function(yr) {
+  # yr is a single value
+  switch(as.character(yr),
+         `1999` = "Year1",
+         `2000` = "Year2",
+         `2001` = "Year3")
+}
+
+## Application:
+## single value
+getYearCode1(Year[1])
+getYearCode2(Year[1])
+## on a vector
+dataset$YearCode <- getYearCode1(Year)
+# or
+dataset$YearCode <- sapply(Year,getYearCode2)
+
+## another option is match()
+df <- data.frame(Year=c(1999,2000,2001),YearCode=c("Year1","Year2","Year3"))
+dataset$YearCode <- df[match(Year,df[,"Year"]),"YearCode"]
+
+##========================================================
+## reading from console
+subset(dataset,YearCode==scan("",what=""))
+subset(dataset,
+   YearCode=={x <- function() {cat("YrCode: ");readline("")}; x()})
+
+## or as a function
+f <- function(x) {
+  g <- function() {
+    x <- function() {
+      cat("YearCode: ");
+      readline("")
+    }
+    subset(dataset,YearCode==x())
+  }
+}
+getSubset1 <- f(dataset)
+
+## type at console. You will be prompted:
+datayear <- getSubset1()
+
+## but easier is
+f <- function(x) {
+  g <- function(y)
+    subset(x,YearCode==y)
+}
+getSubset2 <- f(dataset)
+
+## type at prompt
+datayear <- getSubset1(1999)
+
+
+--- "Spilak,Jacqueline [Edm]" <Jacqueline.Spilak@EC.gc.ca> wrote:
+
+> I would like to know how I can assign a name to a name.  I have a
+> dataset that has different years in it.  I am writing scripts using R
+> and I would like to give a month a generic name and then use the generic
+> name to do different analysis.  The reason for the generic name would be
+> so that I only have to change one thing if I wanted to change the year.
+> For example.
+> Year1 = 1999
+> datayear <- subset(dataset, Year = Year1)
+> I would want  to subset for whatever year is in "Year1".  I am not sure
+> if R does this but it would be great if it does.  Is there also anyway
+> for R to ask the user for the variable in the console without going into
+> the script and then use whatever the user puts in. Thanks for the help.
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-help@stat.math.ethz.ch mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-help
+> PLEASE do read the posting guide
+> http://www.R-project.org/posting-guide.html
+> and provide commented, minimal, self-contained, reproducible code.
+>
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

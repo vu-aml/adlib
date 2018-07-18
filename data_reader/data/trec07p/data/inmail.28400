@@ -1,0 +1,274 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri May  4 05:56:19 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l449uJqD013994
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 4 May 2007 05:56:19 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 89276163885
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri,  4 May 2007 09:56:18 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1004)
+	id 9D204162BDC; Fri,  4 May 2007 09:55:42 +0000 (GMT)
+To: samba-cvs@samba.org
+From: gd@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070504095542.9D204162BDC@lists.samba.org>
+Date: Fri,  4 May 2007 09:55:42 +0000 (GMT)
+Subject: svn commit: samba r22664 - in branches/SAMBA_3_0/source: . include
+	libads libsmb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: gd
+Date: 2007-05-04 09:55:40 +0000 (Fri, 04 May 2007)
+New Revision: 22664
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22664
+
+Log:
+When we have krb5_get_init_creds_opt_get_error() then try to get the NTSTATUS
+codes directly out of the krb5_error edata.
+
+Guenther
+
+Modified:
+   branches/SAMBA_3_0/source/configure.in
+   branches/SAMBA_3_0/source/include/ads.h
+   branches/SAMBA_3_0/source/libads/kerberos.c
+   branches/SAMBA_3_0/source/libsmb/clikrb5.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/configure.in
+===================================================================
+--- branches/SAMBA_3_0/source/configure.in	2007-05-04 09:46:17 UTC (rev 22663)
++++ branches/SAMBA_3_0/source/configure.in	2007-05-04 09:55:40 UTC (rev 22664)
+@@ -3658,6 +3658,7 @@
+   AC_CHECK_FUNC_EXT(initialize_krb5_error_table, $KRB5_LIBS)
+   AC_CHECK_FUNC_EXT(krb5_get_init_creds_opt_alloc, $KRB5_LIBS)
+   AC_CHECK_FUNC_EXT(krb5_get_init_creds_opt_free, $KRB5_LIBS)
++  AC_CHECK_FUNC_EXT(krb5_get_init_creds_opt_get_error, $KRB5_LIBS)
+   AC_CHECK_FUNC_EXT(krb5_enctype_to_string, $KRB5_LIBS)
+ 
+   LIBS="$KRB5_LIBS $LIBS"
+
+Modified: branches/SAMBA_3_0/source/include/ads.h
+===================================================================
+--- branches/SAMBA_3_0/source/include/ads.h	2007-05-04 09:46:17 UTC (rev 22663)
++++ branches/SAMBA_3_0/source/include/ads.h	2007-05-04 09:55:40 UTC (rev 22664)
+@@ -298,6 +298,12 @@
+ 
+ #ifdef HAVE_KRB5
+ typedef struct {
++	NTSTATUS ntstatus;
++	uint32 unknown1;
++	uint32 unknown2; /* 0x00000001 */
++} KRB5_EDATA_NTSTATUS;
++
++typedef struct {
+ #if defined(HAVE_MAGIC_IN_KRB5_ADDRESS) && defined(HAVE_ADDRTYPE_IN_KRB5_ADDRESS) /* MIT */
+ 	krb5_address **addrs;
+ #elif defined(HAVE_KRB5_ADDRESSES) /* Heimdal */
+
+Modified: branches/SAMBA_3_0/source/libads/kerberos.c
+===================================================================
+--- branches/SAMBA_3_0/source/libads/kerberos.c	2007-05-04 09:46:17 UTC (rev 22663)
++++ branches/SAMBA_3_0/source/libads/kerberos.c	2007-05-04 09:55:40 UTC (rev 22664)
+@@ -55,6 +55,127 @@
+ 	return 0;
+ }
+ 
++static BOOL smb_krb5_err_io_nstatus(TALLOC_CTX *mem_ctx, 
++				    DATA_BLOB *edata_blob, 
++				    KRB5_EDATA_NTSTATUS *edata)
++{
++	BOOL ret = False;
++	prs_struct ps;
++
++	if (!mem_ctx || !edata_blob || !edata) 
++		return False;
++
++	if (!prs_init(&ps, edata_blob->length, mem_ctx, UNMARSHALL))
++		return False;
++
++	if (!prs_copy_data_in(&ps, (char *)edata_blob->data, edata_blob->length))
++		goto out;
++
++	prs_set_offset(&ps, 0);
++
++	if (!prs_ntstatus("ntstatus", &ps, 1, &edata->ntstatus))
++		goto out;
++
++	if (!prs_uint32("unknown1", &ps, 1, &edata->unknown1))
++		goto out;
++
++	if (!prs_uint32("unknown2", &ps, 1, &edata->unknown2)) /* only seen 00000001 here */
++		goto out;
++
++	ret = True;
++ out:
++	prs_mem_free(&ps);
++
++	return ret;
++}
++
++ static BOOL smb_krb5_get_ntstatus_from_krb5_error(krb5_error *error,
++						   NTSTATUS *nt_status)
++{
++	DATA_BLOB edata;
++	DATA_BLOB unwrapped_edata;
++	TALLOC_CTX *mem_ctx;
++	KRB5_EDATA_NTSTATUS parsed_edata;
++
++#ifdef HAVE_E_DATA_POINTER_IN_KRB5_ERROR
++	edata = data_blob(error->e_data->data, error->e_data->length);
++#else
++	edata = data_blob(error->e_data.data, error->e_data.length);
++#endif /* HAVE_E_DATA_POINTER_IN_KRB5_ERROR */
++
++#ifdef DEVELOPER
++	dump_data(10, edata.data, edata.length);
++#endif /* DEVELOPER */
++
++	mem_ctx = talloc_init("smb_krb5_get_ntstatus_from_krb5_error");
++	if (mem_ctx == NULL) {
++		data_blob_free(&edata);
++		return False;
++	}
++
++	if (!unwrap_edata_ntstatus(mem_ctx, &edata, &unwrapped_edata)) {
++		data_blob_free(&edata);
++		TALLOC_FREE(mem_ctx);
++		return False;
++	}
++
++	data_blob_free(&edata);
++
++	if (!smb_krb5_err_io_nstatus(mem_ctx, &unwrapped_edata, &parsed_edata)) {
++		data_blob_free(&unwrapped_edata);
++		TALLOC_FREE(mem_ctx);
++		return False;
++	}
++
++	data_blob_free(&unwrapped_edata);
++
++	if (nt_status) {
++		*nt_status = parsed_edata.ntstatus;
++	}
++
++	TALLOC_FREE(mem_ctx);
++
++	return True;
++}
++
++ static BOOL smb_krb5_get_ntstatus_from_krb5_error_init_creds_opt(krb5_context ctx, 
++ 								  krb5_get_init_creds_opt *opt, 
++								  NTSTATUS *nt_status)
++{
++	BOOL ret = False;
++	krb5_error *error = NULL;
++
++#ifdef HAVE_KRB5_GET_INIT_CREDS_OPT_GET_ERROR
++	ret = krb5_get_init_creds_opt_get_error(ctx, opt, &error);
++	if (ret) {
++		DEBUG(1,("krb5_get_init_creds_opt_get_error gave: %s\n", 
++			error_message(ret)));
++		return False;
++	}
++#endif /* HAVE_KRB5_GET_INIT_CREDS_OPT_GET_ERROR */
++
++	if (!error) {
++		DEBUG(1,("no krb5_error\n"));
++		return False;
++	}
++
++#ifdef HAVE_E_DATA_POINTER_IN_KRB5_ERROR
++	if (!error->e_data) {
++#else
++	if (error->e_data.data == NULL) {
++#endif /* HAVE_E_DATA_POINTER_IN_KRB5_ERROR */
++		DEBUG(1,("no edata in krb5_error\n")); 
++		krb5_free_error(ctx, error);
++		return False;
++	}
++
++	ret = smb_krb5_get_ntstatus_from_krb5_error(error, nt_status);
++
++	krb5_free_error(ctx, error);
++
++	return ret;
++}
++
+ /*
+   simulate a kinit, putting the tgt in the given cache location. If cache_name == NULL
+   place in default cache location.
+
+Modified: branches/SAMBA_3_0/source/libsmb/clikrb5.c
+===================================================================
+--- branches/SAMBA_3_0/source/libsmb/clikrb5.c	2007-05-04 09:46:17 UTC (rev 22663)
++++ branches/SAMBA_3_0/source/libsmb/clikrb5.c	2007-05-04 09:55:40 UTC (rev 22664)
+@@ -272,6 +272,45 @@
+ }
+ #endif
+ 
++BOOL unwrap_edata_ntstatus(TALLOC_CTX *mem_ctx, 
++			   DATA_BLOB *edata, 
++			   DATA_BLOB *edata_out)
++{
++	DATA_BLOB edata_contents;
++	ASN1_DATA data;
++	int edata_type;
++
++	if (!edata->length) {
++		return False;
++	}
++
++	asn1_load(&data, *edata);
++	asn1_start_tag(&data, ASN1_SEQUENCE(0));
++	asn1_start_tag(&data, ASN1_CONTEXT(1));
++	asn1_read_Integer(&data, &edata_type);
++
++	if (edata_type != KRB5_PADATA_PW_SALT) {
++		DEBUG(0,("edata is not of required type %d but of type %d\n", 
++			KRB5_PADATA_PW_SALT, edata_type));
++		asn1_free(&data);
++		return False;
++	}
++	
++	asn1_start_tag(&data, ASN1_CONTEXT(2));
++	asn1_read_OctetString(&data, &edata_contents);
++	asn1_end_tag(&data);
++	asn1_end_tag(&data);
++	asn1_end_tag(&data);
++	asn1_free(&data);
++
++	*edata_out = data_blob_talloc(mem_ctx, edata_contents.data, edata_contents.length);
++
++	data_blob_free(&edata_contents);
++
++	return True;
++}
++
++
+ BOOL unwrap_pac(TALLOC_CTX *mem_ctx, DATA_BLOB *auth_data, DATA_BLOB *unwrapped_pac_data)
+ {
+ 	DATA_BLOB pac_contents;
+

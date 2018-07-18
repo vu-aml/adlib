@@ -1,0 +1,608 @@
+From perl6-all-return-81161-ktwarwic=speedy.uwaterloo.ca@perl.org  Mon May  7 17:03:31 2007
+Return-Path: <perl6-all-return-81161-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l47L3TqD003316
+	for <ktwarwic@flax9.uwaterloo.ca>; Mon, 7 May 2007 17:03:29 -0400
+Received: (qmail 13696 invoked by uid 514); 7 May 2007 21:03:27 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 13691 invoked from network); 7 May 2007 21:03:26 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DKIM_SIGNED,DK_POLICY_SIGNSOME,DK_SIGNED,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Delivered-To: parrotbug-followup@parrotcode.org
+Received-SPF: pass (x1.develooper.com: domain of bgeron@gmail.com designates 66.249.82.231 as permitted sender)
+DKIM-Signature: a=rsa-sha1; c=relaxed/relaxed;
+        d=gmail.com; s=beta;
+        h=domainkey-signature:received:received:message-id:date:from:user-agent:mime-version:to:subject:references:in-reply-to:x-enigmail-version:openpgp:content-type;
+        b=jlSZck+IxSX0ACV+MOJnZYcQgRYeA1ZEReKZGsM+YJ/Do6FD7vg1CXMsicTd/unab8jUIRRWCPLq1L/lQqwVEFFta+x+0hs2ZJhoHl/2EAtF2l54lPFfl38nNAaj++sfm93FQrkIX08nJZcbSWJb6WEx1Dy+r28gqTJuAcQP/Zs=
+DomainKey-Signature: a=rsa-sha1; c=nofws;
+        d=gmail.com; s=beta;
+        h=received:message-id:date:from:user-agent:mime-version:to:subject:references:in-reply-to:x-enigmail-version:openpgp:content-type;
+        b=bsEJ0QCLcrIoBuA8WjMnYCh6W3KAjc9fFOXOA3Q10XmhHCgXr78jDyeji9ah+uMr55WOKrGrKMugxH2RvflyMX9wcN+FAUYrjNe3nn7h0DoHqaL2hctEDnFqKZpixrWxLZeWrmUf+oOW8mEF7TkNMK+/JPBEY3WBwiQn3iymlvw=
+Message-ID: <463F8F14.1040009@gmail.com>
+Date: Mon, 07 May 2007 22:41:56 +0200
+From: Bram Geron <bgeron@gmail.com>
+User-Agent: Icedove 1.5.0.10 (X11/20070329)
+MIME-Version: 1.0
+To: parrotbug-followup@parrotcode.org
+Subject: [perl #41583] [PATCH] Tail calls from within vtable methods broken
+References: <RT-Ticket-41583@perl.org> <45DDD2C5.6080108@gmail.com> <rt-3.6.HEAD-28041-1172165360-416.41583-72-0@perl.org> <45EB2A9C.6040204@jnthn.net> <189adbd0703041056o698004c5na006f537ce66bb69@mail.gmail.com> <rt-3.6.HEAD-2051-1173034625-1337.41583-74-0@perl.org>
+In-Reply-To: <rt-3.6.HEAD-2051-1173034625-1337.41583-74-0@perl.org>
+X-Enigmail-Version: 0.94.2.0
+OpenPGP: id=E7B9E65E
+Content-Type: multipart/mixed;
+ boundary="------------030500050706030801020405"
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-1.1 required=8.0
+	tests=BAYES_05,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED,SPF_PASS
+
+--------------030500050706030801020405
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 7bit
+
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA1
+
+This patch copies the context to a new interp->fromc_result_ctx field on
+a set_returns.  As far as I know no new tests fail with this. This patch
+retains most side-patching (comments etc.) by Jonathan.  It also tests
+in Parrot_free_context whether you want to free a context that is on
+front of the free list, which would generate weird bugs.  There is a
+test case for this bug in t/op/calling.t.
+
+Alek, I made the bulk of the patch before I dug through the other mails
+and saw your mail.  I'm sorry if you were still planning on sending it.
+
+Thanks,
+Bram Geron
+
+diffstat:
+ include/parrot/interpreter.h |    5 +-
+ include/parrot/register.h    |    6 +-
+ src/gc/register.c            |   43 ++++++++++++++++++++
+ src/inter_call.c             |    2
+ src/inter_run.c              |   89
++++++++++++++++++++++++++++++++++++++------
+ src/ops/core.ops             |   17 +++++++-
+ t/op/calling.t               |   33 +++++++++++++++
+ 7 files changed, 175 insertions(+), 20 deletions(-)
+
+
+Alek Storm via RT wrote:
+> I'm almost done with a different patch that preserves the parent context for
+> the purpose of returning values into it.  All further tailcalled contexts
+> are freed as normal.  That's pretty vague, but it's easier just to see the
+> code.  I just haven't had time to finish and release it.
+> 
+> Thanks,
+> Alek Storm
+> 
+> On 3/4/07, Jonathan Worthington <jonathan@jnthn.net> wrote:
+>> Bram Geron (via RT) wrote:
+>>> Tail calls from within v-table methods are broken, the tail-called sub
+>>> (or method) will not return correct values.
+>>>
+>>> When method A tailcalls sub B, B's set_returns stores its opcode
+>>> number (and with it, which registers should be returned), but the
+>>> low-level vtable code gets the registers from A's context.
+>>> (Runops_args stores a pointer to A's context just before it is called,
+>>> wrongly assuming A has the final set_returns. Runops_args returns the
+>>> context to a function that then does return value passing on it.)
+>>>
+>>> Maybe the solution is to store the current context in a new field in
+>>> the interp structure; I don't know, I'm rather bad at C.
+>>>
+>>> Example:
+>>> This should print 2, but it prints 13.
+>>
+>> (...)
+- --
+Bram Geron | GPG 0xE7B9E65E
+
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.6 (GNU/Linux)
+Comment: Using GnuPG with Mozilla - http://enigmail.mozdev.org
+
+iD8DBQFGP48UvquQbee55l4RAqSuAJ9/93Fci2ztI9W9DykQngKHwjzZmACfQege
+L/kpuaEOCJiQXJ2HLM06xKw=
+=Yxh5
+-----END PGP SIGNATURE-----
+
+--------------030500050706030801020405
+Content-Type: text/x-patch;
+ name="fromcfix.diff"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline;
+ filename="fromcfix.diff"
+
+Index: src/ops/core.ops
+===================================================================
+--- src/ops/core.ops	(revision 18433)
++++ src/ops/core.ops	(working copy)
+@@ -554,7 +554,7 @@
+ 
+ op set_returns(inconst PMC) {
+     opcode_t * const _this = CUR_OPCODE;
+-    parrot_context_t *ctx;
++    parrot_context_t *ctx, *copy;
+     PMC *ccont;
+     PMC *signature = $1;
+     INTVAL argc;
+@@ -581,6 +581,21 @@
+ 
+         parrot_pass_args(interp, ctx, caller_ctx, src_indexes, dest_indexes, PARROT_PASS_RESULTS);
+     }
++    else {
++        if (interp->fromc_result_ctx)
++            internal_exception(1, "Error: called set_returns twice in one context.\n");
++
++        copy = Parrot_dup_context(interp, ctx);
++        copy_context_registers(interp, copy, ctx);
++        interp->fromc_result_ctx = copy;
++
++        /* If we don't do this, running with -D80 will crash */
++        copy->current_sub = ctx->current_sub;
++        /* Parrot_dup_context sets the current context to the copy (which
++           has a current_cont of NULL), restore the original */
++        CONTEXT(interp->ctx) = ctx;
++    }
++
+     argc = SIG_ELEMS(signature);
+     goto OFFSET(argc + 2);
+ }
+Index: src/gc/register.c
+===================================================================
+--- src/gc/register.c	(revision 18433)
++++ src/gc/register.c	(working copy)
+@@ -301,7 +301,7 @@
+ 
+     ctx->regs_mem_size   = reg_alloc;
+     ctx->n_regs_used     = old->n_regs_used;
+-    diff                 = (long*)ctx - (long*)old;
++    diff                 = (INTVAL*)ctx - (INTVAL*)old;
+ 
+     interp->ctx.bp.regs_i    += diff;
+     interp->ctx.bp_ps.regs_s += diff;
+@@ -451,6 +451,10 @@
+         slot = CALCULATE_SLOT_NUM(ctxp->regs_mem_size);
+ 
+         assert(slot < interp->ctx_mem.n_free_slots);
++#ifndef NDEBUG
++        if (ptr == interp->ctx_mem.free_list[slot])
++            internal_exception(1, "Error: tried to free a context that was already free.\n");
++#endif
+         *(void **)ptr = interp->ctx_mem.free_list[slot];
+         interp->ctx_mem.free_list[slot] = ptr;
+     }
+@@ -628,7 +632,44 @@
+         REG_NUM(i) = 0.0;
+ }
+ 
++/*
+ 
++=item C<void
++copy_context_registers(Interp *interp, parrot_context_t *dest, parrot_context_t *src)>
++
++Copy all registers from one context to another.
++
++=cut
++
++*/
++
++void
++copy_context_registers(Interp *interp, parrot_context_t *dest, parrot_context_t *src)
++{
++    int i;
++    int max;
++
++    max = src->n_regs_used[REGNO_INT];
++    assert(max == dest->n_regs_used[REGNO_INT]);
++    for (i=0; i < max; ++i)
++        CTX_REG_INT(dest, i) = CTX_REG_INT(src, i);
++
++    max = src->n_regs_used[REGNO_NUM];
++    assert(max == dest->n_regs_used[REGNO_NUM]);
++    for (i=0; i < max; ++i)
++        CTX_REG_NUM(dest, i) = CTX_REG_NUM(src, i);
++
++    max = src->n_regs_used[REGNO_STR];
++    assert(max == dest->n_regs_used[REGNO_STR]);
++    for (i=0; i < max; ++i)
++        CTX_REG_STR(dest, i) = CTX_REG_STR(src, i);
++
++    max = src->n_regs_used[REGNO_PMC];
++    assert(max == dest->n_regs_used[REGNO_PMC]);
++    for (i=0; i < max; ++i)
++        CTX_REG_PMC(dest, i) = CTX_REG_PMC(src, i);
++}
++
+ /*
+ 
+ =back
+Index: src/inter_call.c
+===================================================================
+--- src/inter_call.c	(revision 18433)
++++ src/inter_call.c	(working copy)
+@@ -1089,7 +1089,7 @@
+ INTVAL src_n, opcode_t *dest, parrot_context_t * ctxp, va_list ap)>
+ 
+ Pass arguments from C code with given signature to a Parrot Sub.
+-Prerequsits are like above.
++Prerequisites are like above.
+ 
+ =cut
+ 
+Index: src/inter_run.c
+===================================================================
+--- src/inter_run.c	(revision 18433)
++++ src/inter_run.c	(working copy)
+@@ -29,6 +29,7 @@
+ runops(Interp *interp, size_t offset)>
+ 
+ Run parrot ops. Set exception handler and/or resume after exception.
++This is the low level run ops routine that just takes an offset.
+ 
+ =cut
+ 
+@@ -164,10 +165,17 @@
+ 
+     old_ctx = CONTEXT(interp->ctx);
+     interp->current_cont  = new_ret_continuation_pmc(interp, NULL);
++    /* Set the object we're calling with, if any. */
+     interp->current_object = obj;
++
++    /* Call the invoke v-table method to give us the address in the bytecode. */
+     dest = VTABLE_invoke(interp, sub, NULL);
+     if (!dest)
+         internal_exception(1, "Subroutine returned a NULL address");
++
++    /* Build the call signature. If we have an object, need to make sure we
++     * get an O as the first parameter (the final else branch does this).
++     * We always skip over the first character since that's the return type. */
+     if (PMC_IS_NULL(obj)) {
+         /* skip over the return type */
+         sig_p = sig + 1;
+@@ -185,6 +193,7 @@
+         sig_p = new_sig;
+     }
+ 
++    /* If we have arguments, do the passing of them. */
+     if (*sig_p && dest[0] == PARROT_OP_get_params_pc) {
+         dest = parrot_pass_args_fromc(interp, sig_p, dest, old_ctx, ap);
+     }
+@@ -197,9 +206,28 @@
+      }
+      */
+ 
++    interp->fromc_result_ctx = 0;
+     ctx = CONTEXT(interp->ctx);
++    /* Compute the offset into the bytecode and let rip. */
+     offset = dest - interp->code->base.data;
+     runops(interp, offset);
++    /* If set_returns was called somewhere, there is a copy of the context we
++     * need to return in interp->fromc_result_ctx. */
++    if (interp->fromc_result_ctx) {
++        ctx = interp->fromc_result_ctx;
++        /* Make sure it is freed by Parrot_free_context(.., .., 0)
++         * when finally returning to C. Non-copied contexts have a
++         * ref_count of 0 by now, so --ref_count will be -1 in
++         * Parrot_free_context, and -1 != 0 so non-copied contexts
++         * will not really be freed. This is good, as they have
++         * already been freed by RetContinuation->invoke. */
++        ctx->ref_count++;
++    }
++
++    /* Reset fromc_result_ctx for maybe an outer runloop */
++    interp->fromc_result_ctx = 0;
++
++    /* Hand back the context so we can get the args out of it. */
+     return ctx;
+ }
+ 
+@@ -299,11 +327,14 @@
+ {
+     va_list args;
+     parrot_context_t *ctx;
++    PMC *retval;
+ 
+     va_start(args, sig);
+     ctx = runops_args(interp, sub, PMCNULL, NULL, sig, args);
+     va_end(args);
+-    return (PMC *)set_retval(interp, *sig, ctx);
++    retval = (PMC *)set_retval(interp, *sig, ctx);
++    Parrot_free_context(interp, ctx, 0);
++    return retval;
+ }
+ 
+ void *
+@@ -329,6 +360,7 @@
+     ctx = runops_args(interp, sub, PMCNULL, NULL, sig, args);
+     va_end(args);
+     retval = set_retval(interp, *sig, ctx);
++    Parrot_free_context(interp, ctx, 0);
+ 
+     interp->current_args     = cargs;
+     interp->current_params   = params;
+@@ -343,11 +375,14 @@
+ {
+     va_list args;
+     parrot_context_t *ctx;
++    INTVAL retval;
+ 
+     va_start(args, sig);
+     ctx = runops_args(interp, sub, PMCNULL, NULL, sig, args);
+     va_end(args);
+-    return set_retval_i(interp, *sig, ctx);
++    retval = set_retval_i(interp, *sig, ctx);
++    Parrot_free_context(interp, ctx, 0);
++    return retval;
+ }
+ 
+ FLOATVAL
+@@ -356,11 +391,14 @@
+ {
+     va_list args;
+     parrot_context_t *ctx;
++    FLOATVAL retval;
+ 
+     va_start(args, sig);
+     ctx = runops_args(interp, sub, PMCNULL, NULL, sig, args);
+     va_end(args);
+-    return set_retval_f(interp, *sig, ctx);
++    retval = set_retval_f(interp, *sig, ctx);
++    Parrot_free_context(interp, ctx, 0);
++    return retval;
+ }
+ 
+ void*
+@@ -369,11 +407,14 @@
+ {
+     va_list args;
+     parrot_context_t *ctx;
++    void *retval;
+ 
+     va_start(args, sig);
+     ctx = runops_args(interp, sub, obj, meth, sig, args);
+     va_end(args);
+-    return set_retval(interp, *sig, ctx);
++    retval = set_retval(interp, *sig, ctx);
++    Parrot_free_context(interp, ctx, 0);
++    return retval;
+ }
+ 
+ INTVAL
+@@ -382,11 +423,14 @@
+ {
+     va_list args;
+     parrot_context_t *ctx;
++    INTVAL retval;
+ 
+     va_start(args, sig);
+     ctx = runops_args(interp, sub, obj, meth, sig, args);
+     va_end(args);
+-    return set_retval_i(interp, *sig, ctx);
++    retval = set_retval_i(interp, *sig, ctx);
++    Parrot_free_context(interp, ctx, 0);
++    return retval;
+ }
+ 
+ FLOATVAL
+@@ -395,11 +439,14 @@
+ {
+     va_list args;
+     parrot_context_t *ctx;
++    FLOATVAL retval;
+ 
+     va_start(args, sig);
+     ctx = runops_args(interp, sub, obj, meth, sig, args);
+     va_end(args);
+-    return set_retval_f(interp, *sig, ctx);
++    retval = set_retval_f(interp, *sig, ctx);
++    Parrot_free_context(interp, ctx, 0);
++    return retval;
+ }
+ 
+ void *
+@@ -407,9 +454,12 @@
+         const char *sig, va_list args)
+ {
+     parrot_context_t *ctx;
++    void *retval;
+ 
+     ctx = runops_args(interp, sub, PMCNULL, NULL, sig, args);
+-    return set_retval(interp, *sig, ctx);
++    retval = set_retval(interp, *sig, ctx);
++    Parrot_free_context(interp, ctx, 0);
++    return retval;
+ }
+ 
+ INTVAL
+@@ -417,9 +467,12 @@
+         const char *sig, va_list args)
+ {
+     parrot_context_t *ctx;
++    INTVAL retval;
+ 
+     ctx = runops_args(interp, sub, PMCNULL, NULL, sig, args);
+-    return set_retval_i(interp, *sig, ctx);
++    retval = set_retval_i(interp, *sig, ctx);
++    Parrot_free_context(interp, ctx, 0);
++    return retval;
+ }
+ 
+ FLOATVAL
+@@ -427,9 +480,12 @@
+         const char *sig, va_list args)
+ {
+     parrot_context_t *ctx;
++    FLOATVAL retval;
+ 
+     ctx = runops_args(interp, sub, PMCNULL, NULL, sig, args);
+-    return set_retval_f(interp, *sig, ctx);
++    retval = set_retval_f(interp, *sig, ctx);
++    Parrot_free_context(interp, ctx, 0);
++    return retval;
+ }
+ 
+ void*
+@@ -437,9 +493,12 @@
+         PMC *sub, PMC *obj, STRING *meth, const char *sig, va_list args)
+ {
+     parrot_context_t *ctx;
++    void *retval;
+ 
+     ctx = runops_args(interp, sub, obj, meth, sig, args);
+-    return set_retval(interp, *sig, ctx);
++    retval = set_retval(interp, *sig, ctx);
++    Parrot_free_context(interp, ctx, 0);
++    return retval;
+ }
+ 
+ INTVAL
+@@ -447,9 +506,12 @@
+         PMC *sub, PMC *obj, STRING *meth, const char *sig, va_list args)
+ {
+     parrot_context_t *ctx;
++    INTVAL retval;
+ 
+     ctx = runops_args(interp, sub, obj, meth, sig, args);
+-    return set_retval_i(interp, *sig, ctx);
++    retval = set_retval_i(interp, *sig, ctx);
++    Parrot_free_context(interp, ctx, 0);
++    return retval;
+ }
+ 
+ FLOATVAL
+@@ -457,9 +519,12 @@
+         PMC *sub, PMC *obj, STRING *meth, const char *sig, va_list args)
+ {
+     parrot_context_t *ctx;
++    FLOATVAL retval;
+ 
+     ctx = runops_args(interp, sub, obj, meth, sig, args);
+-    return set_retval_f(interp, *sig, ctx);
++    retval = set_retval_f(interp, *sig, ctx);
++    Parrot_free_context(interp, ctx, 0);
++    return retval;
+ }
+ 
+ /*
+Index: include/parrot/register.h
+===================================================================
+--- include/parrot/register.h	(revision 18433)
++++ include/parrot/register.h	(working copy)
+@@ -87,9 +87,11 @@
+ void destroy_context(Interp *);
+ 
+ void setup_register_stacks(Interp*);
+-void mark_register_stack(Interp* interp,
+-                             struct Stack_Chunk* stack);
++void mark_register_stack(Interp* interp, struct Stack_Chunk* stack);
++void copy_context_registers(Interp *interp, struct Parrot_Context *dest,
++        struct Parrot_Context *src);
+ 
++
+ #endif /* PARROT_REGISTER_H_GUARD */
+ 
+ /*
+Index: include/parrot/interpreter.h
+===================================================================
+--- include/parrot/interpreter.h	(revision 18433)
++++ include/parrot/interpreter.h	(working copy)
+@@ -274,7 +274,6 @@
+ #define CHUNKED_CTX_MEM 0           /* no longer works, but will be reinstated
+                                      * some day; see src/register.c for details.
+                                     */
+-
+ typedef struct _context_mem {
+ #if CHUNKED_CTX_MEM
+     char *data;                     /* ctx + register store */
+@@ -282,7 +281,7 @@
+     char *threshold;                /* continuation threshold */
+     struct _context_mem *prev;      /* previous allocated area */
+ #else
+-    void **free_list;               /* per size free slots */
++    void **free_list;               /* array of free-lists, per size free slots */
+     int n_free_slots;               /* amount of allocated */
+ #endif
+ 
+@@ -399,6 +398,8 @@
+     opcode_t *current_args;                   /* ptr into code with set_args opcode */
+     opcode_t *current_params;                 /* ptr into code with get_params opcode */
+     opcode_t *current_returns;                /* ptr into code with get_returns opcode */
++    parrot_context_t *fromc_result_ctx;       /* ptr to the context where set_returns was called,
++                                               * if we are about to pass return values to C */
+     PMC *args_signature;                      /* args signature pmc if it is non-const */
+     PMC *params_signature;                    /* params signature pmc if it is non-const */
+     PMC *returns_signature;                   /* returns signature pmc if it is non-const */
+Index: t/op/calling.t
+===================================================================
+--- t/op/calling.t	(revision 18433)
++++ t/op/calling.t	(working copy)
+@@ -7,7 +7,7 @@
+ use lib qw( . lib ../lib ../../lib );
+ 
+ use Test::More;
+-use Parrot::Test tests => 94;
++use Parrot::Test tests => 95;
+ 
+ =head1 NAME
+ 
+@@ -2408,6 +2408,37 @@
+ Have bar: 2
+ OUTPUT
+ 
++pir_output_is( <<'CODE', <<'OUTPUT', "RT #41583 - Tail calls from within vtable methods broken" );
++.sub main :main
++    $P1 = newclass "Foo"
++    $P2 = new "Foo"
++
++    ## Should return 2, but doesn't.
++    $I1 = elements $P2
++    $S1 = $I1
++    say $S1
++    end
++.end
++
++.namespace ["Foo"]
++
++.sub elements :method :vtable
++    I0 = 13
++    I1 = 2
++    .return identity(I1)
++.end
++
++.sub identity
++    .param int arg
++    ## arg is I0, taken from the elements context (which is set
++    ## to 13). If we put "I0 = 14" here and don't optimize, we
++    ## return 2. (elements's context's I1)
++    .return (arg)
++.end
++CODE
++2
++OUTPUT
++
+ # Local Variables:
+ #   mode: cperl
+ #   cperl-indent-level: 4
+
+
+--------------030500050706030801020405--
+

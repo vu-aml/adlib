@@ -1,0 +1,131 @@
+From r-help-bounces@stat.math.ethz.ch  Thu Apr 12 02:29:54 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3C6Tr0I026472
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 12 Apr 2007 02:29:54 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3C6S0Mb028507;
+	Thu, 12 Apr 2007 08:28:22 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=5.0 tests=AWL,
+	FORGED_RCVD_HELO autolearn=no version=3.1.8
+Received: from markov.stats.ox.ac.uk (markov.stats.ox.ac.uk [163.1.210.1])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3C6Ri4T028282
+	for <r-help@stat.math.ethz.ch>; Thu, 12 Apr 2007 08:27:45 +0200
+Received: from gannet.stats.ox.ac.uk (gannet.stats [163.1.211.17])
+	by markov.stats.ox.ac.uk (8.13.6/8.13.6) with ESMTP id l3C6Rhs9016183; 
+	Thu, 12 Apr 2007 07:27:43 +0100 (BST)
+Date: Thu, 12 Apr 2007 07:27:43 +0100 (BST)
+From: Prof Brian Ripley <ripley@stats.ox.ac.uk>
+To: William Constantine <wconstan@gmail.com>
+In-Reply-To: <23d37d2a0704111602m750fe1c1w5c0d48d1774cfb57@mail.gmail.com>
+Message-ID: <Pine.LNX.4.64.0704120719470.18425@gannet.stats.ox.ac.uk>
+References: <23d37d2a0704111602m750fe1c1w5c0d48d1774cfb57@mail.gmail.com>
+MIME-Version: 1.0
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] Calling LAPACK functions directly from R
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+Status: O
+Content-Length: 3411
+Lines: 83
+
+This was much more appropriate for R-devel, so please move any followup 
+there.
+
+On Wed, 11 Apr 2007, William Constantine wrote:
+
+> I am interested in tapping into LAPACK functionality directly from R.
+> Using R-2.4.1 for Windows, I was able to do so ala:
+>
+> dyn.load("bin/Rlapack.dll")
+> is.loaded("dstebz") # returns TRUE
+>
+> N <- 100
+> NW <- 4
+> n.tapers <- 5
+> tpW <- (2 * pi * NW)/N
+> otNmo <- 1:N
+> D <- as.double(cos(tpW) * ((N - 1 - 2 * (0:(N - 1)))/2)^2)
+> E <- as.double((otNmo * (N - otNmo))/2)
+>
+> z <- .Fortran("dstebz",
+>  "I", "B", as.integer(N), double(1), double(1),
+>  as.integer(N - n.tapers + 1), as.integer(N), double(1),
+>  D, E, integer(1), integer(1), double(N), integer(N), integer(N),
+>  double(4 * N), integer(3 * N), integer(1))[13:15]
+>
+> I then extended this approach in developing an R package
+> where I added the following to the appropriate .First.lib():
+>
+>  lapack.path <- file.path(R.home(), ifelse(.Platform$OS.type == "windows",
+>    file.path("bin", "Rlapack"), file.path("lib", "libRlapack")))
+>  dyn.load(paste(lapack.path,.Platform$dynlib.ext, sep=""))
+>
+> which loads the LAPACK shared objects in lib/libRlapack.so for LINUX/UNIX
+> and bin/Rlapack.dll for Windows.
+>
+> Q1: Is there a better or more robust way of loading LAPACK symbols
+> into R, (e.g., one that is not platform dependent)?
+
+Why do you want to do that?  All uses of LAPACK in R itself are via small 
+C wrappers that make life a lot easier.
+
+> ---------------------------------------------------------------------------------------------------------------------
+>
+> My R package does not currently contain any C or FORTRAN code. However,
+> it has been suggested to me that creating a src/Makevars file containing
+> the line:
+>
+>  PKG_LIBS=$(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
+>
+> is a better means of loading LAPACK symbols as it
+> would eliminate the need to use dyn.load() as shown in my .First.lib().
+> In Windows, however, this suggestion fails and results (for example)
+> in the above code returning a "missing dstebz symbol" error. My understanding
+> is that one need only create such a src/Makevar if they are interested in
+> tapping into LAPACK functionality from their src/ C or FORTRAN code
+> and so am doubtful of this suggestion.
+>
+> Q2: Given that I have no C/FORTRAN code in my package, am I
+> correct to assume that creating a Makevars files in such a way
+> does not eliminate the need to use dyn.load() as in the above?
+>
+> Q3: For future releases of R, should I expect the path of the LAPACK
+> library to remain as they are noted above in my .First.lib() example?
+
+It may not work even now.  Buiilds of R do not necessarily contain 
+LAPACK code (you can link to an external library) even on Windows.
+
+The portable way to link to LAPACK is to use a C wrapper as described in 
+'Writing R Extensions'.
+
+
+-- 
+Brian D. Ripley,                  ripley@stats.ox.ac.uk
+Professor of Applied Statistics,  http://www.stats.ox.ac.uk/~ripley/
+University of Oxford,             Tel:  +44 1865 272861 (self)
+1 South Parks Road,                     +44 1865 272866 (PA)
+Oxford OX1 3TG, UK                Fax:  +44 1865 272595
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

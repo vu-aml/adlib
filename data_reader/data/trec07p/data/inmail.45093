@@ -1,0 +1,129 @@
+From r-help-bounces@stat.math.ethz.ch  Sun May 27 23:53:47 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4S3rjqD009534
+	for <ktwarwic@flax9.uwaterloo.ca>; Sun, 27 May 2007 23:53:46 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4S3r2ls020877;
+	Mon, 28 May 2007 05:53:15 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.6 required=5.0 tests=AWL,
+	BAYES_50 autolearn=no version=3.1.8
+Received: from ug-out-1314.google.com (ug-out-1314.google.com [66.249.92.174])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4S3qu3o020844
+	for <r-help@stat.math.ethz.ch>; Mon, 28 May 2007 05:52:57 +0200
+Received: by ug-out-1314.google.com with SMTP id 36so1194773uga
+	for <r-help@stat.math.ethz.ch>; Sun, 27 May 2007 20:52:56 -0700 (PDT)
+Received: by 10.67.22.14 with SMTP id z14mr4956614ugi.1180324376690;
+	Sun, 27 May 2007 20:52:56 -0700 (PDT)
+Received: by 10.67.105.1 with HTTP; Sun, 27 May 2007 20:52:56 -0700 (PDT)
+Message-ID: <971536df0705272052i528ba6bew384c1e2b64d37e1a@mail.gmail.com>
+Date: Sun, 27 May 2007 23:52:56 -0400
+From: "Gabor Grothendieck" <ggrothendieck@gmail.com>
+To: ronggui <ronggui.huang@gmail.com>
+In-Reply-To: <38b9f0350705271918p656c576ev74cb357a1df46738@mail.gmail.com>
+MIME-Version: 1.0
+Content-Disposition: inline
+References: <38b9f0350705262047n1d943dbak5d137c64cdc40e02@mail.gmail.com>
+	<971536df0705262148o747dfd62xb0fecee27e635a43@mail.gmail.com>
+	<38b9f0350705271918p656c576ev74cb357a1df46738@mail.gmail.com>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: R-Help <r-help@stat.math.ethz.ch>
+Subject: Re: [R] Question about "evalq"
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+On 5/27/07, ronggui <ronggui.huang@gmail.com> wrote:
+> Hi,Gabor Grothendieck, Thanks very much.
+>
+> On 5/27/07, Gabor Grothendieck <ggrothendieck@gmail.com> wrote:
+> > evalq looks like this:
+> >
+> >    > evalq
+> >    function (expr, envir, enclos)
+> >    eval.parent(substitute(eval(quote(expr), envir, enclos)))
+> >    <environment: namespace:base>
+> >
+> > so it seems the difference is that
+> >
+> > - eval(quote(), envir, enclos) evaluates envir and enclos
+> >   in the current frame but
+> > - evalq evaluates them in the parent.frame.
+> >
+> > This may be easier to see in the following example:
+>
+> Yeah, This example make the question easier to understand.
+>
+> >    x <- "G"
+> >    f1 <- function() eval(quote(x), parent.frame())
+> >    f2 <- function() evalq(x, parent.frame())
+> >    f11 <- function() {
+> >         x <- "a"
+> >         f1()
+> >    }
+> >    f22 <- function() {
+> >         x <- "b"
+> >         f2()
+> >    }
+> >    f11() # a
+> >    f22() # G
+> >
+> > To avoid this problem pass a variable whose value is
+> > to be enclos= rather than an expression to compute it:
+>
+> --This is a good idea.
+> --If "evalq evaluates them in the parent.frame", I expected that if I
+> change parent.frame(2) to parent.frame(1), I will get the answer.But I
+> can not actually. So what's wrong with my understanding?
+>
+>    f1 <- function(x,digits=5) lapply(x, f2)
+>    f2 <- function(x) {
+>       evalq(print(digits), list(x=x), parent.frame(1))
+>    }
+>    f1(list(x1=1)) ##Error in print(digits) : object "digits" not found
+
+
+Good point.  Insert a browser statement where the parent.frame
+call was and when it stops do a traceback.  That will show you
+what the call stack looks like at that point in time.
+
+
+> f1 <- function(x,digits=5) lapply(x, f2)
+> f2 <- function(x) evalq(print(digits), list(x=x), { browser() } )
+> f1(list(x1=1)) ##Error in print(digits) : object "digits" not found
+Called from: eval(quote(print(digits)), list(x = x), {
+    browser()
+})
+Browse[1]> traceback()
+10: print(digits)
+9: eval(expr, envir, enclos)
+8: eval(quote(print(digits)), list(x = x), browser())
+7: eval(expr, envir, enclos)
+6: eval(expr, p)
+5: eval.parent(substitute(eval(quote(expr), envir, enclos)))
+4: evalq(print(digits), list(x = x), browser())
+3: FUN(X[[1L]], ...)
+2: lapply(x, f2)
+1: f1(list(x1 = 1))
+Browse[1]>
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

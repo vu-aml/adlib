@@ -1,0 +1,108 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May 16 22:47:50 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4H2loqD026693
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 16 May 2007 22:47:50 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 66FCE163824
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 17 May 2007 02:47:47 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 0E233162BCA; Thu, 17 May 2007 02:47:02 +0000 (GMT)
+Date: Thu, 17 May 2007 12:46:50 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070517024702.0E233162BCA@lists.samba.org>
+Subject: Rev 312: merge from ronnie in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 312
+revision-id: tridge@samba.org-20070517024650-i4at8m57g4gzoasu
+parent: tridge@samba.org-20070517024309-2e9qy28mgxdcevc2
+parent: sahlberg@ronnie-20070517020729-prfu9kv7k2x1m8rp
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Thu 2007-05-17 12:46:50 +1000
+message:
+  merge from ronnie
+modified:
+  common/ctdb_client.c           ctdb_client.c-20070411010216-3kd8v37k61steeya-1
+  include/ctdb.h                 ctdb.h-20061117234101-o3qt14umlg9en8z0-11
+  tools/ctdb_control.c           ctdb_control.c-20070426122705-9ehj1l5lu2gn9kuj-1
+    ------------------------------------------------------------
+    revno: 197.1.116
+    merged: sahlberg@ronnie-20070517020729-prfu9kv7k2x1m8rp
+    parent: sahlberg@ronnie-20070517004531-ttyt43eorz178m4p
+    committer: Ronnie Sahlberg <sahlberg@ronnie>
+    branch nick: ctdb
+    timestamp: Thu 2007-05-17 12:07:29 +1000
+    message:
+      we no longer pass lmaster across during pulldb    so dont print it from 
+      catdb either
+=== modified file 'common/ctdb_client.c'
+--- a/common/ctdb_client.c	2007-05-17 00:45:31 +0000
++++ b/common/ctdb_client.c	2007-05-17 02:07:29 +0000
+@@ -1109,7 +1109,6 @@
+ 	
+ 	keys->keys     = talloc_array(mem_ctx, TDB_DATA, keys->num);
+ 	keys->headers  = talloc_array(mem_ctx, struct ctdb_ltdb_header, keys->num);
+-	keys->lmasters = talloc_array(mem_ctx, uint32_t, keys->num);
+ 	keys->data     = talloc_array(mem_ctx, TDB_DATA, keys->num);
+ 
+ 	rec = (struct ctdb_rec_data *)&reply->data[0];
+@@ -1117,7 +1116,7 @@
+ 	for (i=0;i<reply->count;i++) {
+ 		keys->keys[i].dptr = talloc_memdup(mem_ctx, &rec->data[0], rec->keylen);
+ 		keys->keys[i].dsize = rec->keylen;
+-
++		
+ 		keys->data[i].dptr = talloc_memdup(mem_ctx, &rec->data[keys->keys[i].dsize], rec->datalen);
+ 		keys->data[i].dsize = rec->datalen;
+ 
+
+=== modified file 'include/ctdb.h'
+--- a/include/ctdb.h	2007-05-17 00:45:31 +0000
++++ b/include/ctdb.h	2007-05-17 02:07:29 +0000
+@@ -244,7 +244,6 @@
+ 	uint32_t num;
+ 	TDB_DATA *keys;
+ 	struct ctdb_ltdb_header *headers;
+-	uint32_t *lmasters;
+ 	TDB_DATA *data;
+ };
+ int ctdb_ctrl_pulldb(struct ctdb_context *ctdb, uint32_t destnode, uint32_t dbid, uint32_t lmaster, TALLOC_CTX *mem_ctx, struct ctdb_key_list *keys);
+
+=== modified file 'tools/ctdb_control.c'
+--- a/tools/ctdb_control.c	2007-05-17 00:45:31 +0000
++++ b/tools/ctdb_control.c	2007-05-17 02:07:29 +0000
+@@ -513,8 +513,8 @@
+ 			keystr  = hex_encode(ctdb, keys.keys[i].dptr, keys.keys[i].dsize);
+ 			datastr = hex_encode(ctdb, keys.data[i].dptr, keys.data[i].dsize);
+ 
+-			printf("rsn:%llu lmaster:%d dmaster:%d key:%s data:%s\n", 
+-			       (unsigned long long)keys.headers[i].rsn, keys.lmasters[i], 
++			printf("rsn:%llu dmaster:%d key:%s data:%s\n", 
++			       (unsigned long long)keys.headers[i].rsn,  
+ 			       keys.headers[i].dmaster, keystr, datastr); 
+ 			ret++;
+ 		}
+

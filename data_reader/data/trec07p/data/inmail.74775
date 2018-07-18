@@ -1,0 +1,504 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Jul  5 12:36:41 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l65GafL9028619
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 5 Jul 2007 12:36:41 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 0FCAF1639A3
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu,  5 Jul 2007 16:36:37 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id C8070163817; Thu,  5 Jul 2007 16:36:16 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070705163616.C8070163817@lists.samba.org>
+Date: Thu,  5 Jul 2007 16:36:16 +0000 (GMT)
+Subject: svn commit: samba r23727 - in branches/SAMBA_3_0/source/smbd: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-07-05 16:36:15 +0000 (Thu, 05 Jul 2007)
+New Revision: 23727
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23727
+
+Log:
+Explicitly pass down FLAGS2 to srvstr_get_path.
+
+Next step is to remove the bug that in the trans2 code we use the inbuf
+as the base pointer to decide whether we need ucs2 alignment where we
+need to use the beginning of the params buffer
+
+Jeremy, last one for today to reviw :-)
+
+
+Modified:
+   branches/SAMBA_3_0/source/smbd/nttrans.c
+   branches/SAMBA_3_0/source/smbd/reply.c
+   branches/SAMBA_3_0/source/smbd/trans2.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/smbd/nttrans.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/nttrans.c	2007-07-05 16:33:37 UTC (rev 23726)
++++ branches/SAMBA_3_0/source/smbd/nttrans.c	2007-07-05 16:36:15 UTC (rev 23727)
+@@ -562,7 +562,9 @@
+ 
+ 		if(!dir_fsp->is_directory) {
+ 
+-			srvstr_get_path(inbuf, fname, smb_buf(inbuf), sizeof(fname), 0, STR_TERMINATE, &status);
++			srvstr_get_path(inbuf, SVAL(inbuf,smb_flg2), fname,
++					smb_buf(inbuf), sizeof(fname), 0,
++					STR_TERMINATE, &status);
+ 			if (!NT_STATUS_IS_OK(status)) {
+ 				END_PROFILE(SMBntcreateX);
+ 				return ERROR_NT(status);
+@@ -604,14 +606,18 @@
+ 			dir_name_len++;
+ 		}
+ 
+-		srvstr_get_path(inbuf, rel_fname, smb_buf(inbuf), sizeof(rel_fname), 0, STR_TERMINATE, &status);
++		srvstr_get_path(inbuf, SVAL(inbuf,smb_flg2), rel_fname,
++				smb_buf(inbuf), sizeof(rel_fname), 0,
++				STR_TERMINATE, &status);
+ 		if (!NT_STATUS_IS_OK(status)) {
+ 			END_PROFILE(SMBntcreateX);
+ 			return ERROR_NT(status);
+ 		}
+ 		pstrcat(fname, rel_fname);
+ 	} else {
+-		srvstr_get_path(inbuf, fname, smb_buf(inbuf), sizeof(fname), 0, STR_TERMINATE, &status);
++		srvstr_get_path(inbuf, SVAL(inbuf,smb_flg2), fname,
++				smb_buf(inbuf), sizeof(fname), 0,
++				STR_TERMINATE, &status);
+ 		if (!NT_STATUS_IS_OK(status)) {
+ 			END_PROFILE(SMBntcreateX);
+ 			return ERROR_NT(status);
+@@ -1011,7 +1017,9 @@
+ 
+ 	flags = IVAL(params,0);
+ 
+-	srvstr_get_path(inbuf, fname, params+53, sizeof(fname), parameter_count-53, STR_TERMINATE, &status);
++	srvstr_get_path(inbuf, SVAL(inbuf,smb_flg2), fname, params+53,
++			sizeof(fname), parameter_count-53, STR_TERMINATE,
++			&status);
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		return ERROR_NT(status);
+ 	}
+@@ -1288,7 +1296,10 @@
+ 		}
+ 
+ 		if(!dir_fsp->is_directory) {
+-			srvstr_get_path(inbuf, fname, params+53, sizeof(fname), parameter_count-53, STR_TERMINATE, &status);
++			srvstr_get_path(inbuf, SVAL(inbuf,smb_flg2), fname,
++					params+53, sizeof(fname),
++					parameter_count-53, STR_TERMINATE,
++					&status);
+ 			if (!NT_STATUS_IS_OK(status)) {
+ 				return ERROR_NT(status);
+ 			}
+@@ -1322,14 +1333,19 @@
+ 
+ 		{
+ 			pstring tmpname;
+-			srvstr_get_path(inbuf, tmpname, params+53, sizeof(tmpname), parameter_count-53, STR_TERMINATE, &status);
++			srvstr_get_path(inbuf, SVAL(inbuf,smb_flg2), tmpname,
++					params+53, sizeof(tmpname),
++					parameter_count-53, STR_TERMINATE,
++					&status);
+ 			if (!NT_STATUS_IS_OK(status)) {
+ 				return ERROR_NT(status);
+ 			}
+ 			pstrcat(fname, tmpname);
+ 		}
+ 	} else {
+-		srvstr_get_path(inbuf, fname, params+53, sizeof(fname), parameter_count-53, STR_TERMINATE, &status);
++		srvstr_get_path(inbuf, SVAL(inbuf,smb_flg2), fname, params+53,
++				sizeof(fname), parameter_count-53,
++				STR_TERMINATE, &status);
+ 		if (!NT_STATUS_IS_OK(status)) {
+ 			return ERROR_NT(status);
+ 		}
+@@ -1842,7 +1858,9 @@
+ 	init_smb_request(&req, (uint8 *)inbuf);
+ 
+ 	p = smb_buf(inbuf) + 1;
+-	p += srvstr_get_path_wcard(inbuf, oldname, p, sizeof(oldname), 0, STR_TERMINATE, &status, &src_has_wcard);
++	p += srvstr_get_path_wcard(inbuf, SVAL(inbuf,smb_flg2), oldname, p,
++				   sizeof(oldname), 0, STR_TERMINATE, &status,
++				   &src_has_wcard);
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		END_PROFILE(SMBntrename);
+ 		return ERROR_NT(status);
+@@ -1860,7 +1878,9 @@
+ 	}
+ 
+ 	p++;
+-	p += srvstr_get_path_wcard(inbuf, newname, p, sizeof(newname), 0, STR_TERMINATE, &status, &dest_has_wcard);
++	p += srvstr_get_path_wcard(inbuf, SVAL(inbuf,smb_flg2), newname, p,
++				   sizeof(newname), 0, STR_TERMINATE, &status,
++				   &dest_has_wcard);
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		END_PROFILE(SMBntrename);
+ 		return ERROR_NT(status);
+@@ -2054,8 +2074,9 @@
+ 	fsp = file_fsp(params, 0);
+ 	replace_if_exists = (SVAL(params,2) & RENAME_REPLACE_IF_EXISTS) ? True : False;
+ 	CHECK_FSP(fsp, conn);
+-	srvstr_get_path_wcard(inbuf, new_name, params+4, sizeof(new_name), parameter_count - 4,
+-			STR_TERMINATE, &status, &dest_has_wcard);
++	srvstr_get_path_wcard(inbuf, SVAL(inbuf,smb_flg2), new_name, params+4,
++			      sizeof(new_name), parameter_count - 4,
++			      STR_TERMINATE, &status, &dest_has_wcard);
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		return ERROR_NT(status);
+ 	}
+
+Modified: branches/SAMBA_3_0/source/smbd/reply.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/reply.c	2007-07-05 16:33:37 UTC (rev 23726)
++++ branches/SAMBA_3_0/source/smbd/reply.c	2007-07-05 16:36:15 UTC (rev 23727)
+@@ -209,8 +209,9 @@
+  Pull a string and check the path allowing a wilcard - provide for error return.
+ ****************************************************************************/
+ 
+-size_t srvstr_get_path_wcard(char *inbuf, char *dest, const char *src, size_t dest_len, size_t src_len, int flags,
+-				NTSTATUS *err, BOOL *contains_wcard)
++size_t srvstr_get_path_wcard(char *inbuf, uint16 smb_flags2, char *dest,
++			     const char *src, size_t dest_len, size_t src_len,
++			     int flags, NTSTATUS *err, BOOL *contains_wcard)
+ {
+ 	size_t ret;
+ #ifdef DEVELOPER
+@@ -218,10 +219,10 @@
+ #endif
+ 
+ 	if (src_len == 0) {
+-		ret = srvstr_pull_buf(inbuf, SVAL(inbuf, smb_flg2), dest, src,
++		ret = srvstr_pull_buf(inbuf, smb_flags2, dest, src,
+ 				      dest_len, flags);
+ 	} else {
+-		ret = srvstr_pull(inbuf, SVAL(inbuf, smb_flg2), dest, src,
++		ret = srvstr_pull(inbuf, smb_flags2, dest, src,
+ 				  dest_len, src_len, flags);
+ 	}
+ 
+@@ -249,7 +250,9 @@
+  Pull a string and check the path - provide for error return.
+ ****************************************************************************/
+ 
+-size_t srvstr_get_path(char *inbuf, char *dest, const char *src, size_t dest_len, size_t src_len, int flags, NTSTATUS *err)
++size_t srvstr_get_path(char *inbuf, uint16 smb_flags2, char *dest,
++		       const char *src, size_t dest_len, size_t src_len,
++		       int flags, NTSTATUS *err)
+ {
+ 	size_t ret;
+ #ifdef DEVELOPER
+@@ -257,14 +260,14 @@
+ #endif
+ 
+ 	if (src_len == 0) {
+-		ret = srvstr_pull_buf(inbuf, SVAL(inbuf, smb_flg2), dest, src,
++		ret = srvstr_pull_buf(inbuf, smb_flags2, dest, src,
+ 				      dest_len, flags);
+ 	} else {
+-		ret = srvstr_pull(inbuf, SVAL(inbuf, smb_flg2), dest, src,
++		ret = srvstr_pull(inbuf, smb_flags2, dest, src,
+ 				  dest_len, src_len, flags);
+ 	}
+ 
+-	if (SVAL(inbuf,smb_flg2) & FLAGS2_DFS_PATHNAMES) {
++	if (smb_flags2 & FLAGS2_DFS_PATHNAMES) {
+ 		/* 
+ 		 * For a DFS path the function parse_dfs_path()
+ 		 * will do the path processing, just make a copy.
+@@ -681,7 +684,8 @@
+ 
+ 	START_PROFILE(SMBcheckpath);
+ 
+-	srvstr_get_path(inbuf, name, smb_buf(inbuf) + 1, sizeof(name), 0, STR_TERMINATE, &status);
++	srvstr_get_path(inbuf, SVAL(inbuf,smb_flg2), name, smb_buf(inbuf) + 1,
++			sizeof(name), 0, STR_TERMINATE, &status);
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		END_PROFILE(SMBcheckpath);
+ 		status = map_checkpath_error(inbuf, status);
+@@ -768,7 +772,8 @@
+ 	START_PROFILE(SMBgetatr);
+ 
+ 	p = smb_buf(inbuf) + 1;
+-	p += srvstr_get_path(inbuf, fname, p, sizeof(fname), 0, STR_TERMINATE, &status);
++	p += srvstr_get_path(inbuf, SVAL(inbuf,smb_flg2), fname, p,
++			     sizeof(fname), 0, STR_TERMINATE, &status);
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		END_PROFILE(SMBgetatr);
+ 		return ERROR_NT(status);
+@@ -854,7 +859,8 @@
+ 	START_PROFILE(SMBsetatr);
+ 
+ 	p = smb_buf(inbuf) + 1;
+-	p += srvstr_get_path(inbuf, fname, p, sizeof(fname), 0, STR_TERMINATE, &status);
++	p += srvstr_get_path(inbuf, SVAL(inbuf,smb_flg2), fname, p,
++			     sizeof(fname), 0, STR_TERMINATE, &status);
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		END_PROFILE(SMBsetatr);
+ 		return ERROR_NT(status);
+@@ -1016,7 +1022,9 @@
+ 	maxentries = SVAL(inbuf,smb_vwv0); 
+ 	dirtype = SVAL(inbuf,smb_vwv1);
+ 	p = smb_buf(inbuf) + 1;
+-	p += srvstr_get_path_wcard(inbuf, path, p, sizeof(path), 0, STR_TERMINATE, &nt_status, &mask_contains_wcard);
++	p += srvstr_get_path_wcard(inbuf, SVAL(inbuf,smb_flg2), path, p,
++				   sizeof(path), 0, STR_TERMINATE, &nt_status,
++				   &mask_contains_wcard);
+ 	if (!NT_STATUS_IS_OK(nt_status)) {
+ 		END_PROFILE(SMBsearch);
+ 		return ERROR_NT(nt_status);
+@@ -1221,7 +1229,9 @@
+ 
+ 	outsize = set_message(inbuf,outbuf,1,0,True);
+ 	p = smb_buf(inbuf) + 1;
+-	p += srvstr_get_path_wcard(inbuf, path, p, sizeof(path), 0, STR_TERMINATE, &err, &path_contains_wcard);
++	p += srvstr_get_path_wcard(inbuf, SVAL(inbuf,smb_flg2), path, p,
++				   sizeof(path), 0, STR_TERMINATE, &err,
++				   &path_contains_wcard);
+ 	if (!NT_STATUS_IS_OK(err)) {
+ 		END_PROFILE(SMBfclose);
+ 		return ERROR_NT(err);
+@@ -1280,7 +1290,8 @@
+  
+ 	deny_mode = SVAL(inbuf,smb_vwv0);
+ 
+-	srvstr_get_path(inbuf, fname, smb_buf(inbuf)+1, sizeof(fname), 0, STR_TERMINATE, &status);
++	srvstr_get_path(inbuf, SVAL(inbuf,smb_flg2), fname, smb_buf(inbuf)+1,
++			sizeof(fname), 0, STR_TERMINATE, &status);
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		END_PROFILE(SMBopen);
+ 		return ERROR_NT(status);
+@@ -1414,7 +1425,8 @@
+ 	}
+ 
+ 	/* XXXX we need to handle passed times, sattr and flags */
+-	srvstr_get_path(inbuf, fname, smb_buf(inbuf), sizeof(fname), 0, STR_TERMINATE, &status);
++	srvstr_get_path(inbuf, SVAL(inbuf,smb_flg2), fname, smb_buf(inbuf),
++			sizeof(fname), 0, STR_TERMINATE, &status);
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		END_PROFILE(SMBopenX);
+ 		return ERROR_NT(status);
+@@ -1602,7 +1614,8 @@
+ 
+ 	ts[1] = convert_time_t_to_timespec(srv_make_unix_date3(inbuf + smb_vwv1)); /* mtime. */
+ 
+-	srvstr_get_path(inbuf, fname, smb_buf(inbuf) + 1, sizeof(fname), 0, STR_TERMINATE, &status);
++	srvstr_get_path(inbuf, SVAL(inbuf,smb_flg2), fname, smb_buf(inbuf) + 1,
++			sizeof(fname), 0, STR_TERMINATE, &status);
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		END_PROFILE(SMBcreate);
+ 		return ERROR_NT(status);
+@@ -1703,7 +1716,8 @@
+ 
+ 	init_smb_request(&req, (uint8 *)inbuf);
+ 
+-	srvstr_get_path(inbuf, fname, smb_buf(inbuf)+1, sizeof(fname), 0, STR_TERMINATE, &status);
++	srvstr_get_path(inbuf, SVAL(inbuf,smb_flg2), fname, smb_buf(inbuf)+1,
++			sizeof(fname), 0, STR_TERMINATE, &status);
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		END_PROFILE(SMBctemp);
+ 		return ERROR_NT(status);
+@@ -2111,7 +2125,9 @@
+ 
+ 	dirtype = SVAL(inbuf,smb_vwv0);
+ 	
+-	srvstr_get_path_wcard(inbuf, name, smb_buf(inbuf) + 1, sizeof(name), 0, STR_TERMINATE, &status, &path_contains_wcard);
++	srvstr_get_path_wcard(inbuf, SVAL(inbuf,smb_flg2), name,
++			      smb_buf(inbuf) + 1, sizeof(name), 0,
++			      STR_TERMINATE, &status, &path_contains_wcard);
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		END_PROFILE(SMBunlink);
+ 		return ERROR_NT(status);
+@@ -3834,7 +3850,9 @@
+ 
+ 	START_PROFILE(SMBmkdir);
+  
+-	srvstr_get_path(inbuf, directory, smb_buf(inbuf) + 1, sizeof(directory), 0, STR_TERMINATE, &status);
++	srvstr_get_path(inbuf, SVAL(inbuf,smb_flg2), directory,
++			smb_buf(inbuf) + 1, sizeof(directory), 0,
++			STR_TERMINATE, &status);
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		END_PROFILE(SMBmkdir);
+ 		return ERROR_NT(status);
+@@ -4075,7 +4093,9 @@
+ 	NTSTATUS status;
+ 	START_PROFILE(SMBrmdir);
+ 
+-	srvstr_get_path(inbuf, directory, smb_buf(inbuf) + 1, sizeof(directory), 0, STR_TERMINATE, &status);
++	srvstr_get_path(inbuf, SVAL(inbuf,smb_flg2), directory,
++			smb_buf(inbuf) + 1, sizeof(directory), 0,
++			STR_TERMINATE, &status);
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		END_PROFILE(SMBrmdir);
+ 		return ERROR_NT(status);
+@@ -4765,13 +4785,17 @@
+ 	init_smb_request(&req, (uint8 *)inbuf);
+ 
+ 	p = smb_buf(inbuf) + 1;
+-	p += srvstr_get_path_wcard(inbuf, name, p, sizeof(name), 0, STR_TERMINATE, &status, &src_has_wcard);
++	p += srvstr_get_path_wcard(inbuf, SVAL(inbuf,smb_flg2), name, p,
++				   sizeof(name), 0, STR_TERMINATE, &status,
++				   &src_has_wcard);
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		END_PROFILE(SMBmv);
+ 		return ERROR_NT(status);
+ 	}
+ 	p++;
+-	p += srvstr_get_path_wcard(inbuf, newname, p, sizeof(newname), 0, STR_TERMINATE, &status, &dest_has_wcard);
++	p += srvstr_get_path_wcard(inbuf, SVAL(inbuf,smb_flg2), newname, p,
++				   sizeof(newname), 0, STR_TERMINATE, &status,
++				   &dest_has_wcard);
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		END_PROFILE(SMBmv);
+ 		return ERROR_NT(status);
+@@ -4960,12 +4984,16 @@
+ 	*directory = *mask = 0;
+ 
+ 	p = smb_buf(inbuf);
+-	p += srvstr_get_path_wcard(inbuf, name, p, sizeof(name), 0, STR_TERMINATE, &status, &source_has_wild);
++	p += srvstr_get_path_wcard(inbuf, SVAL(inbuf,smb_flg2), name, p,
++				   sizeof(name), 0, STR_TERMINATE, &status,
++				   &source_has_wild);
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		END_PROFILE(SMBcopy);
+ 		return ERROR_NT(status);
+ 	}
+-	p += srvstr_get_path_wcard(inbuf, newname, p, sizeof(newname), 0, STR_TERMINATE, &status, &dest_has_wild);
++	p += srvstr_get_path_wcard(inbuf, SVAL(inbuf,smb_flg2), newname, p,
++				   sizeof(newname), 0, STR_TERMINATE, &status,
++				   &dest_has_wild);
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		END_PROFILE(SMBcopy);
+ 		return ERROR_NT(status);
+@@ -5181,7 +5209,9 @@
+ 		return ERROR_DOS(ERRDOS,ERRnoaccess);
+ 	}
+ 
+-	srvstr_get_path(inbuf, newdir, smb_buf(inbuf) + 1, sizeof(newdir), 0, STR_TERMINATE, &status);
++	srvstr_get_path(inbuf, SVAL(inbuf,smb_flg2), newdir,
++			smb_buf(inbuf) + 1, sizeof(newdir), 0, STR_TERMINATE,
++			&status);
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		END_PROFILE(pathworks_setdir);
+ 		return ERROR_NT(status);
+
+Modified: branches/SAMBA_3_0/source/smbd/trans2.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/trans2.c	2007-07-05 16:33:37 UTC (rev 23726)
++++ branches/SAMBA_3_0/source/smbd/trans2.c	2007-07-05 16:36:15 UTC (rev 23727)
+@@ -804,7 +804,9 @@
+ 		return(ERROR_DOS(ERRSRV,ERRaccess));
+ 	}
+ 
+-	srvstr_get_path(inbuf, fname, pname, sizeof(fname), total_params - 28, STR_TERMINATE, &status);
++	srvstr_get_path(inbuf, SVAL(inbuf,smb_flg2), fname, pname,
++			sizeof(fname), total_params - 28, STR_TERMINATE,
++			&status);
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		return ERROR_NT(status);
+ 	}
+@@ -1747,7 +1749,9 @@
+ 			return ERROR_NT(NT_STATUS_INVALID_LEVEL);
+ 	}
+ 
+-	srvstr_get_path_wcard(inbuf, directory, params+12, sizeof(directory), total_params - 12, STR_TERMINATE, &ntstatus, &mask_contains_wcard);
++	srvstr_get_path_wcard(inbuf, SVAL(inbuf,smb_flg2), directory,
++			      params+12, sizeof(directory), total_params - 12,
++			      STR_TERMINATE, &ntstatus, &mask_contains_wcard);
+ 	if (!NT_STATUS_IS_OK(ntstatus)) {
+ 		return ERROR_NT(ntstatus);
+ 	}
+@@ -2012,7 +2016,10 @@
+ 
+ 	*mask = *directory = *resume_name = 0;
+ 
+-	srvstr_get_path_wcard(inbuf, resume_name, params+12, sizeof(resume_name), total_params - 12, STR_TERMINATE, &ntstatus, &mask_contains_wcard);
++	srvstr_get_path_wcard(inbuf, SVAL(inbuf,smb_flg2), resume_name,
++			      params+12, sizeof(resume_name),
++			      total_params - 12, STR_TERMINATE, &ntstatus,
++			      &mask_contains_wcard);
+ 	if (!NT_STATUS_IS_OK(ntstatus)) {
+ 		/* Win9x or OS/2 can send a resume name of ".." or ".". This will cause the parser to
+ 		   complain (it thinks we're asking for the directory above the shared
+@@ -3401,7 +3408,9 @@
+ 			return ERROR_NT(NT_STATUS_INVALID_LEVEL);
+ 		}
+ 
+-		srvstr_get_path(inbuf, fname, &params[6], sizeof(fname), total_params - 6, STR_TERMINATE, &status);
++		srvstr_get_path(inbuf, SVAL(inbuf,smb_flg2), fname, &params[6],
++				sizeof(fname), total_params - 6,
++				STR_TERMINATE, &status);
+ 		if (!NT_STATUS_IS_OK(status)) {
+ 			return ERROR_NT(status);
+ 		}
+@@ -4587,7 +4596,8 @@
+ 		return NT_STATUS_INVALID_PARAMETER;
+ 	}
+ 
+-	srvstr_get_path(inbuf, oldname, pdata, sizeof(oldname), total_data, STR_TERMINATE, &status);
++	srvstr_get_path(inbuf, SVAL(inbuf,smb_flg2), oldname, pdata,
++			sizeof(oldname), total_data, STR_TERMINATE, &status);
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		return status;
+ 	}
+@@ -4637,7 +4647,9 @@
+ 		return NT_STATUS_INVALID_PARAMETER;
+ 	}
+ 
+-	srvstr_get_path_wcard(inbuf, newname, &pdata[12], sizeof(newname), len, 0, &status, &dest_has_wcard);
++	srvstr_get_path_wcard(inbuf, SVAL(inbuf,smb_flg2), newname, &pdata[12],
++			      sizeof(newname), len, 0, &status,
++			      &dest_has_wcard);
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		return status;
+ 	}
+@@ -5850,7 +5862,9 @@
+ 		}
+ 
+ 		info_level = SVAL(params,0);    
+-		srvstr_get_path(inbuf, fname, &params[6], sizeof(fname), total_params - 6, STR_TERMINATE, &status);
++		srvstr_get_path(inbuf, SVAL(inbuf,smb_flg2), fname, &params[6],
++				sizeof(fname), total_params - 6, STR_TERMINATE,
++				&status);
+ 		if (!NT_STATUS_IS_OK(status)) {
+ 			return ERROR_NT(status);
+ 		}
+@@ -6188,7 +6202,9 @@
+ 		return ERROR_NT(NT_STATUS_INVALID_PARAMETER);
+ 	}
+ 
+-	srvstr_get_path(inbuf, directory, &params[4], sizeof(directory), total_params - 4, STR_TERMINATE, &status);
++	srvstr_get_path(inbuf, SVAL(inbuf,smb_flg2), directory, &params[4],
++			sizeof(directory), total_params - 4, STR_TERMINATE,
++			&status);
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		return ERROR_NT(status);
+ 	}
+

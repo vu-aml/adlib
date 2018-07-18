@@ -1,0 +1,167 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Apr 23 03:26:59 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3N7Qx0I030370
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 23 Apr 2007 03:26:59 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 317A2162BC3
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 23 Apr 2007 07:26:34 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.7 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 501)
+	id 3E8EF162AD3; Mon, 23 Apr 2007 07:26:09 +0000 (GMT)
+To: samba-cvs@samba.org
+From: abartlet@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070423072609.3E8EF162AD3@lists.samba.org>
+Date: Mon, 23 Apr 2007 07:26:09 +0000 (GMT)
+Subject: svn commit: samba r22477 - in
+	branches/SAMBA_4_0/source/rpc_server/drsuapi: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 4745
+Lines: 124
+
+Author: abartlet
+Date: 2007-04-23 07:26:08 +0000 (Mon, 23 Apr 2007)
+New Revision: 22477
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22477
+
+Log:
+When an invaild base is specified to ldb_search, it should return
+LDB_ERR_NO_SUCH_OBJECT.  Handle this (found against LDAP, ldb_tdb is
+being updated).
+
+Andrew Bartlett
+
+Modified:
+   branches/SAMBA_4_0/source/rpc_server/drsuapi/dcesrv_drsuapi.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/rpc_server/drsuapi/dcesrv_drsuapi.c
+===================================================================
+--- branches/SAMBA_4_0/source/rpc_server/drsuapi/dcesrv_drsuapi.c	2007-04-23 07:25:09 UTC (rev 22476)
++++ branches/SAMBA_4_0/source/rpc_server/drsuapi/dcesrv_drsuapi.c	2007-04-23 07:26:08 UTC (rev 22477)
+@@ -541,6 +541,8 @@
+ 				 "objectClass=server");
+ 	
+ 	if (ret) {
++		DEBUG(1, ("searching for servers in sites DN %s failed: %s\n", 
++			  ldb_dn_get_linearized(sites_dn), ldb_errstring(b_state->sam_ctx)));
+ 		return WERR_GENERAL_FAILURE;
+ 	}
+ 
+@@ -568,10 +570,7 @@
+ 
+ 			ret = ldb_search_exp_fmt(b_state->sam_ctx, mem_ctx, &res_account, ref_dn, 
+ 						 LDB_SCOPE_BASE, attrs_account_1, "objectClass=computer");
+-			if (ret) {
+-				return WERR_GENERAL_FAILURE;
+-			}
+-			if (res_account->count == 1) {
++			if (ret == LDB_SUCCESS && res_account->count == 1) {
+ 				ctr1->array[i].dns_name
+ 					= ldb_msg_find_attr_as_string(res_account->msgs[0], "dNSHostName", NULL);
+ 				ctr1->array[i].netbios_name
+@@ -595,6 +594,10 @@
+ 					}
+ 				}
+ 			}
++			if ((ret != LDB_SUCCESS) && (ret != LDB_ERR_NO_SUCH_OBJECT)) {
++				DEBUG(5, ("warning: searching for computer DN %s failed: %s\n", 
++					  ldb_dn_get_linearized(ref_dn), ldb_errstring(b_state->sam_ctx)));
++			}
+ 
+ 			/* Look at server DN and extract site component */
+ 			ctr1->array[i].site_name = result_site_name(res->msgs[i]->dn);
+@@ -635,34 +638,33 @@
+ 
+ 			ret = ldb_search_exp_fmt(b_state->sam_ctx, mem_ctx, &res_ntds, ntds_dn, 
+ 						 LDB_SCOPE_BASE, attrs_ntds, "objectClass=nTDSDSA");
+-			if (ret) {
+-				return WERR_GENERAL_FAILURE;
+-			}
+-			if (res_ntds->count == 1) {
++			if (ret == LDB_SUCCESS && res_ntds->count == 1) {
+ 				ctr2->array[i].is_gc
+ 					= (ldb_msg_find_attr_as_int(res_ntds->msgs[0], "options", 0) == 1);
+ 				ctr2->array[i].ntds_guid 
+ 					= samdb_result_guid(res_ntds->msgs[0], "objectGUID");
+ 				ctr2->array[i].ntds_dn = ldb_dn_get_linearized(res_ntds->msgs[0]->dn);
+ 			}
++			if ((ret != LDB_SUCCESS) && (ret != LDB_ERR_NO_SUCH_OBJECT)) {
++				DEBUG(5, ("warning: searching for NTDS DN %s failed: %s\n", 
++					  ldb_dn_get_linearized(ntds_dn), ldb_errstring(b_state->sam_ctx)));
++			}
+ 
+ 			ret = ldb_search_exp_fmt(b_state->sam_ctx, mem_ctx, &res_site, site_dn, 
+ 						 LDB_SCOPE_BASE, attrs_site, "objectClass=site");
+-			if (ret) {
+-				return WERR_GENERAL_FAILURE;
+-			}
+-			if (res_site->count == 1) {
++			if (ret == LDB_SUCCESS && res_site->count == 1) {
+ 				ctr2->array[i].site_guid 
+ 					= samdb_result_guid(res_site->msgs[0], "objectGUID");
+ 				ctr2->array[i].site_dn = ldb_dn_get_linearized(res_site->msgs[0]->dn);
+ 			}
++			if ((ret != LDB_SUCCESS) && (ret != LDB_ERR_NO_SUCH_OBJECT)) {
++				DEBUG(5, ("warning: searching for site DN %s failed: %s\n", 
++					  ldb_dn_get_linearized(site_dn), ldb_errstring(b_state->sam_ctx)));
++			}
+ 
+ 			ret = ldb_search_exp_fmt(b_state->sam_ctx, mem_ctx, &res_account, ref_dn, 
+ 						 LDB_SCOPE_BASE, attrs_account_2, "objectClass=computer");
+-			if (ret) {
+-				return WERR_GENERAL_FAILURE;
+-			}
+-			if (res_account->count == 1) {
++			if (ret == LDB_SUCCESS && res_account->count == 1) {
+ 				ctr2->array[i].dns_name
+ 					= ldb_msg_find_attr_as_string(res_account->msgs[0], "dNSHostName", NULL);
+ 				ctr2->array[i].netbios_name
+@@ -679,14 +681,19 @@
+ 					ret = ldb_search_exp_fmt(b_state->sam_ctx, mem_ctx, &res_domain, domain_dn, 
+ 								 LDB_SCOPE_BASE, attrs_none, "fSMORoleOwner=%s",
+ 								 ldb_dn_get_linearized(ntds_dn));
+-					if (ret) {
+-						return WERR_GENERAL_FAILURE;
+-					}
+-					if (res_domain->count == 1) {
++					if (ret == LDB_SUCCESS && res_domain->count == 1) {
+ 						ctr2->array[i].is_pdc = True;
+ 					}
++					if ((ret != LDB_SUCCESS) && (ret != LDB_ERR_NO_SUCH_OBJECT)) {
++						DEBUG(5, ("warning: searching for domain DN %s failed: %s\n", 
++							  ldb_dn_get_linearized(domain_dn), ldb_errstring(b_state->sam_ctx)));
++					}
+ 				}
+ 			}
++			if ((ret != LDB_SUCCESS) && (ret != LDB_ERR_NO_SUCH_OBJECT)) {
++				DEBUG(5, ("warning: searching for computer account DN %s failed: %s\n", 
++					  ldb_dn_get_linearized(ref_dn), ldb_errstring(b_state->sam_ctx)));
++			}
+ 
+ 			/* Look at server DN and extract site component */
+ 			ctr2->array[i].site_name = result_site_name(res->msgs[i]->dn);
+

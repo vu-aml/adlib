@@ -1,0 +1,131 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun Apr 15 18:31:27 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3FMVQ0I030548
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 15 Apr 2007 18:31:26 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 1D979163825
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 15 Apr 2007 22:31:03 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,RCVD_IN_DSBL,
+	UNPARSEABLE_RELAY autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: from mail.SerNet.de (mail1.SerNet.DE [193.175.80.2])
+	by lists.samba.org (Postfix) with ESMTP id 00BA5162AD5
+	for <samba-cvs@samba.org>; Sun, 15 Apr 2007 22:30:38 +0000 (GMT)
+Received: from intern.SerNet.DE by mail.SerNet.DE with esmtp (Exim 4.51 #1)
+	for samba-cvs@samba.org
+	id 1HdDF0-0007md-GI; Mon, 16 Apr 2007 00:30:38 +0200
+Received: by intern.SerNet.DE
+	id 1HdDF0-0004gJ-7P; Mon, 16 Apr 2007 00:30:38 +0200
+Received: by intern.SerNet.DE
+	id 1HdDEz-0004gE-ET; Mon, 16 Apr 2007 00:30:38 +0200
+Received: from mad by nirvana.sernet.private with local (Exim 4.63)
+	(envelope-from <ma@sernet.de>)
+	id 1HdDEz-0001kq-4S; Mon, 16 Apr 2007 00:30:37 +0200
+To: samba-cvs@samba.org
+From: Michael Adam <ma@sernet.de>
+Date: Mon, 16 Apr 2007 00:30:37 +0200
+Message-Id: <E1HdDF0-0004gJ-7P@intern.SerNet.DE>
+Organization: SerNet GmbH, Goettingen, Germany
+Subject: Rev 5361: Make "include = registry" effective (only in global
+	section): in http://samba.sernet.de/ma/bzr/SAMBA_3_0-registry.bzr/
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2405
+Lines: 78
+
+At http://samba.sernet.de/ma/bzr/SAMBA_3_0-registry.bzr/
+
+------------------------------------------------------------
+revno: 5361
+revision-id: ma@sernet.de-20070415223033-c85f4b580cdebeac
+parent: ma@sernet.de-20070415222354-a6c6c91479c2cd30
+committer: Michael Adam <ma@sernet.de>
+branch nick: SAMBA_3_0-registry.bzr
+timestamp: Mon 2007-04-16 00:30:33 +0200
+message:
+  Make "include = registry" effective (only in global section):
+  Parameters are processed by do_parameter.
+  
+  Currently (as with smbd/service.c:load_registry_service(),
+  parameters read from registry are either type sz or type dword
+  and are converted to string (in case of reg type dword).
+  This conversion, which is also present in utils/net_conf.c
+  should really go into one helper function...
+modified:
+  source/param/loadparm.c        loadparm.c-20060530022627-1efa1edb3eb0e897
+=== modified file 'source/param/loadparm.c'
+--- a/source/param/loadparm.c	2007-04-13 16:00:33 +0000
++++ b/source/param/loadparm.c	2007-04-15 22:30:33 +0000
+@@ -3182,8 +3182,9 @@
+ 	char *regpath = NULL;
+ 	WERROR werr = WERR_OK;
+ 	struct registry_key *key = NULL;
+-	struct registry_value *valvalue = NULL;
++	struct registry_value *value = NULL;
+ 	char *valname = NULL;
++	char *valstr = NULL;
+ 	uint32 idx = 0;
+ 	NT_USER_TOKEN *token;
+ 
+@@ -3216,10 +3217,25 @@
+ 
+ 	for (idx = 0;
+ 	     W_ERROR_IS_OK(werr = reg_enumvalue(ctx, key, idx, &valname,
+-			     			&valvalue));
++			     			&value));
+ 	     idx++)
+ 	{
+-		DEBUG(1, ("got global registry parameter '%s'\n", valname));
++		DEBUG(5, ("got global registry parameter '%s'\n", valname));
++		switch(value->type) {
++		case REG_DWORD:
++			valstr = talloc_asprintf(ctx, "%d", value->v.dword);
++			pfunc(valname, valstr);
++			TALLOC_FREE(valstr);
++			break;
++		case REG_SZ:
++			pfunc(valname, value->v.sz.str);
++			break;
++		default:
++			/* ignore */
++			break;
++		}
++		TALLOC_FREE(value);
++		TALLOC_FREE(valstr);
+ 	}
+ 
+ 	ret = pfunc("registry shares", "yes");
+@@ -3239,7 +3255,14 @@
+ 	pstrcpy(fname, pszParmValue);
+ 
+ 	if (strequal(fname, INCLUDE_REGISTRY_NAME)) {
+-		return process_registry_globals(do_parameter);
++		if (bInGlobalSection) {
++			return process_registry_globals(do_parameter);
++		}
++		else {
++			DEBUG(1, ("\"include = registry\" only effective "
++				  "in %s section\n", GLOBAL_NAME));
++			return False;
++		}
+ 	}
+ 
+ 	standard_sub_basic(get_current_username(), current_user_info.domain,
+

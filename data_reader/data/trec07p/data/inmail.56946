@@ -1,0 +1,249 @@
+From r-help-bounces@stat.math.ethz.ch  Wed Jun 13 17:51:25 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5DLpOL9012929
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 13 Jun 2007 17:51:24 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5DLoZ98028299;
+	Wed, 13 Jun 2007 23:50:50 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.0 required=5.0 tests=AWL, BAYES_50,
+	DKIM_POLICY_SIGNSOME autolearn=no version=3.2.0
+Received: from tajo.ucsd.edu (tajo.ucsd.edu [137.110.122.165])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5DLHh6b020250
+	(version=TLSv1/SSLv3 cipher=DHE-RSA-AES256-SHA bits=256 verify=NO)
+	for <r-help@stat.math.ethz.ch>; Wed, 13 Jun 2007 23:17:45 +0200
+Received: from cberry (helo=localhost)
+	by tajo.ucsd.edu with local-esmtp (Exim 4.60)
+	(envelope-from <cberry@tajo.ucsd.edu>)
+	id 1HyaEl-0006Uf-Dn; Wed, 13 Jun 2007 14:18:43 -0700
+Date: Wed, 13 Jun 2007 14:18:43 -0700
+From: "Charles C. Berry" <cberry@tajo.ucsd.edu>
+To: Stephen Tucker <brown_emu@yahoo.com>
+In-Reply-To: <237294.66850.qm@web39711.mail.mud.yahoo.com>
+Message-ID: <Pine.LNX.4.64.0706131412300.24825@tajo.ucsd.edu>
+References: <237294.66850.qm@web39711.mail.mud.yahoo.com>
+MIME-Version: 1.0
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] passing (or obtaining) index or element name of list to FUN
+ in lapply()
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+
+This sounds like a job for mapply, viz:
+
+> a.list <- list(a=cbind(1:4,rnorm(4)),b=cbind(4:1,rnorm(4)))
+> 
+> plot.x.main.y <- function(x,y,...) plot( x, main=y, ... )
+> mapply( plot.x.main.y , a.list, names(a.list) )
+
+Chuck
+
+On Wed, 13 Jun 2007, Stephen Tucker wrote:
+
+> Hi Professor Ripley,
+>
+> Thanks for the response. I apologize, my examples were not too real (though
+> your solutions are indeed clever)... I was trying to ask more generally
+> whether the element name or index of 'listObj' could be obtained by the
+> user-function 'myfunction' when used in lapply(X=listObj,FUN=myfunction);
+> below I illustrate two cases in which I have come across this desire:
+> (1) In 'Example 1' I essentially take the list element and do some
+> transformations (optionally some number-crunching), and then plot it with the
+> element name of the list for the title.
+> (2) In 'Example 2' I want to read in data from the list element and write the
+> contents to a file; writing a header line only when operating on the first
+> element of the list.
+>
+> ## data specification
+> data1 <- "var1 var2
+> -0.44 0.17
+> 1.03 0.93
+> 0.85 0.39"
+> data2 <- "var1 var2
+> -0.16 0.97
+> 0.93 0.23
+> 0.80 0.42"
+> L <- list(data1=data1,data2=data2)
+>
+> ##=== Example 1 (want element name) ===
+> ## function definition
+> plottingfunc <- function(i,x) {
+>  plot(read.table(textConnection(x[[i]]),header=TRUE),main=names(x)[i])
+> }
+> ## function application
+> par(mfrow=c(2,1))
+> lapply(seq(along=L),plottingfunc,x=L)
+>
+> ##=== Example 2 (want element index) ===
+> ## function definition
+> readwritefunc <- function(i,x,fout) {
+>  data <- read.table(textConnection(x[[i]]),header=TRUE)
+>  if(i==1) cat(paste(colnames(data),collapse=","),"\n",file=fout)
+>  write.table(data,file=fout,sep=",",col=FALSE,
+>              row=FALSE,quote=FALSE,append=TRUE)
+> }
+> ## function application
+> fout <- file("out.dat",open="w")
+> lapply(seq(along=L),readwritefunc,x=L,fout=fout)
+> close(fout)
+>
+> Since the above code works, I suppose this is more of a question of
+> aesthetics since I thought the spirit of lapply() was to operate on the
+> elements of a list and not its indices - I thought perhaps there is a way to
+> get the index number and element name from within the user-function.
+>
+> Also, I recall a lesson on 'loop avoidance' from an earlier version of MASS;
+> this was in the days of S-PLUS dominance and perhaps less applicable now to R
+> as you mentioned... But old habits die hard; my amygdala still invokes a fear
+> response at the thought of a loop... (and as of recently, I have been
+> infatuated with the notion of adhering, albeit loosely, to the 'functional
+> programming' paradigm which makes me doubly fearful of loops)
+>
+> Thanks and best regards,
+>
+> Stephen
+>
+> --- Prof Brian Ripley <ripley@stats.ox.ac.uk> wrote:
+>
+>> On Tue, 12 Jun 2007, Stephen Tucker wrote:
+>>
+>>> Hello everyone,
+>>>
+>>> I wonder if there is a way to pass the index or name of a list to a
+>>> user-specified function in lapply(). For instance, my desired effect is
+>>> something like the output of
+>>>
+>>>> L <- list(jack=4098,sape=4139)
+>>>> lapply(seq(along=L),function(i,x) if(i==1) "jack" else "sape",x=L)
+>>> [[1]]
+>>> [1] "jack"
+>>>
+>>> [[2]]
+>>> [1] "sape"
+>>
+>> as.list(names(L))
+>>
+>>>> lapply(seq(along=L),function(i,x) if(names(x)[i]=="jack") 1 else 2,x=L)
+>>> [[1]]
+>>> [1] 1
+>>>
+>>> [[2]]
+>>> [1] 2
+>>
+>> as.list(seq_along(L))
+>>
+>> lapply() can be faster than a for-loop, but usually not by much: its main
+>> advantage is clarity of code.
+>>
+>> I think we need a real-life example to see what you are trying to do.
+>>
+>>> But by passing L as the first argument of lapply(). I thought there was a
+>>> tangentially-related post on this mailing list in the past but I don't
+>> recall
+>>> that it was ever addressed directly (and I can't seem to find it now).
+>> The
+>>> examples above are perfectly good alternatives especially if I wrap each
+>> of
+>>> the lines in "names<-"() to return lists with appropriate names assigned,
+>> but
+>>
+>> Try something like
+>>
+>> L[] <- lapply(seq_along(L),function(i,x) if(i==1) "jack" else "sape",x=L)
+>>
+>>> it feels like I am essentially writing a FOR-LOOP - though I was
+>> surprised to
+>>> find that speed-wise, it doesn't seem to make much of a difference
+>> (unless I
+>>> have not selected a rigorous test):
+>>>
+>>>> N <- 10000
+>>>> y <- runif(N)
+>>> ## looping through elements of y
+>>>> system.time(lapply(y,
+>>> +                    function(x) {
+>>> +                      set.seed(222)
+>>> +                      mean(rnorm(1e4,x,1))
+>>> +                    }))
+>>> [1] 21.00  0.17 21.29    NA    NA
+>>> ## looping through indices
+>>>> system.time(lapply(1:N,
+>>> +                    function(x,y) {
+>>> +                      set.seed(222)
+>>> +                      mean(rnorm(1e4,y[x],1))
+>>> +                      },y=y))
+>>> [1] 21.09  0.14 21.26    NA    NA
+>>>
+>>> In Python, there are methods for Lists and Dictionaries called
+>> enumerate(),
+>>> and iteritems(), respectively. Example applications:
+>>>
+>>> ## a list
+>>> L = ['a','b','c']
+>>> [x for x in enumerate(L)]
+>>> ## returns index of list along with the list element
+>>> [(0, 'a'), (1, 'b'), (2, 'c')]
+>>>
+>>> ## a dictionary
+>>> D = {'jack': 4098, 'sape': 4139}
+>>> [x for x in D.iteritems()]
+>>> ## returns element key (name) along with element contents
+>>> [('sape', 4139), ('jack', 4098)]
+>>>
+>>> And this is something of the effect I was looking for...
+>>>
+>>> Thanks to all,
+>>>
+>>> Stephen
+>>>
+>>> ______________________________________________
+>>> R-help@stat.math.ethz.ch mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-help
+>>> PLEASE do read the posting guide
+>> http://www.R-project.org/posting-guide.html
+>>> and provide commented, minimal, self-contained, reproducible code.
+>>>
+>>
+>> --
+>> Brian D. Ripley,                  ripley@stats.ox.ac.uk
+>> Professor of Applied Statistics,  http://www.stats.ox.ac.uk/~ripley/
+>> University of Oxford,             Tel:  +44 1865 272861 (self)
+>> 1 South Parks Road,                     +44 1865 272866 (PA)
+>> Oxford OX1 3TG, UK                Fax:  +44 1865 272595
+>>
+>
+> ______________________________________________
+> R-help@stat.math.ethz.ch mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-help
+> PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+> and provide commented, minimal, self-contained, reproducible code.
+>
+
+Charles C. Berry                            (858) 534-2098
+                                             Dept of Family/Preventive Medicine
+E mailto:cberry@tajo.ucsd.edu	            UC San Diego
+http://famprevmed.ucsd.edu/faculty/cberry/  La Jolla, San Diego 92093-0901
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

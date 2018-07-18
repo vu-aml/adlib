@@ -1,0 +1,162 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat Apr 28 04:48:28 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3S8mS6w005390
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 28 Apr 2007 04:48:28 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 78FDA162C3C
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 28 Apr 2007 08:48:27 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 620)
+	id 9FE93162AC4; Sat, 28 Apr 2007 08:48:11 +0000 (GMT)
+To: samba-cvs@samba.org
+From: metze@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070428084811.9FE93162AC4@lists.samba.org>
+Date: Sat, 28 Apr 2007 08:48:11 +0000 (GMT)
+Subject: svn commit: samba r22548 - in
+	branches/SAMBA_4_0/source/script/tests: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: RO
+Content-Length: 2706
+Lines: 119
+
+Author: metze
+Date: 2007-04-28 08:48:11 +0000 (Sat, 28 Apr 2007)
+New Revision: 22548
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22548
+
+Log:
+- maintain a global array of exported envvars
+- make it possible to specify the envname for make testenv:
+  SELFTEST_TESTENV=member make testenv
+
+metze
+Modified:
+   branches/SAMBA_4_0/source/script/tests/selftest.pl
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/script/tests/selftest.pl
+===================================================================
+--- branches/SAMBA_4_0/source/script/tests/selftest.pl	2007-04-28 08:43:51 UTC (rev 22547)
++++ branches/SAMBA_4_0/source/script/tests/selftest.pl	2007-04-28 08:48:11 UTC (rev 22548)
+@@ -675,6 +675,23 @@
+ 
+ my %running_envs = ();
+ 
++my @exported_envvars = (
++	# domain stuff
++	"DOMAIN",
++	"REALM",
++
++	# server stuff
++	"SERVER",
++	"NETBIOSNAME",
++
++	# user stuff
++	"USERNAME",
++	"PASSWORD",
++
++	# misc stuff
++	"KRB5_CONFIG"
++);
++
+ sub setup_env($)
+ {
+ 	my ($envname) = @_;
+@@ -693,9 +710,10 @@
+ 
+ 	return undef unless defined($testenv_vars);
+ 
++	SocketWrapper::set_default_iface(6);
+ 	write_clientconf($conffile, $testenv_vars);
+-	foreach ("PASSWORD", "DOMAIN", "SERVER", "USERNAME", "NETBIOSNAME", 
+-			 "KRB5_CONFIG", "REALM") {
++
++	foreach (@exported_envvars) {
+ 		if (defined($testenv_vars->{$_})) {
+ 			$ENV{$_} = $testenv_vars->{$_};
+ 		} else {
+@@ -703,12 +721,23 @@
+ 		}
+ 	}
+ 
+-	SocketWrapper::set_default_iface(6);
+-
+ 	$running_envs{$envname} = $testenv_vars;
+ 	return $testenv_vars;
+ }
+ 
++sub exported_envvars_str($)
++{
++	my ($testenv_vars) = @_;
++	my $out = "";
++
++	foreach (@exported_envvars) {
++		next unless defined($testenv_vars->{$_});
++		$out .= $_."=".$testenv_vars->{$_}."\n";
++	}
++
++	return $out;
++}
++
+ sub getlog_env($)
+ {
+ 	my ($envname) = @_;
+@@ -739,19 +768,29 @@
+ }
+ 
+ if ($opt_testenv) {
+-	my $testenv_vars = setup_env("dc");
++	my $testenv_name = $ENV{SELFTEST_TESTENV};
++	$testenv_name = "dc" unless defined($testenv_name);
++
++	my $testenv_vars = setup_env($testenv_name);
++
+ 	$ENV{PIDDIR} = $testenv_vars->{PIDDIR};
++
++	my $envvarstr = exported_envvars_str($testenv_vars);
++
+ 	my $term = ($ENV{TERM} or "xterm");
+-	system("$term -e 'echo -e \"Welcome to the Samba4 Test environment
++	system("$term -e 'echo -e \"
++Welcome to the Samba4 Test environment '$testenv_name'
++
+ This matches the client environment used in make test
+ smbd is pid `cat \$PIDDIR/smbd.pid`
+ 
+ Some useful environment variables:
+ TORTURE_OPTIONS=\$TORTURE_OPTIONS
+ CONFIGURATION=\$CONFIGURATION
+-SERVER=\$SERVER
+-NETBIOSNAME=\$NETBIOSNAME\" && bash'");
+-	teardown_env("dc");
++
++$envvarstr
++\" && bash'");
++	teardown_env($testenv_name);
+ } else {
+ 	foreach (@todo) {
+ 		$i++;
+

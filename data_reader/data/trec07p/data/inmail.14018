@@ -1,0 +1,143 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Apr 19 13:55:54 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3JHtr0I027708
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 19 Apr 2007 13:55:53 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id D40B4163992
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 19 Apr 2007 17:55:28 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.1 required=3.8 tests=AWL, BAYES_00, FORGED_RCVD_HELO,
+	RCVD_IN_BLARS_RBL,RCVD_IN_DSBL,RCVD_IN_SORBS_DUL,SPF_NEUTRAL 
+	autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from mail.plainjoe.org (68-117-186-136.dhcp.mtgm.al.charter.com
+	[68.117.186.136])
+	by lists.samba.org (Postfix) with ESMTP id 8BBE8162ADA;
+	Thu, 19 Apr 2007 17:54:44 +0000 (GMT)
+Received: from [192.168.1.47] (oak.plainjoe.org [192.168.1.47])
+	by mail.plainjoe.org (Postfix) with ESMTP id 3FFDC2F1EB;
+	Thu, 19 Apr 2007 12:54:44 -0500 (CDT)
+Message-ID: <4627ACF7.1090003@samba.org>
+Date: Thu, 19 Apr 2007 12:55:03 -0500
+From: "Gerald (Jerry) Carter" <jerry@samba.org>
+User-Agent: Thunderbird 1.5.0.10 (X11/20070306)
+MIME-Version: 1.0
+To: James Peach <jpeach@samba.org>
+References: <20070418205000.88D4B1638B9@lists.samba.org>	<1176929909.16886.16.camel@localhost.localdomain>	<1176986243.23884.7.camel@localhost.localdomain>	<200704191330.l3JDUHaM092847@au.padl.com>
+	<1176990812.23884.9.camel@localhost.localdomain>
+	<46278171.7030301@samba.org>
+	<3495631D-6315-4450-8386-41C2F4092239@samba.org>
+In-Reply-To: <3495631D-6315-4450-8386-41C2F4092239@samba.org>
+X-Enigmail-Version: 0.94.0.0
+Content-Type: text/plain; charset=ISO-8859-1
+Content-Transfer-Encoding: 7bit
+Cc: samba-technical@lists.samba.org, simo <idra@samba.org>
+Subject: Re: Broken idmap interface design
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2855
+Lines: 85
+
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA1
+
+James Peach wrote:
+
+> There's two cases for mapping from SIDs to UGIDs.
+> 
+> First case is where full SIDs are explicitly stored 
+> in the directory or have a static partitioning (like
+> Unix Users and Unix Groups). In this case, you don't
+> need to be told what kind of ID the caller is looking
+> for, because the SID is globally unique, and must only 
+> map to one ID.
+
+That is the idmap_ad case where it is easy for the idmap
+backed to determine the SID type.
+
+> Second case is where the SID is dynamically 
+> generated from other information in the directory. In
+> this case, knowing the type of ID in advance helps
+> a lot and can prevent you generating bogus SIDs.
+> 
+> I take it that it is this second case that is problematic?
+
+It is the fact that the *default* winbind setup (using
+tdb, rid, or ldap) requires that the idmap child call
+back into the winbindd parent to get the SID type so
+it knows what to do.  This is a layering violation.
+
+The caller asks the idmap backend to give it an id
+but the backend the asks the caller to tell it
+what type of SID it is.  If this is needed, then the type
+simply must be specified as a parameter or else we
+will be tracking deadlocks in every idmap backend
+implementation we have.
+
+The problem was that the design was built for a specific
+case and not the general case and is therefore not sufficient.
+
+>> Right now I'm going to do several things in order to get
+>> the code to a release point.
+>>
+>> (a) Remove WINBINDD_SIDS_TO_XIDS from winbindd_nss.h to
+>>    prevent us from having to support the broken call in
+>>    future releases.  The existing idmap_methods API will
+>>    not change but will become solely an internal interface
+>>    used by winbindd.
+>>
+>> (b) Overload the id_map.xid.type to be specified by the caller
+>>    and not filled by the idmap backend.
+> 
+> So existing idmap modules will need to be changed?
+
+That's debatable.  Right now, I'm considering the cache that
+would require no change the the idmap interface, just how it
+is used.
+
+An example mapping on SID to uid would be as so.  The
+caller fills in these values:
+
+	sid_copy( id.sid, sid_to_translate );
+	id.xid.type = ID_TYPE_UID;
+
+Then the backend only fills in the id.xid.id field if the SID
+does in fact resolve to a uid.
+
+In most cases I've considered for the caller already knows
+the SID type so this is no additional burden.
+
+This would be the bare minimum fix for 3.0.25.  3.0.26 would
+change the idmap API but as there are no external consusmers
+other than winbindd, this should be easy enough.
+
+
+
+
+cheers, jerry
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.3 (GNU/Linux)
+Comment: Using GnuPG with Mozilla - http://enigmail.mozdev.org
+
+iD8DBQFGJ6z3IR7qMdg1EfYRAnDRAJ97e6yw2P8fVn2hZeBI/NfKBZDhSgCdFBvG
+hBevuH5gRTkSHR2Vw33ERBE=
+=Qoho
+-----END PGP SIGNATURE-----
+

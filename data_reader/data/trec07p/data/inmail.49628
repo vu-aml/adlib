@@ -1,0 +1,95 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat Jun  2 20:54:48 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l530smhB029669
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 2 Jun 2007 20:54:48 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id E2B6D163830
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun,  3 Jun 2007 00:54:42 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 22522162AF7; Sun,  3 Jun 2007 00:54:03 +0000 (GMT)
+Date: Sun, 03 Jun 2007 10:29:16 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070603005403.22522162AF7@lists.samba.org>
+Subject: Rev 439: fixed a race condition in the handling of the recovery
+	lock in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 439
+revision-id: tridge@samba.org-20070603002914-oycc73iztdrrq6g9
+parent: tridge@samba.org-20070602094506-384lkqipi0x10k6c
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Sun 2007-06-03 10:29:14 +1000
+message:
+  fixed a race condition in the handling of the recovery lock
+modified:
+  common/ctdb_call.c             ctdb_call.c-20061128065342-to93h6eejj5kon81-1
+  common/ctdb_recover.c          ctdb_recover.c-20070503002147-admmfgt1oj6gexfo-1
+  common/ctdb_recoverd.c         recoverd.c-20070503213540-bvxuyd9jm1f7ig90-1
+=== modified file 'common/ctdb_call.c'
+--- a/common/ctdb_call.c	2007-05-31 03:50:53 +0000
++++ b/common/ctdb_call.c	2007-06-03 00:29:14 +0000
+@@ -394,8 +394,9 @@
+ 
+ 	/* its a protocol error if the sending node is not the current dmaster */
+ 	if (header.dmaster != hdr->srcnode) {
+-		DEBUG(0,("vnn %u dmaster request non-master %u dmaster=%u key %08x\n",
+-			 ctdb->vnn, hdr->srcnode, header.dmaster, ctdb_hash(&key)));
++		DEBUG(0,("vnn %u dmaster request non-master %u dmaster=%u key %08x dbid 0x%08x\n",
++			 ctdb->vnn, hdr->srcnode, header.dmaster, ctdb_hash(&key),
++			 ctdb_db->db_id));
+ 		ctdb_fatal(ctdb, "ctdb_req_dmaster from non-master");
+ 		return;
+ 	}
+
+=== modified file 'common/ctdb_recover.c'
+--- a/common/ctdb_recover.c	2007-06-02 03:16:11 +0000
++++ b/common/ctdb_recover.c	2007-06-03 00:29:14 +0000
+@@ -487,8 +487,8 @@
+ 	/* we should not be able to get the lock on the nodes list, as it should be
+ 	   held by the recovery master */
+ 	if (ctdb_recovery_lock(ctdb, false)) {
+-		DEBUG(0,("ERROR: node list not locked when recovering!\n"));
+-		ctdb_fatal(ctdb, "node list not locked - make sure it is on shared storage");
++		DEBUG(0,("ERROR: recovery lock file %s not locked when recovering!\n",
++			 ctdb->recovery_lock_file));
+ 		return -1;
+ 	}	
+ 
+
+=== modified file 'common/ctdb_recoverd.c'
+--- a/common/ctdb_recoverd.c	2007-06-02 01:36:42 +0000
++++ b/common/ctdb_recoverd.c	2007-06-03 00:29:14 +0000
+@@ -614,7 +614,8 @@
+ 	}
+ 
+ 	/* release the recmaster lock */
+-	if (ctdb->recovery_lock_fd != -1) {
++	if (em->vnn != ctdb_get_vnn(ctdb) &&
++	    ctdb->recovery_lock_fd != -1) {
+ 		close(ctdb->recovery_lock_fd);
+ 		ctdb->recovery_lock_fd = -1;
+ 	}
+

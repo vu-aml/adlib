@@ -1,0 +1,187 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Apr 10 23:46:31 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3B3kU0I012214
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 10 Apr 2007 23:46:30 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id E7877163886
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 11 Apr 2007 03:46:07 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.5 required=3.8 tests=AWL,BAYES_50,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 501)
+	id 274C1162AF2; Wed, 11 Apr 2007 03:45:40 +0000 (GMT)
+To: samba-cvs@samba.org
+From: abartlet@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070411034540.274C1162AF2@lists.samba.org>
+Date: Wed, 11 Apr 2007 03:45:40 +0000 (GMT)
+Subject: svn commit: samba r22161 - in
+	branches/SAMBA_4_0/source/script/tests: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 4453
+Lines: 144
+
+Author: abartlet
+Date: 2007-04-11 03:45:39 +0000 (Wed, 11 Apr 2007)
+New Revision: 22161
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22161
+
+Log:
+Clarify exactly where the socket_wrapper should be handled (early),
+and ensure that $prefix exists before it tries to create $prefix/w.
+
+This should fix the build farm.  Perhaps we should have a rm -rf
+$prefix at the start of this script, as that would have found the
+problem, but I want to be careful about that...
+
+Andrew Bartlett
+
+Modified:
+   branches/SAMBA_4_0/source/script/tests/Samba3.pm
+   branches/SAMBA_4_0/source/script/tests/Samba4.pm
+   branches/SAMBA_4_0/source/script/tests/selftest.pl
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/script/tests/Samba3.pm
+===================================================================
+--- branches/SAMBA_4_0/source/script/tests/Samba3.pm	2007-04-11 01:32:38 UTC (rev 22160)
++++ branches/SAMBA_4_0/source/script/tests/Samba3.pm	2007-04-11 03:45:39 UTC (rev 22161)
+@@ -16,14 +16,11 @@
+ 	return $self;
+ }
+ 
+-sub check_or_start($$$$) 
++sub check_or_start($$$) 
+ {
+-	my ($self, $env_vars, $socket_wrapper_dir, $max_time) = @_;
++	my ($self, $env_vars, $max_time) = @_;
+ 	return 0 if ( -p $env_vars->{SMBD_TEST_FIFO});
+ 
+-	warn("Not using socket wrapper, but also not running as root. Will not be able to listen on proper ports") unless
+-		defined($socket_wrapper_dir) or $< == 0;
+-
+ 	unlink($env_vars->{SMBD_TEST_FIFO});
+ 	POSIX::mkfifo($env_vars->{SMBD_TEST_FIFO}, 0700);
+ 	unlink($env_vars->{SMBD_TEST_LOG});
+@@ -49,7 +46,6 @@
+ 			exit 1;
+ 		}
+ 		unlink($env_vars->{SMBD_TEST_FIFO});
+-		unlink(<$socket_wrapper_dir/*>) if (defined($socket_wrapper_dir) and -d $socket_wrapper_dir);
+ 		my $exit = $? >> 8;
+ 		if ( $ret == 0 ) {
+ 			print "smbd exits with status $exit\n";
+@@ -121,9 +117,9 @@
+ 	return $failed;
+ }
+ 
+-sub setup_env($$$)
++sub setup_env($$)
+ {
+-	my ($self, $name, $socket_wrapper_dir) = @_;
++	my ($self, $name) = @_;
+ }
+ 
+ 1;
+
+Modified: branches/SAMBA_4_0/source/script/tests/Samba4.pm
+===================================================================
+--- branches/SAMBA_4_0/source/script/tests/Samba4.pm	2007-04-11 01:32:38 UTC (rev 22160)
++++ branches/SAMBA_4_0/source/script/tests/Samba4.pm	2007-04-11 03:45:39 UTC (rev 22161)
+@@ -58,9 +58,9 @@
+ 	}
+ }
+ 
+-sub check_or_start($$$$) 
++sub check_or_start($$$) 
+ {
+-	my ($self, $env_vars, $socket_wrapper_dir, $max_time) = @_;
++	my ($self, $env_vars, $max_time) = @_;
+ 	return 0 if ( -p $env_vars->{SMBD_TEST_FIFO});
+ 
+ 	# Start slapd before smbd
+@@ -99,7 +99,6 @@
+ 			exit 1;
+ 		}
+ 		unlink($env_vars->{SMBD_TEST_FIFO});
+-		unlink(<$socket_wrapper_dir/*>) if (defined($socket_wrapper_dir) and -d $socket_wrapper_dir);
+ 		my $exit = $? >> 8;
+ 		if ( $ret == 0 ) {
+ 			print "smbd exits with status $exit\n";
+@@ -181,24 +180,24 @@
+ 	return $failed;
+ }
+ 
+-sub setup_env($$$$)
++sub setup_env($$$)
+ {
+-	my ($self, $envname, $path, $socket_wrapper_dir) = @_;
++	my ($self, $envname, $path) = @_;
+ 	
+ 	if ($envname eq "dc") {
+-		return $self->setup_dc("$path/dc", $socket_wrapper_dir);
++		return $self->setup_dc("$path/dc");
+ 	} else {
+ 		die("Samba4 can't provide environment $envname");
+ 	}
+ }
+ 
+-sub setup_dc($$$)
++sub setup_dc($$)
+ {
+-	my ($self, $path, $socket_wrapper_dir) = @_;
++	my ($self, $path) = @_;
+ 
+ 	my $env = $self->provision($path);
+ 
+-	$self->check_or_start($env, $socket_wrapper_dir, 
++	$self->check_or_start($env, 
+ 		($ENV{SMBD_MAX_TIME} or 5400));
+ 
+ 	$self->wait_for_start($env);
+
+Modified: branches/SAMBA_4_0/source/script/tests/selftest.pl
+===================================================================
+--- branches/SAMBA_4_0/source/script/tests/selftest.pl	2007-04-11 01:32:38 UTC (rev 22160)
++++ branches/SAMBA_4_0/source/script/tests/selftest.pl	2007-04-11 03:45:39 UTC (rev 22161)
+@@ -371,6 +371,9 @@
+ $ENV{PREFIX} = $prefix;
+ $ENV{SRCDIR} = $srcdir;
+ 
++#Ensure we have the test prefix around
++mkdir $prefix unless -d $prefix;
++
+ my $tls_enabled = not $opt_quick;
+ my $from_build_farm = (defined($ENV{RUN_FROM_BUILD_FARM}) and 
+                       ($ENV{RUN_FROM_BUILD_FARM} eq "yes"));
+@@ -543,7 +546,7 @@
+ 	} elsif ($envname eq "none") {
+ 		$testenv_vars = {};
+ 	} else {
+-		$testenv_vars = $target->setup_env($envname, $prefix, $socket_wrapper_dir);
++		$testenv_vars = $target->setup_env($envname, $prefix);
+ 	}
+ 	write_clientconf($conffile, $testenv_vars);
+ 	foreach ("PASSWORD", "DOMAIN", "SERVER", "USERNAME", "NETBIOSNAME", 
+

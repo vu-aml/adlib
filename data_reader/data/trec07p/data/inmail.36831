@@ -1,0 +1,227 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 15 09:58:32 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4FDwVqD005739
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 09:58:31 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 4783E163D7A
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 13:58:29 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id 2F50E163C7C; Tue, 15 May 2007 13:56:02 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070515135602.2F50E163C7C@lists.samba.org>
+Date: Tue, 15 May 2007 13:56:02 +0000 (GMT)
+Subject: svn commit: samba r22905 - in branches: SAMBA_3_0/source/libsmb
+	SAMBA_3_0/source/nsswitch SAMBA_3_0_26/source/libsmb
+	SAMBA_3_0_26/source/nsswitch
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-05-15 13:56:00 +0000 (Tue, 15 May 2007)
+New Revision: 22905
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22905
+
+Log:
+cli_send_mailslot had a message_send_pid inside
+
+Modified:
+   branches/SAMBA_3_0/source/libsmb/clidgram.c
+   branches/SAMBA_3_0/source/nsswitch/winbindd_cm.c
+   branches/SAMBA_3_0_26/source/libsmb/clidgram.c
+   branches/SAMBA_3_0_26/source/nsswitch/winbindd_cm.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/libsmb/clidgram.c
+===================================================================
+--- branches/SAMBA_3_0/source/libsmb/clidgram.c	2007-05-15 13:47:25 UTC (rev 22904)
++++ branches/SAMBA_3_0/source/libsmb/clidgram.c	2007-05-15 13:56:00 UTC (rev 22905)
+@@ -26,7 +26,8 @@
+  * cli_send_mailslot, send a mailslot for client code ...
+  */
+ 
+-BOOL cli_send_mailslot(BOOL unique, const char *mailslot,
++BOOL cli_send_mailslot(struct messaging_context *msg_ctx,
++		       BOOL unique, const char *mailslot,
+ 		       uint16 priority,
+ 		       char *buf, int len,
+ 		       const char *srcname, int src_type, 
+@@ -104,9 +105,10 @@
+ 	DEBUGADD(4,("to %s IP %s\n", nmb_namestr(&dgram->dest_name),
+ 		    inet_ntoa(dest_ip)));
+ 
+-	return NT_STATUS_IS_OK(message_send_pid(pid_to_procid(nmbd_pid),
+-						MSG_SEND_PACKET, &p, sizeof(p),
+-						False));
++	return NT_STATUS_IS_OK(messaging_send_buf(msg_ctx,
++						  pid_to_procid(nmbd_pid),
++						  MSG_SEND_PACKET,
++						  (uint8 *)&p, sizeof(p)));
+ }
+ 
+ /*
+@@ -133,7 +135,8 @@
+ 
+ static char cli_backup_list[1024];
+ 
+-int cli_get_backup_list(const char *myname, const char *send_to_name)
++int cli_get_backup_list(struct messaging_context *msg_ctx,
++			const char *myname, const char *send_to_name)
+ {
+ 	pstring outbuf;
+ 	char *p;
+@@ -160,7 +163,7 @@
+ 	SIVAL(p, 0, 1); /* The sender's token ... */
+ 	p += 4;
+ 
+-	cli_send_mailslot(True, "\\MAILSLOT\\BROWSE", 1, outbuf, 
++	cli_send_mailslot(msg_ctx, True, "\\MAILSLOT\\BROWSE", 1, outbuf, 
+ 			  PTR_DIFF(p, outbuf), myname, 0, send_to_name, 
+ 			  0x1d, sendto_ip);
+ 
+@@ -179,16 +182,18 @@
+  * cli_get_backup_server: Get the backup list and retrieve a server from it
+  */
+ 
+-int cli_get_backup_server(char *my_name, char *target, char *servername, int namesize)
++int cli_get_backup_server(struct messaging_context *msg_ctx,
++			  char *my_name, char *target, char *servername,
++			  int namesize)
+ {
+ 
+   /* Get the backup list first. We could pull this from the cache later */
+ 
+-  cli_get_backup_list(my_name, target);  /* FIXME: Check the response */
++  cli_get_backup_list(msg_ctx, my_name, target);  /* FIXME: Check the response */
+ 
+   if (!cli_backup_list[0]) { /* Empty list ... try again */
+ 
+-    cli_get_backup_list(my_name, target);
++    cli_get_backup_list(msg_ctx, my_name, target);
+ 
+   }
+ 
+
+Modified: branches/SAMBA_3_0/source/nsswitch/winbindd_cm.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/winbindd_cm.c	2007-05-15 13:47:25 UTC (rev 22904)
++++ branches/SAMBA_3_0/source/nsswitch/winbindd_cm.c	2007-05-15 13:56:00 UTC (rev 22905)
+@@ -975,7 +975,8 @@
+ 	SSVAL(p, 6, 0xffff);
+ 	p+=8;
+ 
+-	return cli_send_mailslot(False, "\\MAILSLOT\\NET\\NTLOGON", 0,
++	return cli_send_mailslot(winbind_messaging_context(),
++				 False, "\\MAILSLOT\\NET\\NTLOGON", 0,
+ 				 outbuf, PTR_DIFF(p, outbuf),
+ 				 global_myname(), 0, domain_name, 0x1c,
+ 				 dc_ip);
+
+Modified: branches/SAMBA_3_0_26/source/libsmb/clidgram.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/libsmb/clidgram.c	2007-05-15 13:47:25 UTC (rev 22904)
++++ branches/SAMBA_3_0_26/source/libsmb/clidgram.c	2007-05-15 13:56:00 UTC (rev 22905)
+@@ -26,7 +26,8 @@
+  * cli_send_mailslot, send a mailslot for client code ...
+  */
+ 
+-BOOL cli_send_mailslot(BOOL unique, const char *mailslot,
++BOOL cli_send_mailslot(struct messaging_context *msg_ctx,
++		       BOOL unique, const char *mailslot,
+ 		       uint16 priority,
+ 		       char *buf, int len,
+ 		       const char *srcname, int src_type, 
+@@ -104,9 +105,10 @@
+ 	DEBUGADD(4,("to %s IP %s\n", nmb_namestr(&dgram->dest_name),
+ 		    inet_ntoa(dest_ip)));
+ 
+-	return NT_STATUS_IS_OK(message_send_pid(pid_to_procid(nmbd_pid),
+-						MSG_SEND_PACKET, &p, sizeof(p),
+-						False));
++	return NT_STATUS_IS_OK(messaging_send_buf(msg_ctx,
++						  pid_to_procid(nmbd_pid),
++						  MSG_SEND_PACKET,
++						  (uint8 *)&p, sizeof(p)));
+ }
+ 
+ /*
+@@ -133,7 +135,8 @@
+ 
+ static char cli_backup_list[1024];
+ 
+-int cli_get_backup_list(const char *myname, const char *send_to_name)
++int cli_get_backup_list(struct messaging_context *msg_ctx,
++			const char *myname, const char *send_to_name)
+ {
+ 	pstring outbuf;
+ 	char *p;
+@@ -160,7 +163,7 @@
+ 	SIVAL(p, 0, 1); /* The sender's token ... */
+ 	p += 4;
+ 
+-	cli_send_mailslot(True, "\\MAILSLOT\\BROWSE", 1, outbuf, 
++	cli_send_mailslot(msg_ctx, True, "\\MAILSLOT\\BROWSE", 1, outbuf, 
+ 			  PTR_DIFF(p, outbuf), myname, 0, send_to_name, 
+ 			  0x1d, sendto_ip);
+ 
+@@ -179,16 +182,18 @@
+  * cli_get_backup_server: Get the backup list and retrieve a server from it
+  */
+ 
+-int cli_get_backup_server(char *my_name, char *target, char *servername, int namesize)
++int cli_get_backup_server(struct messaging_context *msg_ctx,
++			  char *my_name, char *target, char *servername,
++			  int namesize)
+ {
+ 
+   /* Get the backup list first. We could pull this from the cache later */
+ 
+-  cli_get_backup_list(my_name, target);  /* FIXME: Check the response */
++  cli_get_backup_list(msg_ctx, my_name, target);  /* FIXME: Check the response */
+ 
+   if (!cli_backup_list[0]) { /* Empty list ... try again */
+ 
+-    cli_get_backup_list(my_name, target);
++    cli_get_backup_list(msg_ctx, my_name, target);
+ 
+   }
+ 
+
+Modified: branches/SAMBA_3_0_26/source/nsswitch/winbindd_cm.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/nsswitch/winbindd_cm.c	2007-05-15 13:47:25 UTC (rev 22904)
++++ branches/SAMBA_3_0_26/source/nsswitch/winbindd_cm.c	2007-05-15 13:56:00 UTC (rev 22905)
+@@ -975,7 +975,8 @@
+ 	SSVAL(p, 6, 0xffff);
+ 	p+=8;
+ 
+-	return cli_send_mailslot(False, "\\MAILSLOT\\NET\\NTLOGON", 0,
++	return cli_send_mailslot(winbind_messaging_context(),
++				 False, "\\MAILSLOT\\NET\\NTLOGON", 0,
+ 				 outbuf, PTR_DIFF(p, outbuf),
+ 				 global_myname(), 0, domain_name, 0x1c,
+ 				 dc_ip);
+

@@ -1,0 +1,299 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri May 11 21:18:17 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4C1IHqD004265
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 11 May 2007 21:18:17 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 2F7D0163827
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 12 May 2007 01:18:15 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.5 required=3.8 tests=BAYES_50,RCVD_IN_DSBL,
+	UNPARSEABLE_RELAY autolearn=no version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: from gmp-ea-fw-1.sun.com (gmp-ea-fw-1.sun.com [192.18.1.36])
+	by lists.samba.org (Postfix) with ESMTP id D133A162AC0
+	for <samba-technical@samba.org>; Sat, 12 May 2007 01:17:11 +0000 (GMT)
+Received: from d1-emea-09.sun.com (d1-emea-09.sun.com [192.18.2.119])
+	by gmp-ea-fw-1.sun.com (8.13.6+Sun/8.12.9) with ESMTP id l4C1H6lR015719
+	for <samba-technical@samba.org>; Sat, 12 May 2007 01:17:10 GMT
+Received: from conversion-daemon.d1-emea-09.sun.com by d1-emea-09.sun.com
+	(Sun Java System Messaging Server 6.2-6.01 (built Apr  3 2006))
+	id <0JHW00E01M209B00@d1-emea-09.sun.com>
+	(original mail from Jiri.Sasek@Sun.COM) for samba-technical@samba.org;
+	Sat, 12 May 2007 02:17:06 +0100 (BST)
+Received: from [192.168.0.7] ([62.24.72.170])
+	by d1-emea-09.sun.com (Sun Java System Messaging Server 6.2-6.01 (built
+	Apr 3
+	2006)) with ESMTPSA id <0JHW0053UM8HWQ37@d1-emea-09.sun.com> for
+	samba-technical@samba.org; Sat, 12 May 2007 02:17:06 +0100 (BST)
+Date: Sat, 12 May 2007 03:17:05 +0200
+From: Jiri Sasek <Jiri.Sasek@Sun.COM>
+To: samba-technical@samba.org
+Message-id: <46451591.5050002@sun.com>
+MIME-version: 1.0
+Content-type: multipart/mixed; boundary="Boundary_(ID_Ia2AzaMBdAkhcsftNYt5Bg)"
+X-Accept-Language: en-us, en
+User-Agent: Mozilla/5.0 (X11; U; SunOS i86pc; en-US; rv:1.7) Gecko/20041221
+Subject: VFS module handling ACL on ZFS
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+This is a multi-part message in MIME format.
+
+--Boundary_(ID_Ia2AzaMBdAkhcsftNYt5Bg)
+Content-type: text/plain; format=flowed; charset=us-ascii
+Content-transfer-encoding: 7BIT
+
+Is there anybody having courage to test this module? Built and tested 
+with nevada. Feedback is welcomed.
+
+Regards
+
+Jiri
+
+--Boundary_(ID_Ia2AzaMBdAkhcsftNYt5Bg)
+Content-type: text/x-csrc; name=vfs_zfsacl.c
+Content-transfer-encoding: 7BIT
+Content-disposition: inline; filename=vfs_zfsacl.c
+
+/*
+ * Convert ZFS/NFSv4 acls to NT acls and vice versa.
+ *
+ * Copyright (C) Jiri Sasek, 2007
+ * based on the foobar.c module which is copyrighted by Volker Lendecke
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
+ */
+
+#include "includes.h"
+#include "nfs4_acls.h"
+
+#undef DBGC_CLASS
+#define DBGC_CLASS DBGC_VFS
+
+#define ZFSACL_MODULE_NAME "zfsacl"
+
+/* zfs_get_nt_acl()
+ * read the local file's acls and return it in NT form
+ * using the NFSv4 format conversion
+ */
+static size_t zfs_get_nt_acl(struct files_struct *fsp, uint32 security_info,
+			     struct security_descriptor **ppdesc)
+{
+	int naces, i;
+	ace_t *acebuf;
+	SMB4ACL_T *pacl;
+	TALLOC_CTX	*mem_ctx;
+
+	/* read the number of file aces */
+	if((naces = acl(fsp->fsp_name, ACE_GETACLCNT, 0, NULL)) == -1) {
+		if(errno == ENOSYS) {
+			DEBUG(9, ("acl(ACE_GETACLCNT, %s): Operation is not supported on the filesystem where the file reside"));
+		} else {
+			DEBUG(9, ("acl(ACE_GETACLCNT, %s): %s ", fsp->fsp_name,
+					strerror(errno)));
+		}
+		return 0;
+	}
+	/* allocate the field of ZFS aces */
+	mem_ctx = main_loop_talloc_get();
+	acebuf = (ace_t *) talloc_size(mem_ctx, sizeof(ace_t)*naces);
+	if(acebuf == NULL) {
+		errno = ENOMEM;
+		return 0;
+	}
+	/* read the aces into the field */
+	if(acl(fsp->fsp_name, ACE_GETACL, naces, acebuf) < 0) {
+		DEBUG(9, ("acl(ACE_GETACL, %s): %s ", fsp->fsp_name,
+				strerror(errno)));
+		return 0;
+	}
+	/* create SMB4ACL data */
+	if((pacl = smb_create_smb4acl()) == NULL) return 0;
+	for(i=0; i<naces; i++) {
+		SMB_ACE4PROP_T aceprop;
+
+		aceprop.aceType  = (uint32) acebuf[i].a_type;
+		aceprop.aceFlags = (uint32) acebuf[i].a_flags;
+		aceprop.aceMask  = (uint32) acebuf[i].a_access_mask;
+		aceprop.who.id   = (uint32) acebuf[i].a_who;
+		aceprop.flags    = 0;
+		if(smb_add_ace4(pacl, &aceprop) == NULL) return 0;
+	}
+
+	return smb_get_nt_acl_nfs4(fsp, security_info, ppdesc, pacl);
+}
+
+/* call-back function processing the NT acl -> ZFS acl using NFSv4 conv. */
+static BOOL zfs_process_smbacl(files_struct *fsp, SMB4ACL_T *smbacl)
+{
+	int naces = smb_get_naces(smbacl), i;
+	ace_t *acebuf;
+	SMB4ACE_T *smbace;
+	TALLOC_CTX	*mem_ctx;
+
+	/* allocate the field of ZFS aces */
+	mem_ctx = main_loop_talloc_get();
+	acebuf = (ace_t *) talloc_size(mem_ctx, sizeof(ace_t)*naces);
+	if(acebuf == NULL) {
+		errno = ENOMEM;
+		return False;
+	}
+	/* handle all aces */
+	for(smbace = smb_first_ace4(smbacl), i = 0;
+			smbace!=NULL;
+			smbace = smb_next_ace4(smbace), i++) {
+		SMB_ACE4PROP_T *aceprop = smb_get_ace4(smbace);
+
+		acebuf[i].a_type        = aceprop->aceType;
+		acebuf[i].a_flags       = aceprop->aceFlags;
+		acebuf[i].a_access_mask = aceprop->aceMask;
+		acebuf[i].a_who         = aceprop->who.id;
+	}
+	SMB_ASSERT(i == naces);
+
+	/* store acl */
+	if(acl(fsp->fsp_name, ACE_SETACL, naces, acebuf)) {
+		if(errno == ENOSYS) {
+			DEBUG(9, ("acl(ACE_SETACL, %s): Operation is not supported on the filesystem where the file reside"));
+		} else {
+			DEBUG(9, ("acl(ACE_SETACL, %s): %s ", fsp->fsp_name,
+					strerror(errno)));
+		}
+		return 0;
+	}
+
+	return True;
+}
+
+/* zfs_set_nt_acl()
+ * set the local file's acls obtaining it in NT form
+ * using the NFSv4 format conversion
+ */
+static BOOL zfs_set_nt_acl(vfs_handle_struct *handle, files_struct *fsp,
+			   uint32 security_info_sent,
+			   struct security_descriptor *psd)
+{
+	return smb_set_nt_acl_nfs4(fsp, security_info_sent, psd,
+			zfs_process_smbacl);
+}
+
+size_t zfsacl_fget_nt_acl(struct vfs_handle_struct *handle,
+				 struct files_struct *fsp,
+				 int fd,  uint32 security_info,
+				 struct security_descriptor **ppdesc)
+{
+	return zfs_get_nt_acl(fsp, security_info, ppdesc);
+}
+size_t zfsacl_get_nt_acl(struct vfs_handle_struct *handle,
+				struct files_struct *fsp,
+				const char *name,  uint32 security_info,
+				struct security_descriptor **ppdesc)
+{
+	return zfs_get_nt_acl(fsp, security_info, ppdesc);
+}
+
+BOOL zfsacl_fset_nt_acl(vfs_handle_struct *handle,
+			 files_struct *fsp,
+			 int fd, uint32 security_info_sent,
+			 SEC_DESC *psd)
+{
+	return zfs_set_nt_acl(handle, fsp, security_info_sent, psd);
+}
+
+BOOL zfsacl_set_nt_acl(vfs_handle_struct *handle,
+		       files_struct *fsp,
+		       const char *name, uint32 security_info_sent,
+		       SEC_DESC *psd)
+{
+	return zfs_set_nt_acl(handle, fsp, security_info_sent, psd);
+}
+
+/* VFS operations structure */
+
+static vfs_op_tuple zfsacl_ops[] = {	
+	{SMB_VFS_OP(zfsacl_fget_nt_acl), SMB_VFS_OP_FGET_NT_ACL,
+	 SMB_VFS_LAYER_TRANSPARENT},
+	{SMB_VFS_OP(zfsacl_get_nt_acl), SMB_VFS_OP_GET_NT_ACL,
+	 SMB_VFS_LAYER_TRANSPARENT},
+	{SMB_VFS_OP(zfsacl_fset_nt_acl), SMB_VFS_OP_FSET_NT_ACL,
+	 SMB_VFS_LAYER_TRANSPARENT},
+	{SMB_VFS_OP(zfsacl_set_nt_acl), SMB_VFS_OP_SET_NT_ACL,
+	 SMB_VFS_LAYER_TRANSPARENT},
+	{SMB_VFS_OP(NULL), SMB_VFS_OP_NOOP, SMB_VFS_LAYER_NOOP}
+};
+
+NTSTATUS vfs_zfsacl_init(void);
+NTSTATUS vfs_zfsacl_init(void)
+{
+	return smb_register_vfs(SMB_VFS_INTERFACE_VERSION, "zfsacl",
+				zfsacl_ops);
+}
+
+--Boundary_(ID_Ia2AzaMBdAkhcsftNYt5Bg)
+Content-type: text/plain; name=makefile.in-diff
+Content-transfer-encoding: 7BIT
+Content-disposition: inline; filename=makefile.in-diff
+
+--- samba-3.0.25/source/Makefile.in	Wed Feb 28 20:55:16 2007
++++ samba-3.0.25-fix/source/Makefile.in	Tue Mar 20 07:48:26 2007
+@@ -415,6 +415,7 @@
+ VFS_AIXACL_OBJ = modules/vfs_aixacl.o modules/vfs_aixacl_util.o
+ VFS_AIXACL2_OBJ = modules/vfs_aixacl2.o modules/vfs_aixacl_util.o modules/nfs4_acls.o
+ VFS_SOLARISACL_OBJ = modules/vfs_solarisacl.o
++VFS_ZFSACL_OBJ = modules/vfs_zfsacl.o modules/nfs4_acls.o
+ VFS_HPUXACL_OBJ = modules/vfs_hpuxacl.o
+ VFS_IRIXACL_OBJ = modules/vfs_irixacl.o
+ VFS_TRU64ACL_OBJ = modules/vfs_tru64acl.o
+@@ -740,7 +741,7 @@
+ WINBIND_WINS_NSS_OBJ = nsswitch/wins.o $(PARAM_OBJ) \
+ 	$(LIBSMB_OBJ) $(LIB_NONSMBD_OBJ) $(NSSWINS_OBJ) $(KRBCLIENT_OBJ) $(SECRETS_OBJ)
+ 
+-PAM_SMBPASS_OBJ_0 = pam_smbpass/pam_smb_auth.o pam_smbpass/pam_smb_passwd.o \
++PAM_SMBPASS_OBJ = pam_smbpass/pam_smb_auth.o pam_smbpass/pam_smb_passwd.o \
+ 		pam_smbpass/pam_smb_acct.o pam_smbpass/support.o \
+ 		$(PARAM_OBJ) $(LIB_NONSMBD_OBJ) $(PASSDB_OBJ) $(GROUPDB_OBJ) \
+ 		$(SECRETS_OBJ) $(SMBLDAP_OBJ) $(LIBSAMBA_OBJ) \
+@@ -1436,6 +1437,11 @@
+ 	@$(SHLD) $(LDSHFLAGS) -o $@ $(VFS_SOLARISACL_OBJ) \
+ 		@SONAMEFLAG@`basename $@`
+ 
++bin/zfsacl.@SHLIBEXT@: $(VFS_ZFSACL_OBJ)
++	@echo "Building plugin $@"
++	@$(SHLD) $(LDSHFLAGS) -o $@ $(VFS_ZFSACL_OBJ) \
++		@SONAMEFLAG@`basename $@`
++
+ bin/irixacl.@SHLIBEXT@: $(VFS_IRIXACL_OBJ)
+ 	@echo "Building plugin $@"
+ 	@$(SHLD) $(LDSHFLAGS) -o $@ $(VFS_IRIXACL_OBJ) \
+
+--Boundary_(ID_Ia2AzaMBdAkhcsftNYt5Bg)--
+

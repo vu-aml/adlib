@@ -1,0 +1,218 @@
+From perl6-all-return-81410-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue May 15 21:46:40 2007
+Return-Path: <perl6-all-return-81410-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4G1kdqD012658
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 15 May 2007 21:46:40 -0400
+Received: (qmail 26742 invoked by uid 514); 16 May 2007 01:46:36 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 26737 invoked from network); 16 May 2007 01:46:36 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-1.3 required=8.0
+	tests=BAYES_00,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED,MISSING_HEADERS,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: domain of codermattie@gmail.com designates 64.233.184.237 as permitted sender)
+DKIM-Signature: a=rsa-sha1; c=relaxed/relaxed;
+        d=gmail.com; s=beta;
+        h=domainkey-signature:received:received:date:from:cc:subject:message-id:in-reply-to:references:x-mailer:mime-version:content-type;
+        b=b/6zjHHQa4KaFlXxyX8FxI/V37nLCSKGjRTkVGEeh26c09nroLlU9gIkirPfgd7+jfyXvj3hftrPK4TLmQdfxFJA8gkhHY/67mGakCTPeb2eyG1j5Yc7w+dDBb+gRVk1WOQC8QdmyFLH0AIDYpeOPi4q4Z79E/4zLdLRYF1VrJk=
+DomainKey-Signature: a=rsa-sha1; c=nofws;
+        d=gmail.com; s=beta;
+        h=received:date:from:cc:subject:message-id:in-reply-to:references:x-mailer:mime-version:content-type;
+        b=QYliOXygZ+fIf7hmeUDzmXw2iona5U/huKcMppL3sCEVOJ/oGXv/GGV9EUBbkyKtQGhCOj2XjDNpD4ra4k/ZA8zEju4aU95An+Vz/2ih4FHIABSatjVdWFHnInym0OmYpJPsa1ERiFVr7XtN7B7rtXTB9H8+ToeabgZ+Iraqc4A=
+Date: Tue, 15 May 2007 18:32:06 -0700
+From: Mike Mattie <codermattie@gmail.com>
+Cc: parrot ML <perl6-internals@perl.org>, Allison Randal <allison@perl.org>
+Subject: Re: [RFC] extension guessing, functionally better loader behavior
+ -> working install target
+Message-ID: <20070515183206.39509488@reforged>
+In-Reply-To: <20070513224615.5f62e3ad@reforged>
+References: <20070513224615.5f62e3ad@reforged>
+X-Mailer: Claws Mail 2.6.1 (GTK+ 2.10.9; i686-pc-linux-gnu)
+Mime-Version: 1.0
+Content-Type: multipart/signed; boundary="Sig_DnPJRnx=Xb0xQxmnSYP2Hr5";
+ protocol="application/pgp-signature"; micalg=PGP-SHA1
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=0.7 required=8.0
+	tests=BAYES_00,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED,KARMA_CONNECT_NEGATIVE,MISSING_HEADERS,SPF_PASS
+
+--Sig_DnPJRnx=Xb0xQxmnSYP2Hr5
+Content-Type: text/plain; charset=US-ASCII
+Content-Transfer-Encoding: quoted-printable
+
+On Sun, 13 May 2007 22:46:15 -0700
+Mike Mattie <codermattie@gmail.com> wrote:
+
+> Hello,
+>=20
+[snip RFC]
+
+Here is a revised and cleaned up specification of the search algorithm take=
+n from my current description
+of the Parrot_locate_runtime_str function.
+
+
+/*
+
+=3Ditem C<char* Parrot_locate_runtime_file(Interp *,
+                                         const char *object_name,
+                                         STRING *hll
+                                         enum_runtime_ft *loader
+                                         STRING* trace)>
+
+Parrot_locate_runtime_str searches the filesystem for object files
+containing code of some sort. This functionality is shared by several
+opcodes/components and is designed with parrot's unusual flexiblity in
+mind.
+
+object_name : the name of the object to load. It can be simply a name,
+              path, or absolute path.
+
+hll         : The hll argument is the key to the HLL name-space. The
+              default namespace is used if the namespace does not exist
+              or is null.
+
+              The default name-space is "parrot".
+
+loader      : a bit-mask selecting loaders to be included in the search.
+              This arguement is passed by reference. When a matching file
+              is found the value of loader is reset to the flag for the
+              loader under which it was found.
+
+              loader is not modified unless a matching file is found.
+
+trace       : given non-null string a trace of the search will be appended.
+              This allows higher level API's to capture detailed diagnostics
+              when the search fails. This is useful for all parties.
+
+The return value is:
+
+  *  a string containing the path to the objects preferred form, or NULL if=
+ not found.
+
+  * localized with parrot_platform_path_localize
+
+      *  all path seperators are coverted to the platform's value (ie Win32)
+
+      *  a hidden 0 char is appended making it suitable for direct use in C=
+ API calls,
+         an artifact of the previous implementation.
+
+Search behavior:
+
+code objects can have several formats, some of which will be stored on
+disk. This routine searches for the preferred format of an object.
+Preferred is either lowest form (compiled), or highest form (source).
+
+The given search rules apply at each step in the search order. The
+search order is executed per loader. The loader mask is also traversed
+in preferred the order.
+
+rule 1: parrot will always try the object_name as given before adding
+        extensions. The set of extensions tried is loader specific.
+
+Search order:
+
+     1. Absolute paths (return or fail)
+
+     2. Search the paths joined with get_runtime_prefix
+
+     3. joined with get_runtime_prefix
+
+     4. as given
+
+     Exception 1. absolute paths in the path list are not prefixed
+
+     Exception 2. If the loader mask is zero: step two of the search order
+                  will be skipped. extensions are skipped since there
+                  is no loader information available.
+
+The two modals for the search are the runtime_prefix and preferred
+order.
+
+SEE ALSO: Parrot_get_runtime_prefix, query_load_prefer , F<include/parrot/l=
+ibrary.h>
+
+current parrot behavior can be achieved by passing NULL as the hll
+argument, and a loader mask of:
+
+  PARROT_RUNTIME_FT_BYTECODE &
+  PARROT_RUNTIME_FT_INCLUDE &
+  PARROT_RUNTIME_FT_SOURCE
+
+for parrot bytecode, and PARROT_RUNTIME_FT_ARCH for platform shared
+objects.
+
+Implementation Notes:
+
+The implementation of the search behavior is tagged in this file.
+rules            :  grep search-rule x
+search order     :  grep search-order x
+search exception :  grep search-rule x
+
+The search lists for both paths and extensions are dynamic arrays. In
+the extension search space it is assumed that the lowest index
+corresponds to the lowest form, and that the array is sorted
+accordingly.
+
+TODO: the extension , which is actually the stage of interpretation contain=
+ed
+      by the format is returned in the extension of the file. This should be
+      returned as a optimization hint to heuristics that do the real
+      determination of what's in a file , ( example: use v6; or shebang inv=
+ocations )
+
+TODO: instead of a string that is checked by stat() , a handle should be
+      returned instead to close the classic access() race. Additional
+      flags are needed for that such as NO_TTY and other basic cross-platfo=
+rm
+      security open() masks. <-- huge warning.
+
+      (This should be relative to a loader , higher level forms may
+       have looser security constraints)
+
+TODO: OS IO/VM hinting. some loaders could benefit from IO hinting such as
+      mapped/streamed, use-once etc. depends on returning a handle and open
+      flags.
+
+
+=3Dcut
+
+*/
+
+>=20
+> Cheers,
+> Mike Mattie - codermattie@gmail.com
+>=20
+>=20
+>=20
+>=20
+
+--Sig_DnPJRnx=Xb0xQxmnSYP2Hr5
+Content-Type: application/pgp-signature; name=signature.asc
+Content-Disposition: attachment; filename=signature.asc
+
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.6 (GNU/Linux)
+
+iD8DBQFGSl8ddfRchrkBInkRAjLyAJsHeHJygjwDwb9tm9tFuhkM5smiyQCeO0IP
+doSElw2mmwMEG8PMO5y1aeQ=
+=C/+u
+-----END PGP SIGNATURE-----
+
+--Sig_DnPJRnx=Xb0xQxmnSYP2Hr5--
+

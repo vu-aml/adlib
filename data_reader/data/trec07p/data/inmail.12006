@@ -1,0 +1,91 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Apr 17 21:27:26 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3I1RP0I003382
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 21:27:25 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 019361638DD
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 18 Apr 2007 01:27:00 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.6 required=3.8 tests=AWL,BAYES_50,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 76FC1162B01; Wed, 18 Apr 2007 01:26:04 +0000 (GMT)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Transfer-Encoding: 7bit
+Message-ID: <17957.29642.812135.596922@samba.org>
+Date: Wed, 18 Apr 2007 11:26:34 +1000
+To: Volker.Lendecke@SerNet.DE, samba-technical@samba.org
+In-Reply-To: <17957.20263.755596.506465@samba.org>
+References: <E1HdqDI-0008Fd-Ar@intern.SerNet.DE>
+	<E1HdvRc-0002zY-BV@intern.SerNet.DE>
+	<17957.20263.755596.506465@samba.org>
+X-Mailer: VM 7.19 under Emacs 22.0.95.1
+From: tridge@samba.org
+Subject: Re: ctdb status
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: tridge@samba.org
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 1510
+Lines: 41
+
+Volker,
+
+ > If we are leaking memory, then I suspect the real problem is a missing
+ > talloc_free() somewhere else. I'll have a look this morning and see if
+ > I can spot it.
+
+I've committed a fix for this.
+
+What was happening was this:
+
+  - in ctdb_recv_pkt() we were freeing the packet after
+    processing. That is the right thing to do in nearly every case, as
+    it ensures we don't leak packets. 
+
+  - some of the packet processing routines (in particular
+    ctdb_request_dmaster()) needed to keep the packet around for a
+    while, so they were stealing the packet into their own hierarchy
+
+  - in one code path, the packet processing routine would steal the
+    packet into its own hierarchy, then free that hierarchy. That
+    actually makes sense on that code path, but it meant we had a
+    double free when ctdb_recv_pkt() also freed the packet
+
+The solution was this:
+
+ - in ctdb_recv_pkt() create a temporary local context, and put the
+   packet under that context
+
+ - free this temporary context at the end of ctdb_recv_pkt()
+
+ - if the packet processing function frees, steals or does anything
+   else with the packet, then that's now fine, as it just means that
+   when we free the temporary context that the packet is no longer a
+   child of that context. If the packet processing routine doesn't
+   move or free the packet then freeing the temporary context frees
+   the packet
+
+This solution applies to all 3 of our packet recv routines (the 3
+operation switch routines).
+
+Cheers, Tridge
+

@@ -1,0 +1,109 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri May 25 15:32:16 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4PJWFqD031804
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 25 May 2007 15:32:15 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 715CD163824
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 25 May 2007 19:32:11 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.0 required=3.8 tests=AWL,BAYES_00,
+	RCVD_IN_BLARS_RBL,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from cassoulet.panasas.com (gw-e.panasas.com [65.194.124.178])
+	by lists.samba.org (Postfix) with ESMTP id 5856D162BCB
+	for <samba-technical@lists.samba.org>;
+	Fri, 25 May 2007 19:31:33 +0000 (GMT)
+Received: from laguna.int.panasas.com (localhost.localdomain [127.0.0.1])
+	by cassoulet.panasas.com (8.13.1/8.13.1) with ESMTP id l4PJVV0L015759
+	for <samba-technical@lists.samba.org>; Fri, 25 May 2007 15:31:32 -0400
+Received: from 172.17.132.41 ([172.17.132.41] helo=laguna.int.panasas.com)
+	by ASSP-nospam; 25 May 2007 15:31:31 -0400
+Received: from [172.17.132.117] ([172.17.132.117]) by laguna.int.panasas.com
+	with Microsoft SMTPSVC(6.0.3790.1830); 
+	Fri, 25 May 2007 12:31:30 -0700
+Message-ID: <46573992.5080404@panasas.com>
+Date: Fri, 25 May 2007 12:31:30 -0700
+From: Herb Lewis <hlewis@panasas.com>
+User-Agent: Mozilla/5.0 (X11; U; Linux i686; en-US;
+	rv:1.7.13) Gecko/20060501 Fedora/1.7.13-1.1.fc4
+X-Accept-Language: en-us, en
+MIME-Version: 1.0
+To: samba tech <samba-technical@lists.samba.org>
+References: <4651D9E9.5060605@panasas.com> <20070525190752.GE29352@samba1>
+In-Reply-To: <20070525190752.GE29352@samba1>
+Content-Type: text/plain; charset=us-ascii; format=flowed
+Content-Transfer-Encoding: 7bit
+X-OriginalArrivalTime: 25 May 2007 19:31:30.0778 (UTC)
+	FILETIME=[4BBD8BA0:01C79F03]
+Subject: Re: comment doesn't match code
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Didn't look at the implementation :-)
+
+So that also makes the
+
+if(ret_flock == -1 ){
+
+code that will never get executed.
+Might be better to just leave the comment here and just
+
+(void)SMB_VFS_KERNEL_FLOCK(fsp, fsp->fh->fd, share_access);
+
+and remove the error check code
+
+Jeremy Allison wrote:
+> On Mon, May 21, 2007 at 10:42:01AM -0700, Herb Lewis wrote:
+> 
+>>in smbd/open.c in the function open_file_ntcreate we have the
+>>following comment and code which contradict.
+>>
+>>        /* note that we ignore failure for the following. It is
+>>           basically a hack for NFS, and NFS will never set one of
+>>           these only read them. Nobody but Samba can ever set a deny
+>>           mode and we have already checked our more authoritative
+>>           locking database for permission to set this deny mode. If
+>>           the kernel refuses the operations then the kernel is wrong.
+>>           note that GPFS supports it as well - jmcd */
+>>
+>>        ret_flock = SMB_VFS_KERNEL_FLOCK(fsp, fsp->fh->fd, share_access);
+>>        if(ret_flock == -1 ){
+>>
+>>                TALLOC_FREE(lck);
+>>                fd_close(conn, fsp);
+>>                file_free(fsp);
+>>
+>>                return NT_STATUS_SHARING_VIOLATION;
+>>        }
+> 
+> 
+> But if you look at the implementation it goes...
+> 
+> static int vfswrap_kernel_flock(vfs_handle_struct *handle, files_struct *fsp, int fd,
+>                                 uint32 share_mode)
+> {
+>         START_PROFILE(syscall_kernel_flock);
+>         kernel_flock(fd, share_mode);
+>         END_PROFILE(syscall_kernel_flock);
+>         return 0;
+> }
+> 
+> always returns ok :-). Confusing comment - needs to be moved
+> to modules/vfs_default.c I think.
+

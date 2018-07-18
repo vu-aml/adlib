@@ -1,0 +1,111 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun Apr 22 17:18:41 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3MLIf0I024186
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 22 Apr 2007 17:18:41 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 9E7441639A6
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 22 Apr 2007 21:18:15 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1004)
+	id 10901162BC4; Sun, 22 Apr 2007 21:17:50 +0000 (GMT)
+To: samba-cvs@samba.org
+From: gd@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070422211750.10901162BC4@lists.samba.org>
+Date: Sun, 22 Apr 2007 21:17:50 +0000 (GMT)
+Subject: svn commit: samba r22467 - in branches/SAMBA_3_0/source: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2774
+Lines: 69
+
+Author: gd
+Date: 2007-04-22 21:17:49 +0000 (Sun, 22 Apr 2007)
+New Revision: 22467
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22467
+
+Log:
+Adding configure check for -Werror-implicit-function-declaration and use it in
+-enable-developer.
+
+Guenther
+
+Modified:
+   branches/SAMBA_3_0/source/configure.in
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/configure.in
+===================================================================
+--- branches/SAMBA_3_0/source/configure.in	2007-04-22 20:15:00 UTC (rev 22466)
++++ branches/SAMBA_3_0/source/configure.in	2007-04-22 21:17:49 UTC (rev 22467)
+@@ -399,7 +399,7 @@
+ AC_ARG_ENABLE(developer, [  --enable-developer      Turn on developer warnings and debugging (default=no)],
+     [if eval "test x$enable_developer = xyes"; then
+         developer=yes
+-    	CFLAGS="${CFLAGS} -gstabs -Wall -Wshadow -Wstrict-prototypes -Wpointer-arith -Wcast-align -Wwrite-strings -DDEBUG_PASSWORD -DDEVELOPER"
++    	DEVELOPER_CFLAGS="-gstabs -Wall -Wshadow -Wstrict-prototypes -Wpointer-arith -Wcast-align -Wwrite-strings -DDEBUG_PASSWORD -DDEVELOPER"
+ 	# Add -Wdeclaration-after-statement if compiler supports it
+ 	AC_CACHE_CHECK(
+           [that the C compiler understands -Wdeclaration-after-statement],
+@@ -414,8 +414,25 @@
+ 	    samba_cv_HAVE_Wdeclaration_after_statement=cross)
+        ])
+        if test x"$samba_cv_HAVE_Wdeclaration_after_statement" = x"yes"; then
+-	    CFLAGS="${CFLAGS} -Wdeclaration-after-statement"
++	    DEVELOPER_CFLAGS="${DEVELOPER_CFLAGS} -Wdeclaration-after-statement"
+        fi
++	# here
++	#-Werror-implicit-function-declaration
++	AC_CACHE_CHECK(
++          [that the C compiler understands -Werror-implicit-function-declaration],
++          samba_cv_HAVE_Werror_implicit_function_declaration, [
++	  AC_TRY_RUN_STRICT([
++	    int main(void)
++	    {
++	    	return 0;
++	    }],[-Werror-implicit-function-declaration],[$CPPFLAGS],[$LDFLAGS],
++	    samba_cv_HAVE_Werror_implicit_function_declaration=yes,
++	    samba_cv_HAVE_Werror_implicit_function_declaration=no,
++	    samba_cv_HAVE_Werror_implicit_function_declaration=cross)
++       ])
++       if test x"$samba_cv_HAVE_Werror_implicit_function_declaration" = x"yes"; then
++	    DEVELOPER_CFLAGS="${DEVELOPER_CFLAGS} -Werror-implicit-function-declaration"
++       fi
+     fi])
+ 
+ AC_ARG_ENABLE(krb5developer, [  --enable-krb5developer  Turn on developer warnings and debugging, except -Wstrict-prototypes (default=no)],
+@@ -6287,6 +6304,11 @@
+ 	   AC_MSG_ERROR([summary failure. Aborting config]); exit 1;,
+ 	   AC_MSG_WARN([cannot run when cross-compiling]))
+ 
++dnl Merge in developer cflags from now on
++if test x"$developer" = x"yes"; then
++    CFLAGS="${CFLAGS} ${DEVELOPER_CFLAGS}"
++fi
++
+ builddir=`pwd`
+ AC_SUBST(builddir)
+ 
+

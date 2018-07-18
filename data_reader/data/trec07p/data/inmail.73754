@@ -1,0 +1,97 @@
+From perl6-all-return-82534-ktwarwic=speedy.uwaterloo.ca@perl.org  Wed Jul  4 09:23:02 2007
+Return-Path: <perl6-all-return-82534-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l64DN1L9010957
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 4 Jul 2007 09:23:01 -0400
+Received: (qmail 12576 invoked by uid 514); 4 Jul 2007 13:22:56 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 12571 invoked from network); 4 Jul 2007 13:22:55 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+Subject: [perl #43315] [TODO] config/inter/lex.pm:  Write unit tests 
+From: "James Keenan via RT" <parrotbug-followup@parrotcode.org>
+Reply-To: parrotbug-followup@parrotcode.org
+In-Reply-To: <E1I1tkq-0000eS-OI@li11-226.members.linode.com>
+References: <RT-Ticket-43315@perl.org> <E1I1tkq-0000eS-OI@li11-226.members.linode.com>
+Message-ID: <rt-3.6.HEAD-25329-1183555341-117.43315-15-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #43315
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: jkeen@verizon.net
+Cc: perl6-internals@perl.org
+To: "OtherRecipients of perl Ticket #43315": ;
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+X-RT-Original-Encoding: utf-8
+Date: Wed, 04 Jul 2007 06:22:21 -0700
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+
+Since last week's post-YAPC hackathon I've been trying to write tests for config/inter/lex.pm, 
+the package which governs Parrot configuration step inter::lex.  Per the POD, this step "[d]
+etermines whether 'lex' is installed and if it's actually 'flex' of least the user-specified 
+minimum version, defaulting to 2.5.33."
+
+In the Phalanx-model of testing, we try to write enough tests to exercise every statement in 
+the code and, within each statement, each branch and condition.  One major implication of 
+this is that we try to write tests to cover each 'return' statement from each subroutine within 
+the code.  In the case of config/inter/lex.pm, this is quite a challenge, since its subroutine 
+'runstep()' has no fewer than *eight* return statements, i.e., eight different possible 
+outcomes for running this configuration step.  (This is also true of config/inter/yacc.pm.)
+
+I anticipate writing a series of posts to this RT ticket about different aspects of config/inter/
+lex.pm.  To start, let me ask about the '--maintainer' option to Configure.pl.  This 
+configuration option was added four years ago "to work around imcc dependencies."  When 
+set, its most important effect appears to come in config/auto/gcc.pm later in the 
+configuration process when it causes Parrot to be compiled with " -Wlarger-than-4096".
+
+Two years ago, however, Configure.pl and config/inter/lex.pm were modified such that:
+
+(a) If either of the '--lex' or '--yacc' options to Configure.pl were set, the '--maintainer' 
+option would be set as well.
+
+(b) If the '--maintainer' option was *not* set (either explicitly or implicitly by setting '--lex' 
+or '--yacc'), then configuration step inter::lex immediately short-circuits.  It makes no further 
+attempt to determine whether you have a 'lex'-like program on disk or whether you have a 
+sufficient version of 'flex'.  You are not prompted to provide input on STDIN.  A result of 
+'skipped' is set; 'runstep()' exits; and configuration goes on to the next step.
+
+    unless ( $conf->options->get('maintainer') ) {
+        $conf->data->set( $util => 'echo' );    # here, $util = 'lex'
+        $self->set_result('skipped');
+        return $self;
+    }
+
+Since you have to explicitly set certain options to Configure.pl to get past this point in 
+inter::lex, Parrot's configuration by default does not attempt to determine whether you have 
+a 'lex'-like program available.
+
+My question is this:  Is this a good thing?
+
+In other words, is it good that, by default, Parrot's configuration does *not* attempt to 
+determine whether you have a 'lex'-like or 'yacc'-like program on disk?  Are we depriving the 
+Makefile of any significant information by customarily sidestepping this probe?  Shouldn't 
+Parrot's default configuration behavior be to seek out information rather than to skip that 
+search?
+
+Thank you very much.
+kid51
+

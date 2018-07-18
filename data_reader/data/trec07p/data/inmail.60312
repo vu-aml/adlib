@@ -1,0 +1,156 @@
+From r-help-bounces@stat.math.ethz.ch  Tue Jun 19 02:11:40 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5J6BYL9025770
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 19 Jun 2007 02:11:35 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5J6AEsG024977;
+	Tue, 19 Jun 2007 08:10:27 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.2 required=5.0 tests=AWL, BAYES_50, DKIM_SIGNED,
+	DKIM_VERIFIED autolearn=no version=3.2.0
+Received: from web39715.mail.mud.yahoo.com (web39715.mail.mud.yahoo.com
+	[209.191.106.61])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with SMTP id l5J6A56N024920
+	for <r-help@stat.math.ethz.ch>; Tue, 19 Jun 2007 08:10:06 +0200
+Received: (qmail 72649 invoked by uid 60001); 19 Jun 2007 05:47:17 -0000
+X-YMail-OSG: OA2IlhkVM1naPc6fgfJRA1XEC98LWSDDz.0il4fdHX8n88mIFzSpxDf7s0GCSQQHtF6I1ZVYtJUqOnxXFJ1U53jGn9x16n1UjWTJgpcVH6Yo0OLsp4Ju84gAvsVzJQ--
+Received: from [66.91.227.183] by web39715.mail.mud.yahoo.com via HTTP;
+	Mon, 18 Jun 2007 22:47:17 PDT
+Date: Mon, 18 Jun 2007 22:47:17 -0700 (PDT)
+From: Stephen Tucker <brown_emu@yahoo.com>
+To: "H. Paul Benton" <hpbenton@scripps.edu>, r-help@stat.math.ethz.ch
+In-Reply-To: <467701FE.80707@scripps.edu>
+MIME-Version: 1.0
+Message-ID: <430962.72268.qm@web39715.mail.mud.yahoo.com>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Subject: Re: [R] data type for block data?
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+Hi Paul,
+
+Hope this is what you're looking for:
+
+## reading in text (the first 13 rows of cc from your posting)
+## and using smaller indices [(3,8) instead of (10,40)]
+## for this example
+> cc <- "mode<-"(do.call(rbind,
++        strsplit(readLines(textConnection(txt))[-1],"[ ]{2,}"))[,-1],
++        "numeric")
+> index <- c(3,8)
+
+## (1) convert cc to data frame
+## (2) split according to factors produced by cut()
+## (3) apply data.matrix() to each element of list
+##     produced by split() to convert back to numeric matrix
+> s <- lapply(split(as.data.frame(cc),
++                   f=cut(1:nrow(cc),breaks=c(-Inf,index,Inf))),
++             data.matrix)
+
+## return result. now s[[1]] contains the first "block",
+## s[[2]] contains the second "block", and so on.
+> s
+$`(-Inf,3]`
+  V1 V2
+1  1 26
+2  2 27
+3  3 28
+
+$`(3,8]`
+  V1 V2
+4  4 29
+5  5 30
+6  6 31
+7  7 32
+8  8 33
+
+$`(8, Inf]`
+   V1 V2
+9   9 34
+10  1 27
+11  1 28
+12  2 30
+13  3 34
+
+
+--- "H. Paul Benton" <hpbenton@scripps.edu> wrote:
+
+> Dear All,
+> 
+> 
+>     I have a matrix with data that is not organised. I would like to go
+> through this and extract it. Each feature has 2 vectors which express
+> the data. I also have an index of the places where the data should be cut.
+> eg.
+> >class(cc)
+> "matrix"
+> >cc
+>       [,1] [,2]
+>  [1,]    1   26
+>  [2,]    2   27
+>  [3,]    3   28
+>  [4,]    4   29
+>  [5,]    5   30
+>  [6,]    6   31
+>  [7,]    7   32
+>  [8,]    8   33
+>  [9,]    9   34
+> [10,]    1   27
+> [11,]    1   28
+> [12,]    2   30
+> [13,]    3   34
+> ect......
+> > index
+> [1] "10" "40"
+> 
+> 
+> Is there a way to take cc[i:index[i-1],] to another format as to where
+> each block could be worked on separately. ie so in one block would be
+> rows1:10 the next block would be rows11:40 and so on.
+> 
+> Thanks,
+> 
+> Paul
+> 
+> 
+> 
+> -- 
+> Research Technician
+> Mass Spectrometry
+>    o The
+>   /
+> o Scripps
+>   \
+>    o Research
+>   /
+> o Institute
+> 
+> ______________________________________________
+> R-help@stat.math.ethz.ch mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-help
+> PLEASE do read the posting guide
+> http://www.R-project.org/posting-guide.html
+> and provide commented, minimal, self-contained, reproducible code.
+>
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

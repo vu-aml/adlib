@@ -1,0 +1,175 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun Jun  3 08:11:38 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l53CBbhB015379
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 3 Jun 2007 08:11:37 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id DF5AF163828
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun,  3 Jun 2007 12:11:31 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id E323B162ACD; Sun,  3 Jun 2007 12:11:01 +0000 (GMT)
+Date: Sun, 03 Jun 2007 22:07:08 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070603121101.E323B162ACD@lists.samba.org>
+Subject: Rev 449: make the init scripts more portable about location of
+	system config files in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 449
+revision-id: tridge@samba.org-20070603120707-py0wul4gatwvkcer
+parent: tridge@samba.org-20070603105424-u3l4oixhczc2triy
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Sun 2007-06-03 22:07:07 +1000
+message:
+  make the init scripts more portable about location of system config files
+modified:
+  config/ctdb.init               ctdb.init-20070527204758-biuh7znabuwan3zn-6
+  config/events                  events-20070529030121-04fjh63cxfh8v1pj-1
+  config/events.d/nfs            nfs-20070601141008-hy3h4qgbk1jd2jci-1
+  config/events.d/nfslock        nfslock-20070601105340-vlcvnp6euoj3zdwy-2
+  config/events.d/samba          samba-20070601105340-vlcvnp6euoj3zdwy-3
+  config/functions               functions-20070601105405-gajwirydr5a9zd6x-1
+  config/statd-callout           statdcallout-20070531010857-6sdlz455vusye5y5-1
+=== modified file 'config/ctdb.init'
+--- a/config/ctdb.init	2007-06-03 09:24:52 +0000
++++ b/config/ctdb.init	2007-06-03 12:07:07 +0000
+@@ -34,19 +34,15 @@
+ # Avoid using root's TMPDIR
+ unset TMPDIR
+ 
++. /etc/ctdb/functions
++loadconfig network
++loadconfig ctdb
++
+ # check networking is up (for redhat)
+-[ -f /etc/sysconfig/network ] && {
+-    . /etc/sysconfig/network
+-    [ ${NETWORKING} = "no" ] && exit 0
+-}
++[ ${NETWORKING} = "no" ] && exit 0
+ 
+ CTDB_OPTIONS=""
+ 
+-# pull in admin specified config for ctdb
+-if [ -f /etc/sysconfig/ctdb ]; then
+-   . /etc/sysconfig/ctdb 
+-fi
+-
+ [ -z "$CTDB_RECOVERY_LOCK" ] && {
+     echo "You must configure the location of the CTDB_RECOVERY_LOCK"
+     exit 1
+
+=== modified file 'config/events'
+--- a/config/events	2007-06-02 09:40:07 +0000
++++ b/config/events	2007-06-03 12:07:07 +0000
+@@ -2,8 +2,8 @@
+ ############################
+ # main event script for ctdb
+ 
+-. /etc/sysconfig/ctdb
+ . /etc/ctdb/functions
++loadconfig ctdb
+ 
+ cmd="$1"
+ shift
+
+=== modified file 'config/events.d/nfs'
+--- a/config/events.d/nfs	2007-06-03 04:39:27 +0000
++++ b/config/events.d/nfs	2007-06-03 12:07:07 +0000
+@@ -1,8 +1,8 @@
+ #!/bin/sh
+ # script to manage nfs in a clustered environment
+ 
+-. /etc/sysconfig/nfs
+ . /etc/ctdb/functions
++loadconfig nfs
+ 
+ [ -z $CTDB_MANAGES_NFS ] && exit 0
+ [ $CTDB_MANAGES_NFS != "yes" ] && exit 0
+
+=== modified file 'config/events.d/nfslock'
+--- a/config/events.d/nfslock	2007-06-03 04:39:27 +0000
++++ b/config/events.d/nfslock	2007-06-03 12:07:07 +0000
+@@ -1,8 +1,8 @@
+ #!/bin/sh
+ # event strict to manage lockd and statd in a cluster environment
+ 
+-. /etc/sysconfig/nfs
+ . /etc/ctdb/functions
++loadconfig nfs
+ 
+ [ -z $CTDB_MANAGES_NFS ] && exit 0
+ [ $CTDB_MANAGES_NFS != "yes" ] && exit 0
+
+=== modified file 'config/events.d/samba'
+--- a/config/events.d/samba	2007-06-03 04:39:27 +0000
++++ b/config/events.d/samba	2007-06-03 12:07:07 +0000
+@@ -3,8 +3,8 @@
+ 
+ PATH=/bin:/usr/bin:$PATH
+ 
+-. /etc/sysconfig/ctdb
+ . /etc/ctdb/functions
++loadconfig ctdb
+ 
+ cmd="$1"
+ shift
+
+=== modified file 'config/functions'
+--- a/config/functions	2007-06-02 09:40:07 +0000
++++ b/config/functions	2007-06-03 12:07:07 +0000
+@@ -1,5 +1,16 @@
+ # utility functions for ctdb event scripts
+ 
++#######################################
++# pull in a system config file, if any
++loadconfig() {
++    name="$1"
++    if [ -f /etc/sysconfig/$name ]; then
++	. /etc/sysconfig/$name
++    elif [ -f /etc/default/$name ]; then
++	. /etc/default/$name
++    fi
++}
++
+ 
+ ######################################################
+ # simulate /sbin/service on platforms that don't have it
+
+=== modified file 'config/statd-callout'
+--- a/config/statd-callout	2007-06-02 09:45:06 +0000
++++ b/config/statd-callout	2007-06-03 12:07:07 +0000
+@@ -5,8 +5,8 @@
+ # /etc/sysconfig/nfs:
+ #   STATD_HOSTNAME="myhostname -H /etc/ctdb/statd-callout"
+ 
+-
+-. /etc/sysconfig/nfs
++. /etc/ctdb/functions
++loadconfig nfs
+ 
+ [ -z "$STATD_SHARED_DIRECTORY" ] && exit 0
+ 
+

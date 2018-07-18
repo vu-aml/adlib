@@ -1,0 +1,116 @@
+From r-help-bounces@stat.math.ethz.ch  Wed May  9 14:58:59 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l49IwrqD032575
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 9 May 2007 14:58:55 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l49IvkxB006722;
+	Wed, 9 May 2007 20:57:56 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.7 required=5.0 tests=AWL,
+	BAYES_40 autolearn=no version=3.1.8
+Received: from ug-out-1314.google.com (ug-out-1314.google.com [66.249.92.174])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l49Ivek1006350
+	for <r-help@stat.math.ethz.ch>; Wed, 9 May 2007 20:57:41 +0200
+Received: by ug-out-1314.google.com with SMTP id p37so349322ugc
+	for <r-help@stat.math.ethz.ch>; Wed, 09 May 2007 11:57:40 -0700 (PDT)
+Received: by 10.66.237.9 with SMTP id k9mr1441730ugh.1178737059676;
+	Wed, 09 May 2007 11:57:39 -0700 (PDT)
+Received: by 10.67.29.15 with HTTP; Wed, 9 May 2007 11:57:39 -0700 (PDT)
+Message-ID: <971536df0705091157s5a453069o9fdf086d3803c7aa@mail.gmail.com>
+Date: Wed, 9 May 2007 14:57:39 -0400
+From: "Gabor Grothendieck" <ggrothendieck@gmail.com>
+To: Vittorio <vdemart1@tin.it>
+In-Reply-To: <971536df0705091046s776a44cu9abe474ebe7793a0@mail.gmail.com>
+MIME-Version: 1.0
+Content-Disposition: inline
+References: <112714f947c.vdemart1@tin.it>
+	<971536df0705091046s776a44cu9abe474ebe7793a0@mail.gmail.com>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] Reading a web page in pdf format
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+Here is one additional solution.  This one produces a data frame.  The
+regular expression removes:
+
+- everything from beginning to first (
+- everything from last ( to end
+- everything between ) and ( in the middle
+
+The | characters separate the three parts.  Then read.table reads it in.
+
+
+URL <- "http://www.snamretegas.it/italiano/business/gas/bilancio/pdf/bilancio.pdf"
+Lines.raw <- readLines(URL)
+Lines <- grep("Industriale|Termoelettrico", Lines.raw, value = TRUE)
+
+rx <- "^[^(]*[(]|[)][^(]*$|[)][^(]*[(]"
+read.table(textConnection(gsub(rx, "", Lines)), dec = ",")
+
+
+On 5/9/07, Gabor Grothendieck <ggrothendieck@gmail.com> wrote:
+> Modify this to suit.  After grepping out the correct lines we use strapply
+> to find and emit character sequences that come after a "(" but do not contain
+> a ")" .  back = -1 says to only emit the backreferences and not the entire
+> matched expression (which would have included the leading "(" ):
+>
+> URL <- "http://www.snamretegas.it/italiano/business/gas/bilancio/pdf/bilancio.pdf"
+> Lines.raw <- readLines(URL)
+> Lines <- grep("Industriale|Termoelettrico", Lines.raw, value = TRUE)
+> library(gsubfn)
+> strapply(Lines, "[(]([^)]*)", back = -1, simplify = rbind)
+>
+> which gives a character matrix whose first column is the label
+> and second column is the number in character form.  You can
+> then manipulate it as desired.
+>
+> On 5/9/07, Vittorio <vdemart1@tin.it> wrote:
+> > Each day the daily balance in the following link
+> >
+> > http://www.
+> > snamretegas.it/italiano/business/gas/bilancio/pdf/bilancio.pdf
+> >
+> > is
+> > updated.
+> >
+> > I would like to set up an R procedure to be run daily in a
+> > server able to read the figures in a couple of lines only
+> > ("Industriale" and "Termoelettrico", towards the end of the balance)
+> > and put the data in a table.
+> >
+> > Is that possible? If yes, what R-packages
+> > should I use?
+> >
+> > Ciao
+> > Vittorio
+> >
+> > ______________________________________________
+> > R-help@stat.math.ethz.ch mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-help
+> > PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+> > and provide commented, minimal, self-contained, reproducible code.
+> >
+>
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

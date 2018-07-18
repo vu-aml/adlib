@@ -1,0 +1,230 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Apr 17 08:17:45 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3HCHi0I027173
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 08:17:44 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id D4F08163A5D
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 12:17:20 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 729C4162AC8; Tue, 17 Apr 2007 12:16:46 +0000 (GMT)
+Date: Tue, 17 Apr 2007 22:16:50 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070417121646.729C4162AC8@lists.samba.org>
+Subject: Rev 141: moved cmdline.c to common code in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 6413
+Lines: 189
+
+------------------------------------------------------------
+revno: 141
+revision-id: tridge@samba.org-20070417121650-abbb360fdc1b534d
+parent: tridge@samba.org-20070417121306-4902b949f42f9daf
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Tue 2007-04-17 22:16:50 +1000
+message:
+  moved cmdline.c to common code
+renamed:
+  tests/cmdline.c => common/cmdline.c cmdline.c-20070416041216-w1zvz91bkdsgjckw-1
+  tests/cmdline.h => include/cmdline.h cmdline.h-20070416041216-w1zvz91bkdsgjckw-2
+modified:
+  Makefile.in                    makefile.in-20061117234101-o3qt14umlg9en8z0-1
+  direct/ctdbd.c                 ctdbd.c-20070411085044-dqmhr6mfeexnyt4m-1
+  tests/ctdb_bench.c             ctdb_bench.c-20061219052637-2liagoglohxb6p7s-1
+  tests/ctdb_fetch.c             ctdb_fetch.c-20070405031748-f7gslozfj3rwh5ie-1
+  tests/ctdb_fetch1.c            ctdb_fetch1.c-20070412111848-xawz6wqk9r0v8jdk-1
+  tests/ctdb_messaging.c         ctdb_messaging.c-20070411034205-6d6vne56pbih2x1p-1
+  tests/ctdb_test.c              ctdb_test.c-20061117234101-o3qt14umlg9en8z0-16
+  tests/lockwait.c               lockwait.c-20070416055753-3ztnb4cxqgamfudx-1
+=== renamed file 'tests/cmdline.c' => 'common/cmdline.c'
+=== renamed file 'tests/cmdline.h' => 'include/cmdline.h'
+=== modified file 'Makefile.in'
+--- a/Makefile.in	2007-04-17 12:13:06 +0000
++++ b/Makefile.in	2007-04-17 12:16:50 +0000
+@@ -22,7 +22,7 @@
+ 
+ CTDB_COMMON_OBJ = common/ctdb.o common/ctdb_daemon.o common/ctdb_client.o common/ctdb_io.o common/util.o common/ctdb_util.o \
+ 	common/ctdb_call.o common/ctdb_ltdb.o common/ctdb_lockwait.o common/ctdb_message.o \
+-	lib/util/idtree.o lib/util/db_wrap.o
++	common/cmdline.o lib/util/idtree.o lib/util/db_wrap.o
+ 
+ CTDB_TCP_OBJ = tcp/tcp_connect.o tcp/tcp_io.o tcp/tcp_init.o
+ 
+@@ -49,41 +49,41 @@
+ dirs:
+ 	@mkdir -p $(DIRS)
+ 
+-bin/ctdb_test: $(OBJS) tests/ctdb_test.o tests/cmdline.o
++bin/ctdb_test: $(OBJS) tests/ctdb_test.o
+ 	@echo Linking $@
+-	@$(CC) $(CFLAGS) -o $@ tests/ctdb_test.o tests/cmdline.o $(OBJS) $(LIB_FLAGS)
++	@$(CC) $(CFLAGS) -o $@ tests/ctdb_test.o $(OBJS) $(LIB_FLAGS)
+ 
+-bin/ctdbd: $(OBJS) direct/ctdbd.o tests/cmdline.o
++bin/ctdbd: $(OBJS) direct/ctdbd.o 
+ 	@echo Linking $@
+-	@$(CC) $(CFLAGS) -o $@ direct/ctdbd.o tests/cmdline.o $(OBJS) $(LIB_FLAGS)
++	@$(CC) $(CFLAGS) -o $@ direct/ctdbd.o $(OBJS) $(LIB_FLAGS)
+ 
+ bin/ctdbd_test: $(OBJS) direct/ctdbd_test.o
+ 	@echo Linking $@
+ 	@$(CC) $(CFLAGS) -o $@ direct/ctdbd_test.o 
+ 
+-bin/ctdb_bench: $(OBJS) tests/ctdb_bench.o tests/cmdline.o
+-	@echo Linking $@
+-	@$(CC) $(CFLAGS) -o $@ tests/ctdb_bench.o tests/cmdline.o $(OBJS) $(LIB_FLAGS)
+-
+-bin/ctdb_fetch: $(OBJS) tests/ctdb_fetch.o tests/cmdline.o
+-	@echo Linking $@
+-	@$(CC) $(CFLAGS) -o $@ tests/ctdb_fetch.o tests/cmdline.o $(OBJS) $(LIB_FLAGS)
+-
+-bin/ctdb_fetch1: $(OBJS) tests/ctdb_fetch1.o tests/cmdline.o
+-	@echo Linking $@
+-	@$(CC) $(CFLAGS) -o $@ tests/ctdb_fetch1.o tests/cmdline.o $(OBJS) $(LIB_FLAGS)
+-
+-bin/ctdb_messaging: $(OBJS) tests/ctdb_messaging.o tests/cmdline.o
+-	@echo Linking $@
+-	@$(CC) $(CFLAGS) -o $@ tests/ctdb_messaging.o tests/cmdline.o $(OBJS) $(LIB_FLAGS)
++bin/ctdb_bench: $(OBJS) tests/ctdb_bench.o 
++	@echo Linking $@
++	@$(CC) $(CFLAGS) -o $@ tests/ctdb_bench.o $(OBJS) $(LIB_FLAGS)
++
++bin/ctdb_fetch: $(OBJS) tests/ctdb_fetch.o 
++	@echo Linking $@
++	@$(CC) $(CFLAGS) -o $@ tests/ctdb_fetch.o $(OBJS) $(LIB_FLAGS)
++
++bin/ctdb_fetch1: $(OBJS) tests/ctdb_fetch1.o 
++	@echo Linking $@
++	@$(CC) $(CFLAGS) -o $@ tests/ctdb_fetch1.o $(OBJS) $(LIB_FLAGS)
++
++bin/ctdb_messaging: $(OBJS) tests/ctdb_messaging.o 
++	@echo Linking $@
++	@$(CC) $(CFLAGS) -o $@ tests/ctdb_messaging.o $(OBJS) $(LIB_FLAGS)
+ 
+ bin/ibwrapper_test: $(OBJS) ib/ibwrapper_test.o
+ 	@echo Linking $@
+ 	@$(CC) $(CFLAGS) -o $@ ib/ibwrapper_test.o $(OBJS) $(LIB_FLAGS)
+ 
+-bin/lockwait: $(OBJS) tests/lockwait.o tests/cmdline.o
++bin/lockwait: $(OBJS) tests/lockwait.o 
+ 	@echo Linking $@
+-	@$(CC) $(CFLAGS) -o $@ tests/lockwait.o tests/cmdline.o $(OBJS) $(LIB_FLAGS)
++	@$(CC) $(CFLAGS) -o $@ tests/lockwait.o $(OBJS) $(LIB_FLAGS)
+ 
+ clean:
+ 	rm -f *.o */*.o */*/*.o
+
+=== modified file 'direct/ctdbd.c'
+--- a/direct/ctdbd.c	2007-04-17 12:13:06 +0000
++++ b/direct/ctdbd.c	2007-04-17 12:16:50 +0000
+@@ -23,7 +23,7 @@
+ #include "system/filesys.h"
+ #include "popt.h"
+ #include "system/wait.h"
+-#include "tests/cmdline.h"
++#include "cmdline.h"
+ 
+ static void block_signal(int signum)
+ {
+
+=== modified file 'tests/ctdb_bench.c'
+--- a/tests/ctdb_bench.c	2007-04-16 04:12:50 +0000
++++ b/tests/ctdb_bench.c	2007-04-17 12:16:50 +0000
+@@ -22,7 +22,7 @@
+ #include "lib/events/events.h"
+ #include "system/filesys.h"
+ #include "popt.h"
+-#include "tests/cmdline.h"
++#include "cmdline.h"
+ 
+ #include <sys/time.h>
+ #include <time.h>
+
+=== modified file 'tests/ctdb_fetch.c'
+--- a/tests/ctdb_fetch.c	2007-04-17 06:20:32 +0000
++++ b/tests/ctdb_fetch.c	2007-04-17 12:16:50 +0000
+@@ -22,7 +22,7 @@
+ #include "lib/events/events.h"
+ #include "system/filesys.h"
+ #include "popt.h"
+-#include "tests/cmdline.h"
++#include "cmdline.h"
+ 
+ #include <sys/time.h>
+ #include <time.h>
+
+=== modified file 'tests/ctdb_fetch1.c'
+--- a/tests/ctdb_fetch1.c	2007-04-17 04:52:51 +0000
++++ b/tests/ctdb_fetch1.c	2007-04-17 12:16:50 +0000
+@@ -24,7 +24,7 @@
+ #include "popt.h"
+ #include "ctdb.h"
+ #include "ctdb_private.h"
+-#include "tests/cmdline.h"
++#include "cmdline.h"
+ 
+ #define PARENT_SRVID	0
+ #define CHILD1_SRVID	1
+
+=== modified file 'tests/ctdb_messaging.c'
+--- a/tests/ctdb_messaging.c	2007-04-16 04:12:50 +0000
++++ b/tests/ctdb_messaging.c	2007-04-17 12:16:50 +0000
+@@ -22,7 +22,7 @@
+ #include "lib/events/events.h"
+ #include "system/filesys.h"
+ #include "popt.h"
+-#include "tests/cmdline.h"
++#include "cmdline.h"
+ 
+ static int timelimit = 10;
+ static int num_records = 10;
+
+=== modified file 'tests/ctdb_test.c'
+--- a/tests/ctdb_test.c	2007-04-16 04:12:50 +0000
++++ b/tests/ctdb_test.c	2007-04-17 12:16:50 +0000
+@@ -22,7 +22,7 @@
+ #include "lib/events/events.h"
+ #include "system/filesys.h"
+ #include "popt.h"
+-#include "tests/cmdline.h"
++#include "cmdline.h"
+ 
+ enum my_functions {FUNC_SORT=1, FUNC_FETCH=2};
+ 
+
+=== modified file 'tests/lockwait.c'
+--- a/tests/lockwait.c	2007-04-16 21:41:27 +0000
++++ b/tests/lockwait.c	2007-04-17 12:16:50 +0000
+@@ -23,7 +23,7 @@
+ #include "system/filesys.h"
+ #include "system/wait.h"
+ #include "popt.h"
+-#include "tests/cmdline.h"
++#include "cmdline.h"
+ 
+ 
+ struct lockwait_handle {
+

@@ -1,0 +1,163 @@
+From sugar-bounces@lists.laptop.org  Fri Jun 29 10:45:40 2007
+Return-Path: <sugar-bounces@lists.laptop.org>
+Received: from mail.laptop.org (pedal.laptop.org [18.85.2.148])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5TEjdL9027098
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 29 Jun 2007 10:45:40 -0400
+Received: from [127.0.1.1] (localhost [127.0.0.1])
+	by mail.laptop.org (Postfix) with ESMTP id 2C1E158BC810;
+	Fri, 29 Jun 2007 10:44:37 -0400 (EDT)
+Received: by mail.laptop.org (Postfix)
+	id B85D358BC812; Fri, 29 Jun 2007 10:44:35 -0400 (EDT)
+Delivered-To: sugar@laptop.org
+Received: from spam.laptop.org (spam.laptop.org [18.85.46.23])
+	(using TLSv1 with cipher DHE-RSA-AES256-SHA (256/256 bits))
+	(No client certificate requested)
+	by mail.laptop.org (Postfix) with ESMTP id ACEC158BC810
+	for <sugar@laptop.org>; Fri, 29 Jun 2007 10:44:35 -0400 (EDT)
+X-ASG-Debug-ID: 1183128332-1eac00010000-3Xmyjt
+X-Barracuda-URL: http://18.85.46.23:8000/cgi-bin/mark.cgi
+X-Barracuda-Connect: newton.cx[65.99.241.218]
+X-Barracuda-Start-Time: 1183128332
+X-Barracuda-Encrypted: DHE-RSA-AES256-SHA
+Received: from newton.cx (newton.cx [65.99.241.218])
+	(using TLSv1 with cipher DHE-RSA-AES256-SHA (256/256 bits))
+	(No client certificate requested)
+	by spam.laptop.org (Spam Firewall) with ESMTP id 56AB136AF
+	for <sugar@laptop.org>; Fri, 29 Jun 2007 10:45:33 -0400 (EDT)
+Received: from [66.92.95.82] (helo=[192.168.1.24])
+	by newton.cx with esmtpsa (SSLv3:RC4-MD5:128) (Exim 4.43)
+	id 1I4Hj1-0002Pt-FR
+	for sugar@laptop.org; Fri, 29 Jun 2007 10:45:31 -0400
+X-ASG-Orig-Subj: fix for 1846, sugar crashes when nick is whitespace
+From: Owen Williams <owen@ywwg.com>
+To: Sugar List <sugar@laptop.org>
+Content-Type: multipart/mixed; boundary="=-z9fPzBP+pSjO4E9odG0+"
+Date: Fri, 29 Jun 2007 10:44:37 -0400
+Message-Id: <1183128277.6564.103.camel@localhost.localdomain>
+Mime-Version: 1.0
+X-Mailer: Evolution 2.10.1 
+X-Barracuda-Bayes: INNOCENT GLOBAL 0.2370 1.0000 -0.6387
+X-Barracuda-Virus-Scanned: by Barracuda Spam Firewall at laptop.org
+X-Barracuda-Spam-Score: -0.64
+X-Barracuda-Spam-Status: No, SCORE=-0.64 using global scores of TAG_LEVEL=3.5
+	QUARANTINE_LEVEL=1000.0 KILL_LEVEL=5.5 tests=
+X-Barracuda-Spam-Report: Code version 3.1, rules version 3.1.21316
+	Rule breakdown below
+	pts rule name              description
+	---- ----------------------
+	--------------------------------------------------
+Subject: [sugar] fix for 1846, sugar crashes when nick is whitespace
+X-BeenThere: sugar@lists.laptop.org
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Discussion of OLPC design,
+	desktop platform and user experience" <sugar.lists.laptop.org>
+List-Unsubscribe: <http://lists.laptop.org/listinfo/sugar>,
+	<mailto:sugar-request@lists.laptop.org?subject=unsubscribe>
+List-Archive: <http://lists.laptop.org/pipermail/sugar>
+List-Post: <mailto:sugar@lists.laptop.org>
+List-Help: <mailto:sugar-request@lists.laptop.org?subject=help>
+List-Subscribe: <http://lists.laptop.org/listinfo/sugar>,
+	<mailto:sugar-request@lists.laptop.org?subject=subscribe>
+Sender: sugar-bounces@lists.laptop.org
+Errors-To: sugar-bounces@lists.laptop.org
+
+
+--=-z9fPzBP+pSjO4E9odG0+
+Content-Type: text/plain
+Content-Transfer-Encoding: 7bit
+
+Here is a patch for http://dev.laptop.org/ticket/1846.  I am just
+patching intro.py to reject usernames that are all whitespace and to
+trim excess whitespace on either end.
+
+Also, when a user supplies a blank nickname and presses the forward
+button, I briefly flash the "My Name:" label.  This can be changed if
+there's a better way to indicate why the interface is refusing to
+advance.
+
+owen
+
+--=-z9fPzBP+pSjO4E9odG0+
+Content-Disposition: attachment; filename=intro_name_strip_patch-1.diff
+Content-Type: text/x-patch; name=intro_name_strip_patch-1.diff; charset=ISO-8859-1
+Content-Transfer-Encoding: 7bit
+
+diff --git a/shell/intro/intro.py b/shell/intro/intro.py
+index 2ae097d..0a927c4 100644
+--- a/shell/intro/intro.py
++++ b/shell/intro/intro.py
+@@ -191,6 +191,26 @@ class EntryBox(hippo.CanvasBox, hippo.CanvasItem):
+ 
+     def get_text(self):
+         return self._entry.props.text
++        
++    def flash_label(self):
++        """Briefly flashes the label to draw the user's attention to the
++        control"""
++        
++        old_fg_color = color.LABEL_TEXT.get_int()
++        old_bg_color = 0x000000ff # background color set above
++        r,g,b,a = color.LABEL_TEXT.get_rgba()
++        fg_opposite = color.RGBColor(1 - r, 1 - g, 1 - b)
++        bg_opposite = color.RGBColor(1, 1, 1)
++        
++        self._label.props.color = fg_opposite.get_int()
++        self._label.props.background_color = bg_opposite.get_int()
++        
++        gobject.timeout_add(200, self._flash_reset, old_fg_color, old_bg_color)
++        
++    def _flash_reset(self, old_fg_color, old_bg_color):
++        self._label.props.color = old_fg_color
++        self._label.props.background_color = old_bg_color
++        return False
+ 
+ 
+ class ColorBox(hippo.CanvasBox, hippo.CanvasItem):
+@@ -257,12 +277,32 @@ class IntroBox(hippo.CanvasBox, hippo.CanvasItem):
+         pixbuf = gtk.gdk.pixbuf_new_from_file(path)
+         name = self._entry_box.get_text()
+         color = self._color_box.get_color()
++        
++        name = self._check_nickname(name)
++        
++        if name is None:
++            self._entry_box.flash_label()
++            return
+ 
+         if not pixbuf or not name or not color:
+             print "not one of pixbuf(%r), name(%r), or color(%r)"
+             return
+ 
+         self.emit('ok', pixbuf, name, color)
++        
++    def _check_nickname(self, name):
++        """Returns None if a bad nickname, returns the corrected nickname
++        otherwise"""
++        
++        if name is None:
++            return None
++            
++        name = name.strip()
++        
++        if len(name) == 0:
++            return None
++
++        return name
+ 
+ 
+ class IntroWindow(gtk.Window):
+
+--=-z9fPzBP+pSjO4E9odG0+
+Content-Type: text/plain; charset="us-ascii"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+
+_______________________________________________
+Sugar mailing list
+Sugar@lists.laptop.org
+http://lists.laptop.org/listinfo/sugar
+
+--=-z9fPzBP+pSjO4E9odG0+--
+

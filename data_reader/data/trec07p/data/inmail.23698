@@ -1,0 +1,390 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat Apr 28 12:38:41 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3SGce6w009836
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 28 Apr 2007 12:38:40 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id C8AE0163925
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 28 Apr 2007 16:38:39 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.4 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 501)
+	id E6DDC162AF4; Sat, 28 Apr 2007 16:38:06 +0000 (GMT)
+To: samba-cvs@samba.org
+From: abartlet@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070428163806.E6DDC162AF4@lists.samba.org>
+Date: Sat, 28 Apr 2007 16:38:06 +0000 (GMT)
+Subject: svn commit: samba r22558 - in branches/SAMBA_4_0/source/auth:
+	credentials kerberos
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 10838
+Lines: 347
+
+Author: abartlet
+Date: 2007-04-28 16:38:06 +0000 (Sat, 28 Apr 2007)
+New Revision: 22558
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22558
+
+Log:
+Move to a static list of enctypes to put into our keytab.  In future,
+I'll allow this to be configured from the secrets.ldb, but it should
+fix some user issues.
+
+Andrew Bartlett
+
+Modified:
+   branches/SAMBA_4_0/source/auth/credentials/credentials_krb5.c
+   branches/SAMBA_4_0/source/auth/kerberos/kerberos_util.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/auth/credentials/credentials_krb5.c
+===================================================================
+--- branches/SAMBA_4_0/source/auth/credentials/credentials_krb5.c	2007-04-28 15:18:25 UTC (rev 22557)
++++ branches/SAMBA_4_0/source/auth/credentials/credentials_krb5.c	2007-04-28 16:38:06 UTC (rev 22558)
+@@ -141,7 +141,10 @@
+ 		talloc_free(ccc);
+ 		return ret;
+ 	}
+-	talloc_reference(ccc, ccc->smb_krb5_context);
++	if (!talloc_reference(ccc, ccc->smb_krb5_context)) {
++		talloc_free(ccc);
++		return ENOMEM;
++	}
+ 
+ 	if (name) {
+ 		ret = krb5_cc_resolve(ccc->smb_krb5_context->krb5_context, name, &ccc->ccache);
+@@ -218,7 +221,10 @@
+ 		talloc_free(ccc);
+ 		return ret;
+ 	}
+-	talloc_reference(ccc, ccc->smb_krb5_context);
++	if (!talloc_reference(ccc, ccc->smb_krb5_context)) {
++		talloc_free(ccc);
++		return ENOMEM;
++	}
+ 
+ 	ret = krb5_cc_resolve(ccc->smb_krb5_context->krb5_context, ccache_name, &ccc->ccache);
+ 	if (ret) {
+@@ -394,6 +400,7 @@
+ 	krb5_error_code ret;
+ 	struct keytab_container *ktc;
+ 	struct smb_krb5_context *smb_krb5_context;
++	const char **enctype_strings;
+ 	TALLOC_CTX *mem_ctx;
+ 
+ 	if (cred->keytab_obtained >= (MAX(cred->principal_obtained, 
+@@ -416,7 +423,11 @@
+ 		return ENOMEM;
+ 	}
+ 
+-	ret = smb_krb5_create_memory_keytab(mem_ctx, cred, smb_krb5_context, &ktc);
++	enctype_strings = cli_credentials_get_enctype_strings(cred);
++	
++	ret = smb_krb5_create_memory_keytab(mem_ctx, cred, 
++					    smb_krb5_context, 
++					    enctype_strings, &ktc);
+ 	if (ret) {
+ 		talloc_free(mem_ctx);
+ 		return ret;
+@@ -478,6 +489,7 @@
+ 	krb5_error_code ret;
+ 	struct keytab_container *ktc;
+ 	struct smb_krb5_context *smb_krb5_context;
++	const char **enctype_strings;
+ 	TALLOC_CTX *mem_ctx;
+ 	
+ 	mem_ctx = talloc_new(cred);
+@@ -491,13 +503,15 @@
+ 		return ret;
+ 	}
+ 
++	enctype_strings = cli_credentials_get_enctype_strings(cred);
++	
+ 	ret = cli_credentials_get_keytab(cred, &ktc);
+ 	if (ret != 0) {
+ 		talloc_free(mem_ctx);
+ 		return ret;
+ 	}
+ 
+-	ret = smb_krb5_update_keytab(mem_ctx, cred, smb_krb5_context, ktc);
++	ret = smb_krb5_update_keytab(mem_ctx, cred, smb_krb5_context, enctype_strings, ktc);
+ 
+ 	talloc_free(mem_ctx);
+ 	return ret;
+@@ -594,6 +608,22 @@
+ 	return cred->kvno;
+ }
+ 
++
++const char **cli_credentials_get_enctype_strings(struct cli_credentials *cred) 
++{
++	/* If this is ever made user-configurable, we need to add code
++	 * to remove/hide the other entries from the generated
++	 * keytab */
++	static const char *default_enctypes[] = {
++		"des-cbc-md5",
++		"aes256-cts-hmac-sha1-96",
++		"des3-cbc-sha1",
++		"arcfour-hmac-md5",
++		NULL
++	};
++	return default_enctypes;
++}
++
+ const char *cli_credentials_get_salt_principal(struct cli_credentials *cred) 
+ {
+ 	return cred->salt_principal;
+
+Modified: branches/SAMBA_4_0/source/auth/kerberos/kerberos_util.c
+===================================================================
+--- branches/SAMBA_4_0/source/auth/kerberos/kerberos_util.c	2007-04-28 15:18:25 UTC (rev 22557)
++++ branches/SAMBA_4_0/source/auth/kerberos/kerberos_util.c	2007-04-28 16:38:06 UTC (rev 22558)
+@@ -273,17 +273,6 @@
+ 	return 0;
+ }
+ 
+-struct enctypes_container {
+-	struct smb_krb5_context *smb_krb5_context;
+-	krb5_enctype *enctypes;
+-};
+-
+-static int free_enctypes(struct enctypes_container *etc)
+-{
+-	free_kerberos_etypes(etc->smb_krb5_context->krb5_context, etc->enctypes);
+-	return 0;
+-}
+-
+ static krb5_error_code keytab_add_keys(TALLOC_CTX *parent_ctx,
+ 				       const char *princ_string,
+ 				       krb5_principal princ,
+@@ -291,45 +280,34 @@
+ 				       int kvno,
+ 				       const char *password_s,
+ 				       struct smb_krb5_context *smb_krb5_context,
++				       const char **enctype_strings,
+ 				       krb5_keytab keytab)
+ {
+ 	int i;
+ 	krb5_error_code ret;
+-	krb5_enctype *enctypes;
+-	char *enctype_string;
+-	struct enctypes_container *etc;
+ 	krb5_data password;
+ 	TALLOC_CTX *mem_ctx = talloc_new(parent_ctx);
+ 	if (!mem_ctx) {
+ 		return ENOMEM;
+ 	}
+ 
+-	etc = talloc(mem_ctx, struct enctypes_container);
+-	if (!etc) {
+-		talloc_free(mem_ctx);
+-		return ENOMEM;
+-	}
+-	ret = get_kerberos_allowed_etypes(smb_krb5_context->krb5_context, 
+-					  &enctypes);
+-	if (ret != 0) {
+-		DEBUG(1,("keytab_add_keys: getting encrption types failed (%s)\n",
+-			 error_message(ret)));
+-		talloc_free(mem_ctx);
+-		return ret;
+-	}
+-
+-	etc->smb_krb5_context = talloc_reference(etc, smb_krb5_context);
+-	etc->enctypes = enctypes;
+-
+-	talloc_set_destructor(etc, free_enctypes);
+-
+ 	password.data = discard_const_p(char *, password_s);
+ 	password.length = strlen(password_s);
+ 
+-	for (i=0; enctypes[i]; i++) {
++	for (i=0; enctype_strings[i]; i++) {
+ 		krb5_keytab_entry entry;
++		krb5_enctype enctype;
++		ret = krb5_string_to_enctype(smb_krb5_context->krb5_context, enctype_strings[i], &enctype);
++		if (ret != 0) {
++			DEBUG(1, ("Failed to interpret %s as a krb5 encryption type: %s\n",				  
++				  enctype_strings[i],
++				  smb_get_krb5_error_message(smb_krb5_context->krb5_context, 
++							     ret, mem_ctx)));
++			talloc_free(mem_ctx);
++			return ret;
++		}
+ 		ret = create_kerberos_key_from_string(smb_krb5_context->krb5_context, 
+-						      salt_princ, &password, &entry.keyblock, enctypes[i]);
++						      salt_princ, &password, &entry.keyblock, enctype);
+ 		if (ret != 0) {
+ 			talloc_free(mem_ctx);
+ 			return ret;
+@@ -338,25 +316,21 @@
+                 entry.principal = princ;
+                 entry.vno       = kvno;
+ 		ret = krb5_kt_add_entry(smb_krb5_context->krb5_context, keytab, &entry);
+-		enctype_string = NULL;
+-		krb5_enctype_to_string(smb_krb5_context->krb5_context, enctypes[i], &enctype_string);
+ 		if (ret != 0) {
+ 			DEBUG(1, ("Failed to add %s entry for %s(kvno %d) to keytab: %s\n",
+-				  enctype_string,
++				  enctype_strings[i],
+ 				  princ_string,
+ 				  kvno,
+ 				  smb_get_krb5_error_message(smb_krb5_context->krb5_context, 
+ 							     ret, mem_ctx)));
+ 			talloc_free(mem_ctx);
+-			free(enctype_string);		
+ 			krb5_free_keyblock_contents(smb_krb5_context->krb5_context, &entry.keyblock);
+ 			return ret;
+ 		}
+ 
+ 		DEBUG(5, ("Added %s(kvno %d) to keytab (%s)\n", 
+ 			  princ_string, kvno,
+-			  enctype_string));
+-		free(enctype_string);		
++			  enctype_strings[i]));
+ 		
+ 		krb5_free_keyblock_contents(smb_krb5_context->krb5_context, &entry.keyblock);
+ 	}
+@@ -367,12 +341,12 @@
+ static int create_keytab(TALLOC_CTX *parent_ctx,
+ 			 struct cli_credentials *machine_account,
+ 			 struct smb_krb5_context *smb_krb5_context,
++			 const char **enctype_strings,
+ 			 krb5_keytab keytab,
+ 			 BOOL add_old) 
+ {
+ 	krb5_error_code ret;
+ 	const char *password_s;
+-	char *enctype_string;
+ 	const char *old_secret;
+ 	int kvno;
+ 	krb5_principal salt_princ;
+@@ -410,11 +384,18 @@
+ 	/* Finally, do the dance to get the password to put in the entry */
+ 	password_s = cli_credentials_get_password(machine_account);
+ 	if (!password_s) {
+-		/* If we don't have the plaintext password, try for
+-		 * the MD4 password hash */
+-
+ 		krb5_keytab_entry entry;
+ 		const struct samr_Password *mach_pwd;
++
++		if (!str_list_check(enctype_strings, "arcfour-hmac-md5")) {
++			DEBUG(1, ("Asked to create keytab, but with only an NT hash supplied, "
++				  "but not listing arcfour-hmac-md5 as an enc type to include in the keytab!\n"));
++			talloc_free(mem_ctx);
++			return EINVAL;
++		}
++
++		/* If we don't have the plaintext password, try for
++		 * the MD4 password hash */
+ 		mach_pwd = cli_credentials_get_nt_hash(machine_account, mem_ctx);
+ 		if (!mach_pwd) {
+ 			/* OK, nothing to do here */
+@@ -446,14 +427,9 @@
+ 			return ret;
+ 		}
+ 		
+-		krb5_enctype_to_string(smb_krb5_context->krb5_context, 
+-				       ETYPE_ARCFOUR_HMAC_MD5,
+-				       &enctype_string);
+-		DEBUG(5, ("Added %s(kvno %d) to keytab (%s)\n", 
++		DEBUG(5, ("Added %s(kvno %d) to keytab (arcfour-hmac-md5)\n", 
+ 			  cli_credentials_get_principal(machine_account, mem_ctx),
+-			  cli_credentials_get_kvno(machine_account),
+-			  enctype_string));
+-		free(enctype_string);		
++			  cli_credentials_get_kvno(machine_account)));
+ 
+ 		krb5_free_keyblock_contents(smb_krb5_context->krb5_context, &entry.keyblock);
+ 
+@@ -465,7 +441,8 @@
+ 	kvno = cli_credentials_get_kvno(machine_account);
+ 	/* good, we actually have the real plaintext */
+ 	ret = keytab_add_keys(mem_ctx, princ_string, princ, salt_princ, 
+-			      kvno, password_s, smb_krb5_context, keytab);
++			      kvno, password_s, smb_krb5_context, 
++			      enctype_strings, keytab);
+ 	if (!ret) {
+ 		talloc_free(mem_ctx);
+ 		return ret;
+@@ -483,7 +460,8 @@
+ 	}
+ 	
+ 	ret = keytab_add_keys(mem_ctx, princ_string, princ, salt_princ, 
+-			      kvno - 1, old_secret, smb_krb5_context, keytab);
++			      kvno - 1, old_secret, smb_krb5_context, 
++			      enctype_strings, keytab);
+ 	if (!ret) {
+ 		talloc_free(mem_ctx);
+ 		return ret;
+@@ -627,6 +605,7 @@
+ int smb_krb5_update_keytab(TALLOC_CTX *parent_ctx,
+ 			   struct cli_credentials *machine_account,
+ 			   struct smb_krb5_context *smb_krb5_context,
++			   const char **enctype_strings,
+ 			   struct keytab_container *keytab_container) 
+ {
+ 	krb5_error_code ret;
+@@ -635,7 +614,7 @@
+ 	if (!mem_ctx) {
+ 		return ENOMEM;
+ 	}
+-	
++
+ 	ret = remove_old_entries(mem_ctx, machine_account, 
+ 				 smb_krb5_context, keytab_container->keytab, &found_previous);
+ 	if (ret != 0) {
+@@ -648,6 +627,7 @@
+ 	 * Otherwise, add kvno, and kvno -1 */
+ 	
+ 	ret = create_keytab(mem_ctx, machine_account, smb_krb5_context, 
++			    enctype_strings, 
+ 			    keytab_container->keytab, 
+ 			    found_previous ? False : True);
+ 	talloc_free(mem_ctx);
+@@ -655,9 +635,10 @@
+ }
+ 
+ _PUBLIC_ int smb_krb5_create_memory_keytab(TALLOC_CTX *parent_ctx,
+-				  struct cli_credentials *machine_account,
+-				  struct smb_krb5_context *smb_krb5_context,
+-				  struct keytab_container **keytab_container) 
++					   struct cli_credentials *machine_account,
++					   struct smb_krb5_context *smb_krb5_context,
++					   const char **enctype_strings,
++					   struct keytab_container **keytab_container) 
+ {
+ 	krb5_error_code ret;
+ 	TALLOC_CTX *mem_ctx = talloc_new(parent_ctx);
+@@ -687,7 +668,7 @@
+ 		return ret;
+ 	}
+ 
+-	ret = smb_krb5_update_keytab(mem_ctx, machine_account, smb_krb5_context, *keytab_container);
++	ret = smb_krb5_update_keytab(mem_ctx, machine_account, smb_krb5_context, enctype_strings, *keytab_container);
+ 	if (ret == 0) {
+ 		talloc_steal(parent_ctx, *keytab_container);
+ 	} else {
+

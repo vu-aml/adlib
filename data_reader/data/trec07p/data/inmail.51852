@@ -1,0 +1,221 @@
+From r-help-bounces@stat.math.ethz.ch  Tue Jun  5 17:07:14 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l55L7ChB013856
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 5 Jun 2007 17:07:13 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l55L6ja7010638;
+	Tue, 5 Jun 2007 23:06:50 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=5.0 tests=AWL, BAYES_50,
+	DKIM_POLICY_SIGNSOME autolearn=no version=3.2.0
+Received: from gromsgoa01.pfizer.com (gromsgo.pfizer.com [148.168.224.84])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l55Kuomu007708
+	(version=TLSv1/SSLv3 cipher=DHE-RSA-AES256-SHA bits=256 verify=NO)
+	for <r-help@stat.math.ethz.ch>; Tue, 5 Jun 2007 22:56:51 +0200
+Received: from mopamrexc01.amer.pfizer.com (mopamrexc01.pfizer.com
+	[170.116.32.254])
+	by gromsgoa01.pfizer.com (8.13.7/8.13.7) with ESMTP id l55KunAx031044; 
+	Tue, 5 Jun 2007 16:56:49 -0400
+Received: from mopamrexc03.amer.pfizer.com ([170.116.30.69]) by
+	mopamrexc01.amer.pfizer.com with Microsoft SMTPSVC(6.0.3790.1830); 
+	Tue, 5 Jun 2007 16:56:49 -0400
+Received: from groamrexm03.amer.pfizer.com ([10.128.42.23]) by
+	mopamrexc03.amer.pfizer.com with Microsoft SMTPSVC(6.0.3790.1830); 
+	Tue, 5 Jun 2007 16:56:48 -0400
+X-MimeOLE: Produced By Microsoft Exchange V6.5
+Content-class: urn:content-classes:message
+MIME-Version: 1.0
+Date: Tue, 5 Jun 2007 16:56:48 -0400
+Message-ID: <71257D09F114DA4A8E134DEAC70F25D3088F85B2@groamrexm03.amer.pfizer.com>
+In-Reply-To: <4665BFEC.5070004@statistik.uni-dortmund.de>
+X-MS-Has-Attach: 
+X-MS-TNEF-Correlator: 
+Thread-Topic: [R] naiveBayes other than e1071
+Thread-Index: Acenq9ygvWhruHrtR2qNiekqm6Y0VgAA/4sQ
+From: "Kuhn, Max" <Max.Kuhn@pfizer.com>
+To: "Uwe Ligges" <ligges@statistik.uni-dortmund.de>,
+   "Saeed Abu Nimeh" <sabunime@gmail.com>
+X-OriginalArrivalTime: 05 Jun 2007 20:56:48.0261 (UTC)
+	FILETIME=[088ABB50:01C7A7B4]
+X-Proofpoint-Virus-Version: vendor=fsecure engine=4.65.5502:2.3.11, 1.2.37,
+	4.0.164 definitions=2007-06-05_08:2007-06-04, 2007-06-05,
+	2007-06-05 signatures=0
+X-Proofpoint-Spam-Reason: safe
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+X-MIME-Autoconverted: from quoted-printable to 8bit by hypatia.math.ethz.ch id
+	l55Kuomu007708
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] naiveBayes other than e1071
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+Saeed and Uwe,
+
+The underlying problem is the distribution of the data. For example:
+
+> table(x.x[,91], y.y)
+             y.y
+                 0    1
+  0.000675027 2412    0
+  0.002184892    0  481
+
+When the function tries to estimate the distribution of this feature for
+each class, it gets:
+
+   nb$tables[[91]]
+            [,1] [,2]
+   0 0.000675027    0
+   1 0.002184892    0
+
+(Saeed - column 1 contains the means for each class and column 2
+contains the variances)
+ 
+For class 0, if a new data point for this variable has a value of
+0.000675027, then dnorm(0.000675027, 0.000675027, 0) = Inf (all other
+points have density values of zero). When the data are normalized by
+p(x), this produces a NaN. A few of the predictors have this problem.
+
+There should probably be some sort of check for this, but that might be
+hard to do when usekernel = TRUE. Uwe - do you agree and/or have ideas? 
+
+Good news Saeed! Just use variable 91 and you don't need a model.
+Seriously, you might want to think about these data a bit. Many of them
+are highly skewed and have a large point mass at zero. Modeling the
+conditional probabilities using a normal distribution may not be the
+best idea.
+
+Max
+
+
+-----Original Message-----
+From: Uwe Ligges [mailto:ligges@statistik.uni-dortmund.de] 
+Sent: Tuesday, June 05, 2007 3:56 PM
+To: Saeed Abu Nimeh
+Cc: Kuhn, Max; r-help@stat.math.ethz.ch
+Subject: Re: [R] naiveBayes other than e1071
+
+
+
+Saeed Abu Nimeh wrote:
+> Max,
+> Thanks. I have tried it but i keep getting an error:
+> Error in as.vector(x, mode) : invalid argument 'mode'
+> Do I have to do something specific when using the class column. I
+tried
+> both  y.y<-as.vector and y.y<-as.factor.
+> 
+> dread<-read.table('dataset.csv',sep=",")
+> x.x<-as.matrix(dread[,2:256])
+> y.y<-as.vector(dread[,1])
+> nb<- NaiveBayes(x=x.x,grouping=y.y)
+> pred.nb<-predict(nb)
+> 
+> Error in as.vector(x, mode) : invalid argument 'mode'
+
+
+
+Please tell us (according to the posting guide): Which version of R? 
+Which version of klaR? Example data that reproduce the error?
+
+Uwe Ligges
+
+
+
+> Thanks,
+> Saeed
+> 
+> Kuhn, Max wrote:
+>> Saeed,
+>>
+>> There is a version in the klaR package. I recently submitted a change
+to
+>> the predict function that may be related to your problem. 
+>>
+>> If:
+>>
+>>   1. the posterior probabilities (apart from the prior) are being
+>> approximated by the product of the p(x_i|y_j) and
+>>
+>>   2. a lot of predictors are being used
+>>
+>> then posterior probabilities may have values of absolute zero. 
+>>
+>> When the approximation is used, the approximate posterior
+probabilities
+>> are normalized by their sum (which is zero in such cases).
+>>
+>> The patch in klaR uses the product of the conditional divided by the
+>> marginal of x_i (per the true formula). I haven't seen the problem
+occur
+>> with this patch.
+>>
+>> HTH,
+>>
+>> Max
+>>
+>> -----Original Message-----
+>> From: r-help-bounces@stat.math.ethz.ch
+>> [mailto:r-help-bounces@stat.math.ethz.ch] On Behalf Of Saeed Abu
+Nimeh
+>> Sent: Monday, June 04, 2007 2:45 PM
+>> To: r-help@stat.math.ethz.ch
+>> Subject: [R] naiveBayes other than e1071
+>>
+>> Hi List,
+>> Is there a naiveBayes interface other than the one in e1071 package.
+For
+>> some reason on certain datasets all predicted values are NaN, but it
+>> predicts well on others.
+>> Thanks,
+>> Saeed
+>> ---
+>> model <- naiveBayes(x.train, y.train, laplace = 3)
+>> pred <- predict(model,x.test,type="raw")
+>>
+>> ______________________________________________
+>> R-help@stat.math.ethz.ch mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-help
+>> PLEASE do read the posting guide
+>> http://www.R-project.org/posting-guide.html
+>> and provide commented, minimal, self-contained, reproducible code.
+>>
+>>
+----------------------------------------------------------------------
+>> LEGAL NOTICE
+>> Unless expressly stated otherwise, this message is confidential and
+may be privileged.  It is intended for the addressee(s) only.  Access to
+this E-mail by anyone else is unauthorized.  If you are not an
+addressee, any disclosure or copying of the contents of this E-mail or
+any action taken (or not taken) in reliance on it is unauthorized and
+may be unlawful.  If you are not an addressee, please inform the sender
+immediately.
+>>
+> 
+> ______________________________________________
+> R-help@stat.math.ethz.ch mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-help
+> PLEASE do read the posting guide
+http://www.R-project.org/posting-guide.html
+> and provide commented, minimal, self-contained, reproducible code.
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

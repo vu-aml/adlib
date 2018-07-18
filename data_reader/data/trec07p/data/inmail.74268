@@ -1,0 +1,83 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Jul  4 23:07:14 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l6537EL9020538
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 4 Jul 2007 23:07:14 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id B658316382A
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu,  5 Jul 2007 03:07:09 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.6 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 501)
+	id CF38C162C44; Thu,  5 Jul 2007 03:06:59 +0000 (GMT)
+To: samba-cvs@samba.org
+From: abartlet@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070705030659.CF38C162C44@lists.samba.org>
+Date: Thu,  5 Jul 2007 03:06:59 +0000 (GMT)
+Subject: svn commit: samba r23718 - in
+	branches/SAMBA_4_0/source/dsdb/samdb/ldb_modules: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: abartlet
+Date: 2007-07-05 03:06:59 +0000 (Thu, 05 Jul 2007)
+New Revision: 23718
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23718
+
+Log:
+Make Samba4 work against the LDAP backend again. 
+
+When we set up the schema, we don't have a partitions container yet.
+The LDAP error differs from that given by LDB, so I think we still
+have some conformance work to do.
+
+Andrew Bartlett
+
+Modified:
+   branches/SAMBA_4_0/source/dsdb/samdb/ldb_modules/naming_fsmo.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/dsdb/samdb/ldb_modules/naming_fsmo.c
+===================================================================
+--- branches/SAMBA_4_0/source/dsdb/samdb/ldb_modules/naming_fsmo.c	2007-07-05 02:52:58 UTC (rev 23717)
++++ branches/SAMBA_4_0/source/dsdb/samdb/ldb_modules/naming_fsmo.c	2007-07-05 03:06:59 UTC (rev 23718)
+@@ -69,10 +69,16 @@
+ 			 LDB_SCOPE_BASE,
+ 			 NULL, naming_attrs,
+ 			 &naming_res);
++	if (ret == LDB_ERR_NO_SUCH_OBJECT) {
++		ldb_debug(module->ldb, LDB_DEBUG_WARNING,
++			  "naming_fsmo_init: no partitions dn present: (skip loading of naming contexts details)\n");
++		talloc_free(mem_ctx);
++		return ldb_next_init(module);
++	}
+ 	if (ret != LDB_SUCCESS) {
+ 		ldb_debug_set(module->ldb, LDB_DEBUG_FATAL,
+-			      "naming_fsmo_init: failed to search the cross-ref container: %d:%s\n",
+-			      ret, ldb_strerror(ret));
++			      "naming_fsmo_init: failed to search the cross-ref container: %s: %s\n",
++			      ldb_strerror(ret), ldb_errstring(module->ldb));
+ 		talloc_free(mem_ctx);
+ 		return ret;
+ 	}
+

@@ -1,0 +1,524 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri May 18 19:39:36 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4INdaqD019690
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 18 May 2007 19:39:36 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 0120316381A
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 18 May 2007 23:39:33 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.8 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 549)
+	id D4743162AED; Fri, 18 May 2007 23:38:58 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jra@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070518233858.D4743162AED@lists.samba.org>
+Date: Fri, 18 May 2007 23:38:58 +0000 (GMT)
+Subject: svn commit: samba r23005 - in branches: SAMBA_3_0/source
+	SAMBA_3_0/source/lib SAMBA_3_0/source/passdb
+	SAMBA_3_0/source/utils SAMBA_3_0_25/source
+	SAMBA_3_0_25/source/lib SAMBA_3_0_25/source/passdb
+	SAMBA_3_0_25/source/utils SAMBA_3_0_26/source
+	SAMBA_3_0_26/source/lib SAMBA_3_0_26/source/passdb
+	SAMBA_3_0_26/source/utils
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: jra
+Date: 2007-05-18 23:38:56 +0000 (Fri, 18 May 2007)
+New Revision: 23005
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23005
+
+Log:
+If we're running on a system where time_t is 8 bytes
+we have to take care to preserve the "special" values
+for Windows of 0x80000000 and 0x7FFFFFFF when casting
+between time_t and uint32. Add conversion functions
+(and use them).
+Jeremy.
+
+Modified:
+   branches/SAMBA_3_0/source/configure.in
+   branches/SAMBA_3_0/source/lib/time.c
+   branches/SAMBA_3_0/source/passdb/passdb.c
+   branches/SAMBA_3_0/source/utils/pdbedit.c
+   branches/SAMBA_3_0_25/source/configure.in
+   branches/SAMBA_3_0_25/source/lib/time.c
+   branches/SAMBA_3_0_25/source/passdb/passdb.c
+   branches/SAMBA_3_0_25/source/utils/pdbedit.c
+   branches/SAMBA_3_0_26/source/configure.in
+   branches/SAMBA_3_0_26/source/lib/time.c
+   branches/SAMBA_3_0_26/source/passdb/passdb.c
+   branches/SAMBA_3_0_26/source/utils/pdbedit.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/configure.in
+===================================================================
+--- branches/SAMBA_3_0/source/configure.in	2007-05-18 20:57:01 UTC (rev 23004)
++++ branches/SAMBA_3_0/source/configure.in	2007-05-18 23:38:56 UTC (rev 23005)
+@@ -2079,6 +2079,14 @@
+ fi
+ 
+ 
++AC_CACHE_CHECK([for 64 bit time_t],samba_cv_SIZEOF_TIME_T,[
++AC_TRY_RUN([#include <time.h>
++main() { exit((sizeof(time_t) == 8) ? 0 : 1); }],
++samba_cv_SIZEOF_TIME_T=yes,samba_cv_SIZEOF_TIME_T=no,samba_cv_SIZEOF_TIME_T=cross)])
++if test x"$samba_cv_SIZEOF_TIME_T" = x"yes"; then
++    AC_DEFINE(SIZEOF_TIME_T,8,[The size of the 'time_t' type])
++fi
++
+ AC_CACHE_CHECK([for 64 bit off_t],samba_cv_SIZEOF_OFF_T,[
+ AC_TRY_RUN([#include <stdio.h>
+ #include <sys/stat.h>
+
+Modified: branches/SAMBA_3_0/source/lib/time.c
+===================================================================
+--- branches/SAMBA_3_0/source/lib/time.c	2007-05-18 20:57:01 UTC (rev 23004)
++++ branches/SAMBA_3_0/source/lib/time.c	2007-05-18 23:38:56 UTC (rev 23005)
+@@ -554,6 +554,37 @@
+ 		  ((TIME_FIXUP_CONSTANT_INT + (uint64_t)tv->tv_sec) * 1000000));
+ }
+ 
++/**************************************************************
++ Handle conversions between time_t and uint32, taking care to
++ preserve the "special" values.
++**************************************************************/
++
++uint32 convert_time_t_to_uint32(time_t t)
++{
++#if (defined(SIZEOF_TIME_T) && (SIZEOF_TIME_T == 8))
++	/* time_t is 64-bit. */
++	if (t == 0x8000000000000000LL) {
++		return 0x80000000;
++	} else if (t == 0x7FFFFFFFFFFFFFFFLL) {
++		return 0x7FFFFFFF;
++	}
++#endif
++	return (uint32)t;
++}
++
++time_t convert_uint32_to_time_t(uint32 u)
++{
++#if (defined(SIZEOF_TIME_T) && (SIZEOF_TIME_T == 8))
++	/* time_t is 64-bit. */
++	if (u == 0x80000000) {
++		return (time_t)0x8000000000000000LL;
++	} else if (u == 0x7FFFFFFF) {
++		return (time_t)0x7FFFFFFFFFFFFFFFLL) {
++	}
++#endif
++	return (time_t)u;
++}
++
+ /*******************************************************************
+  Yield the difference between *A and *B, in seconds, ignoring leap seconds.
+ ********************************************************************/
+
+Modified: branches/SAMBA_3_0/source/passdb/passdb.c
+===================================================================
+--- branches/SAMBA_3_0/source/passdb/passdb.c	2007-05-18 20:57:01 UTC (rev 23004)
++++ branches/SAMBA_3_0/source/passdb/passdb.c	2007-05-18 23:38:56 UTC (rev 23005)
+@@ -930,13 +930,13 @@
+ 		goto done;
+ 	}
+ 
+-	pdb_set_logon_time(sampass, logon_time, PDB_SET);
+-	pdb_set_logoff_time(sampass, logoff_time, PDB_SET);
+-	pdb_set_kickoff_time(sampass, kickoff_time, PDB_SET);
+-	pdb_set_bad_password_time(sampass, bad_password_time, PDB_SET);
+-	pdb_set_pass_can_change_time(sampass, pass_can_change_time, PDB_SET);
+-	pdb_set_pass_must_change_time(sampass, pass_must_change_time, PDB_SET);
+-	pdb_set_pass_last_set_time(sampass, pass_last_set_time, PDB_SET);
++	pdb_set_logon_time(sampass, convert_uint32_to_time_t(logon_time), PDB_SET);
++	pdb_set_logoff_time(sampass, convert_uint32_to_time_t(logoff_time), PDB_SET);
++	pdb_set_kickoff_time(sampass, convert_uint32_to_time_t(kickoff_time), PDB_SET);
++	pdb_set_bad_password_time(sampass, convert_uint32_to_time_t(bad_password_time), PDB_SET);
++	pdb_set_pass_can_change_time(sampass, convert_uint32_to_time_t(pass_can_change_time), PDB_SET);
++	pdb_set_pass_must_change_time(sampass, convert_uint32_to_time_t(pass_must_change_time), PDB_SET);
++	pdb_set_pass_last_set_time(sampass, convert_uint32_to_time_t(pass_last_set_time), PDB_SET);
+ 
+ 	pdb_set_username(sampass, username, PDB_SET); 
+ 	pdb_set_domain(sampass, domain, PDB_SET);
+@@ -1118,13 +1118,13 @@
+ 	*buf = NULL;
+ 	buflen = 0;
+ 
+-	logon_time = (uint32)pdb_get_logon_time(sampass);
+-	logoff_time = (uint32)pdb_get_logoff_time(sampass);
+-	kickoff_time = (uint32)pdb_get_kickoff_time(sampass);
+-	bad_password_time = (uint32)pdb_get_bad_password_time(sampass);
+-	pass_can_change_time = (uint32)pdb_get_pass_can_change_time_noncalc(sampass);
+-	pass_must_change_time = (uint32)pdb_get_pass_must_change_time(sampass);
+-	pass_last_set_time = (uint32)pdb_get_pass_last_set_time(sampass);
++	logon_time = convert_time_t_to_uint32(pdb_get_logon_time(sampass));
++	logoff_time = convert_time_t_to_uint32(pdb_get_logoff_time(sampass));
++	kickoff_time = convert_time_t_to_uint32(pdb_get_kickoff_time(sampass));
++	bad_password_time = convert_time_t_to_uint32(pdb_get_bad_password_time(sampass));
++	pass_can_change_time = convert_time_t_to_uint32(pdb_get_pass_can_change_time_noncalc(sampass));
++	pass_must_change_time = convert_time_t_to_uint32(pdb_get_pass_must_change_time(sampass));
++	pass_last_set_time = convert_time_t_to_uint32(pdb_get_pass_last_set_time(sampass));
+ 
+ 	user_rid = pdb_get_user_rid(sampass);
+ 	group_rid = pdb_get_group_rid(sampass);
+@@ -1408,7 +1408,7 @@
+ 	LastBadPassword = pdb_get_bad_password_time(sampass);
+ 	DEBUG(7, ("LastBadPassword=%d, resettime=%d, current time=%d.\n", 
+ 		   (uint32) LastBadPassword, resettime, (uint32)time(NULL)));
+-	if (time(NULL) > (LastBadPassword + (time_t)resettime*60)){
++	if (time(NULL) > (LastBadPassword + convert_uint32_to_time_t(resettime)*60)){
+ 		pdb_set_bad_password_count(sampass, 0, PDB_CHANGED);
+ 		pdb_set_bad_password_time(sampass, 0, PDB_CHANGED);
+ 		if (updated) {
+@@ -1462,7 +1462,7 @@
+ 		return True;
+ 	}
+ 
+-	if ((time(NULL) > (LastBadPassword + (time_t) duration * 60))) {
++	if ((time(NULL) > (LastBadPassword + convert_uint32_to_time_t(duration) * 60))) {
+ 		pdb_set_acct_ctrl(sampass,
+ 				  pdb_get_acct_ctrl(sampass) & ~ACB_AUTOLOCK,
+ 				  PDB_CHANGED);
+
+Modified: branches/SAMBA_3_0/source/utils/pdbedit.c
+===================================================================
+--- branches/SAMBA_3_0/source/utils/pdbedit.c	2007-05-18 20:57:01 UTC (rev 23004)
++++ branches/SAMBA_3_0/source/utils/pdbedit.c	2007-05-18 23:38:56 UTC (rev 23005)
+@@ -285,14 +285,14 @@
+ 		       lm_passwd,
+ 		       nt_passwd,
+ 		       pdb_encode_acct_ctrl(pdb_get_acct_ctrl(sam_pwent),NEW_PW_FORMAT_SPACE_PADDED_LEN),
+-		       (uint32)pdb_get_pass_last_set_time(sam_pwent));
++		       (uint32)convert_time_t_to_uint32(pdb_get_pass_last_set_time(sam_pwent)));
+ 	} else {
+ 		uid = nametouid(pdb_get_username(sam_pwent));
+ 		printf ("%s:%lu:%s\n", pdb_get_username(sam_pwent), (unsigned long)uid,	
+ 			pdb_get_fullname(sam_pwent));
+ 	}
+ 
+-	return 0;	
++	return 0;
+ }
+ 
+ /*********************************************************
+
+Modified: branches/SAMBA_3_0_25/source/configure.in
+===================================================================
+--- branches/SAMBA_3_0_25/source/configure.in	2007-05-18 20:57:01 UTC (rev 23004)
++++ branches/SAMBA_3_0_25/source/configure.in	2007-05-18 23:38:56 UTC (rev 23005)
+@@ -1936,6 +1936,14 @@
+ fi
+ 
+ 
++AC_CACHE_CHECK([for 64 bit time_t],samba_cv_SIZEOF_TIME_T,[
++AC_TRY_RUN([#include <time.h>
++main() { exit((sizeof(time_t) == 8) ? 0 : 1); }],
++samba_cv_SIZEOF_TIME_T=yes,samba_cv_SIZEOF_TIME_T=no,samba_cv_SIZEOF_TIME_T=cross)])
++if test x"$samba_cv_SIZEOF_TIME_T" = x"yes"; then
++    AC_DEFINE(SIZEOF_TIME_T,8,[The size of the 'time_t' type])
++fi
++
+ AC_CACHE_CHECK([for 64 bit off_t],samba_cv_SIZEOF_OFF_T,[
+ AC_TRY_RUN([#include <stdio.h>
+ #include <sys/stat.h>
+
+Modified: branches/SAMBA_3_0_25/source/lib/time.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/lib/time.c	2007-05-18 20:57:01 UTC (rev 23004)
++++ branches/SAMBA_3_0_25/source/lib/time.c	2007-05-18 23:38:56 UTC (rev 23005)
+@@ -554,6 +554,37 @@
+ 		  ((TIME_FIXUP_CONSTANT_INT + (uint64_t)tv->tv_sec) * 1000000));
+ }
+ 
++/**************************************************************
++ Handle conversions between time_t and uint32, taking care to
++ preserve the "special" values.
++**************************************************************/
++
++uint32 convert_time_t_to_uint32(time_t t)
++{
++#if (defined(SIZEOF_TIME_T) && (SIZEOF_TIME_T == 8))
++	/* time_t is 64-bit. */
++	if (t == 0x8000000000000000LL) {
++		return 0x80000000;
++	} else if (t == 0x7FFFFFFFFFFFFFFFLL) {
++		return 0x7FFFFFFF;
++	}
++#endif
++	return (uint32)t;
++}
++
++time_t convert_uint32_to_time_t(uint32 u)
++{
++#if (defined(SIZEOF_TIME_T) && (SIZEOF_TIME_T == 8))
++	/* time_t is 64-bit. */
++	if (u == 0x80000000) {
++		return (time_t)0x8000000000000000LL;
++	} else if (u == 0x7FFFFFFF) {
++		return (time_t)0x7FFFFFFFFFFFFFFFLL) {
++	}
++#endif
++	return (time_t)u;
++}
++
+ /*******************************************************************
+  Yield the difference between *A and *B, in seconds, ignoring leap seconds.
+ ********************************************************************/
+
+Modified: branches/SAMBA_3_0_25/source/passdb/passdb.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/passdb/passdb.c	2007-05-18 20:57:01 UTC (rev 23004)
++++ branches/SAMBA_3_0_25/source/passdb/passdb.c	2007-05-18 23:38:56 UTC (rev 23005)
+@@ -914,13 +914,13 @@
+ 		goto done;
+ 	}
+ 
+-	pdb_set_logon_time(sampass, logon_time, PDB_SET);
+-	pdb_set_logoff_time(sampass, logoff_time, PDB_SET);
+-	pdb_set_kickoff_time(sampass, kickoff_time, PDB_SET);
+-	pdb_set_bad_password_time(sampass, bad_password_time, PDB_SET);
+-	pdb_set_pass_can_change_time(sampass, pass_can_change_time, PDB_SET);
+-	pdb_set_pass_must_change_time(sampass, pass_must_change_time, PDB_SET);
+-	pdb_set_pass_last_set_time(sampass, pass_last_set_time, PDB_SET);
++	pdb_set_logon_time(sampass, convert_uint32_to_time_t(logon_time), PDB_SET);
++	pdb_set_logoff_time(sampass, convert_uint32_to_time_t(logoff_time), PDB_SET);
++	pdb_set_kickoff_time(sampass, convert_uint32_to_time_t(kickoff_time), PDB_SET);
++	pdb_set_bad_password_time(sampass, convert_uint32_to_time_t(bad_password_time), PDB_SET);
++	pdb_set_pass_can_change_time(sampass, convert_uint32_to_time_t(pass_can_change_time), PDB_SET);
++	pdb_set_pass_must_change_time(sampass, convert_uint32_to_time_t(pass_must_change_time), PDB_SET);
++	pdb_set_pass_last_set_time(sampass, convert_uint32_to_time_t(pass_last_set_time), PDB_SET);
+ 
+ 	pdb_set_username(sampass, username, PDB_SET); 
+ 	pdb_set_domain(sampass, domain, PDB_SET);
+@@ -1102,13 +1102,13 @@
+ 	*buf = NULL;
+ 	buflen = 0;
+ 
+-	logon_time = (uint32)pdb_get_logon_time(sampass);
+-	logoff_time = (uint32)pdb_get_logoff_time(sampass);
+-	kickoff_time = (uint32)pdb_get_kickoff_time(sampass);
+-	bad_password_time = (uint32)pdb_get_bad_password_time(sampass);
+-	pass_can_change_time = (uint32)pdb_get_pass_can_change_time_noncalc(sampass);
+-	pass_must_change_time = (uint32)pdb_get_pass_must_change_time(sampass);
+-	pass_last_set_time = (uint32)pdb_get_pass_last_set_time(sampass);
++	logon_time = convert_time_t_to_uint32(pdb_get_logon_time(sampass));
++	logoff_time = convert_time_t_to_uint32(pdb_get_logoff_time(sampass));
++	kickoff_time = convert_time_t_to_uint32(pdb_get_kickoff_time(sampass));
++	bad_password_time = convert_time_t_to_uint32(pdb_get_bad_password_time(sampass));
++	pass_can_change_time = convert_time_t_to_uint32(pdb_get_pass_can_change_time_noncalc(sampass));
++	pass_must_change_time = convert_time_t_to_uint32(pdb_get_pass_must_change_time(sampass));
++	pass_last_set_time = convert_time_t_to_uint32(pdb_get_pass_last_set_time(sampass));
+ 
+ 	user_rid = pdb_get_user_rid(sampass);
+ 	group_rid = pdb_get_group_rid(sampass);
+@@ -1392,7 +1392,7 @@
+ 	LastBadPassword = pdb_get_bad_password_time(sampass);
+ 	DEBUG(7, ("LastBadPassword=%d, resettime=%d, current time=%d.\n", 
+ 		   (uint32) LastBadPassword, resettime, (uint32)time(NULL)));
+-	if (time(NULL) > (LastBadPassword + (time_t)resettime*60)){
++	if (time(NULL) > (LastBadPassword + convert_uint32_to_time_t(resettime)*60)){
+ 		pdb_set_bad_password_count(sampass, 0, PDB_CHANGED);
+ 		pdb_set_bad_password_time(sampass, 0, PDB_CHANGED);
+ 		if (updated) {
+@@ -1445,7 +1445,7 @@
+ 			return True;
+ 	}
+ 
+-	if ((time(NULL) > (LastBadPassword + (time_t) duration * 60))) {
++	if ((time(NULL) > (LastBadPassword + convert_uint32_to_time_t(duration) * 60))) {
+ 		pdb_set_acct_ctrl(sampass,
+ 				  pdb_get_acct_ctrl(sampass) & ~ACB_AUTOLOCK,
+ 				  PDB_CHANGED);
+
+Modified: branches/SAMBA_3_0_25/source/utils/pdbedit.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/utils/pdbedit.c	2007-05-18 20:57:01 UTC (rev 23004)
++++ branches/SAMBA_3_0_25/source/utils/pdbedit.c	2007-05-18 23:38:56 UTC (rev 23005)
+@@ -285,14 +285,14 @@
+ 		       lm_passwd,
+ 		       nt_passwd,
+ 		       pdb_encode_acct_ctrl(pdb_get_acct_ctrl(sam_pwent),NEW_PW_FORMAT_SPACE_PADDED_LEN),
+-		       (uint32)pdb_get_pass_last_set_time(sam_pwent));
++		       (uint32)convert_time_t_to_uint32(pdb_get_pass_last_set_time(sam_pwent)));
+ 	} else {
+ 		uid = nametouid(pdb_get_username(sam_pwent));
+ 		printf ("%s:%lu:%s\n", pdb_get_username(sam_pwent), (unsigned long)uid,	
+ 			pdb_get_fullname(sam_pwent));
+ 	}
+ 
+-	return 0;	
++	return 0;
+ }
+ 
+ /*********************************************************
+
+Modified: branches/SAMBA_3_0_26/source/configure.in
+===================================================================
+--- branches/SAMBA_3_0_26/source/configure.in	2007-05-18 20:57:01 UTC (rev 23004)
++++ branches/SAMBA_3_0_26/source/configure.in	2007-05-18 23:38:56 UTC (rev 23005)
+@@ -1943,6 +1943,14 @@
+ fi
+ 
+ 
++AC_CACHE_CHECK([for 64 bit time_t],samba_cv_SIZEOF_TIME_T,[
++AC_TRY_RUN([#include <time.h>
++main() { exit((sizeof(time_t) == 8) ? 0 : 1); }],
++samba_cv_SIZEOF_TIME_T=yes,samba_cv_SIZEOF_TIME_T=no,samba_cv_SIZEOF_TIME_T=cross)])
++if test x"$samba_cv_SIZEOF_TIME_T" = x"yes"; then
++    AC_DEFINE(SIZEOF_TIME_T,8,[The size of the 'time_t' type])
++fi
++
+ AC_CACHE_CHECK([for 64 bit off_t],samba_cv_SIZEOF_OFF_T,[
+ AC_TRY_RUN([#include <stdio.h>
+ #include <sys/stat.h>
+
+Modified: branches/SAMBA_3_0_26/source/lib/time.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/lib/time.c	2007-05-18 20:57:01 UTC (rev 23004)
++++ branches/SAMBA_3_0_26/source/lib/time.c	2007-05-18 23:38:56 UTC (rev 23005)
+@@ -554,6 +554,37 @@
+ 		  ((TIME_FIXUP_CONSTANT_INT + (uint64_t)tv->tv_sec) * 1000000));
+ }
+ 
++/**************************************************************
++ Handle conversions between time_t and uint32, taking care to
++ preserve the "special" values.
++**************************************************************/
++
++uint32 convert_time_t_to_uint32(time_t t)
++{
++#if (defined(SIZEOF_TIME_T) && (SIZEOF_TIME_T == 8))
++	/* time_t is 64-bit. */
++	if (t == 0x8000000000000000LL) {
++		return 0x80000000;
++	} else if (t == 0x7FFFFFFFFFFFFFFFLL) {
++		return 0x7FFFFFFF;
++	}
++#endif
++	return (uint32)t;
++}
++
++time_t convert_uint32_to_time_t(uint32 u)
++{
++#if (defined(SIZEOF_TIME_T) && (SIZEOF_TIME_T == 8))
++	/* time_t is 64-bit. */
++	if (u == 0x80000000) {
++		return (time_t)0x8000000000000000LL;
++	} else if (u == 0x7FFFFFFF) {
++		return (time_t)0x7FFFFFFFFFFFFFFFLL) {
++	}
++#endif
++	return (time_t)u;
++}
++
+ /*******************************************************************
+  Yield the difference between *A and *B, in seconds, ignoring leap seconds.
+ ********************************************************************/
+
+Modified: branches/SAMBA_3_0_26/source/passdb/passdb.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/passdb/passdb.c	2007-05-18 20:57:01 UTC (rev 23004)
++++ branches/SAMBA_3_0_26/source/passdb/passdb.c	2007-05-18 23:38:56 UTC (rev 23005)
+@@ -914,13 +914,13 @@
+ 		goto done;
+ 	}
+ 
+-	pdb_set_logon_time(sampass, logon_time, PDB_SET);
+-	pdb_set_logoff_time(sampass, logoff_time, PDB_SET);
+-	pdb_set_kickoff_time(sampass, kickoff_time, PDB_SET);
+-	pdb_set_bad_password_time(sampass, bad_password_time, PDB_SET);
+-	pdb_set_pass_can_change_time(sampass, pass_can_change_time, PDB_SET);
+-	pdb_set_pass_must_change_time(sampass, pass_must_change_time, PDB_SET);
+-	pdb_set_pass_last_set_time(sampass, pass_last_set_time, PDB_SET);
++	pdb_set_logon_time(sampass, convert_uint32_to_time_t(logon_time), PDB_SET);
++	pdb_set_logoff_time(sampass, convert_uint32_to_time_t(logoff_time), PDB_SET);
++	pdb_set_kickoff_time(sampass, convert_uint32_to_time_t(kickoff_time), PDB_SET);
++	pdb_set_bad_password_time(sampass, convert_uint32_to_time_t(bad_password_time), PDB_SET);
++	pdb_set_pass_can_change_time(sampass, convert_uint32_to_time_t(pass_can_change_time), PDB_SET);
++	pdb_set_pass_must_change_time(sampass, convert_uint32_to_time_t(pass_must_change_time), PDB_SET);
++	pdb_set_pass_last_set_time(sampass, convert_uint32_to_time_t(pass_last_set_time), PDB_SET);
+ 
+ 	pdb_set_username(sampass, username, PDB_SET); 
+ 	pdb_set_domain(sampass, domain, PDB_SET);
+@@ -1102,13 +1102,13 @@
+ 	*buf = NULL;
+ 	buflen = 0;
+ 
+-	logon_time = (uint32)pdb_get_logon_time(sampass);
+-	logoff_time = (uint32)pdb_get_logoff_time(sampass);
+-	kickoff_time = (uint32)pdb_get_kickoff_time(sampass);
+-	bad_password_time = (uint32)pdb_get_bad_password_time(sampass);
+-	pass_can_change_time = (uint32)pdb_get_pass_can_change_time_noncalc(sampass);
+-	pass_must_change_time = (uint32)pdb_get_pass_must_change_time(sampass);
+-	pass_last_set_time = (uint32)pdb_get_pass_last_set_time(sampass);
++	logon_time = convert_time_t_to_uint32(pdb_get_logon_time(sampass));
++	logoff_time = convert_time_t_to_uint32(pdb_get_logoff_time(sampass));
++	kickoff_time = convert_time_t_to_uint32(pdb_get_kickoff_time(sampass));
++	bad_password_time = convert_time_t_to_uint32(pdb_get_bad_password_time(sampass));
++	pass_can_change_time = convert_time_t_to_uint32(pdb_get_pass_can_change_time_noncalc(sampass));
++	pass_must_change_time = convert_time_t_to_uint32(pdb_get_pass_must_change_time(sampass));
++	pass_last_set_time = convert_time_t_to_uint32(pdb_get_pass_last_set_time(sampass));
+ 
+ 	user_rid = pdb_get_user_rid(sampass);
+ 	group_rid = pdb_get_group_rid(sampass);
+@@ -1392,7 +1392,7 @@
+ 	LastBadPassword = pdb_get_bad_password_time(sampass);
+ 	DEBUG(7, ("LastBadPassword=%d, resettime=%d, current time=%d.\n", 
+ 		   (uint32) LastBadPassword, resettime, (uint32)time(NULL)));
+-	if (time(NULL) > (LastBadPassword + (time_t)resettime*60)){
++	if (time(NULL) > (LastBadPassword + convert_uint32_to_time_t(resettime)*60)){
+ 		pdb_set_bad_password_count(sampass, 0, PDB_CHANGED);
+ 		pdb_set_bad_password_time(sampass, 0, PDB_CHANGED);
+ 		if (updated) {
+@@ -1445,7 +1445,7 @@
+ 			return True;
+ 	}
+ 
+-	if ((time(NULL) > (LastBadPassword + (time_t) duration * 60))) {
++	if ((time(NULL) > (LastBadPassword + convert_uint32_to_time_t(duration) * 60))) {
+ 		pdb_set_acct_ctrl(sampass,
+ 				  pdb_get_acct_ctrl(sampass) & ~ACB_AUTOLOCK,
+ 				  PDB_CHANGED);
+
+Modified: branches/SAMBA_3_0_26/source/utils/pdbedit.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/utils/pdbedit.c	2007-05-18 20:57:01 UTC (rev 23004)
++++ branches/SAMBA_3_0_26/source/utils/pdbedit.c	2007-05-18 23:38:56 UTC (rev 23005)
+@@ -285,14 +285,14 @@
+ 		       lm_passwd,
+ 		       nt_passwd,
+ 		       pdb_encode_acct_ctrl(pdb_get_acct_ctrl(sam_pwent),NEW_PW_FORMAT_SPACE_PADDED_LEN),
+-		       (uint32)pdb_get_pass_last_set_time(sam_pwent));
++		       (uint32)convert_time_t_to_uint32(pdb_get_pass_last_set_time(sam_pwent)));
+ 	} else {
+ 		uid = nametouid(pdb_get_username(sam_pwent));
+ 		printf ("%s:%lu:%s\n", pdb_get_username(sam_pwent), (unsigned long)uid,	
+ 			pdb_get_fullname(sam_pwent));
+ 	}
+ 
+-	return 0;	
++	return 0;
+ }
+ 
+ /*********************************************************
+

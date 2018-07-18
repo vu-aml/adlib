@@ -1,0 +1,187 @@
+From perl6-all-return-80828-ktwarwic=speedy.uwaterloo.ca@perl.org  Mon Apr 23 17:19:28 2007
+Return-Path: <perl6-all-return-80828-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3NLJR6w001719
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 23 Apr 2007 17:19:27 -0400
+Received: (qmail 7541 invoked by uid 514); 23 Apr 2007 21:19:26 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 7536 invoked from network); 23 Apr 2007 21:19:26 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+Message-ID: <462D22A9.30806@jnthn.net>
+Date: Mon, 23 Apr 2007 22:18:33 +0100
+From: Jonathan Worthington <jonathan@jnthn.net>
+User-Agent: Thunderbird 1.5.0.10 (Windows/20070221)
+MIME-Version: 1.0
+To: perl6-internals@perl.org
+Subject: My brain dump for the PMCs PDD
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+Status: O
+Content-Length: 7549
+Lines: 142
+
+Hi all,
+
+Here's my semi-coherent collection of random thoughts about PMCs, typed 
+up while sitting in a nice sunny park in London last week. A lot of 
+details will need hashing out with these ideas. I am primarily trying to 
+address:
+
+* Interaction between PMCs and classes built with Class (but it's 
+actually a more geneal problem of interaction between classes from 
+different and imcompatible class system implementations; I think we need 
+something that deals with the general problem and is not specific to PMCs).
+
+* PMC state
+
+* PMCs and roles
+
+== PMC Attributes
+Present situation: PMCs have up to three slots for data if they use_ext. 
+Any slots that their parents use are unusable in a non-compatible way, 
+so any complex inheritance hierarchy is near impossible to achieve.
+
+Proposal: PMCs can have attributes just as classes in HLLs have 
+attributes. This is somewhat related to variable sized PMCs; note you 
+can leave PMC headers fixed size and just have a pmc_ext like structure 
+that is the variable sized bit. The implementation of attributes and 
+attribute inheritance would be pretty standard.
+
+== Introspection
+While every instance of an object instantiated from a Parrot Class has 
+the Class available for introspection purposes, PMCs do not. This needs 
+to change, and here's something I think will work.
+
+Every PMC gets an automatically generated instance of MetaPMC. This 
+implements the inspect and inspect_str vtable methods, which again will 
+be generated automatically. This will allow full outside introspection 
+of the methods, attributes, inheritance and roles done by a PMC. The 
+MetaPMC will be attached to a namespace just as a class or role is 
+attached to a namespace today. Using the get_class op will return the 
+MetaPMC, just as you'd get a Class if you called get_class on an Object. 
+You can go ahead and introspect the thing like a class, and it'll Just Work.
+
+== Interaction Between HLL Clases and PMCs
+In the inheritance heirarchy, MetaPMCs show up just as a Class would. 
+However, in your MRO, you treat anything from a different "universe" 
+(that is, PMCs are in a different universe to classes built using the 
+default Parrot Class) as a black box - that is, you don't list all of 
+its parents in the MRO. (Whether inspecting the MRO lies and does 
+include them is another matter, I'm talking internals here).
+
+Method lookup should always be done by obtaining the method done by a 
+class using the inspection interface unless it is of the same type of 
+class as the one who's find_method vtable method is doing the lookup 
+(you understand your own internals, so you can cheat). This means that 
+PMCs just expose their methods as a class would expose its methods - 
+through the MetaPMC.
+
+State is a bit harder when it comes to inheritance, since different 
+class systems will chose to store it in different ways. For example, the 
+default Parrot Class implementation uses a ResizablePMCArray in the 
+Object to store attributes. PMCs will do it differently, being based 
+upon a C structure.
+
+We can partly resolve the problem by introducing the same kind of rule 
+we have been doing so far: you only include attributes from classes in 
+the same "universe" as yourself - that is, implemented using the same or 
+a compatible underlying implementation. When Class builds its attribute 
+lookup table, it does not include attributes from PMCs.
+
+At the point of attribute lookup, when an imcompatible type of class is 
+reached, lookup is then delegated to the get_attribute vtable method of 
+the instance from the different universe.
+
+For this to work, any class implementaiton will need to instantiate 
+objects of any class that it directly inherits from that belongs to a 
+different universe. That is, if you inherit from two PMCs when creating 
+a Class, then each of those PMCs will need to be instantiated. (This is 
+sort of what we do today, but we can only support one PMC parent, not 
+multiple ones; also I'm extending this to deal not just with the 
+Class/PMC mismatch, but also the mismatch that will occur when you have 
+other class system implementations that are totally different internally).
+
+== PMRs (Parrot Magic Roles)
+If a PMC does a role, you can do that composition statically in the PMC 
+compiler. That kinda means that roles at a C level need not exist at 
+runtime. Unfortunately, that'd mean that we couldn't inspect the role at 
+runtime or compose it into a non-PMC class, which would rather suck. 
+Conclusion: roles somehow need to exist at runtime.
+
+Roles have methods and state. As before, methods are quite easy to deal 
+with, but state is a pain. The main issue is that the state exists at a 
+C level. To deal with this for classes, we had to instantiate each of 
+the PMCs we inherited from, so we had state available in the right form. 
+We have the same situation with roles, which seems to suggest that you 
+need to keep around a collection of "instantiated" roles (yes, I know, 
+you can't really instantiate a role) that are from a different universe.
+
+This is all starting to make PMCs and PMRs sound very similar, to the 
+extent that you probably want to re-use a lot of the functionaltiy 
+between the two of them.
+
+Unfortunately, we have no such general concpet of instantiating a role 
+for the sake of having its state available. Trouble is that the roles 
+paper gets some good properties from roles by them *not* having state, 
+and having roles with state loses you them. Of course, there's 
+advantages too, but you lose a lot of the implementation simplicity. In 
+fact, this whole thing is still the biggest unsolved problem in my mind. 
+A general mechanism to bridge the gap between classes in different 
+uinverses wasn't so bad, because you had instantiation so you can 
+actually delegate rather than inherit. With roles, we don't have that, 
+so you can't use the same cheat unless you make roles somehow 
+instantiable, or at least provide a way of saying "here's the state of 
+the role from a different universe".
+
+== Calling methods in a subclass from a different universe
+State for once doesn't hurt us here, since you can't see the state of a 
+subclass (since you don't know it exists). The same ins't true of method 
+overriding. If you call a method from different universe, delegation 
+breaks down and you can't call accross the boundary - the find_method 
+vtable ends up invoking on the wrong object.
+
+The only way I see to resolve this is to try and pull apart "who am I" 
+from "what state do I have". The two are tied together under the current 
+PMC design. It's incompatible ways of doing state that leads us to 
+wanting delegation, so maybe what we really want is to actually pass a 
+copy of the PMC data structure with the vtable of the class deepest in 
+the inheritance hierarchy, but with the state stored in whatever way the 
+object in the different universe uses. If you stick with fixed sized PMC 
+headers pointing to a vtable and the state, with variable sized state, 
+that becomes reasonably easy to implement. It's a tad evil, and we'd 
+want a way to say to implementers of other class systems "just call this 
+magic bit of code that crosses you into the other universe".
+
+Note that with this, you'd need to be quite careful about calling the 
+correct get_attribute and set_attribute methods when you delegate up the 
+tree, as I suggested for crossing universe boundaries during attribute 
+lookup.
+
+OK, that's all I've got for now. Sorry for the rambling towards the end 
+as I explored the bits I'm not clear on yet, and hope it's helpful.
+
+Jonathan
+
+

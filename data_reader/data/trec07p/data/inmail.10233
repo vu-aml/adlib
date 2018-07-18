@@ -1,0 +1,259 @@
+From perl6-all-return-80630-ktwarwic=speedy.uwaterloo.ca@perl.org  Mon Apr 16 09:54:08 2007
+Return-Path: <perl6-all-return-80630-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3GDs70I014234
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 16 Apr 2007 09:54:07 -0400
+Received: (qmail 8158 invoked by uid 514); 16 Apr 2007 13:53:42 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 8153 invoked from network); 16 Apr 2007 13:53:42 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+Date: Mon, 16 Apr 2007 06:53:10 -0700
+From: Mark Glines <mark@glines.org>
+To: perl6-internals@perl.org
+Subject: RT #41858, reasonable set of rules for splint (was: Re: Parrot Bug
+ Summary)
+Message-ID: <20070416065310.505c94f3@chirp>
+In-Reply-To: <20070416130027.17184.qmail@x1.develooper.com>
+References: <20070416130027.17184.qmail@x1.develooper.com>
+Organization: Glines.org
+X-Mailer: Claws Mail 2.8.0 (GTK+ 2.10.11; i686-pc-linux-gnu)
+X-Useless-Header: yay!
+Mime-Version: 1.0
+Content-Type: multipart/mixed; boundary=MP_7RE6fC5GI_Pf4HfJIU1NMXd
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME
+Status: O
+Content-Length: 8725
+Lines: 210
+
+--MP_7RE6fC5GI_Pf4HfJIU1NMXd
+Content-Type: text/plain; charset=US-ASCII
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+
+On 16 Apr 2007 13:00:27 -0000
+Parrot Bug Summary <perlbug-summary@perl.org> wrote:
+
+> 41858 [CAGE] Make a reasonable set of rules for splint
+
+Hi,
+
+Random cage cleaner here.  At Andy Lester's suggestion, I've begun
+working on this splint stuff. So everything below is all his fault. :)
+
+I found that "make splint" is currently very dependent on the machine
+you run it on.  I'm running it on Gentoo Linux, and so, Parrot gets
+built with lots of unixish features (due to their being enabled in
+has_header.h). For instance, my platform has PARROT_HAS_HEADER_ARPAINET
+defined, so <arpa/inet.h> gets included.
+
+Unfortunately, splint barfs on this, because my arpa/inet.h isn't
+compatible with the +posixstrictlibs flag (because of a lack of
+in_addr_t typedef in splint's posix lib, I think).  Further on, I found
+splint couldn't parse my pthread.h either, so I eventually gave it a
++skip-sys-headers, which got a lot farther.
+
+I battled against this for a while, and found this small set of changes
+(see the attached diff) were helpful to get the majority of the
+sourcefiles parsing correctly with splint.
+
+Unfortunately, I had to turn +posixstrictlibs into +unixstrictlibs to
+get it to work at all on my machine... which is not the most portable
+thing to do.
+
+Do you think its possible to use a "dummy" config.h and has_header.h
+and stuff, for the purposes of splint portability?  One that doesn't
+enable any platform-specific stuff, and thus, will generate the same
+results on any platform? Splint seems to like using its own internal
+header-library (and it has a few different ones... ISO, POSIX, UNIX),
+and barfs on my system headers in several places, mostly due to
+conflicts between its library and my reality.
+
+I had to blacklist the following files, because splint could not parse
+them for whatever reason:
+
+compilers/imcc/imcparser.c
+compilers/imcc/instructions.c
+compilers/imcc/parser_util.c
+src/charset/unicode.c
+src/encodings/ucs2.c
+src/encodings/utf16.c
+src/exec_save.c
+src/io/io.c
+src/misc.c
+src/ops/core_ops_cg.c
+src/ops/core_ops_cgp.c
+src/pmc/bigint.c
+src/spf_render.c
+src/spf_vtable.c
+src/string_primitives.c
+
+But the remaining 177 C source files went through okay, with the
+following warning summary:
+
+Error Type                Reported  Suppressed
+===================       ========  =========
+nullderef                    0         512
+nullpass                     0         350
+nullret                      0         617
+nullstate                    0         363
+nullassign                   0         148
+usedef                       0         170
+compdef                      0        3858
+initallelements             13           0
+incondefs                    1           0
+realcompare                224          21
+unsignedcompare              0          17
+nullptrarith                 0           7
+bitwisesigned             4354          58
+shiftnegative                0          78
+shiftimplementation          0         764
+sizeoftype                   0        2181
+fixedformalarray             4           0
+formalarray                  0          22
+boolops                      0        1286
+predboolint                  0          14
+predboolptr                  0        1096
+predboolothers             837           0
+abstract                     0           9
+mustfreefresh                0        3229
+mustfreeonly                 0        4737
+usereleased                  0         138
+compdestroy                  0       24010
+branchstate                  0         958
+compmempass                  0        1681
+stackref                     9           2
+dependenttrans               0          23
+onlytrans                    0         719
+onlyunqglobaltrans           0           3
+temptrans                    0        3409
+kepttrans                    0         248
+immediatetrans               0          49
+statictrans                  0          41
+unqualifiedtrans             0         419
+staticinittrans              0           2
+readonlytrans                0         721
+aliasunique                  1           0
+mayaliasunique               0           8
+observertrans                0          35
+modobserver                  2           0
+globs                        0         271
+evalorder                    5           0
+evalorderuncon               0         131
+casebreak                    0        1251
+misscase                     0           1
+looploopbreak                0          35
+loopswitchbreak              0         430
+switchswitchbreak            0          44
+looploopcontinue             0          14
+ifempty                      3           0
+noeffect                     2           0
+retvalother                478         103
+retvalint                    0         513
+macroredef                  88           0
+macroparens                  0           1
+sefuncon                     0           5
+namechecks                 157         167
+isoreserved                  0        1008
+fcnuse                      78           0
+paramuse                     0       17175
+varuse                      38           3
+declundef                  196           0
+exitarg                      0           9
+shadow                      22          85
+nestedextern                22           0
+redecl                       0         191
+redef                        8           5
+exporttype                   0         226
+type                         0        8620
+formatconst                  0           1
+voidabstract                 0           1
+castfcnptr                   0         168
+charindex                    0          10
+ignoresigns                  2           0
+unrecog                     61           0
+bufferoverflowhigh          28           0
+multithreaded                0           1
+superuser                    0           1
+warnlintcomments             0           1
+                          ========  =========
+Total                     6633       82474
+
+I think this is a reasonable starting point.  More details are available
+on request. (the stdout was around 2 megs.)
+
+So far, I've already identified the "casebreak" warnings as useless,
+because parrot often intentionally falls through from one switchcase to
+another, and this isn't a bug.  So I shut those off.  It's likely that
+other flags in the above list will need to be suppressed, as well...
+the casebreak one was simply the most obvious one.
+
+I'd like to spend some time trying to make "make splint" more
+portable... splint defines a special preprocessor variable when it
+runs, so maybe config.h can skip all the platform-specific stuff when
+that variable is defined, or something like that.  And I'd like to
+spend some time fixing the source files I listed above, or, failing
+that, marking them somehow so splint will skip the erroneous stuff.
+
+I'd also like to spend some time researching and (hopefully) fixing
+some of the warnings in the above warning list, too.
+
+Is anyone already working on this?
+
+Does anyone have any interest in this?
+
+Does anyone have an objection to it?
+
+Mark
+
+--MP_7RE6fC5GI_Pf4HfJIU1NMXd
+Content-Type: text/x-patch; name=splint-flags-for-my-linux-box.diff
+Content-Transfer-Encoding: 7bit
+Content-Disposition: attachment; filename=splint-flags-for-my-linux-box.diff
+
+=== config/gen/makefiles/root.in
+==================================================================
+--- config/gen/makefiles/root.in	(revision 20093)
++++ config/gen/makefiles/root.in	(local)
+@@ -126,15 +126,15 @@
+ SPLINT     = splint
+ # note: +distinctinternalnames with +externalnamelen at 8 characters
+ #       (the ANSI standard) is not going to fly for us.
+-SPLINTFLAGS  = -weak +showscan +showsummary +posixstrictlib -abstract \
++SPLINTFLAGS  = -weak +showscan +showsummary +unixstrictlib -abstract \
+     +aliasunique +ansireserved +ansireservedinternal +assignexpose \
+     +bitwisesigned +boolcompare +booltype BOOLVAL +casebreak -castfcnptr \
+     -charint +continuecomment +controlnestdepth 15 +cppnames +declundef \
+     +distinctinternalnames +evalorder +fielduse +forcehints -globs \
+-    +imptype +includenest 8 +incondefs +incondefslib +linelen 9999 \
++    +imptype +includenest 20 +incondefs +incondefslib +linelen 9999 \
+     +longintegral +macroassign +macroempty +macroredef +matchanyintegral \
+     +nestedextern +noeffect +readonlystrings +realcompare +shadow -type \
+-    -isoreserved
++    -isoreserved +skip-sys-headers +single-include -casebreak
+ 
+ # slightly weaker, more realistic variant.
+ SPLINTFLAGS2 = $(SPLINTFLAGS) -ansireserved -retvalother -bitwisesigned \
+
+--MP_7RE6fC5GI_Pf4HfJIU1NMXd--
+

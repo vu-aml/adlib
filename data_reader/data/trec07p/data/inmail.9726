@@ -1,0 +1,104 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun Apr 15 20:32:16 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3G0WG0I031674
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 15 Apr 2007 20:32:16 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 928B4163824
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 16 Apr 2007 00:31:52 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.6 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 66161162ADC; Mon, 16 Apr 2007 00:31:30 +0000 (GMT)
+Date: Mon, 16 Apr 2007 10:31:39 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070416003130.66161162ADC@lists.samba.org>
+Subject: Rev 108: merge CTDB_SRVID_ALL patch from Samba4 in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2004
+Lines: 63
+
+------------------------------------------------------------
+revno: 108
+revision-id: tridge@samba.org-20070416003139-ac731d5336e759e3
+parent: tridge@samba.org-20070416002144-34daa28d0f1d01db
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Mon 2007-04-16 10:31:39 +1000
+message:
+  merge CTDB_SRVID_ALL patch from Samba4
+modified:
+  common/ctdb_message.c          ctdb_message.c-20070208224107-9dnio7x7z33prrmt-1
+  common/ctdb_util.c             ctdb_util.c-20061128065342-to93h6eejj5kon81-3
+  include/ctdb.h                 ctdb.h-20061117234101-o3qt14umlg9en8z0-11
+=== modified file 'common/ctdb_message.c'
+--- a/common/ctdb_message.c	2007-04-16 00:21:44 +0000
++++ b/common/ctdb_message.c	2007-04-16 00:31:39 +0000
+@@ -39,7 +39,7 @@
+ 	/* XXX we need a must faster way of finding the matching srvid
+ 	   - maybe a tree? */
+ 	for (ml=ctdb->message_list;ml;ml=ml->next) {
+-		if (ml->srvid == srvid) break;
++		if (ml->srvid == srvid || ml->srvid == CTDB_SRVID_ALL) break;
+ 	}
+ 	if (ml == NULL) {
+ 		printf("daemon vnn:%d  no msg handler for srvid=%u\n", ctdb_get_vnn(ctdb), srvid);
+
+=== modified file 'common/ctdb_util.c'
+--- a/common/ctdb_util.c	2007-04-16 00:21:44 +0000
++++ b/common/ctdb_util.c	2007-04-16 00:31:39 +0000
+@@ -43,15 +43,16 @@
+ 	talloc_free(ctdb->err_msg);
+ 	va_start(ap, fmt);
+ 	ctdb->err_msg = talloc_vasprintf(ctdb, fmt, ap);
++	DEBUG(0,("ctdb error: %s\n", ctdb->err_msg));
+ 	va_end(ap);
+ }
+ 
+-
+ /*
+   a fatal internal error occurred - no hope for recovery
+ */
+ void ctdb_fatal(struct ctdb_context *ctdb, const char *msg)
+ {
++	DEBUG(0,("ctdb fatal error: %s\n", msg));
+ 	fprintf(stderr, "ctdb fatal error: '%s'\n", msg);
+ 	abort();
+ }
+
+=== modified file 'include/ctdb.h'
+--- a/include/ctdb.h	2007-04-12 05:46:50 +0000
++++ b/include/ctdb.h	2007-04-16 00:31:39 +0000
+@@ -56,6 +56,11 @@
+ #define CTDB_FLAG_CONNECT_WAIT (1<<2)
+ 
+ 
++/* 
++   a message handler ID meaning "give me all messages"
++ */
++#define CTDB_SRVID_ALL 0xFFFFFFFF
++
+ struct event_context;
+ 
+ /*
+

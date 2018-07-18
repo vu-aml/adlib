@@ -1,0 +1,166 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Jun 18 18:00:41 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5IM0eL9022319
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 18 Jun 2007 18:00:41 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 22C1116384D
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 18 Jun 2007 22:00:39 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.6 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1006)
+	id E6732162BCA; Mon, 18 Jun 2007 22:00:21 +0000 (GMT)
+To: samba-cvs@samba.org
+From: lha@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070618220021.E6732162BCA@lists.samba.org>
+Date: Mon, 18 Jun 2007 22:00:21 +0000 (GMT)
+Subject: svn commit: lorikeet r752 - in trunk/heimdal: . lib/hx509 lib/krb5
+	lib/sl
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: lha
+Date: 2007-06-18 22:00:20 +0000 (Mon, 18 Jun 2007)
+New Revision: 752
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=lorikeet&rev=752
+
+Log:
+Merged with Heimdal svn revision 21151
+Modified:
+   trunk/heimdal/ChangeLog
+   trunk/heimdal/lib/hx509/cert.c
+   trunk/heimdal/lib/krb5/pac.c
+   trunk/heimdal/lib/sl/ChangeLog
+
+
+Changeset:
+Modified: trunk/heimdal/ChangeLog
+===================================================================
+--- trunk/heimdal/ChangeLog	2007-06-18 21:42:31 UTC (rev 751)
++++ trunk/heimdal/ChangeLog	2007-06-18 22:00:20 UTC (rev 752)
+@@ -1,5 +1,7 @@
+ 2007-06-18  Love Hörnquist Åstrand  <lha@it.su.se>
+ 
++	* lib/krb5/pac.c: make compile.
++	
+ 	* lib/krb5/pac.c (verify_checksum): memset cksum to avoid using
+ 	pointer from stack.
+ 
+
+Modified: trunk/heimdal/lib/hx509/cert.c
+===================================================================
+--- trunk/heimdal/lib/hx509/cert.c	2007-06-18 21:42:31 UTC (rev 751)
++++ trunk/heimdal/lib/hx509/cert.c	2007-06-18 22:00:20 UTC (rev 752)
+@@ -32,7 +32,7 @@
+  */
+ 
+ #include "hx_locl.h"
+-RCSID("$Id: cert.c 21136 2007-06-18 21:13:27Z lha $");
++RCSID("$Id: cert.c 21150 2007-06-18 21:51:52Z lha $");
+ #include "crypto-headers.h"
+ #include <rtbl.h>
+ 
+@@ -82,22 +82,6 @@
+  *
+  */
+ 
+-void
+-_hx509_abort(const char *fmt, ...)
+-{
+-    va_list ap;
+-    va_start(ap, fmt);
+-    vprintf(fmt, ap);
+-    va_end(ap);
+-    printf("\n");
+-    fflush(stdout);
+-    abort();
+-}
+-
+-/*
+- *
+- */
+-
+ int
+ hx509_context_init(hx509_context *context)
+ {
+@@ -2472,3 +2456,24 @@
+ 
+     return ret;
+ }
++
++/*
++ * Last to avoid lost __attribute__s due to #undef.
++ */
++
++#undef __attribute__
++#define __attribute__(X)
++
++void
++_hx509_abort(const char *fmt, ...)
++     __attribute__ ((noreturn, format (printf, 1, 2)))
++{
++    va_list ap;
++    va_start(ap, fmt);
++    vprintf(fmt, ap);
++    va_end(ap);
++    printf("\n");
++    fflush(stdout);
++    abort();
++}
++
+
+Modified: trunk/heimdal/lib/krb5/pac.c
+===================================================================
+--- trunk/heimdal/lib/krb5/pac.c	2007-06-18 21:42:31 UTC (rev 751)
++++ trunk/heimdal/lib/krb5/pac.c	2007-06-18 22:00:20 UTC (rev 752)
+@@ -33,7 +33,7 @@
+ 
+ #include "krb5_locl.h"
+ 
+-RCSID("$Id: pac.c 21135 2007-06-18 21:06:08Z lha $");
++RCSID("$Id: pac.c 21149 2007-06-18 21:50:22Z lha $");
+ 
+ struct PAC_INFO_BUFFER {
+     uint32_t type;
+@@ -409,7 +409,7 @@
+     krb5_error_code ret;
+     Checksum cksum;
+ 
+-    memset(&cksum, 0, sizof(cksum));
++    memset(&cksum, 0, sizeof(cksum));
+ 
+     sp = krb5_storage_from_mem((char *)data->data + sig->offset_lo,
+ 			       sig->buffersize);
+
+Modified: trunk/heimdal/lib/sl/ChangeLog
+===================================================================
+--- trunk/heimdal/lib/sl/ChangeLog	2007-06-18 21:42:31 UTC (rev 751)
++++ trunk/heimdal/lib/sl/ChangeLog	2007-06-18 22:00:20 UTC (rev 752)
+@@ -1,5 +1,7 @@
+ 2007-06-18  Love Hörnquist Åstrand  <lha@it.su.se>
+ 
++	* sl.c: make compile.
++
+ 	* sl.c: Pass in pointer to strlen().
+ 
+ 	* sl.c (sl_make_argv): use memmove since we are dealing with
+

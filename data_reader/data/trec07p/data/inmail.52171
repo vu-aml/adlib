@@ -1,0 +1,214 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Jun  6 05:28:11 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l569SAhB019806
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 6 Jun 2007 05:28:10 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id B20F4163830
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed,  6 Jun 2007 09:28:04 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1017)
+	id D3DBA162ACC; Wed,  6 Jun 2007 09:27:44 +0000 (GMT)
+To: samba-cvs@samba.org
+From: obnox@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070606092744.D3DBA162ACC@lists.samba.org>
+Date: Wed,  6 Jun 2007 09:27:44 +0000 (GMT)
+Subject: svn commit: samba r23363 - in branches:
+	SAMBA_3_0/source/lib/replace SAMBA_3_0_26/source/lib/replace
+	SAMBA_4_0/source/lib/replace
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: obnox
+Date: 2007-06-06 09:27:43 +0000 (Wed, 06 Jun 2007)
+New Revision: 23363
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23363
+
+Log:
+Activate rep_pread and rep_pwrite in lib/replace/replace.h.
+This fixes the build on a SuSE 6.1. :-)
+I guess this had been merely forgotten.
+
+But beware: The implementations of rep_pread and rep_pwrite are
+not thread safe.
+
+Michael
+
+
+Modified:
+   branches/SAMBA_3_0/source/lib/replace/replace.c
+   branches/SAMBA_3_0/source/lib/replace/replace.h
+   branches/SAMBA_3_0_26/source/lib/replace/replace.c
+   branches/SAMBA_3_0_26/source/lib/replace/replace.h
+   branches/SAMBA_4_0/source/lib/replace/replace.c
+   branches/SAMBA_4_0/source/lib/replace/replace.h
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/lib/replace/replace.c
+===================================================================
+--- branches/SAMBA_3_0/source/lib/replace/replace.c	2007-06-06 07:46:38 UTC (rev 23362)
++++ branches/SAMBA_3_0/source/lib/replace/replace.c	2007-06-06 09:27:43 UTC (rev 23363)
+@@ -438,6 +438,10 @@
+ }
+ #endif
+ 
++/*****************************************************************
++ Watch out: this is not thread safe.
++*****************************************************************/
++
+ #ifndef HAVE_PREAD
+ ssize_t rep_pread(int __fd, void *__buf, size_t __nbytes, off_t __offset)
+ {
+@@ -448,6 +452,10 @@
+ }
+ #endif
+ 
++/*****************************************************************
++ Watch out: this is not thread safe.
++*****************************************************************/
++
+ #ifndef HAVE_PWRITE
+ ssize_t rep_pwrite(int __fd, const void *__buf, size_t __nbytes, off_t __offset)
+ {
+
+Modified: branches/SAMBA_3_0/source/lib/replace/replace.h
+===================================================================
+--- branches/SAMBA_3_0/source/lib/replace/replace.h	2007-06-06 07:46:38 UTC (rev 23362)
++++ branches/SAMBA_3_0/source/lib/replace/replace.h	2007-06-06 09:27:43 UTC (rev 23363)
+@@ -350,6 +350,16 @@
+ char *rep_mkdtemp(char *template);
+ #endif
+ 
++#ifndef HAVE_PREAD
++#define pread rep_pread
++ssize_t rep_pread(int __fd, void *__buf, size_t __nbytes, off_t __offset);
++#endif
++
++#ifndef HAVE_PWRITE
++#define pwrite rep_pwrite
++ssize_t rep_pwrite(int __fd, const void *__buf, size_t __nbytes, off_t __offset);
++#endif
++
+ #ifdef HAVE_LIMITS_H
+ #include <limits.h>
+ #endif
+
+Modified: branches/SAMBA_3_0_26/source/lib/replace/replace.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/lib/replace/replace.c	2007-06-06 07:46:38 UTC (rev 23362)
++++ branches/SAMBA_3_0_26/source/lib/replace/replace.c	2007-06-06 09:27:43 UTC (rev 23363)
+@@ -438,6 +438,10 @@
+ }
+ #endif
+ 
++/*****************************************************************
++ Watch out: this is not thread safe.
++*****************************************************************/
++
+ #ifndef HAVE_PREAD
+ ssize_t rep_pread(int __fd, void *__buf, size_t __nbytes, off_t __offset)
+ {
+@@ -448,6 +452,10 @@
+ }
+ #endif
+ 
++/*****************************************************************
++ Watch out: this is not thread safe.
++*****************************************************************/
++
+ #ifndef HAVE_PWRITE
+ ssize_t rep_pwrite(int __fd, const void *__buf, size_t __nbytes, off_t __offset)
+ {
+
+Modified: branches/SAMBA_3_0_26/source/lib/replace/replace.h
+===================================================================
+--- branches/SAMBA_3_0_26/source/lib/replace/replace.h	2007-06-06 07:46:38 UTC (rev 23362)
++++ branches/SAMBA_3_0_26/source/lib/replace/replace.h	2007-06-06 09:27:43 UTC (rev 23363)
+@@ -350,6 +350,16 @@
+ char *rep_mkdtemp(char *template);
+ #endif
+ 
++#ifndef HAVE_PREAD
++#define pread rep_pread
++ssize_t rep_pread(int __fd, void *__buf, size_t __nbytes, off_t __offset);
++#endif
++
++#ifndef HAVE_PWRITE
++#define pwrite rep_pwrite
++ssize_t rep_pwrite(int __fd, const void *__buf, size_t __nbytes, off_t __offset);
++#endif
++
+ #ifdef HAVE_LIMITS_H
+ #include <limits.h>
+ #endif
+
+Modified: branches/SAMBA_4_0/source/lib/replace/replace.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/replace/replace.c	2007-06-06 07:46:38 UTC (rev 23362)
++++ branches/SAMBA_4_0/source/lib/replace/replace.c	2007-06-06 09:27:43 UTC (rev 23363)
+@@ -438,6 +438,10 @@
+ }
+ #endif
+ 
++/*****************************************************************
++ Watch out: this is not thread safe.
++*****************************************************************/
++
+ #ifndef HAVE_PREAD
+ ssize_t rep_pread(int __fd, void *__buf, size_t __nbytes, off_t __offset)
+ {
+@@ -448,6 +452,10 @@
+ }
+ #endif
+ 
++/*****************************************************************
++ Watch out: this is not thread safe.
++*****************************************************************/
++
+ #ifndef HAVE_PWRITE
+ ssize_t rep_pwrite(int __fd, const void *__buf, size_t __nbytes, off_t __offset)
+ {
+
+Modified: branches/SAMBA_4_0/source/lib/replace/replace.h
+===================================================================
+--- branches/SAMBA_4_0/source/lib/replace/replace.h	2007-06-06 07:46:38 UTC (rev 23362)
++++ branches/SAMBA_4_0/source/lib/replace/replace.h	2007-06-06 09:27:43 UTC (rev 23363)
+@@ -350,6 +350,16 @@
+ char *rep_mkdtemp(char *template);
+ #endif
+ 
++#ifndef HAVE_PREAD
++#define pread rep_pread
++ssize_t rep_pread(int __fd, void *__buf, size_t __nbytes, off_t __offset);
++#endif
++
++#ifndef HAVE_PWRITE
++#define pwrite rep_pwrite
++ssize_t rep_pwrite(int __fd, const void *__buf, size_t __nbytes, off_t __offset);
++#endif
++
+ #ifdef HAVE_LIMITS_H
+ #include <limits.h>
+ #endif
+

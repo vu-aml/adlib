@@ -1,0 +1,355 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri May  4 05:23:13 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l449NDqD013754
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 4 May 2007 05:23:13 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 4738B163859
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri,  4 May 2007 09:23:12 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 620)
+	id 71425162ADB; Fri,  4 May 2007 09:22:53 +0000 (GMT)
+To: samba-cvs@samba.org
+From: metze@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070504092253.71425162ADB@lists.samba.org>
+Date: Fri,  4 May 2007 09:22:53 +0000 (GMT)
+Subject: svn commit: samba r22661 - in branches/SAMBA_4_0/source/lib/events:
+	.
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: metze
+Date: 2007-05-04 09:22:52 +0000 (Fri, 04 May 2007)
+New Revision: 22661
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22661
+
+Log:
+optimize the handling of directly triggered timed events:
+
+- if someone adds a timed_event with a zero timeval
+  we now avoid serval gettimeofday() calls and the
+  event handler doesn't get the current time when it's
+  called, instead we also pass a zero timeval
+
+- this also makes sure multiple timed events with a zero timeval
+  are processed in the order there're added.
+
+the little benchmark shows that processing 2000000 directly timed events
+is now much faster, while avoiding syscalls at all!
+
+> time ./evtest (with the old code)
+
+real    0m6.388s
+user    0m1.740s
+sys     0m4.632s
+> time ./evtest (with the new code)
+
+real    0m1.498s
+user    0m1.496s
+sys     0m0.004s
+metze@SERNOX:~/devel/samba/4.0/samba4-ci/source> cat evtest.c
+#include <stdio.h>
+#include <stdint.h>
+#include <sys/time.h>
+#include <talloc.h>
+#include <events.h>
+
+static void dummy_fde_handler(struct event_context *ev_ctx, struct fd_event *fde,
+                              uint16_t flags, void *private_data)
+{
+}
+
+static void timeout_handler(struct event_context *ev, struct timed_event *te,
+                            struct timeval tval, void *private_data)
+{
+        uint32_t *countp = (uint32_t *)private_data;
+        (*countp)++;
+        if (*countp > 2000000) exit(0);
+        event_add_timed(ev, ev, tval, timeout_handler, countp);
+}
+
+int main(void)
+{
+        struct event_context *ev;
+        struct timeval tval =  { 0, 0 };
+        uint32_t count = 0;
+        ev = event_context_init(NULL);
+        event_add_fd(ev, ev, 0, 0, dummy_fde_handler, NULL);
+        event_add_timed(ev, ev, tval, timeout_handler, &count);
+        return event_loop_wait(ev);
+}
+Modified:
+   branches/SAMBA_4_0/source/lib/events/events_aio.c
+   branches/SAMBA_4_0/source/lib/events/events_epoll.c
+   branches/SAMBA_4_0/source/lib/events/events_internal.h
+   branches/SAMBA_4_0/source/lib/events/events_select.c
+   branches/SAMBA_4_0/source/lib/events/events_standard.c
+   branches/SAMBA_4_0/source/lib/events/events_timed.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/lib/events/events_aio.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/events/events_aio.c	2007-05-04 07:00:09 UTC (rev 22660)
++++ branches/SAMBA_4_0/source/lib/events/events_aio.c	2007-05-04 09:22:52 UTC (rev 22661)
+@@ -250,7 +250,8 @@
+ 	}
+ 
+ 	if (ret == 0 && tvalp) {
+-		common_event_loop_timer(aio_ev->ev);
++		/* we don't care about a possible delay here */
++		common_event_loop_timer_delay(aio_ev->ev);
+ 		return 0;
+ 	}
+ 
+@@ -431,10 +432,8 @@
+ 		 					   struct aio_event_context);
+ 	struct timeval tval;
+ 
+-	tval = common_event_loop_delay(ev);
+-
++	tval = common_event_loop_timer_delay(ev);
+ 	if (timeval_is_zero(&tval)) {
+-		common_event_loop_timer(ev);
+ 		return 0;
+ 	}
+ 
+
+Modified: branches/SAMBA_4_0/source/lib/events/events_epoll.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/events/events_epoll.c	2007-05-04 07:00:09 UTC (rev 22660)
++++ branches/SAMBA_4_0/source/lib/events/events_epoll.c	2007-05-04 09:22:52 UTC (rev 22661)
+@@ -233,7 +233,8 @@
+ 	}
+ 
+ 	if (ret == 0 && tvalp) {
+-		common_event_loop_timer(epoll_ev->ev);
++		/* we don't care about a possible delay here */
++		common_event_loop_timer_delay(epoll_ev->ev);
+ 		return 0;
+ 	}
+ 
+@@ -376,10 +377,8 @@
+ 		 					   struct epoll_event_context);
+ 	struct timeval tval;
+ 
+-	tval = common_event_loop_delay(ev);
+-
++	tval = common_event_loop_timer_delay(ev);
+ 	if (timeval_is_zero(&tval)) {
+-		common_event_loop_timer(ev);
+ 		return 0;
+ 	}
+ 
+
+Modified: branches/SAMBA_4_0/source/lib/events/events_internal.h
+===================================================================
+--- branches/SAMBA_4_0/source/lib/events/events_internal.h	2007-05-04 07:00:09 UTC (rev 22660)
++++ branches/SAMBA_4_0/source/lib/events/events_internal.h	2007-05-04 09:22:52 UTC (rev 22661)
+@@ -117,8 +117,7 @@
+ 
+ struct timed_event *common_event_add_timed(struct event_context *, TALLOC_CTX *,
+ 					   struct timeval, event_timed_handler_t, void *);
+-void common_event_loop_timer(struct event_context *);
+-struct timeval common_event_loop_delay(struct event_context *);
++struct timeval common_event_loop_timer_delay(struct event_context *);
+ 
+ struct signal_event *common_event_add_signal(struct event_context *ev, 
+ 					     TALLOC_CTX *mem_ctx,
+
+Modified: branches/SAMBA_4_0/source/lib/events/events_select.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/events/events_select.c	2007-05-04 07:00:09 UTC (rev 22660)
++++ branches/SAMBA_4_0/source/lib/events/events_select.c	2007-05-04 09:22:52 UTC (rev 22661)
+@@ -218,7 +218,8 @@
+ 	}
+ 
+ 	if (selrtn == 0 && tvalp) {
+-		common_event_loop_timer(select_ev->ev);
++		/* we don't care about a possible delay here */
++		common_event_loop_timer_delay(select_ev->ev);
+ 		return 0;
+ 	}
+ 
+@@ -252,10 +253,8 @@
+ 		 					   struct select_event_context);
+ 	struct timeval tval;
+ 
+-	tval = common_event_loop_delay(ev);
+-
++	tval = common_event_loop_timer_delay(ev);
+ 	if (timeval_is_zero(&tval)) {
+-		common_event_loop_timer(ev);
+ 		return 0;
+ 	}
+ 
+
+Modified: branches/SAMBA_4_0/source/lib/events/events_standard.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/events/events_standard.c	2007-05-04 07:00:09 UTC (rev 22660)
++++ branches/SAMBA_4_0/source/lib/events/events_standard.c	2007-05-04 09:22:52 UTC (rev 22661)
+@@ -248,7 +248,8 @@
+ 	}
+ 
+ 	if (ret == 0 && tvalp) {
+-		common_event_loop_timer(std_ev->ev);
++		/* we don't care about a possible delay here */
++		common_event_loop_timer_delay(std_ev->ev);
+ 		return 0;
+ 	}
+ 
+@@ -471,7 +472,8 @@
+ 	}
+ 
+ 	if (selrtn == 0 && tvalp) {
+-		common_event_loop_timer(std_ev->ev);
++		/* we don't care about a possible delay here */
++		common_event_loop_timer_delay(std_ev->ev);
+ 		return 0;
+ 	}
+ 
+@@ -505,10 +507,8 @@
+ 		 					   struct std_event_context);
+ 	struct timeval tval;
+ 
+-	tval = common_event_loop_delay(ev);
+-
++	tval = common_event_loop_timer_delay(ev);
+ 	if (timeval_is_zero(&tval)) {
+-		common_event_loop_timer(ev);
+ 		return 0;
+ 	}
+ 
+
+Modified: branches/SAMBA_4_0/source/lib/events/events_timed.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/events/events_timed.c	2007-05-04 07:00:09 UTC (rev 22660)
++++ branches/SAMBA_4_0/source/lib/events/events_timed.c	2007-05-04 09:22:52 UTC (rev 22661)
+@@ -68,9 +68,7 @@
+ 	last_te = NULL;
+ 	for (cur_te = ev->timed_events; cur_te; cur_te = cur_te->next) {
+ 		/* if the new event comes before the current one break */
+-		if (!timeval_is_zero(&cur_te->next_event) &&
+-		    timeval_compare(&te->next_event,
+-				    &cur_te->next_event) < 0) {
++		if (timeval_compare(&te->next_event, &cur_te->next_event) < 0) {
+ 			break;
+ 		}
+ 
+@@ -85,17 +83,47 @@
+ }
+ 
+ /*
+-  a timer has gone off - call it
++  do a single event loop using the events defined in ev
++
++  return the delay untill the next timed event,
++  or zero if a timed event was triggered
+ */
+-void common_event_loop_timer(struct event_context *ev)
++struct timeval common_event_loop_timer_delay(struct event_context *ev)
+ {
+-	struct timeval t = timeval_current();
++	struct timeval current_time = timeval_zero();
+ 	struct timed_event *te = ev->timed_events;
+ 
+-	if (te == NULL) {
+-		return;
++	if (!te) {
++		/* have a default tick time of 30 seconds. This guarantees
++		   that code that uses its own timeout checking will be
++		   able to proceeed eventually */
++		return timeval_set(30, 0);
+ 	}
+ 
++	/*
++	 * work out the right timeout for the next timed event
++	 *
++	 * avoid the syscall to gettimeofday() if the timed event should
++	 * be triggered directly
++	 *
++	 * if there's a delay till the next timed event, we're done
++	 * with just returning the delay
++	 */
++	if (!timeval_is_zero(&te->next_event)) {
++		struct timeval delay;
++
++		current_time = timeval_current();
++
++		delay = timeval_until(&current_time, &te->next_event);
++		if (!timeval_is_zero(&delay)) {
++			return delay;
++		}
++	}
++
++	/*
++	 * ok, we have a timed event that we'll process ...
++	 */
++
+ 	/* deny the handler to free the event */
+ 	talloc_set_destructor(te, common_event_timed_deny_destructor);
+ 
+@@ -104,33 +132,21 @@
+ 	 * handler we don't want to come across this event again -- vl */
+ 	DLIST_REMOVE(ev->timed_events, te);
+ 
+-	te->handler(ev, te, t, te->private_data);
++	/*
++	 * If the timed event was registered for a zero current_time,
++	 * then we pass a zero timeval here too! To avoid the
++	 * overhead of gettimeofday() calls.
++	 *
++	 * otherwise we pass the current time
++	 */
++	te->handler(ev, te, current_time, te->private_data);
+ 
+ 	/* The destructor isn't necessary anymore, we've already removed the
+ 	 * event from the list. */
+ 	talloc_set_destructor(te, NULL);
+ 
+ 	talloc_free(te);
+-}
+ 
+-/*
+-  do a single event loop using the events defined in ev 
+-*/
+-struct timeval common_event_loop_delay(struct event_context *ev)
+-{
+-	struct timeval tval;
+-
+-	/* work out the right timeout for all timed events */
+-	if (ev->timed_events) {
+-		struct timeval t = timeval_current();
+-		tval = timeval_until(&t, &ev->timed_events->next_event);
+-	} else {
+-		/* have a default tick time of 30 seconds. This guarantees
+-		   that code that uses its own timeout checking will be
+-		   able to proceeed eventually */
+-		tval = timeval_set(30, 0);
+-	}
+-	
+-	return tval;
++	return timeval_zero();
+ }
+ 
+

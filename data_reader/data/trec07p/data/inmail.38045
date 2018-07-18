@@ -1,0 +1,124 @@
+From r-help-bounces@stat.math.ethz.ch  Wed May 16 20:17:40 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4H0HcqD025422
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 16 May 2007 20:17:39 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4H0FiBQ006621;
+	Thu, 17 May 2007 02:16:23 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.6 required=5.0 tests=AWL,
+	BAYES_50 autolearn=no version=3.1.8
+Received: from ug-out-1314.google.com (ug-out-1314.google.com [66.249.92.175])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4H0FZ6I006578
+	for <R-help@stat.math.ethz.ch>; Thu, 17 May 2007 02:15:36 +0200
+Received: by ug-out-1314.google.com with SMTP id p37so192169ugc
+	for <R-help@stat.math.ethz.ch>; Wed, 16 May 2007 17:15:35 -0700 (PDT)
+Received: by 10.67.22.14 with SMTP id z14mr6883131ugi.1179360935716;
+	Wed, 16 May 2007 17:15:35 -0700 (PDT)
+Received: by 10.67.105.13 with HTTP; Wed, 16 May 2007 17:15:35 -0700 (PDT)
+Message-ID: <971536df0705161715g7cd61cf4w22e43c87402dc090@mail.gmail.com>
+Date: Wed, 16 May 2007 20:15:35 -0400
+From: "Gabor Grothendieck" <ggrothendieck@gmail.com>
+To: "fatih ozgul" <fatih.ozgul@gmail.com>
+In-Reply-To: <971536df0705160559l198eeefbobc4719baf3a6cd3f@mail.gmail.com>
+MIME-Version: 1.0
+Content-Disposition: inline
+References: <20070516085445.33821.qmail@web27514.mail.ukl.yahoo.com>
+	<464AC8F7.20700@optonline.net> <001a01c797a7$8d149f20$3d06ee58@CANIM>
+	<971536df0705160559l198eeefbobc4719baf3a6cd3f@mail.gmail.com>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: R-help@stat.math.ethz.ch
+Subject: Re: [R] converting a data frame to ts objects
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+On 5/16/07, Gabor Grothendieck <ggrothendieck@gmail.com> wrote:
+> On 5/16/07, fatih ozgul <fatih.ozgul@gmail.com> wrote:
+> > Dear R-ians
+> >
+> > I have a data frame like
+> >
+> > Person_id  Date/time        Count
+> > ---------  ----------      -------
+> > 123         20 May 1999      1
+> > 123         21 May 1999      3
+> > 222         1  Feb 2000      2
+> > 222         3  Feb 2000      4
+> >
+> > I want to create ts objects for each person_id (i.e. 123 and 222). Time
+> > series frequency can be in months and all starting from the same date (i.e.
+> > May 1999).
+> >
+> > Rather than manually creating sum of counts for each month and creating ts
+> > objects manually for each persons,
+> >
+> > Is there a function for creating ts objects automatically from such data?
+> >
+>
+> Try this:
+>
+> # read in as data frame and fix up date
+> Lines.raw <- "Person_id Date/time Count
+> 123 20 May 1999 1
+> 123 21 May 1999 3
+> 222 1 Feb 2000 2
+> 222 3 Feb 2000 4
+> "
+> library(zoo)
+> DF <- read.table(textConnection(Lines.raw), skip = 1,
+>  col.names = c("Person_id", "d", "b", "Y", "Count"))
+> DF$Date.time <- as.Date(paste(DF$d, DF$b, DF$Y), "%d %b %Y")
+>
+> # aggregate counts over months, series and convert to "ts"
+> f <- function(DF) aggregate(zoo(DF$Count), as.yearmon(DF$Date.time), sum)
+> z <- do.call("merge.zoo", lapply(split(DF, DF$Person_id), f))
+> frequency(z) <- 12
+> as.ts(z)
+>
+
+A slight simplification based on zoo 1.3-1 (which just appeared on CRAN)
+is the following.  It converts the month and year columns directly into
+class "yearmon" eliminating the intermediate step of going via "Date" class.
+Its the same number of lines but a couple of the lines are now simpler.
+
+# read in as data frame and fix up date
+Lines.raw <- "Person_id Date/time Count
+
+123 20 May 1999 1
+123 21 May 1999 3
+222 1 Feb 2000 2
+222 3 Feb 2000 4
+"
+
+library(zoo)
+DF <- read.table(textConnection(Lines.raw), skip = 1,
+ col.names = c("Person_id", "d", "b", "Y", "Count"))
+DF$yearmon <- as.yearmon(paste(DF$b, DF$Y), "%b %Y")
+
+# aggregate counts over months, merge series and convert to "ts"
+ag <- function(DF) aggregate(zoo(DF$Count), DF$yearmon, sum)
+z <- do.call("merge.zoo", lapply(split(DF, DF$Person_id), ag))
+frequency(z) <- 12
+as.ts(z)
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

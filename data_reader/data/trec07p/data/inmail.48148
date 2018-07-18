@@ -1,0 +1,137 @@
+From perl6-all-return-81696-ktwarwic=speedy.uwaterloo.ca@perl.org  Thu May 31 21:03:11 2007
+Return-Path: <perl6-all-return-81696-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l5113AhB002918
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 31 May 2007 21:03:10 -0400
+Received: (qmail 7831 invoked by uid 514); 1 Jun 2007 01:03:04 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 7826 invoked from network); 1 Jun 2007 01:03:03 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-0.7 required=8.0
+	tests=BAYES_20,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: neutral (x1.develooper.com: 63.251.223.186 is neither permitted nor denied by domain of jkeen@verizon.net)
+Message-ID: <20070601010156.6966.qmail@lists.develooper.com>
+To: perl6-internals@perl.org
+Date: Thu, 31 May 2007 21:01:55 -0400
+From: James E Keenan <jkeen@verizon.net>
+User-Agent: Mozilla/5.0 (Macintosh; U; PPC Mac OS X Mach-O; en-US; rv:1.8.1.2) Gecko/20070221 SeaMonkey/1.1.1
+MIME-Version: 1.0
+Subject: Re: [perl #41168] graceful "no compiler" error message?
+References: <RT-Ticket-41168@perl.org> <20070416163549.73509b6a@chirp> <rt-3.6.HEAD-1687-1177726690-1312.41168-15-0@perl.org> <8e8ee0d40704271943q4510fcf3x71159aa0685086a3@mail.gmail.com> <rt-3.6.HEAD-1687-1177728275-664.41168-74-0@perl.org> <rt-3.6.HEAD-1687-1177729065-296.41168-74-0@perl.org> <20070427200912.24c85259@chirp> <rt-3.6.HEAD-30557-1177729780-2.41168-15-0@perl.org> <rt-3.6.HEAD-1687-1177890296-410.41168-15-0@perl.org>
+In-Reply-To: <rt-3.6.HEAD-1687-1177890296-410.41168-15-0@perl.org>
+Content-Type: text/plain; charset=UTF-8; format=flowed
+Content-Transfer-Encoding: 7bit
+X-Posted-By: 71.247.161.160
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-0.1 required=8.0
+	tests=BAYES_20,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_NEUTRAL
+
+James Keenan via RT wrote:
+> A participant in this weekend's hackathon in Toronto posed this question:
+> 
+> "Invoking the compiler on a simple source file, then checking that the
+> generated code exists seems such an obvious test that there must be a
+> fatal flaw in it. What am I missing?"
+
+This patch grew out of Hackathon Toronto and was posted to RT, but not 
+initially cc-ed to the list.  Please review this patch.  Thank you very 
+much.
+
+kid51
+
+
+The attached patch to inter/progs.pm is my attempt to improve
+Configure's behaviour.
+
+It writes an embedded minimal C program to disk. (If there's already a
+file called "minimal.c" it complains and dies.) It then attempts to
+call the specified compiler. If the result isn't an a.out, it dies
+promptly and gracefully. (It can be fooled, if something other than a
+C compiler writes an a.out; that's how I tested it, but that's really
+a pathological case.)
+
+The comments should explain what's going on.
+
+
+
+Index: progs.pm
+===================================================================
+--- progs.pm (revision 18351)
++++ progs.pm (working copy)
+@@ -38,14 +38,31 @@
+# If none work, then set to null command.
+# XXX need config support for a null command.
+my $null = 'echo';
+- my $first_working = sub {
++ my $output = 'a.out';
++ my $min = 'minimal.c'; # File name probably not in use
++ if (-f $min) { # but die if it is
++ warn "\nPlease rename minimal.c - I create it\n" ;
++ exit 1;
++ }
++ open(MIN, ">".$min);
++ print MIN <DATA>; # Create test program (from U-Haul)
++ close MIN;
++ unlink($output) if -f $output; # in case there is rubbish lying around
++
++ my $first_working = sub {
+foreach (@_) {
+- `$_ -h 2>&1`;
+- return $_ if not $?;
++
++ system ($_, $min) ; # Attempt simplest possible compile
++ if (-f $output) # See if it produced something
++ {
++ unlink($output, $min); # Sweep up the debris
++ return $_ ; # And return the successful program name
++ }
+}
++
++ unlink($min); # Tidy up, even after failure
+return $null;
+- };
+-
++ };
+my $ask = $conf->options->get('ask');
+if ($ask) {
+print <<'END';
+@@ -66,6 +83,10 @@
+$cc = integrate( $conf->data->get('cc'), $conf->options->get('cc') );
+$cc = prompt( "What C compiler do you want to use?", $cc )
+if $ask;
++ if ($first_working->($cc) eq 'echo') {
++ warn "No compiler found (tried '$cc')\n";
++ exit 1;
++ }
+$conf->data->set( cc => $cc );
+
+$link = integrate( $conf->data->get('link'), $conf->options->get('link') );
+@@ -139,3 +160,13 @@
+# fill-column: 100
+# End:
+# vim: expandtab shiftwidth=4:
++__DATA__
++/* Start of minimal.c - any C compiler should create a.out from this */
++include <stdio.h>
++
++int main()
++{
++ printf ("Compiler found \n");
++}
++
++/* End of minimal.c */
+

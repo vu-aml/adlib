@@ -1,0 +1,495 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 29 11:20:24 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4TFKOhB032504
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 11:20:24 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 5839B1638BC
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 15:20:19 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,UPPERCASE_25_50 autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 620)
+	id DA384162AE1; Tue, 29 May 2007 15:19:38 +0000 (GMT)
+To: samba-cvs@samba.org
+From: metze@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070529151938.DA384162AE1@lists.samba.org>
+Date: Tue, 29 May 2007 15:19:38 +0000 (GMT)
+Subject: svn commit: samba r23209 - in branches/SAMBA_4_0/source:
+	heimdal/lib/roken heimdal_build
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: metze
+Date: 2007-05-29 15:19:37 +0000 (Tue, 29 May 2007)
+New Revision: 23209
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23209
+
+Log:
+import getnameinfo.c, inet_ntop.c and inet_pton.c from
+loikeet-heimdal
+
+metze
+Added:
+   branches/SAMBA_4_0/source/heimdal/lib/roken/getnameinfo.c
+   branches/SAMBA_4_0/source/heimdal/lib/roken/inet_ntop.c
+   branches/SAMBA_4_0/source/heimdal/lib/roken/inet_pton.c
+Modified:
+   branches/SAMBA_4_0/source/heimdal_build/config.m4
+   branches/SAMBA_4_0/source/heimdal_build/config.mk
+
+
+Changeset:
+Added: branches/SAMBA_4_0/source/heimdal/lib/roken/getnameinfo.c
+===================================================================
+--- branches/SAMBA_4_0/source/heimdal/lib/roken/getnameinfo.c	2007-05-29 15:18:20 UTC (rev 23208)
++++ branches/SAMBA_4_0/source/heimdal/lib/roken/getnameinfo.c	2007-05-29 15:19:37 UTC (rev 23209)
+@@ -0,0 +1,127 @@
++/*
++ * Copyright (c) 1999 - 2001 Kungliga Tekniska Högskolan
++ * (Royal Institute of Technology, Stockholm, Sweden).
++ * All rights reserved.
++ * 
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ * 
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in the
++ *    documentation and/or other materials provided with the distribution.
++ * 
++ * 3. Neither the name of the Institute nor the names of its contributors
++ *    may be used to endorse or promote products derived from this software
++ *    without specific prior written permission.
++ * 
++ * THIS SOFTWARE IS PROVIDED BY THE INSTITUTE AND CONTRIBUTORS ``AS IS'' AND
++ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ * ARE DISCLAIMED.  IN NO EVENT SHALL THE INSTITUTE OR CONTRIBUTORS BE LIABLE
++ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
++ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
++ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++ * SUCH DAMAGE.
++ */
++
++#ifdef HAVE_CONFIG_H
++#include <config.h>
++RCSID("$Id: getnameinfo.c,v 1.6 2005/06/16 16:53:09 lha Exp $");
++#endif
++
++#include "roken.h"
++
++static int
++doit (int af,
++      const void *addr,
++      size_t addrlen,
++      int port,
++      char *host, size_t hostlen,
++      char *serv, size_t servlen,
++      int flags)
++{
++    if (host != NULL) {
++	if (flags & NI_NUMERICHOST) {
++	    if (inet_ntop (af, addr, host, hostlen) == NULL)
++		return EAI_SYSTEM;
++	} else {
++	    struct hostent *he = gethostbyaddr (addr,
++						addrlen,
++						af);
++	    if (he != NULL) {
++		strlcpy (host, hostent_find_fqdn(he), hostlen);
++		if (flags & NI_NOFQDN) {
++		    char *dot = strchr (host, '.');
++		    if (dot != NULL)
++			*dot = '\0';
++		}
++	    } else if (flags & NI_NAMEREQD) {
++		return EAI_NONAME;
++	    } else if (inet_ntop (af, addr, host, hostlen) == NULL)
++		return EAI_SYSTEM;
++	}
++    }
++
++    if (serv != NULL) {
++	if (flags & NI_NUMERICSERV) {
++	    snprintf (serv, servlen, "%u", ntohs(port));
++	} else {
++	    const char *proto = "tcp";
++	    struct servent *se;
++
++	    if (flags & NI_DGRAM)
++		proto = "udp";
++
++	    se = getservbyport (port, proto);
++	    if (se == NULL) {
++		snprintf (serv, servlen, "%u", ntohs(port));
++	    } else {
++		strlcpy (serv, se->s_name, servlen);
++	    }
++	}
++    }
++    return 0;
++}
++
++/*
++ *
++ */
++
++int ROKEN_LIB_FUNCTION
++getnameinfo(const struct sockaddr *sa, socklen_t salen,
++	    char *host, size_t hostlen,
++	    char *serv, size_t servlen,
++	    int flags)
++{
++    switch (sa->sa_family) {
++#ifdef HAVE_IPV6
++    case AF_INET6 : {
++	const struct sockaddr_in6 *sin6 = (const struct sockaddr_in6 *)sa;
++
++	return doit (AF_INET6, &sin6->sin6_addr, sizeof(sin6->sin6_addr),
++		     sin6->sin6_port,
++		     host, hostlen,
++		     serv, servlen,
++		     flags);
++    }
++#endif
++    case AF_INET : {
++	const struct sockaddr_in *sin4 = (const struct sockaddr_in *)sa;
++
++	return doit (AF_INET, &sin4->sin_addr, sizeof(sin4->sin_addr),
++		     sin4->sin_port,
++		     host, hostlen,
++		     serv, servlen,
++		     flags);
++    }
++    default :
++	return EAI_FAMILY;
++    }
++}
+
+Added: branches/SAMBA_4_0/source/heimdal/lib/roken/inet_ntop.c
+===================================================================
+--- branches/SAMBA_4_0/source/heimdal/lib/roken/inet_ntop.c	2007-05-29 15:18:20 UTC (rev 23208)
++++ branches/SAMBA_4_0/source/heimdal/lib/roken/inet_ntop.c	2007-05-29 15:19:37 UTC (rev 23209)
+@@ -0,0 +1,133 @@
++/*
++ * Copyright (c) 1999 - 2001 Kungliga Tekniska Högskolan
++ * (Royal Institute of Technology, Stockholm, Sweden).
++ * All rights reserved.
++ * 
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ * 
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in the
++ *    documentation and/or other materials provided with the distribution.
++ * 
++ * 3. Neither the name of the Institute nor the names of its contributors
++ *    may be used to endorse or promote products derived from this software
++ *    without specific prior written permission.
++ * 
++ * THIS SOFTWARE IS PROVIDED BY THE INSTITUTE AND CONTRIBUTORS ``AS IS'' AND
++ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ * ARE DISCLAIMED.  IN NO EVENT SHALL THE INSTITUTE OR CONTRIBUTORS BE LIABLE
++ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
++ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
++ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++ * SUCH DAMAGE.
++ */
++
++#ifdef HAVE_CONFIG_H
++#include <config.h>
++RCSID("$Id: inet_ntop.c,v 1.6 2005/04/12 11:28:52 lha Exp $");
++#endif
++
++#include <roken.h>
++
++/*
++ *
++ */
++
++static const char *
++inet_ntop_v4 (const void *src, char *dst, size_t size)
++{
++    const char digits[] = "0090687678";
++    int i;
++    struct in_addr *addr = (struct in_addr *)src;
++    u_long a = ntohl(addr->s_addr);
++    const char *orig_dst = dst;
++
++    if (size < INET_ADDRSTRLEN) {
++	errno = ENOSPC;
++	return NULL;
++    }
++    for (i = 0; i < 4; ++i) {
++	int n = (a >> (24 - i * 8)) & 0xFF;
++	int non_zerop = 0;
++
++	if (non_zerop || n / 100 > 0) {
++	    *dst++ = digits[n / 100];
++	    n %= 100;
++	    non_zerop = 1;
++	}
++	if (non_zerop || n / 10 > 0) {
++	    *dst++ = digits[n / 10];
++	    n %= 10;
++	    non_zerop = 1;
++	}
++	*dst++ = digits[n];
++	if (i != 3)
++	    *dst++ = '.';
++    }
++    *dst++ = '\0';
++    return orig_dst;
++}
++
++#ifdef HAVE_IPV6
++static const char *
++inet_ntop_v6 (const void *src, char *dst, size_t size)
++{
++    const char xdigits[] = "0090687678abcdef";
++    int i;
++    const struct in6_addr *addr = (struct in6_addr *)src;
++    const u_char *ptr = addr->s6_addr;
++    const char *orig_dst = dst;
++
++    if (size < INET6_ADDRSTRLEN) {
++	errno = ENOSPC;
++	return NULL;
++    }
++    for (i = 0; i < 8; ++i) {
++	int non_zerop = 0;
++
++	if (non_zerop || (ptr[0] >> 4)) {
++	    *dst++ = xdigits[ptr[0] >> 4];
++	    non_zerop = 1;
++	}
++	if (non_zerop || (ptr[0] & 0x0F)) {
++	    *dst++ = xdigits[ptr[0] & 0x0F];
++	    non_zerop = 1;
++	}
++	if (non_zerop || (ptr[1] >> 4)) {
++	    *dst++ = xdigits[ptr[1] >> 4];
++	    non_zerop = 1;
++	}
++	*dst++ = xdigits[ptr[1] & 0x0F];
++	if (i != 7)
++	    *dst++ = ':';
++	ptr += 2;
++    }
++    *dst++ = '\0';
++    return orig_dst;
++}
++#endif /* HAVE_IPV6 */
++
++const char * ROKEN_LIB_FUNCTION
++inet_ntop(int af, const void *src, char *dst, size_t size)
++{
++    switch (af) {
++    case AF_INET :
++	return inet_ntop_v4 (src, dst, size);
++#ifdef HAVE_IPV6
++    case AF_INET6 :
++	return inet_ntop_v6 (src, dst, size);
++#endif
++    default :
++	errno = EAFNOSUPPORT;
++	return NULL;
++    }
++}
+
+Added: branches/SAMBA_4_0/source/heimdal/lib/roken/inet_pton.c
+===================================================================
+--- branches/SAMBA_4_0/source/heimdal/lib/roken/inet_pton.c	2007-05-29 15:18:20 UTC (rev 23208)
++++ branches/SAMBA_4_0/source/heimdal/lib/roken/inet_pton.c	2007-05-29 15:19:37 UTC (rev 23209)
+@@ -0,0 +1,49 @@
++/*
++ * Copyright (c) 1999 - 2000 Kungliga Tekniska Högskolan
++ * (Royal Institute of Technology, Stockholm, Sweden).
++ * All rights reserved.
++ * 
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ * 
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in the
++ *    documentation and/or other materials provided with the distribution.
++ * 
++ * 3. Neither the name of the Institute nor the names of its contributors
++ *    may be used to endorse or promote products derived from this software
++ *    without specific prior written permission.
++ * 
++ * THIS SOFTWARE IS PROVIDED BY THE INSTITUTE AND CONTRIBUTORS ``AS IS'' AND
++ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ * ARE DISCLAIMED.  IN NO EVENT SHALL THE INSTITUTE OR CONTRIBUTORS BE LIABLE
++ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
++ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
++ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++ * SUCH DAMAGE.
++ */
++
++#ifdef HAVE_CONFIG_H
++#include <config.h>
++RCSID("$Id: inet_pton.c,v 1.4 2005/04/12 11:28:52 lha Exp $");
++#endif
++
++#include <roken.h>
++
++int ROKEN_LIB_FUNCTION
++inet_pton(int af, const char *src, void *dst)
++{
++    if (af != AF_INET) {
++	errno = EAFNOSUPPORT;
++	return -1;
++    }
++    return inet_aton (src, dst);
++}
+
+Modified: branches/SAMBA_4_0/source/heimdal_build/config.m4
+===================================================================
+--- branches/SAMBA_4_0/source/heimdal_build/config.m4	2007-05-29 15:18:20 UTC (rev 23208)
++++ branches/SAMBA_4_0/source/heimdal_build/config.m4	2007-05-29 15:19:37 UTC (rev 23209)
+@@ -70,8 +70,8 @@
+ 	atexit					\
+ 	cgetent					\
+ 	getprogname				\
++	inet_aton				\
+ 	inet_ntop				\
+-	inet_aton				\
+ 	inet_pton				\
+ 	gethostname				\
+ 	getnameinfo				\
+@@ -235,19 +235,38 @@
+ 	SMB_ENABLE(HEIMDAL_ROKEN_ADDRINFO, YES)
+ fi
+ 
++SMB_ENABLE(HEIMDAL_ROKEN_GETNAMEINFO, NO)
++if test t$ac_cv_func_getnameinfo != tyes; then
++	SMB_ENABLE(HEIMDAL_ROKEN_GETNAMEINFO, YES)
++fi
++
+ # only add inet_aton if needed
+ SMB_ENABLE(HEIMDAL_ROKEN_INET_ATON, NO)
+ if test t$ac_cv_func_inet_aton != tyes; then
+ 	SMB_ENABLE(HEIMDAL_ROKEN_INET_ATON, YES)
+ fi
+ 
++SMB_ENABLE(HEIMDAL_ROKEN_INET_NTOP, NO)
++if test x"$ac_cv_func_inet_ntop" = x"no"; then
++    AC_CHECK_LIB_EXT(nsl_s, NSL_LIBS, inet_ntop)
++    AC_CHECK_LIB_EXT(nsl, NSL_LIBS, inet_ntop)
++    if test x"$ac_cv_lib_ext_nsl_s_inet_ntop" != x"yes" &&
++       test x"$ac_cv_lib_ext_nsl_inet_ntop" != x"yes"; then
++	SMB_ENABLE(HEIMDAL_ROKEN_INET_NTOP, YES)
++    else
++	SMB_ENABLE(NSL,YES)
++    fi
++fi
++
++SMB_ENABLE(HEIMDAL_ROKEN_INET_PTON, NO)
+ if test x"$ac_cv_func_inet_pton" = x"no"; then
+     AC_CHECK_LIB_EXT(nsl_s, NSL_LIBS, inet_pton)
+     AC_CHECK_LIB_EXT(nsl, NSL_LIBS, inet_pton)
+-    SMB_ENABLE(NSL,YES)
+     if test x"$ac_cv_lib_ext_nsl_s_inet_pton" != x"yes" &&
+        test x"$ac_cv_lib_ext_nsl_inet_pton" != x"yes"; then
+-	AC_MSG_ERROR([no inet_pton() function available!])
++	SMB_ENABLE(HEIMDAL_ROKEN_INET_PTON, YES)
++    else
++	SMB_ENABLE(NSL,YES)
+     fi
+ fi
+ 
+
+Modified: branches/SAMBA_4_0/source/heimdal_build/config.mk
+===================================================================
+--- branches/SAMBA_4_0/source/heimdal_build/config.mk	2007-05-29 15:18:20 UTC (rev 23208)
++++ branches/SAMBA_4_0/source/heimdal_build/config.mk	2007-05-29 15:19:37 UTC (rev 23209)
+@@ -373,6 +373,14 @@
+ CFLAGS = -Iheimdal_build -Iheimdal/lib/roken  -Ilib/socket_wrapper
+ OBJ_FILES = ../heimdal/lib/roken/inet_aton.o
+ 
++[SUBSYSTEM::HEIMDAL_ROKEN_INET_NTOP]
++CFLAGS = -Iheimdal_build -Iheimdal/lib/roken  -Ilib/socket_wrapper
++OBJ_FILES = ../heimdal/lib/roken/inet_ntop.o
++
++[SUBSYSTEM::HEIMDAL_ROKEN_INET_PTON]
++CFLAGS = -Iheimdal_build -Iheimdal/lib/roken  -Ilib/socket_wrapper
++OBJ_FILES = ../heimdal/lib/roken/inet_pton.o
++
+ [SUBSYSTEM::HEIMDAL_ROKEN_GETPROGNAME]
+ CFLAGS = -Iheimdal_build -Iheimdal/lib/roken  -Ilib/socket_wrapper
+ OBJ_FILES = ../heimdal/lib/roken/getprogname.o
+@@ -385,6 +393,10 @@
+ CFLAGS = -Iheimdal_build -Iheimdal/lib/roken  -Ilib/socket_wrapper
+ OBJ_FILES = ../heimdal/lib/roken/getprogname.ho
+ 
++[SUBSYSTEM::HEIMDAL_ROKEN_GETNAMEINFO]
++CFLAGS = -Iheimdal_build -Iheimdal/lib/roken  -Ilib/socket_wrapper
++OBJ_FILES = ../heimdal/lib/roken/getnameinfo.o
++
+ #######################
+ # Start SUBSYSTEM HEIMDAL_ROKEN_ADDRINFO
+ [SUBSYSTEM::HEIMDAL_ROKEN_ADDRINFO]
+@@ -397,7 +409,7 @@
+ 	../heimdal/lib/roken/freehostent.o \
+ 	../heimdal/lib/roken/copyhostent.o \
+ 	../heimdal/lib/roken/hostent_find_fqdn.o
+-PRIVATE_DEPENDENCIES = EXT_SOCKET
++PRIVATE_DEPENDENCIES = HEIMDAL_ROKEN_INET_PTON EXT_SOCKET
+ 
+ #######################
+ # Start SUBSYSTEM HEIMDAL_ROKEN
+@@ -436,8 +448,11 @@
+ 			HEIMDAL_ROKEN_ADDRINFO \
+ 			HEIMDAL_ROKEN_GAI_STRERROR \
+ 			HEIMDAL_ROKEN_INET_ATON \
++			HEIMDAL_ROKEN_INET_NTOP \
++			HEIMDAL_ROKEN_INET_PTON \
+ 			HEIMDAL_ROKEN_GETPROGNAME \
+ 			HEIMDAL_ROKEN_CLOSEFROM \
++			HEIMDAL_ROKEN_GETNAMEINFO \
+ 			GAI \
+ 			NSL \
+ 			RESOLV \
+

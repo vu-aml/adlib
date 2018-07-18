@@ -1,0 +1,145 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Jul  5 14:00:26 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l65I0PL9029410
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 5 Jul 2007 14:00:25 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 48BA716384D
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu,  5 Jul 2007 18:00:21 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.2 required=3.8 tests=AWL, BAYES_00, FORGED_RCVD_HELO,
+	RCVD_IN_DSBL,RCVD_IN_SORBS_DUL,SPF_NEUTRAL autolearn=no version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: from mail.plainjoe.org (68-117-186-136.dhcp.mtgm.al.charter.com
+	[68.117.186.136])
+	by lists.samba.org (Postfix) with ESMTP id C01C6162BDB;
+	Thu,  5 Jul 2007 17:59:30 +0000 (GMT)
+Received: from [192.168.1.47] (oak.plainjoe.org [192.168.1.47])
+	by mail.plainjoe.org (Postfix) with ESMTP id 545002F04C;
+	Thu,  5 Jul 2007 12:59:30 -0500 (CDT)
+Message-ID: <468D3181.8020308@samba.org>
+Date: Thu, 05 Jul 2007 12:59:29 -0500
+From: "Gerald (Jerry) Carter" <jerry@samba.org>
+User-Agent: Thunderbird 1.5.0.12 (X11/20070604)
+MIME-Version: 1.0
+To: James Peach <jpeach@samba.org>,
+   "Stefan (metze) Metzmacher" <metze@samba.org>
+References: <468AB812.1000903@samba.org> <468B63CF.8070300@samba.org>
+	<47E8360A-7D64-4448-8083-BC36CC7440C0@samba.org>
+In-Reply-To: <47E8360A-7D64-4448-8083-BC36CC7440C0@samba.org>
+X-Enigmail-Version: 0.94.2.0
+Content-Type: text/plain; charset=ISO-8859-1
+Content-Transfer-Encoding: 7bit
+Cc: simo <idra@samba.org>, samba-technical@samba.org
+Subject: Re: Updates to work flow descriptions for GIT
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA1
+
+James Peach wrote:
+
+>>
+>> how do you managed to only have the interesting branches instead of all?
+> 
+> git-svn init svn+ssh://svn.samba.org/data/svn/samba
+> [edit .git/config]
+> git-svn fetch
+> 
+> When you edit .git/config, make it look like this:
+> 
+> [svn-remote "svn"]
+>         url = svn+ssh://svn.samba.org/data/svn/samba
+>         fetch = branches/SAMBA_3_0:refs/remotes/samba3
+>         fetch = branches/SAMBA_4_0:refs/remotes/samba4
+>         fetch = branches/SAMBA_3_0_25:refs/remotes/samba3025
+> 
+> ie. remove the wildcards and add explicit mappings for the branches you
+> care about. you can add new mappings later and 'git-svn fetch' will pick
+> them up.
+
+Actually I grabbed everything and then created local branches
+that I push out. In my .git/config, I just added:
+
+[remote "samba"]
+        url = jerry@git.samba.org:/data/git/samba.git
+        push = v3-0
+        push = v3-0-23
+        push = v3-0-24
+        push = v3-0-25
+        push = v3-0-26
+        push = v4-0
+
+where each local branch was created from remotes/SAMBA_X_X
+
+>> do you use git-svn dcommit ? If so it would be 
+>> interesting what the workflow is to commit from back to
+>> svn from a local feature branch
+
+ok. Obviously this is a bit different than people without
+svn write access would work.  Normally the git-svn repo is
+strictly a mirror and used to push changes to the master
+repo on git.samba.org.
+
+Initially I clone git://git.samba.org/samba/ like everyone else
+and work exclusively from there. When something is ready to
+be merged upstream, I simply
+
+  $ git-pull --squash /path/to/local/tree <branch>
+  $ git-svn dcommit
+
+To merge to another branch (say merge a change to SAMBA_3_0_26
+that I just checked into SAMBA_3_0), I use git-cherry-pick to
+merge the single change.
+
+And to send out patches to the mailing list, I do something like:
+
+  $ git-format-patch --attach -1
+  ....edit generated file
+  ....add comments to msg body and extra To: and CC: lines
+  $ git-send-email <generated patchfile>
+
+PS: If you want the svn+ssh:// git mirror, you can grab it
+from rsync://us2.samba.org/src/samba-svn.git.tgz (~170Mb)
+Once you untar it, just run "git-svn fetch"  You also see
+the local working branches for v3-0, et. al. which you can
+remove and create you own.  The sha1 hashes should continue
+to be the same between the master mirror and your local copy
+due git generates the content hashes.
+
+PSS: That tarball will be of no use to people without svn
+write access.
+
+
+
+
+cheers, jerry
+=====================================================================
+Samba                                    ------- http://www.samba.org
+Centeris                         -----------  http://www.centeris.com
+"What man is a man who does not make the world better?"      --Balian
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.6 (GNU/Linux)
+Comment: Using GnuPG with Mozilla - http://enigmail.mozdev.org
+
+iD8DBQFGjTGBIR7qMdg1EfYRAqcZAKDofvXLJ5wI8FyPkWipOnow6YZuNQCgmoVp
+p/mRHqfZYhb34jI9wtK15HI=
+=A1h4
+-----END PGP SIGNATURE-----
+

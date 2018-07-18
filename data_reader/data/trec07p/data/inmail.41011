@@ -1,0 +1,127 @@
+From r-help-bounces@stat.math.ethz.ch  Mon May 21 16:19:47 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4LKJjqD003370
+	for <ktwarwic@flax9.uwaterloo.ca>; Mon, 21 May 2007 16:19:46 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4LKIjw4016448;
+	Mon, 21 May 2007 22:19:07 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.8 required=5.0 tests=AWL,
+	BAYES_50 autolearn=no version=3.1.8
+Received: from mailgw02.nhh.no (mailgw02.nhh.no [158.37.108.34])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4LKIP1f016316
+	for <r-help@stat.math.ethz.ch>; Mon, 21 May 2007 22:18:26 +0200
+X-IronPort-AV: E=Sophos;i="4.14,562,1170630000"; 
+   d="scan'208";a="4411858"
+Received: from inti.valuta.nhh.no ([158.37.108.136])
+	by mailgw-02.nhh.no with ESMTP; 21 May 2007 22:18:24 +0200
+Received: from reclus.nhh.no ([158.37.107.20]) by inti.valuta.nhh.no with
+	Microsoft SMTPSVC(6.0.3790.1830); Mon, 21 May 2007 22:18:23 +0200
+Date: Mon, 21 May 2007 22:18:24 +0200 (CEST)
+From: Roger Bivand <Roger.Bivand@nhh.no>
+X-X-Sender: rsb@reclus.nhh.no
+To: "Liu, Ningwei" <ningwei.liu@countryfinancial.com>
+In-Reply-To: <07E228A5BE53C24CAD490193A7381BBB9AAF83@LP-EXCHVS07.CO.IHC.COM>
+Message-ID: <Pine.LNX.4.44.0705212158470.32005-100000@reclus.nhh.no>
+MIME-Version: 1.0
+X-OriginalArrivalTime: 21 May 2007 20:18:23.0920 (UTC)
+	FILETIME=[2ED9F300:01C79BE5]
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch, Greg Snow <Greg.Snow@intermountainmail.org>
+Subject: Re: [R] Graphically show population density for a specific
+ geographicarea using R
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+Reply-To: Roger.Bivand@nhh.no
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+On Mon, 21 May 2007, Greg Snow wrote:
+
+> 1. Yes you need a shape file with that information.
+> 
+> 2. One place to look is:
+> http://www.census.gov/geo/www/cob/bdy_files.html There are shapefiles
+> (the .shp ones) for counties and zip codes (as well as many other
+> things).  These work pretty directly with the tools in the maptools and
+> sp packages.
+> 
+> 3. Read the .shp file in using maptools, the .dbf information is
+> automatically read in as well (with whatever details come with the
+> shapefile), then look at the structure of what you read in, you will see
+> the data frame and you should be able to just add your data into that
+> data frame, or use it seperately.
+
+wget http://www.census.gov/geo/cob/bdy/zt/z500shp/zt17_d00_shp.zip
+unzip zt17_d00_shp.zip
+R
+
+ill_zip <- readShapePoly("zt17_d00.shp", proj4string=CRS("+proj=longlat"))
+names(ill_zip)
+summary(ill_zip)
+plot(ill_zip, axes=TRUE)
+
+suggests that there is no useful attribute data in the shapefile. It is in 
+geographical coordinates, so that the AREA variable is not in useful 
+coordinates. If you look at the codes, you'll see that some are 
+represented by multiple polygons, especially the HH codes (water 
+features). Also note that ZCTA are not the same as Postal ZIP Codes, 
+according to the FAQ.
+
+The easiest way to map a variable at the moment is:
+
+spplot(ill_zip, "AREA")
+> ill_zip$HH <- FALSE
+> ill_zip$HH[grep("HH", as.character(ill_zip$NAME))] <- TRUE
+> spplot(ill_zip, "HH")
+
+only AREA doesn't tell you anything. You'll need to look for data for
+ZCTAs or similar, and if you need to compute the areas, project to
+something suitable and extract the values from the underlying
+SpatialPolygons object.
+
+Finally, you'll need up-to-date numbers of inhabitants, as at this scale, 
+a housing development can easily date your data.
+
+I suggest you follow up on R-sig-geo.
+
+Roger
+
+> 
+> 4. plot.Map has an option auxvar, though it is now prefered to use the
+> plot methods for the more specific objects (SpatialLinesDataFrame object
+> from the readLinesShape function).  I would expect that they would have
+> an auxvar or similar argument also.  Or you can decide what color you
+> want to use, plot the overall map, then add each county/zipcode
+> individually using the specified color.
+> 
+> Hope this helps,
+> 
+> 
+
+-- 
+Roger Bivand
+Economic Geography Section, Department of Economics, Norwegian School of
+Economics and Business Administration, Helleveien 30, N-5045 Bergen,
+Norway. voice: +47 55 95 93 55; fax +47 55 95 95 43
+e-mail: Roger.Bivand@nhh.no
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

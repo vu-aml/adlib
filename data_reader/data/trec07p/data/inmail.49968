@@ -1,0 +1,130 @@
+From perl6-all-return-81768-ktwarwic=speedy.uwaterloo.ca@perl.org  Sun Jun  3 11:54:20 2007
+Return-Path: <perl6-all-return-81768-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l53FsJhB017178
+	for <ktwarwic@flax9.uwaterloo.ca>; Sun, 3 Jun 2007 11:54:19 -0400
+Received: (qmail 28223 invoked by uid 514); 3 Jun 2007 15:54:12 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 28218 invoked from network); 3 Jun 2007 15:54:12 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=0.0 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+Message-ID: <4662DF39.9010809@jnthn.net>
+Date: Sun, 03 Jun 2007 16:33:13 +0100
+From: Jonathan Worthington <jonathan@jnthn.net>
+User-Agent: Thunderbird 1.5.0.12 (Windows/20070509)
+MIME-Version: 1.0
+To: perl6-internals@perl.org
+Subject: Analysing a GC problem
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=1.2 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,FH_HOST_EQ_D_D_D_D,SPF_PASS
+
+Hi,
+
+At the moment, under Win32, virtually all of the Perl 6 test suite fails 
+unless run with -G (disabling garbage collection). The problem for at 
+least one of them is that the free list appears to be corrupted.
+
+First, a few notes on the free list. Parrot allocates large chunks of 
+memory, called pools, and then allocates objects out of these pools 
+itself. All garbage collectible objects start out with the same two things:
+
+typedef struct pobj_t {
+    UnionVal u;
+    Parrot_UInt flags;
+} pobj_t;
+
+The UnionVal contains a range of things, but is at least the size of two 
+integers or two pointers. Normally this is used to store some of the 
+data for the object itself. However, after the object is freed, the 
+first pointer-sized chunk of the UnionVal is used for another thing: to 
+store a linked list of free objects. When we want a new object, unless 
+the free list is empty (and thus NULL), we take the object on the front 
+and set the free list to whatever that referred to as the next thing on 
+the free list, like this:
+
+    if (!pool->free_list)
+        (*pool->more_objects)(interp, pool);
+    ptr = pool->free_list;
+    pool->free_list = *(void **)ptr;
+
+The segfault was occuring on the third line of this, namely because ptr 
+was coming back as 0xFFFFFFFF. After some messing around, I realized 
+that if I changed the code to read:
+
+    if (!pool->free_list)
+        (*pool->more_objects)(interp, pool);
+    ptr = pool->free_list;
+    if (*(void **)ptr == 0xFFFFFFFF) {
+        PMC *check = (PMC*)ptr;
+        return NULL;
+    }
+    pool->free_list = *(void **)ptr;
+
+And set a breakpoint on the "return NULL;", then I'd get some better 
+idea of what ptr actually was. Turns out it is a PMC - a Key PMC in 
+fact. And if you look in the Key PMC, you see a comment like:
+
+PMC_int_val(-1) means end of iteration.
+
+PMC_int_val is the same memory location as the free list pointer would 
+be, -1 is 0xFFFFFFFF and...well, you can see where this is going. So 
+somehow this Key PMC is not getting marked live, when it is still being 
+used, right?
+
+Well, maybe. Next I looked at the flags of this PMC.
+
+00000100 00010000 00000110 00000011
+
+We'd expect that:
+
+b_PObj_on_free_list_FLAG = 1 << 19,
+
+Would be set, but it ain't. So the PMC is on the free list, but hasn't 
+got the "I'm on the free list" flag. Thus it was, in theory, never 
+actually placed onto the free list. Changing the test condition from 
+earlier to:
+
+    if (!PObj_on_free_list_TEST((PObj*)ptr)) {
+        PMC *check = (PMC*)ptr;
+        return NULL;
+    }
+
+And setting the breakpoint gave check as the Key PMC, just like before. 
+ From which I infer that perhaps it's not a Key PMC that is not being 
+marked, but something else that keeps a Key PMC referenced from the 
+first pointer in the UnionVal  Perhaps an iterator; from Iterator.pmc's 
+mark routine:
+
+        /* the KEY */
+        if (PMC_struct_val(SELF))
+             pobject_lives(INTERP, (PObj *) PMC_struct_val(SELF));
+
+Or perhaps not, that's all I have time for today. But this post is for 
+those of you who wonder how one goes about tracing GC problems - I have 
+been asked before and just wanted to make things a little less 
+mysterious. Hope this helps. Or that it spurs someone else to continue 
+the hunt for this bug, which would be rather nice to nail.
+
+Happy hacking,
+
+Jonathan
+

@@ -1,0 +1,100 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 15 08:42:15 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4FCgFqD004964
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 08:42:15 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 0C390163AF0
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 15 May 2007 12:42:13 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: **
+X-Spam-Status: No, score=2.0 required=3.8 tests=AWL, BAYES_05, FORGED_RCVD_HELO,
+	NO_MORE_FUNN, RCVD_IN_BLARS_RBL, RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from p15135482.pureserver.info (seh-technology.de [217.160.212.8])
+	by lists.samba.org (Postfix) with ESMTP id 4E5001638FA
+	for <samba-technical@lists.samba.org>;
+	Tue, 15 May 2007 12:40:50 +0000 (GMT)
+Received: from localhost (localhost.localdomain [127.0.0.1])
+	by p15135482.pureserver.info (Postfix) with ESMTP id 80E3B34C03B
+	for <samba-technical@lists.samba.org>;
+	Tue, 15 May 2007 14:40:49 +0200 (CEST)
+Received: from p15135482.pureserver.info ([127.0.0.1])
+	by localhost (p15135482 [127.0.0.1]) (amavisd-new,
+	port 10024) with ESMTP
+	id 12773-08 for <samba-technical@lists.samba.org>;
+	Tue, 15 May 2007 14:40:46 +0200 (CEST)
+Received: from [192.168.3.74] (p54870a49.dip0.t-ipconnect.de [84.135.10.73])
+	(using TLSv1 with cipher RC4-MD5 (128/128 bits))
+	(No client certificate requested)
+	by p15135482.pureserver.info (Postfix) with ESMTP id 6A4E334C040
+	for <samba-technical@lists.samba.org>;
+	Tue, 15 May 2007 14:40:45 +0200 (CEST)
+Message-ID: <4649AA47.7020103@seh.de>
+Date: Tue, 15 May 2007 14:40:39 +0200
+From: Martin Zielinski <mz@seh.de>
+User-Agent: Thunderbird 1.5.0.10 (X11/20070306)
+MIME-Version: 1.0
+To: samba-technical@lists.samba.org
+Content-Type: text/plain; charset=ISO-8859-15; format=flowed
+Content-Transfer-Encoding: 7bit
+X-Virus-Scanned: by amavisd-new at seh.de
+Subject: 3.0.25 cups printer location string sync
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Hello all!
+
+I still don't like the way how the printer location string is grabbed 
+from cups in get_a_printer_2() and get_a_printer_2_default() functions.
+
+The reason is, if the comment or location is empty, then samba will
+allways ask cups. This can happen *very* frequently when clients are 
+connected to printer shares.
+
+Another point is, that in get_printer_2_default() the comment string is 
+allways empty. So the if-clause is unnecessary.
+
+The cups-calls might not be such a big problem on large servers, but 
+nonetheless it's a slow-down by design (if I havn't overlooked something 
+obvious).
+
+I'd suggest to add the location to the service structure and the 
+pcap_cache structure. Then the location can be loaded at startup just 
+like the comment string (not overwriting the tdb-value if set).
+
+2ndly, in this case the user cannot update the string from the server 
+(linux or so) side. So I would suggest to expand the rpcclient 
+"setprinter" call (setprinter printername comment [location]).
+
+I'm not sure about the next thing, but if I update the printer comment 
+and/or location string and do an AD search for printers afterwards, the 
+new strings are not visible in the result. I don't know, if there are 
+timeouts or sync intervals. If not, the printer should be "republished" 
+after the changes have been made.
+
+If anyone is interested, I could provide a patch against 3.0.25.
+
+Best regards,
+
+Martin
+
+-- 
+Martin Zielinski             mz@seh.de
+Software Development
+SEH Computertechnik GmbH     www.seh.de
+

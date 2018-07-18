@@ -1,0 +1,205 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon May 21 23:41:09 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4M3f9qD007366
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 21 May 2007 23:41:09 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 45C32163829
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 22 May 2007 03:41:05 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 8B018162ACF; Tue, 22 May 2007 03:40:32 +0000 (GMT)
+Date: Tue, 22 May 2007 13:14:53 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070522034032.8B018162ACF@lists.samba.org>
+Subject: Rev 329: global lock should imply the transaction lock in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 329
+revision-id: tridge@samba.org-20070522031451-628wjb3bbna6p4vc
+parent: tridge@samba.org-20070519111106-hmbognp9baltnxgw
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Tue 2007-05-22 13:14:51 +1000
+message:
+  global lock should imply the transaction lock
+modified:
+  lib/tdb/common/lock.c          lock.c-20070220022425-m1wibgjq7n5hahs6-7
+  lib/tdb/common/tdb_private.h   tdb_private.h-20070220022425-m1wibgjq7n5hahs6-10
+  lib/tdb/common/transaction.c   transaction.c-20070220022425-m1wibgjq7n5hahs6-11
+  lib/tdb/common/traverse.c      traverse.c-20070220022425-m1wibgjq7n5hahs6-12
+=== modified file 'lib/tdb/common/lock.c'
+--- a/lib/tdb/common/lock.c	2007-05-12 04:33:10 +0000
++++ b/lib/tdb/common/lock.c	2007-05-22 03:14:51 +0000
+@@ -285,6 +285,41 @@
+ 	return ret;
+ }
+ 
++/*
++  get the transaction lock
++ */
++int tdb_transaction_lock(struct tdb_context *tdb, int ltype)
++{
++	if (tdb->have_transaction_lock || tdb->global_lock.count) {
++		return 0;
++	}
++	if (tdb->methods->tdb_brlock(tdb, TRANSACTION_LOCK, ltype, 
++				     F_SETLKW, 0, 1) == -1) {
++		TDB_LOG((tdb, TDB_DEBUG_ERROR, "tdb_transaction_lock: failed to get transaction lock\n"));
++		tdb->ecode = TDB_ERR_LOCK;
++		return -1;
++	}
++	tdb->have_transaction_lock = 1;
++	return 0;
++}
++
++/*
++  release the transaction lock
++ */
++int tdb_transaction_unlock(struct tdb_context *tdb)
++{
++	int ret;
++	if (!tdb->have_transaction_lock) {
++		return 0;
++	}
++	ret = tdb->methods->tdb_brlock(tdb, TRANSACTION_LOCK, F_UNLCK, F_SETLKW, 0, 1);
++	if (ret == 0) {
++		tdb->have_transaction_lock = 0;
++	}
++	return ret;
++}
++
++
+ 
+ 
+ /* lock/unlock entire database */
+
+=== modified file 'lib/tdb/common/tdb_private.h'
+--- a/lib/tdb/common/tdb_private.h	2007-04-21 08:09:37 +0000
++++ b/lib/tdb/common/tdb_private.h	2007-05-22 03:14:51 +0000
+@@ -170,6 +170,7 @@
+ 	struct tdb_transaction *transaction;
+ 	int page_size;
+ 	int max_dead_records;
++	bool have_transaction_lock;
+ };
+ 
+ 
+@@ -181,6 +182,8 @@
+ int tdb_lock(struct tdb_context *tdb, int list, int ltype);
+ int tdb_unlock(struct tdb_context *tdb, int list, int ltype);
+ int tdb_brlock(struct tdb_context *tdb, tdb_off_t offset, int rw_type, int lck_type, int probe, size_t len);
++int tdb_transaction_lock(struct tdb_context *tdb, int ltype);
++int tdb_transaction_unlock(struct tdb_context *tdb);
+ int tdb_brlock_upgrade(struct tdb_context *tdb, tdb_off_t offset, size_t len);
+ int tdb_write_lock_record(struct tdb_context *tdb, tdb_off_t off);
+ int tdb_write_unlock_record(struct tdb_context *tdb, tdb_off_t off);
+
+=== modified file 'lib/tdb/common/transaction.c'
+--- a/lib/tdb/common/transaction.c	2007-04-16 12:52:58 +0000
++++ b/lib/tdb/common/transaction.c	2007-05-22 03:14:51 +0000
+@@ -423,9 +423,7 @@
+ 	/* get the transaction write lock. This is a blocking lock. As
+ 	   discussed with Volker, there are a number of ways we could
+ 	   make this async, which we will probably do in the future */
+-	if (tdb_brlock(tdb, TRANSACTION_LOCK, F_WRLCK, F_SETLKW, 0, 1) == -1) {
+-		TDB_LOG((tdb, TDB_DEBUG_ERROR, "tdb_transaction_start: failed to get transaction lock\n"));
+-		tdb->ecode = TDB_ERR_LOCK;
++	if (tdb_transaction_lock(tdb, F_WRLCK) == -1) {
+ 		SAFE_FREE(tdb->transaction);
+ 		return -1;
+ 	}
+@@ -469,6 +467,7 @@
+ 			      TDB_HASHTABLE_SIZE(tdb)) != 0) {
+ 		TDB_LOG((tdb, TDB_DEBUG_FATAL, "tdb_transaction_start: failed to prime hash table\n"));
+ 		tdb->ecode = TDB_ERR_IO;
++		tdb->methods = tdb->transaction->io_methods;
+ 		goto fail;
+ 	}
+ 
+@@ -476,7 +475,7 @@
+ 	
+ fail:
+ 	tdb_brlock(tdb, FREELIST_TOP, F_UNLCK, F_SETLKW, 0, 0);
+-	tdb_brlock(tdb, TRANSACTION_LOCK, F_UNLCK, F_SETLKW, 0, 1);
++	tdb_transaction_unlock(tdb);
+ 	SAFE_FREE(tdb->transaction->hash_heads);
+ 	SAFE_FREE(tdb->transaction);
+ 	return -1;
+@@ -531,7 +530,7 @@
+ 	tdb->methods = tdb->transaction->io_methods;
+ 
+ 	tdb_brlock(tdb, FREELIST_TOP, F_UNLCK, F_SETLKW, 0, 0);
+-	tdb_brlock(tdb, TRANSACTION_LOCK, F_UNLCK, F_SETLKW, 0, 1);
++	tdb_transaction_unlock(tdb);
+ 	SAFE_FREE(tdb->transaction->hash_heads);
+ 	SAFE_FREE(tdb->transaction);
+ 	
+
+=== modified file 'lib/tdb/common/traverse.c'
+--- a/lib/tdb/common/traverse.c	2007-02-20 02:24:45 +0000
++++ b/lib/tdb/common/traverse.c	2007-05-22 03:14:51 +0000
+@@ -205,12 +205,10 @@
+ {
+ 	struct tdb_traverse_lock tl = { NULL, 0, 0, F_RDLCK };
+ 	int ret;
+-	
++
+ 	/* we need to get a read lock on the transaction lock here to
+ 	   cope with the lock ordering semantics of solaris10 */
+-	if (tdb->methods->tdb_brlock(tdb, TRANSACTION_LOCK, F_RDLCK, F_SETLKW, 0, 1) == -1) {
+-		TDB_LOG((tdb, TDB_DEBUG_ERROR, "tdb_traverse_read: failed to get transaction lock\n"));
+-		tdb->ecode = TDB_ERR_LOCK;
++	if (tdb_transaction_lock(tdb, F_RDLCK)) {
+ 		return -1;
+ 	}
+ 
+@@ -218,7 +216,7 @@
+ 	ret = tdb_traverse_internal(tdb, fn, private_data, &tl);
+ 	tdb->traverse_read--;
+ 
+-	tdb->methods->tdb_brlock(tdb, TRANSACTION_LOCK, F_UNLCK, F_SETLKW, 0, 1);
++	tdb_transaction_unlock(tdb);
+ 
+ 	return ret;
+ }
+@@ -237,15 +235,13 @@
+ 		return tdb_traverse_read(tdb, fn, private_data);
+ 	}
+ 	
+-	if (tdb->methods->tdb_brlock(tdb, TRANSACTION_LOCK, F_WRLCK, F_SETLKW, 0, 1) == -1) {
+-		TDB_LOG((tdb, TDB_DEBUG_ERROR, "tdb_traverse: failed to get transaction lock\n"));
+-		tdb->ecode = TDB_ERR_LOCK;
++	if (tdb_transaction_lock(tdb, F_WRLCK)) {
+ 		return -1;
+ 	}
+ 
+ 	ret = tdb_traverse_internal(tdb, fn, private_data, &tl);
+ 
+-	tdb->methods->tdb_brlock(tdb, TRANSACTION_LOCK, F_UNLCK, F_SETLKW, 0, 1);
++	tdb_transaction_unlock(tdb);
+ 
+ 	return ret;
+ }
+

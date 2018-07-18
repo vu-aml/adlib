@@ -1,0 +1,284 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Apr 19 16:51:52 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3JKpq0I029599
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 19 Apr 2007 16:51:52 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id A5ED11638C3
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 19 Apr 2007 20:51:27 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 549)
+	id 6F442162AD3; Thu, 19 Apr 2007 20:50:51 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jra@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070419205051.6F442162AD3@lists.samba.org>
+Date: Thu, 19 Apr 2007 20:50:51 +0000 (GMT)
+Subject: svn commit: samba r22389 - in branches/SAMBA_3_0/source: lib libsmb
+	smbd
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 7404
+Lines: 241
+
+Author: jra
+Date: 2007-04-19 20:50:49 +0000 (Thu, 19 Apr 2007)
+New Revision: 22389
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22389
+
+Log:
+Start preparing for multiple encryption contexts in the
+server. Allow server to reflect back to calling client
+the encryption context that was sent.
+Jeremy.
+
+Modified:
+   branches/SAMBA_3_0/source/lib/util.c
+   branches/SAMBA_3_0/source/libsmb/smb_seal.c
+   branches/SAMBA_3_0/source/smbd/aio.c
+   branches/SAMBA_3_0/source/smbd/blocking.c
+   branches/SAMBA_3_0/source/smbd/process.c
+   branches/SAMBA_3_0/source/smbd/reply.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/lib/util.c
+===================================================================
+--- branches/SAMBA_3_0/source/lib/util.c	2007-04-19 20:00:40 UTC (rev 22388)
++++ branches/SAMBA_3_0/source/lib/util.c	2007-04-19 20:50:49 UTC (rev 22389)
+@@ -533,14 +533,20 @@
+  Set the length and marker of an smb packet.
+ ********************************************************************/
+ 
+-void smb_setlen(char *buf,int len)
++void smb_setlen(char *buf,int len,const char *frombuf)
+ {
+ 	_smb_setlen(buf,len);
+ 
+-	SCVAL(buf,4,0xFF);
+-	SCVAL(buf,5,'S');
+-	SCVAL(buf,6,'M');
+-	SCVAL(buf,7,'B');
++	if (frombuf) {
++		if (buf != frombuf) {
++			memcpy(buf+4, frombuf+4, 4);
++		}
++	} else {
++		SCVAL(buf,4,0xFF);
++		SCVAL(buf,5,'S');
++		SCVAL(buf,6,'M');
++		SCVAL(buf,7,'B');
++	}
+ }
+ 
+ /*******************************************************************
+@@ -554,7 +560,7 @@
+ 	}
+ 	SCVAL(buf,smb_wct,num_words);
+ 	SSVAL(buf,smb_vwv + num_words*SIZEOFWORD,num_bytes);  
+-	smb_setlen(buf,smb_size + num_words*2 + num_bytes - 4);
++	smb_setlen(buf,smb_size + num_words*2 + num_bytes - 4, NULL);
+ 	return (smb_size + num_words*2 + num_bytes);
+ }
+ 
+@@ -566,7 +572,7 @@
+ {
+ 	int num_words = CVAL(buf,smb_wct);
+ 	SSVAL(buf,smb_vwv + num_words*SIZEOFWORD,num_bytes);  
+-	smb_setlen(buf,smb_size + num_words*2 + num_bytes - 4);
++	smb_setlen(buf,smb_size + num_words*2 + num_bytes - 4, NULL);
+ 	return (smb_size + num_words*2 + num_bytes);
+ }
+ 
+
+Modified: branches/SAMBA_3_0/source/libsmb/smb_seal.c
+===================================================================
+--- branches/SAMBA_3_0/source/libsmb/smb_seal.c	2007-04-19 20:00:40 UTC (rev 22388)
++++ branches/SAMBA_3_0/source/libsmb/smb_seal.c	2007-04-19 20:50:49 UTC (rev 22389)
+@@ -93,10 +93,11 @@
+ 	}
+ 
+ 	memcpy(buf + 8, inbuf + 8 + NTLMSSP_SIG_SIZE, data_len);
+-	SAFE_FREE(inbuf);
+ 
+ 	/* Reset the length. */
+-	smb_setlen(buf, data_len + 4);
++	smb_setlen(buf, data_len + 4, inbuf);
++
++	SAFE_FREE(inbuf);
+ 	return NT_STATUS_OK;
+ }
+ 
+@@ -203,7 +204,7 @@
+ 	}
+ 
+ 	memcpy(buf + 8, out_buf.value, out_buf.length);
+-	smb_setlen(buf, out_buf.length + 4);
++	smb_setlen(buf, out_buf.length + 4, out_buf.value);
+ 
+ 	gss_release_buffer(&minor, &out_buf);
+ 	return NT_STATUS_OK;
+
+Modified: branches/SAMBA_3_0/source/smbd/aio.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/aio.c	2007-04-19 20:00:40 UTC (rev 22388)
++++ branches/SAMBA_3_0/source/smbd/aio.c	2007-04-19 20:50:49 UTC (rev 22389)
+@@ -49,8 +49,10 @@
+  of the aio_read call.
+ *****************************************************************************/
+ 
+-static struct aio_extra *create_aio_ex_read(files_struct *fsp, size_t buflen,
+-					    uint16 mid)
++static struct aio_extra *create_aio_ex_read(files_struct *fsp,
++						size_t buflen,
++						uint16 mid,
++						const char *inbuf)
+ {
+ 	struct aio_extra *aio_ex = SMB_MALLOC_P(struct aio_extra);
+ 
+@@ -66,6 +68,14 @@
+ 		SAFE_FREE(aio_ex);
+ 		return NULL;
+ 	}
++	/* Save the first 8 bytes of inbuf for possible enc data. */
++	aio_ex->inbuf = SMB_MALLOC_ARRAY(char, 8);
++	if (!aio_ex->inbuf) {
++		SAFE_FREE(aio_ex->outbuf);
++		SAFE_FREE(aio_ex);
++		return NULL;
++	}
++	memcpy(aio_ex->inbuf, inbuf, 8);
+ 	DLIST_ADD(aio_list_head, aio_ex);
+ 	aio_ex->fsp = fsp;
+ 	aio_ex->read_req = True;
+@@ -408,7 +418,7 @@
+ 			    aio_ex->acb.aio_nbytes, (int)nread ) );
+ 
+ 	}
+-	smb_setlen(outbuf,outsize - 4);
++	smb_setlen(outbuf,outsize - 4,aio_ex->inbuf);
+ 	show_msg(outbuf);
+ 	if (!send_smb(smbd_server_fd(),outbuf)) {
+ 		exit_server_cleanly("handle_aio_read_complete: send_smb "
+
+Modified: branches/SAMBA_3_0/source/smbd/blocking.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/blocking.c	2007-04-19 20:00:40 UTC (rev 22388)
++++ branches/SAMBA_3_0/source/smbd/blocking.c	2007-04-19 20:50:49 UTC (rev 22389)
+@@ -237,13 +237,15 @@
+  Return a smd with a given size.
+ *****************************************************************************/
+ 
+-static void send_blocking_reply(char *outbuf, int outsize)
++static void send_blocking_reply(char *outbuf, int outsize, const char *inbuf)
+ {
+-	if(outsize > 4)
+-		smb_setlen(outbuf,outsize - 4);
++	if(outsize > 4) {
++		smb_setlen(outbuf,outsize - 4, inbuf);
++	}
+ 
+-	if (!send_smb(smbd_server_fd(),outbuf))
++	if (!send_smb(smbd_server_fd(),outbuf)) {
+ 		exit_server_cleanly("send_blocking_reply: send_smb failed.");
++	}
+ }
+ 
+ /****************************************************************************
+@@ -272,7 +274,7 @@
+ 
+ 	outsize += chain_size;
+ 
+-	send_blocking_reply(outbuf,outsize);
++	send_blocking_reply(outbuf,outsize,inbuf);
+ }
+ 
+ /****************************************************************************
+
+Modified: branches/SAMBA_3_0/source/smbd/process.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/process.c	2007-04-19 20:00:40 UTC (rev 22388)
++++ branches/SAMBA_3_0/source/smbd/process.c	2007-04-19 20:50:49 UTC (rev 22389)
+@@ -1039,8 +1039,9 @@
+ 
+ 	outsize += chain_size;
+ 
+-	if(outsize > 4)
+-		smb_setlen(outbuf,outsize - 4);
++	if(outsize > 4) {
++		smb_setlen(outbuf,outsize - 4, inbuf);
++	}
+ 	return(outsize);
+ }
+ 
+@@ -1219,7 +1220,7 @@
+ 	}
+ 
+ 	/* And set it in the header. */
+-	smb_setlen(inbuf2, new_size);
++	smb_setlen(inbuf2, new_size, inbuf);
+ 
+ 	/* create the out buffer */
+ 	construct_reply_common(inbuf2, outbuf2);
+
+Modified: branches/SAMBA_3_0/source/smbd/reply.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/reply.c	2007-04-19 20:00:40 UTC (rev 22388)
++++ branches/SAMBA_3_0/source/smbd/reply.c	2007-04-19 20:50:49 UTC (rev 22389)
+@@ -303,7 +303,7 @@
+ 	
+ 	memset(outbuf,'\0',smb_size);
+ 
+-	smb_setlen(outbuf,0);
++	smb_setlen(outbuf,0,inbuf);
+ 	
+ 	switch (msg_type) {
+ 	case 0x81: /* session request */
+@@ -1182,7 +1182,7 @@
+ 	SSVAL(outbuf,smb_flg2, (SVAL(outbuf, smb_flg2) & (~FLAGS2_UNICODE_STRINGS)));
+ 	  
+ 	outsize += DIR_STRUCT_SIZE*numentries;
+-	smb_setlen(outbuf,outsize - 4);
++	smb_setlen(outbuf,outsize - 4,inbuf);
+   
+ 	if ((! *directory) && dptr_path(dptr_num))
+ 		slprintf(directory, sizeof(directory)-1, "(%s)",dptr_path(dptr_num));
+@@ -3538,7 +3538,7 @@
+ 	for (seq_num =1 ; seq_num <= smb_reverb ; seq_num++) {
+ 		SSVAL(outbuf,smb_vwv0,seq_num);
+ 
+-		smb_setlen(outbuf,outsize - 4);
++		smb_setlen(outbuf,outsize - 4,inbuf);
+ 
+ 		show_msg(outbuf);
+ 		if (!send_smb(smbd_server_fd(),outbuf))
+@@ -5846,7 +5846,7 @@
+ 
+ 	if (write_through && tcount==nwritten) {
+ 		/* We need to send both a primary and a secondary response */
+-		smb_setlen(outbuf,outsize - 4);
++		smb_setlen(outbuf,outsize - 4,inbuf);
+ 		show_msg(outbuf);
+ 		if (!send_smb(smbd_server_fd(),outbuf))
+ 			exit_server_cleanly("reply_writebmpx: send_smb failed.");
+

@@ -1,0 +1,151 @@
+From perl6-all-return-80897-ktwarwic=speedy.uwaterloo.ca@perl.org  Thu Apr 26 11:36:30 2007
+Return-Path: <perl6-all-return-80897-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3QFaT6w013996
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 26 Apr 2007 11:36:29 -0400
+Received: (qmail 8544 invoked by uid 514); 26 Apr 2007 15:36:27 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 8539 invoked from network); 26 Apr 2007 15:36:27 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Delivered-To: parrotbug-followup@parrotcode.org
+Received-SPF: pass (x1.develooper.com: domain of jerry.gay@gmail.com designates 66.249.92.174 as permitted sender)
+DKIM-Signature: a=rsa-sha1; c=relaxed/relaxed;
+        d=gmail.com; s=beta;
+        h=domainkey-signature:received:received:message-id:date:from:to:subject:cc:in-reply-to:mime-version:content-type:content-transfer-encoding:content-disposition:references;
+        b=emglKOZeoeqS+lLehWRTScnPYnPkFPJ+wiAfLxE7nSl3oJF0kHtVGHMwwfcT4mQdrIF1CfYEsa5tR+cXeWAbuJeIeMF5Y4aQ0XgV82ER4p4Y8K+ucVICs0m4rcqpChVGXmsZUzQ12pRaMndY1ESpGi857NRZ2zhSBqypaEXY/Hw=
+DomainKey-Signature: a=rsa-sha1; c=nofws;
+        d=gmail.com; s=beta;
+        h=received:message-id:date:from:to:subject:cc:in-reply-to:mime-version:content-type:content-transfer-encoding:content-disposition:references;
+        b=VNEyxlaTrnC/UNK74A0kcdHSBw02XEIEEvhLQLnsogJeHm6arlsUcFAslPrnzTdNr+UnjO5j+Aply00wrw+zC82KaFrhaO1OWwV0IrHZbSSSZn3WGo/IwMy7zImN5nBs/3qWp22A0qyrOB9IPFU6mGJa6K+OI14COlMtWbZEhYY=
+Message-ID: <1d9a3f400704260835s4326b648sa4f363838c4c7d07@mail.gmail.com>
+Date: Thu, 26 Apr 2007 08:35:40 -0700
+From: "jerry gay" <jerry.gay@gmail.com>
+To: "Kevin Tew" <tewk@tewk.com>, "Jonathan Worthington" <jnthn@jnthn.net>
+Subject: [perl #42693] [BUG] method overload in pir subclass of pmc pccmethod leaves object undefined
+Cc: parrotbug-followup <parrotbug-followup@parrotcode.org>
+In-Reply-To: <1d9a3f400704231226r7ebe6925s8373e10fe6bb70c2@mail.gmail.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8; format=flowed
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+References: <1d9a3f400704231226r7ebe6925s8373e10fe6bb70c2@mail.gmail.com>
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED,SPF_PASS
+Status: O
+Content-Length: 2664
+Lines: 96
+
+could one of you take a look at this for me? i've started digging into
+the pmc2c code, but it'll be a long while before i grok it. since you
+two have an understanding of that code already, perhaps something will
+jump out at you.
+
+~jerry
+
+---------- Forwarded message ----------
+From: jerry gay <jerry.gay@gmail.com>
+Date: Apr 23, 2007 12:26 PM
+Subject: [BUG] method overload in pir subclass of pmc pccmethod leaves
+object undefined
+To: parrotbug <parrotbug@parrotcode.org>
+
+
+while creating a subclass of Exporter to test inter-language exports,
+i stumbled across a bug that i can't seem to fix.
+
+i've created a subclass of Exporter called MyExporter. MyExporter has
+an overridden 'add_global' method, which adds a '&' sigil to each
+global specified by the user and calls the method in the superclass.
+
+i've also created a high-level language that uses the '&' sigil on
+subs, and i import and aim to call the hll sub. however, the code
+never finishes 'add_method', as it segfaults inside the supermethod
+with an undefined 'exp' object. that is, from src/pmc/exporter.pmc,
+line 260:
+
+        Parrot_Exporter *exp = PARROT_EXPORTER(SELF);
+
+after this line, 'exp' is NULL, but 'SELF' (or after macro expansion
+'pmc') is not. this is not the case when 'add_method' has not been
+overridden. here's the pir code that exposes the bug:
+
+.sub 'main' :main
+    .local pmc exp, ns
+
+    exp = new 'MyExporter'
+
+    ns = get_root_namespace ['foo']
+    exp.'source'( ns )
+
+    exp.'add_global'('bar')
+
+say "NEVER REACHES HERE"
+
+    exp.'import'()
+
+    '&bar'() ## THIS WILL SUCCEED!
+     'bar'() ## THIS WILL FAIL!
+             ## THAT'S NOT WHAT I WANT!!!
+.end
+
+
+## create a subclass of Exporter that overrides 'add_global'
+## it adds a '&' sigil to each requested global
+.namespace ['MyExporter']
+.sub 'onload' :load :init :anon
+    .local pmc class
+    class = subclass 'Exporter', 'MyExporter'
+    .return ()
+.end
+
+
+.sub 'add_global' :method
+    .param string glb      :optional
+    .param int    has_glb  :opt_flag
+
+    .local pmc args, super
+    args = new .Hash
+    super = new .Super, self
+
+    unless has_glb goto no_global
+    glb = concat '&', glb
+    .return super.'add_global'( glb )
+  no_global:
+    .return super.'add_global'()
+.end
+
+
+# create a high-level language that uses '&' sigil for sub names
+.HLL 'foo', ''
+.sub '&bar'
+    say 'hello, world!'
+.end
+
+
+note that switching from a tail method call to a regular method call
+has no effect.
+
+also note that my code also exposes a problem with the current
+Exporter implementation: the imported sub name does not match the
+requested name. i have yet to address this as the current bug is
+blocking progress.
+
+~jerry
+

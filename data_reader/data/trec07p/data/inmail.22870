@@ -1,0 +1,555 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Apr 27 17:09:29 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3RL9T6w031096
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 27 Apr 2007 17:09:29 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 30BE0163881
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 27 Apr 2007 21:09:28 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 549)
+	id F2799162ADF; Fri, 27 Apr 2007 21:09:16 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jra@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070427210916.F2799162ADF@lists.samba.org>
+Date: Fri, 27 Apr 2007 21:09:16 +0000 (GMT)
+Subject: svn commit: samba r22539 - in branches: SAMBA_3_0/source/lib/talloc
+	SAMBA_3_0_25/source/lib/talloc SAMBA_4_0/source/lib/talloc
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 15415
+Lines: 512
+
+Author: jra
+Date: 2007-04-27 21:09:16 +0000 (Fri, 27 Apr 2007)
+New Revision: 22539
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22539
+
+Log:
+Added _strict varients of the talloc calls to
+return NULL on size == 0 varients.
+Jeremy.
+
+Modified:
+   branches/SAMBA_3_0/source/lib/talloc/talloc.c
+   branches/SAMBA_3_0/source/lib/talloc/talloc.h
+   branches/SAMBA_3_0_25/source/lib/talloc/talloc.c
+   branches/SAMBA_3_0_25/source/lib/talloc/talloc.h
+   branches/SAMBA_4_0/source/lib/talloc/talloc.c
+   branches/SAMBA_4_0/source/lib/talloc/talloc.h
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/lib/talloc/talloc.c
+===================================================================
+--- branches/SAMBA_3_0/source/lib/talloc/talloc.c	2007-04-27 17:35:15 UTC (rev 22538)
++++ branches/SAMBA_3_0/source/lib/talloc/talloc.c	2007-04-27 21:09:16 UTC (rev 22539)
+@@ -1087,6 +1087,28 @@
+ }
+ 
+ 
++/* 
++   talloc and zero memory. 
++   Strict version - returns NULL if size is zero.
++*/
++void *_talloc_zero_strict(const void *ctx, size_t size, const char *name)
++{
++	void *p;
++
++	if (unlikely(size == 0)) {
++		return NULL;
++	}
++
++	p = _talloc_named_const(ctx, size, name);
++
++	if (p) {
++		memset(p, '\0', size);
++	}
++
++	return p;
++}
++
++
+ /*
+   memdup with a talloc. 
+ */
+@@ -1102,6 +1124,26 @@
+ }
+ 
+ /*
++  memdup with a talloc. 
++  Strict version - returns NULL if size is zero.
++*/
++void *_talloc_memdup_strict(const void *t, const void *p, size_t size, const char *name)
++{
++	void *newp;
++
++	if (unlikely(size == 0)) {
++		return NULL;
++	}
++
++	newp = _talloc_named_const(t, size, name);
++	if (likely(newp)) {
++		memcpy(newp, p, size);
++	}
++
++	return newp;
++}
++
++/*
+   strdup with a talloc 
+ */
+ char *talloc_strdup(const void *t, const char *p)
+@@ -1282,6 +1324,23 @@
+ }
+ 
+ /*
++  alloc an array, checking for integer overflow in the array size.
++  Strict version - returns NULL if count or el_size are zero.
++*/
++void *_talloc_array_strict(const void *ctx, size_t el_size, unsigned count, const char *name)
++{
++	if (count >= MAX_TALLOC_SIZE/el_size) {
++		return NULL;
++	}
++
++	if (el_size == 0 || count == 0) {
++		return NULL;
++	}
++
++	return _talloc_named_const(ctx, el_size * count, name);
++}
++
++/*
+   alloc an zero array, checking for integer overflow in the array size
+ */
+ void *_talloc_zero_array(const void *ctx, size_t el_size, unsigned count, const char *name)
+@@ -1292,7 +1351,24 @@
+ 	return _talloc_zero(ctx, el_size * count, name);
+ }
+ 
++/*
++  alloc an zero array, checking for integer overflow in the array size
++  Strict version - returns NULL if count or el_size are zero.
++*/
++void *_talloc_zero_array_strict(const void *ctx, size_t el_size, unsigned count, const char *name)
++{
++	if (count >= MAX_TALLOC_SIZE/el_size) {
++		return NULL;
++	}
+ 
++	if (el_size == 0 || count == 0) {
++		return NULL;
++	}
++
++	return _talloc_zero(ctx, el_size * count, name);
++}
++
++
+ /*
+   realloc an array, checking for integer overflow in the array size
+ */
+@@ -1421,3 +1497,14 @@
+ 	}
+ 	return 0;
+ }
++
++/*
++  Talloc wrapper that returns NULL if size == 0.
++*/
++void *talloc_strict(const void *context, size_t size, const char *name)
++{
++	if (unlikely(size == 0)) {
++		return NULL;
++	}
++	return _talloc_named_const(context, size, name);
++}
+
+Modified: branches/SAMBA_3_0/source/lib/talloc/talloc.h
+===================================================================
+--- branches/SAMBA_3_0/source/lib/talloc/talloc.h	2007-04-27 17:35:15 UTC (rev 22538)
++++ branches/SAMBA_3_0/source/lib/talloc/talloc.h	2007-04-27 21:09:16 UTC (rev 22539)
+@@ -89,10 +89,16 @@
+ #define talloc_new(ctx) talloc_named_const(ctx, 0, "talloc_new: " __location__)
+ 
+ #define talloc_zero(ctx, type) (type *)_talloc_zero(ctx, sizeof(type), #type)
++/* Varient of talloc_zero that returns NULL if size is zero. */
++#define talloc_zero_strict(ctx, type) (type *)_talloc_zero_strict(ctx, sizeof(type), #type)
+ #define talloc_zero_size(ctx, size) _talloc_zero(ctx, size, __location__)
+ 
+ #define talloc_zero_array(ctx, type, count) (type *)_talloc_zero_array(ctx, sizeof(type), count, #type)
++/* Varient of talloc_zero_array that returns NULL if count is zero. */
++#define talloc_zero_array_strict(ctx, type, count) (type *)_talloc_zero_array_strict(ctx, sizeof(type), count, #type)
+ #define talloc_array(ctx, type, count) (type *)_talloc_array(ctx, sizeof(type), count, #type)
++/* Varient of talloc_array that returns NULL if count is zero. */
++#define talloc_array_strict(ctx, type, count) (type *)_talloc_array_strict(ctx, sizeof(type), count, #type)
+ #define talloc_array_size(ctx, size, count) _talloc_array(ctx, size, count, __location__)
+ #define talloc_array_ptrtype(ctx, ptr, count) (_TALLOC_TYPEOF(ptr))talloc_array_size(ctx, sizeof(*(ptr)), count)
+ 
+@@ -100,6 +106,8 @@
+ #define talloc_realloc_size(ctx, ptr, size) _talloc_realloc(ctx, ptr, size, __location__)
+ 
+ #define talloc_memdup(t, p, size) _talloc_memdup(t, p, size, __location__)
++/* Varient of talloc_memdup that returns NULL if count is zero. */
++#define talloc_memdup_strict(t, p, size) _talloc_memdup_strict(t, p, size, __location__)
+ 
+ #define talloc_set_type(ptr, type) talloc_set_name_const(ptr, #type)
+ #define talloc_get_type(ptr, type) (type *)talloc_check_name(ptr, #type)
+@@ -169,6 +177,6 @@
+ void *talloc_find_parent_byname(const void *ctx, const char *name);
+ void talloc_show_parents(const void *context, FILE *file);
+ int talloc_is_parent(const void *context, const void *ptr);
++void *talloc_strict(const void *context, size_t size, const char *name);
+ 
+ #endif
+-
+
+Modified: branches/SAMBA_3_0_25/source/lib/talloc/talloc.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/lib/talloc/talloc.c	2007-04-27 17:35:15 UTC (rev 22538)
++++ branches/SAMBA_3_0_25/source/lib/talloc/talloc.c	2007-04-27 21:09:16 UTC (rev 22539)
+@@ -1087,6 +1087,28 @@
+ }
+ 
+ 
++/* 
++   talloc and zero memory. 
++   Strict version - returns NULL if size is zero.
++*/
++void *_talloc_zero_strict(const void *ctx, size_t size, const char *name)
++{
++	void *p;
++
++	if (unlikely(size == 0)) {
++		return NULL;
++	}
++
++	p = _talloc_named_const(ctx, size, name);
++
++	if (p) {
++		memset(p, '\0', size);
++	}
++
++	return p;
++}
++
++
+ /*
+   memdup with a talloc. 
+ */
+@@ -1102,6 +1124,26 @@
+ }
+ 
+ /*
++  memdup with a talloc. 
++  Strict version - returns NULL if size is zero.
++*/
++void *_talloc_memdup_strict(const void *t, const void *p, size_t size, const char *name)
++{
++	void *newp;
++
++	if (unlikely(size == 0)) {
++		return NULL;
++	}
++
++	newp = _talloc_named_const(t, size, name);
++	if (likely(newp)) {
++		memcpy(newp, p, size);
++	}
++
++	return newp;
++}
++
++/*
+   strdup with a talloc 
+ */
+ char *talloc_strdup(const void *t, const char *p)
+@@ -1282,6 +1324,23 @@
+ }
+ 
+ /*
++  alloc an array, checking for integer overflow in the array size.
++  Strict version - returns NULL if count or el_size are zero.
++*/
++void *_talloc_array_strict(const void *ctx, size_t el_size, unsigned count, const char *name)
++{
++	if (count >= MAX_TALLOC_SIZE/el_size) {
++		return NULL;
++	}
++
++	if (el_size == 0 || count == 0) {
++		return NULL;
++	}
++
++	return _talloc_named_const(ctx, el_size * count, name);
++}
++
++/*
+   alloc an zero array, checking for integer overflow in the array size
+ */
+ void *_talloc_zero_array(const void *ctx, size_t el_size, unsigned count, const char *name)
+@@ -1292,7 +1351,24 @@
+ 	return _talloc_zero(ctx, el_size * count, name);
+ }
+ 
++/*
++  alloc an zero array, checking for integer overflow in the array size
++  Strict version - returns NULL if count or el_size are zero.
++*/
++void *_talloc_zero_array_strict(const void *ctx, size_t el_size, unsigned count, const char *name)
++{
++	if (count >= MAX_TALLOC_SIZE/el_size) {
++		return NULL;
++	}
+ 
++	if (el_size == 0 || count == 0) {
++		return NULL;
++	}
++
++	return _talloc_zero(ctx, el_size * count, name);
++}
++
++
+ /*
+   realloc an array, checking for integer overflow in the array size
+ */
+@@ -1421,3 +1497,14 @@
+ 	}
+ 	return 0;
+ }
++
++/*
++  Talloc wrapper that returns NULL if size == 0.
++*/
++void *talloc_strict(const void *context, size_t size, const char *name)
++{
++	if (unlikely(size == 0)) {
++		return NULL;
++	}
++	return _talloc_named_const(context, size, name);
++}
+
+Modified: branches/SAMBA_3_0_25/source/lib/talloc/talloc.h
+===================================================================
+--- branches/SAMBA_3_0_25/source/lib/talloc/talloc.h	2007-04-27 17:35:15 UTC (rev 22538)
++++ branches/SAMBA_3_0_25/source/lib/talloc/talloc.h	2007-04-27 21:09:16 UTC (rev 22539)
+@@ -85,10 +85,16 @@
+ #define talloc_new(ctx) talloc_named_const(ctx, 0, "talloc_new: " __location__)
+ 
+ #define talloc_zero(ctx, type) (type *)_talloc_zero(ctx, sizeof(type), #type)
++/* Varient of talloc_zero that returns NULL if size is zero. */
++#define talloc_zero_strict(ctx, type) (type *)_talloc_zero_strict(ctx, sizeof(type), #type)
+ #define talloc_zero_size(ctx, size) _talloc_zero(ctx, size, __location__)
+ 
+ #define talloc_zero_array(ctx, type, count) (type *)_talloc_zero_array(ctx, sizeof(type), count, #type)
++/* Varient of talloc_zero_array that returns NULL if count is zero. */
++#define talloc_zero_array_strict(ctx, type, count) (type *)_talloc_zero_array_strict(ctx, sizeof(type), count, #type)
+ #define talloc_array(ctx, type, count) (type *)_talloc_array(ctx, sizeof(type), count, #type)
++/* Varient of talloc_array that returns NULL if count is zero. */
++#define talloc_array_strict(ctx, type, count) (type *)_talloc_array_strict(ctx, sizeof(type), count, #type)
+ #define talloc_array_size(ctx, size, count) _talloc_array(ctx, size, count, __location__)
+ #define talloc_array_ptrtype(ctx, ptr, count) (_TALLOC_TYPEOF(ptr))talloc_array_size(ctx, sizeof(*(ptr)), count)
+ 
+@@ -96,6 +102,8 @@
+ #define talloc_realloc_size(ctx, ptr, size) _talloc_realloc(ctx, ptr, size, __location__)
+ 
+ #define talloc_memdup(t, p, size) _talloc_memdup(t, p, size, __location__)
++/* Varient of talloc_memdup that returns NULL if count is zero. */
++#define talloc_memdup_strict(t, p, size) _talloc_memdup_strict(t, p, size, __location__)
+ 
+ #define talloc_set_type(ptr, type) talloc_set_name_const(ptr, #type)
+ #define talloc_get_type(ptr, type) (type *)talloc_check_name(ptr, #type)
+@@ -165,6 +173,6 @@
+ void *talloc_find_parent_byname(const void *ctx, const char *name);
+ void talloc_show_parents(const void *context, FILE *file);
+ int talloc_is_parent(const void *context, const void *ptr);
++void *talloc_strict(const void *context, size_t size, const char *name);
+ 
+ #endif
+-
+
+Modified: branches/SAMBA_4_0/source/lib/talloc/talloc.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/talloc/talloc.c	2007-04-27 17:35:15 UTC (rev 22538)
++++ branches/SAMBA_4_0/source/lib/talloc/talloc.c	2007-04-27 21:09:16 UTC (rev 22539)
+@@ -1087,6 +1087,28 @@
+ }
+ 
+ 
++/* 
++   talloc and zero memory. 
++   Strict version - returns NULL if size is zero.
++*/
++void *_talloc_zero_strict(const void *ctx, size_t size, const char *name)
++{
++	void *p;
++
++	if (unlikely(size == 0)) {
++		return NULL;
++	}
++
++	p = _talloc_named_const(ctx, size, name);
++
++	if (p) {
++		memset(p, '\0', size);
++	}
++
++	return p;
++}
++
++
+ /*
+   memdup with a talloc. 
+ */
+@@ -1102,6 +1124,26 @@
+ }
+ 
+ /*
++  memdup with a talloc. 
++  Strict version - returns NULL if size is zero.
++*/
++void *_talloc_memdup_strict(const void *t, const void *p, size_t size, const char *name)
++{
++	void *newp;
++
++	if (unlikely(size == 0)) {
++		return NULL;
++	}
++
++	newp = _talloc_named_const(t, size, name);
++	if (likely(newp)) {
++		memcpy(newp, p, size);
++	}
++
++	return newp;
++}
++
++/*
+   strdup with a talloc 
+ */
+ char *talloc_strdup(const void *t, const char *p)
+@@ -1282,6 +1324,23 @@
+ }
+ 
+ /*
++  alloc an array, checking for integer overflow in the array size.
++  Strict version - returns NULL if count or el_size are zero.
++*/
++void *_talloc_array_strict(const void *ctx, size_t el_size, unsigned count, const char *name)
++{
++	if (count >= MAX_TALLOC_SIZE/el_size) {
++		return NULL;
++	}
++
++	if (el_size == 0 || count == 0) {
++		return NULL;
++	}
++
++	return _talloc_named_const(ctx, el_size * count, name);
++}
++
++/*
+   alloc an zero array, checking for integer overflow in the array size
+ */
+ void *_talloc_zero_array(const void *ctx, size_t el_size, unsigned count, const char *name)
+@@ -1292,7 +1351,24 @@
+ 	return _talloc_zero(ctx, el_size * count, name);
+ }
+ 
++/*
++  alloc an zero array, checking for integer overflow in the array size
++  Strict version - returns NULL if count or el_size are zero.
++*/
++void *_talloc_zero_array_strict(const void *ctx, size_t el_size, unsigned count, const char *name)
++{
++	if (count >= MAX_TALLOC_SIZE/el_size) {
++		return NULL;
++	}
+ 
++	if (el_size == 0 || count == 0) {
++		return NULL;
++	}
++
++	return _talloc_zero(ctx, el_size * count, name);
++}
++
++
+ /*
+   realloc an array, checking for integer overflow in the array size
+ */
+@@ -1421,3 +1497,14 @@
+ 	}
+ 	return 0;
+ }
++
++/*
++  Talloc wrapper that returns NULL if size == 0.
++*/
++void *talloc_strict(const void *context, size_t size, const char *name)
++{
++	if (unlikely(size == 0)) {
++		return NULL;
++	}
++	return _talloc_named_const(context, size, name);
++}
+
+Modified: branches/SAMBA_4_0/source/lib/talloc/talloc.h
+===================================================================
+--- branches/SAMBA_4_0/source/lib/talloc/talloc.h	2007-04-27 17:35:15 UTC (rev 22538)
++++ branches/SAMBA_4_0/source/lib/talloc/talloc.h	2007-04-27 21:09:16 UTC (rev 22539)
+@@ -89,10 +89,16 @@
+ #define talloc_new(ctx) talloc_named_const(ctx, 0, "talloc_new: " __location__)
+ 
+ #define talloc_zero(ctx, type) (type *)_talloc_zero(ctx, sizeof(type), #type)
++/* Varient of talloc_zero that returns NULL if size is zero. */
++#define talloc_zero_strict(ctx, type) (type *)_talloc_zero_strict(ctx, sizeof(type), #type)
+ #define talloc_zero_size(ctx, size) _talloc_zero(ctx, size, __location__)
+ 
+ #define talloc_zero_array(ctx, type, count) (type *)_talloc_zero_array(ctx, sizeof(type), count, #type)
++/* Varient of talloc_zero_array that returns NULL if count is zero. */
++#define talloc_zero_array_strict(ctx, type, count) (type *)_talloc_zero_array_strict(ctx, sizeof(type), count, #type)
+ #define talloc_array(ctx, type, count) (type *)_talloc_array(ctx, sizeof(type), count, #type)
++/* Varient of talloc_array that returns NULL if count is zero. */
++#define talloc_array_strict(ctx, type, count) (type *)_talloc_array_strict(ctx, sizeof(type), count, #type)
+ #define talloc_array_size(ctx, size, count) _talloc_array(ctx, size, count, __location__)
+ #define talloc_array_ptrtype(ctx, ptr, count) (_TALLOC_TYPEOF(ptr))talloc_array_size(ctx, sizeof(*(ptr)), count)
+ 
+@@ -100,6 +106,8 @@
+ #define talloc_realloc_size(ctx, ptr, size) _talloc_realloc(ctx, ptr, size, __location__)
+ 
+ #define talloc_memdup(t, p, size) _talloc_memdup(t, p, size, __location__)
++/* Varient of talloc_memdup that returns NULL if count is zero. */
++#define talloc_memdup_strict(t, p, size) _talloc_memdup_strict(t, p, size, __location__)
+ 
+ #define talloc_set_type(ptr, type) talloc_set_name_const(ptr, #type)
+ #define talloc_get_type(ptr, type) (type *)talloc_check_name(ptr, #type)
+@@ -169,6 +177,6 @@
+ void *talloc_find_parent_byname(const void *ctx, const char *name);
+ void talloc_show_parents(const void *context, FILE *file);
+ int talloc_is_parent(const void *context, const void *ptr);
++void *talloc_strict(const void *context, size_t size, const char *name);
+ 
+ #endif
+-
+

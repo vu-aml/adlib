@@ -1,0 +1,129 @@
+From sugar-bounces@laptop.org  Mon May 21 22:58:46 2007
+Return-Path: <sugar-bounces@laptop.org>
+Received: from pedal.laptop.org (pedal.laptop.org [18.85.2.148])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4M2wiqD007006
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 21 May 2007 22:58:44 -0400
+Received: from pedal.laptop.org (localhost [127.0.0.1])
+	by pedal.laptop.org (Postfix) with ESMTP id 0A96B4F6A1;
+	Mon, 21 May 2007 22:58:04 -0400 (EDT)
+X-Original-To: sugar@laptop.org
+Delivered-To: sugar@laptop.org
+Received: from spam.laptop.org (spam.laptop.org [18.85.46.23])
+	by pedal.laptop.org (Postfix) with ESMTP id EC4FD4F688
+	for <sugar@laptop.org>; Mon, 21 May 2007 22:58:02 -0400 (EDT)
+X-ASG-Debug-ID: 1179802718-497b00000000-3Xmyjt
+X-Barracuda-URL: http://18.85.46.23:8000/cgi-bin/mark.cgi
+X-Barracuda-Connect: www.WarpOMatic.com[66.98.182.86]
+X-Barracuda-Start-Time: 1179802718
+X-Barracuda-Encrypted: DHE-RSA-AES256-SHA
+Received: from WarpOMatic.com (www.WarpOMatic.com [66.98.182.86])
+	(using TLSv1 with cipher DHE-RSA-AES256-SHA (256/256 bits))
+	(No client certificate requested)
+	by spam.laptop.org (Spam Firewall) with ESMTP id C2486E07E
+	for <sugar@laptop.org>; Mon, 21 May 2007 22:58:38 -0400 (EDT)
+Received: from [192.168.0.127] (c-69-181-124-113.hsd1.ca.comcast.net
+	[69.181.124.113]) (authenticated bits=0)
+	by WarpOMatic.com (8.12.10/8.12.10) with ESMTP id l4M2rrfX001481;
+	Mon, 21 May 2007 19:53:54 -0700
+Message-ID: <46525C51.1000505@DonHopkins.com>
+Date: Mon, 21 May 2007 19:58:25 -0700
+From: Don Hopkins <dhopkins@DonHopkins.com>
+User-Agent: Thunderbird 1.5.0.10 (Windows/20070221)
+MIME-Version: 1.0
+To: "'Sugar List'" <sugar@laptop.org>, pygtk@daa.com.au,
+   John Gilmore <gnu@toad.com>
+X-ASG-Orig-Subj: How to get pygtk to give you a GtkToolTips from a Toolbar to
+	pass to ToolItem's set_tooltip?
+X-Barracuda-Bayes: INNOCENT GLOBAL 0.0000 1.0000 -2.0210
+X-Barracuda-Virus-Scanned: by Barracuda Spam Firewall at laptop.org
+X-Barracuda-Spam-Score: -2.02
+X-Barracuda-Spam-Status: No, SCORE=-2.02 using global scores of TAG_LEVEL=3.5
+	QUARANTINE_LEVEL=1000.0 KILL_LEVEL=5.5 tests=
+X-Barracuda-Spam-Report: Code version 3.1, rules version 3.1.17650
+	Rule breakdown below
+	pts rule name              description
+	---- ----------------------
+	--------------------------------------------------
+Subject: [sugar] How to get pygtk to give you a GtkToolTips from a Toolbar
+ to pass to ToolItem's set_tooltip?
+X-BeenThere: sugar@laptop.org
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Discussion of OLPC design,
+	desktop platform and user experience" <sugar.laptop.org>
+List-Unsubscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=unsubscribe>
+List-Archive: <http://mailman.laptop.org/pipermail/sugar>
+List-Post: <mailto:sugar@laptop.org>
+List-Help: <mailto:sugar-request@laptop.org?subject=help>
+List-Subscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: sugar-bounces@laptop.org
+Errors-To: sugar-bounces@laptop.org
+
+I'm trying to set the tooltip of a tool item, which I though would be 
+easy, but the ToolItem.set_tooltip takes a first parameter that's a 
+mysterious GtkTooltips object.
+But I can't figure out how to get a reference to the required ToolTips 
+object to pass as a first argument to a ToolItem's set_tooltip(tooltips, 
+tool_tip_string) ...
+The obvious looking method GtkToolbar.get_tooltips() actually returns a 
+boolean that tells if the toolbar is using tooltips, but does not return 
+the toolbar's "GtkTooltips *tooltips" member, which is declared public 
+but apparently not exposed as a property to Python.
+
+Is there an existing way to get a reference to the GtkTooltips object? 
+Or another way to set the tooltip of a ToolItem without passing in a 
+GtkTooltips?
+
+In desperation, I hacked pygtk to support a phantom 
+"toolbar.get_tooltips_object()" method that returns the toolbar's actual 
+GtkTooltips object.
+It seems to work ok, and now I can get the tooltips object, then pass it 
+to set_tooltip without giving it indigestion, so now I'm getting tooltips!
+Is this a change that should be added upstream to pygtk, or is there a 
+better way to do it? Would there be a better name for it?
+
+Added to gtk-base.defs after the definition of "popup_context_menu":
+
+(define-method get_tooltips_object
+  (of-object "GtkToolbar")
+  (c-name "gtk_toolbar_get_tooltips_object")
+  (return-type "GtkTooltips*")
+)
+
+
+Added to gtk.override at the end:
+
+%%
+override gtk_toolbar_get_tooltips_object noargs
+static PyObject *
+_wrap_gtk_toolbar_get_tooltips_object(PyGObject *self)
+{
+    GtkTooltips *ret;
+
+    ret = GTK_TOOLBAR(self->obj)->tooltips;
+
+    /* pygobject_new handles NULL checking */
+    return pygobject_new((GObject *)ret);
+}
+
+
+I'm kind of winging it with the pygtk-codegen stuff.
+It's not very well documented, so I read the code to figure out how it 
+works, and took some notes.
+It would be great if somebody who's more familiar with it could 
+elaborate on it and correct any mistakes, please!
+I've put the notes up on the olpc wiki!
+
+http://wiki.laptop.org/go/PyGTK-Codegen
+
+    -Don
+
+_______________________________________________
+Sugar mailing list
+Sugar@laptop.org
+http://mailman.laptop.org/mailman/listinfo/sugar
+

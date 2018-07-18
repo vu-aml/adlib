@@ -1,0 +1,91 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun Jun  3 12:22:19 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l53GMJhB017423
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 3 Jun 2007 12:22:19 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id E3592162C22
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun,  3 Jun 2007 16:22:13 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,UPPERCASE_25_50 autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 620)
+	id 67DFD162B6E; Sun,  3 Jun 2007 16:21:41 +0000 (GMT)
+To: samba-cvs@samba.org
+From: metze@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070603162141.67DFD162B6E@lists.samba.org>
+Date: Sun,  3 Jun 2007 16:21:41 +0000 (GMT)
+Subject: svn commit: samba r23315 - in branches/SAMBA_3_0/source: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: metze
+Date: 2007-06-03 16:21:40 +0000 (Sun, 03 Jun 2007)
+New Revision: 23315
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23315
+
+Log:
+- don't use the builtin and -liniparser together in bin/net
+- unify handling on @BUILD_INIPARSER@
+
+btw: nsswitch/pam_winbind.c doesn't compile anymore on SuSE 10.2!
+     I think we should build pam modules by default to notice things
+     like this in the build-farm...
+
+metze
+Modified:
+   branches/SAMBA_3_0/source/Makefile.in
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/Makefile.in
+===================================================================
+--- branches/SAMBA_3_0/source/Makefile.in	2007-06-03 15:51:09 UTC (rev 23314)
++++ branches/SAMBA_3_0/source/Makefile.in	2007-06-03 16:21:40 UTC (rev 23315)
+@@ -613,7 +613,7 @@
+ 	     $(SMBLDAP_OBJ) $(DCUTIL_OBJ) $(LDB_OBJ)
+ 
+ PAM_WINBIND_OBJ = nsswitch/pam_winbind.o $(WBCOMMON_OBJ) \
+-		  $(LIBREPLACE_OBJ) $(SOCKET_WRAPPER_OBJ) @BUILD_INIPARSER@
++		  $(LIBREPLACE_OBJ) $(SOCKET_WRAPPER_OBJ)
+ 
+ LIBSMBCLIENT_OBJ = libsmb/libsmbclient.o libsmb/libsmb_compat.o \
+ 		   libsmb/libsmb_cache.o \
+@@ -685,8 +685,7 @@
+ 	  $(LIBADS_OBJ) $(LIBADS_SERVER_OBJ) $(POPT_LIB_OBJ) \
+ 	  $(SMBLDAP_OBJ) $(DCUTIL_OBJ) $(SERVER_MUTEX_OBJ) \
+ 	  $(AFS_OBJ) $(AFS_SETTOKEN_OBJ) $(REGFIO_OBJ) $(READLINE_OBJ) \
+-	  $(LDB_OBJ) $(LIBGPO_OBJ) $(INIPARSER_OBJ) $(DISPLAY_SEC_OBJ) \
+-	  $(NET_REG_OBJ)
++	  $(LDB_OBJ) $(LIBGPO_OBJ) $(DISPLAY_SEC_OBJ) $(NET_REG_OBJ)
+ 
+ CUPS_OBJ = client/smbspool.o $(PARAM_OBJ) $(LIBSMB_OBJ) \
+ 	  $(LIB_NONSMBD_OBJ) $(KRBCLIENT_OBJ) $(SECRETS_OBJ)
+@@ -1476,7 +1475,7 @@
+ 		$(LDAP_LIBS) $(LIBS) -lcom_err \
+ 		@SONAMEFLAG@`basename $@`
+ 
+-bin/pam_winbind.@SHLIBEXT@: $(BINARY_PREREQS) $(PAM_WINBIND_OBJ)
++bin/pam_winbind.@SHLIBEXT@: $(BINARY_PREREQS) $(PAM_WINBIND_OBJ) @BUILD_INIPARSER@
+ 	@echo "Linking shared library $@"
+ 	@$(SHLD) $(LDSHFLAGS) -o $@ $(PAM_WINBIND_OBJ) -lpam @INIPARSERLIBS@ $(GPLIBS) \
+ 		@SONAMEFLAG@`basename $@`
+

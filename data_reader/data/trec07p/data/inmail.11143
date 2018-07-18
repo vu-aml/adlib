@@ -1,0 +1,161 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Apr 17 06:03:30 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3HA3U0I026129
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 06:03:30 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 2271C163A3A
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 10:03:06 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 6BAEA162ABF; Tue, 17 Apr 2007 10:02:36 +0000 (GMT)
+Date: Tue, 17 Apr 2007 20:03:01 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070417100236.6BAEA162ABF@lists.samba.org>
+Subject: Rev 139: fixed a missing idr remove,
+	and check the types after idr_find() in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 3511
+Lines: 119
+
+------------------------------------------------------------
+revno: 139
+revision-id: tridge@samba.org-20070417100301-d4155325c957a5c8
+parent: tridge@samba.org-20070417094129-679a037628a088fc
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Tue 2007-04-17 20:03:01 +1000
+message:
+  fixed a missing idr remove, and check the types after idr_find()
+modified:
+  common/ctdb_call.c             ctdb_call.c-20061128065342-to93h6eejj5kon81-1
+  common/ctdb_client.c           ctdb_client.c-20070411010216-3kd8v37k61steeya-1
+=== modified file 'common/ctdb_call.c'
+--- a/common/ctdb_call.c	2007-04-17 07:11:12 +0000
++++ b/common/ctdb_call.c	2007-04-17 10:03:01 +0000
+@@ -424,6 +424,11 @@
+ 	state = idr_find(ctdb->idr, hdr->reqid);
+ 	if (state == NULL) return;
+ 
++	if (!talloc_get_type(state, struct ctdb_call_state)) {
++		printf("ctdb idr type error at %s\n", __location__);
++		return;
++	}
++
+ 	state->call.reply_data.dptr = c->data;
+ 	state->call.reply_data.dsize = c->datalen;
+ 	state->call.status = c->status;
+@@ -458,6 +463,12 @@
+ 	if (state == NULL) {
+ 		return;
+ 	}
++
++	if (!talloc_get_type(state, struct ctdb_call_state)) {
++		printf("ctdb idr type error at %s\n", __location__);
++		return;
++	}
++
+ 	ctdb_db = state->ctdb_db;
+ 
+ 	data.dptr = c->data;
+@@ -495,6 +506,11 @@
+ 	state = idr_find(ctdb->idr, hdr->reqid);
+ 	if (state == NULL) return;
+ 
++	if (!talloc_get_type(state, struct ctdb_call_state)) {
++		printf("ctdb idr type error at %s\n", __location__);
++		return;
++	}
++
+ 	talloc_steal(state, c);
+ 
+ 	state->state  = CTDB_CALL_ERROR;
+@@ -520,6 +536,11 @@
+ 	state = idr_find(ctdb->idr, hdr->reqid);
+ 	if (state == NULL) return;
+ 
++	if (!talloc_get_type(state, struct ctdb_call_state)) {
++		printf("ctdb idr type error at %s\n", __location__);
++		return;
++	}
++
+ 	talloc_steal(state, c);
+ 	
+ 	/* don't allow for too many redirects */
+
+=== modified file 'common/ctdb_client.c'
+--- a/common/ctdb_client.c	2007-04-17 07:10:50 +0000
++++ b/common/ctdb_client.c	2007-04-17 10:03:01 +0000
+@@ -57,6 +57,7 @@
+ 	enum fetch_lock_state state;
+ 	struct ctdb_db_context *ctdb_db;
+ 	struct ctdb_reply_fetch_lock *r;
++	struct ctdb_req_fetch_lock *req;
+ 	struct ctdb_ltdb_header header;
+ };
+ 
+@@ -76,6 +77,11 @@
+ 	state = idr_find(ctdb->idr, hdr->reqid);
+ 	if (state == NULL) return;
+ 
++	if (!talloc_get_type(state, struct ctdb_fetch_lock_state)) {
++		printf("ctdb idr type error at %s\n", __location__);
++		return;
++	}
++
+ 	state->r = talloc_steal(state, r);
+ 
+ 	/* get an extra reference here - this prevents the free in ctdb_recv_pkt()
+@@ -420,6 +426,12 @@
+ 	ctdb_daemon_connect_wait(ctdb);
+ }
+ 
++static int ctdb_fetch_lock_destructor(struct ctdb_fetch_lock_state *state)
++{
++	idr_remove(state->ctdb_db->ctdb->idr, state->req->hdr.reqid);
++	return 0;
++}
++
+ static struct ctdb_fetch_lock_state *ctdb_client_fetch_lock_send(struct ctdb_db_context *ctdb_db, 
+ 								 TALLOC_CTX *mem_ctx, 
+ 								 TDB_DATA key, 
+@@ -443,7 +455,7 @@
+ 	state->state   = CTDB_FETCH_LOCK_WAIT;
+ 	state->ctdb_db = ctdb_db;
+ 	len = offsetof(struct ctdb_req_fetch_lock, key) + key.dsize;
+-	req = ctdbd_allocate_pkt(ctdb, len);
++	state->req = req = ctdbd_allocate_pkt(ctdb, len);
+ 	if (req == NULL) {
+ 		printf("failed to allocate packet\n");
+ 		return NULL;
+@@ -461,6 +473,8 @@
+ 	req->keylen          = key.dsize;
+ 	req->header          = *header;
+ 	memcpy(&req->key[0], key.dptr, key.dsize);
++
++	talloc_set_destructor(state, ctdb_fetch_lock_destructor);
+ 	
+ 	res = ctdb_client_queue_pkt(ctdb, &req->hdr);
+ 	if (res != 0) {
+

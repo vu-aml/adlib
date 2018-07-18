@@ -1,0 +1,165 @@
+From perl6-all-return-80775-ktwarwic=speedy.uwaterloo.ca@perl.org  Sun Apr 22 08:41:38 2007
+Return-Path: <perl6-all-return-80775-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3MCfa0I020079
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 22 Apr 2007 08:41:36 -0400
+Received: (qmail 3244 invoked by uid 514); 22 Apr 2007 12:41:10 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 3230 invoked from network); 22 Apr 2007 12:41:10 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: domain of rutski89@gmail.com designates 209.85.132.248 as permitted sender)
+DKIM-Signature: a=rsa-sha1; c=relaxed/relaxed;
+        d=gmail.com; s=beta;
+        h=domainkey-signature:received:received:in-reply-to:references:mime-version:content-type:message-id:cc:content-transfer-encoding:from:subject:date:to:x-mailer;
+        b=eszsX/oEmrFOXJr7dw6rb4vluB0l7420t23RfHAdbKfS4r9Qad3CL6CAs3K6XjAWVTjdl0i040oPHbB6FUcrDvYP3mLJTLOmYGzYYet4j5e0TSSzHAMNbrT1okl4I8pzrgaOZHDA2YVLwK4zal8N2RpxTaPa42GuXU9RQpzVJ2o=
+DomainKey-Signature: a=rsa-sha1; c=nofws;
+        d=gmail.com; s=beta;
+        h=received:in-reply-to:references:mime-version:content-type:message-id:cc:content-transfer-encoding:from:subject:date:to:x-mailer;
+        b=izp7ZYXMa9bIuCbEKjjxkGdb7g5Qf50aUqkc7l+z2bOgyjdusVCaYTUp+X9gkY4KJIQiAru6icLjvjTYRHaAaxbN4TH+7M1eCPhHVVMJgF4OXLPF5uNgrcA2eI6JD48onRk88bK4AcN8Jmh+gsVN49EaGTKNJ3VgyBmYLUzoVvA=
+In-Reply-To: <200704221156.34317.lt@toetsch.at>
+References: <200704211824.18554.chromatic@wgz.org> <ef04c7728061e200914c84b6cbbc987a@gmail.com> <C77C50D7-1F2A-4D33-8489-253E9A5659A2@gmail.com> <200704221156.34317.lt@toetsch.at>
+Mime-Version: 1.0 (Apple Message framework v752.2)
+Content-Type: text/plain; charset=US-ASCII; delsp=yes; format=flowed
+Message-Id: <61275CFA-2D22-4D24-8A50-5E78E7D6FB02@gmail.com>
+Cc: Joshua Isom <jrisom@gmail.com>, chromatic <chromatic@wgz.org>,
+   perl6-internals@perl.org
+Content-Transfer-Encoding: 7bit
+From: Patrick Rutkowski <rutski89@gmail.com>
+Subject: Re: I Don't Understand The Context Allocation/Destruction Code
+Date: Sun, 22 Apr 2007 08:40:39 -0400
+To: Leopold Toetsch <lt@toetsch.at>
+X-Mailer: Apple Mail (2.752.2)
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED,SPF_PASS
+Status: O
+Content-Length: 4120
+Lines: 110
+
+Ok, so I see now that reg_alloc is rounded up to a multiple of 8 by
+the following two lines:
+
+   /*code*/ const int slot = (reg_alloc + 7) >> 3;
+   /*code*/ reg_alloc = slot << 3;
+
+However, this still begs the question of what the slot variable is
+for. Clearly it's being used as an index into
+interp->ctx_mem.free_list; but its value, which is always set to
+reg_alloc/8, seems to me to be rather arbitrary (either that or it has
+some meaning but I just don't know any better).
+
+So if slot (which equals reg_alloc/8) is greater than n_free_slots
+then the array is resized to fit slot+1 void* types. The last element
+(now indexed by slot by definition) is then stored in "ptr" and used
+throughout the rest of the procedure.
+
+QUESTION: For what purpose is the array resized to hold so many more
+elements? e.g. if n_free_slots is 8 and slot is 80 then 72 extra
+elements are allocated and the last one of them is used laster on as
+the "ptr" variable; why is that? (This 8 and 80 example is actually the
+case on my machine when create_initial_context calls
+Parrot_alloc_context()).
+
+If, on the other hand, slot is less than n_free_slots then slot is a
+now seemingly random index into the free_list; the item at that index
+is pulled out and used as the "ptr" varible.
+
+QUESTION: Is that seemingly random indexing intended? Or is slot
+always a well defined and in no way random value with some deeper
+purpose? If so, that deeper purpose needs to be explained in a
+comment.
+
+On another note, there also seems to be some confusion as to what the
+free_list actually is in the first place:
+
+<quote-some-stuff>
+
+   Chromatic wrote:
+     I originally thought the free_list was an array of recycled
+     contexts to avoid malloc() and free() pairs by reusing
+     already-allocated-but-unused memory, but now I can't tell what it's
+     doing.  I tried to change this into a linked list, but that failed
+     with invalid reads.
+
+   Joshua Isom responded:
+     I thought it was a list of items to be freed, but that may be a
+     different free_list sadly.  We have more than one in parrot.
+
+</quote-some-stuff>
+
+This definitely needs to be documented if it's not already. "typedef
+struct _context_mem { ... } context_mem" in interpreter.h might be a
+good place to put a brief descrpiton of how the free_list is meant to
+be used.
+
+-Patrick
+
+On Apr 22, 2007, at 5:56 AM, Leopold Toetsch wrote:
+
+> Am Sonntag, 22. April 2007 09:11 schrieb Patrick Rutkowski:
+>> I think Leo would be the best person to go to for an explanation,
+>> especially if you plan to dramatically rework the code.
+>
+>>>> This is where I start not to understand.  Why reg_alloc + 7?  Why
+>>>> shift left
+>>>> and right by 3?
+>>>
+>>> I'm not sure if it is actually doing anything that needs to be that
+>>> complicated to code that way.  It could be able to be written as:
+>>>
+>>>     const int slot = (reg_alloc + 7) / 8; /* divide by eight for
+>>> some reason and round up on remainder */
+>>>     reg_alloc = slot * 8; /* reg_alloc is now evenly divisible by  
+>>> 8 */
+>
+> Sure. It's just rounding up to the next multpile of 8.
+>
+>>> ...  Now, slot is multiplied by sizeof(void*) later on,
+>>> which may be why it's divided by eight in the first place.
+>
+> The rounding up happens to reduce the size of the free_list array.
+>
+>>> The n = slot + 1 I find a little odd, because the number is already
+>>> rounded up, so it's rounding up and then adding an extra place of
+>>> memory.
+>
+> This is for the extension of the free_list.
+>
+>>>> I do understand the purpose of the resizing code, but not how slot
+>>>> relates to
+>>>> it:
+>>>>
+>>>>     if (slot >= interp->ctx_mem.n_free_slots) {
+>
+> Well, if slot is beyond the end of the list, it's resized.
+>
+>>> The *(void **) has been confusing me for a long time.
+>
+> The free list per size (i.e. one slot) is a linked list of pointers.
+>
+>>>> I'd like to find a simpler scheme, if it's possible.  Otherwise,
+>>>> I'd like to
+>>>> figure out what's going on so we can at least explain it somehow.
+>
+> Why? This is all rather straight-forward and can be found in any  
+> memory
+> allocator e.g. ins smallobjects.
+>
+> leo
+

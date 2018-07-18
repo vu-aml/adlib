@@ -1,0 +1,129 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun May  6 23:08:10 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l47389qD026323
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 6 May 2007 23:08:09 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id A1347163849
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon,  7 May 2007 03:08:08 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.4 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1005)
+	id 5A1A2162AD2; Mon,  7 May 2007 03:07:41 +0000 (GMT)
+To: samba-cvs@samba.org
+From: derrell@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070507030741.5A1A2162AD2@lists.samba.org>
+Date: Mon,  7 May 2007 03:07:41 +0000 (GMT)
+Subject: svn commit: samba r22732 - in branches/SAMBA_3_0/source: include
+	libsmb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: derrell
+Date: 2007-05-07 03:07:39 +0000 (Mon, 07 May 2007)
+New Revision: 22732
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22732
+
+Log:
+
+- Testing of libsmbclient against Vista revealed what is likely a bug in
+  Vista.  Vista provides a plethora of kludges to simulate older versions of
+  Windows.  The kludges are in the form of shortcuts (or more likely symbolic
+  links, but I don't know enough about Vista to determine that definitively)
+  and in most cases, attempts to access them get back an "access denied"
+  error.  On one particular folder, however, "<share>/Users/All Users", it
+  returns an unknown (to ethereal and the Samba3 code) NT status code:
+  0x8000002d.  Although this code does not have a high byte of 0xc0 indicating
+  that it is an error, it appears to be an alternate form of "access denied".
+
+  Without this patch, libsmbclient times out on an attempt to enumerate that
+  folder rather than returning an error to the caller.  This patch corrects
+  that problem.
+
+Modified:
+   branches/SAMBA_3_0/source/include/nterr.h
+   branches/SAMBA_3_0/source/libsmb/clierror.c
+   branches/SAMBA_3_0/source/libsmb/clitrans.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/include/nterr.h
+===================================================================
+--- branches/SAMBA_3_0/source/include/nterr.h	2007-05-07 03:02:24 UTC (rev 22731)
++++ branches/SAMBA_3_0/source/include/nterr.h	2007-05-07 03:07:39 UTC (rev 22732)
+@@ -30,6 +30,9 @@
+ #define STATUS_NO_MORE_FILES              NT_STATUS(0x80000006)
+ #define NT_STATUS_NO_MORE_ENTRIES         NT_STATUS(0x8000001a)
+ 
++/* Vista Status codes. */
++#define NT_STATUS_INACCESSIBLE_SYSTEM_SHORTCUT         NT_STATUS(0x8000002d)
++
+ #define STATUS_MORE_ENTRIES               NT_STATUS(0x0105)
+ #define STATUS_SOME_UNMAPPED              NT_STATUS(0x0107)
+ #define ERROR_INVALID_PARAMETER		  NT_STATUS(0x0057)
+
+Modified: branches/SAMBA_3_0/source/libsmb/clierror.c
+===================================================================
+--- branches/SAMBA_3_0/source/libsmb/clierror.c	2007-05-07 03:02:24 UTC (rev 22731)
++++ branches/SAMBA_3_0/source/libsmb/clierror.c	2007-05-07 03:07:39 UTC (rev 22732)
+@@ -385,6 +385,15 @@
+ 		return cli_errno_from_nt(status);
+         }
+ 
++        /*
++         * Yuck!  A special case for this Vista error.  Since its high-order
++         * byte isn't 0xc0, it doesn't match cli_is_nt_error() above.
++         */
++        status = cli_nt_error(cli);
++        if (NT_STATUS_V(status) == NT_STATUS_V(NT_STATUS_INACCESSIBLE_SYSTEM_SHORTCUT)) {
++            return EACCES;
++        }
++
+ 	/* for other cases */
+ 	return EINVAL;
+ }
+
+Modified: branches/SAMBA_3_0/source/libsmb/clitrans.c
+===================================================================
+--- branches/SAMBA_3_0/source/libsmb/clitrans.c	2007-05-07 03:02:24 UTC (rev 22731)
++++ branches/SAMBA_3_0/source/libsmb/clitrans.c	2007-05-07 03:07:39 UTC (rev 22732)
+@@ -196,11 +196,18 @@
+ 	 * returned when a trans2 findfirst/next finishes.
+ 	 * When setting up an encrypted transport we can also
+ 	 * see NT_STATUS_MORE_PROCESSING_REQUIRED here.
++         *
++         * Vista returns NT_STATUS_INACCESSIBLE_SYSTEM_SHORTCUT if the folder
++         * "<share>/Users/All Users" is enumerated.  This is a special pseudo
++         * folder, and the response does not have parameters (nor a parameter
++         * length).
+ 	 */
+ 	status = cli_nt_error(cli);
+ 	
+ 	if (!NT_STATUS_EQUAL(status, NT_STATUS_MORE_PROCESSING_REQUIRED)) {
+-		if (NT_STATUS_IS_ERR(status) || NT_STATUS_EQUAL(status,STATUS_NO_MORE_FILES)) {
++		if (NT_STATUS_IS_ERR(status) ||
++                    NT_STATUS_EQUAL(status,STATUS_NO_MORE_FILES) ||
++                    NT_STATUS_EQUAL(status,NT_STATUS_INACCESSIBLE_SYSTEM_SHORTCUT)) {
+ 			goto out;
+ 		}
+ 	}
+

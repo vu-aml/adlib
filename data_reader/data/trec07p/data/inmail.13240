@@ -1,0 +1,109 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Apr 18 19:53:32 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3INrV0I017656
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 18 Apr 2007 19:53:31 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 8B1FB163930
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 18 Apr 2007 23:53:06 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,
+	FORGED_RCVD_HELO,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: from castor.warande.net (castor.sshunet.nl [145.97.192.41])
+	by lists.samba.org (Postfix) with ESMTP id 63235162B70
+	for <samba-cvs@samba.org>; Wed, 18 Apr 2007 23:52:37 +0000 (GMT)
+Received: from localhost (localhost.localdomain [127.0.0.1])
+	by castor.warande.net (Postfix) with ESMTP id 85BB057C021
+	for <samba-cvs@samba.org>; Thu, 19 Apr 2007 01:52:36 +0200 (CEST)
+Received: from castor.warande.net ([127.0.0.1])
+	by localhost (castor [127.0.0.1]) (amavisd-new, port 10024)
+	with ESMTP id 24524-04 for <samba-cvs@samba.org>;
+	Thu, 19 Apr 2007 01:52:36 +0200 (CEST)
+Received: from ganieda.vernstok.nl (135pc197.sshunet.nl [145.97.197.135])
+	by castor.warande.net (Postfix) with ESMTP
+	for <samba-cvs@samba.org>; Thu, 19 Apr 2007 01:52:36 +0200 (CEST)
+Received: by ganieda.vernstok.nl (Postfix, from userid 1000)
+	id 908825C4923; Thu, 19 Apr 2007 02:52:35 +0200 (CEST)
+To: samba-cvs@samba.org
+From: Jelmer Vernooij <jelmer@samba.org>
+Message-Id: <20070419005235.908825C4923@ganieda.vernstok.nl>
+Date: Thu, 19 Apr 2007 02:52:35 +0200 (CEST)
+X-Virus-Scanned: by amavisd-new-20030616-p10 (Debian) at sshunet.nl
+Subject: Rev 11920: Simple refactoring. in
+	file:///home/jelmer/bzr.samba/SAMBA_4_0/
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 1911
+Lines: 54
+
+At file:///home/jelmer/bzr.samba/SAMBA_4_0/
+
+------------------------------------------------------------
+revno: 11920
+revision-id: jelmer@samba.org-20070419005219-xhzck81g2odsayyq
+parent: svn-v2:22346@0c0555d6-39d7-0310-84fc-f1cc0bd64818-branches%2fSAMBA_4_0
+committer: Jelmer Vernooij <jelmer@samba.org>
+branch nick: SAMBA_4_0
+timestamp: Thu 2007-04-19 02:52:19 +0200
+message:
+  Simple refactoring.
+modified:
+  source/script/tests/selftest.pl svn-v2:20693@0c0555d6-39d7-0310-84fc-f1cc0bd64818-branches%2fSAMBA_4_0-source%2fscript%2ftests%2fselftest.pl
+=== modified file 'source/script/tests/selftest.pl'
+--- a/source/script/tests/selftest.pl	2007-04-18 14:43:05 +0000
++++ b/source/script/tests/selftest.pl	2007-04-19 00:52:19 +0000
+@@ -672,6 +672,12 @@
+ 	delete $running_envs{$envname};
+ }
+ 
++my $msg_ops;
++if ($from_build_farm) {
++	$msg_ops = $buildfarm_msg_ops;
++} else {
++	$msg_ops = $plain_msg_ops;
++}
+ 
+ if ($opt_testenv) {
+ 	my $testenv_vars = setup_env("dc");
+@@ -708,12 +714,8 @@
+ 		my $pcap_file = "$pcap_dir/$shname.cap";
+ 
+ 		SocketWrapper::setup_pcap($pcap_file) if ($opt_socket_wrapper_pcap);
+-		my $result;
+-		if ($from_build_farm) {
+-			$result = run_test($envname, $name, $cmd, $i, $suitestotal, $buildfarm_msg_ops);
+-		} else {
+-			$result = run_test($envname, $name, $cmd, $i, $suitestotal, $plain_msg_ops);
+-		}
++		my $result = run_test($envname, $name, $cmd, $i, $suitestotal, 
++							  $msg_ops);
+ 
+ 		if ($opt_socket_wrapper_pcap and $result and 
+ 			not $opt_socket_wrapper_keep_pcap) {
+@@ -738,7 +740,8 @@
+ my $duration = ($end-$start);
+ my $numfailed = $#$suitesfailed+1;
+ if ($numfailed == 0) {
+-	my $ok = $statistics->{TESTS_EXPECTED_OK} + $statistics->{TESTS_EXPECTED_FAIL};
++	my $ok = $statistics->{TESTS_EXPECTED_OK} + 
++	         $statistics->{TESTS_EXPECTED_FAIL};
+ 	print "ALL OK ($ok tests in $statistics->{SUITES_OK} testsuites)\n";
+ } else {
+ 	unless ($from_build_farm) {
+

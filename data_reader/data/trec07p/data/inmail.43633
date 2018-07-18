@@ -1,0 +1,193 @@
+From r-help-bounces@stat.math.ethz.ch  Fri May 25 11:20:27 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4PFKPqD029514
+	for <ktwarwic@flax9.uwaterloo.ca>; Fri, 25 May 2007 11:20:26 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4PFJJGJ010922;
+	Fri, 25 May 2007 17:19:46 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=5.0 tests=AWL,
+	BAYES_50 autolearn=no version=3.1.8
+Received: from mailr-truth.macaulay.ac.uk (mailr-truth.macaulay.ac.uk
+	[143.234.88.101])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4PFGNQM009434
+	(version=TLSv1/SSLv3 cipher=DHE-RSA-AES256-SHA bits=256 verify=NO)
+	for <r-help@stat.math.ethz.ch>; Fri, 25 May 2007 17:16:23 +0200
+Received: from macaulay.ac.uk (migwia02.macaulay.ac.uk [143.234.88.18])
+	by mailr-truth.macaulay.ac.uk (8.13.1/8.13.4) with ESMTP id
+	l4PF1Rde021318
+	for <r-help@stat.math.ethz.ch>; Fri, 25 May 2007 16:01:30 +0100
+Received: from MLURI-MTA by macaulay.ac.uk
+	with Novell_GroupWise; Fri, 25 May 2007 16:16:08 +0100
+Message-Id: <46570BAC.1E3C.0035.0@macaulay.ac.uk>
+X-Mailer: Novell GroupWise Internet Agent 7.0.1 
+Date: Fri, 25 May 2007 16:15:40 +0100
+From: "Colin Beale" <c.beale@macaulay.ac.uk>
+To: <r-help@stat.math.ethz.ch>
+References: <464D6E7B.1E3C.0035.0@macaulay.ac.uk>
+	<40e66e0b0705180732o71e76d6h7654cc86f48e23a6@mail.gmail.com>
+	<464DD8E9.1E3C.0035.0@macaulay.ac.uk>
+Mime-Version: 1.0
+Content-Disposition: inline
+X-MailScanner-MLURI-Information: Please contact the ISP for more information
+X-MailScanner-MLURI: Found to be clean
+X-MailScanner-MLURI-SpamCheck: not spam, SpamAssassin (not cached,
+	score=-4.399, required 5, autolearn=not spam, ALL_TRUSTED -1.80,
+	BAYES_00 -2.60)
+X-MailScanner-MLURI-From: c.beale@macaulay.ac.uk
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Subject: [R] Help with complex lme model fit
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+ Hi R helpers,
+
+ I'm trying to fit a rather complex model to some simulated data using
+ lme and am not getting the correct results. It seems there might be
+some
+ identifiability issues that could possibly be dealt with by
+specifying
+ starting parameters - but I can't see how to do this. I'm comparing
+ results from R to those got when using GenStat...
+
+ The raw data are available on the web at
+http://cmbeale.freehostia.com/OutData.txt and can be read directly
+into R using:
+
+ gpdat <- read.table("http://cmbeale.freehostia.com/OutData.txt",
+header = T)
+ gpdat$X7 <- as.factor(gpdat$X7)
+ gpdat$X4 <- as.factor(gpdat$X4)
+ rand_mat <- as.matrix(gpdat[,11:26])
+ gpdat <- groupedData(Y1 ~X1 + X2 + X3 + X4 + X5 + m_sum|.g, data =
+gpdat)
+
+
+ the model fitted using:
+
+     library(Matrix)
+     library(nlme)
+
+     m_sum <- rowSums(gpdat[,11:27])
+     mod1 <- lme(fixed = Y1 ~ X1 + X2 + X3 + X4 + X5 +  m_sum,
+                   random = pdBlocked(list(pdIdent(~1), pdIdent (~ X6
+-
+ 1),
+                   pdIdent (~ X7 - 1), pdIdent(~ rand_mat -1))), data
+=
+ gpdat)
+
+ Which should recover the variance components:
+
+                 var_label            var_est
+          rand_mat_scalar         0.00021983
+         X6_scalar                       0.62314002
+         X7_scalar        0.03853604
+
+ as recovered by GenStat and used to generate the dataset. Instead I
+ get:
+
+ X6      0.6231819
+ X7     0.05221481
+ rand_mat    1.377596e-11
+
+ However, If I change or drop either of X5 or X6. I then get much
+closer
+ estimates to what is expected. For example:
+
+
+     mod2 <- lme(fixed = Y1 ~ X1 + X2 + X3 + X4 + X5 +  m_sum,
+                   random = pdBlocked(list(pdIdent(~1), pdIdent (~ X6
+-
+ 1),
+                   pdIdent (~as.numeric( X7) - 1), pdIdent(~ rand_mat
+ -1))), data = gpdat)
+
+ returns variance components:
+ X6      0.6137986
+ X7     Not meaningful
+ rand_mat    0.0006119088
+
+ which is much closer to those used to generate the dataset for the
+ parameters that are now meaningful, and has appropriate random effect
+ estimates for the -rand_mat columns (the variable of most interest
+ here). This suggests to me that there is some identifiability issue
+that
+ might be helped by giving different starting values. Is this
+possible?
+ Or does anyone have any other suggestions?
+
+ Thanks,
+
+ Colin
+
+ sessionInfo:
+R version 2.5.0 (2007-04-23) 
+i386-pc-mingw32 
+
+locale:
+LC_COLLATE=English_United Kingdom.1252;
+LC_CTYPE=English_United Kingdom.1252;
+LC_MONETARY=English_United Kingdom.1252;
+LC_NUMERIC=C;
+LC_TIME=English_United Kingdom.1252
+
+attached base packages:
+[1] "stats"     "graphics"  "grDevices" "datasets"  "tcltk"     "utils"
+    "methods"   "base"     
+
+other attached packages:
+       nlme      Matrix     lattice    svSocket        svIO      R2HTML
+     svMisc       svIDE 
+   "3.1-80" "0.9975-11"    "0.15-5"     "0.9-5"     "0.9-5"      "1.58"
+    "0.9-5"     "0.9-5" 
+
+
+
+Dr. Colin Beale
+Spatial Ecologist
+The Macaulay Institute
+Craigiebuckler
+Aberdeen
+AB15 8QH
+UK
+
+Tel: 01224 498245 ext. 2427
+Fax: 01224 311556
+Email: c.beale@macaulay.ac.uk 
+
+
+
+-- 
+Please note that the views expressed in this e-mail are those of the
+sender and do not necessarily represent the views of the Macaulay
+Institute. This email and any attachments are confidential and are
+intended solely for the use of the recipient(s) to whom they are
+addressed. If you are not the intended recipient, you should not read,
+copy, disclose or rely on any information contained in this e-mail, and
+we would ask you to contact the sender immediately and delete the email
+from your system. Thank you.
+Macaulay Institute and Associated Companies, Macaulay Drive,
+Craigiebuckler, Aberdeen, AB15 8QH.
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

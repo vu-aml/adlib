@@ -1,0 +1,224 @@
+From r-help-bounces@stat.math.ethz.ch  Thu Jul  5 16:18:48 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l65KIlL9030872
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 5 Jul 2007 16:18:47 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l65KHwo6018461;
+	Thu, 5 Jul 2007 22:18:10 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.7 required=5.0 tests=AWL, BAYES_50,
+	DKIM_POLICY_SIGNSOME autolearn=no version=3.2.0
+Received: from lynne.ethz.ch (lynne [129.132.58.30])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l65KHoeT018429
+	(version=TLSv1/SSLv3 cipher=DHE-RSA-AES256-SHA bits=256 verify=NO);
+	Thu, 5 Jul 2007 22:17:50 +0200
+Received: (from maechler@localhost)
+	by lynne.ethz.ch (8.13.8/8.13.1/Submit) id l65KHoOf017521;
+	Thu, 5 Jul 2007 22:17:50 +0200
+From: Martin Maechler <maechler@stat.math.ethz.ch>
+MIME-Version: 1.0
+Message-ID: <18061.20974.176693.44517@stat.math.ethz.ch>
+Date: Thu, 5 Jul 2007 22:17:50 +0200
+To: Hubertus <stonemonkey@web.de>
+In-Reply-To: <20070704125844.GA31772@p15097509.pureserver.info>
+References: <20070704125844.GA31772@p15097509.pureserver.info>
+X-Mailer: VM 7.19 under Emacs 22.1.1
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] Problem/bug with smooth.spline and all.knots=T
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+Reply-To: Martin Maechler <maechler@stat.math.ethz.ch>
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+>>>>> "H" == Hubertus  <stonemonkey@web.de>
+>>>>>     on Wed, 4 Jul 2007 14:58:44 +0200 writes:
+
+    H> Dear list,
+    H> if I do
+
+    H> smooth.spline(tmpSec, tmpT, all.knots=T)
+
+    H> with the attached data,
+Thanks for providing the data via URL (see below)
+
+    H> with the attached data, I get this error-message:
+    H> Error in smooth.spline(tmpSec, tmpT, all.knots = T) :
+    H> smoothing parameter value too small
+    H> If I do
+    H> smooth.spline(tmpSec[-single arbitrary number], tmpT[-single arbitrary number], all.knots=T)
+
+    H> it works!
+
+not quite (see below)
+
+I have transformed your reports into something reproducible
+(as *all* such R-help  messages should be!):
+
+dFile <- "..../sspl_Hub_data.rda"
+## use a file name you can write to
+
+if(file.exists(dFile)) {
+    load(dFile)
+} else {
+    load(url("http://phi.stonemonkey.org/smoothspline.rda"))
+    d.tmp <- data.frame(Sec = tmpSec, T = tmpT)
+    save(d.tmp, file = dFile)
+}
+str(d.tmp)
+## 'data.frame':	2055 obs. of  2 variables:
+##  $ Sec: num  25743 25744 25745 25746 25747 ...
+##  $ T  : num  288 288 288 288 288 ...
+
+## Dear list,
+## if I do
+
+ssT <- with(d.tmp, smooth.spline(Sec, T, all.knots=TRUE))
+
+## with the attached data, I get this error-message:
+##   Error in smooth.spline(tmpSec, tmpT, all.knots = T) :
+##         smoothing parameter value too small
+
+## MM: it works "fine" for me on 64-bit, RH5 ("lynne"),
+##     I but can confirm the problem on my 32-bit Pentium M notebook:
+ssT <- with(d.tmp, smooth.spline(Sec, T, all.knots=TRUE,
+                                 control.spar = list(trace = TRUE)))
+## gives (on nb-mm):
+## sbart (ratio =   1.1399039e-11) iterations; initial tol1 = 3.334042e-05 :
+##        spar            GCV      b - a           e  Kind   NEW lspar         crit
+##  -------------------------------------------------------------------------------
+## -0.35410197 0.000220934951 3.0000e+00           0 GS -- 1.61033e-11   0.00027127
+## -0.35410197 0.000220934951 1.8541e+00      1.8541 FP GS 8.47468e-20  1.57859e-05
+## -0.79179607 1.57858803e-05 1.1459e+00     -1.1459 FP GS 9.41382e-22    3.555e-12
+## -1.06230590 3.55500244e-12 7.0820e-01     -0.7082 FP PI 3.86481e-21  2.08386e-10
+## -1.06230590 3.55500244e-12 5.2259e-01    -0.27051 FP PI  1.9073e-21  1.13107e-09
+## -1.06230590 3.55500244e-12 4.8014e-01    0.084898 FP GS 5.83319e-23  1.04372e-18
+## -1.22949017 1.04371872e-18 4.3769e-01    -0.43769 FP PI 2.30006e-22  4.72251e-15
+## -1.22949017 1.04371872e-18 3.5298e-01    -0.16718 FP PI  1.1561e-22  2.37808e-16
+## -1.22949017 1.04371872e-18 3.1163e-01    0.082471 FP PI 7.90222e-23  2.03459e-15
+## -1.22949017 1.04371872e-18 2.8876e-01    0.041121 FP GS  1.0457e-23  2.03459e-15
+##   >>>   1.0457e-23  1.04372e-18
+## Error in smooth.spline(Sec, T, all.knots = TRUE, control.spar = list(trace = 2)) :
+## 	smoothing parameter value too small
+
+## Where it works, I get
+ssT
+## Call:
+## smooth.spline(x = Sec, y = T, all.knots = TRUE)
+
+## Smoothing Parameter  spar= -1.044387  lambda= 1.266990e-21 (22 iterations)
+## Equivalent Degrees of Freedom (Df): 2054.954
+## Penalized Criterion: 4.420969e-20
+
+
+## OTOH, need a relaxed convergence criterion:
+ssT. <- with(d.tmp,
+             smooth.spline(Sec, T, all.knots=TRUE,
+                           control.spar = list(trace = TRUE,
+                           tol=1e-4, eps= 0.01)))
+ssT.
+##-> Df: 2055.163 --- interpolation !!!!
+
+##------> really almost fails to do spline *interpolation* as a
+##        limiting case.
+
+In principle that's well know:
+the smoothing spline solution tends to an interpolation spline
+when lambda -> 0, however the formula (algorithm) that is used
+for smoothing spline fitting( given lambda) is not applicable to
+the limiting case, lambda=0.
+
+I agree that this is a small remaining flaw of an already
+somewhat sophisticated algorithm for determining the smoothing
+parameter.
+I'm sure we could fix the algorithm to "work" in this case,
+however to do the fix in such a way that all other cases remain
+returning the exact same solution as now, seems a harder task.
+And changing the default behavior of smooth.spline() even if only
+slightly, is quite a bit problematic.
+I know it, because I did it many many R versions back... 
+
+For you data, see many possibilities;
+- don't use all.knots = TRUE
+- really use spline interpolation,
+  library(splines)
+  ?interpSpline 
+- use 'df = <something reasonable>' if you want to apply it to
+  many datasets
+
+- don't use 'all.knots = TRUE'  or use 'cv=TRUE' or ... :
+
+## What about "proper" crossvalidation instead of GCV (default)
+## which I'd recommend anyway on todays fast computers :
+ssTg <- with(d.tmp,
+             smooth.spline(Sec, T, all.knots=TRUE, cv= TRUE,
+                           control.spar = list(trace = TRUE)))
+
+## *does* work (interestingly)
+ssTg # hmm, also DF = 2055
+plot(T ~ Sec, data = d.tmp, pch = ".")
+lines(predict(ssTg), col=2)
+
+## don't use all.knots:
+ssTg. <- with(d.tmp,
+              smooth.spline(Sec, T, cv= TRUE,
+                            control.spar = list(trace = TRUE)))
+## *does* work too
+ssTg. # DF = 103.8
+plot(T ~ Sec, data = d.tmp, pch = ".")
+lines(predict(ssTg.), col=2)
+
+sfsmisc::TA.plot(ssTg., labels="o")
+sfsmisc::p.ts(residuals(ssTg.))
+## hmm, the residuals *do* look like a time-series
+acf(residuals(ssTg.))
+plot(spectrum(residuals(ssTg.), method = "ar"))
+
+--------------------
+Regards,
+Maritn Maechler, ETH Zurich
+
+
+## If I do
+## If I do
+##   smooth.spline(tmpSec[-single arbitrary number], tmpT[-single arbitrary number], all.knots=T)
+## it works!
+
+## MM: *reproducible* code, please!
+N <- nrow(d.tmp)
+set.seed(1)# or any(?) other
+for(n in 1:100) {
+    i <- sample(N, 1)
+    cat(sprintf("i =%5d : ", i))
+    sst.i <- with(d.tmp, smooth.spline(Sec[-i], T[-i], all.knots=TRUE))
+    cat(" -> df = ", format(sst.i$df),"\n")
+}
+
+## what Hubertus says is not true, already the 3rd example
+## also gives error:
+
+## i =  546 :  -> df =  2054.019
+## i =  765 :  -> df =  2053.997
+## i = 1178 : Error in smooth.spline(Sec[-i], T[-i], all.knots = TRUE) :
+## 	smoothing parameter value too small
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

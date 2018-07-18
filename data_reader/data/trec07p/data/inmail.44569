@@ -1,0 +1,127 @@
+From r-help-bounces@stat.math.ethz.ch  Sun May 27 00:51:32 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4R4pVqD016088
+	for <ktwarwic@flax9.uwaterloo.ca>; Sun, 27 May 2007 00:51:31 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4R4ngHF003509;
+	Sun, 27 May 2007 06:49:58 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=5.0 tests=AWL,
+	BAYES_20 autolearn=no version=3.1.8
+Received: from ug-out-1314.google.com (ug-out-1314.google.com [66.249.92.168])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4R4mgSx003405
+	for <r-help@stat.math.ethz.ch>; Sun, 27 May 2007 06:48:43 +0200
+Received: by ug-out-1314.google.com with SMTP id 36so1064204uga
+	for <r-help@stat.math.ethz.ch>; Sat, 26 May 2007 21:48:42 -0700 (PDT)
+Received: by 10.66.236.13 with SMTP id j13mr4195307ugh.1180241322783;
+	Sat, 26 May 2007 21:48:42 -0700 (PDT)
+Received: by 10.67.105.1 with HTTP; Sat, 26 May 2007 21:48:42 -0700 (PDT)
+Message-ID: <971536df0705262148o747dfd62xb0fecee27e635a43@mail.gmail.com>
+Date: Sun, 27 May 2007 00:48:42 -0400
+From: "Gabor Grothendieck" <ggrothendieck@gmail.com>
+To: ronggui <ronggui.huang@gmail.com>
+In-Reply-To: <38b9f0350705262047n1d943dbak5d137c64cdc40e02@mail.gmail.com>
+MIME-Version: 1.0
+Content-Disposition: inline
+References: <38b9f0350705262047n1d943dbak5d137c64cdc40e02@mail.gmail.com>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: R-Help <r-help@stat.math.ethz.ch>
+Subject: Re: [R] Question about "evalq"
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+evalq looks like this:
+
+   > evalq
+   function (expr, envir, enclos)
+   eval.parent(substitute(eval(quote(expr), envir, enclos)))
+   <environment: namespace:base>
+
+so it seems the difference is that
+
+- eval(quote(), envir, enclos) evaluates envir and enclos
+  in the current frame but
+- evalq evaluates them in the parent.frame.
+
+This may be easier to see in the following example:
+
+   x <- "G"
+   f1 <- function() eval(quote(x), parent.frame())
+   f2 <- function() evalq(x, parent.frame())
+   f11 <- function() {
+   	x <- "a"
+   	f1()
+   }
+   f22 <- function() {
+   	x <- "b"
+   	f2()
+   }
+   f11() # a
+   f22() # G
+
+To avoid this problem pass a variable whose value is
+to be enclos= rather than an expression to compute it:
+
+   f1 <- function(x,digits=5) lapply(x, f2)
+   f2 <- function(x) {
+      pf2 <- parent.frame(2)
+      evalq(print(digits), list(x=x), pf2)
+   }
+   f1(list(x1=1)) # 5
+
+
+
+On 5/26/07, ronggui <ronggui.huang@gmail.com> wrote:
+> The help page of eval says: The 'evalq' form is equivalent to
+> 'eval(quote(expr), ...)'.  But the following is not equivalent.  Can
+> anyone give me some explaination? Thanks very much.
+>
+> > f1 <- function(x,digits=5) lapply(x, f2)
+> > f2 <- function(x) eval(quote(print(x+1,digits=digits)),list(x=x),parent.frame(2))
+> > f1(list(x1=1))
+> [1] 2
+> $x1
+> [1] 2
+>
+> >
+> > f1 <- function(x,digits=5) lapply(x, f2)
+> > f2 <- function(x) evalq(print(x+1,digits=digits),list(x=x),parent.frame(2))
+> > f1(list(x1=1))
+> Error in print.default(x + 1, digits = digits) :
+>  object "digits" not found
+>
+>
+>
+> --
+> Ronggui Huang
+> Department of Sociology
+> Fudan University, Shanghai, China
+>
+> ______________________________________________
+> R-help@stat.math.ethz.ch mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-help
+> PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+> and provide commented, minimal, self-contained, reproducible code.
+>
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

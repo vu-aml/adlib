@@ -1,0 +1,197 @@
+From r-help-bounces@stat.math.ethz.ch  Wed Apr 18 12:50:04 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3IGo30I013236
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 18 Apr 2007 12:50:03 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3IGmSRp023460;
+	Wed, 18 Apr 2007 18:48:34 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.7 required=5.0 tests=AWL,
+	BAYES_50 autolearn=no version=3.1.8
+Received: from mailgate02.smtp.vanderbilt.edu (mailgate02.smtp.Vanderbilt.Edu
+	[129.59.1.72])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3IGmCIe023430
+	(version=TLSv1/SSLv3 cipher=DHE-RSA-AES256-SHA bits=256 verify=NO)
+	for <r-help@stat.math.ethz.ch>; Wed, 18 Apr 2007 18:48:13 +0200
+Received: from smtp09.smtp.vanderbilt.edu (smtp09.smtp.Vanderbilt.Edu
+	[129.59.1.239])
+	by mailgate02.smtp.vanderbilt.edu (8.13.8/8.13.8) with ESMTP id
+	l3IGm6FQ016874
+	(version=TLSv1/SSLv3 cipher=DHE-RSA-AES256-SHA bits=256 verify=NOT);
+	Wed, 18 Apr 2007 11:48:06 -0500
+Received: from smtp09.smtp.vanderbilt.edu (localhost [127.0.0.1])
+	by smtp09.smtp.vanderbilt.edu (8.12.11/8.12.11/VU-3.7.9C+d3.7.9) with
+	ESMTP id l3IGm6QL015769; Wed, 18 Apr 2007 11:48:06 -0500 (CDT)
+Received: from [160.129.116.158] ([160.129.116.158])
+	by smtp09.smtp.vanderbilt.edu (8.12.11/8.12.11/VU-3.7.9.3B+d3.7.9) with
+	ESMTP id l3IGm3ZS015765; Wed, 18 Apr 2007 11:48:04 -0500 (CDT)
+Message-ID: <46264BC1.7070101@vanderbilt.edu>
+Date: Wed, 18 Apr 2007 11:48:01 -0500
+From: Frank E Harrell Jr <f.harrell@vanderbilt.edu>
+User-Agent: Icedove 1.5.0.9 (X11/20061220)
+MIME-Version: 1.0
+To: Cody_Hamilton@Edwards.com
+References: <OF82571AB2.7043765F-ON882572C1.00574760-882572C1.00582DDC@irvine.edwards.com>
+In-Reply-To: <OF82571AB2.7043765F-ON882572C1.00574760-882572C1.00582DDC@irvine.edwards.com>
+X-Proofpoint-Virus-Version: vendor=fsecure engine=4.65.5502:2.3.11, 1.2.37,
+	4.0.164 definitions=2007-04-18_06:2007-04-17, 2007-04-18,
+	2007-04-18 signatures=0
+X-PPS: No, score=0
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] help comparing two median with R
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+Status: O
+Content-Length: 6106
+Lines: 133
+
+Cody_Hamilton@Edwards.com wrote:
+> Has anyone proposed using a bootstrap for Pedro's problem?
+> 
+> What about taking a boostrap sample from x, a boostrap sample from y, take
+> the difference in the medians for these two bootstrap samples, repeat the
+> process 1,000 times and calculate the 95th percentiles of the 1,000
+> computed differences?  You would get a CI on the difference between the
+> medians for these two groups, with which you could determine whether the
+> difference was greater/less than zero.  Too crude?
+> 
+> Regards,
+>    -Cody
+
+As hinted at by Brian Ripley, the following code will approximate that. 
+  It gets the nonparametric confidence interval for the median and 
+solves for the variance that would give the same confidence interval 
+width if normality of the median held.
+
+  g <- function(y) {
+     y <- sort(y[!is.na(y)])
+     n <- length(y)
+     if(n < 4) return(c(median=median(y),q1=NA,q3=NA,variance=NA))
+     qu <- quantile(y, c(.5,.25,.75))
+     names(qu) <- NULL
+     r <- pmin(qbinom(c(.025,.975), n, .5) + 1, n)  ## Exact 0.95 C.L.
+     w <- y[r[2]] - y[r[1]]                         ## Width of C.L.
+     var.med <- ((w/1.96)^2)/4      ## Approximate variance of median
+     c(median=qu[1], q1=qu[2], q3=qu[3], variance=var.med)
+   }
+
+Run g separately by group, add the two variances, and take the square 
+root to approximate the variance of the difference in medians and get a 
+confidence interval.
+
+Frank
+> 
+> 
+> 
+> 
+>                                                                            
+>              Frank E Harrell                                               
+>              Jr                                                            
+>              <f.harrell@vander                                          To 
+>              bilt.edu>                 Thomas Lumley                       
+>              Sent by:                  <tlumley@u.washington.edu>          
+>              r-help-bounces@st                                          cc 
+>              at.math.ethz.ch           r-help@stat.math.ethz.ch            
+>                                                                    Subject 
+>                                        Re: [R] help comparing two median   
+>              04/18/2007 05:02          with R                              
+>              AM                                                            
+>                                                                            
+>                                                                            
+>                                                                            
+>                                                                            
+>                                                                            
+> 
+> 
+> 
+> 
+> Thomas Lumley wrote:
+>> On Tue, 17 Apr 2007, Frank E Harrell Jr wrote:
+>>
+>>> The points that Thomas and Brian have made are certainly correct, if
+>>> one is truly interested in testing for differences in medians or
+>>> means.  But the Wilcoxon test provides a valid test of x > y more
+>>> generally.  The test is consonant with the Hodges-Lehmann estimator:
+>>> the median of all possible differences between an X and a Y.
+>>>
+>> Yes, but there is no ordering of distributions (taken one at a time)
+>> that agrees with the Wilcoxon two-sample test, only orderings of pairs
+>> of distributions.
+>>
+>> The Wilcoxon test provides a test of x>y if it is known a priori that
+>> the two distributions are stochastically ordered, but not under weaker
+>> assumptions.  Otherwise you can get x>y>z>x. This is in contrast to the
+>> t-test, which orders distributions (by their mean) whether or not they
+>> are stochastically ordered.
+>>
+>> Now, it is not unreasonable to say that the problems are unlikely to
+>> occur very often and aren't worth worrying too much about. It does imply
+>> that it cannot possibly be true that there is any summary of a single
+>> distribution that the Wilcoxon test tests for (and the same is true for
+>> other two-sample rank tests, eg the logrank test).
+>>
+>> I know Frank knows this, because I gave a talk on it at Vanderbilt, but
+>> most people don't know it. (I thought for a long time that the Wilcoxon
+>> rank-sum test was a test for the median pairwise mean, which is actually
+>> the R-estimator corresponding to the *one*-sample Wilcoxon test).
+>>
+>>
+>>     -thomas
+>>
+> 
+> Thanks for your note Thomas.  I do feel that the problems you have
+> rightly listed occur infrequently and that often I only care about two
+> groups.  Rank tests generally are good at relatives, not absolutes.  We
+> have an efficient test (Wilcoxon) for relative shift but for estimating
+> an absolute one-sample quantity (e.g., median) the nonparametric
+> estimator is not very efficient.  Ironically there is an exact
+> nonparametric confidence interval for the median (unrelated to Wilcoxon)
+> but none exists for the mean.
+> 
+> Cheers,
+> Frank
+> --
+> Frank E Harrell Jr   Professor and Chair           School of Medicine
+>                       Department of Biostatistics   Vanderbilt University
+> 
+> ______________________________________________
+> R-help@stat.math.ethz.ch mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-help
+> PLEASE do read the posting guide
+> http://www.R-project.org/posting-guide.html
+> and provide commented, minimal, self-contained, reproducible code.
+> 
+> ______________________________________________
+> R-help@stat.math.ethz.ch mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-help
+> PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+> and provide commented, minimal, self-contained, reproducible code.
+> 
+
+
+-- 
+Frank E Harrell Jr   Professor and Chair           School of Medicine
+                      Department of Biostatistics   Vanderbilt University
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

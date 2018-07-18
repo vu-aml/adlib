@@ -1,0 +1,118 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun May 27 05:30:08 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4R9U7qD000373
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 27 May 2007 05:30:07 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 013F1162C26
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 27 May 2007 09:30:03 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.6 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id 1B769162AC1; Sun, 27 May 2007 09:29:28 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070527092928.1B769162AC1@lists.samba.org>
+Date: Sun, 27 May 2007 09:29:28 +0000 (GMT)
+Subject: svn commit: samba r23162 - in branches: SAMBA_3_0/source/locking
+	SAMBA_3_0_26/source/locking
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-05-27 09:29:26 +0000 (Sun, 27 May 2007)
+New Revision: 23162
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23162
+
+Log:
+Make use of messaging_send_buf
+
+Modified:
+   branches/SAMBA_3_0/source/locking/locking.c
+   branches/SAMBA_3_0_26/source/locking/locking.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/locking/locking.c
+===================================================================
+--- branches/SAMBA_3_0/source/locking/locking.c	2007-05-27 09:22:11 UTC (rev 23161)
++++ branches/SAMBA_3_0/source/locking/locking.c	2007-05-27 09:29:26 UTC (rev 23162)
+@@ -822,7 +822,6 @@
+ 	size_t msg_len;
+ 	char *frm = NULL;
+ 	int i;
+-	DATA_BLOB msg;
+ 
+ 	if (!lck) {
+ 		return False;
+@@ -866,8 +865,6 @@
+ 	safe_strcpy(&frm[16], lck->servicepath, sp_len);
+ 	safe_strcpy(&frm[16 + sp_len + 1], lck->filename, fn_len);
+ 
+-	msg = data_blob_const(frm, msg_len);
+-
+ 	/* Send the messages. */
+ 	for (i=0; i<lck->num_share_modes; i++) {
+ 		struct share_mode_entry *se = &lck->share_modes[i];
+@@ -885,7 +882,8 @@
+ 			(unsigned int)lck->dev, (double)lck->ino,
+ 			lck->servicepath, lck->filename ));
+ 
+-		messaging_send(msg_ctx, se->pid, MSG_SMB_FILE_RENAME, &msg);
++		messaging_send_buf(msg_ctx, se->pid, MSG_SMB_FILE_RENAME,
++				   (uint8 *)frm, msg_len);
+ 	}
+ 
+ 	return True;
+
+Modified: branches/SAMBA_3_0_26/source/locking/locking.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/locking/locking.c	2007-05-27 09:22:11 UTC (rev 23161)
++++ branches/SAMBA_3_0_26/source/locking/locking.c	2007-05-27 09:29:26 UTC (rev 23162)
+@@ -822,7 +822,6 @@
+ 	size_t msg_len;
+ 	char *frm = NULL;
+ 	int i;
+-	DATA_BLOB msg;
+ 
+ 	if (!lck) {
+ 		return False;
+@@ -866,8 +865,6 @@
+ 	safe_strcpy(&frm[16], lck->servicepath, sp_len);
+ 	safe_strcpy(&frm[16 + sp_len + 1], lck->filename, fn_len);
+ 
+-	msg = data_blob_const(frm, msg_len);
+-
+ 	/* Send the messages. */
+ 	for (i=0; i<lck->num_share_modes; i++) {
+ 		struct share_mode_entry *se = &lck->share_modes[i];
+@@ -885,7 +882,8 @@
+ 			(unsigned int)lck->dev, (double)lck->ino,
+ 			lck->servicepath, lck->filename ));
+ 
+-		messaging_send(msg_ctx, se->pid, MSG_SMB_FILE_RENAME, &msg);
++		messaging_send_buf(msg_ctx, se->pid, MSG_SMB_FILE_RENAME,
++				   (uint8 *)frm, msg_len);
+ 	}
+ 
+ 	return True;
+

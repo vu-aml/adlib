@@ -1,0 +1,91 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun May  6 20:28:51 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l470SoqD024180
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 6 May 2007 20:28:50 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id B40A0163848
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon,  7 May 2007 00:28:49 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-2.2 required=3.8 tests=ALL_TRUSTED,AWL,BAYES_00,
+	RCVD_IN_DSBL autolearn=ham version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from [127.0.0.1] (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id C36D5162ADE;
+	Mon,  7 May 2007 00:28:11 +0000 (GMT)
+From: simo <idra@samba.org>
+To: jerry@samba.org, samba-technical@lists.samba.org
+In-Reply-To: <20070506210431.33FEB162AD7@lists.samba.org>
+References: <20070506210431.33FEB162AD7@lists.samba.org>
+Content-Type: text/plain
+Organization: Samba Team
+Date: Mon, 07 May 2007 00:28:11 +0000
+Message-Id: <1178497691.28758.170.camel@localhost.localdomain>
+Mime-Version: 1.0
+X-Mailer: Evolution 2.8.1 
+Content-Transfer-Encoding: 7bit
+Subject: Re: svn commit: samba r22713 - in branches:
+	SAMBA_3_0/source/nsswitch SAMBA_3_0_26/source/nsswitch
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+On Sun, 2007-05-06 at 21:04 +0000, jerry@samba.org wrote:
+> Author: jerry
+> Date: 2007-05-06 21:04:30 +0000 (Sun, 06 May 2007)
+> New Revision: 22713
+> 
+> WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22713
+> 
+> Log:
+> Offline logon fixes for idmap manager:
+> 
+> (a) Ignore the negative cache when the domain is offline
+> (b) don't delete expired entries from the cache as these
+>     can be used when offline (same model as thw wcache entries)
+> (c) Delay idmap backend initialization when offline
+>     as the backend routines will not be called until we go 
+>     online anyways.  This prevents idmap_init() from failing
+>     when a backend's init() function fails becuase of lack of
+>     network connectivity
+
+Jerry,
+this commit doesn't seem right to me.
+
+You basically reverted some code you already committed and I changed in
+3_0_25. Right now each single backend init function can cope with the
+offline mode. Each one has a delayed initialization mode, so point (c)
+should not be needed.
+
+The query code should also be able to cope with offline requests, that's
+the whole point of returning ID_EXPIRED, so that in case we can't really
+resolve we keep it, otherwise we get the correct return.
+
+Basically the problem of avoiding the query completely is that you also
+avoid querying idmap_tdb/idmap_rid/idmap_passdb/idmap_nss. they all the
+mappings and can be consulted when offline without problems.
+ 
+The negative cache changes are fine.
+
+Simo.
+
+-- 
+Simo Sorce
+Samba Team GPL Compliance Officer
+email: idra@samba.org
+http://samba.org
+

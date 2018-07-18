@@ -1,0 +1,564 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Apr 13 12:01:39 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3DG1d0I013659
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 13 Apr 2007 12:01:39 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id CEB4B163851
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 13 Apr 2007 16:01:15 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.1 required=3.8 tests=AWL,BAYES_05,
+	UNPARSEABLE_RELAY,UPPERCASE_50_75 autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: from mail.SerNet.de (mail.SerNet.DE [193.175.80.2])
+	by lists.samba.org (Postfix) with ESMTP id 311A5162ADA
+	for <samba-cvs@samba.org>; Fri, 13 Apr 2007 16:00:37 +0000 (GMT)
+Received: from intern.SerNet.DE by mail.SerNet.DE with esmtp (Exim 4.51 #1)
+	for samba-cvs@samba.org
+	id 1HcOCS-0006Ty-Q8; Fri, 13 Apr 2007 18:00:36 +0200
+Received: by intern.SerNet.DE
+	id 1HcOCS-0000rl-I8; Fri, 13 Apr 2007 18:00:36 +0200
+Received: by intern.SerNet.DE
+	id 1HcOCS-0000rg-CI; Fri, 13 Apr 2007 18:00:36 +0200
+Received: from mad by nirvana.sernet.private with local (Exim 4.63)
+	(envelope-from <ma@sernet.de>)
+	id 1HcOCS-0008PW-5v; Fri, 13 Apr 2007 18:00:36 +0200
+To: samba-cvs@samba.org
+From: Michael Adam <ma@sernet.de>
+Date: Fri, 13 Apr 2007 18:00:36 +0200
+Message-Id: <E1HcOCS-0000rl-I8@intern.SerNet.DE>
+Organization: SerNet GmbH, Goettingen, Germany
+Subject: Rev 5355: Initial step towards activation of registry globals in
+	loadparm.c in http://samba.sernet.de/ma/bzr/SAMBA_3_0-registry.bzr/
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 19361
+Lines: 511
+
+At http://samba.sernet.de/ma/bzr/SAMBA_3_0-registry.bzr/
+
+------------------------------------------------------------
+revno: 5355
+revision-id: ma@sernet.de-20070413160033-9f9bd35f13e4cf77
+parent: ma@sernet.de-20070413155735-bcd3cd2c2e57f281
+committer: Michael Adam <ma@sernet.de>
+branch nick: SAMBA_3_0-registry.bzr
+timestamp: Fri 2007-04-13 18:00:33 +0200
+message:
+  Initial step towards activation of registry globals in loadparm.c
+  via special semantics of "include = registry". It compiles but
+  it is not yet functional. Wanted to get into bzr before leaving for
+  the weekend. 
+  
+  The patch to Makefile.in is especially ugly. This is why:
+  
+  It is impossible to just add the registry objects and all dependent
+  stuff to PARAM_OBJ, since virtually every target binary has its own
+  subset of the dependent objects already in its _OBJ list. So for
+  each target, the _OBJ list has to be adapted individually. What I
+  did is rename PARAM_OBJ to PARAM_OBJ1, use this for smbd (which has
+  all the registry and dependent stuff anyways) and define PARAM_OBJ
+  as PARAM_OBJ1 plus REG_API_OBJ (the objects currently needed for the
+  registry api needed for KEY_SMBCONF). Most of the build targets that
+  use PARAM_OBJ, had to be adapted slightly.
+  
+  This way, I hope to have kept the patch as small as possible,
+  and make a future adaption for a refactoring of the registry
+  api to minimize the linker deps more drastically easy. 
+  
+  The plan is to further isolate the tdb-layer of the registry 
+  and untangle it from the printing and eventlog code.
+  
+  (I have to admit that I have intermingled some slight reformattings
+  with my additions - some line breaks.)
+modified:
+  source/Makefile.in             Makefile.in-20060530022626-b16dac2328ebe703
+  source/param/loadparm.c        loadparm.c-20060530022627-1efa1edb3eb0e897
+=== modified file 'source/Makefile.in'
+--- a/source/Makefile.in	2007-04-12 14:14:00 +0000
++++ b/source/Makefile.in	2007-04-13 16:00:33 +0000
+@@ -281,7 +281,9 @@
+ # Be sure to include them into your application
+ POPT_LIB_OBJ = lib/popt_common.o
+ 
+-PARAM_OBJ = dynconfig.o param/loadparm.o param/params.o lib/sharesec.o
++PARAM_OBJ1 = dynconfig.o param/loadparm.o param/params.o lib/sharesec.o 
++
++PARAM_OBJ = $(PARAM_OBJ1) $(REG_API_OBJ)
+ 
+ KRBCLIENT_OBJ = libads/kerberos.o libads/ads_status.o
+ 
+@@ -413,10 +415,15 @@
+ 
+ PROFILE_OBJ = profile/profile.o
+ PROFILES_OBJ = utils/profiles.o \
+-               $(REGFIO_OBJ) $(REGOBJS_OBJ) $(ERRORMAP_OBJ) \
++               $(REGFIO_OBJ) \
++	       $(ERRORMAP_OBJ) \
+ 	       $(RPC_PARSE_OBJ1) $(PARAM_OBJ) $(LIBSAMBA_OBJ) \
+                $(DOSERR_OBJ) $(LIB_OBJ) $(LIB_DUMMY_OBJ) \
+-               $(POPT_LIB_OBJ) $(SECRETS_OBJ)
++               $(POPT_LIB_OBJ) $(SECRETS_OBJ) \
++	       $(REG_API_ADD_OBJ)
++
++# removed from PROFILES_OBJ upon adding REG_API_OBJ to PARAM_OBJ:
++#	       $(REGOBJS_OBJ) \
+ 
+ OPLOCK_OBJ = smbd/oplock.o smbd/oplock_irix.o smbd/oplock_linux.o
+ 
+@@ -494,7 +501,7 @@
+ 	       $(AFS_SETTOKEN_OBJ) smbd/aio.o smbd/statvfs.o \
+ 	       smbd/dmapi.o $(MANGLE_OBJ) @VFS_STATIC@
+ 
+-SMBD_OBJ_BASE = $(PARAM_OBJ) $(SMBD_OBJ_SRV) $(LIBSMB_OBJ) \
++SMBD_OBJ_BASE = $(PARAM_OBJ1) $(SMBD_OBJ_SRV) $(LIBSMB_OBJ) \
+ 		$(RPC_SERVER_OBJ) $(RPC_PARSE_OBJ) $(SECRETS_OBJ) \
+ 		$(LOCKING_OBJ) $(PASSDB_OBJ) $(PRINTING_OBJ) $(PROFILE_OBJ) \
+ 		$(LIB_OBJ) $(PRINTBACKEND_OBJ) $(OPLOCK_OBJ) \
+@@ -526,8 +533,11 @@
+             nmbd/nmbd_subnetdb.o nmbd/nmbd_winsproxy.o nmbd/nmbd_winsserver.o \
+             nmbd/nmbd_workgroupdb.o nmbd/nmbd_synclists.o
+ 
++NMBD_OBJ2 = $(REG_API_ADD_OBJ)
++
+ NMBD_OBJ = $(NMBD_OBJ1) $(PARAM_OBJ) $(LIBSMB_OBJ) $(KRBCLIENT_OBJ) \
+-           $(PROFILE_OBJ) $(LIB_NONSMBD_OBJ) $(SECRETS_OBJ) $(POPT_LIB_OBJ)
++           $(PROFILE_OBJ) $(LIB_NONSMBD_OBJ) $(SECRETS_OBJ) $(POPT_LIB_OBJ) \
++	   $(NMBD_OBJ2)
+ 
+ SWAT_OBJ1 = web/cgi.o web/diagnose.o web/startstop.o web/statuspage.o \
+            web/swat.o web/neg_lang.o
+@@ -542,36 +552,45 @@
+ 	     $(LOCKING_OBJ) $(PARAM_OBJ) \
+              $(PROFILE_OBJ) $(LIB_NONSMBD_OBJ) $(POPT_LIB_OBJ) \
+ 	     $(SECRETS_OBJ) $(LIBSAMBA_OBJ) $(ERRORMAP_OBJ) $(RPC_PARSE_OBJ1) \
+-             $(DOSERR_OBJ)
++             $(DOSERR_OBJ) \
++	     $(REG_API_ADD_OBJ)
+ 
+ SMBCONTROL_OBJ = utils/smbcontrol.o $(LOCKING_OBJ) $(PARAM_OBJ) \
+ 	$(PROFILE_OBJ) $(LIB_NONSMBD_OBJ) $(POPT_LIB_OBJ) \
+ 	$(SECRETS_OBJ) $(LIBSAMBA_OBJ) $(RPC_PARSE_OBJ1) $(DOSERR_OBJ) \
+-	$(PRINTBASE_OBJ) $(ERRORMAP_OBJ)
++	$(PRINTBASE_OBJ) $(ERRORMAP_OBJ) \
++	$(REG_API_ADD_OBJ)
+ 
+ SMBTREE_OBJ = utils/smbtree.o $(PARAM_OBJ) \
+              $(PROFILE_OBJ) $(LIB_NONSMBD_OBJ) $(LIBSMB_OBJ) \
+ 	     $(KRBCLIENT_OBJ) $(POPT_LIB_OBJ) $(SECRETS_OBJ) \
+-             rpc_client/cli_pipe.o $(RPC_PARSE_OBJ2) \
++             rpc_client/cli_pipe.o \
+              $(RPC_CLIENT_OBJ1) \
+ 	     $(PASSDB_OBJ) $(SMBLDAP_OBJ) $(LDB_OBJ) $(GROUPDB_OBJ) \
+-             $(LIBMSRPC_GEN_OBJ)
++             $(LIBMSRPC_GEN_OBJ) \
++	     $(REG_API_ADD_OBJ2)
++
++# removed from SMBTREE_OBJ upon adding REG_API_OBJ to PARAM_OBJ:
++#	     $(RPC_PARSE_OBJ2) \
+ 
+ TESTPARM_OBJ = utils/testparm.o \
+                $(PARAM_OBJ) $(LIB_NONSMBD_OBJ) $(POPT_LIB_OBJ) \
+-	       $(SECRETS_OBJ) $(LIBSAMBA_OBJ) $(RPC_PARSE_OBJ1) $(DOSERR_OBJ)
++	       $(SECRETS_OBJ) $(LIBSAMBA_OBJ) $(RPC_PARSE_OBJ1) $(DOSERR_OBJ) \
++	       $(REG_API_ADD_OBJ) $(ERRORMAP_OBJ)
+ 
+ PASSWD_UTIL_OBJ = utils/passwd_util.o
+ 
+ SMBPASSWD_OBJ = utils/smbpasswd.o $(PASSWD_UTIL_OBJ) $(PASSCHANGE_OBJ) \
+ 		$(PARAM_OBJ) $(SECRETS_OBJ) $(LIBSMB_OBJ) $(PASSDB_OBJ) \
+ 		$(GROUPDB_OBJ) $(LIB_NONSMBD_OBJ) $(KRBCLIENT_OBJ) \
+-		$(POPT_LIB_OBJ) $(SMBLDAP_OBJ) $(RPC_PARSE_OBJ) $(LIBMSRPC_GEN_OBJ) $(LIBMSRPC_OBJ) $(LDB_OBJ)
++		$(POPT_LIB_OBJ) $(SMBLDAP_OBJ) $(RPC_PARSE_OBJ) \
++		$(LIBMSRPC_GEN_OBJ) $(LIBMSRPC_OBJ) $(LDB_OBJ)
+ 
+ PDBEDIT_OBJ = utils/pdbedit.o $(PASSWD_UTIL_OBJ) $(PARAM_OBJ) $(PASSDB_OBJ) \
+ 		$(LIBSAMBA_OBJ) $(LIB_NONSMBD_OBJ) $(GROUPDB_OBJ) \
+ 		$(SECRETS_OBJ) $(POPT_LIB_OBJ) $(SMBLDAP_OBJ) libsmb/asn1.o \
+-		$(RPC_PARSE_OBJ1) $(DOSERR_OBJ) $(LDB_OBJ) libsmb/errormap.o
++		$(RPC_PARSE_OBJ1) $(DOSERR_OBJ) $(LDB_OBJ) $(ERRORMAP_OBJ) \
++		$(REG_API_ADD_OBJ2)
+ 
+ SMBGET_OBJ = utils/smbget.o $(POPT_LIB_OBJ) $(LIBSMBCLIENT_OBJ)
+ 
+@@ -600,7 +619,8 @@
+ 		   $(PARAM_OBJ) $(LIB_NONSMBD_OBJ) \
+ 	  	   $(LIBSMB_OBJ) $(KRBCLIENT_OBJ) \
+ 		   $(LIBMSRPC_OBJ) $(LIBMSRPC_GEN_OBJ) $(RPC_PARSE_OBJ) \
+-		   $(SECRETS_OBJ) $(PASSDB_OBJ) $(SMBLDAP_OBJ) $(GROUPDB_OBJ) $(LDB_OBJ)
++		   $(SECRETS_OBJ) $(PASSDB_OBJ) $(SMBLDAP_OBJ) \
++		   $(GROUPDB_OBJ) $(LDB_OBJ)
+ 
+ CAC_OBJ = $(LIBSMBCLIENT_OBJ) \
+ 			 libmsrpc/libmsrpc.o libmsrpc/libmsrpc_internal.o \
+@@ -621,19 +641,57 @@
+ 
+ CLIENT_OBJ1 = client/client.o client/clitar.o rpc_client/cli_pipe.o \
+ 	      $(RPC_CLIENT_OBJ1) \
+-	      $(RPC_PARSE_OBJ2)
++	      
++# removed from CLIENT_OBJ1 upon adding REG_API_OBJ to PARAM_OBJ:
++#	      $(RPC_PARSE_OBJ2)
+ 
+ CLIENT_OBJ = $(CLIENT_OBJ1) $(PARAM_OBJ) $(LIBSMB_OBJ) \
+ 	     $(LIB_NONSMBD_OBJ) $(KRBCLIENT_OBJ) $(LIBMSRPC_GEN_OBJ) \
+              $(READLINE_OBJ) $(POPT_LIB_OBJ) $(SECRETS_OBJ) \
+              $(PASSDB_OBJ) $(SMBLDAP_OBJ) $(GROUPDB_OBJ) $(LDB_OBJ) \
+-	     $(DISPLAY_SEC_OBJ)
++	     $(DISPLAY_SEC_OBJ) \
++	     $(REG_API_ADD_OBJ2)
+ 
+ TOOL_OBJ = client/smbctool.o client/clitar.o $(PARAM_OBJ) $(LIBSMB_OBJ) \
+ 	     $(LIB_NONSMBD_OBJ) $(KRBCLIENT_OBJ) \
+              $(READLINE_OBJ) $(POPT_LIB_OBJ) $(SECRETS_OBJ) \
+ 	     $(DISPLAY_SEC_OBJ)
+ 
++REG_API_OBJ = registry/reg_api.o \
++	      registry/reg_frontend_hilvl.o \
++	      registry/reg_smbconf.o \
++	      registry/reg_db.o \
++	      registry/reg_util.o \
++	      \
++	      registry/reg_cachehook.o \
++	      registry/reg_eventlog.o \
++	      registry/reg_perfcount.o \
++	      registry/reg_dynamic.o \
++	      \
++	      lib/util_nttoken.o
++
++REG_API_ADD_OBJ_UTOPIA = lib/privileges_basic.o
++
++REG_API_ADD_OBJ1 = \
++		   $(PASSDB_OBJ) \
++		   $(SMBLDAP_OBJ) \
++		   $(GROUPDB_OBJ)
++
++REG_API_ADD_OBJ2 = \
++		   $(RPC_PARSE_OBJ)
++
++REG_API_ADD_OBJ = \
++		  $(REG_API_ADD_OBJ1) \
++		  $(REG_API_ADD_OBJ2)
++
++
++#	      passdb/pdb_interface.o \
++#	      passdb/passdb.o \
++#	      passdb/pdb_get_set.o
++#	      $(REGOBJS_OBJ) \
++#	      lib/util_reg.o 
++
++
+ NET_OBJ1 = utils/net.o utils/net_ads.o utils/net_domain.o utils/net_help.o \
+ 	   utils/net_rap.o utils/net_rpc.o utils/net_rpc_samsync.o \
+ 	   utils/net_rpc_join.o utils/net_time.o utils/net_lookup.o \
+@@ -645,19 +703,6 @@
+ 	   $(PASSWD_UTIL_OBJ) utils/net_dns.o utils/net_ads_gpo.o \
+ 	   utils/net_conf.o
+ 
+-NET_REG_OBJ = registry/reg_api.o \
+-	      registry/reg_frontend_hilvl.o \
+-	      registry/reg_smbconf.o \
+-	      registry/reg_db.o \
+-	      registry/reg_util.o \
+-	      \
+-	      registry/reg_cachehook.o \
+-	      registry/reg_eventlog.o \
+-	      registry/reg_perfcount.o \
+-	      registry/reg_dynamic.o \
+-	      \
+-	      lib/util_nttoken.o
+-  
+ NET_OBJ = $(NET_OBJ1) $(PARAM_OBJ) $(SECRETS_OBJ) $(LIBSMB_OBJ) \
+ 	  $(RPC_PARSE_OBJ) $(PASSDB_OBJ) $(GROUPDB_OBJ) \
+ 	  $(KRBCLIENT_OBJ) $(LIB_NONSMBD_OBJ) $(LIBADDNS_OBJ0) \
+@@ -665,11 +710,11 @@
+ 	  $(LIBADS_OBJ) $(LIBADS_SERVER_OBJ) $(POPT_LIB_OBJ) \
+ 	  $(SMBLDAP_OBJ) $(DCUTIL_OBJ) $(SERVER_MUTEX_OBJ) \
+ 	  $(AFS_OBJ) $(AFS_SETTOKEN_OBJ) $(REGFIO_OBJ) $(READLINE_OBJ) \
+-	  $(LDB_OBJ) $(LIBGPO_OBJ) $(INIPARSER_OBJ) $(DISPLAY_SEC_OBJ) \
+-	  $(NET_REG_OBJ)
++	  $(LDB_OBJ) $(LIBGPO_OBJ) $(INIPARSER_OBJ) $(DISPLAY_SEC_OBJ) 
+ 
+ CUPS_OBJ = client/smbspool.o $(PARAM_OBJ) $(LIBSMB_OBJ) \
+-	  $(LIB_NONSMBD_OBJ) $(KRBCLIENT_OBJ) $(SECRETS_OBJ)
++	  $(LIB_NONSMBD_OBJ) $(KRBCLIENT_OBJ) $(SECRETS_OBJ) \
++	  $(REG_API_ADD_OBJ)
+ 
+ MOUNT_OBJ = client/smbmount.o \
+              $(PARAM_OBJ) $(LIBSMB_OBJ) $(KRBCLIENT_OBJ) $(LIB_NONSMBD_OBJ) $(SECRETS_OBJ)
+@@ -682,30 +727,40 @@
+ 
+ CIFS_UMOUNT_OBJ = client/umount.cifs.o
+ 
+-NMBLOOKUP_OBJ = utils/nmblookup.o $(PARAM_OBJ) $(LIBNMB_OBJ) $(RPC_PARSE_OBJ1) $(DOSERR_OBJ) \
+-               $(LIB_NONSMBD_OBJ) $(POPT_LIB_OBJ) $(SECRETS_OBJ) $(LIBSAMBA_OBJ)
++NMBLOOKUP_OBJ = utils/nmblookup.o $(PARAM_OBJ) $(LIBNMB_OBJ) \
++		$(RPC_PARSE_OBJ1) \
++		$(DOSERR_OBJ) \
++                $(LIB_NONSMBD_OBJ) $(POPT_LIB_OBJ) $(SECRETS_OBJ) \
++		$(LIBSAMBA_OBJ) \
++		$(REG_API_ADD_OBJ) $(ERRORMAP_OBJ)
+ 
+ SMBTORTURE_OBJ1 = torture/torture.o torture/nbio.o torture/scanner.o torture/utable.o \
+ 		torture/denytest.o torture/mangle_test.o
+ 
+ SMBTORTURE_OBJ = $(SMBTORTURE_OBJ1) $(PARAM_OBJ) \
+-	$(LIBSMB_OBJ) $(KRBCLIENT_OBJ) $(LIB_NONSMBD_OBJ) $(SECRETS_OBJ)
++	$(LIBSMB_OBJ) $(KRBCLIENT_OBJ) $(LIB_NONSMBD_OBJ) $(SECRETS_OBJ) \
++	$(REG_API_ADD_OBJ)
+ 
+ MASKTEST_OBJ = torture/masktest.o $(PARAM_OBJ) $(LIBSMB_OBJ) $(KRBCLIENT_OBJ) \
+-                 $(LIB_NONSMBD_OBJ) $(SECRETS_OBJ)
++                 $(LIB_NONSMBD_OBJ) $(SECRETS_OBJ) \
++		 $(REG_API_ADD_OBJ)
+ 
+ MSGTEST_OBJ = torture/msgtest.o $(PARAM_OBJ) $(LIBSMB_OBJ) $(KRBCLIENT_OBJ) \
+-                 $(LIB_NONSMBD_OBJ) $(SECRETS_OBJ)
++                 $(LIB_NONSMBD_OBJ) $(SECRETS_OBJ) \
++		 $(REG_API_ADD_OBJ)
+ 
+ LOCKTEST_OBJ = torture/locktest.o $(PARAM_OBJ) $(LOCKING_OBJ) $(KRBCLIENT_OBJ) \
+-               $(LIBSMB_OBJ) $(LIB_NONSMBD_OBJ) $(SECRETS_OBJ)
++               $(LIBSMB_OBJ) $(LIB_NONSMBD_OBJ) $(SECRETS_OBJ) \
++	       $(REG_API_ADD_OBJ)
+ 
+ NSSTEST_OBJ = torture/nsstest.o $(PARAM_OBJ) $(LIBSMB_OBJ) $(KRBCLIENT_OBJ) \
+-                 $(LIB_NONSMBD_OBJ) $(SECRETS_OBJ)
++                 $(LIB_NONSMBD_OBJ) $(SECRETS_OBJ) \
++		 $(REG_API_ADD_OBJ)
+ 
+ PDBTEST_OBJ = torture/pdbtest.o $(PARAM_OBJ) $(LIBSMB_OBJ) $(KRBCLIENT_OBJ) \
+ 		$(LIB_NONSMBD_OBJ) $(SECRETS_OBJ) $(PASSDB_OBJ) $(GROUPDB_OBJ) \
+-		$(SMBLDAP_OBJ) $(POPT_LIB_OBJ) $(LDB_OBJ)
++		$(SMBLDAP_OBJ) $(POPT_LIB_OBJ) $(LDB_OBJ) \
++		$(REG_API_ADD_OBJ2)
+ 
+ 
+ VFSTEST_OBJ = torture/cmd_vfs.o torture/vfstest.o $(SMBD_OBJ_BASE) $(READLINE_OBJ)
+@@ -715,7 +770,8 @@
+ LOG2PCAP_OBJ = utils/log2pcaphex.o
+ 
+ LOCKTEST2_OBJ = torture/locktest2.o $(PARAM_OBJ) $(LOCKING_OBJ) $(LIBSMB_OBJ) \
+-		$(KRBCLIENT_OBJ) $(LIB_NONSMBD_OBJ) $(SECRETS_OBJ)
++		$(KRBCLIENT_OBJ) $(LIB_NONSMBD_OBJ) $(SECRETS_OBJ) \
++		$(REG_API_ADD_OBJ)
+ 
+ SMBCACLS_OBJ = utils/smbcacls.o $(PARAM_OBJ) $(LIBSMB_OBJ) \
+ 			   $(KRBCLIENT_OBJ) $(LIB_NONSMBD_OBJ) $(RPC_PARSE_OBJ) \
+@@ -730,19 +786,30 @@
+ 
+ EVTLOGADM_OBJ0	= utils/eventlogadm.o
+ 
+-EVTLOGADM_OBJ	= $(EVTLOGADM_OBJ0) $(PARAM_OBJ) $(LIB_NONSMBD_OBJ) $(REGOBJS_OBJ) \
++EVTLOGADM_OBJ	= $(EVTLOGADM_OBJ0) $(PARAM_OBJ) $(LIB_NONSMBD_OBJ) \
+ 		$(ERRORMAP_OBJ) $(RPC_PARSE_OBJ1) $(LIBSAMBA_OBJ) $(DOSERR_OBJ) \
+ 		$(SECRETS_OBJ) \
+-	        registry/reg_eventlog.o rpc_server/srv_eventlog_lib.o registry/reg_util.o \
+-		registry/reg_db.o
++		rpc_server/srv_eventlog_lib.o \
++		$(REG_API_ADD_OBJ)
++
++# removed from EVENTLOGADM_OBJ upon adding REG_API_OBJ to PARAM_OBJ:
++#		  $(REGOBJS_OBJ) \
++#	        registry/reg_eventlog.o \
++#		registry/reg_util.o \
++#		registry/reg_db.o
+ 
+ SHARESEC_OBJ0 = utils/sharesec.o
+-SHARESEC_OBJ  = $(SHARESEC_OBJ0) $(PARAM_OBJ) $(LIB_NONSMBD_OBJ) $(REGOBJS_OBJ) \
++SHARESEC_OBJ  = $(SHARESEC_OBJ0) $(PARAM_OBJ) $(LIB_NONSMBD_OBJ) \
+ 		$(ERRORMAP_OBJ) $(RPC_PARSE_OBJ1) $(LIBSAMBA_OBJ) $(DOSERR_OBJ) \
+-                $(POPT_LIB_OBJ) $(SECRETS_OBJ)
++                $(POPT_LIB_OBJ) $(SECRETS_OBJ) \
++		$(REG_API_ADD_OBJ)
++
++# removed from SHARESEC_OBJ upon adding REG_API_OBJ to PARAM_OBJ:
++#		$(REGOBJS_OBJ) \
+ 
+ TALLOCTORT_OBJ = lib/talloc/testsuite.o $(PARAM_OBJ) $(LIB_NONSMBD_OBJ) \
+-                 $(RPC_PARSE_OBJ1) $(DOSERR_OBJ) $(LIBSAMBA_OBJ) $(SECRETS_OBJ)
++                 $(RPC_PARSE_OBJ1) $(DOSERR_OBJ) $(LIBSAMBA_OBJ) $(SECRETS_OBJ) \
++		 $(REG_API_ADD_OBJ) $(ERRORMAP_OBJ)
+ 
+ REPLACETORT_OBJ = lib/replace/test/testsuite.o lib/replace/test/os2_delete.o \
+ 		$(LIBREPLACE_OBJ)
+@@ -750,7 +817,8 @@
+ NDRDUMP_OBJ = librpc/tools/ndrdump.o \
+ 			  $(PARAM_OBJ) $(LIBNDR_OBJ) $(LIBNDR_GEN_OBJ) \
+ 			  $(LIBSAMBA_OBJ) $(LIB_NONSMBD_OBJ) $(POPT_LIB_OBJ) \
+-			  $(RPC_PARSE_OBJ1) $(DOSERR_OBJ) $(SECRETS_OBJ)
++			  $(RPC_PARSE_OBJ1) $(DOSERR_OBJ) $(SECRETS_OBJ) \
++			  $(REG_API_ADD_OBJ) $(ERRORMAP_OBJ)
+ 
+ RPCTORTURE_OBJ = torture/rpctorture.o \
+              rpcclient/display.o \
+@@ -760,12 +828,18 @@
+              rpcclient/cmd_srvsvc.o \
+              rpcclient/cmd_netlogon.o \
+              $(PARAM_OBJ) $(LIBSMB_OBJ) $(LIB_NONSMBD_OBJ) $(KRBCLIENT_OBJ) \
+-             $(RPC_CLIENT_OBJ) $(RPC_PARSE_OBJ) $(PASSDB_GET_SET_OBJ) $(SECRETS_OBJ)
++             $(RPC_CLIENT_OBJ) \
++	     $(PASSDB_GET_SET_OBJ) $(SECRETS_OBJ) \
++	     $(REG_API_ADD_OBJ)
++
++# removed from RPCTORTURE_OBJ upon adding REG_API_OBJ to PARAM_OBJ:
++#	     $(RPC_PARSE_OBJ) \
+ 
+ DEBUG2HTML_OBJ = utils/debug2html.o utils/debugparse.o
+ 
+ SMBFILTER_OBJ = utils/smbfilter.o $(PARAM_OBJ) $(LIBSMB_OBJ) $(SECRETS_OBJ) \
+-                 $(LIB_NONSMBD_OBJ) $(KRBCLIENT_OBJ)
++                 $(LIB_NONSMBD_OBJ) $(KRBCLIENT_OBJ) \
++		 $(REG_API_ADD_OBJ)
+ 
+ PROTO_OBJ = $(SMBD_OBJ_MAIN) $(LIBNDR_OBJ) $(RPCCLIENT_NDR_OBJ) \
+ 			$(LIBNDR_GEN_OBJ) $(SMBD_OBJ_SRV) $(NMBD_OBJ1) $(LIBSMB_OBJ) \
+@@ -832,7 +906,9 @@
+ 		$(LIBADS_SERVER_OBJ) $(SERVER_MUTEX_OBJ) $(LDB_OBJ)
+ 
+ WBINFO_OBJ = nsswitch/wbinfo.o $(LIBSAMBA_OBJ) $(PARAM_OBJ) $(LIB_NONSMBD_OBJ) \
+-		$(SECRETS_OBJ) $(POPT_LIB_OBJ) $(AFS_SETTOKEN_OBJ) $(RPC_PARSE_OBJ1) $(DOSERR_OBJ)
++	     $(SECRETS_OBJ) $(POPT_LIB_OBJ) $(AFS_SETTOKEN_OBJ) \
++	     $(RPC_PARSE_OBJ1) $(DOSERR_OBJ) \
++	     $(REG_API_ADD_OBJ) $(ERRORMAP_OBJ)
+ 
+ WINBIND_NSS_OBJ = $(WBCOMMON_OBJ) $(LIBREPLACE_OBJ) $(SOCKET_WRAPPER_OBJ) @WINBIND_NSS_EXTRA_OBJS@
+ 
+@@ -900,8 +976,14 @@
+ 		libsmb/asn1.o libsmb/spnego.o libsmb/clikrb5.o libads/kerberos.o \
+ 		libads/kerberos_verify.o $(SECRETS_OBJ) $(SERVER_MUTEX_OBJ) \
+ 		libads/authdata.o $(RPC_PARSE_OBJ1) $(PASSDB_OBJ) $(GROUPDB_OBJ) \
+-		$(SMBLDAP_OBJ) $(DOSERR_OBJ) rpc_parse/parse_net.o $(LIBNMB_OBJ) \
+-		$(LDB_OBJ) libsmb/errormap.o
++		$(SMBLDAP_OBJ) $(DOSERR_OBJ) \
++		$(LIBNMB_OBJ) \
++		$(LDB_OBJ) $(ERRORMAP_OBJ) \
++		$(PARAM_OBJ) \
++		$(REG_API_ADD_OBJ2)
++
++# removed from NTLM_AUTH_OBJ upon adding REG_API_OBJ to PARAM_OBJ:
++#		rpc_parse/parse_net.o \
+ 
+ ######################################################################
+ # now the rules...
+@@ -1640,11 +1722,11 @@
+ 	@echo Linking $@
+ 	@$(CC) $(FLAGS) -o $@ $(LDFLAGS) $(WBINFO_OBJ) $(DYNEXP) $(LIBS) $(LDAP_LIBS) @POPTLIBS@
+ 
+-bin/ntlm_auth@EXEEXT@: proto_exists $(NTLM_AUTH_OBJ) $(PARAM_OBJ) $(LIB_NONSMBD_OBJ) \
++bin/ntlm_auth@EXEEXT@: proto_exists $(NTLM_AUTH_OBJ) $(LIB_NONSMBD_OBJ) \
+ 		@BUILD_POPT@ bin/.dummy
+ 	@echo Linking $@
+ 	@$(CC) $(FLAGS) -o $@ $(LDFLAGS) $(DYNEXP) $(NTLM_AUTH_OBJ) \
+-		$(PARAM_OBJ) $(LIB_NONSMBD_OBJ) $(LIBS) \
++		$(LIB_NONSMBD_OBJ) $(LIBS) \
+ 		@POPTLIBS@ $(KRB5LIBS) $(LDAP_LIBS) $(NSCD_LIBS)
+ 
+ bin/pam_smbpass.@SHLIBEXT@: $(PAM_SMBPASS_OBJ)
+
+=== modified file 'source/param/loadparm.c'
+--- a/source/param/loadparm.c	2007-03-27 22:14:31 +0000
++++ b/source/param/loadparm.c	2007-04-13 16:00:33 +0000
+@@ -72,6 +72,14 @@
+ #define HOMES_NAME "homes"
+ #endif
+ 
++/* the special value for the include parameter
++ * to be interpreted not as a file name but to
++ * trigger loading of the global smb.conf options
++ * from registry. */
++#ifndef INCLUDE_REGISTRY_NAME
++#define INCLUDE_REGISTRY_NAME "registry"
++#endif
++
+ /* some helpful bits */
+ #define LP_SNUM_OK(i) (((i) >= 0) && ((i) < iNumServices) && (ServicePtrs != NULL) && ServicePtrs[(i)]->valid)
+ #define VALID(i) (ServicePtrs != NULL && ServicePtrs[i]->valid)
+@@ -3167,6 +3175,60 @@
+ 	return set_netbios_aliases((const char **)Globals.szNetbiosAliases);
+ }
+ 
++static BOOL process_registry_globals(BOOL (*pfunc)(const char *, const char *))
++{
++	BOOL ret = False;
++	TALLOC_CTX *ctx = NULL;
++	char *regpath = NULL;
++	WERROR werr = WERR_OK;
++	struct registry_key *key = NULL;
++	struct registry_value *valvalue = NULL;
++	char *valname = NULL;
++	uint32 idx = 0;
++	NT_USER_TOKEN *token;
++
++	ctx = talloc_init("process_registry_globals");
++	if (!ctx) {
++		smb_panic("Failed to create talloc context!");
++	}
++
++	/* It might not bee to clean to have the initialization here.
++	 * If the registry is already initialized, it does not do
++	 * any harm. */
++	if (!registry_init_regdb()) {
++		DEBUG(1, ("Error initializing the registry.\n"));
++		goto done;
++	}
++
++	if (!(token = registry_create_admin_token(ctx))) {
++		DEBUG(1, ("Error creating admin token\n"));
++		goto done;
++	}
++
++	regpath = talloc_asprintf(ctx,"%s\\%s", KEY_SMBCONF, GLOBAL_NAME);
++	werr = reg_open_path(ctx, regpath, REG_KEY_READ, token, &key);
++	if (!W_ERROR_IS_OK(werr)) {
++		DEBUG(1, ("Registry smbconf global section does not exist.\n"));
++		DEBUGADD(1, ("Error opening registry path '%s\\%s: %s\n",
++			     KEY_SMBCONF, GLOBAL_NAME, dos_errstr(werr)));
++		goto done;
++	}
++
++	for (idx = 0;
++	     W_ERROR_IS_OK(werr = reg_enumvalue(ctx, key, idx, &valname,
++			     			&valvalue));
++	     idx++)
++	{
++		DEBUG(1, ("got global registry parameter '%s'\n", valname));
++	}
++
++	ret = pfunc("registry shares", "yes");
++
++done:
++	talloc_destroy(ctx);
++	return ret;
++}
++
+ /***************************************************************************
+  Handle the include operation.
+ ***************************************************************************/
+@@ -3176,6 +3238,10 @@
+ 	pstring fname;
+ 	pstrcpy(fname, pszParmValue);
+ 
++	if (strequal(fname, INCLUDE_REGISTRY_NAME)) {
++		return process_registry_globals(do_parameter);
++	}
++
+ 	standard_sub_basic(get_current_username(), current_user_info.domain,
+ 			   fname,sizeof(fname));
+ 
+

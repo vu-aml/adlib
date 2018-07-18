@@ -1,0 +1,203 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat Apr 28 13:43:59 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3SHhw6w010478
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 28 Apr 2007 13:43:58 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 2B152163838
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 28 Apr 2007 17:43:57 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 5BCA8162B74; Sat, 28 Apr 2007 17:43:27 +0000 (GMT)
+Date: Sat, 28 Apr 2007 19:13:36 +0200
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070428174327.5BCA8162B74@lists.samba.org>
+Subject: Rev 220: added reset status control in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 4688
+Lines: 163
+
+------------------------------------------------------------
+revno: 220
+revision-id: tridge@samba.org-20070428171336-4yw1gh5qfslqan73
+parent: tridge@samba.org-20070428165537-dq8tirclx8okd1ec
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Sat 2007-04-28 19:13:36 +0200
+message:
+  added reset status control
+modified:
+  common/ctdb_client.c           ctdb_client.c-20070411010216-3kd8v37k61steeya-1
+  common/ctdb_control.c          ctdb_control.c-20070426122724-j6gkpiofhbwdin63-1
+  include/ctdb.h                 ctdb.h-20061117234101-o3qt14umlg9en8z0-11
+  include/ctdb_private.h         ctdb_private.h-20061117234101-o3qt14umlg9en8z0-13
+  tools/ctdb_control.c           ctdb_control.c-20070426122705-9ehj1l5lu2gn9kuj-1
+=== modified file 'common/ctdb_client.c'
+--- a/common/ctdb_client.c	2007-04-28 15:42:40 +0000
++++ b/common/ctdb_client.c	2007-04-28 17:13:36 +0000
+@@ -1054,3 +1054,24 @@
+ 	talloc_free(map);
+ 	return nodes;
+ }
++
++
++/*
++  reset remote status
++ */
++int ctdb_status_reset(struct ctdb_context *ctdb, uint32_t destnode)
++{
++	int ret;
++	TDB_DATA data;
++	int32_t res;
++
++	ZERO_STRUCT(data);
++	ret = ctdb_control(ctdb, destnode, 0, 
++			   CTDB_CONTROL_STATUS_RESET, data, 
++			   NULL, NULL, &res);
++	if (ret != 0 || res != 0) {
++		DEBUG(0,(__location__ " ctdb_control for reset status failed\n"));
++		return -1;
++	}
++	return 0;
++}
+
+=== modified file 'common/ctdb_control.c'
+--- a/common/ctdb_control.c	2007-04-28 13:15:21 +0000
++++ b/common/ctdb_control.c	2007-04-28 17:13:36 +0000
+@@ -80,6 +80,12 @@
+ 		return 0;
+ 	}
+ 
++	case CTDB_CONTROL_STATUS_RESET: {
++		CHECK_CONTROL_DATA_SIZE(0);
++		ZERO_STRUCT(ctdb->status);
++		return 0;
++	}
++
+ 	case CTDB_CONTROL_GETVNNMAP: {
+ 		uint32_t i, len;
+ 		CHECK_CONTROL_DATA_SIZE(0);
+
+=== modified file 'include/ctdb.h'
+--- a/include/ctdb.h	2007-04-28 15:42:40 +0000
++++ b/include/ctdb.h	2007-04-28 17:13:36 +0000
+@@ -256,4 +256,6 @@
+ uint32_t *ctdb_get_connected_nodes(struct ctdb_context *ctdb, TALLOC_CTX *mem_ctx,
+ 				   uint32_t *num_nodes);
+ 
++int ctdb_status_reset(struct ctdb_context *ctdb, uint32_t destnode);
++
+ #endif
+
+=== modified file 'include/ctdb_private.h'
+--- a/include/ctdb_private.h	2007-04-28 16:55:37 +0000
++++ b/include/ctdb_private.h	2007-04-28 17:13:36 +0000
+@@ -251,7 +251,8 @@
+ 		    CTDB_CONTROL_GET_DEBUG,
+ 		    CTDB_CONTROL_SET_DEBUG,
+ 		    CTDB_CONTROL_GET_DBMAP,
+-		    CTDB_CONTROL_GET_NODEMAP};
++		    CTDB_CONTROL_GET_NODEMAP,
++		    CTDB_CONTROL_STATUS_RESET};
+ 
+ enum call_state {CTDB_CALL_WAIT, CTDB_CALL_DONE, CTDB_CALL_ERROR};
+ 
+
+=== modified file 'tools/ctdb_control.c'
+--- a/tools/ctdb_control.c	2007-04-28 16:18:33 +0000
++++ b/tools/ctdb_control.c	2007-04-28 17:13:36 +0000
+@@ -36,6 +36,7 @@
+ 	printf("  ping\n");
+ 	printf("  process-exists <vnn:pid>           see if a process exists\n");
+ 	printf("  status <vnn|all>                   show ctdb status on a node\n");
++	printf("  statusreset <vnn|all>              reset status on a node\n");
+ 	printf("  debug <vnn|all> <level>            set ctdb debug level on a node\n");
+ 	printf("  debuglevel                         display ctdb debug levels\n");
+ 	printf("  getvnnmap <vnn>                    display ctdb vnnmap\n");
+@@ -170,6 +171,56 @@
+ 	return 0;
+ }
+ 
++
++/*
++  reset status on all nodes
++ */
++static int control_status_reset_all(struct ctdb_context *ctdb)
++{
++	int ret, i;
++	uint32_t *nodes;
++	uint32_t num_nodes;
++
++	nodes = ctdb_get_connected_nodes(ctdb, ctdb, &num_nodes);
++	CTDB_NO_MEMORY(ctdb, nodes);
++	
++	for (i=0;i<num_nodes;i++) {
++		ret = ctdb_status_reset(ctdb, nodes[i]);
++		if (ret != 0) {
++			printf("Unable to reset status on node %u\n", nodes[i]);
++			return ret;
++		}
++	}
++	talloc_free(nodes);
++	return 0;
++}
++
++
++/*
++  reset remote ctdb status
++ */
++static int control_status_reset(struct ctdb_context *ctdb, int argc, const char **argv)
++{
++	uint32_t vnn;
++	int ret;
++	if (argc < 1) {
++		usage();
++	}
++
++	if (strcmp(argv[0], "all") == 0) {
++		return control_status_reset_all(ctdb);
++	}
++
++	vnn = strtoul(argv[0], NULL, 0);
++
++	ret = ctdb_status_reset(ctdb, vnn);
++	if (ret != 0) {
++		printf("Unable to reset status on node %u\n", vnn);
++		return ret;
++	}
++	return 0;
++}
++
+ /*
+   display remote ctdb vnn map
+  */
+@@ -441,6 +492,8 @@
+ 		ret = control_process_exists(ctdb, extra_argc-1, extra_argv+1);
+ 	} else if (strcmp(control, "status") == 0) {
+ 		ret = control_status(ctdb, extra_argc-1, extra_argv+1);
++	} else if (strcmp(control, "statusreset") == 0) {
++		ret = control_status_reset(ctdb, extra_argc-1, extra_argv+1);
+ 	} else if (strcmp(control, "getvnnmap") == 0) {
+ 		ret = control_getvnnmap(ctdb, extra_argc-1, extra_argv+1);
+ 	} else if (strcmp(control, "getdbmap") == 0) {
+

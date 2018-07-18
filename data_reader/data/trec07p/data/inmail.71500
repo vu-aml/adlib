@@ -1,0 +1,105 @@
+From r-help-bounces@stat.math.ethz.ch  Mon Jul  2 00:21:50 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l624LnL9008897
+	for <ktwarwic@flax9.uwaterloo.ca>; Mon, 2 Jul 2007 00:21:49 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l624KA46006075;
+	Mon, 2 Jul 2007 06:20:30 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.6 required=5.0 tests=AWL, BAYES_50, DKIM_SIGNED,
+	DKIM_VERIFIED autolearn=no version=3.2.0
+Received: from wx-out-0506.google.com (wx-out-0506.google.com [66.249.82.236])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l624K3ja006049
+	for <r-help@stat.math.ethz.ch>; Mon, 2 Jul 2007 06:20:03 +0200
+Received: by wx-out-0506.google.com with SMTP id i28so1337173wxd
+	for <r-help@stat.math.ethz.ch>; Sun, 01 Jul 2007 21:20:02 -0700 (PDT)
+Received: by 10.90.113.18 with SMTP id l18mr4520715agc.1183350002889;
+	Sun, 01 Jul 2007 21:20:02 -0700 (PDT)
+Received: by 10.90.118.18 with HTTP; Sun, 1 Jul 2007 21:20:02 -0700 (PDT)
+Message-ID: <971536df0707012120j7862cb2cnb70e8c6b8f2c676@mail.gmail.com>
+Date: Mon, 2 Jul 2007 00:20:02 -0400
+From: "Gabor Grothendieck" <ggrothendieck@gmail.com>
+To: "Markus Loecher" <markus@insightfromdata.com>
+In-Reply-To: <200706291302.l5TD2wc9015482@hypatia.math.ethz.ch>
+MIME-Version: 1.0
+Content-Disposition: inline
+References: <200706281511.l5SFBlat007218@hypatia.math.ethz.ch>
+	<18052.43963.748646.703108@stat.math.ethz.ch>
+	<Pine.LNX.4.64.0706290840510.1099@gannet.stats.ox.ac.uk>
+	<200706291302.l5TD2wc9015482@hypatia.math.ethz.ch>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] align() function missing in R ?
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+On 6/29/07, Markus Loecher <markus@insightfromdata.com> wrote:
+> Thank you for your responses, I should have given an example of the
+> functionality I am looking for, here are three typical scenarios that
+> I deal with a lot in my work:
+>
+> - a regular timeseries with lots of missing values that I want to
+> convert to the corresponding regular time series with mssing values
+> replaced by NAs, e.g.:
+>         x = timeSeries(c(0.5,0.2,0.3,0.4,0.3,0.2,0.3), pos =
+> c(1,2,5,8,9,12,14));
+>         x.align = align(x, pos = 1:14, method = "NA");
+> - a regular timeseries at a coarse scale which I want to linearly
+> interpolate to a finer time scale:
+>         x = ts(1:10, frequency = 4);
+>         x.align = align(x, frequency = 8, method = "interp")
+> - an irregular timeseries which I want to linearly interpolate to a
+> regular time grid:
+>         x = timeSeries(c(0.5,0.2,0.3,0.4,0.3,0.2,0.3), pos =
+> c(1,2.5,3.2,4.1,5.7,6.5,7.3));
+>         x.align = align(x, pos = 1:7, method = "interp");
+>
+> I am wondering how to easily code such a function using only window,
+> ts.union and ts.intersect.
+
+Here it is using zoo series:
+
+
+library(zoo)
+x <- c(0.5, 0.2, 0.3, 0.4, 0.3, 0.2, 0.3)
+
+x1 <- zoo(x, c(1, 2, 5, 8, 9, 12, 14))
+as.zoo(as.ts(x1))
+
+x2 <- zooreg(1:10, frequency = 4)
+frequency(x2) <- 8
+x2
+
+x3 <- zoo(x,  c(1, 2.5, 3.2, 4.1, 5.7, 6.5, 7.3))
+tt <- 1:7
+zoo(approx(time(x3), x3, tt)$y, tt)
+# or
+tt <- as.numeric(1:7) # can omit if warning in next line ok
+window(na.approx(cbind(x3, zoo(, tt))), tt)
+
+For more on zoo:
+
+library(zoo)
+vignette("zoo")
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

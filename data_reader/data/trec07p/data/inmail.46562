@@ -1,0 +1,108 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 29 22:28:30 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4U2SUhB008027
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 22:28:30 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 726C6162C38
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 30 May 2007 02:28:25 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id C4850162ABF; Wed, 30 May 2007 02:27:58 +0000 (GMT)
+Date: Wed, 30 May 2007 12:27:59 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070530022758.C4850162ABF@lists.samba.org>
+Subject: Rev 397: wait for local tcp services like smbd to come up before
+	allowing ctdb to start talking to other nodes in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 397
+revision-id: tridge@samba.org-20070530022758-26c4o6952lel86gt
+parent: tridge@samba.org-20070530011752-x8gi0mp8otg937uu
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Wed 2007-05-30 12:27:58 +1000
+message:
+  wait for local tcp services like smbd to come up before allowing ctdb to start talking to other nodes
+modified:
+  common/ctdb_daemon.c           ctdb_daemon.c-20070409200331-3el1kqgdb9m4ib0g-1
+  tools/events                   events-20070529030121-04fjh63cxfh8v1pj-1
+=== modified file 'common/ctdb_daemon.c'
+--- a/common/ctdb_daemon.c	2007-05-29 07:23:29 +0000
++++ b/common/ctdb_daemon.c	2007-05-30 02:27:58 +0000
+@@ -50,6 +50,12 @@
+ 		return;
+ 	}
+ 
++	ret = ctdb_event_script(ctdb, "startup");
++	if (ret != 0) {
++		DEBUG(0,("Failed startup event script\n"));
++		return;
++	}
++
+ 	/* start the transport running */
+ 	if (ctdb->methods->start(ctdb) != 0) {
+ 		DEBUG(0,("transport failed to start!\n"));
+
+=== modified file 'tools/events'
+--- a/tools/events	2007-05-30 00:21:16 +0000
++++ b/tools/events	2007-05-30 02:27:58 +0000
+@@ -1,10 +1,28 @@
+ #!/bin/sh
+ # sample event script for ctdb
+ 
++. /etc/sysconfig/ctdb
++
+ cmd="$1"
+ shift
+ 
+ case $cmd in 
++     startup)
++	# wait for local services to come up
++	[ -z "$CTDB_WAIT_TCP_PORTS" ] || {
++	  all_ok=0
++	  while [ $all_ok -eq 0 ]; do
++	  	  all_ok=1
++	  	  for p in $CTDB_WAIT_TCP_PORTS; do
++	  	      /usr/bin/nc -z 127.0.0.1 $p || all_ok=0
++		  done
++		  [ $all_ok -eq 1 ] || sleep 1
++          done
++	  echo "Local services on $CTDB_WAIT_TCP_PORTS are up"
++	}
++	exit 0;	
++	;;
++	
+      takeip)
+ 	if [ $# != 3 ]; then
+ 	   echo "must supply interface, IP and maskbits"
+@@ -13,6 +31,7 @@
+ 	iface=$1
+ 	ip=$2
+ 	maskbits=$3
++
+ 	/sbin/ip addr add $ip/$maskbits dev $iface || {
+ 		 echo "Failed to add $ip/$maskbits on dev $iface"
+ 		 exit 1
+

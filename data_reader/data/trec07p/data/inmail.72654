@@ -1,0 +1,73 @@
+From perl6-all-return-82518-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue Jul  3 05:45:05 2007
+Return-Path: <perl6-all-return-82518-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l639j4L9026956
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 3 Jul 2007 05:45:05 -0400
+Received: (qmail 22157 invoked by uid 514); 3 Jul 2007 09:45:00 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 22152 invoked from network); 3 Jul 2007 09:44:59 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+Message-ID: <468A1A7A.2020707@jnthn.net>
+Date: Tue, 03 Jul 2007 10:44:26 +0100
+From: Jonathan Worthington <jonathan@jnthn.net>
+User-Agent: Thunderbird 1.5.0.12 (Windows/20070509)
+MIME-Version: 1.0
+To: "perl6-internals@perl.org" <perl6-internals@perl.org>
+Subject: find_method changes look wrong
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+
+Hi,
+
+Just looking at the Class and Object PMCs and a couple of things concern me.
+
+1) Inside the method finding code I see this has been added:
+
+         if (  ! PMC_IS_NULL(namespace)
+            &&  VTABLE_exists_keyed_str(interp, namespace, name)) {
+            PMC *ret = VTABLE_get_pmc_keyed_str(interp, namespace, name);
+            PCCRETURN(PMC *ret);
+        }
+
+Which is in contradiction with PDD15:
+
+"Since the method list and vtable override list are stored in the class 
+PMC, method finding is a lookup on the class object and not a lookup in 
+the namespace."
+
+2) find_method used to be implemented in the Object PMC. I see now that 
+there is a find_method PCCMETHOD in the Class PMC that the Object PMC 
+calls. This is bad, since all PCCMETHODs are eventually supposed to be 
+moved out to a role so we don't pollute the method "namespace" or a 
+Class with things that other languages don't want. That means that 
+Object should not rely on there being a find_method PCCMETHOD in the class.
+
+To me it feels wrong for it to be there anyway. Class methods are 
+distinct from object methods. The PCCMETHODs described in PDD15 are 
+methods of an instance of Class. The things that you add_method'd to a 
+class are methods of objects instantiated from the class.
+
+Thanks,
+
+Jonathan
+

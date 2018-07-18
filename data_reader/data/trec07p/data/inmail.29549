@@ -1,0 +1,124 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat May  5 17:14:12 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l45LECqD031547
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 5 May 2007 17:14:12 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 0F93B162BCA
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat,  5 May 2007 21:14:11 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.4 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id 73433162AD0; Sat,  5 May 2007 21:13:41 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070505211341.73433162AD0@lists.samba.org>
+Date: Sat,  5 May 2007 21:13:41 +0000 (GMT)
+Subject: svn commit: samba r22691 - in branches: SAMBA_3_0/source/smbd
+	SAMBA_3_0_26/source/smbd
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-05-05 21:13:40 +0000 (Sat, 05 May 2007)
+New Revision: 22691
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22691
+
+Log:
+Fix a 64-bit warning and a const const discard warning
+
+Modified:
+   branches/SAMBA_3_0/source/smbd/dmapi.c
+   branches/SAMBA_3_0/source/smbd/process.c
+   branches/SAMBA_3_0_26/source/smbd/dmapi.c
+   branches/SAMBA_3_0_26/source/smbd/process.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/smbd/dmapi.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/dmapi.c	2007-05-05 20:51:58 UTC (rev 22690)
++++ branches/SAMBA_3_0/source/smbd/dmapi.c	2007-05-05 21:13:40 UTC (rev 22691)
+@@ -152,7 +152,8 @@
+ 
+ 	/* No session already defined. */
+ 	if (dmapi_session == DM_NO_SESSION) {
+-		err = dm_create_session(DM_NO_SESSION, DMAPI_SESSION_NAME,
++		err = dm_create_session(DM_NO_SESSION,
++					CONST_DISCARD(DMAPI_SESSION_NAME),
+ 					&dmapi_session);
+ 		if (err < 0) {
+ 			DEBUGADD(DMAPI_TRACE,
+
+Modified: branches/SAMBA_3_0/source/smbd/process.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/process.c	2007-05-05 20:51:58 UTC (rev 22690)
++++ branches/SAMBA_3_0/source/smbd/process.c	2007-05-05 21:13:40 UTC (rev 22691)
+@@ -1211,10 +1211,9 @@
+ 	/* work out the new size for the in buffer. */
+ 	new_size = size - (inbuf2 - inbuf);
+ 	if (new_size < 0) {
+-		DEBUG(0,("chain_reply: chain packet size incorrect (orig size = %d, "
+-			"offset = %d)\n",
+-			size,
+-			(inbuf2 - inbuf) ));
++		DEBUG(0,("chain_reply: chain packet size incorrect "
++			 "(orig size = %d, offset = %d)\n",
++			 size, (int)(inbuf2 - inbuf) ));
+ 		exit_server_cleanly("Bad chained packet");
+ 		return(-1);
+ 	}
+
+Modified: branches/SAMBA_3_0_26/source/smbd/dmapi.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/smbd/dmapi.c	2007-05-05 20:51:58 UTC (rev 22690)
++++ branches/SAMBA_3_0_26/source/smbd/dmapi.c	2007-05-05 21:13:40 UTC (rev 22691)
+@@ -152,7 +152,8 @@
+ 
+ 	/* No session already defined. */
+ 	if (dmapi_session == DM_NO_SESSION) {
+-		err = dm_create_session(DM_NO_SESSION, DMAPI_SESSION_NAME,
++		err = dm_create_session(DM_NO_SESSION,
++					CONST_DISCARD(DMAPI_SESSION_NAME),
+ 					&dmapi_session);
+ 		if (err < 0) {
+ 			DEBUGADD(DMAPI_TRACE,
+
+Modified: branches/SAMBA_3_0_26/source/smbd/process.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/smbd/process.c	2007-05-05 20:51:58 UTC (rev 22690)
++++ branches/SAMBA_3_0_26/source/smbd/process.c	2007-05-05 21:13:40 UTC (rev 22691)
+@@ -1202,10 +1202,9 @@
+ 	/* work out the new size for the in buffer. */
+ 	new_size = size - (inbuf2 - inbuf);
+ 	if (new_size < 0) {
+-		DEBUG(0,("chain_reply: chain packet size incorrect (orig size = %d, "
+-			"offset = %d)\n",
+-			size,
+-			(inbuf2 - inbuf) ));
++		DEBUG(0,("chain_reply: chain packet size incorrect "
++			 "(orig size = %d, offset = %d)\n",
++			 size, (int)(inbuf2 - inbuf) ));
+ 		exit_server_cleanly("Bad chained packet");
+ 		return(-1);
+ 	}
+

@@ -1,0 +1,86 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu May 17 14:20:45 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4HIKiqD003050
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 17 May 2007 14:20:45 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 00D9116395F
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 17 May 2007 18:20:42 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.8 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 535)
+	id B003D162C3A; Thu, 17 May 2007 18:20:23 +0000 (GMT)
+To: samba-cvs@samba.org
+From: idra@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070517182023.B003D162C3A@lists.samba.org>
+Date: Thu, 17 May 2007 18:20:23 +0000 (GMT)
+Subject: svn commit: samba r22974 - in branches/SAMBA_3_0/source: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: idra
+Date: 2007-05-17 18:20:16 +0000 (Thu, 17 May 2007)
+New Revision: 22974
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22974
+
+Log:
+enable relro with PIE if available, this gives extra protection to the ELF segment
+Modified:
+   branches/SAMBA_3_0/source/configure.in
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/configure.in
+===================================================================
+--- branches/SAMBA_3_0/source/configure.in	2007-05-17 13:56:19 UTC (rev 22973)
++++ branches/SAMBA_3_0/source/configure.in	2007-05-17 18:20:16 UTC (rev 22974)
+@@ -1763,6 +1763,29 @@
+ 	fi
+ fi
+ 
++#Check if we can enable relro as well
++if test x"${samba_cv_fpie}" = x"yes"
++then
++	AC_CACHE_CHECK(for relro, samba_cv_fpie_relro,
++	[
++		cat > conftest.c <<EOF
++int foo;
++main () { return 0;}
++EOF
++                if AC_TRY_COMMAND([${CC-cc} $CFLAGS $CPPFLAGS $LDFLAGS -pie -fPIE -Wl,z,relro -o conftest conftest.c 1>&AS_MESSAGE_LOG_FD])
++		then
++			samba_cv_fpie_relro=yes
++		else
++			samba_cv_fpie_relro=no
++		fi
++		rm -f conftest*
++	])
++	if test x"${samba_cv_fpie_relro}" = x"yes"
++	then
++		PIE_LDFLAGS="-pie -Wl,z,relro"
++	fi
++fi
++
+ # Assume non-shared by default and override below
+ BLDSHARED="false"
+ 
+

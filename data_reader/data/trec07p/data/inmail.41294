@@ -1,0 +1,281 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 22 01:22:47 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4M5MkqD008233
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 22 May 2007 01:22:46 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 1724A16383D
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 22 May 2007 05:22:43 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.5 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 501)
+	id B2289162ACE; Tue, 22 May 2007 05:22:01 +0000 (GMT)
+To: samba-cvs@samba.org
+From: abartlet@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070522052201.B2289162ACE@lists.samba.org>
+Date: Tue, 22 May 2007 05:22:01 +0000 (GMT)
+Subject: svn commit: samba r23063 - in
+	branches/SAMBA_4_0/source/auth/credentials: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: abartlet
+Date: 2007-05-22 05:21:59 +0000 (Tue, 22 May 2007)
+New Revision: 23063
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23063
+
+Log:
+Make sure to invalidate the ccache when we set a
+username/password/realm/etc from the command line.
+
+Also make sure it can't 'come back' from a later call to
+cli_credentials_guess(), buy setting a threshold.
+
+This should fix the issues with the build farm...
+
+Andrew Bartlett
+
+Modified:
+   branches/SAMBA_4_0/source/auth/credentials/credentials.c
+   branches/SAMBA_4_0/source/auth/credentials/credentials.h
+   branches/SAMBA_4_0/source/auth/credentials/credentials_krb5.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/auth/credentials/credentials.c
+===================================================================
+--- branches/SAMBA_4_0/source/auth/credentials/credentials.c	2007-05-22 05:16:16 UTC (rev 23062)
++++ branches/SAMBA_4_0/source/auth/credentials/credentials.c	2007-05-22 05:21:59 UTC (rev 23063)
+@@ -53,6 +53,9 @@
+ 	cred->keytab_obtained = CRED_UNINITIALISED;
+ 	cred->principal_obtained = CRED_UNINITIALISED;
+ 
++	cred->ccache_threshold = CRED_UNINITIALISED;
++	cred->client_gss_creds_threshold = CRED_UNINITIALISED;
++
+ 	cred->old_password = NULL;
+ 	cred->smb_krb5_context = NULL;
+ 	cred->salt_principal = NULL;
+@@ -125,6 +128,7 @@
+ 		cred->username = cred->username_cb(cred);
+ 	    	cred->callback_running = False;
+ 		cred->username_obtained = CRED_SPECIFIED;
++		cli_credentials_invalidate_ccache(cred, cred->username_obtained);
+ 	}
+ 
+ 	return cred->username;
+@@ -136,6 +140,7 @@
+ 	if (obtained >= cred->username_obtained) {
+ 		cred->username = talloc_strdup(cred, val);
+ 		cred->username_obtained = obtained;
++		cli_credentials_invalidate_ccache(cred, cred->username_obtained);
+ 		return True;
+ 	}
+ 
+@@ -191,6 +196,7 @@
+ 		cred->principal = cred->principal_cb(cred);
+ 	    	cred->callback_running = False;
+ 		cred->principal_obtained = CRED_SPECIFIED;
++		cli_credentials_invalidate_ccache(cred, cred->principal_obtained);
+ 	}
+ 
+ 	if (cred->principal_obtained < cred->username_obtained) {
+@@ -214,6 +220,7 @@
+ 	if (obtained >= cred->principal_obtained) {
+ 		cred->principal = talloc_strdup(cred, val);
+ 		cred->principal_obtained = obtained;
++		cli_credentials_invalidate_ccache(cred, cred->principal_obtained);
+ 		return True;
+ 	}
+ 
+@@ -280,6 +287,7 @@
+ 		cred->password = cred->password_cb(cred);
+ 	    	cred->callback_running = False;
+ 		cred->password_obtained = CRED_CALLBACK_RESULT;
++		cli_credentials_invalidate_ccache(cred, cred->password_obtained);
+ 	}
+ 
+ 	return cred->password;
+@@ -295,6 +303,7 @@
+ 	if (obtained >= cred->password_obtained) {
+ 		cred->password = talloc_strdup(cred, val);
+ 		cred->password_obtained = obtained;
++		cli_credentials_invalidate_ccache(cred, cred->password_obtained);
+ 
+ 		cred->nt_hash = NULL;
+ 		return True;
+@@ -309,6 +318,7 @@
+ 	if (cred->password_obtained < CRED_CALLBACK) {
+ 		cred->password_cb = password_cb;
+ 		cred->password_obtained = CRED_CALLBACK;
++		cli_credentials_invalidate_ccache(cred, cred->password_obtained);
+ 		return True;
+ 	}
+ 
+@@ -401,6 +411,7 @@
+ 		cred->domain = cred->domain_cb(cred);
+ 	    	cred->callback_running = False;
+ 		cred->domain_obtained = CRED_SPECIFIED;
++		cli_credentials_invalidate_ccache(cred, cred->domain_obtained);
+ 	}
+ 
+ 	return cred->domain;
+@@ -417,6 +428,7 @@
+ 		 * calculations */
+ 		cred->domain = strupper_talloc(cred, val);
+ 		cred->domain_obtained = obtained;
++		cli_credentials_invalidate_ccache(cred, cred->domain_obtained);
+ 		return True;
+ 	}
+ 
+@@ -453,6 +465,7 @@
+ 		cred->realm = cred->realm_cb(cred);
+ 	    	cred->callback_running = False;
+ 		cred->realm_obtained = CRED_SPECIFIED;
++		cli_credentials_invalidate_ccache(cred, cred->realm_obtained);
+ 	}
+ 
+ 	return cred->realm;
+@@ -469,6 +482,7 @@
+ 	if (obtained >= cred->realm_obtained) {
+ 		cred->realm = strupper_talloc(cred, val);
+ 		cred->realm_obtained = obtained;
++		cli_credentials_invalidate_ccache(cred, cred->realm_obtained);
+ 		return True;
+ 	}
+ 
+
+Modified: branches/SAMBA_4_0/source/auth/credentials/credentials.h
+===================================================================
+--- branches/SAMBA_4_0/source/auth/credentials/credentials.h	2007-05-22 05:16:16 UTC (rev 23062)
++++ branches/SAMBA_4_0/source/auth/credentials/credentials.h	2007-05-22 05:21:59 UTC (rev 23063)
+@@ -61,6 +61,13 @@
+ 	enum credentials_obtained keytab_obtained;
+ 	enum credentials_obtained server_gss_creds_obtained;
+ 
++	/* Threshold values (essentially a MAX() over a number of the
++	 * above) for the ccache and GSS credentials, to ensure we
++	 * regenerate/pick correctly */
++
++	enum credentials_obtained ccache_threshold;
++	enum credentials_obtained client_gss_creds_threshold;
++
+ 	const char *workstation;
+ 	const char *username;
+ 	const char *password;
+
+Modified: branches/SAMBA_4_0/source/auth/credentials/credentials_krb5.c
+===================================================================
+--- branches/SAMBA_4_0/source/auth/credentials/credentials_krb5.c	2007-05-22 05:16:16 UTC (rev 23062)
++++ branches/SAMBA_4_0/source/auth/credentials/credentials_krb5.c	2007-05-22 05:21:59 UTC (rev 23063)
+@@ -101,7 +101,9 @@
+ 
+ 	krb5_free_principal(cred->ccache->smb_krb5_context->krb5_context, princ);
+ 
++	/* set the ccache_obtained here, as it just got set to UNINITIALISED by the calls above */
+ 	cred->ccache_obtained = obtained;
++	cli_credentials_invalidate_client_gss_creds(cred, cred->ccache_obtained);
+ 
+ 	return 0;
+ }
+@@ -262,9 +264,7 @@
+ 		cli_credentials_set_machine_account(cred);
+ 	}
+ 
+-	if (cred->ccache_obtained >=(MAX(MAX(cred->principal_obtained, 
+-					     cred->username_obtained), 
+-					 cred->password_obtained))) {
++	if (cred->ccache_obtained >= cred->ccache_threshold) {
+ 		*ccc = cred->ccache;
+ 		return 0;
+ 	}
+@@ -289,6 +289,49 @@
+ 	return ret;
+ }
+ 
++void cli_credentials_invalidate_client_gss_creds(struct cli_credentials *cred, 
++						 enum credentials_obtained obtained)
++{
++	/* If the caller just changed the username/password etc, then
++	 * any cached credentials are now invalid */
++	if (obtained >= cred->client_gss_creds_obtained) {
++		if (cred->client_gss_creds_obtained > CRED_UNINITIALISED) {
++			talloc_free(cred->client_gss_creds);
++		}
++		cred->client_gss_creds_obtained = CRED_UNINITIALISED;
++	}
++	/* Now that we know that the data is 'this specified', then
++	 * don't allow something less 'known' to be returned as a
++	 * ccache.  Ie, if the username is on the commmand line, we
++	 * don't want to later guess to use a file-based ccache */
++	if (obtained > cred->client_gss_creds_threshold) {
++		cred->client_gss_creds_threshold = obtained;
++	}
++}
++
++void cli_credentials_invalidate_ccache(struct cli_credentials *cred, 
++				       enum credentials_obtained obtained)
++{
++	/* If the caller just changed the username/password etc, then
++	 * any cached credentials are now invalid */
++	if (obtained >= cred->ccache_obtained) {
++		if (cred->ccache_obtained > CRED_UNINITIALISED) {
++			talloc_free(cred->ccache);
++		}
++		cred->ccache_obtained = CRED_UNINITIALISED;
++	}
++	/* Now that we know that the data is 'this specified', then
++	 * don't allow something less 'known' to be returned as a
++	 * ccache.  Ie, if the username is on the commmand line, we
++	 * don't want to later guess to use a file-based ccache */
++	if (obtained > cred->ccache_threshold) {
++		cred->ccache_threshold  = obtained;
++	}
++
++	cli_credentials_invalidate_client_gss_creds(cred, 
++						    obtained);
++}
++
+ static int free_gssapi_creds(struct gssapi_creds_container *gcc)
+ {
+ 	OM_uint32 min_stat, maj_stat;
+@@ -303,9 +346,7 @@
+ 	OM_uint32 maj_stat, min_stat;
+ 	struct gssapi_creds_container *gcc;
+ 	struct ccache_container *ccache;
+-	if (cred->client_gss_creds_obtained >= (MAX(cred->ccache_obtained, 
+-					     MAX(cred->principal_obtained, 
+-						 cred->username_obtained)))) {
++	if (cred->client_gss_creds_obtained >= cred->client_gss_creds_threshold) {
+ 		*_gcc = cred->client_gss_creds;
+ 		return 0;
+ 	}
+@@ -389,6 +430,8 @@
+ 		gcc->creds = gssapi_cred;
+ 		talloc_set_destructor(gcc, free_gssapi_creds);
+ 		
++		/* set the clinet_gss_creds_obtained here, as it just 
++		   got set to UNINITIALISED by the calls above */
+ 		cred->client_gss_creds_obtained = obtained;
+ 		cred->client_gss_creds = gcc;
+ 	}
+

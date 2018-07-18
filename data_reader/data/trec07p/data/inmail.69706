@@ -1,0 +1,292 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Jun 29 13:52:14 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5THqDL9029059
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 29 Jun 2007 13:52:13 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 4F304162ADB
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 29 Jun 2007 17:52:10 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id E008F162AD9; Fri, 29 Jun 2007 17:51:34 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070629175134.E008F162AD9@lists.samba.org>
+Date: Fri, 29 Jun 2007 17:51:34 +0000 (GMT)
+Subject: svn commit: samba r23662 - in branches: SAMBA_3_0/source
+	SAMBA_3_0/source/lib SAMBA_3_0/source/torture
+	SAMBA_3_0_26/source SAMBA_3_0_26/source/lib
+	SAMBA_3_0_26/source/torture
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-06-29 17:51:31 +0000 (Fri, 29 Jun 2007)
+New Revision: 23662
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23662
+
+Log:
+According to simo, check_dos_char is needed
+Added:
+   branches/SAMBA_3_0/source/torture/t_doschar.c
+   branches/SAMBA_3_0_26/source/torture/t_doschar.c
+Modified:
+   branches/SAMBA_3_0/source/Makefile.in
+   branches/SAMBA_3_0/source/lib/charcnv.c
+   branches/SAMBA_3_0/source/lib/util_unistr.c
+   branches/SAMBA_3_0_26/source/Makefile.in
+   branches/SAMBA_3_0_26/source/lib/charcnv.c
+   branches/SAMBA_3_0_26/source/lib/util_unistr.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/Makefile.in
+===================================================================
+--- branches/SAMBA_3_0/source/Makefile.in	2007-06-29 17:40:37 UTC (rev 23661)
++++ branches/SAMBA_3_0/source/Makefile.in	2007-06-29 17:51:31 UTC (rev 23662)
+@@ -1735,6 +1735,8 @@
+ bin/t_stringoverflow@EXEEXT@: $(BINARY_PREREQS) bin/libbigballofmud.@SHLIBEXT@ torture/t_stringoverflow.o
+ 	$(CC) $(FLAGS) -o $@ $(DYNEXP) torture/t_stringoverflow.o -L./bin -lbigballofmud
+ 
++bin/t_doschar@EXEEXT@: $(BINARY_PREREQS) bin/libbigballofmud.@SHLIBEXT@ torture/t_doschar.o
++	$(CC) $(FLAGS) -o $@ $(DYNEXP) $(LIBS) torture/t_doschar.o -L ./bin -lbigballofmud
+ bin/t_push_ucs2@EXEEXT@: $(BINARY_PREREQS) bin/libbigballofmud.@SHLIBEXT@ torture/t_push_ucs2.o
+ 	$(CC) $(FLAGS) -o $@ $(DYNEXP) $(LIBS) torture/t_push_ucs2.o -L ./bin -lbigballofmud
+ 
+
+Modified: branches/SAMBA_3_0/source/lib/charcnv.c
+===================================================================
+--- branches/SAMBA_3_0/source/lib/charcnv.c	2007-06-29 17:40:37 UTC (rev 23661)
++++ branches/SAMBA_3_0/source/lib/charcnv.c	2007-06-29 17:51:31 UTC (rev 23662)
+@@ -179,6 +179,7 @@
+ 		 * codepage changes? */
+ 		/* XXX: Is the did_reload test too strict? */
+ 		conv_silent = True;
++		init_doschar_table();
+ 		init_valid_table();
+ 		conv_silent = False;
+ 	}
+
+Modified: branches/SAMBA_3_0/source/lib/util_unistr.c
+===================================================================
+--- branches/SAMBA_3_0/source/lib/util_unistr.c	2007-06-29 17:40:37 UTC (rev 23661)
++++ branches/SAMBA_3_0/source/lib/util_unistr.c	2007-06-29 17:51:31 UTC (rev 23662)
+@@ -36,6 +36,14 @@
+ static BOOL valid_table_use_unmap;
+ 
+ /**
++ * This table says which Unicode characters are valid dos
++ * characters.
++ *
++ * Each value is just a single bit.
++ **/
++static uint8 doschar_table[8192]; /* 65536 characters / 8 bits/byte */
++
++/**
+  * Destroy global objects allocated by load_case_tables()
+  **/
+ void gfree_case_tables(void)
+@@ -142,6 +150,21 @@
+ #endif
+ }
+ 
++/*
++  see if a ucs2 character can be mapped correctly to a dos character
++  and mapped back to the same character in ucs2
++*/
++
++int check_dos_char(smb_ucs2_t c)
++{
++	lazy_initialize_conv();
++	
++	/* Find the right byte, and right bit within the byte; return
++	 * 1 or 0 */
++	return (doschar_table[(c & 0xffff) / 8] & (1 << (c & 7))) != 0;
++}
++
++
+ static int check_dos_char_slowly(smb_ucs2_t c)
+ {
+ 	char buf[10];
+@@ -159,7 +182,34 @@
+ 	return (c == c2);
+ }
+ 
++
+ /**
++ * Fill out doschar table the hard way, by examining each character
++ **/
++
++void init_doschar_table(void)
++{
++	int i, j, byteval;
++
++	/* For each byte of packed table */
++	
++	for (i = 0; i <= 0xffff; i += 8) {
++		byteval = 0;
++		for (j = 0; j <= 7; j++) {
++			smb_ucs2_t c;
++
++			c = i + j;
++			
++			if (check_dos_char_slowly(c)) {
++				byteval |= 1 << j;
++			}
++		}
++		doschar_table[i/8] = byteval;
++	}
++}
++
++
++/**
+  * Load the valid character map table from <tt>valid.dat</tt> or
+  * create from the configured codepage.
+  *
+@@ -207,7 +257,7 @@
+ 	for (;i<0x10000;i++) {
+ 		smb_ucs2_t c;
+ 		SSVAL(&c, 0, i);
+-		valid_table[i] = check_dos_char_slowly(c);
++		valid_table[i] = check_dos_char(c);
+ 	}
+ }
+ 
+
+Copied: branches/SAMBA_3_0/source/torture/t_doschar.c (from rev 23659, branches/SAMBA_3_0/source/torture/t_doschar.c)
+
+Modified: branches/SAMBA_3_0_26/source/Makefile.in
+===================================================================
+--- branches/SAMBA_3_0_26/source/Makefile.in	2007-06-29 17:40:37 UTC (rev 23661)
++++ branches/SAMBA_3_0_26/source/Makefile.in	2007-06-29 17:51:31 UTC (rev 23662)
+@@ -1725,6 +1725,8 @@
+ bin/t_stringoverflow@EXEEXT@: $(BINARY_PREREQS) bin/libbigballofmud.@SHLIBEXT@ torture/t_stringoverflow.o
+ 	$(CC) $(FLAGS) -o $@ $(DYNEXP) torture/t_stringoverflow.o -L./bin -lbigballofmud
+ 
++bin/t_doschar@EXEEXT@: $(BINARY_PREREQS) bin/libbigballofmud.@SHLIBEXT@ torture/t_doschar.o
++	$(CC) $(FLAGS) -o $@ $(DYNEXP) $(LIBS) torture/t_doschar.o -L ./bin -lbigballofmud
+ bin/t_push_ucs2@EXEEXT@: $(BINARY_PREREQS) bin/libbigballofmud.@SHLIBEXT@ torture/t_push_ucs2.o
+ 	$(CC) $(FLAGS) -o $@ $(DYNEXP) $(LIBS) torture/t_push_ucs2.o -L ./bin -lbigballofmud
+ 
+
+Modified: branches/SAMBA_3_0_26/source/lib/charcnv.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/lib/charcnv.c	2007-06-29 17:40:37 UTC (rev 23661)
++++ branches/SAMBA_3_0_26/source/lib/charcnv.c	2007-06-29 17:51:31 UTC (rev 23662)
+@@ -179,6 +179,7 @@
+ 		 * codepage changes? */
+ 		/* XXX: Is the did_reload test too strict? */
+ 		conv_silent = True;
++		init_doschar_table();
+ 		init_valid_table();
+ 		conv_silent = False;
+ 	}
+
+Modified: branches/SAMBA_3_0_26/source/lib/util_unistr.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/lib/util_unistr.c	2007-06-29 17:40:37 UTC (rev 23661)
++++ branches/SAMBA_3_0_26/source/lib/util_unistr.c	2007-06-29 17:51:31 UTC (rev 23662)
+@@ -36,6 +36,14 @@
+ static BOOL valid_table_use_unmap;
+ 
+ /**
++ * This table says which Unicode characters are valid dos
++ * characters.
++ *
++ * Each value is just a single bit.
++ **/
++static uint8 doschar_table[8192]; /* 65536 characters / 8 bits/byte */
++
++/**
+  * Destroy global objects allocated by load_case_tables()
+  **/
+ void gfree_case_tables(void)
+@@ -142,6 +150,21 @@
+ #endif
+ }
+ 
++/*
++  see if a ucs2 character can be mapped correctly to a dos character
++  and mapped back to the same character in ucs2
++*/
++
++int check_dos_char(smb_ucs2_t c)
++{
++	lazy_initialize_conv();
++	
++	/* Find the right byte, and right bit within the byte; return
++	 * 1 or 0 */
++	return (doschar_table[(c & 0xffff) / 8] & (1 << (c & 7))) != 0;
++}
++
++
+ static int check_dos_char_slowly(smb_ucs2_t c)
+ {
+ 	char buf[10];
+@@ -159,7 +182,34 @@
+ 	return (c == c2);
+ }
+ 
++
+ /**
++ * Fill out doschar table the hard way, by examining each character
++ **/
++
++void init_doschar_table(void)
++{
++	int i, j, byteval;
++
++	/* For each byte of packed table */
++	
++	for (i = 0; i <= 0xffff; i += 8) {
++		byteval = 0;
++		for (j = 0; j <= 7; j++) {
++			smb_ucs2_t c;
++
++			c = i + j;
++			
++			if (check_dos_char_slowly(c)) {
++				byteval |= 1 << j;
++			}
++		}
++		doschar_table[i/8] = byteval;
++	}
++}
++
++
++/**
+  * Load the valid character map table from <tt>valid.dat</tt> or
+  * create from the configured codepage.
+  *
+@@ -207,7 +257,7 @@
+ 	for (;i<0x10000;i++) {
+ 		smb_ucs2_t c;
+ 		SSVAL(&c, 0, i);
+-		valid_table[i] = check_dos_char_slowly(c);
++		valid_table[i] = check_dos_char(c);
+ 	}
+ }
+ 
+
+Copied: branches/SAMBA_3_0_26/source/torture/t_doschar.c (from rev 23659, branches/SAMBA_3_0_26/source/torture/t_doschar.c)
+

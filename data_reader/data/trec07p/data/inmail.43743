@@ -1,0 +1,85 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri May 25 14:31:58 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4PIVvqD031256
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 25 May 2007 14:31:57 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 33A3E16385C
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 25 May 2007 18:31:53 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-3.2 required=3.8 tests=ALL_TRUSTED,AWL,BAYES_00 
+	autolearn=ham version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: from [127.0.0.1] (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 20092163819;
+	Fri, 25 May 2007 18:31:10 +0000 (GMT)
+From: simo <idra@samba.org>
+To: "Gerald (Jerry) Carter" <jerry@samba.org>
+In-Reply-To: <46572839.6090006@samba.org>
+References: <46572839.6090006@samba.org>
+Content-Type: text/plain
+Organization: Samba Team
+Date: Fri, 25 May 2007 14:31:09 -0400
+Message-Id: <1180117869.7679.83.camel@localhost.localdomain>
+Mime-Version: 1.0
+X-Mailer: Evolution 2.10.1 
+Content-Transfer-Encoding: 7bit
+Cc: samba-technical@samba.org
+Subject: Re: [PATCH] LOOKUP_NAME_EXPLICIT to avoid lockups between winbindd
+	and nscd
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+On Fri, 2007-05-25 at 13:17 -0500, Gerald (Jerry) Carter wrote:
+> -----BEGIN PGP SIGNED MESSAGE-----
+> Hash: SHA1
+> 
+> Here's the problem I hit:
+> 
+> getgrnam("foo") -> nscd -> NSS -> winbindd ->
+>   winbindd_passdb.c:nam_to_sid() -> lookup_global_sam_name() ->
+>   getgrnam("foo") -> nscd -> ....
+> 
+> This is in the SAMBA_3_0 specifically but in theory could happen
+> SAMBA_3_0_25 (or 26) for an unknown group.
+> 
+> The attached patch passes down enough state for the
+> name_to_sid() call to be able to determine the originating
+> winbindd cmd that came into the parent.  So we can avoid
+> making more NSS calls if the original call came in trough NSS
+> so we don't deadlock ?  But you should still service
+> lookupname() calls which are needed for example when
+> doing the token access checks for a "valid groups" from
+> smb.conf.
+> 
+> I've got this in testing now.  The problem has shown up with the
+> DsProvider on OS X and with nscd on SOlaris and Linux.
+> 
+> Comments?
+
+Why our nss_winbindd loop protection does not kick in in this case?
+Do we explicitly disable it somewhere?
+
+Simo.
+
+-- 
+Simo Sorce
+Samba Team GPL Compliance Officer
+email: idra@samba.org
+http://samba.org
+

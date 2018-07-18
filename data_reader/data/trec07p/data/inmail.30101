@@ -1,0 +1,153 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun May  6 17:34:45 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l46LYjqD022911
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 6 May 2007 17:34:45 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 50F401639E7
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun,  6 May 2007 21:34:44 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 540)
+	id 68DF4162AF1; Sun,  6 May 2007 21:34:25 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jerry@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070506213425.68DF4162AF1@lists.samba.org>
+Date: Sun,  6 May 2007 21:34:25 +0000 (GMT)
+Subject: svn commit: samba r22725 - in branches: SAMBA_3_0/source/nsswitch
+	SAMBA_3_0_26/source/nsswitch
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: jerry
+Date: 2007-05-06 21:34:24 +0000 (Sun, 06 May 2007)
+New Revision: 22725
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22725
+
+Log:
+* Don't try to update the sequence_number when offline
+* Log the NTSTATUS when saving name/sid cache entry
+* Allow the backend loolkup_usergroups() call in winbindd_{rpc,ads}.c
+  to inform the wcache manager that the group list should not be cached
+  (needed for one-way trusts).
+
+
+Modified:
+   branches/SAMBA_3_0/source/nsswitch/winbindd_cache.c
+   branches/SAMBA_3_0_26/source/nsswitch/winbindd_cache.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/nsswitch/winbindd_cache.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/winbindd_cache.c	2007-05-06 21:31:19 UTC (rev 22724)
++++ branches/SAMBA_3_0/source/nsswitch/winbindd_cache.c	2007-05-06 21:34:24 UTC (rev 22725)
+@@ -458,6 +458,10 @@
+ 	time_t t = time(NULL);
+ 	unsigned cache_time = lp_winbind_cache_time();
+ 
++	if ( IS_DOMAIN_OFFLINE(domain) ) {
++		return;
++	}
++	
+ 	get_cache( domain );
+ 
+ #if 0	/* JERRY -- disable as the default cache time is now 5 minutes */
+@@ -829,8 +833,8 @@
+ 	fstrcpy(uname, name);
+ 	strupper_m(uname);
+ 	centry_end(centry, "NS/%s/%s", domain_name, uname);
+-	DEBUG(10,("wcache_save_name_to_sid: %s\\%s -> %s\n", domain_name, uname,
+-		  sid_string_static(sid)));
++	DEBUG(10,("wcache_save_name_to_sid: %s\\%s -> %s (%s)\n", domain_name, uname,
++		  sid_string_static(sid), nt_errstr(status)));
+ 	centry_free(centry);
+ }
+ 
+@@ -853,7 +857,8 @@
+ 		centry_put_string(centry, name);
+ 	}
+ 	centry_end(centry, "SN/%s", sid_to_string(sid_string, sid));
+-	DEBUG(10,("wcache_save_sid_to_name: %s -> %s\n", sid_string, name));
++	DEBUG(10,("wcache_save_sid_to_name: %s -> %s (%s)\n", sid_string, 
++		  name, nt_errstr(status)));
+ 	centry_free(centry);
+ }
+ 
+@@ -1748,6 +1753,9 @@
+ 
+ 	status = domain->backend->lookup_usergroups(domain, mem_ctx, user_sid, num_groups, user_gids);
+ 
++	if ( NT_STATUS_EQUAL(status, NT_STATUS_SYNCHRONIZATION_REQUIRED) )
++		goto skip_save;
++	
+ 	/* and save it */
+ 	refresh_sequence_number(domain, False);
+ 	centry = centry_start(domain, status);
+
+Modified: branches/SAMBA_3_0_26/source/nsswitch/winbindd_cache.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/nsswitch/winbindd_cache.c	2007-05-06 21:31:19 UTC (rev 22724)
++++ branches/SAMBA_3_0_26/source/nsswitch/winbindd_cache.c	2007-05-06 21:34:24 UTC (rev 22725)
+@@ -449,6 +449,10 @@
+ 	time_t t = time(NULL);
+ 	unsigned cache_time = lp_winbind_cache_time();
+ 
++	if ( IS_DOMAIN_OFFLINE(domain) ) {
++		return;
++	}
++	
+ 	get_cache( domain );
+ 
+ #if 0	/* JERRY -- disable as the default cache time is now 5 minutes */
+@@ -823,8 +827,8 @@
+ 	fstrcpy(uname, name);
+ 	strupper_m(uname);
+ 	centry_end(centry, "NS/%s/%s", domain_name, uname);
+-	DEBUG(10,("wcache_save_name_to_sid: %s\\%s -> %s\n", domain_name, uname,
+-		  sid_string_static(sid)));
++	DEBUG(10,("wcache_save_name_to_sid: %s\\%s -> %s (%s)\n", domain_name, uname,
++		  sid_string_static(sid), nt_errstr(status)));
+ 	centry_free(centry);
+ }
+ 
+@@ -847,7 +851,8 @@
+ 		centry_put_string(centry, name);
+ 	}
+ 	centry_end(centry, "SN/%s", sid_to_string(sid_string, sid));
+-	DEBUG(10,("wcache_save_sid_to_name: %s -> %s\n", sid_string, name));
++	DEBUG(10,("wcache_save_sid_to_name: %s -> %s (%s)\n", sid_string, 
++		  name, nt_errstr(status)));
+ 	centry_free(centry);
+ }
+ 
+@@ -1730,6 +1735,9 @@
+ 
+ 	status = domain->backend->lookup_usergroups(domain, mem_ctx, user_sid, num_groups, user_gids);
+ 
++	if ( NT_STATUS_EQUAL(status, NT_STATUS_SYNCHRONIZATION_REQUIRED) )
++		goto skip_save;
++	
+ 	/* and save it */
+ 	refresh_sequence_number(domain, False);
+ 	centry = centry_start(domain, status);
+

@@ -1,0 +1,114 @@
+From perl6-all-return-80640-ktwarwic=speedy.uwaterloo.ca@perl.org  Mon Apr 16 17:38:25 2007
+Return-Path: <perl6-all-return-80640-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3GLcN0I019278
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 16 Apr 2007 17:38:24 -0400
+Received: (qmail 32178 invoked by uid 514); 16 Apr 2007 21:37:59 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 32173 invoked from network); 16 Apr 2007 21:37:58 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Delivered-To: parrotbug-followup@parrotcode.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+X-Virus-Scanned: by both ClamAV and Kaspersky at http://aliencamel.com/
+Message-ID: <4623ECA6.4010405@perl.org>
+Date: Mon, 16 Apr 2007 14:37:42 -0700
+From: Allison Randal <allison@perl.org>
+User-Agent: Thunderbird 1.5.0.10 (Macintosh/20070221)
+MIME-Version: 1.0
+To: Andy Spieherty <spiehera@lafayette.edu>
+CC: Allison Randal via RT <parrotbug-followup@parrotcode.org>, chip@pobox.com
+Subject: Re: [perl #39063] [RESOLVED] [TODO] ResizableBooleanArray uses 64
+  bytes per bit of information
+References: <rt-3.6.HEAD-30201-1176627494-564.39063-51-0@perl.org> <Pine.LNX.4.62.0704160912030.8434@fractal.phys.lafayette.edu>
+In-Reply-To: <Pine.LNX.4.62.0704160912030.8434@fractal.phys.lafayette.edu>
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME
+Status: O
+Content-Length: 2373
+Lines: 65
+
+Andy Spieherty wrote:
+> 
+> Are you *sure* it's been fixed?  My test involved running a simple
+> program something like this
+> 
+>     .sub _main
+> 	.local pmc pmc1
+> 	pmc1 = new ResizableBooleanArray
+> 	pmc1[1000] = 1
+>     .end
+> 
+> and incrementing the '1000'.  I found that for every element I added,
+> parrot allocated 64 extra bytes.  (I monitored parrot's calls to malloc()
+> with -DDETAIL_MEMORY_DEBUG.)
+> 
+> Hence if I want to store 1,000 bits, parrot will call malloc() to
+> allocate 64,000 bytes.  That's why I said it "uses 64 bytes per bit of
+> information".
+> 
+> I apologize in advance if I have misunderstood the correct way to use 
+> ResizableBooleanArray or what the number '1000' means in the above
+> example.
+
+Ah, I see what you're talking about. I thought you meant it was taking 
+up 64 bytes of storage for each bit of data (which it's not).
+
+Yes, ResizableBooleanArray does allocate more memory than it immediately 
+needs for the number of indexes, anticipating future growth. What the 
+code is *supposed* to be doing is rounding off to the nearest 64 bits.
+
+   newASize = (size / MIN_ALLOC + 1) * MIN_ALLOC;
+
+The first problem is, MIN_ALLOC isn't a simple value macro, it's an 
+expression, so instead of evaluating as:
+
+   newASize = (size / 64 + 1) * 64;
+
+It's evaluating as:
+
+   newASize = (size / 8 * 8 + 1) * 8 * 8;
+
+Which gives you a much larger result than intended! Wrapping the 
+expression in parens takes care of that, but it also means you're 
+recalculating the value every time you use the macro, so I changed it to 
+a simple constant:
+
+   #define MIN_ALLOC 64
+
+The second problem is, after rounding to the nearest 64 bits, it's 
+passing the number of bits directly into mem_sys_allocate_zeroed, but 
+mem_sys_allocate_zeroed (a simple call to calloc) expects bytes. 
+(FixedBooleanArray doesn't make this mistake, BTW.)
+
+ResizableBooleanArray had another oddity where it was checking to see if 
+it needed to reallocate based on the literal size, rather than the 
+rounded size. So, if you stored 1000 bits, and then stored 1001 bits, it 
+would allocate 1024 bits and then reallocate 1024 bits, instead of just 
+using the allocated 1024 bits the second time. I fixed that.
+
+In the process, I found a bug in the shift/unshift code. I'll fix that 
+as a separate commit.
+
+(Joshua, I didn't see your patch until just now. You were close.)
+
+Allison
+

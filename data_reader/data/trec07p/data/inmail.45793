@@ -1,0 +1,141 @@
+From perl6-all-return-81631-ktwarwic=speedy.uwaterloo.ca@perl.org  Mon May 28 23:55:26 2007
+Return-Path: <perl6-all-return-81631-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4T3tOhB026041
+	for <ktwarwic@flax9.uwaterloo.ca>; Mon, 28 May 2007 23:55:25 -0400
+Received: (qmail 28395 invoked by uid 514); 29 May 2007 03:55:16 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 28390 invoked from network); 29 May 2007 03:55:15 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: domain of mark@glines.org designates 72.36.206.66 as permitted sender)
+Date: Mon, 28 May 2007 20:54:15 -0700
+From: Mark Glines <mark@glines.org>
+To: perl6-internals@perl.org
+Cc: parrotbug-followup@parrotcode.org
+Subject: Re: [perl #42355] [PATCH] [TODO] use ARG_MAX in pic_callr__() op
+Message-ID: <20070528205415.347cb94b@chirp>
+In-Reply-To: <rt-3.6.HEAD-1687-1176059077-441.42355-72-0@perl.org>
+References: <RT-Ticket-42355@perl.org>
+	<8e8ee0d40704081204n591d4828r1ff70f594c3c7c41@mail.gmail.com>
+	<rt-3.6.HEAD-1687-1176059077-441.42355-72-0@perl.org>
+Organization: Glines.org
+X-Mailer: Claws Mail 2.9.0 (GTK+ 2.10.12; i686-pc-linux-gnu)
+X-Useless-Header: yay!
+Mime-Version: 1.0
+Content-Type: multipart/mixed; boundary=MP_mAQPe+3jUR_t.1zShXmZphG
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-0.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,KARMA_CONNECT_NEGATIVE,SPF_HELO_PASS,SPF_PASS
+
+--MP_mAQPe+3jUR_t.1zShXmZphG
+Content-Type: text/plain; charset=US-ASCII
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+
+On Sun, 08 Apr 2007 12:04:37 -0700
+parrotbug-followup@parrotcode.org (Paul Cochrane) wrote:
+
+> # New Ticket Created by  Paul Cochrane 
+> # Please include the string:  [perl #42355]
+> # in the subject line of all future correspondence about this issue. 
+> # <URL: http://rt.perl.org/rt3/Ticket/Display.html?id=42355 >
+> 
+> 
+> In the file src/ops/pic.ops in the pic_callr__() op there is a todo
+> item which merely states:
+> 
+> "ARG_MAX"
+> 
+> I believe this means use the ARG_MAX macro instead of a hard-coded
+> number in the args[] array mentioned on this line.  In short: fix.
+
+There is no ARG_MAX macro.  There's a PCC_ARG_MAX macro, defined to
+1024, which is probably not quite what we were looking for (the magic
+number in question is 6).
+
+There is already a PARROT_MAX_ARGS define in ops.h, set to 8.  This
+function (pic_callr__) declares an array of 6 args, and does some work
+to copy arguments 2+ from the current opcode into this array.  I don't
+know what the first 2 arguments do or why they were skipped, but here's
+a patch to clean up the magic number 6 (the cause of this ticket) as
+well as the magic offset number 2, which occurs in several places
+farther down in the function.
+
+I was warnocked on the IRC channel asking what all of this stuff was
+about, so it's quite probable that the macros this patch adds could
+have better names.  (Or that I'm calculating 6 from the wrong source.)
+Please feel free to correct me.  Anyway, here's a patch.
+
+Mark
+
+--MP_mAQPe+3jUR_t.1zShXmZphG
+Content-Type: text/x-patch; name=42355-try1.diff
+Content-Transfer-Encoding: 7bit
+Content-Disposition: attachment; filename=42355-try1.diff
+
+=== include/parrot/op.h
+==================================================================
+--- include/parrot/op.h	(revision 20478)
++++ include/parrot/op.h	(local)
+@@ -15,7 +15,9 @@
+ 
+ #include "parrot/config.h"
+ 
+-#define PARROT_MAX_ARGS 8
++#define PARROT_MAX_ARGS       8
++#define PARROT_OP_ARGS_OFFSET 2
++#define PARROT_OP_ARGS        (PARROT_MAX_ARGS-PARROT_OP_ARGS_OFFSET)
+ 
+ typedef enum {
+     PARROT_INLINE_OP,
+=== src/ops/pic.ops
+==================================================================
+--- src/ops/pic.ops	(revision 20478)
++++ src/ops/pic.ops	(local)
+@@ -246,7 +246,7 @@
+ inline op pic_callr__(inconst PMC) :pic {
+     Parrot_MIC *mic;
+     Parrot_PIC_lru *lru;
+-    void *args[6];      /* RT#42355 ARG_MAX */
++    void *args[PARROT_OP_ARGS];
+     parrot_context_t *ctx;
+     opcode_t *pc;
+     void **pred_pc;
+@@ -277,15 +277,15 @@
+         switch (sig_bits[i]) {
+             case PARROT_ARG_INTVAL:
+                 args[1 + i] = (void*)*(INTVAL*)(_reg_base +
+-                        ((opcode_t*)cur_opcode)[2 + i]);
++                        ((opcode_t*)cur_opcode)[PARROT_OP_ARGS_OFFSET + i]);
+                 break;
+             case PARROT_ARG_INTVAL|PARROT_ARG_CONSTANT:
+             case PARROT_ARG_FLOATVAL|PARROT_ARG_CONSTANT:
+-                args[1 + i] = (void**)cur_opcode[2 + i];
++                args[1 + i] = (void**)cur_opcode[PARROT_OP_ARGS_OFFSET + i];
+                 break;
+             case PARROT_ARG_FLOATVAL:
+                 args[1 + i] = (_reg_base +
+-                        ((opcode_t*)cur_opcode)[2 + i]);
++                        ((opcode_t*)cur_opcode)[PARROT_OP_ARGS_OFFSET + i]);
+                 break;
+             default:
+                 internal_exception(1, "unhandled sig_bits");
+
+--MP_mAQPe+3jUR_t.1zShXmZphG--
+

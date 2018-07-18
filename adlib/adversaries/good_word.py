@@ -166,10 +166,9 @@ class GoodWord(Adversary):
         iterations_without_change = 0
         max_iterations_without_change = 10
         for spammy_word_index in positive_weight_word_indices:
-            is_index_in_spam_msg = barely_spam_message.get_feature(
-                spammy_word_index) == 1
-            if not is_index_in_spam_msg: barely_spam_message.flip_bit(
-                spammy_word_index)
+            is_index_in_spam_msg = barely_spam_message.get_feature(spammy_word_index) == 1
+            if not is_index_in_spam_msg: barely_spam_message.flip_bit(spammy_word_index)
+            if not is_index_in_spam_msg: barely_spam_message.flip_bit(spammy_word_index)
             small_weight_word_indices = self.build_word_set(
                 barely_spam_message,
                 Learner.positive_classification,

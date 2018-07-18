@@ -1,0 +1,647 @@
+From perl6-all-return-81588-ktwarwic=speedy.uwaterloo.ca@perl.org  Fri May 25 06:12:23 2007
+Return-Path: <perl6-all-return-81588-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4PACLqD026787
+	for <ktwarwic@flax9.uwaterloo.ca>; Fri, 25 May 2007 06:12:22 -0400
+Received: (qmail 15430 invoked by uid 514); 25 May 2007 10:12:16 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 15419 invoked from network); 25 May 2007 10:12:15 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=0.0 required=8.0
+	tests=BAYES_50,DKIM_SIGNED,DKIM_VERIFIED,DK_SIGNED,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: domain of codermattie@gmail.com designates 209.85.132.241 as permitted sender)
+DKIM-Signature: a=rsa-sha1; c=relaxed/relaxed;
+        d=gmail.com; s=beta;
+        h=domainkey-signature:received:received:message-id:date:from:to:subject:cc:in-reply-to:mime-version:content-type:content-transfer-encoding:content-disposition:references;
+        b=c825s5eRYZJ8JGj297hYgylIOtp85AsA+r8kex59s1To9jPX1VUh5qC2C8UoS4KmOktFnKkXPj7Am7JUzF4tYHtVf8jahDIOf6bebyk1QWPaFq0pkx4GIx/VEQs6wOSoSr6DYCOUldEiOSGTeoh6DOxb6nCvVf8nYfQsqM8dNbE=
+DomainKey-Signature: a=rsa-sha1; c=nofws;
+        d=gmail.com; s=beta;
+        h=received:message-id:date:from:to:subject:cc:in-reply-to:mime-version:content-type:content-transfer-encoding:content-disposition:references;
+        b=jxbyOYD8S+qGjn0ote88ht0S3LoYxpQyMcUz6VMkAB6PFM8v/1FVpqulQHPogzeQRJt0QbWe/RmKDBSicPcgjvoTxfUid/opwlcneW1omn1y8/V3KDMU2tcTQnirVGSwlvpoRhvyh9V8MmiVppTLnX/Yi+3e91Q+FMyEWJ9RmHo=
+Message-ID: <407f37460705250310l4036a12dw91dacde03096e549@mail.gmail.com>
+Date: Fri, 25 May 2007 03:10:41 -0700
+From: "Mike Mattie" <codermattie@gmail.com>
+To: "Allison Randal" <allison@perl.org>
+Subject: Re: [RFC] extension guessing, functionally better loader behavior -> working install target
+Cc: "parrot ML" <perl6-internals@perl.org>
+In-Reply-To: <464E67E8.8090702@perl.org>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+References: <20070513224615.5f62e3ad@reforged> <464E67E8.8090702@perl.org>
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=0.0 required=8.0
+	tests=BAYES_50,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED,SPF_PASS
+
+Here is the first part of my response. I have dropped the parts
+about re-factoring and the library.paths parts so we can get
+on the same page design wise.
+
+Here goes ....
+
+> I wanted to reply to this before you left on vacation, but Thunderbird
+> crashed taking several unfinished replies with it. (Fresh install, which
+> I hadn't yet configured to automatically save drafts.)
+
+> So, the abbreviated version...
+
+no problem. Right now I am really hobbled with the gmail interface. This
+coming Saturday I will be back in the saddle with all my files and a real
+mail client.
+
+>> Mike Mattie wrote:
+>> Hello,
+>>
+>> I have been working on implementing extension guessing consistently
+in parrot.
+>> These changes make parrot much more usable, robust, flexible, and
+maintainable.
+>>
+>> Usable:
+>>
+>> the current parrot implementation requires the extension to be
+specified. First
+>> what is a extension ? An extension is just a few extra characters tacked on
+>> to a path. All things being right an extension implies a file format.
+>>
+>> In parrot however a file extension is much more. It indicates which stage
+>> of compilation for a module. A module may have multiple stages cached on
+>> disk.
+>>
+>> foo.pir  <- source
+>> foo.pbc  <- bytecode compiled
+>>
+>> The parrot implementation is completely backwards in that the user of
+>> module "foo" cannot simply use "foo". The user has to explicitly hardwire
+>> which stage of compilation they want along with the module name itself.
+>>
+>> In using parrot there is no good reason for the compilation stage to
+>> matter. (I know about the jit issues on web-servers, it is not relevant).
+>>
+>> In fact having this information "filter-down" from the request to load
+>> a module has broken the install target. There are several cases where
+>> someone does ".load_bytecode "foo.pir"" because in the working-copy
+>> they have both foo.pbc and foo.pir. In the install tree only
+>> foo.pbc is installed.
+
+> This can be solved by simply referencing the .pbc file and building the
+> PBC in the make process for a particular subsystem. Which is only to say
+> that automatic extension selection is an optional refinement, not a core
+> requirement.
+
+For perl5 this will be a requirement. In fact I think this is where
+communication of the design is breaking down (my fault).
+
+When I set out to solve this problem I did not want to build a crutch
+to hop over the problem I faced personally ; my proposal is a very
+general solution that I hope encompasses the entire spectrum of
+languages that parrot will support in the future. I hope that this
+will result in substantial forward progress, and be in concordance
+with the theme of parrot as a general solution for languages.
+
+When I expanded my problem domain I overloaded the topic. I should
+have been more clear before , but this discussion will hammer out the
+scope of the proposal.
+
+When it comes to loading source code for interpretation of any sort
+there are common issues: security, OS optimization, well
+understood/transparent search behavior, and configuration.
+
+For security/optimization platforms have similar solutions with
+slightly different flags/calls etc.  The OS optimization needs to
+happen in C (open flags), and security (open flags, search algorithm,
+input validation) needs to be implemented in one place. Verification
+by review is hard enough without having to search all over the source
+tree in a variety of languages (C/PIR mix would be bad) to comprehend
+the implementation. This leads directly into fragmentation.
+
+When more languages are implemented with 100% compatability with the
+original platforms that the process for locating source files and
+loading them can become fragemented - losing the essential sense of
+parrot "cohesiveness".
+
+This is natural because programmers tend to scan API documentation and
+source code looking for what they need but do not want to implement.
+Looking at the API for what it is in terms of an abstraction and
+amending both their implementation plan and the API itself is far more
+exhausting.
+
+I think the implementation of dynext.c supports this. The code is
+almost a complete duplication of the primary search loop in
+library.c. The fundamental algorithm both share is combinitorial ;
+which I have hoisted and named properly (path_concat_permutations)
+in my proposed library.c implementation (2cnd posting).
+
+This tendancy towards divergance regardless of motive and the hassle
+it causes is the reason the linux kernel has resisted what they
+describe as the "balkanization" of the scheduler implementation. This
+is parrot, not Linux but the design principle both valuable, and
+applicable here IMHO. When configuration is brought into the picture
+this balkanization has real problem potential.
+
+I Think of a common parrot behavior for languages on a VM level as a
+"look and feel" issue as well. This is addressed in the new API by the
+search trace diagnostic for when the search fails. When all of the
+related opcodes use this API, and the diverse languages supported by
+parrot rely on these opcodes parrot centric expectations of behavior
+for all languages is acheivable in the loading part of a language
+implementation.
+
+>> So parrot is not able to load code that exists on disk, because parrot
+>> must be explicitly told the exact compilation stage along with the
+>> module, and some compilation stages aren't always useful (intermediate)
+>> or available.
+>>
+>> Two behavioral rules can be formulated to solve this problem:
+>>
+>> Rule 1. When a user requests a module, parrot will load that module using
+>>         whatever format/loader is available. (dlopen, bytecode
+loaders, compilers)
+>>
+>> Rule 2. When a module is requested , for performance the most compiled form
+>>         of that module will be chosen.
+>>
+>>    This is in fact the behavior of perl5 , and I think it should be
+>>    the behavior of perl6. In fact in discussing this on #perl6 someone
+>>    mentioned that there is already perl5 code that relies on this
+behavior (strange?).
+
+> My take on this is that we should have two opcodes. One that tries to
+> work out the extension for you, and one that is quite literal-minded.
+> When the "smart loader" isn't sufficiently smart, the code can fall back
+> to the literal-minded loader.
+
+All of my committed/proposed changes have tried the "literal" version
+*first* , then tried extension guessing as a fallback. This is more
+reliable since the code can over-ride the heuristic approach when
+necessary , which may not possible with the "fall-back to literal"
+behavior described above. Bad heuristics that prevent a literal input
+from working are a most frustrating software behavior.
+
+The "literal first" approach also preserves existing behavior
+perfectly and is the reason why my changes AFAIK have not broken the
+parrot tree. I am politely adamant on this particular point.
+
+> For the sake of sane migration,
+> load_bytecode should continue to work as it always has, and we come up
+> with a new name for the new opcode. (load_bytecode is a misleading name
+> anyway.)
+
+.load_bytecode: I am not talking about changing the behavior of this
+op-code at all for existing code. In fact much of the confusion
+probably stems from the strong desire of mine to attempting to preserve
+both existing behavior of this opcode and developer habits ; except the
+PARROT_PREFER_SOURCE part.
+
+That's ok because .load_bytecode is the first user for the new version
+of this function. If it can't support *all* the bytecodes that
+implement object-file search-spaces by searching of a list of
+directories then it's broken IMHO and I need to fix it.
+
+Eventually I would love to see load_bytecode narrowed in scope or
+removed ; it is horribly overloaded. I hope that my new implementation
+of Parrot_locate_runtime_str will make this easier by moving a well
+abstracted part of the problem out of one op into a routine that is
+more easily shared by multiple ops.
+
+>> Rule 3:  PARROT_PREFER_SOURCE when this environment variable is
+exported parrot
+>>          will reverse it's normal preference for low-level compiled
+forms , and
+>>          prefer high level source forms.
+
+> An environment variable should not be used to select the behavior of
+> Parrot opcodes. If both behaviors are useful, then provide both as
+> separate opcodes.
+
+.load_bytecode has been influenced by an environment variable, and has
+for ages: PARROT_RUNTIME. I am raising it as a design issue and
+properly documenting it. I do not want lapse into a nerdy pendantic
+and obtuse response so I will assume you mean "no new environment
+variable influences. PERL5LIB and friends is on the horizon though.
+
+The point of PARROT_PREFER_SOURCE was simply to eliminate the
+objections that stemmed from people who did not want to run make clean
+im-between revisions of the code. I tried to make something useful out
+of it instead of immediately rejecting those concerns.
+
+I think this case is situation where the user may want to change the
+behavior without re-compiling code: transiently , permenently, and by
+"session". Environment variables are process inherited and are AFAIK
+the only cross-platform configuration mechanism with this kind of
+flexibility. I can start two shells , set the defaults in a shell
+configuration file such as ".profile" , change it in one shell
+temporarily with a single command issued once , and discard that
+change by simply exiting the shell. This is do-able on windows as
+well, but not as common a practice due to the weak CLI environment.
+
+I think PARROT_PREFER_SOURCE is very nice and useful by the Larry Wall
+laziness principle but I will drop it if no one else sees sufficient
+benifit.
+
+>> Flexible:
+>>
+>> I am working on making parrot more flexible by allowing languages/compilers
+>> to have a "namespace" within the loader.
+>>
+>> Please do *not* tie this part to the rest. It only exists in my working-tree
+>> and is easily ripped out of the rest of the proposal.
+>>
+>> This is a more speculative feature, but I think a good one. While reading
+>> pdd21 concerning HLL name-spaces and interoperability I decided to try
+>> the time-machine experiment.
+>>
+>> Fast-fowarding to a future where parrot rules the earth I see parrot
+>> having byte-code loaders for a range of languages: java, CLR, python,
+>> perl5, perl6, etc.
+>>
+>> Each language has it's own runtime, a set of libraries, architecture
+>> objects (machine-code) , bytecode objects, and source files. Parrot
+>> can interpret all of these but there is no reason to re-implement them
+>> all from source.
+>>
+>> If each language could have a "namespace" within the loader then the
+>> java runtime distributed by Sun/whoever could be used by parrot
+>> without any collisions for the wheels that everyone has to re-invent
+>> like string,file,io etc.
+
+> I halfway get the impression that you're working backwards here. You
+> want to make extensions irrelevant, but once you do that, you need some
+> way to distinguish between different languages, so you add the
+> distinctions back in as directory hierarchy.
+
+Extensions: they are an optimization hint/feature
+
+I never take the extension to be anything but a optimization hint.
+What a file contains should be determined by inspection. That being
+said I think parrot can be very slick here.
+
+I was specifically inspired by "pheme.g": the PGE grammar for pheme. I
+thought to myself why does the build system have to generate all this
+intermediate junk on disk ? It clutters the build and the tree on disk
+because parrot needs hand-holding at the build-system level to walk it
+through the translation phases ; completely ignoring the HLL
+infrastructure. Why can't parrot just see a ".g", assume until
+something goes wrong that it's a grammar, use the HLLcompiler
+infrastructure to run through the translation phases , and then link
+it in ?
+
+If parrot can do that , then caching the translation phases ie
+compilation should just be a matter of stopping translation at a
+specific phase and outputting to disk with the right extension. When
+the install is performed the most compiled version is copied, and
+"pheme.g" is left in the source tree.
+
+With the whole extension guessing thing finding the "preferred
+extension" is finding *the optimal first phase of translation*. The
+HLLcompiler infrastructure is primed by that vital information to
+produce an executable form.
+
+For example: Say I make a directory for each of the major phases of
+transation, parse, OST etc. In each directory I have the .g file,
+or the .tge file. I have a "super-op" called ".load_it" . In the
+core pheme I have something like ".load_it grammar/pheme".
+
+When I am working on the grammar in the source tree I can change the
+grammar file and re-run the interpreter core without re-compiling the
+interpreter core - it will run through all the translation phases
+every time I run it. This is nice for development.
+
+When I am finished developing and do the build/install it will pick up
+the compiled version in the install tree and use that, which is
+performance optimal for a system-wide install.
+
+This one implementation of Parrot_locate_runtime_file_str does the
+discovery of what's available, aka finding the available object-file
+forms and selecting the most optimal starting phase of the
+translation to an internally executable form.
+
+Per-language search space:
+
+If parrot is going to become "one VM to rule them all" , then it will
+need "one loader to load them all". Parrot_locate_runtime_file_str is
+not the loader - it does the discovery of what is available to load. In
+that way it is "one search implementation to discover them all".
+
+I want to support *all* languages with Parrot_locate_runtime_file_str
+- "Do it in one place". Python has it's own tree of modules
+distributed along with "/usr/bin/python". So does every other
+non-trivial language with an extensive library.
+
+The ideal future I am envisioning uses parrot as a "drop in replacement"
+for the interpreter, while using the existing, even compiled libraries
+for those languages. That way I don't have to keep current on how the
+same issues are solved in different VM's. I can focus on one VM: parrot,
+and see the fixes and features propogated through all the languages
+I use on a regular basis.
+
+Examples: PERL5LIB , PYTHONLIB, ELISPLIB - they are all search spaces
+for specific languages. language interoptability doesn't happen until
+the loader can function correctly as defined by an individual language
+; what is loaded can then be intergrated at a calling convention
+level.
+
+> There is some provision to specify a custom library that is loaded when
+> the HLL is selected in the second argument to .HLL. It's limited, and
+> not really used AFAIK.
+
+I am not aware of what you are talking about with the custom library.
+I skimmed over it ;  I freely admit that I do it too :) .
+
+>> Rule: when a loader namespace for a language has not been defined
+>>       the default namespace "parrot" is used. If a lookup fails
+>>       within the parrot namespace the load fails.
+
+> What's the distinction between loader namespace and Parrot namespace?
+
+Calling it a loader name-space is a garbling of terms that I will
+hopefully correct in a very precise way . Having the concept of
+loaders disjunct to translation phases is a vital aquiescence to the
+current practice of a single module, say sha1 implemented at both a
+low-level and a high level or C/byte-code.
+
+Before the relationship between a loader and a language is established
+the class of loaders and their kind must be established.
+
+fundamentum divisionis: loaders are a translation phase where linking
+can be performed with minimal residual analysis of the higher level
+forms.
+
+In simplest terms a loader is a translation phase where the objects
+are functionally both interchange-able and opaque to the loader.
+
+Two examples:
+
+The C pre-processor forms a translation unit for compilation via the
+#include directive. This recursive combination of seperate files into
+a single stream for syntatic anaylsis is done with only the lexing
+necessary to identify CPP directives and expand them.
+
+On the level of the link-loader the relocation fix-ups are performed
+without any knowledge of the original source except the residual
+symbol export/import tables. Only the addresses of load/store/branch
+instructions are significant, not what the instruction semantics.
+
+My four kinds of loader:
+
+OS (was ARCH),   : the operating system loader
+BYTECODE         : byte-code object-files for various VM's such as python,java
+INCLUDE          : .PAST level include processing
+SOURCE           : triggers imcc/HLLCompiler driven translation
+
+This is not logically exhaustive - rather de-facto useful.
+
+The OS kind is distinct because it is largely implemented external to
+parrot.
+
+The BYTECODE kind is distinct because the translation to a
+internally executable form is based on a regular input format,
+hence byte-code ; contrast with SOURCE.
+
+The INCLUDE kind is distinct because the processing is deferred to
+post-compilation (ie SOURCE) with parrot, and limited to imperative
+style macro language, and .include directive processing.
+
+The SOURCE kind is distinct because it triggers syntax driven context
+free grammar translation via HLLCompiler? -> imcc -> bytecode.
+
+the old enum_runtime_ft was a ad-hoc division of object/source file
+types , with a bit-mask union classification as OS | SOURCE in the svn
+HEAD version of library.c .
+
+The analysis above is more clean and useful on a logical level and
+more precisely defined IMHO. I hope the application of logical
+vocabulary will help clarify rather than obscure the proposal.
+
+Returning to the relationship between loader and language they
+are disjunct because the language uses loaders as containers and
+a library module as a whole can be implemented at different levels
+for a variety of reasons such as performance , access to C level
+API's, and the deferring of CPP style macro processing.
+
+Each loader has it's own search-space. This is because the operating
+system shared objects can and sometimes should be stored in trees
+seperate from byte-code and source objects. Forcing a single
+search-space with a common tree root for seperate object-file types
+can limit privelage seperation at the operating system level. Sets
+of extensions are specific to a kind of loader.
+
+The order in which loaders are tried is important. For the sha1
+example the OS level or C implementation needs to be loaded
+before the bytecode level NCI wrappers are loaded. Without the
+distinction between loaders in the API, and with a first match
+search the byte-code part of the library module would not be
+reachable.
+
+This is realized in the HEAD version of library.c with the seperate
+code paths depending on the classification OS | SOURCE . My goal
+was not to remove this , rather to clean it up.
+
+With the my new implementation of library.{ch} the kinds of loaders
+are general with well defined distinctions. It is possible for both
+dynext and .load_bytecode to use a well insulated
+Parrot_locate_runtime_file_str simply by passing an appropriate mask.
+
+>> RFC: I noticed compreg, and quickly scanned through HLLCompiler.
+>>      compiler implies either a translation stage, a sequence of
+>>      translation stages, or a language.
+>>
+>>      Has the meanings been refined architecturally somewhere ?
+>>
+>> Basically the lib_paths global which is currently built like this
+>>
+>> fixed-array[
+>>   paths,      -> resizable array of strings
+>>   extensions, -> resizable array of strings (note how parrot
+already implements extension guessing)
+>> ]
+>>
+>> becomes this:
+>>
+>> hash keyed by namespace {
+>>
+>>   parrot -> fixed array of loaders [
+>>      ARCH     /*dlopen loader*/       -> [ ... ]
+>>      BYTECODE /* bytecode loaders */  -> [ ... ]
+>>      SOURCE   /* source compilers */  -> fixed array [
+>>                                          SEARCH_PATH  -> resizable
+array of strings
+>>                                          SEARCH_EXT   -> resizable
+array of strings
+>>   ]
+>> }
+>>
+>> With this new structure parrot has enough flexibility that it can
+construct a search space
+>> for any language distribution, and can use them all within the same
+parrot instance without
+>> collisions in the search space between languages.
+
+> This doesn't quite work because you have to be able to load one
+> language's libraries from another language. So, you need to be able to
+> load Python's Mail.Filter and Perl's Mail::Filter (fictional examples)
+> at the same time and use them both within the same program.
+
+hash keyed by namespace -> hash keyed by language
+
+you did not understand what I meant by "hash keyed by namespace" I
+think. I should not use name-space anymore leaving that to the
+pdd21 scope issues - my blunder.
+
+I am renaming the argument: STRING* hll -> STRING* language
+so things will not be so confused anymore.
+
+But with that example you understand why I want a "per language
+search-space". Hopefuly we are on the same page now.
+
+The current implementation supports loading them both, that is a
+primary goal. Using them both at the same time is a namespace issue
+addressed by pdd21 which is far beyond the scope of the loader.
+
+Another point of confusion is that I had a hard time finding where
+parrot encapsulated the concept of a "language". When looking I found
+HLLCompiler which seemed to define a language as a sequence of
+translation phases. This is the most useful definition of a language
+from the perspective of parrot as far as I can see. At this moment
+for me HLL = language.
+
+What I want to do is have Parrot_locate_runtime_file_str look
+by object_name, by language, and return what is found within
+the masked loaders.
+
+That way you can search for a object, in the python language, first by
+shared objects, then by bytecode objects etc. Having a mask for the
+loaders also allows the loading to be split or combined by opcodes at
+a higher level of design ; a level that I am not informed to comment
+on yet.
+
+What I really need to know is how to translate this "language" string
+into a value that will key the translation/loading machinery for
+parrot. All of the SOURCE level loading should be a sequence of translation
+phases starting with the best available object-file form and ending with
+imcc.
+
+> The directories on disk correspond to the Parrot namespace of the
+> libraries as a convention. You could potentially optimize the loading
+> operation by having a load of a Python module only search the Python HLL
+> directory. But, a user-defined module might not follow the convention.
+
+The fact that a user defined module may not follow the convention is
+not a problem. With my search algorithm the standard library locations
+will be searched first so that trusted implementations are always
+preferred.  If nothing is found in the standard library locations the
+object_name is then tried as a path relative to the current working
+directory. I have mentioned things like PERL5LIB. I can easily
+implement that sort of thing but that is not integral to the core
+design, merely a mechanism to extend the search-space for a particular
+language. Considering parrot's current limitations I don't think this
+is an immediate priority if the design is okay.
+
+> Similarly, there is a convention (not entirely consistent) that foo.pbc
+> is the compiled form of foo.pir, but that's not always the case, and
+> certainly not required.
+
+I agree, that is why I am firm on extensions being an optimization
+hint.  In particular the "use v6;" is always present in my
+consideration of how loading needs to be designed and implemented.
+
+>> It could also be used to implement binary compatibility. If
+"parrot" is versioned , say
+>> as "parrot-pre" "parrot1" etc then the loader could support
+selecting a compatible version
+>> of multiple runtime installs.
+
+>What you haven't addressed (and what I consider the most important
+>problem to solve for library loading), is a mechanism for extending
+>Parrot's search path.
+
+I think I have extended it quite far :) Joking aside you are right
+if you are talking about a .pir wrappers to manipulate the search-space
+data structures. Again this is not essential to the core-design and
+can be added after a working concencus is reached.
+
+If you are talking about supporting multiple languages This is why
+I want:
+
+* per language search spaces , was STRING* hll, now STRING* language to
+  clear up the confusion.
+
+* extension guessing ( doesn't matter what language provides the
+functions anymore
+                       unless you care. but that is handled at a
+higher level, at
+                       some point it needs to be explicit, and it is for
+                       Parrot_locate_runtime_file_str )
+
+* integrate with HLLCompiler infrastructure = intergrate with whatever
+  encapsulates the machinery for a language.
+
+> If that were defined, then versioning would be a simple matter of
+> selecting an appropriate search path.
+
+lets call it search-space , and per-language search space so I can
+stop confusing you :) Versioning in the language key is simply a cheap
+side-benefit I thought of.
+
+>> Maintainability:
+>>
+>> This issue will get a bit more involved. the parrot loader is very
+alpha, aka put
+>> together early in the development process. It let people explore
+the rest of the design
+>> space but a refactor is apparent throughout the code and API.
+
+> This section is a mixture of code refactor ideas and architecture ideas.
+> Would be simpler to process the two separately, but I'll take a stab.
+
+- Show quoted text -
+
+I think we need to first get on the same page by agreeing on terms
+before drilling down much further. I apologize for the instances where
+I have confused you since we are clearly articulating the same goals,
+but not communicating in architecture terms clearly.
+
+It would really help if there was a place in parrot that encapsulated
+the entire scope of a language. I discovered .compreg as the closest
+thing I could find to something like that. I also assumed pdd21 was
+where I would find the architecture of that encapsulation.
+
+I also wonder if you had the time to look at the second draft of
+library.c . I noticed that you are very familiar with the current
+implementation. As far as my new implementation I don't think
+you had time to review the code yet.
+
+I make a particular point of writing code that is readable. I value
+highly a discussion at the design level, but if the code is not the
+optimal way to understand the design then I am disappointed in how I
+wrote the code. I consider a critique of the code transparency to be
+as important as the design. In particular the "tagging" of where the
+steps of the algorithm is implemented was an attempt to make review
+easier.
+
+There are parts of the code that I can now re-factor with clarity
+using a more consistent definition of terms. I will do that within the
+next couple of days. This response should be enough to ponder for a bit.
+
+I hope at the least that you see that I am working on the general
+loading libraries for multiple languages problem, and that I have a
+design that is being refined by this process towards a good
+implementation.
+

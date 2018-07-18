@@ -1,0 +1,110 @@
+From perl6-all-return-82142-ktwarwic=speedy.uwaterloo.ca@perl.org  Wed Jun 20 12:55:17 2007
+Return-Path: <perl6-all-return-82142-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l5KGtDL9012529
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 20 Jun 2007 12:55:14 -0400
+Received: (qmail 5405 invoked by uid 514); 20 Jun 2007 16:55:11 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 5400 invoked from network); 20 Jun 2007 16:55:11 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+Message-ID: <46795AD8.20204@perl.org>
+Date: Wed, 20 Jun 2007 09:50:32 -0700
+From: Allison Randal <allison@perl.org>
+User-Agent: Thunderbird 1.5.0.12 (Macintosh/20070509)
+MIME-Version: 1.0
+To: Leopold Toetsch <lt@toetsch.at>
+Cc: perl6-internals@perl.org, Andy Lester <andy@petdance.com>
+Subject: Re: memcpy
+References: <65994EAC-9723-4C2B-88B4-AA72456034B7@petdance.com> <200706192219.34450.lt@toetsch.at>
+In-Reply-To: <200706192219.34450.lt@toetsch.at>
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+X-Virus-Scanned: by amavisd-new at wgz.org
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-1.9 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_NEUTRAL
+
+I wasn't entirely happy with either option, so I asked around a bit for 
+other ideas. I like the macro approach below, it gives us both self 
+documentation and better checking for the size of the two structs.
+
+Allison
+
+-------- Original Message --------
+From: Nick Forrette <nforrett@wgz.com>
+To: Allison Randal <allison@perl.org>
+
+This can be a bit brittle -- you have to be careful when changing the
+type of dst else you could end up with over or underflow.
+memcpy(dst, src, sizeof(FOO));
+
+I do like memcpy because it serves as a red flag that a potentially
+medium to large size hunk of memory will be copied here,
+memcpy(dst, src, sizeof(*dst));
+
+This gets you better type checking (if src and dst are different
+struct types, the compiler will complain). Much harder to overflow dst
+or only partially copy src.
+*dst = *src;
+
+
+Something like this can get you the best of the above, as long as
+you're careful about size-effects (I'd have to double check to be
+sure, but I believe there are differences with pre-increment/decrement
+in a dereference/assignment v.s. two arguments to a function).
+
+#define copy_struct(dst, src) \
+    (*(dst) = *(src))
+
+copy_struct(dst, src);
+
+
+You could use a more robust macro that does a run time check for size 
+effects:
+
+// returns int so it can be used in a , expression
+int myAssert(int thisIsABool)
+{
+   assert(thisIsABool);
+   return 0;
+}
+
+#ifdef NDEBUG
+#define macro_assert(thisIsABool) 0
+#else
+#define macro_assert(thisIsABool) myAssert(thisIsABool)
+#endif
+
+#define copy_struct(dst, src) \
+    (\
+        macro_assert((dst) == (dst)), \
+        macro_assert((src) == (src)), \
+        (*(dst) = *(src)) \
+    )
+
+
+Gives you what I consider the best of all worlds. The compiler will
+flag copying between different struct types, it is more robust in the
+face of changed types for src or dst, in form that clearly spells out
+what you're trying to do, that at least gives you run time checking
+for abuse of side effects in debug builds.
+
+Nick
+

@@ -1,0 +1,1246 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu May 10 07:12:48 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4ABCmqD008481
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 10 May 2007 07:12:48 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 71EDA1638D1
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 10 May 2007 11:12:46 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-2.2 required=3.8 tests=ALL_TRUSTED,AWL,BAYES_00,
+	RCVD_IN_DSBL autolearn=ham version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: from [127.0.0.1] (dp [66.70.73.150])
+	by lists.samba.org (Postfix) with ESMTP id 70C9A16398A;
+	Thu, 10 May 2007 11:12:00 +0000 (GMT)
+Message-ID: <4642FD32.9080901@samba.org>
+Date: Thu, 10 May 2007 13:08:34 +0200
+From: Guenther Deschner <gd@samba.org>
+Organization: Samba Team
+User-Agent: Thunderbird 1.5.0.10 (X11/20070302)
+MIME-Version: 1.0
+To: "Gerald (Jerry) Carter" <jerry@samba.org>
+References: <463E589E.70201@samba.org> <463F20E4.40605@samba.org>
+	<46415041.1000204@samba.org>
+In-Reply-To: <46415041.1000204@samba.org>
+Content-Type: multipart/mixed; boundary="------------070202000908050706090102"
+Cc: Guenther Deschner <gd@samba.org>, idra@samba.org, jra@samba.org,
+   samba-technical@samba.org
+Subject: Re: Flushed pending centeris patch queue
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+This is a multi-part message in MIME format.
+--------------070202000908050706090102
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 8bit
+
+Gerald (Jerry) Carter wrote:
+> -----BEGIN PGP SIGNED MESSAGE-----
+> Hash: SHA1
+> 
+> Guenther Deschner wrote:
+> 
+>>> I've pushed out all my pending patches for winbindd except:
+>>>
+>>> (a) security = ads & machine password change in winbindd
+>>> (b) username map support for winbindd
+>> I send you my UPN logon patch in a separate mail today.
+> 
+> Could you resend it?  I didn't see it come in.
+
+Here it is, sorry for the delay.
+
+Guenther
+-- 
+Günther Deschner                    GPG-ID: 8EE11688
+Red Hat                         gdeschner@redhat.com
+Samba Team                              gd@samba.org
+
+--------------070202000908050706090102
+Content-Type: text/x-patch;
+ name="samba3-upn.diff"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline;
+ filename="samba3-upn.diff"
+
+Index: param/loadparm.c
+===================================================================
+--- param/loadparm.c	(revision 22774)
++++ param/loadparm.c	(working copy)
+@@ -179,6 +179,7 @@ typedef struct {
+ 	BOOL bWinbindNestedGroups;
+ 	BOOL bWinbindRefreshTickets;
+ 	BOOL bWinbindOfflineLogon;
++	BOOL bWinbindUPNLogon;
+ 	BOOL bWinbindNormalizeNames;
+ 	char **szIdmapDomains;
+ 	char **szIdmapBackend; /* deprecated */
+@@ -1288,6 +1289,7 @@ static struct parm_struct parm_table[] =
+ 	{"winbind nss info", P_LIST, P_GLOBAL, &Globals.szWinbindNssInfo, NULL, NULL, FLAG_ADVANCED}, 
+ 	{"winbind refresh tickets", P_BOOL, P_GLOBAL, &Globals.bWinbindRefreshTickets, NULL, NULL, FLAG_ADVANCED}, 
+ 	{"winbind offline logon", P_BOOL, P_GLOBAL, &Globals.bWinbindOfflineLogon, NULL, NULL, FLAG_ADVANCED},
++	{"winbind upn logon", P_BOOL, P_GLOBAL, &Globals.bWinbindUPNLogon, NULL, NULL, FLAG_ADVANCED},
+ 	{"winbind normalize names", P_BOOL, P_GLOBAL, &Globals.bWinbindNormalizeNames, NULL, NULL, FLAG_ADVANCED},
+ 
+ 	{NULL,  P_BOOL,  P_NONE,  NULL,  NULL,  NULL,  0}
+@@ -1634,6 +1636,7 @@ static void init_globals(BOOL first_time
+ 	Globals.bWinbindNestedGroups = True;
+ 	Globals.bWinbindRefreshTickets = False;
+ 	Globals.bWinbindOfflineLogon = False;
++	Globals.bWinbindUPNLogon = False;
+ 
+ 	Globals.iIdmapCacheTime = 900; /* 15 minutes by default */
+ 	Globals.iIdmapNegativeCacheTime = 120; /* 2 minutes by default */
+@@ -1898,6 +1901,7 @@ FN_GLOBAL_BOOL(lp_winbind_trusted_domain
+ FN_GLOBAL_BOOL(lp_winbind_nested_groups, &Globals.bWinbindNestedGroups)
+ FN_GLOBAL_BOOL(lp_winbind_refresh_tickets, &Globals.bWinbindRefreshTickets)
+ FN_GLOBAL_BOOL(lp_winbind_offline_logon, &Globals.bWinbindOfflineLogon)
++FN_GLOBAL_BOOL(lp_winbind_upn_logon, &Globals.bWinbindUPNLogon)
+ FN_GLOBAL_BOOL(lp_winbind_normalize_names, &Globals.bWinbindNormalizeNames)
+ 
+ FN_GLOBAL_LIST(lp_idmap_domains, &Globals.szIdmapDomains)
+Index: nsswitch/winbindd_reconnect.c
+===================================================================
+--- nsswitch/winbindd_reconnect.c	(revision 22774)
++++ nsswitch/winbindd_reconnect.c	(working copy)
+@@ -103,6 +103,25 @@ static NTSTATUS name_to_sid(struct winbi
+ 	return result;
+ }
+ 
++/* convert a single principal name to a sid in a domain */
++static NTSTATUS upn_to_sid(struct winbindd_domain *domain,
++			   TALLOC_CTX *mem_ctx,
++			   const char *name,
++			   DOM_SID *sid,
++			   enum lsa_SidType *type)
++{
++	NTSTATUS result;
++
++	result = msrpc_methods.upn_to_sid(domain, mem_ctx,
++					  name, sid, type);
++
++	if (NT_STATUS_EQUAL(result, NT_STATUS_UNSUCCESSFUL))
++		result = msrpc_methods.upn_to_sid(domain, mem_ctx,
++						  name, sid, type);
++
++	return result;
++}
++
+ /*
+   convert a domain SID to a user or group name
+ */
+@@ -303,6 +322,7 @@ struct winbindd_methods reconnect_method
+ 	enum_dom_groups,
+ 	enum_local_groups,
+ 	name_to_sid,
++	upn_to_sid,
+ 	sid_to_name,
+ 	rids_to_names,
+ 	query_user,
+@@ -313,4 +333,5 @@ struct winbindd_methods reconnect_method
+ 	lockout_policy,
+ 	password_policy,
+ 	trusted_domains,
++	msrpc_get_upn_suffixes,
+ };
+Index: nsswitch/wbinfo.c
+===================================================================
+--- nsswitch/wbinfo.c	(revision 22774)
++++ nsswitch/wbinfo.c	(working copy)
+@@ -738,6 +738,32 @@ static BOOL wbinfo_lookupname(char *name
+ 	return True;
+ }
+ 
++/* Convert upn to name */
++
++static BOOL wbinfo_upn_to_name(char *upn)
++{
++	struct winbindd_request request;
++	struct winbindd_response response;
++
++	/* Send off request */
++
++	ZERO_STRUCT(request);
++	ZERO_STRUCT(response);
++
++	fstrcpy(request.data.name.name, upn);
++	fstrcpy(request.data.name.dom_name, lp_workgroup());
++
++	if (winbindd_request_response(WINBINDD_LOOKUPUPN, &request, &response) !=
++	    NSS_STATUS_SUCCESS)
++		return False;
++
++	/* Display response */
++
++	d_printf("%s%c%s\n", response.data.name.dom_name, winbind_separator(), response.data.name.name);
++
++	return True;
++}
++
+ /* Authenticate a user with a plaintext password */
+ 
+ static BOOL wbinfo_auth_krb5(char *username, const char *cctype, uint32 flags)
+@@ -1198,6 +1224,7 @@ enum {
+ 	OPT_LIST_ALL_DOMAINS,
+ 	OPT_LIST_OWN_DOMAIN,
+ 	OPT_GROUP_INFO,
++	OPT_UPN_TO_NAME,
+ };
+ 
+ int main(int argc, char **argv, char **envp)
+@@ -1259,6 +1286,7 @@ int main(int argc, char **argv, char **e
+ 			/* "user%password,DOM\\user%password,user@EXAMPLE.COM,EXAMPLE.COM\\user%password" }, */
+ #endif
+ 		{ "separator", 0, POPT_ARG_NONE, 0, OPT_SEPARATOR, "Get the active winbind separator", NULL },
++		{ "upn-to-name", 0, POPT_ARG_STRING, &string_arg, OPT_UPN_TO_NAME, "Converts UPN to name" , "UPN" },
+ 		POPT_COMMON_VERSION
+ 		POPT_TABLEEND
+ 	};
+@@ -1535,6 +1563,12 @@ int main(int argc, char **argv, char **e
+ 				goto done;
+ 			}
+ 			break;
++		case OPT_UPN_TO_NAME:
++			if (!wbinfo_upn_to_name(string_arg)) {
++				d_fprintf(stderr, "Could not lookup NAME by UPN %s\n", string_arg);
++				goto done;
++			}
++			break;
+ 		/* generic configuration options */
+ 		case OPT_DOMAIN_NAME:
+ 			break;
+Index: nsswitch/winbindd_ads.c
+===================================================================
+--- nsswitch/winbindd_ads.c	(revision 22774)
++++ nsswitch/winbindd_ads.c	(working copy)
+@@ -1252,6 +1252,46 @@ static NTSTATUS trusted_domains(struct w
+ 	return result;
+ }
+ 
++/* get the list of allowed UPN suffixes for this domain */
++static NTSTATUS get_upn_suffixes(struct winbindd_domain *domain,
++				 TALLOC_CTX *mem_ctx,
++				 size_t *num_upn_suffixes,
++				 char ***upn_suffixes)
++{
++	NTSTATUS result = NT_STATUS_UNSUCCESSFUL;
++	ADS_STRUCT *ads = NULL;
++	ADS_STATUS status;
++
++	size_t num_suffixes;
++	char **suffixes;
++
++	DEBUG(3,("ads: upn_suffixes\n"));
++
++	ads = ads_cached_connection(domain);
++	if (!ads) {
++		domain->last_status = NT_STATUS_SERVER_DISABLED;
++		goto done;
++	}
++
++	*num_upn_suffixes = 0;
++	*upn_suffixes = NULL;
++
++	status = ads_upn_suffixes(ads, mem_ctx, &suffixes, &num_suffixes);
++	if (!ADS_ERR_OK(status)) {
++		goto done;
++	}
++
++	*num_upn_suffixes = num_suffixes;
++	*upn_suffixes = suffixes;
++
++	result = NT_STATUS_OK;
++
++	DEBUG(3,("ads: got %d upn_suffixes for domain %s\n", (int)num_suffixes, domain->alt_name));
++ done:
++	return result;
++}
++
++
+ /* the ADS backend methods are exposed via this structure */
+ struct winbindd_methods ads_methods = {
+ 	True,
+@@ -1259,6 +1299,7 @@ struct winbindd_methods ads_methods = {
+ 	enum_dom_groups,
+ 	enum_local_groups,
+ 	msrpc_name_to_sid,
++	msrpc_upn_to_sid,
+ 	msrpc_sid_to_name,
+ 	msrpc_rids_to_names,
+ 	query_user,
+@@ -1269,6 +1310,7 @@ struct winbindd_methods ads_methods = {
+ 	msrpc_lockout_policy,
+ 	msrpc_password_policy,
+ 	trusted_domains,
++	get_upn_suffixes
+ };
+ 
+ #endif
+Index: nsswitch/winbindd_nss.h
+===================================================================
+--- nsswitch/winbindd_nss.h	(revision 22774)
++++ nsswitch/winbindd_nss.h	(working copy)
+@@ -96,6 +96,7 @@ enum winbindd_cmd {
+ 
+ 	WINBINDD_LOOKUPSID,
+ 	WINBINDD_LOOKUPNAME,
++	WINBINDD_LOOKUPUPN,
+ 	WINBINDD_LOOKUPRIDS,
+ 
+ 	/* Lookup functions */
+Index: nsswitch/winbindd_util.c
+===================================================================
+--- nsswitch/winbindd_util.c	(revision 22774)
++++ nsswitch/winbindd_util.c	(working copy)
+@@ -941,6 +941,57 @@ BOOL winbindd_lookup_sid_by_name(TALLOC_
+ 	return NT_STATUS_IS_OK(result);
+ }
+ 
++/* Lookup a sid in a domain from a name */
++
++BOOL winbindd_lookup_sid_by_upn(TALLOC_CTX *mem_ctx,
++				struct winbindd_domain *domain, 
++				const char *upn, DOM_SID *sid, 
++				enum lsa_SidType *type)
++{
++	NTSTATUS result;
++	size_t num_suffixes = 0;
++	char **suffixes;
++	char *p = NULL;
++	BOOL valid_suffix = False;
++	int i;
++
++	*type = SID_NAME_UNKNOWN;
++
++	result = domain->methods->get_upn_suffixes(domain, mem_ctx, &num_suffixes, &suffixes);
++	if (!NT_STATUS_IS_OK(result)) {
++		DEBUG(10,("failed to get upn suffixes: %s\n", nt_errstr(result)));
++		return False;
++	}
++
++	p = strchr(upn, '@');
++	if (p == NULL) {
++		return False;
++	}
++
++	for (i = 0; i <num_suffixes; i++) {
++		if (strequal(suffixes[i], p+1)) {
++			valid_suffix = True;
++			break;
++		}
++	}
++
++	if (!valid_suffix) {
++		DEBUG(10,("%s is not a valid suffix\n", p+1));
++		return False;
++	}
++
++	/* Lookup name */
++	result = domain->methods->upn_to_sid(domain, mem_ctx, upn, sid, type);
++
++	/* Return sid and type if lookup successful */
++	if (!NT_STATUS_IS_OK(result)) {
++		*type = SID_NAME_UNKNOWN;
++	}
++
++	return NT_STATUS_IS_OK(result);
++}
++
++
+ /**
+  * @brief Lookup a name in a domain from a sid.
+  *
+@@ -1300,3 +1351,38 @@ BOOL winbindd_can_contact_domain( struct
+ 	
+ 	return True;	
+ }
++
++/*********************************************************************
++ are logons with user principal names enabled
++********************************************************************/
++
++BOOL winbind_upn_logon_enabled(void)
++{
++	if (!lp_winbind_upn_logon()) {
++		return False;
++	}
++
++	if (*lp_winbind_separator() == '@') {
++		DEBUG(0,("winbind upn logon cannot with winbind separator '@'\n"));
++		return False;
++	}
++
++	return True;
++}
++
++/*********************************************************************
++ can we assume the username is a upn
++********************************************************************/
++
++BOOL winbind_is_upn(const char *name)
++{
++	char *p;
++	
++	if (!winbind_upn_logon_enabled()) {
++		return False;
++	}
++
++	p = strchr(name, '@');
++
++	return (p != NULL);
++}
+Index: nsswitch/winbindd_async.c
+===================================================================
+--- nsswitch/winbindd_async.c	(revision 22774)
++++ nsswitch/winbindd_async.c	(working copy)
+@@ -983,6 +983,31 @@ void winbindd_lookupname_async(TALLOC_CT
+ 			(void *)cont, s);
+ }
+ 
++void winbindd_lookupupn_async(TALLOC_CTX *mem_ctx,
++			      const char *dom_name, const char *name,
++			      void (*cont)(void *private_data, BOOL success,
++					   const DOM_SID *sid,
++					   enum lsa_SidType type),
++			      void *private_data)
++{
++	struct winbindd_request request;
++	struct winbindd_domain *domain;
++
++	if ( (domain = find_lookup_domain_from_name(dom_name)) == NULL ) {
++		DEBUG(5, ("Could not find domain for name %s\n", dom_name));
++		cont(private_data, False, NULL, SID_NAME_UNKNOWN);
++		return;
++	}
++
++	ZERO_STRUCT(request);
++	request.cmd = WINBINDD_LOOKUPUPN;
++	fstrcpy(request.data.name.name, name);
++
++	/* FIXME: query domain_root as well */
++	do_async_domain(mem_ctx, domain, &request, lookupname_recv2,
++			(void *)cont, private_data);
++}
++
+ enum winbindd_result winbindd_dual_lookupname(struct winbindd_domain *domain,
+ 					      struct winbindd_cli_state *state)
+ {
+@@ -990,6 +1015,8 @@ enum winbindd_result winbindd_dual_looku
+ 	char *name_domain, *name_user;
+ 	DOM_SID sid;
+ 	char *p;
++	fstring name_to_lookup;
++	BOOL ret = False, is_upn = False;
+ 
+ 	/* Ensure null termination */
+ 	state->request.data.name.dom_name[sizeof(state->request.data.name.dom_name)-1]='\0';
+@@ -997,23 +1024,43 @@ enum winbindd_result winbindd_dual_looku
+ 	/* Ensure null termination */
+ 	state->request.data.name.name[sizeof(state->request.data.name.name)-1]='\0';
+ 
+-	/* cope with the name being a fully qualified name */
+-	p = strstr(state->request.data.name.name, lp_winbind_separator());
+-	if (p) {
+-		*p = 0;
+-		name_domain = state->request.data.name.name;
+-		name_user = p+1;
++	is_upn = winbind_is_upn(state->request.data.name.name);
++
++	if (!is_upn) {
++		/* cope with the name being a fully qualified name */
++		p = strstr(state->request.data.name.name, lp_winbind_separator());
++		if (p) {
++			*p = 0;
++			name_domain = state->request.data.name.name;
++			name_user = p+1;
++		} else {
++			name_domain = state->request.data.name.dom_name;
++			name_user = state->request.data.name.name;
++		}
++
++		fstrcpy(name_to_lookup, name_domain);
++		fstrcat(name_to_lookup, lp_winbind_separator());
++		fstrcat(name_to_lookup, name_user);
+ 	} else {
+-		name_domain = state->request.data.name.dom_name;
++		name_domain = NULL;
+ 		name_user = state->request.data.name.name;
++
++		fstrcpy(name_to_lookup, name_user);
+ 	}
+ 
+-	DEBUG(3, ("[%5lu]: lookupname %s%s%s\n", (unsigned long)state->pid,
+-		  name_domain, lp_winbind_separator(), name_user));
++	DEBUG(3, ("[%5lu]: lookupname %s\n", (unsigned long)state->pid,
++		  name_to_lookup));
+ 
+ 	/* Lookup name from DC using lsa_lookup_names() */
+-	if (!winbindd_lookup_sid_by_name(state->mem_ctx, domain, name_domain,
+-					 name_user, &sid, &type)) {
++	if (is_upn) {
++		ret = winbindd_lookup_sid_by_upn(state->mem_ctx, domain, name_user,
++						 &sid, &type);
++	} else {
++		ret = winbindd_lookup_sid_by_name(state->mem_ctx, domain, name_domain,
++					 name_user, &sid, &type);
++	}
++	
++	if (!ret) {
+ 		return WINBINDD_ERROR;
+ 	}
+ 
+@@ -1023,6 +1070,34 @@ enum winbindd_result winbindd_dual_looku
+ 	return WINBINDD_OK;
+ }
+ 
++enum winbindd_result winbindd_dual_lookupupn(struct winbindd_domain *domain,
++					     struct winbindd_cli_state *state)
++{
++	enum lsa_SidType type;
++	char *upn;
++	DOM_SID sid;
++
++	/* Ensure null termination */
++	state->request.data.name.name[sizeof(state->request.data.name.name)-1]='\0';
++
++	upn = state->request.data.name.name;
++
++	DEBUG(3, ("[%5lu]: lookupupn %s\n", (unsigned long)state->pid,
++		  upn));
++
++	/* Lookup name from DC using lsa_lookup_names() */
++	if (!winbindd_lookup_sid_by_upn(state->mem_ctx, domain,
++					upn, &sid, &type)) {
++		return WINBINDD_ERROR;
++	}
++
++	sid_to_string(state->response.data.sid.sid, &sid);
++	state->response.data.sid.type = type;
++
++	return WINBINDD_OK;
++}
++
++
+ BOOL print_sidlist(TALLOC_CTX *mem_ctx, const DOM_SID *sids,
+ 		   size_t num_sids, char **result, ssize_t *len)
+ {
+Index: nsswitch/winbindd_user.c
+===================================================================
+--- nsswitch/winbindd_user.c	(revision 22774)
++++ nsswitch/winbindd_user.c	(working copy)
+@@ -366,15 +366,29 @@ void winbindd_getpwnam(struct winbindd_c
+ 	DEBUG(3, ("[%5lu]: getpwnam %s\n", (unsigned long)state->pid,
+ 		  state->request.data.username));
+ 
+-	ws_name_return( state->request.data.username, WB_REPLACE_CHAR );
++	if (!lp_winbind_upn_logon()) {
+ 
+-	if (!parse_domain_user(state->request.data.username, domname,
+-			       username)) {
+-		DEBUG(5, ("Could not parse domain user: %s\n",
+-			  state->request.data.username));
+-		request_error(state);
+-		return;
+-	}
++		ws_name_return( state->request.data.username, WB_REPLACE_CHAR );
++
++		if (!parse_domain_user(state->request.data.username, domname,
++				       username)) {
++			DEBUG(5, ("Could not parse domain user: %s\n",
++				  state->request.data.username));
++			request_error(state);
++			return;
++		}
++
++	} else {
++ 	
++		if (*lp_winbind_separator() == '@') {
++			DEBUG(1,("Cannot resolve user principal names when winbind separator is '@'\n"));
++			request_error(state);
++			return;
++		}
++
++		fstrcpy(domname, lp_workgroup());
++		fstrcpy(username, state->request.data.username);
++	};
+ 	
+ 	/* Get info for the domain */
+ 
+Index: nsswitch/winbindd.c
+===================================================================
+--- nsswitch/winbindd.c	(revision 22774)
++++ nsswitch/winbindd.c	(working copy)
+@@ -235,6 +235,7 @@ static struct winbindd_dispatch_table {
+ 
+ 	{ WINBINDD_LOOKUPSID, winbindd_lookupsid, "LOOKUPSID" },
+ 	{ WINBINDD_LOOKUPNAME, winbindd_lookupname, "LOOKUPNAME" },
++	{ WINBINDD_LOOKUPUPN, winbindd_lookupupn, "LOOKUPUPN" },
+ 	{ WINBINDD_LOOKUPRIDS, winbindd_lookuprids, "LOOKUPRIDS" },
+ 
+ 	/* Lookup related functions */
+Index: nsswitch/winbindd_rpc.c
+===================================================================
+--- nsswitch/winbindd_rpc.c	(revision 22774)
++++ nsswitch/winbindd_rpc.c	(working copy)
+@@ -268,13 +268,16 @@ NTSTATUS msrpc_name_to_sid(struct winbin
+ 	struct rpc_pipe_client *cli;
+ 	POLICY_HND lsa_policy;
+ 
+-        if(name == NULL || *name=='\0') {
+-                DEBUG(3,("rpc: name_to_sid name=%s\n", domain_name));
+-                full_name = talloc_asprintf(mem_ctx, "%s", domain_name);
+-        } else {
+-                DEBUG(3,("rpc: name_to_sid name=%s\\%s\n", domain_name, name));
+-                full_name = talloc_asprintf(mem_ctx, "%s\\%s", domain_name, name);
+-        }
++	if (name == NULL || *name=='\0') {
++		DEBUG(3,("rpc: name_to_sid name=%s\n", domain_name));
++		full_name = talloc_asprintf(mem_ctx, "%s", domain_name);
++	} else if (domain_name == NULL || *domain_name == '\0') {
++		DEBUG(3,("rpc: name_to_sid name=%s\n", name));
++		full_name = talloc_asprintf(mem_ctx, "%s", name);
++	} else {
++		DEBUG(3,("rpc: name_to_sid name=%s\\%s\n", domain_name, name));
++		full_name = talloc_asprintf(mem_ctx, "%s\\%s", domain_name, name);
++	}
+ 	if (!full_name) {
+ 		DEBUG(0, ("talloc_asprintf failed!\n"));
+ 		return NT_STATUS_NO_MEMORY;
+@@ -302,6 +305,44 @@ NTSTATUS msrpc_name_to_sid(struct winbin
+ 	return NT_STATUS_OK;
+ }
+ 
++/* convert a single principal name to a sid in a domain */
++NTSTATUS msrpc_upn_to_sid(struct winbindd_domain *domain,
++			  TALLOC_CTX *mem_ctx,
++			  const char *upn,
++			  DOM_SID *sid,
++			  enum lsa_SidType *type)
++{
++	NTSTATUS result;
++	DOM_SID *sids = NULL;
++	enum lsa_SidType *types = NULL;
++	struct rpc_pipe_client *cli;
++	POLICY_HND lsa_policy;
++
++	if (upn == NULL || *upn == '\0') {
++		return NT_STATUS_INVALID_PARAMETER;
++	}
++
++	DEBUG(3,("rpc: upn_to_sid name=%s\n", upn));
++
++	result = cm_connect_lsa(domain, mem_ctx, &cli, &lsa_policy);
++	if (!NT_STATUS_IS_OK(result))
++		return result;
++
++	result = rpccli_lsa_lookup_names(cli, mem_ctx, &lsa_policy, 1, 
++					 (const char**) &upn, NULL, &sids, &types);
++        
++	if (!NT_STATUS_IS_OK(result))
++		return result;
++
++	/* Return rid and type if lookup successful */
++
++	sid_copy(sid, &sids[0]);
++	*type = types[0];
++
++	return NT_STATUS_OK;
++}
++
++
+ /*
+   convert a domain SID to a user or group name
+ */
+@@ -1090,6 +1131,14 @@ NTSTATUS msrpc_password_policy(struct wi
+ 	return result;
+ }
+ 
++NTSTATUS msrpc_get_upn_suffixes(struct winbindd_domain *domain,
++				TALLOC_CTX *mem_ctx,
++				size_t *num_upn_suffixes,
++				char ***upn_suffixes)
++{
++	return NT_STATUS_NOT_SUPPORTED;
++}
++
+ 
+ /* the rpc backend methods are exposed via this structure */
+ struct winbindd_methods msrpc_methods = {
+@@ -1098,6 +1147,7 @@ struct winbindd_methods msrpc_methods = 
+ 	enum_dom_groups,
+ 	enum_local_groups,
+ 	msrpc_name_to_sid,
++	msrpc_upn_to_sid,
+ 	msrpc_sid_to_name,
+ 	msrpc_rids_to_names,
+ 	query_user,
+@@ -1108,4 +1158,5 @@ struct winbindd_methods msrpc_methods = 
+ 	msrpc_lockout_policy,
+ 	msrpc_password_policy,
+ 	trusted_domains,
++	msrpc_get_upn_suffixes,
+ };
+Index: nsswitch/winbindd_dual.c
+===================================================================
+--- nsswitch/winbindd_dual.c	(revision 22774)
++++ nsswitch/winbindd_dual.c	(working copy)
+@@ -351,6 +351,7 @@ static struct winbindd_child_dispatch_ta
+ 	
+ 	{ WINBINDD_LOOKUPSID,            winbindd_dual_lookupsid,             "LOOKUPSID" },
+ 	{ WINBINDD_LOOKUPNAME,           winbindd_dual_lookupname,            "LOOKUPNAME" },
++	{ WINBINDD_LOOKUPUPN,            winbindd_dual_lookupupn,             "LOOKUPUPN" },
+ 	{ WINBINDD_LOOKUPRIDS,           winbindd_dual_lookuprids,            "LOOKUPRIDS" },
+ 	{ WINBINDD_LIST_TRUSTDOM,        winbindd_dual_list_trusted_domains,  "LIST_TRUSTDOM" },
+ 	{ WINBINDD_INIT_CONNECTION,      winbindd_dual_init_connection,       "INIT_CONNECTION" },
+Index: nsswitch/winbindd.h
+===================================================================
+--- nsswitch/winbindd.h	(revision 22774)
++++ nsswitch/winbindd.h	(working copy)
+@@ -241,6 +241,13 @@ struct winbindd_methods {
+ 				DOM_SID *sid,
+ 				enum lsa_SidType *type);
+ 
++	/* convert one principal name to a sid */
++	NTSTATUS (*upn_to_sid)(struct winbindd_domain *domain,
++			       TALLOC_CTX *mem_ctx,
++			       const char *upn,
++			       DOM_SID *sid,
++			       enum lsa_SidType *type);
++
+ 	/* convert a sid to a user or group name */
+ 	NTSTATUS (*sid_to_name)(struct winbindd_domain *domain,
+ 				TALLOC_CTX *mem_ctx,
+@@ -309,6 +316,11 @@ struct winbindd_methods {
+ 				    char ***names,
+ 				    char ***alt_names,
+ 				    DOM_SID **dom_sids);
++
++	NTSTATUS (*get_upn_suffixes)(struct winbindd_domain *domain,
++				     TALLOC_CTX *mem_ctx,
++				     size_t *num_upn_suffixes,
++				     char ***upn_suffixes);
+ };
+ 
+ /* Used to glue a policy handle and cli_state together */
+Index: nsswitch/winbindd_cache.c
+===================================================================
+--- nsswitch/winbindd_cache.c	(revision 22774)
++++ nsswitch/winbindd_cache.c	(working copy)
+@@ -823,7 +823,7 @@ static void wcache_save_name_to_sid(stru
+ 				    enum lsa_SidType type)
+ {
+ 	struct cache_entry *centry;
+-	fstring uname;
++	fstring uname, dname;
+ 
+ 	centry = centry_start(domain, status);
+ 	if (!centry)
+@@ -832,12 +832,36 @@ static void wcache_save_name_to_sid(stru
+ 	centry_put_sid(centry, sid);
+ 	fstrcpy(uname, name);
+ 	strupper_m(uname);
+-	centry_end(centry, "NS/%s/%s", domain_name, uname);
++	fstrcpy(dname, domain_name);
++	strupper_m(dname);
++	centry_end(centry, "NS/%s/%s", dname, uname);
+ 	DEBUG(10,("wcache_save_name_to_sid: %s\\%s -> %s (%s)\n", domain_name, uname,
+ 		  sid_string_static(sid), nt_errstr(status)));
+ 	centry_free(centry);
+ }
+ 
++static void wcache_save_upn_to_sid(struct winbindd_domain *domain, 
++				   NTSTATUS status, 
++				   const char *name, const DOM_SID *sid, 
++				   enum lsa_SidType type)
++{
++	struct cache_entry *centry;
++	fstring uname;
++
++	centry = centry_start(domain, status);
++	if (!centry)
++		return;
++	centry_put_uint32(centry, type);
++	centry_put_sid(centry, sid);
++	fstrcpy(uname, name);
++	strupper_m(uname);
++	centry_end(centry, "UPN/%s", uname);
++	DEBUG(10,("wcache_save_upn_to_sid: %s -> %s (%s)\n", uname,
++		  sid_string_static(sid), nt_errstr(status)));
++	centry_free(centry);
++}
++
++
+ static void wcache_save_sid_to_name(struct winbindd_domain *domain, NTSTATUS status, 
+ 				    const DOM_SID *sid, const char *domain_name, const char *name, enum lsa_SidType type)
+ {
+@@ -1432,6 +1456,68 @@ do_query:
+ 	return status;
+ }
+ 
++/* convert a single name to a sid in a domain */
++static NTSTATUS upn_to_sid(struct winbindd_domain *domain,
++			   TALLOC_CTX *mem_ctx,
++			   const char *name,
++			   DOM_SID *sid,
++			   enum lsa_SidType *type)
++{
++	struct winbind_cache *cache = get_cache(domain);
++	struct cache_entry *centry = NULL;
++	NTSTATUS status;
++	fstring uname;
++
++	if (!cache->tdb)
++		goto do_query;
++
++	fstrcpy(uname, name);
++	strupper_m(uname);
++	centry = wcache_fetch(cache, domain, "UPN/%s", uname);
++	if (!centry)
++		goto do_query;
++	*type = (enum lsa_SidType)centry_uint32(centry);
++	status = centry->status;
++	if (NT_STATUS_IS_OK(status)) {
++		centry_sid(centry, mem_ctx, sid);
++	}
++
++	DEBUG(10,("upn_to_sid: [Cached] - cached name for domain %s status: %s\n",
++		domain->name, nt_errstr(status) ));
++
++	centry_free(centry);
++	return status;
++
++do_query:
++	ZERO_STRUCTP(sid);
++
++	/* If the seq number check indicated that there is a problem
++	 * with this DC, then return that status... except for
++	 * access_denied.  This is special because the dc may be in
++	 * "restrict anonymous = 1" mode, in which case it will deny
++	 * most unauthenticated operations, but *will* allow the LSA
++	 * name-to-sid that we try as a fallback. */
++
++	if (!(NT_STATUS_IS_OK(domain->last_status)
++	      || NT_STATUS_EQUAL(domain->last_status, NT_STATUS_ACCESS_DENIED)))
++		return domain->last_status;
++
++	DEBUG(10,("upn_to_sid: [Cached] - doing backend query for name for domain %s\n",
++		domain->name ));
++
++	status = domain->backend->upn_to_sid(domain, mem_ctx, name, sid, type);
++
++	/* and save it */
++	refresh_sequence_number(domain, False);
++
++	if (domain->online && !is_null_sid(sid)) {
++		wcache_save_upn_to_sid(domain, status, name, sid, *type);
++	}
++
++	return status;
++}
++
++
+ /* convert a sid to a user or group name. The sid is guaranteed to be in the domain
+    given */
+ static NTSTATUS sid_to_name(struct winbindd_domain *domain,
+@@ -2165,6 +2251,83 @@ do_query:
+ 	return status;
+ }
+ 
++/* get upn suffixes for a domain */
++static NTSTATUS get_upn_suffixes(struct winbindd_domain *domain,
++				 TALLOC_CTX *mem_ctx,
++				 size_t *num_upn_suffixes,
++				 char ***upn_suffixes)
++{
++ 	struct winbind_cache *cache = get_cache(domain);
++ 	struct cache_entry *centry = NULL;
++ 	NTSTATUS status;
++	int i;
++ 
++	if (!cache->tdb)
++		goto do_query;
++ 
++	centry = wcache_fetch(cache, domain, "UPN_SUFFIXES/%s", domain->name);
++	
++	if (!centry) {
++ 		goto do_query;
++	}
++ 
++	(*num_upn_suffixes) = centry_uint32(centry);
++	
++	(*upn_suffixes) = TALLOC_ARRAY(mem_ctx, char *, *num_upn_suffixes);
++ 
++	if (!(*upn_suffixes)) {
++		smb_panic("get_upn_suffixes out of memory");
++ 	}
++ 
++	for (i=0; i<(*num_upn_suffixes); i++) {
++		(*upn_suffixes)[i] = centry_string(centry, mem_ctx);
++	}
++
++ 	status = centry->status;
++ 
++	DEBUG(10,("upn_suffixes: [Cached] - cached info for domain %s (%d suffixes) status: %s\n",
++		domain->name, (int)(*num_upn_suffixes), nt_errstr(status) ));
++ 
++ 	centry_free(centry);
++ 	return status;
++ 
++do_query:
++	(*num_upn_suffixes) = 0;
++	(*upn_suffixes) = NULL;
++ 
++	/* Return status value returned by seq number check */
++
++ 	if (!NT_STATUS_IS_OK(domain->last_status))
++ 		return domain->last_status;
++	
++	DEBUG(10,("upn_suffixes: [Cached] - doing backend query for info for domain %s\n",
++		domain->name ));
++ 
++	status = domain->backend->get_upn_suffixes(domain, mem_ctx, num_upn_suffixes,
++						   upn_suffixes);
++
++	/* and save it */
++	refresh_sequence_number(domain, False);
++ 
++ 	centry = centry_start(domain, status);
++	if (!centry)
++		goto skip_save;
++
++	centry_put_uint32(centry, (*num_upn_suffixes));
++
++	for (i=0; i<(*num_upn_suffixes); i++) {
++		centry_put_string(centry, (*upn_suffixes)[i]);
++ 	}
++	
++	centry_end(centry, "UPN_SUFFIXES/%s", domain->name);
++ 
++ 	centry_free(centry);
++ 
++skip_save:
++ 	return status;
++}	
++
++
+ 
+ /* Invalidate cached user and group lists coherently */
+ 
+@@ -3102,6 +3265,52 @@ static int validate_de(TALLOC_CTX *mem_c
+ 	return 0;
+ }
+ 
++static int validate_upn(TALLOC_CTX *mem_ctx, const char *keystr, TDB_DATA dbuf)
++{
++	struct cache_entry *centry = create_centry_validate(keystr, dbuf);
++	if (!centry) {
++		return 1;
++	}
++
++	(void)centry_uint32(centry);
++	if (NT_STATUS_IS_OK(centry->status)) {
++		DOM_SID sid;
++		(void)centry_sid(centry, mem_ctx, &sid);
++	}
++
++	centry_free(centry);
++
++	if (bad_cache_entry) {
++		return 1;
++	}
++	DEBUG(10,("validate_upn: %s ok\n", keystr));
++	return 0;
++}
++
++static int validate_upn_suffixes(TALLOC_CTX *mem_ctx, const char *keystr, TDB_DATA dbuf)
++{
++	struct cache_entry *centry = create_centry_validate(keystr, dbuf);
++	int32 num_suffixes, i;
++
++	if (!centry) {
++		return 1;
++	}
++
++	num_suffixes = centry_uint32(centry);
++	
++	for (i=0; i< num_suffixes; i++) {
++		(void)centry_string(centry, mem_ctx);
++	}
++
++	centry_free(centry);
++
++	if (bad_cache_entry) {
++		return 1;
++	}
++	DEBUG(10,("validate_upn_suffixes: %s ok\n", keystr));
++	return 0;
++}
++
+ static int validate_trustdoms(TALLOC_CTX *mem_ctx, const char *keystr, TDB_DATA dbuf)
+ {
+ 	struct cache_entry *centry = create_centry_validate(keystr, dbuf);
+@@ -3164,6 +3373,8 @@ struct key_val_struct {
+ 	{"GM/", validate_gm},
+ 	{"DR/", validate_dr},
+ 	{"DE/", validate_de},
++	{"UPN/", validate_upn},
++	{"UPN_SUFFIXES/", validate_upn_suffixes},
+ 	{"TRUSTDOMS/", validate_trustdoms},
+ 	{"WINBINDD_OFFLINE", validate_offline},
+ 	{NULL, NULL}
+@@ -3827,6 +4038,7 @@ struct winbindd_methods cache_methods = 
+ 	enum_dom_groups,
+ 	enum_local_groups,
+ 	name_to_sid,
++	upn_to_sid,
+ 	sid_to_name,
+ 	rids_to_names,
+ 	query_user,
+@@ -3836,5 +4048,6 @@ struct winbindd_methods cache_methods = 
+ 	sequence_number,
+ 	lockout_policy,
+ 	password_policy,
+-	trusted_domains
++	trusted_domains,
++	get_upn_suffixes,
+ };
+Index: nsswitch/pam_winbind.c
+===================================================================
+--- nsswitch/pam_winbind.c	(revision 22774)
++++ nsswitch/pam_winbind.c	(working copy)
+@@ -462,6 +462,7 @@ static int pam_winbind_request(pam_handl
+ 
+ 		case WINBINDD_GETPWNAM:
+ 		case WINBINDD_LOOKUPNAME:
++		case WINBINDD_LOOKUPUPN:
+ 			if (strlen(response->data.auth.nt_status_string) > 0) {
+ 				_pam_log(pamh, ctrl, LOG_ERR, "request failed, NT error was %s", 
+ 				response->data.auth.nt_status_string);
+@@ -800,6 +801,96 @@ out:
+ }
+ 
+ /**
++ * Retrieve the winbind separator.
++ *
++ * @param pamh PAM handle
++ * @param ctrl PAM winbind options.
++ *
++ * @return string separator character. NULL on failure.
++ */
++
++static char winbind_get_separator(pam_handle_t *pamh, int ctrl)
++{
++	struct winbindd_request request;
++	struct winbindd_response response;
++
++	ZERO_STRUCT(request);
++	ZERO_STRUCT(response);
++
++	if (pam_winbind_request_log(pamh, ctrl, WINBINDD_INFO, &request, &response, NULL)) {
++		return '\0';
++	}
++
++	return response.data.info.winbind_separator;
++}
++
++/**
++ * Convert a upn to a name.
++ *
++ * @param pamh PAM handle
++ * @param ctrl PAM winbind options.
++ * @param user User in PAM request.
++ *
++ * @return converted name. unconverted name on failure. Caller needs to free.
++ */
++
++static char *winbind_upn_to_username(pam_handle_t *pamh,
++				     int ctrl,
++				     const char *user)
++{
++	char *p = NULL;
++	struct winbindd_request request;
++	struct winbindd_response response;
++	char *ret_name = NULL;
++	size_t str_size = 1024;
++	char sep;
++
++	sep = winbind_get_separator(pamh, ctrl);
++	if (!sep || sep == '@') {
++		goto failed;
++	}
++
++	/* lookup name? */ 
++	if ((p = strchr(user, '@')) == NULL) {
++		_pam_log_debug(pamh, ctrl, LOG_DEBUG, "no upn given");
++		goto failed;
++	}
++
++	ZERO_STRUCT(request);
++	ZERO_STRUCT(response);
++
++	_pam_log_debug(pamh, ctrl, LOG_DEBUG, "upn given, looking up: %s\n", user);
++
++	strncpy(request.data.name.name, user,
++		sizeof(request.data.name.name) - 1);
++
++	if (pam_winbind_request_log(pamh, ctrl, WINBINDD_LOOKUPUPN, &request, &response, user)) {
++		_pam_log(pamh, ctrl, LOG_INFO, "could not lookup name: %s\n", user); 
++		goto failed;
++	}
++
++	ret_name = (char *)malloc(str_size);
++	if (!ret_name) {
++		goto failed;
++	}
++
++	if (snprintf(ret_name, str_size, "%s%c%s", 
++		     response.data.name.dom_name, sep,
++		     response.data.name.name) == -1) {
++		goto failed;
++	}
++
++	_pam_log(pamh, ctrl, LOG_INFO, "upn %s translates to name: %s\n", user, ret_name); 
++
++	return ret_name;
++
++ failed:
++ 	SAFE_FREE(ret_name);
++	return strdup(user);
++}
++
++
++/**
+  * put krb5ccname variable into environment
+  *
+  * @param pamh PAM handle
+@@ -1545,6 +1636,7 @@ int pam_sm_authenticate(pam_handle_t *pa
+ 	char *username_ret = NULL;
+ 	char *new_authtok_required = NULL;
+ 	char *real_username = NULL;
++	char *auth_username = NULL;
+ 
+ 	/* parse arguments */
+ 	int ctrl = _pam_parse(pamh, flags, argc, argv, &d);
+@@ -1610,9 +1702,14 @@ int pam_sm_authenticate(pam_handle_t *pa
+ 
+ 	cctype = get_krb5_cc_type_from_config(pamh, argc, argv, ctrl, d);
+ 
++	auth_username = winbind_upn_to_username(pamh, ctrl, username);
++
++	pam_set_item(pamh, PAM_USER, auth_username);
++
+ 	/* Now use the username to look up password */
+-	retval = winbind_auth_request(pamh, ctrl, username, password, member,
++	retval = winbind_auth_request(pamh, ctrl, auth_username, password, member,
+ 				      cctype, NULL, NULL, &username_ret);
++	SAFE_FREE(auth_username);
+ 
+ 	if (retval == PAM_NEW_AUTHTOK_REQD ||
+ 	    retval == PAM_AUTHTOK_EXPIRED) {
+Index: nsswitch/winbindd_passdb.c
+===================================================================
+--- nsswitch/winbindd_passdb.c	(revision 22774)
++++ nsswitch/winbindd_passdb.c	(working copy)
+@@ -109,6 +109,19 @@ static NTSTATUS name_to_sid(struct winbi
+ 	return NT_STATUS_OK;
+ }
+ 
++/* convert a single name to a sid in a domain */
++static NTSTATUS upn_to_sid(struct winbindd_domain *domain,
++			   TALLOC_CTX *mem_ctx,
++			   const char *name,
++			   DOM_SID *sid,
++			   enum lsa_SidType *type)
++{
++	DEBUG(10, ("Finding name %s\n", name));
++
++	return NT_STATUS_NONE_MAPPED;
++}
++
++
+ /*
+   convert a domain SID to a user or group name
+ */
+@@ -438,6 +451,7 @@ struct winbindd_methods passdb_methods =
+ 	enum_dom_groups,
+ 	enum_local_groups,
+ 	name_to_sid,
++	upn_to_sid,
+ 	sid_to_name,
+ 	rids_to_names,
+ 	query_user,
+@@ -448,4 +462,5 @@ struct winbindd_methods passdb_methods =
+ 	lockout_policy,
+ 	password_policy,
+ 	trusted_domains,
++	msrpc_get_upn_suffixes
+ };
+Index: nsswitch/winbindd_sid.c
+===================================================================
+--- nsswitch/winbindd_sid.c	(revision 22774)
++++ nsswitch/winbindd_sid.c	(working copy)
+@@ -124,6 +124,45 @@ static void lookupname_recv(void *privat
+ 	return;
+ }
+ 
++static void lookupupn_recv(void *private_data, BOOL success,
++			   const DOM_SID *sid, enum lsa_SidType type);
++
++void winbindd_lookupupn(struct winbindd_cli_state *state)
++{
++	const char *name_user = NULL;
++
++	/* Ensure null termination */
++	state->request.data.name.name[sizeof(state->request.data.name.name)-1]='\0';
++
++	name_user = state->request.data.name.name;
++
++	DEBUG(3, ("[%5lu]: lookupupn %s\n", (unsigned long)state->pid,
++		  name_user));
++
++	/* one day we might do a proper DsCrackNames() call here */
++
++	winbindd_lookupupn_async(state->mem_ctx, lp_workgroup(), name_user,
++				 lookupupn_recv, state);
++}
++
++static void lookupupn_recv(void *private_data, BOOL success,
++			   const DOM_SID *sid, enum lsa_SidType type)
++{
++	struct winbindd_cli_state *state =
++		talloc_get_type_abort(private_data, struct winbindd_cli_state);
++
++	if (!success) {
++		DEBUG(5, ("lookupupn returned an error\n"));
++		request_error(state);
++		return;
++	}
++
++	sid_to_string(state->request.data.sid, sid);
++
++	/* now do a sid2name lookup */
++	winbindd_lookupsid(state);
++}
++
+ void winbindd_lookuprids(struct winbindd_cli_state *state)
+ {
+ 	struct winbindd_domain *domain;
+
+--------------070202000908050706090102--
+

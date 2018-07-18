@@ -1,0 +1,130 @@
+From r-help-bounces@stat.math.ethz.ch  Wed Jun  6 12:35:50 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l56GZmhB023845
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 6 Jun 2007 12:35:49 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l56GZ1NV024462;
+	Wed, 6 Jun 2007 18:35:21 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: *
+X-Spam-Status: No, score=1.5 required=5.0 tests=AWL, BAYES_80,
+	DKIM_POLICY_SIGNSOME autolearn=no version=3.2.0
+Received: from guardian2.sph.harvard.edu (guardian.sph.harvard.edu
+	[134.174.190.3])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l56GVsNL023581
+	for <r-help@stat.math.ethz.ch.>; Wed, 6 Jun 2007 18:31:54 +0200
+Received: from hsph.harvard.edu (unverified [134.174.190.147]) by
+	guardian2.sph.harvard.edu (Vircom SMTPRS 4.35.480.0) with ESMTP id
+	<B0019238349@guardian2.sph.harvard.edu> for
+	<r-help@stat.math.ethz.ch.>; Wed, 6 Jun 2007 12:32:00 -0400
+X-Modus-BlackList: 134.174.190.147=OK;JGOLDHAB@hsph.harvard.edu=OK
+X-Modus-Trusted: 134.174.190.147=YES
+Received: from SPHGWIA1-MTA by hsph.harvard.edu
+	with Novell_GroupWise; Wed, 06 Jun 2007 12:32:01 -0400
+Message-Id: <4666A910.896D.005E.0@hsph.harvard.edu>
+X-Mailer: Novell GroupWise Internet Agent 7.0.1 
+Date: Wed, 06 Jun 2007 12:31:24 -0400
+From: "Jeremy Goldhaber-Fiebert" <JGOLDHAB@hsph.harvard.edu>
+To: <r-help@stat.math.ethz.ch>
+References: <4666A5D0.896D.005E.0@hsph.harvard.edu>
+Mime-Version: 1.0
+Content-Disposition: inline
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Subject: [R] Fwd: Using odesolve to produce non-negative solutions
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+Hello,
+
+I am using odesolve to simulate a group of people moving through time and transmitting infections to one another. 
+
+In Matlab, there is a NonNegative option which tells the Matlab solver to keep the vector elements of the ODE solution non-negative at all times. What is the right way to do this in R?
+
+Thanks,
+Jeremy
+
+P.S., Below is a simplified version of the code I use to try to do this, but I am not sure that it is theoretically right 
+
+dynmodel <- function(t,y,p) 
+{ 
+## Initialize parameter values
+
+	birth <- p$mybirth(t)
+	death <- p$mydeath(t)
+	recover <- p$myrecover
+	beta <- p$mybeta
+	vaxeff <- p$myvaxeff
+	vaccinated <- p$myvax(t)
+
+	vax <- vaxeff*vaccinated/100
+
+## If the state currently has negative quantities (shouldn't have), then reset to reasonable values for computing meaningful derivatives
+
+	for (i in 1:length(y)) {
+		if (y[i]<0) {
+			y[i] <- 0
+		}
+	}
+
+	S <- y[1]
+	I <- y[2]
+	R <- y[3]
+	N <- y[4]
+
+	shat <- (birth*(1-vax)) - (death*S) - (beta*S*I/N)
+	ihat <- (beta*S*I/N) - (death*I) - (recover*I)
+	rhat <- (birth*(vax)) + (recover*I) - (death*R)
+
+## Do we overshoot into negative space, if so shrink derivative to bring state to 0 
+## then rescale the components that take the derivative negative
+
+	if (shat+S<0) {
+		shat_old <- shat
+		shat <- -1*S
+		scaled_transmission <- (shat/shat_old)*(beta*S*I/N)
+		ihat <- scaled_transmission - (death*I) - (recover*I)
+		
+	}	
+	if (ihat+I<0) {
+		ihat_old <- ihat
+		ihat <- -1*I
+		scaled_recovery <- (ihat/ihat_old)*(recover*I)
+		rhat <- scaled_recovery +(birth*(vax)) - (death*R)
+	
+	}	
+	if (rhat+R<0) {
+		rhat <- -1*R
+	}	
+
+	nhat <- shat + ihat + rhat
+
+	if (nhat+N<0) {
+		nhat <- -1*N	
+	}	
+
+## return derivatives
+
+	list(c(shat,ihat,rhat,nhat),c(0))
+
+}
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

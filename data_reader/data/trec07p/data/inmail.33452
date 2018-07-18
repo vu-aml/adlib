@@ -1,0 +1,118 @@
+From perl6-all-return-81247-ktwarwic=speedy.uwaterloo.ca@perl.org  Thu May 10 18:36:51 2007
+Return-Path: <perl6-all-return-81247-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4AManqD015370
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 10 May 2007 18:36:50 -0400
+Received: (qmail 1509 invoked by uid 514); 10 May 2007 22:36:47 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 1504 invoked from network); 10 May 2007 22:36:47 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=1.3 required=8.0
+	tests=BAYES_20,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,KARMA_CONNECT_NEGATIVE,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: domain of nick@flirble.org designates 194.70.3.20 as permitted sender)
+Date: Thu, 10 May 2007 23:34:21 +0100
+From: Nicholas Clark <nick@ccl4.org>
+To: Joshua Isom <jrisom@gmail.com>
+Cc: perl6-internals@perl.org, chromatic <chromatic@wgz.org>
+Subject: Re: [svn:parrot] r18381 - trunk/include/parrot
+Message-ID: <20070510223421.GV18077@plum.flirble.org>
+Mail-Followup-To: Joshua Isom <jrisom@gmail.com>, perl6-internals@perl.org,
+	chromatic <chromatic@wgz.org>
+References: <20070501234157.8CE9ACB9B8@x12.develooper.com> <20070501234122.9F5F8CB9B8@x12.develooper.com> <20070509195357.GJ52711@colon.colondot.net> <200705091306.49336.chromatic@wgz.org> <20070509210103.GL18077@plum.flirble.org> <390f5c4771b86959736aea306ae5211f@gmail.com>
+Mime-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+In-Reply-To: <390f5c4771b86959736aea306ae5211f@gmail.com>
+User-Agent: Mutt/1.4.2.1i
+X-Organisation: Tetrachloromethane
+Sender: Nicholas Clark <nick@flirble.org>
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=1.8 required=8.0
+	tests=BAYES_40,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,KARMA_CONNECT_NEGATIVE,SPF_HELO_PASS,SPF_PASS
+
+On Thu, May 10, 2007 at 03:33:41AM -0500, Joshua Isom wrote:
+> 
+> On May 9, 2007, at 4:01 PM, Nicholas Clark wrote:
+
+> >So, !s->strlen does scan as quickly and easily.
+> >
+> 
+> To some, but it isn't as easy to just literally read.  "Not s's strlen" 
+> is a lot different than "STRING_IS_EMTPY".  Since the code will be read 
+> often, and often by people not familiar with parrot's internals, it 
+> makes sense to make it easily readable.  It takes me a second to read 
+> !s->strlen, but half a second to read STRING_IS_EMTPY.
+
+Whilst I agree with the .5s vs 1s, I'm still not convinced that I agree
+[and we may have to agree to disagree]
+
+It comes down to the level of understanding of the internals. If every
+construction is hidden behind macros that explain its function, then
+I think it will help the beginners (as you say) and the knowledgeable
+(who know what STRING_IS_EMPTY() expands to).
+
+But when I read STRING_IS_EMPTY() I stop and wonder "right, how?" and
+stop to look up what it expands to. Which one does need to do, if one
+is chasing down a bug. (Because with a bug, things *aren't* working as
+at least one of the designer or implementor intended, which means
+assumptions need to be checked. Maybe I'm odd)
+
+So, personally, I find it easier with a comment on the struct by that
+member, saying that an empty string has zero length.
+
+Mmm, looking at it right now:
+
+struct parrot_string_t {
+    pobj_t obj;
+    UINTVAL bufused;
+    char *strstart;
+    UINTVAL strlen;
+    /*    parrot_string_representation_t representation;*/
+    struct _encoding *encoding;
+    struct _charset *charset;
+    UINTVAL hashval; /* cached hash value computation; not yet used */
+};
+
+
+It makes me wonder what's the difference between bufused and strlen.
+
+> >s == NULL is also more tersely written as !s, which, I feel, is also 
+> >clearer
+> >to regular C programmers.
+> 
+> Eh, if we have one, may as well have the other, although this one seems 
+> simple enough.
+
+STRING_IS_NULL() might not mean !s
+!s can only mean !s
+
+
+That's why I don't like it.
+
+> >Clearly 5 years isn't a rapid learning curve.
+>
+> And one of the major reasons I don't want to even look at the perl5 
+> source to find the code I'm wanting.  Plus the documentation of the 
+> code isn't great last I saw(like where's the definition of what SvPVNL 
+> is?).  Parrot does have a couple flaws for finding struct definitions, 
+
+man perlapi. Or it's not documented.
+But probably last you looked it wasn't documented - there has been work in
+this area.
+
+Nicholas Clark
+

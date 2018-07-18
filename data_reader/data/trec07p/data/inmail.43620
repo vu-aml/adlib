@@ -1,0 +1,116 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri May 25 10:51:28 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4PEpSqD029257
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 25 May 2007 10:51:28 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 17BA4162BD1
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 25 May 2007 14:51:24 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 3002B162AE1; Fri, 25 May 2007 14:50:58 +0000 (GMT)
+Date: Sat, 26 May 2007 00:05:30 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070525145058.3002B162AE1@lists.samba.org>
+Subject: Rev 347: send a message to clients when an IP has been released in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 347
+revision-id: tridge@samba.org-20070525140530-wueocj9ci5qpi3cf
+parent: tridge@samba.org-20070525120745-40ik47s270sgbx07
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Sat 2007-05-26 00:05:30 +1000
+message:
+  send a message to clients when an IP has been released
+modified:
+  common/ctdb_recoverd.c         recoverd.c-20070503213540-bvxuyd9jm1f7ig90-1
+  include/ctdb.h                 ctdb.h-20061117234101-o3qt14umlg9en8z0-11
+  takeover/ctdb_takeover.c       ctdb_takeover.c-20070525071636-a5n1ihghjtppy08r-2
+=== modified file 'common/ctdb_recoverd.c'
+--- a/common/ctdb_recoverd.c	2007-05-25 07:04:13 +0000
++++ b/common/ctdb_recoverd.c	2007-05-25 14:05:30 +0000
+@@ -557,7 +557,8 @@
+ 		return -1;
+ 	}
+ 
+-	/* send a message to all clients telling them that the cluster has been reconfigured */
++	/* send a message to all clients telling them that the cluster 
++	   has been reconfigured */
+ 	ctdb_send_message(ctdb, CTDB_BROADCAST_ALL, CTDB_SRVID_RECONFIGURE, tdb_null);
+ 
+ 	DEBUG(0, (__location__ " Recovery complete\n"));
+
+=== modified file 'include/ctdb.h'
+--- a/include/ctdb.h	2007-05-23 04:50:41 +0000
++++ b/include/ctdb.h	2007-05-25 14:05:30 +0000
+@@ -67,6 +67,11 @@
+  */
+ #define CTDB_SRVID_RECONFIGURE 0xF200000000000000LL
+ 
++/* 
++   a message handler ID meaning that an IP address has been released
++ */
++#define CTDB_SRVID_RELEASE_IP 0xF300000000000000LL
++
+ struct event_context;
+ 
+ /*
+
+=== modified file 'takeover/ctdb_takeover.c'
+--- a/takeover/ctdb_takeover.c	2007-05-25 11:27:26 +0000
++++ b/takeover/ctdb_takeover.c	2007-05-25 14:05:30 +0000
+@@ -108,19 +108,30 @@
+ {
+ 	struct sockaddr_in *sin = (struct sockaddr_in *)indata.dptr;
+ 	char *cmdstr;
++	TDB_DATA data;
++	char *ip = inet_ntoa(sin->sin_addr);
+ 
+ 	/* stop any previous arps */
+ 	talloc_free(ctdb->takeover.last_ctx);
+ 	ctdb->takeover.last_ctx = NULL;
+ 
+ 	cmdstr = talloc_asprintf(ctdb, "ip addr del %s/32 dev %s 2> /dev/null",
+-				 inet_ntoa(sin->sin_addr), ctdb->takeover.interface);
++				 ip, ctdb->takeover.interface);
+ 		
+ 	DEBUG(0,("Releasing IP : %s\n", cmdstr));
+ 	system(cmdstr);
+ 
+ 	talloc_free(cmdstr);
+ 
++	/* send a message to all clients of this node telling them
++	   that the cluster has been reconfigured and they should
++	   release any sockets on this IP */
++	data.dptr = (uint8_t *)ip;
++	data.dsize = strlen(ip)+1;
++
++	ctdb_send_message(ctdb, ctdb->vnn, CTDB_SRVID_RELEASE_IP, data);
++
++
+ 	return 0;
+ }
+ 
+

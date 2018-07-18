@@ -1,0 +1,530 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May 16 10:24:38 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4GEObqD019691
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 16 May 2007 10:24:37 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 92C231638B0
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 16 May 2007 14:24:34 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id ED01B162AC3; Wed, 16 May 2007 14:24:07 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070516142407.ED01B162AC3@lists.samba.org>
+Date: Wed, 16 May 2007 14:24:07 +0000 (GMT)
+Subject: svn commit: samba r22942 - in branches: SAMBA_3_0/source/smbd
+	SAMBA_3_0_26/source/smbd
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-05-16 14:24:06 +0000 (Wed, 16 May 2007)
+New Revision: 22942
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22942
+
+Log:
+Some message_register -> messaging_register conversions
+
+Modified:
+   branches/SAMBA_3_0/source/smbd/conn.c
+   branches/SAMBA_3_0/source/smbd/open.c
+   branches/SAMBA_3_0/source/smbd/server.c
+   branches/SAMBA_3_0_26/source/smbd/conn.c
+   branches/SAMBA_3_0_26/source/smbd/open.c
+   branches/SAMBA_3_0_26/source/smbd/server.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/smbd/conn.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/conn.c	2007-05-16 14:02:04 UTC (rev 22941)
++++ branches/SAMBA_3_0/source/smbd/conn.c	2007-05-16 14:24:06 UTC (rev 22942)
+@@ -319,13 +319,16 @@
+ share are unmounted
+ the special sharename '*' forces unmount of all shares
+ ****************************************************************************/
+-void msg_force_tdis(int msg_type, struct server_id pid, void *buf, size_t len,
+-		    void *private_data)
++void msg_force_tdis(struct messaging_context *msg,
++		    void *private_data,
++		    uint32_t msg_type,
++		    struct server_id server_id,
++		    DATA_BLOB *data)
+ {
+ 	connection_struct *conn, *next;
+ 	fstring sharename;
+ 
+-	fstrcpy(sharename, (const char *)buf);
++	fstrcpy(sharename, (const char *)data->data);
+ 
+ 	if (strcmp(sharename, "*") == 0) {
+ 		DEBUG(1,("Forcing close of all shares\n"));
+
+Modified: branches/SAMBA_3_0/source/smbd/open.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/open.c	2007-05-16 14:02:04 UTC (rev 22941)
++++ branches/SAMBA_3_0/source/smbd/open.c	2007-05-16 14:24:06 UTC (rev 22942)
+@@ -2249,19 +2249,24 @@
+  smbd process.
+ ****************************************************************************/
+ 
+-void msg_file_was_renamed(int msg_type, struct server_id src,
+-			  void *buf, size_t len, void *private_data)
++void msg_file_was_renamed(struct messaging_context *msg,
++			  void *private_data,
++			  uint32_t msg_type,
++			  struct server_id server_id,
++			  DATA_BLOB *data)
+ {
+ 	files_struct *fsp;
+-	char *frm = (char *)buf;
++	char *frm = (char *)data->data;
+ 	SMB_DEV_T dev;
+ 	SMB_INO_T inode;
+ 	const char *sharepath;
+ 	const char *newname;
+ 	size_t sp_len;
+ 
+-	if (buf == NULL || len < MSG_FILE_RENAMED_MIN_SIZE + 2) {
+-                DEBUG(0, ("msg_file_was_renamed: Got invalid msg len %d\n", (int)len));
++	if (data->data == NULL
++	    || data->length < MSG_FILE_RENAMED_MIN_SIZE + 2) {
++                DEBUG(0, ("msg_file_was_renamed: Got invalid msg len %d\n",
++			  data->length));
+                 return;
+         }
+ 
+
+Modified: branches/SAMBA_3_0/source/smbd/server.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/server.c	2007-05-16 14:02:04 UTC (rev 22941)
++++ branches/SAMBA_3_0/source/smbd/server.c	2007-05-16 14:24:06 UTC (rev 22942)
+@@ -87,10 +87,14 @@
+  What to do when smb.conf is updated.
+  ********************************************************************/
+ 
+-static void smb_conf_updated(int msg_type, struct server_id src,
+-			     void *buf, size_t len, void *private_data)
++static void smb_conf_updated(struct messaging_context *msg,
++			     void *private_data,
++			     uint32_t msg_type,
++			     struct server_id server_id,
++			     DATA_BLOB *data)
+ {
+-	DEBUG(10,("smb_conf_updated: Got message saying smb.conf was updated. Reloading.\n"));
++	DEBUG(10,("smb_conf_updated: Got message saying smb.conf was "
++		  "updated. Reloading.\n"));
+ 	reload_services(False);
+ }
+ 
+@@ -99,10 +103,13 @@
+  Delete a statcache entry.
+  ********************************************************************/
+ 
+-static void smb_stat_cache_delete(int msg_type, struct server_id src,
+-				  void *buf, size_t len, void *private_data)
++static void smb_stat_cache_delete(struct messaging_context *msg,
++				  void *private_data,
++				  uint32_t msg_tnype,
++				  struct server_id server_id,
++				  DATA_BLOB *data)
+ {
+-	const char *name = (const char *)buf;
++	const char *name = (const char *)data->data;
+ 	DEBUG(10,("smb_stat_cache_delete: delete name %s\n", name));
+ 	stat_cache_delete(name);
+ }
+@@ -150,9 +157,11 @@
+  somewhere else.
+ ****************************************************************************/
+ 
+-static void msg_sam_sync(int UNUSED(msg_type), struct server_id UNUSED(pid),
+-			 void *UNUSED(buf), size_t UNUSED(len),
+-			 void *private_data)
++static void msg_sam_sync(struct messaging_context *msg,
++			 void *private_data,
++			 uint32_t msg_type,
++			 struct server_id server_id,
++			 DATA_BLOB *data)
+ {
+         DEBUG(10, ("** sam sync message received, ignoring\n"));
+ }
+@@ -162,15 +171,18 @@
+  somewhere else.
+ ****************************************************************************/
+ 
+-static void msg_sam_repl(int msg_type, struct server_id pid,
+-			 void *buf, size_t len, void *private_data)
++static void msg_sam_repl(struct messaging_context *msg,
++			 void *private_data,
++			 uint32_t msg_type,
++			 struct server_id server_id,
++			 DATA_BLOB *data)
+ {
+         uint32 low_serial;
+ 
+-        if (len != sizeof(uint32))
++        if (data->length != sizeof(low_serial))
+                 return;
+ 
+-        low_serial = *((uint32 *)buf);
++        low_serial = *((uint32 *)data->data);
+ 
+         DEBUG(3, ("received sam replication message, serial = 0x%04x\n",
+                   low_serial));
+@@ -196,38 +208,44 @@
+ 	return True;
+ }
+ 
+-static void msg_exit_server(int msg_type, struct server_id src,
+-			    void *buf, size_t len, void *private_data)
++static void msg_exit_server(struct messaging_context *msg,
++			    void *private_data,
++			    uint32_t msg_type,
++			    struct server_id server_id,
++			    DATA_BLOB *data)
+ {
+ 	DEBUG(3, ("got a SHUTDOWN message\n"));
+ 	exit_server_cleanly(NULL);
+ }
+ 
+ #ifdef DEVELOPER
+-static void msg_inject_fault(int msg_type, struct server_id src,
+-			    void *buf, size_t len, void *private_data)
++static void msg_inject_fault(struct messaging_context *msg,
++			     void *private_data,
++			     uint32_t msg_type,
++			     struct server_id src,
++			     DATA_BLOB *data)
+ {
+ 	int sig;
+ 
+-	if (len != sizeof(int)) {
++	if (data->length != sizeof(sig)) {
+ 		
+-		DEBUG(0, ("Process %llu sent bogus signal injection request\n",
+-			(unsigned long long)src.pid));
++		DEBUG(0, ("Process %s sent bogus signal injection request\n",
++			  procid_str_static(&src)));
+ 		return;
+ 	}
+ 
+-	sig = *(int *)buf;
++	sig = *(int *)data->data;
+ 	if (sig == -1) {
+ 		exit_server("internal error injected");
+ 		return;
+ 	}
+ 
+ #if HAVE_STRSIGNAL
+-	DEBUG(0, ("Process %llu requested injection of signal %d (%s)\n",
+-		    (unsigned long long)src.pid, sig, strsignal(sig)));
++	DEBUG(0, ("Process %s requested injection of signal %d (%s)\n",
++		  procid_str_static(&src), sig, strsignal(sig)));
+ #else
+-	DEBUG(0, ("Process %llu requested injection of signal %d\n",
+-		    (unsigned long long)src.pid, sig));
++	DEBUG(0, ("Process %s requested injection of signal %d\n",
++		  procid_str_static(&src), sig));
+ #endif
+ 
+ 	kill(sys_getpid(), sig);
+@@ -345,16 +363,22 @@
+ 
+         /* Listen to messages */
+ 
+-        message_register(MSG_SMB_SAM_SYNC, msg_sam_sync, NULL);
+-        message_register(MSG_SMB_SAM_REPL, msg_sam_repl, NULL);
+-        message_register(MSG_SHUTDOWN, msg_exit_server, NULL);
+-        message_register(MSG_SMB_FILE_RENAME, msg_file_was_renamed, NULL);
+-	message_register(MSG_SMB_CONF_UPDATED, smb_conf_updated, NULL); 
+-	message_register(MSG_SMB_STAT_CACHE_DELETE, smb_stat_cache_delete,
+-			 NULL);
++	messaging_register(smbd_messaging_context(), NULL,
++			   MSG_SMB_SAM_SYNC, msg_sam_sync);
++	messaging_register(smbd_messaging_context(), NULL,
++			   MSG_SMB_SAM_REPL, msg_sam_repl);
++	messaging_register(smbd_messaging_context(), NULL,
++			   MSG_SHUTDOWN, msg_exit_server);
++	messaging_register(smbd_messaging_context(), NULL,
++			   MSG_SMB_FILE_RENAME, msg_file_was_renamed);
++	messaging_register(smbd_messaging_context(), NULL,
++			   MSG_SMB_CONF_UPDATED, smb_conf_updated); 
++	messaging_register(smbd_messaging_context(), NULL,
++			   MSG_SMB_STAT_CACHE_DELETE, smb_stat_cache_delete);
+ 
+ #ifdef DEVELOPER
+-	message_register(MSG_SMB_INJECT_FAULT, msg_inject_fault, NULL); 
++	messaging_register(smbd_messaging_context(), NULL,
++			   MSG_SMB_INJECT_FAULT, msg_inject_fault);
+ #endif
+ 
+ 	/* now accept incoming connections - forking a new process
+@@ -1071,7 +1095,8 @@
+ 	initialize_async_io_handler();
+ 
+ 	/* register our message handlers */
+-	message_register(MSG_SMB_FORCE_TDIS, msg_force_tdis, NULL);
++	messaging_register(smbd_messaging_context(), NULL,
++			   MSG_SMB_FORCE_TDIS, msg_force_tdis);
+ 
+ 	if ((lp_keepalive() != 0)
+ 	    && !(event_add_idle(smbd_event_context(), NULL,
+
+Modified: branches/SAMBA_3_0_26/source/smbd/conn.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/smbd/conn.c	2007-05-16 14:02:04 UTC (rev 22941)
++++ branches/SAMBA_3_0_26/source/smbd/conn.c	2007-05-16 14:24:06 UTC (rev 22942)
+@@ -311,13 +311,16 @@
+ share are unmounted
+ the special sharename '*' forces unmount of all shares
+ ****************************************************************************/
+-void msg_force_tdis(int msg_type, struct server_id pid, void *buf, size_t len,
+-		    void *private_data)
++void msg_force_tdis(struct messaging_context *msg,
++		    void *private_data,
++		    uint32_t msg_type,
++		    struct server_id server_id,
++		    DATA_BLOB *data)
+ {
+ 	connection_struct *conn, *next;
+ 	fstring sharename;
+ 
+-	fstrcpy(sharename, (const char *)buf);
++	fstrcpy(sharename, (const char *)data->data);
+ 
+ 	if (strcmp(sharename, "*") == 0) {
+ 		DEBUG(1,("Forcing close of all shares\n"));
+
+Modified: branches/SAMBA_3_0_26/source/smbd/open.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/smbd/open.c	2007-05-16 14:02:04 UTC (rev 22941)
++++ branches/SAMBA_3_0_26/source/smbd/open.c	2007-05-16 14:24:06 UTC (rev 22942)
+@@ -2253,19 +2253,24 @@
+  smbd process.
+ ****************************************************************************/
+ 
+-void msg_file_was_renamed(int msg_type, struct server_id src,
+-			  void *buf, size_t len, void *private_data)
++void msg_file_was_renamed(struct messaging_context *msg,
++			  void *private_data,
++			  uint32_t msg_type,
++			  struct server_id server_id,
++			  DATA_BLOB *data)
+ {
+ 	files_struct *fsp;
+-	char *frm = (char *)buf;
++	char *frm = (char *)data->data;
+ 	SMB_DEV_T dev;
+ 	SMB_INO_T inode;
+ 	const char *sharepath;
+ 	const char *newname;
+ 	size_t sp_len;
+ 
+-	if (buf == NULL || len < MSG_FILE_RENAMED_MIN_SIZE + 2) {
+-                DEBUG(0, ("msg_file_was_renamed: Got invalid msg len %d\n", (int)len));
++	if (data->data == NULL
++	    || data->length < MSG_FILE_RENAMED_MIN_SIZE + 2) {
++                DEBUG(0, ("msg_file_was_renamed: Got invalid msg len %d\n",
++			  data->length));
+                 return;
+         }
+ 
+
+Modified: branches/SAMBA_3_0_26/source/smbd/server.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/smbd/server.c	2007-05-16 14:02:04 UTC (rev 22941)
++++ branches/SAMBA_3_0_26/source/smbd/server.c	2007-05-16 14:24:06 UTC (rev 22942)
+@@ -86,10 +86,14 @@
+  What to do when smb.conf is updated.
+  ********************************************************************/
+ 
+-static void smb_conf_updated(int msg_type, struct server_id src,
+-			     void *buf, size_t len, void *private_data)
++static void smb_conf_updated(struct messaging_context *msg,
++			     void *private_data,
++			     uint32_t msg_type,
++			     struct server_id server_id,
++			     DATA_BLOB *data)
+ {
+-	DEBUG(10,("smb_conf_updated: Got message saying smb.conf was updated. Reloading.\n"));
++	DEBUG(10,("smb_conf_updated: Got message saying smb.conf was "
++		  "updated. Reloading.\n"));
+ 	reload_services(False);
+ }
+ 
+@@ -98,10 +102,13 @@
+  Delete a statcache entry.
+  ********************************************************************/
+ 
+-static void smb_stat_cache_delete(int msg_type, struct server_id src,
+-				  void *buf, size_t len, void *private_data)
++static void smb_stat_cache_delete(struct messaging_context *msg,
++				  void *private_data,
++				  uint32_t msg_tnype,
++				  struct server_id server_id,
++				  DATA_BLOB *data)
+ {
+-	const char *name = (const char *)buf;
++	const char *name = (const char *)data->data;
+ 	DEBUG(10,("smb_stat_cache_delete: delete name %s\n", name));
+ 	stat_cache_delete(name);
+ }
+@@ -149,9 +156,11 @@
+  somewhere else.
+ ****************************************************************************/
+ 
+-static void msg_sam_sync(int UNUSED(msg_type), struct server_id UNUSED(pid),
+-			 void *UNUSED(buf), size_t UNUSED(len),
+-			 void *private_data)
++static void msg_sam_sync(struct messaging_context *msg,
++			 void *private_data,
++			 uint32_t msg_type,
++			 struct server_id server_id,
++			 DATA_BLOB *data)
+ {
+         DEBUG(10, ("** sam sync message received, ignoring\n"));
+ }
+@@ -161,15 +170,18 @@
+  somewhere else.
+ ****************************************************************************/
+ 
+-static void msg_sam_repl(int msg_type, struct server_id pid,
+-			 void *buf, size_t len, void *private_data)
++static void msg_sam_repl(struct messaging_context *msg,
++			 void *private_data,
++			 uint32_t msg_type,
++			 struct server_id server_id,
++			 DATA_BLOB *data)
+ {
+         uint32 low_serial;
+ 
+-        if (len != sizeof(uint32))
++        if (data->length != sizeof(low_serial))
+                 return;
+ 
+-        low_serial = *((uint32 *)buf);
++        low_serial = *((uint32 *)data->data);
+ 
+         DEBUG(3, ("received sam replication message, serial = 0x%04x\n",
+                   low_serial));
+@@ -195,38 +207,44 @@
+ 	return True;
+ }
+ 
+-static void msg_exit_server(int msg_type, struct server_id src,
+-			    void *buf, size_t len, void *private_data)
++static void msg_exit_server(struct messaging_context *msg,
++			    void *private_data,
++			    uint32_t msg_type,
++			    struct server_id server_id,
++			    DATA_BLOB *data)
+ {
+ 	DEBUG(3, ("got a SHUTDOWN message\n"));
+ 	exit_server_cleanly(NULL);
+ }
+ 
+ #ifdef DEVELOPER
+-static void msg_inject_fault(int msg_type, struct server_id src,
+-			    void *buf, size_t len, void *private_data)
++static void msg_inject_fault(struct messaging_context *msg,
++			     void *private_data,
++			     uint32_t msg_type,
++			     struct server_id src,
++			     DATA_BLOB *data)
+ {
+ 	int sig;
+ 
+-	if (len != sizeof(int)) {
++	if (data->length != sizeof(sig)) {
+ 		
+-		DEBUG(0, ("Process %llu sent bogus signal injection request\n",
+-			(unsigned long long)src.pid));
++		DEBUG(0, ("Process %s sent bogus signal injection request\n",
++			  procid_str_static(&src)));
+ 		return;
+ 	}
+ 
+-	sig = *(int *)buf;
++	sig = *(int *)data->data;
+ 	if (sig == -1) {
+ 		exit_server("internal error injected");
+ 		return;
+ 	}
+ 
+ #if HAVE_STRSIGNAL
+-	DEBUG(0, ("Process %llu requested injection of signal %d (%s)\n",
+-		    (unsigned long long)src.pid, sig, strsignal(sig)));
++	DEBUG(0, ("Process %s requested injection of signal %d (%s)\n",
++		  procid_str_static(&src), sig, strsignal(sig)));
+ #else
+-	DEBUG(0, ("Process %llu requested injection of signal %d\n",
+-		    (unsigned long long)src.pid, sig));
++	DEBUG(0, ("Process %s requested injection of signal %d\n",
++		  procid_str_static(&src), sig));
+ #endif
+ 
+ 	kill(sys_getpid(), sig);
+@@ -441,16 +459,22 @@
+ 
+         /* Listen to messages */
+ 
+-        message_register(MSG_SMB_SAM_SYNC, msg_sam_sync, NULL);
+-        message_register(MSG_SMB_SAM_REPL, msg_sam_repl, NULL);
+-        message_register(MSG_SHUTDOWN, msg_exit_server, NULL);
+-        message_register(MSG_SMB_FILE_RENAME, msg_file_was_renamed, NULL);
+-	message_register(MSG_SMB_CONF_UPDATED, smb_conf_updated, NULL); 
+-	message_register(MSG_SMB_STAT_CACHE_DELETE, smb_stat_cache_delete,
+-			 NULL);
++	messaging_register(smbd_messaging_context(), NULL,
++			   MSG_SMB_SAM_SYNC, msg_sam_sync);
++	messaging_register(smbd_messaging_context(), NULL,
++			   MSG_SMB_SAM_REPL, msg_sam_repl);
++	messaging_register(smbd_messaging_context(), NULL,
++			   MSG_SHUTDOWN, msg_exit_server);
++	messaging_register(smbd_messaging_context(), NULL,
++			   MSG_SMB_FILE_RENAME, msg_file_was_renamed);
++	messaging_register(smbd_messaging_context(), NULL,
++			   MSG_SMB_CONF_UPDATED, smb_conf_updated); 
++	messaging_register(smbd_messaging_context(), NULL,
++			   MSG_SMB_STAT_CACHE_DELETE, smb_stat_cache_delete);
+ 
+ #ifdef DEVELOPER
+-	message_register(MSG_SMB_INJECT_FAULT, msg_inject_fault, NULL); 
++	messaging_register(smbd_messaging_context(), NULL,
++			   MSG_SMB_INJECT_FAULT, msg_inject_fault);
+ #endif
+ 
+ 	/* now accept incoming connections - forking a new process
+@@ -1116,7 +1140,8 @@
+ 	initialize_async_io_handler();
+ 
+ 	/* register our message handlers */
+-	message_register(MSG_SMB_FORCE_TDIS, msg_force_tdis, NULL);
++	messaging_register(smbd_messaging_context(), NULL,
++			   MSG_SMB_FORCE_TDIS, msg_force_tdis);
+ 
+ 	smbd_process();
+ 
+

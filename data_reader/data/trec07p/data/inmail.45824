@@ -1,0 +1,287 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 29 01:50:04 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4T5o4hB026908
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 01:50:04 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id C2780162C34
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 05:49:59 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.6 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 615)
+	id 17554162AF4; Tue, 29 May 2007 05:49:36 +0000 (GMT)
+To: samba-cvs@samba.org
+From: mimir@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070529054936.17554162AF4@lists.samba.org>
+Date: Tue, 29 May 2007 05:49:36 +0000 (GMT)
+Subject: svn commit: samba r23178 - in branches/SAMBA_4_0/testprogs/ejs: .
+	ejsnet
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: mimir
+Date: 2007-05-29 05:49:35 +0000 (Tue, 29 May 2007)
+New Revision: 23178
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23178
+
+Log:
+add simple js code I use for testing and which starts to look like
+ejsnet command line utility (perhaps to be moved to utils later...)
+
+
+rafal
+
+
+Added:
+   branches/SAMBA_4_0/testprogs/ejs/ejsnet/
+   branches/SAMBA_4_0/testprogs/ejs/ejsnet/nethost.js
+   branches/SAMBA_4_0/testprogs/ejs/ejsnet/netusr.js
+Modified:
+   branches/SAMBA_4_0/testprogs/ejs/ejsnet.js
+
+
+Changeset:
+Added: branches/SAMBA_4_0/testprogs/ejs/ejsnet/nethost.js
+===================================================================
+--- branches/SAMBA_4_0/testprogs/ejs/ejsnet/nethost.js	2007-05-29 01:20:47 UTC (rev 23177)
++++ branches/SAMBA_4_0/testprogs/ejs/ejsnet/nethost.js	2007-05-29 05:49:35 UTC (rev 23178)
+@@ -0,0 +1,45 @@
++function PrintNetHostHelp()
++{
++	println("Host management - available commands:");
++	println("\t domainlist - list users in specified domain");
++}
++
++
++function ListDomains(hostCtx)
++{
++	var domain;
++
++	var list = hostCtx.DomainList();
++	if (list == undefined) {
++		println("Error when listing domains");
++		return -1;
++	}
++
++	for (var i = 0; i < list.Count; i++) {
++		domain = list.Domains[i];
++		printf("%s\n", domain.Name);
++	}
++
++	printf("\nResult: %s\n", list.Status.errstr);
++}
++
++
++function HostManager(ctx, options)
++{
++	var hostCtx;
++
++	if (options.ARGV.length < 2) {
++		PrintNetHostHelp();
++		return -1;
++	}
++
++	var hostCmd = options.ARGV[1];
++
++	if (hostCmd == "domainlist") {
++		hostCtx = ctx.HostMgr();
++		ListDomains(hostCtx);
++
++	} else {
++		println("unknown command");
++	}
++}
+
+Added: branches/SAMBA_4_0/testprogs/ejs/ejsnet/netusr.js
+===================================================================
+--- branches/SAMBA_4_0/testprogs/ejs/ejsnet/netusr.js	2007-05-29 01:20:47 UTC (rev 23177)
++++ branches/SAMBA_4_0/testprogs/ejs/ejsnet/netusr.js	2007-05-29 05:49:35 UTC (rev 23178)
+@@ -0,0 +1,86 @@
++function PrintNetUsrHelp(options)
++{
++	println("User management - available commands:");
++	println("\t list - list users in specified domain");
++	println("\t info - display user account information");
++}
++
++
++function ListUsers(usrCtx)
++{
++	var list, user;
++	var finished = false;
++
++	for (list = usrCtx.List(list); list.Status.is_ok && !finished; list = usrCtx.List(list)) {
++		for (i = 0; i < list.Count; i++) {
++			user = list.Users[i];
++			printf("%s\n", user.Username);
++		}
++		
++		finished = list.EndOfList;
++	}
++
++	printf("\nResult: %s\n", list.Status.errstr);
++}
++
++
++function UserInfo(usrCtx, username)
++{
++	var info;
++
++	info = usrCtx.Info(username);
++	if (info == null) {
++		println("Account unknown");
++		return -1;
++	}
++
++	println("User account info:\n");
++	printf("AccountName = %s\n", info.AccountName);
++	printf("Description = %s\n", info.Description);
++	printf("FullName    = %s\n", info.FullName);
++	printf("AcctExpiry  = %s\n", info.AcctExpiry);
++}
++
++
++function UserManager(ctx, options)
++{
++	var usrCtx;
++
++	if (options.ARGV.length < 2) {
++		PrintNetUsrHelp(options);
++		return -1;
++
++	}
++	
++	var usrCmd = options.ARGV[1];
++
++	if (usrCmd == "create") {
++
++	} else if (usrCmd == "info") {
++		var userName;
++
++		if (options.ARGV.length > 2) {
++			userName = options.ARGV[2];
++		} else {
++			println("No username provided");
++			return -1;
++		}
++		usrCtx = ctx.UserMgr();
++
++		UserInfo(usrCtx, userName);
++
++	} else if (usrCmd == "list") {
++
++		if (options.ARGV.length > 2) {
++			usrCtx = ctx.UserMgr(options.ARGV[2]);
++		} else {
++			usrCtx = ctx.UserMgr();
++		}
++
++		ListUsers(usrCtx);
++
++	} else {
++		println("Unknown command specified.");
++		PrintNetUsrHelp(options);
++	}
++}
+
+Modified: branches/SAMBA_4_0/testprogs/ejs/ejsnet.js
+===================================================================
+--- branches/SAMBA_4_0/testprogs/ejs/ejsnet.js	2007-05-29 01:20:47 UTC (rev 23177)
++++ branches/SAMBA_4_0/testprogs/ejs/ejsnet.js	2007-05-29 05:49:35 UTC (rev 23178)
+@@ -1,52 +1,46 @@
+ #!/usr/bin/env smbscript
+ 
++libinclude("base.js");
++
++/* note: these require specifying a proper path in "js include" parameter */
++libinclude("ejsnet/netusr.js");
++libinclude("ejsnet/nethost.js");
++
++function PrintNetHelp()
++{
++	println("Usage: ejsnet.js <cmd> [options]");
++}
++
++/* here we start */
++
+ var options = GetOptions(ARGV, 
+ 		"POPT_AUTOHELP",
+ 		"POPT_COMMON_SAMBA",
+ 		"POPT_COMMON_CREDENTIALS");
+ if (options == undefined) {
+-   println("Failed to parse options");
+-   return -1;
++	PrintNetHelp();
++	return -1;
+ }
+ 
+-if (options.ARGV.length != 2) {
+-   println("Usage: ejsnet.js <DOMAIN> <NEW USER NAME>");
+-   return -1;
++if (options.ARGV.length < 1) {
++	PrintNetHelp();
++	return -1;
+ }
+ 
+ /* use command line creds if available */
+ var creds = options.get_credentials();
+-
+ var ctx = NetContext(creds);
+-var usr_ctx = ctx.UserMgr(options.ARGV[0]);
+-if (usr_ctx == undefined) {
+-	println("Couldn't get user management context.");
+-	return -1;
+-}
+ 
+-var status = usr_ctx.Create(options.ARGV[1]);
+-if (status.is_ok != true) {
+-	println("Failed to create user account " + options.ARGV[1] + ": " + status.errstr);
+-	return -1;
+-}
++var cmd = options.ARGV[0];
++if (cmd == "user") {
++	UserManager(ctx, options);
+ 
++} else if (cmd == "host") {
++	HostManager(ctx, options);
+ 
+-var info = usr_ctx.Info(options.ARGV[1]);
+-if (info != null) {
+-	println("UserInfo.AccountName = " + info.AccountName);
+-	println("UserInfo.Description = " + info.Description);
+-	println("UserInfo.FullName = " + info.FullName);
+-	println("UserInfo.AcctExpiry = " + info.AcctExpiry);
+ } else {
+-	println("Null UserInfo returned - account unknown");
+-}
+-
+-
+-var status = usr_ctx.Delete(options.ARGV[1]);
+-if (status.is_ok != true) {
+-	println("Failed to delete user account " + options.ARGV[1] + ": " + status.errstr);
++	PrintNetHelp();
+ 	return -1;
+ }
+ 
+-print ("OK\n");
+ return 0;
+

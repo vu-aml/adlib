@@ -1,0 +1,2172 @@
+From perl6-all-return-81115-ktwarwic=speedy.uwaterloo.ca@perl.org  Sat May  5 04:39:50 2007
+Return-Path: <perl6-all-return-81115-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l458dhqD025769
+	for <ktwarwic@flax9.uwaterloo.ca>; Sat, 5 May 2007 04:39:44 -0400
+Received: (qmail 19638 invoked by uid 514); 5 May 2007 08:39:42 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 19633 invoked from network); 5 May 2007 08:39:42 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: moderator for perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: Mark Glines (via RT) <parrotbug-followup@parrotcode.org>
+X-RT-NewTicket: yes
+To: bugs-bitbucket@netlabs.develooper.com
+Resent-To: perl6-internals@perl.org
+Mail-Followup-To: perl6-internals@perl.org
+Reply-To: perl6-internals@perl.org
+Date: Fri, 04 May 2007 14:39:54 -0700
+Subject: [perl #42883] [PATCH] Fix up headerfile guards 
+In-Reply-To: <20070504143850.229cc5ad@chirp>
+References: <RT-Ticket-42883@perl.org> <20070504143850.229cc5ad@chirp>
+Message-ID: <rt-3.6.HEAD-29410-1178314794-1708.42883-72-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #42883
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: mark@glines.org
+MIME-Version: 1.0
+X-RT-Original-Encoding: utf-8
+Content-type: multipart/mixed; boundary="----------=_1178314794-29410-0"
+Resent-Message-Id: <20070504213955.5DB982AFD4@x3.develooper.com>
+Resent-Date: Fri,  4 May 2007 14:39:55 -0700 (PDT)
+Resent-From: rt-mark=glines.org@netlabs.develooper.com
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-0.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,KARMA_CONNECT_NEGATIVE,SPF_PASS
+
+------------=_1178314794-29410-0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+# New Ticket Created by  Mark Glines 
+# Please include the string:  [perl #42883]
+# in the subject line of all future correspondence about this issue. 
+# <URL: http://rt.perl.org/rt3/Ticket/Display.html?id=42883 >
+
+
+Most header files in parrot are wrapped by some gunk that looks like
+this:
+
+#ifndef PARROT_SOME_HEADER_H_GUARD
+#define PARROT_SOME_HEADER_H_GUARD
+
+... headerfile contents here...
+
+#endif /* PARROT_SOME_HEADER_H_GUARD */
+
+This is a fairly common idiom, to prevent redefinition warnings and
+such when a header file gets included twice.
+
+Here's a big ugly patch to fix up certain issues related to this.  It
+fixes up many of parrot's header files, and also fixes up the
+headers output by vtable_extend.pl and Pmc2c.pm.
+
+* Standardize on PARROT_*_GUARD style names for these lines (some
+headers used a style that looks like "__PIRLEXER_H" instead)
+
+* Standardize on "#ifndef FOO" rather than "#if !defined(FOO)"
+
+* Fix up the indentation problems caused by the above bullet point.
+(TODO: why does t/codingstd/c_indent.t require indentation for #if and
+#ifdef, but not for #ifndef?)
+
+* Add the #endif comment in several files that didn't have it.  I also
+added comments to several other #endifs in the middle of files, which
+weren't quite clear to me what they were ending.
+
+
+I'd like to write some tests for this stuff, and then fix up the rest
+of the cases (I know I've missed a bunch).  How would the list feel
+about a patch to PDD07 specifying the above for header files, and a
+codingstd test to enforce it?
+
+Mark
+
+------------=_1178314794-29410-0
+Content-Type: text/x-patch; charset="ascii"; name="fixup_header_guards.diff"
+Content-Disposition: inline; filename="fixup_header_guards.diff"
+Content-Transfer-Encoding: 7bit
+RT-Attachment: 42883/258638/112708
+
+Index: src/trace.h
+===================================================================
+--- src/trace.h	(revision 18422)
++++ src/trace.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_TRACE_H_GUARD)
++#ifndef PARROT_TRACE_H_GUARD
+ #define PARROT_TRACE_H_GUARD
+ 
+ #include "parrot/parrot.h"
+Index: src/exec_save.h
+===================================================================
+--- src/exec_save.h	(revision 18422)
++++ src/exec_save.h	(working copy)
+@@ -11,7 +11,7 @@
+  * References:
+  */
+ 
+-#if !defined(PARROT_EXEC_SAVE_H_GUARD)
++#ifndef PARROT_EXEC_SAVE_H_GUARD
+ #  define PARROT_EXEC_SAVE_H_GUARD
+ 
+ void Parrot_exec_save(Parrot_exec_objfile_t *obj, const char *file);
+Index: src/stm/stm_internal.h
+===================================================================
+--- src/stm/stm_internal.h	(revision 18422)
++++ src/stm/stm_internal.h	(working copy)
+@@ -1,16 +1,16 @@
+-#if !defined(PARROT_STM_INTERNAL_H_GAURD)
+-#  define PARROT_STM_INTERNAL_H_GAURD
++#ifndef PARROT_STM_INTERNAL_H_GUARD
++#define PARROT_STM_INTERNAL_H_GUARD
+ 
+-#  include <parrot/parrot.h>
+-#  include <parrot/stm/backend.h>
+-#  include "stm_waitlist.h"
++#include <parrot/parrot.h>
++#include <parrot/stm/backend.h>
++#include "stm_waitlist.h"
+ 
+-#  if STM_PROFILE
++#if STM_PROFILE
+ 
+-#    define CYCLE_BUCKETS 20
+-#    define TIME_BUCKETS 20
+-#    define PROFILE(log) log->profile
+-#    define PROFILE_WAIT(log, time, cycles) \
++#  define CYCLE_BUCKETS 20
++#  define TIME_BUCKETS 20
++#  define PROFILE(log) log->profile
++#  define PROFILE_WAIT(log, time, cycles) \
+       do { \
+           FLOATVAL the_time = (time); \
+           int time_bucket = ceil(the_time * 200.0); \
+@@ -37,11 +37,11 @@
+           } \
+       } while (0)
+ 
+-#    define PROFILE_TRIED_COMMIT(log) \
++#  define PROFILE_TRIED_COMMIT(log) \
+       ++PROFILE(log).attempted_commits
+-#    define PROFILE_FAILED_COMMIT(log) \
++#  define PROFILE_FAILED_COMMIT(log) \
+       ++PROFILE(log).failed_commits
+-#    define PROFILE_ABORTED(profile) \
++#  define PROFILE_ABORTED(profile) \
+       ++PROFILE(log).num_aborts
+ 
+ struct STM_profile_data {
+@@ -56,15 +56,15 @@
+     long total_wait_cycles;
+ };
+ 
+-#  else
++#else
+ 
+-#    define PROFILE(x)
+-#    define PROFILE_TRIED_COMMIT(x)
+-#    define PROFILE_FAILED_COMMIT(x)
+-#    define PROFILE_ABORTED(x)
+-#    define PROFILE_WAIT(x,y,z)
++#  define PROFILE(x)
++#  define PROFILE_TRIED_COMMIT(x)
++#  define PROFILE_FAILED_COMMIT(x)
++#  define PROFILE_ABORTED(x)
++#  define PROFILE_WAIT(x,y,z)
+ 
+-#  endif
++#endif
+ 
+ struct Parrot_STM_PMC_handle_data {
+     Buffer buf;
+@@ -100,9 +100,9 @@
+     STM_STATUS_INVALID = 3
+ };
+ 
+-#  define STM_START_RECORDS 32
++#define STM_START_RECORDS 32
+ 
+-#  define STM_MAX_TX_DEPTH 32 /* TODO: remove limitation */
++#define STM_MAX_TX_DEPTH 32 /* TODO: remove limitation */
+ 
+ struct STM_tx_log_sub;
+ 
+@@ -120,9 +120,9 @@
+ struct STM_tx_log {
+     int depth;
+ 
+-#  if STM_PROFILE
++#if STM_PROFILE
+     struct STM_profile_data profile;
+-#  endif
++#endif
+ 
+     STM_tx_log_sub inner[STM_MAX_TX_DEPTH];
+ 
+@@ -147,7 +147,7 @@
+ 
+ STM_tx_log *Parrot_STM_tx_log_get(Interp *interp);
+ 
+-#endif
++#endif /* PARROT_STM_INTERNAL_H_GUARD */
+ 
+ /*
+  * Local variables:
+Index: src/stm/stm_waitlist.h
+===================================================================
+--- src/stm/stm_waitlist.h	(revision 18422)
++++ src/stm/stm_waitlist.h	(working copy)
+@@ -1,9 +1,9 @@
+-#if !defined(PARROT_STM_WAITLIST_H_GAURD)
+-#  define PARROT_STM_WAITLIST_H_GAURD
++#ifndef PARROT_STM_WAITLIST_H_GUARD
++#define PARROT_STM_WAITLIST_H_GUARD
+ 
+-#  include <parrot/atomic.h>
++#include <parrot/atomic.h>
+ 
+-#  define WAITLIST_DEBUG 0
++#define WAITLIST_DEBUG 0
+ 
+ struct waitlist_entry {
+     /* next entry in the waitlist */
+@@ -37,9 +37,9 @@
+     struct waitlist_entry **entries;
+     size_t entry_count;
+     size_t used_entries;
+-#  if WAITLIST_DEBUG
++#if WAITLIST_DEBUG
+     Interp *interp;
+-#  endif
++#endif
+ };
+ 
+ typedef struct waitlist_head STM_waitlist;
+@@ -52,7 +52,7 @@
+ void Parrot_STM_waitlist_wait(Parrot_Interp);
+ void Parrot_STM_waitlist_destroy_thread(Parrot_Interp);
+ 
+-#endif
++#endif /* PARROT_STM_WAITLIST_H_GUARD */
+ 
+ /*
+  * Local variables:
+Index: src/runops_cores.h
+===================================================================
+--- src/runops_cores.h	(revision 18422)
++++ src/runops_cores.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_RUNOPS_CORES_H_GUARD)
++#ifndef PARROT_RUNOPS_CORES_H_GUARD
+ #define PARROT_RUNOPS_CORES_H_GUARD
+ 
+ #include "parrot/parrot.h"
+Index: src/charset/tables.h
+===================================================================
+--- src/charset/tables.h	(revision 18422)
++++ src/charset/tables.h	(working copy)
+@@ -13,7 +13,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_CHARSET_TABLES_H_GUARD)
++#ifndef PARROT_CHARSET_TABLES_H_GUARD
+ #define PARROT_CHARSET_TABLES_H_GUARD
+ #include "parrot/cclass.h"
+ #include "parrot/parrot.h"
+Index: src/charset/iso-8859-1.h
+===================================================================
+--- src/charset/iso-8859-1.h	(revision 18422)
++++ src/charset/iso-8859-1.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_CHARSET_ISO_8859_1_H_GUARD)
++#ifndef PARROT_CHARSET_ISO_8859_1_H_GUARD
+ #define PARROT_CHARSET_ISO_8859_1_H_GUARD
+ 
+ STRING *charset_cvt_iso_8859_1_to_ascii(Interp *, STRING *src, STRING *dest);
+Index: src/charset/binary.h
+===================================================================
+--- src/charset/binary.h	(revision 18422)
++++ src/charset/binary.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_CHARSET_BINARY_H_GUARD)
++#ifndef PARROT_CHARSET_BINARY_H_GUARD
+ #define PARROT_CHARSET_BINARY_H_GUARD
+ 
+ CHARSET *Parrot_charset_binary_init(Interp *);
+Index: src/charset/unicode.h
+===================================================================
+--- src/charset/unicode.h	(revision 18422)
++++ src/charset/unicode.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_CHARSET_UNICODE_H_GUARD)
++#ifndef PARROT_CHARSET_UNICODE_H_GUARD
+ #define PARROT_CHARSET_UNICODE_H_GUARD
+ 
+ /*
+Index: src/charset/ascii.h
+===================================================================
+--- src/charset/ascii.h	(revision 18422)
++++ src/charset/ascii.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_CHARSET_ASCII_H_GUARD)
++#ifndef PARROT_CHARSET_ASCII_H_GUARD
+ #define PARROT_CHARSET_ASCII_H_GUARD
+ 
+ /*
+Index: src/interp_guts.h
+===================================================================
+--- src/interp_guts.h	(revision 18422)
++++ src/interp_guts.h	(working copy)
+@@ -2,7 +2,7 @@
+ ** interp_guts.h
+ */
+ 
+-#if !defined(PARROT_INTERP_GUTS_H_GUARD)
++#ifndef PARROT_INTERP_GUTS_H_GUARD
+ #  define PARROT_INTERP_GUTS_H_GUARD
+ 
+ #  define DO_OP(PC,INTERP) (PC = ((INTERP->op_func_table)[*PC])(PC,INTERP))
+Index: src/bignum.h
+===================================================================
+--- src/bignum.h	(revision 18422)
++++ src/bignum.h	(working copy)
+@@ -25,7 +25,7 @@
+ 
+ */
+ 
+-#if !defined(PARROT_TYPES_BIGNUM_H_GUARD)
++#ifndef PARROT_TYPES_BIGNUM_H_GUARD
+ #define PARROT_TYPES_BIGNUM_H_GUARD
+ 
+ /* Stuff to be parrot-like in source, even if not being used in parrot */
+Index: src/encodings/ucs2.h
+===================================================================
+--- src/encodings/ucs2.h	(revision 18422)
++++ src/encodings/ucs2.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_ENCODING_UCS2_H_GUARD)
++#ifndef PARROT_ENCODING_UCS2_H_GUARD
+ #define PARROT_ENCODING_UCS2_H_GUARD
+ 
+ ENCODING *Parrot_encoding_ucs2_init(Interp *);
+Index: src/encodings/utf16.h
+===================================================================
+--- src/encodings/utf16.h	(revision 18422)
++++ src/encodings/utf16.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_ENCODING_UTF16_H_GUARD)
++#ifndef PARROT_ENCODING_UTF16_H_GUARD
+ #define PARROT_ENCODING_UTF16_H_GUARD
+ 
+ ENCODING *Parrot_encoding_utf16_init(Interp *);
+Index: src/encodings/fixed_8.h
+===================================================================
+--- src/encodings/fixed_8.h	(revision 18422)
++++ src/encodings/fixed_8.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_ENCODING_FIXED_8_H_GUARD)
++#ifndef PARROT_ENCODING_FIXED_8_H_GUARD
+ #define PARROT_ENCODING_FIXED_8_H_GUARD
+ 
+ static UINTVAL get_codepoint(Interp *interp, const STRING *source_string, UINTVAL offset);
+Index: src/encodings/utf8.h
+===================================================================
+--- src/encodings/utf8.h	(revision 18422)
++++ src/encodings/utf8.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_ENCODING_UTF8_H_GUARD)
++#ifndef PARROT_ENCODING_UTF8_H_GUARD
+ #define PARROT_ENCODING_UTF8_H_GUARD
+ 
+ ENCODING *Parrot_encoding_utf8_init(Interp *);
+Index: src/unicode.h
+===================================================================
+--- src/unicode.h	(revision 18422)
++++ src/unicode.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_UNICODE_H_GUARD)
++#ifndef PARROT_UNICODE_H_GUARD
+ #define PARROT_UNICODE_H_GUARD
+ 
+ typedef unsigned char utf8_t;
+Index: src/pmc/classobject.h
+===================================================================
+--- src/pmc/classobject.h	(revision 18422)
++++ src/pmc/classobject.h	(working copy)
+@@ -7,7 +7,7 @@
+ ** documented interface.
+ */
+ 
+-#if !defined(PARROT_CLASSOBJECT_H_GUARD)
++#ifndef PARROT_CLASSOBJECT_H_GUARD
+ #  define PARROT_CLASSOBJECT_GUARD
+ 
+ /* Class PMC's underlying struct. */
+Index: src/jit/arm/exec_dep.h
+===================================================================
+--- src/jit/arm/exec_dep.h	(revision 18422)
++++ src/jit/arm/exec_dep.h	(working copy)
+@@ -11,7 +11,7 @@
+  * References:
+  */
+ 
+-#if !defined(PARROT_ARM_EXEC_DEP_H_GUARD)
++#ifndef PARROT_ARM_EXEC_DEP_H_GUARD
+ #  define PARROT_ARM_EXEC_DEP_H_GUARD
+ 
+ #ifdef JIT_CGP
+Index: src/jit/ppc/jit_emit.h
+===================================================================
+--- src/jit/ppc/jit_emit.h	(revision 18422)
++++ src/jit/ppc/jit_emit.h	(working copy)
+@@ -6,7 +6,7 @@
+  * $Id$
+  */
+ 
+-#if !defined(PARROT_PPC_JIT_EMIT_H_GUARD)
++#ifndef PARROT_PPC_JIT_EMIT_H_GUARD
+ #  define PARROT_PPC_JIT_EMIT_H_GUARD
+ 
+ #  include <unistd.h>
+Index: src/jit/ia64/jit_emit.h
+===================================================================
+--- src/jit/ia64/jit_emit.h	(revision 18422)
++++ src/jit/ia64/jit_emit.h	(working copy)
+@@ -766,7 +766,7 @@
+ 
+ #  endif
+ 
+-#endif
++#endif /* !JIT_EMIT */
+ 
+ /*
+  * Local variables:
+Index: src/jit/skeleton/jit_emit.h
+===================================================================
+--- src/jit/skeleton/jit_emit.h	(revision 18422)
++++ src/jit/skeleton/jit_emit.h	(working copy)
+@@ -6,7 +6,7 @@
+  * $Id$
+  */
+ 
+-#if !defined(PARROT_PPC_JIT_EMIT_H_GUARD)
++#ifndef PARROT_PPC_JIT_EMIT_H_GUARD
+ #  define PARROT_PPC_JIT_EMIT_H_GUARD
+ 
+ #  include <unistd.h>
+Index: src/jit/alpha/jit_emit.h
+===================================================================
+--- src/jit/alpha/jit_emit.h	(revision 18422)
++++ src/jit/alpha/jit_emit.h	(working copy)
+@@ -33,7 +33,7 @@
+  *
+  */
+ 
+-#if !defined(PARROT_ALPHA_JIT_EMIT_H_GUARD)
++#ifndef PARROT_ALPHA_JIT_EMIT_H_GUARD
+ #  define PARROT_ALPHA_JIT_EMIT_H_GUARD
+ 
+ typedef enum {
+Index: src/jit/hppa/jit_emit.h
+===================================================================
+--- src/jit/hppa/jit_emit.h	(revision 18422)
++++ src/jit/hppa/jit_emit.h	(working copy)
+@@ -6,6 +6,10 @@
+  * $Id$
+  */
+ 
++#ifndef PARROT_HPPA_JIT_EMIT_H_GUARD
++#define PARROT_HPPA_JIT_EMIT_H_GUARD
++
++
+ /*
+  *      r0          Zero
+  *      r26         Argument 1
+@@ -769,8 +773,10 @@
+ 
+ #  endif
+ 
+-#endif
++#endif /* !JIT_EMIT */
+ 
++#endif /* PARROT_HPPA_JIT_EMIT_H_GUARD */
++
+ /*
+  * Local variables:
+  *   c-file-style: "parrot"
+Index: src/jit/mips/jit_emit.h
+===================================================================
+--- src/jit/mips/jit_emit.h	(revision 18422)
++++ src/jit/mips/jit_emit.h	(working copy)
+@@ -11,7 +11,7 @@
+  * References:
+  */
+ 
+-#if !defined(PARROT_MIPS_JIT_EMIT_H_GUARD)
++#ifndef PARROT_MIPS_JIT_EMIT_H_GUARD
+ #  define PARROT_MIPS_JIT_EMIT_H_GUARD
+ 
+ #  define BASE_REG s0
+Index: src/jit/i386/jit_emit.h
+===================================================================
+--- src/jit/i386/jit_emit.h	(revision 18422)
++++ src/jit/i386/jit_emit.h	(working copy)
+@@ -6,7 +6,7 @@
+  * $Id$
+  */
+ 
+-#if !defined(PARROT_I386_JIT_EMIT_H_GUARD)
++#ifndef PARROT_I386_JIT_EMIT_H_GUARD
+ #  define PARROT_I386_JIT_EMIT_H_GUARD
+ 
+ #  include <assert.h>
+Index: src/jit/sun4/jit_emit.h
+===================================================================
+--- src/jit/sun4/jit_emit.h	(revision 18422)
++++ src/jit/sun4/jit_emit.h	(working copy)
+@@ -6,7 +6,7 @@
+ ** $Id$
+ **/
+ 
+-#if !defined(PARROT_SUN4_JIT_EMIT_H_GUARD)
++#ifndef PARROT_SUN4_JIT_EMIT_H_GUARD
+ #  define PARROT_SUN4_JIT_EMIT_H_GUARD
+ 
+ /*
+Index: src/io/io_private.h
+===================================================================
+--- src/io/io_private.h	(revision 18422)
++++ src/io/io_private.h	(working copy)
+@@ -22,7 +22,7 @@
+ 
+ */
+ 
+-#if !defined(PARROT_IO_PRIVATE_H_GUARD)
++#ifndef PARROT_IO_PRIVATE_H_GUARD
+ #define PARROT_IO_PRIVATE_H_GUARD
+ 
+ #define PARROT_IN_IO 1
+Index: src/jit.h
+===================================================================
+--- src/jit.h	(revision 18422)
++++ src/jit.h	(working copy)
+@@ -4,7 +4,7 @@
+  * $Id$
+  */
+ 
+-#if !defined(PARROT_JIT_H_GUARD)
++#ifndef PARROT_JIT_H_GUARD
+ #define PARROT_JIT_H_GUARD
+ 
+ typedef void (*jit_f)(Interp *interp, opcode_t *pc);
+Index: tools/build/vtable_extend.pl
+===================================================================
+--- tools/build/vtable_extend.pl	(revision 18422)
++++ tools/build/vtable_extend.pl	(working copy)
+@@ -26,7 +26,7 @@
+ /*
+ Copyright (C) 2005-2007, The Perl Foundation.
+ */
+-#if !defined(PARROT_EXTEND_VTABLE_H_GUARD)
++#ifndef PARROT_EXTEND_VTABLE_H_GUARD
+ #define PARROT_EXTEND_VTABLE_H_GUARD
+ 
+ /* Need size_t  */
+@@ -38,7 +38,7 @@
+ 
+ print $OUT <<'EOF';
+ 
+-#endif
++#endif /* PARROT_EXTEND_VTABLE_H_GUARD */
+ EOF
+ 
+ # append the C code coda
+Index: lib/Parrot/Pmc2c.pm
+===================================================================
+--- lib/Parrot/Pmc2c.pm	(revision 18422)
++++ lib/Parrot/Pmc2c.pm	(working copy)
+@@ -1171,7 +1171,7 @@
+     $hout .= $self->{ro}->hdecls()           if ( $self->{ro} );
+     $hout .= <<"EOH";
+ 
+-#endif
++#endif /* PARROT_PMC_${name}_H_GUARD */
+ 
+ EOH
+     $hout .= c_code_coda();
+Index: include/parrot/sub.h
+===================================================================
+--- include/parrot/sub.h	(revision 18422)
++++ include/parrot/sub.h	(working copy)
+@@ -12,7 +12,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_SUB_H_GUARD)
++#ifndef PARROT_SUB_H_GUARD
+ #define PARROT_SUB_H_GUARD
+ 
+ #include "parrot/parrot.h"
+Index: include/parrot/misc.h
+===================================================================
+--- include/parrot/misc.h	(revision 18422)
++++ include/parrot/misc.h	(working copy)
+@@ -17,7 +17,7 @@
+  *  References: misc.c, spf_vtable.c, spf_render.c
+  */
+ 
+-#if !defined(PARROT_MISC_H_GUARD)
++#ifndef PARROT_MISC_H_GUARD
+ #define PARROT_MISC_H_GUARD
+ 
+ #include "parrot/parrot.h"
+Index: include/parrot/smallobject.h
+===================================================================
+--- include/parrot/smallobject.h	(revision 18422)
++++ include/parrot/smallobject.h	(working copy)
+@@ -1,4 +1,4 @@
+-#if !defined(PARROT_SMALLOBJECT_H_GUARD)
++#ifndef PARROT_SMALLOBJECT_H_GUARD
+ #  define PARROT_SMALLOBJECT_H_GUARD
+ 
+ #  include "parrot/parrot.h"
+@@ -74,7 +74,7 @@
+     struct _gc_gms_gen *next;
+ } Gc_gms_gen;
+ 
+-#endif
++#endif /* PARROT_GC_GMS */
+ 
+ /* Tracked resource pool */
+ typedef struct Small_Object_Pool {
+Index: include/parrot/slice.h
+===================================================================
+--- include/parrot/slice.h	(revision 18422)
++++ include/parrot/slice.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_SLICE_H_GUARD)
++#ifndef PARROT_SLICE_H_GUARD
+ #define PARROT_SLICE_H_GUARD
+ 
+ #ifdef PARROT_IN_CORE
+Index: include/parrot/oplib.h
+===================================================================
+--- include/parrot/oplib.h	(revision 18422)
++++ include/parrot/oplib.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_OPLIB_H_GUARD)
++#ifndef PARROT_OPLIB_H_GUARD
+ #define PARROT_OPLIB_H_GUARD
+ 
+ #include "parrot/config.h"
+Index: include/parrot/tsq.h
+===================================================================
+--- include/parrot/tsq.h	(revision 18422)
++++ include/parrot/tsq.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_TSQ_H_GUARD)
++#ifndef PARROT_TSQ_H_GUARD
+ #define PARROT_TSQ_H_GUARD
+ 
+ #include "parrot/config.h"
+Index: include/parrot/parrot.h
+===================================================================
+--- include/parrot/parrot.h	(revision 18422)
++++ include/parrot/parrot.h	(working copy)
+@@ -15,7 +15,7 @@
+    Programs embedding parrot should include <parrot/embed.h>.
+ */
+ 
+-#if !defined(PARROT_PARROT_H_GUARD)
++#ifndef PARROT_PARROT_H_GUARD
+ #define PARROT_PARROT_H_GUARD
+ 
+ #if defined(INSIDE_GLOBAL_SETUP)
+Index: include/parrot/cclass.h
+===================================================================
+--- include/parrot/cclass.h	(revision 18422)
++++ include/parrot/cclass.h	(working copy)
+@@ -5,7 +5,7 @@
+ *   Parrot character classes
+ */
+ 
+-#if !defined(PARROT_CCLASS_H_GUARD)
++#ifndef PARROT_CCLASS_H_GUARD
+ #define PARROT_CCLASS_H_GUARD
+ 
+ /* &gen_from_enum(cclass.pasm) subst(s/enum_cclass_(\w+)/uc("CCLASS_$1")/e) */
+Index: include/parrot/exit.h
+===================================================================
+--- include/parrot/exit.h	(revision 18422)
++++ include/parrot/exit.h	(working copy)
+@@ -11,7 +11,7 @@
+  *      exit.c
+  */
+ 
+-#if !defined(PARROT_EXIT_H_GUARD)
++#ifndef PARROT_EXIT_H_GUARD
+ #define PARROT_EXIT_H_GUARD
+ 
+ #include "parrot/compiler.h"    /* compiler capabilities */
+Index: include/parrot/resources.h
+===================================================================
+--- include/parrot/resources.h	(revision 18422)
++++ include/parrot/resources.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_RESOURCES_H_GUARD)
++#ifndef PARROT_RESOURCES_H_GUARD
+ #define PARROT_RESOURCES_H_GUARD
+ 
+ #include "parrot/parrot.h"
+Index: include/parrot/embed.h
+===================================================================
+--- include/parrot/embed.h	(revision 18422)
++++ include/parrot/embed.h	(working copy)
+@@ -12,7 +12,7 @@
+  *      embed.c, docs/embed.pod.
+  */
+ 
+-#if !defined(PARROT_EMBED_H_GUARD)
++#ifndef PARROT_EMBED_H_GUARD
+ #define PARROT_EMBED_H_GUARD
+ 
+ #include "parrot/compiler.h"    /* compiler capabilities */
+Index: include/parrot/stm/backend.h
+===================================================================
+--- include/parrot/stm/backend.h	(revision 18422)
++++ include/parrot/stm/backend.h	(working copy)
+@@ -1,15 +1,15 @@
+-#if !defined(PARROT_STM_BACKEND_H_GAURD)
+-#  define PARROT_STM_BACKEND_H_GAURD
++#ifndef PARROT_STM_BACKEND_H_GUARD
++#  define PARROT_STM_BACKEND_H_GUARD
+ 
+ #  include <parrot/parrot.h>
+ 
+ #  define STM_PROFILE 0
+ 
+-#  if STM_PROFILE
++#if STM_PROFILE
+ void Parrot_STM_merge_profile(Interp *dest, Interp *source);
+ 
+ void Parrot_STM_dump_profile(Interp *);
+-#  endif
++#endif
+ 
+ struct Parrot_STM_PMC_handle_data;
+ 
+@@ -53,7 +53,7 @@
+ 
+ void Parrot_STM_destroy_extracted(Interp *interp, void *);
+ 
+-#endif
++#endif /* PARROT_STM_BACKEND_H_GUARD */
+ 
+ /*
+  * Local variables:
+Index: include/parrot/hll.h
+===================================================================
+--- include/parrot/hll.h	(revision 18422)
++++ include/parrot/hll.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_HLL_H_GUARD)
++#ifndef PARROT_HLL_H_GUARD
+ #define PARROT_HLL_H_GUARD
+ 
+ /* this invalid HLL type means "no HLL" when passed to the below functions */
+Index: include/parrot/hash.h
+===================================================================
+--- include/parrot/hash.h	(revision 18422)
++++ include/parrot/hash.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_HASH_H_GUARD)
++#ifndef PARROT_HASH_H_GUARD
+ #define PARROT_HASH_H_GUARD
+ 
+ /* Prototypes */
+Index: include/parrot/register.h
+===================================================================
+--- include/parrot/register.h	(revision 18422)
++++ include/parrot/register.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_REGISTER_H_GUARD)
++#ifndef PARROT_REGISTER_H_GUARD
+ #define PARROT_REGISTER_H_GUARD
+ 
+ #include "parrot/string.h"
+Index: include/parrot/atomic/fallback.h
+===================================================================
+--- include/parrot/atomic/fallback.h	(revision 18422)
++++ include/parrot/atomic/fallback.h	(working copy)
+@@ -11,8 +11,8 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_ATOMIC_FALLBACK_H_GAURD)
+-#  define PARROT_ATOMIC_FALLBACK_H_GAURD
++#ifndef PARROT_ATOMIC_FALLBACK_H_GUARD
++#  define PARROT_ATOMIC_FALLBACK_H_GUARD
+ 
+ typedef struct Parrot_atomic_pointer {
+     void *val;
+@@ -115,7 +115,7 @@
+         MUTEX_DESTROY((a).lock); \
+     } while (0)
+ 
+-#endif
++#endif /* PARROT_ATOMIC_FALLBACK_H_GUARD */
+ 
+ /*
+  * Local variables:
+Index: include/parrot/atomic/gcc_pcc.h
+===================================================================
+--- include/parrot/atomic/gcc_pcc.h	(revision 18422)
++++ include/parrot/atomic/gcc_pcc.h	(working copy)
+@@ -12,8 +12,8 @@
+  *  References:
+  */
+ 
+-#if !defined(ATOMIC_GCC_PCC_H_GAURD)
+-#  define ATOMIC_GCC_PCC_H_GAURD
++#ifndef ATOMIC_GCC_PCC_H_GUARD
++#  define ATOMIC_GCC_PCC_H_GUARD
+ 
+ typedef struct Parrot_atomic_pointer {
+     void * volatile val;
+@@ -115,7 +115,7 @@
+         result = parrot_ppc_add(&(a).val, -1); \
+     } while (0)
+ 
+-#endif
++#endif /* ATOMIC_GCC_PCC_H_GUARD */
+ 
+ /*
+  * Local variables:
+Index: include/parrot/atomic/gcc_x86.h
+===================================================================
+--- include/parrot/atomic/gcc_x86.h	(revision 18422)
++++ include/parrot/atomic/gcc_x86.h	(working copy)
+@@ -12,8 +12,8 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_ATOMIC_GCC_X86_H_GAURD)
+-#  define PARROT_ATOMIC_GCC_X86_H_GAURD
++#ifndef PARROT_ATOMIC_GCC_X86_H_GUARD
++#define PARROT_ATOMIC_GCC_X86_H_GUARD
+ 
+ typedef struct Parrot_atomic_pointer {
+     void *volatile val;
+@@ -30,25 +30,25 @@
+ inline static void *parrot_i386_cmpxchg(void *volatile *ptr, void *expect,
+                                         void *update)
+ {
+-#  if defined(PARROT_HAS_X86_64_GCC_CMPXCHG)
++#if defined(PARROT_HAS_X86_64_GCC_CMPXCHG)
+     __asm__ __volatile__("lock\n"
+                          "cmpxchgq %1,%2":"=a"(expect):"q"(update), "m"(*ptr),
+                          "0"(expect)
+                          :"memory");
+-#  else
++#else
+     __asm__ __volatile__("lock\n"
+                          "cmpxchgl %1,%2":"=a"(expect):"q"(update), "m"(*ptr),
+                          "0"(expect)
+                          :"memory");
+-#  endif
++#endif
+     return expect;
+ }
+ 
+-#  define PARROT_ATOMIC_PTR_GET(result, a) (result = (a).val)
++#define PARROT_ATOMIC_PTR_GET(result, a) (result = (a).val)
+ 
+-#  define PARROT_ATOMIC_PTR_SET(a, b) ((a).val = b)
++#define PARROT_ATOMIC_PTR_SET(a, b) ((a).val = b)
+ 
+-#  define PARROT_ATOMIC_PTR_CAS(result, a, expect, update)  \
++#define PARROT_ATOMIC_PTR_CAS(result, a, expect, update)  \
+     do { \
+         if (expect == parrot_i386_cmpxchg(&(a).val, expect, update)) { \
+             result = 1; \
+@@ -58,19 +58,19 @@
+         } \
+     } while (0)
+ 
+-#  define PARROT_ATOMIC_PTR_INIT(a)
++#define PARROT_ATOMIC_PTR_INIT(a)
+ 
+-#  define PARROT_ATOMIC_PTR_DESTROY(a)
++#define PARROT_ATOMIC_PTR_DESTROY(a)
+ 
+-#  define PARROT_ATOMIC_INT_INIT(a)
++#define PARROT_ATOMIC_INT_INIT(a)
+ 
+-#  define PARROT_ATOMIC_INT_DESTROY(a)
++#define PARROT_ATOMIC_INT_DESTROY(a)
+ 
+-#  define PARROT_ATOMIC_INT_GET(result, a) (result = (a).val)
++#define PARROT_ATOMIC_INT_GET(result, a) (result = (a).val)
+ 
+-#  define PARROT_ATOMIC_INT_SET(a, b) ((a).val = b)
++#define PARROT_ATOMIC_INT_SET(a, b) ((a).val = b)
+ 
+-#  define PARROT_ATOMIC_INT_CAS(result, a, expect, update) \
++#define PARROT_ATOMIC_INT_CAS(result, a, expect, update) \
+     do { \
+         if (expect == (long) parrot_i386_cmpxchg( \
+                 (void * volatile *) &(a).val, \
+@@ -85,29 +85,29 @@
+ inline static long parrot_i386_xadd(volatile long *l, long amount)
+ {
+     long result = amount;
+-#  if defined(PARROT_HAS_X86_64_GCC_CMPXCHG)
++#if defined(PARROT_HAS_X86_64_GCC_CMPXCHG)
+     __asm__ __volatile__("lock\n" "xaddq %0, %1" : "=r"(result), "=m"(*l) :
+             "0"(result), "m"(*l)
+         );
+-#  else
++#else
+     __asm__ __volatile__("lock\n" "xaddl %0, %1" : "=r"(result), "=m"(*l) :
+             "0"(result), "m"(*l)
+         );
+-#  endif
++#endif
+     return result + amount;
+ }
+ 
+-#  define PARROT_ATOMIC_INT_INC(result, a) \
++#define PARROT_ATOMIC_INT_INC(result, a) \
+     do { \
+         result = parrot_i386_xadd(&(a).val, 1); \
+     } while (0)
+ 
+-#  define PARROT_ATOMIC_INT_DEC(result, a) \
++#define PARROT_ATOMIC_INT_DEC(result, a) \
+     do { \
+         result = parrot_i386_xadd(&(a).val, -1); \
+     } while (0)
+ 
+-#endif
++#endif /* PARROT_ATOMIC_GCC_X86_H_GUARD */
+ 
+ /*
+  * Local variables:
+Index: include/parrot/atomic/sparc.h
+===================================================================
+--- include/parrot/atomic/sparc.h	(revision 18422)
++++ include/parrot/atomic/sparc.h	(working copy)
+@@ -12,63 +12,63 @@
+  *  References:
+  */
+ 
+-#if !defined(ATOMIC_SPARC_H_GAURD)
+-#  define ATOMIC_SPARC_H_GAURD
++#ifndef ATOMIC_SPARC_H_GUARD
++#define ATOMIC_SPARC_H_GUARD
+ 
+ extern int parrot_sparc_cas32(Parrot_UInt4 *value, Parrot_UInt4 old, Parrot_UInt4 new);
+ /* NB cas64 _will_ be broken when PTR_SIZE == 4 */
+-#  if PTR_SIZE == 8
+-#    if INTVAL_SIZE != 8
+-#      error Expected 8-byte wide INTVAL.
+-#    endif
++#if PTR_SIZE == 8
++#  if INTVAL_SIZE != 8
++#    error Expected 8-byte wide INTVAL.
++#  endif
+ extern int parrot_sparc_cas64(INTVAL *value, INTVAL old, INTVAL new);
+-#  endif
++#endif
+ 
+ typedef struct Parrot_atomic_pointer {
+     void * volatile val;
+ } Parrot_atomic_pointer;
+ 
+-#  define PARROT_ATOMIC_PTR_GET(result, a) (result = (a).val)
++#define PARROT_ATOMIC_PTR_GET(result, a) (result = (a).val)
+ 
+-#  define PARROT_ATOMIC_PTR_SET(a, b) ((a).val = b)
++#define PARROT_ATOMIC_PTR_SET(a, b) ((a).val = b)
+ 
+-#  if PTR_SIZE == 8
+-#    define PARROT_ATOMIC_PTR_CAS(result, a, expect, update) \
++#if PTR_SIZE == 8
++#  define PARROT_ATOMIC_PTR_CAS(result, a, expect, update) \
+       do { \
+           result = parrot_sparc_cas64((INTVAL *) &(a).val, \
+               (INTVAL) expect, (INTVAL) update); \
+       } while (0)
+-#  else
+-#    define PARROT_ATOMIC_PTR_CAS(result, a, expect, update) \
++#else
++#  define PARROT_ATOMIC_PTR_CAS(result, a, expect, update) \
+       do { \
+           result = parrot_sparc_cas32((Parrot_UInt4 *) &(a).val, \
+               (Parrot_UInt4) expect, (Parrot_UInt4) update); \
+       } while (0)
+-#  endif
++#endif
+ 
+-#  define PARROT_ATOMIC_PTR_INIT(a)
++#define PARROT_ATOMIC_PTR_INIT(a)
+ 
+-#  define PARROT_ATOMIC_PTR_DESTROY(a)
++#define PARROT_ATOMIC_PTR_DESTROY(a)
+ 
+ typedef struct Parrot_atomic_integer {
+     volatile Parrot_Int4 val;
+ } Parrot_atomic_integer;
+ 
+-#  define PARROT_ATOMIC_INT_INIT(a)
++#define PARROT_ATOMIC_INT_INIT(a)
+ 
+-#  define PARROT_ATOMIC_INT_DESTROY(a)
++#define PARROT_ATOMIC_INT_DESTROY(a)
+ 
+-#  define PARROT_ATOMIC_INT_GET(result, a) (result = (a).val)
++#define PARROT_ATOMIC_INT_GET(result, a) (result = (a).val)
+ 
+-#  define PARROT_ATOMIC_INT_SET(a, b) ((a).val = b)
++#define PARROT_ATOMIC_INT_SET(a, b) ((a).val = b)
+ 
+-#  define PARROT_ATOMIC_INT_CAS(result, a, expect, update) \
++#define PARROT_ATOMIC_INT_CAS(result, a, expect, update) \
+     do { \
+         result = parrot_sparc_cas32((Parrot_UInt4*) &(a).val, \
+             (Parrot_UInt4) (expect), (Parrot_UInt4) (update)); \
+     } while (0)
+ 
+-#  define parrot_sparc_atomic_int_add(result, a, what) \
++#define parrot_sparc_atomic_int_add(result, a, what) \
+     do { \
+         int successp; \
+         Parrot_Int4 old; \
+@@ -80,10 +80,10 @@
+     } while (0)
+ 
+ 
+-#  define PARROT_ATOMIC_INT_DEC(result, a) parrot_sparc_atomic_int_add(result, a, -1)
+-#  define PARROT_ATOMIC_INT_INC(result, a) parrot_sparc_atomic_int_add(result, a,  1)
++#define PARROT_ATOMIC_INT_DEC(result, a) parrot_sparc_atomic_int_add(result, a, -1)
++#define PARROT_ATOMIC_INT_INC(result, a) parrot_sparc_atomic_int_add(result, a,  1)
+ 
+-#endif
++#endif /* ATOMIC_SPARC_H_GUARD */
+ 
+ /*
+  * Local variables:
+Index: include/parrot/encoding.h
+===================================================================
+--- include/parrot/encoding.h	(revision 18422)
++++ include/parrot/encoding.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_ENCODING_H_GUARD)
++#ifndef PARROT_ENCODING_H_GUARD
+ #define PARROT_ENCODING_H_GUARD
+ 
+ #include "parrot/parrot.h"
+Index: include/parrot/debug.h
+===================================================================
+--- include/parrot/debug.h	(revision 18422)
++++ include/parrot/debug.h	(working copy)
+@@ -11,7 +11,7 @@
+  * References:
+  */
+ 
+-#if !defined(PARROT_PDB_H_GUARD)
++#ifndef PARROT_PDB_H_GUARD
+ #define PARROT_PDB_H_GUARD
+ 
+ enum {
+Index: include/parrot/caches.h
+===================================================================
+--- include/parrot/caches.h	(revision 18422)
++++ include/parrot/caches.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_CACHES_H_GUARD)
++#ifndef PARROT_CACHES_H_GUARD
+ #define PARROT_CACHES_H_GUARD
+ 
+ #define DISABLE_METH_CACHE 0
+Index: include/parrot/enums.h
+===================================================================
+--- include/parrot/enums.h	(revision 18422)
++++ include/parrot/enums.h	(working copy)
+@@ -8,7 +8,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_ENUMS_H_GUARD)
++#ifndef PARROT_ENUMS_H_GUARD
+ #define PARROT_ENUMS_H_GUARD
+ 
+ typedef enum {
+Index: include/parrot/charset.h
+===================================================================
+--- include/parrot/charset.h	(revision 18422)
++++ include/parrot/charset.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_CHARSET_H_GUARD)
++#ifndef PARROT_CHARSET_H_GUARD
+ #define PARROT_CHARSET_H_GUARD
+ 
+ 
+Index: include/parrot/settings.h
+===================================================================
+--- include/parrot/settings.h	(revision 18422)
++++ include/parrot/settings.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_SETTINGS_H_GUARD)
++#ifndef PARROT_SETTINGS_H_GUARD
+ #define PARROT_SETTINGS_H_GUARD
+ 
+ /*
+Index: include/parrot/global.h
+===================================================================
+--- include/parrot/global.h	(revision 18422)
++++ include/parrot/global.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_GLOBAL_H_GUARD)
++#ifndef PARROT_GLOBAL_H_GUARD
+ #define PARROT_GLOBAL_H_GUARD
+ 
+ PARROT_API PMC *Parrot_get_namespace_keyed(Interp *, PMC *base_ns, PMC *pmc_key);
+Index: include/parrot/string_funcs.h
+===================================================================
+--- include/parrot/string_funcs.h	(revision 18422)
++++ include/parrot/string_funcs.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_STRING_FUNCS_H_GUARD)
++#ifndef PARROT_STRING_FUNCS_H_GUARD
+ #define PARROT_STRING_FUNCS_H_GUARD
+ 
+ #include "parrot/compiler.h"
+Index: include/parrot/events.h
+===================================================================
+--- include/parrot/events.h	(revision 18422)
++++ include/parrot/events.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_EVENTS_H_GUARD)
++#ifndef PARROT_EVENTS_H_GUARD
+ #define PARROT_EVENTS_H_GUARD
+ 
+ typedef void* (*event_func_t)(Parrot_Interp, void*);
+Index: include/parrot/dod.h
+===================================================================
+--- include/parrot/dod.h	(revision 18422)
++++ include/parrot/dod.h	(working copy)
+@@ -12,7 +12,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_DOD_H_GUARD)
++#ifndef PARROT_DOD_H_GUARD
+ #define PARROT_DOD_H_GUARD
+ 
+ #include "parrot/parrot.h"
+Index: include/parrot/thr_windows.h
+===================================================================
+--- include/parrot/thr_windows.h	(revision 18422)
++++ include/parrot/thr_windows.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_THR_WINDOWS_H_GUARD)
++#ifndef PARROT_THR_WINDOWS_H_GUARD
+ #  define PARROT_THR_WINDOWS_H_GUARD
+ 
+ #  undef CONST
+Index: include/parrot/memory.h
+===================================================================
+--- include/parrot/memory.h	(revision 18422)
++++ include/parrot/memory.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_MEMORY_H_GUARD)
++#ifndef PARROT_MEMORY_H_GUARD
+ #define PARROT_MEMORY_H_GUARD
+ #include <assert.h>
+ PARROT_API void *mem_sys_allocate(size_t);
+Index: include/parrot/pic.h
+===================================================================
+--- include/parrot/pic.h	(revision 18422)
++++ include/parrot/pic.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_PIC_H_GUARD)
++#ifndef PARROT_PIC_H_GUARD
+ #define PARROT_PIC_H_GUARD
+ 
+ /*
+Index: include/parrot/list.h
+===================================================================
+--- include/parrot/list.h	(revision 18422)
++++ include/parrot/list.h	(working copy)
+@@ -11,7 +11,7 @@
+ 
+ #include "parrot/parrot.h"
+ 
+-#if !defined(PARROT_LIST_H_GUARD)
++#ifndef PARROT_LIST_H_GUARD
+ #define PARROT_LIST_H_GUARD
+ 
+ typedef struct List_chunk {
+Index: include/parrot/atomic.h
+===================================================================
+--- include/parrot/atomic.h	(revision 18422)
++++ include/parrot/atomic.h	(working copy)
+@@ -11,7 +11,7 @@
+  */
+ 
+ 
+-#if !defined(PARROT_ATOMIC_H_GUARD)
++#ifndef PARROT_ATOMIC_H_GUARD
+ #  define PARROT_ATOMIC_H_GUARD
+ 
+ #  include "parrot/has_header.h"
+Index: include/parrot/inter_call.h
+===================================================================
+--- include/parrot/inter_call.h	(revision 18422)
++++ include/parrot/inter_call.h	(working copy)
+@@ -13,7 +13,7 @@
+  *     pdd03 - Calling Conventions
+  */
+ 
+-#if !defined(PARROT_INTER_CALL_H_GUARD)
++#ifndef PARROT_INTER_CALL_H_GUARD
+ #define PARROT_INTER_CALL_H_GUARD
+ 
+ enum call_state_mode {
+Index: include/parrot/pmc.h
+===================================================================
+--- include/parrot/pmc.h	(revision 18422)
++++ include/parrot/pmc.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_PMC_H_GUARD)
++#ifndef PARROT_PMC_H_GUARD
+ #define PARROT_PMC_H_GUARD
+ 
+ #include "parrot/core_pmcs.h"
+Index: include/parrot/intlist.h
+===================================================================
+--- include/parrot/intlist.h	(revision 18422)
++++ include/parrot/intlist.h	(working copy)
+@@ -12,7 +12,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_INTLIST_H_GUARD)
++#ifndef PARROT_INTLIST_H_GUARD
+ #define PARROT_INTLIST_H_GUARD
+ 
+ #include "parrot/parrot.h"
+Index: include/parrot/key.h
+===================================================================
+--- include/parrot/key.h	(revision 18422)
++++ include/parrot/key.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_KEY_H_GUARD)
++#ifndef PARROT_KEY_H_GUARD
+ #define PARROT_KEY_H_GUARD
+ 
+ #include "parrot/parrot.h"
+Index: include/parrot/pobj.h
+===================================================================
+--- include/parrot/pobj.h	(revision 18422)
++++ include/parrot/pobj.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References: memory_internals.pod
+  */
+ 
+-#if !defined(PARROT_POBJ_H_GUARD)
++#ifndef PARROT_POBJ_H_GUARD
+ #define PARROT_POBJ_H_GUARD
+ 
+ #include "parrot/config.h"
+Index: include/parrot/string.h
+===================================================================
+--- include/parrot/string.h	(revision 18422)
++++ include/parrot/string.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_STRING_H_GUARD)
++#ifndef PARROT_STRING_H_GUARD
+ #define PARROT_STRING_H_GUARD
+ 
+ #include "parrot/config.h"
+Index: include/parrot/builtin.h
+===================================================================
+--- include/parrot/builtin.h	(revision 18422)
++++ include/parrot/builtin.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_BUILTIN_H_GUARD)
++#ifndef PARROT_BUILTIN_H_GUARD
+ #define PARROT_BUILTIN_H_GUARD
+ 
+ #include "parrot/compiler.h"
+Index: include/parrot/io.h
+===================================================================
+--- include/parrot/io.h	(revision 18422)
++++ include/parrot/io.h	(working copy)
+@@ -16,7 +16,7 @@
+  *      Some ideas from AT&T SFIO
+  */
+ 
+-#if !defined(PARROT_IO_H_GUARD)
++#ifndef PARROT_IO_H_GUARD
+ #define PARROT_IO_H_GUARD
+ 
+ #include <stdio.h>
+Index: include/parrot/stat.h
+===================================================================
+--- include/parrot/stat.h	(revision 18422)
++++ include/parrot/stat.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_STAT_H_GUARD)
++#ifndef PARROT_STAT_H_GUARD
+ #define PARROT_STAT_H_GUARD
+ 
+ #include "parrot/config.h"
+Index: include/parrot/headers.h
+===================================================================
+--- include/parrot/headers.h	(revision 18422)
++++ include/parrot/headers.h	(working copy)
+@@ -11,7 +11,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_HEADERS_H_GUARD)
++#ifndef PARROT_HEADERS_H_GUARD
+ #define PARROT_HEADERS_H_GUARD
+ 
+ #include "parrot/parrot.h"
+Index: include/parrot/op.h
+===================================================================
+--- include/parrot/op.h	(revision 18422)
++++ include/parrot/op.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_OP_H_GUARD)
++#ifndef PARROT_OP_H_GUARD
+ #define PARROT_OP_H_GUARD
+ 
+ #include "parrot/config.h"
+Index: include/parrot/global_setup.h
+===================================================================
+--- include/parrot/global_setup.h	(revision 18422)
++++ include/parrot/global_setup.h	(working copy)
+@@ -11,7 +11,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_GLOBAL_SETUP_H_GUARD)
++#ifndef PARROT_GLOBAL_SETUP_H_GUARD
+ #define PARROT_GLOBAL_SETUP_H_GUARD
+ 
+ #include "parrot/config.h"
+Index: include/parrot/string_primitives.h
+===================================================================
+--- include/parrot/string_primitives.h	(revision 18422)
++++ include/parrot/string_primitives.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_STRING_PRIMITIVES_H_GUARD)
++#ifndef PARROT_STRING_PRIMITIVES_H_GUARD
+ #define PARROT_STRING_PRIMITIVES_H_GUARD
+ 
+ #ifdef PARROT_IN_CORE
+Index: include/parrot/longopt.h
+===================================================================
+--- include/parrot/longopt.h	(revision 18422)
++++ include/parrot/longopt.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_LONGOPT_H_GUARD)
++#ifndef PARROT_LONGOPT_H_GUARD
+ #define PARROT_LONGOPT_H_GUARD
+ 
+ /* I use a char* here because this needs to be easily statically
+Index: include/parrot/warnings.h
+===================================================================
+--- include/parrot/warnings.h	(revision 18422)
++++ include/parrot/warnings.h	(working copy)
+@@ -1,4 +1,4 @@
+-#if !defined(PARROT_WARNINGS_H_GUARD)
++#ifndef PARROT_WARNINGS_H_GUARD
+ #define PARROT_WARNINGS_H_GUARD
+ 
+ /* These should be visible to embedders. */
+Index: include/parrot/objects.h
+===================================================================
+--- include/parrot/objects.h	(revision 18422)
++++ include/parrot/objects.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_OBJECTS_H_GUARD)
++#ifndef PARROT_OBJECTS_H_GUARD
+ #define PARROT_OBJECTS_H_GUARD
+ 
+ #include "parrot/parrot.h"
+Index: include/parrot/datatypes.h
+===================================================================
+--- include/parrot/datatypes.h	(revision 18422)
++++ include/parrot/datatypes.h	(working copy)
+@@ -12,7 +12,7 @@
+  *     Though appending a type and a name should be safe.
+  */
+ 
+-#if !defined(PARROT_DATATYPES_H_GUARD)
++#ifndef PARROT_DATATYPES_H_GUARD
+ #define PARROT_DATATYPES_H_GUARD
+ 
+ /* &gen_from_enum(datatypes.pasm) subst(s/enum_type_(\w+)/uc("DATATYPE_$1")/e) */
+Index: include/parrot/vtables.h
+===================================================================
+--- include/parrot/vtables.h	(revision 18422)
++++ include/parrot/vtables.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_VTABLES_H_GUARD)
++#ifndef PARROT_VTABLES_H_GUARD
+ #define PARROT_VTABLES_H_GUARD
+ 
+ PARROT_API VTABLE *Parrot_new_vtable(Interp*);
+Index: include/parrot/interpreter.h
+===================================================================
+--- include/parrot/interpreter.h	(revision 18422)
++++ include/parrot/interpreter.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_INTERPRETER_H_GUARD)
++#ifndef PARROT_INTERPRETER_H_GUARD
+ #define PARROT_INTERPRETER_H_GUARD
+ 
+ /* These should be visible to embedders. */
+Index: include/parrot/thr_pthread.h
+===================================================================
+--- include/parrot/thr_pthread.h	(revision 18422)
++++ include/parrot/thr_pthread.h	(working copy)
+@@ -13,7 +13,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_THR_PTHREAD_H_GUARD)
++#ifndef PARROT_THR_PTHREAD_H_GUARD
+ #define PARROT_THR_PTHREAD_H_GUARD
+ 
+ #  include <pthread.h>
+Index: include/parrot/library.h
+===================================================================
+--- include/parrot/library.h	(revision 18422)
++++ include/parrot/library.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_LIBRARY_H_GUARD)
++#ifndef PARROT_LIBRARY_H_GUARD
+ #define PARROT_LIBRARY_H_GUARD
+ 
+ typedef enum {
+Index: include/parrot/thread.h
+===================================================================
+--- include/parrot/thread.h	(revision 18422)
++++ include/parrot/thread.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_THREAD_H_GUARD)
++#ifndef PARROT_THREAD_H_GUARD
+ #  define PARROT_THREAD_H_GUARD
+ 
+ #  include "parrot/parrot.h"
+Index: include/parrot/nci.h
+===================================================================
+--- include/parrot/nci.h	(revision 18422)
++++ include/parrot/nci.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_NCI_H_GUARD)
++#ifndef PARROT_NCI_H_GUARD
+ #define PARROT_NCI_H_GUARD
+ 
+ #include "parrot/parrot.h"
+Index: include/parrot/compiler.h
+===================================================================
+--- include/parrot/compiler.h	(revision 18422)
++++ include/parrot/compiler.h	(working copy)
+@@ -6,7 +6,7 @@
+  *     defines compiler capabilities
+  */
+ 
+-#if !defined(PARROT_COMPILER_H_GUARD)
++#ifndef PARROT_COMPILER_H_GUARD
+ #define PARROT_COMPILER_H_GUARD
+ 
+ /*
+Index: include/parrot/dynext.h
+===================================================================
+--- include/parrot/dynext.h	(revision 18422)
++++ include/parrot/dynext.h	(working copy)
+@@ -5,7 +5,7 @@
+ *   Parrot dynamic extensions
+ */
+ 
+-#if !defined(PARROT_DYNEXT_H_GUARD)
++#ifndef PARROT_DYNEXT_H_GUARD
+ #define PARROT_DYNEXT_H_GUARD
+ 
+ /* dynamic lib/oplib/PMC loading */
+Index: include/parrot/imcc.h
+===================================================================
+--- include/parrot/imcc.h	(revision 18422)
++++ include/parrot/imcc.h	(working copy)
+@@ -3,14 +3,14 @@
+  * $Id$
+  */
+ 
+-#if !defined(PARROT_IMCC_H_GUARD)
++#ifndef PARROT_IMCC_H_GUARD
+ #define PARROT_IMCC_H_GUARD
+ 
+ PARROT_API int imcc_initialize(Interp *interp);
+ PARROT_API char * parseflags(Interp *interp, int *argc, char **argv[]);
+ PARROT_API int imcc_run(Interp *interp, const char *sourcefile, int argc, char * argv[]);
+ 
+-#endif
++#endif /* PARROT_IMCC_H_GUARD */
+ 
+ /*
+  * Local variables:
+Index: include/parrot/mmd.h
+===================================================================
+--- include/parrot/mmd.h	(revision 18422)
++++ include/parrot/mmd.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_MMD_H_GUARD)
++#ifndef PARROT_MMD_H_GUARD
+ #define PARROT_MMD_H_GUARD
+ 
+ /* inplace */
+Index: include/parrot/packfile.h
+===================================================================
+--- include/parrot/packfile.h	(revision 18422)
++++ include/parrot/packfile.h	(working copy)
+@@ -7,7 +7,7 @@
+ *   (Do endian conversion and wordsize transforms on the fly.)
+ */
+ 
+-#if !defined(PARROT_PACKFILE_H_GUARD)
++#ifndef PARROT_PACKFILE_H_GUARD
+ #define PARROT_PACKFILE_H_GUARD
+ 
+ #include <parrot/parrot.h>
+Index: include/parrot/pmc_freeze.h
+===================================================================
+--- include/parrot/pmc_freeze.h	(revision 18422)
++++ include/parrot/pmc_freeze.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_PMC_FREEZE_H_GUARD)
++#ifndef PARROT_PMC_FREEZE_H_GUARD
+ #define      PARROT_PMC_FREEZE_H_GUARD
+ 
+ struct _visit_info;
+Index: include/parrot/exceptions.h
+===================================================================
+--- include/parrot/exceptions.h	(revision 18422)
++++ include/parrot/exceptions.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References:
+  */
+ 
+-#if !defined(PARROT_EXCEPTIONS_H_GUARD)
++#ifndef PARROT_EXCEPTIONS_H_GUARD
+ #define PARROT_EXCEPTIONS_H_GUARD
+ 
+ #include "parrot/compiler.h"
+Index: include/parrot/extend.h
+===================================================================
+--- include/parrot/extend.h	(revision 18422)
++++ include/parrot/extend.h	(working copy)
+@@ -12,7 +12,7 @@
+  *      extend.c, docs/pdds/pdd11_extending.pod.
+  */
+ 
+-#if !defined(PARROT_EXTEND_H_GUARD)
++#ifndef PARROT_EXTEND_H_GUARD
+ #define PARROT_EXTEND_H_GUARD
+ 
+ #include "parrot/config.h"      /* PARROT_VERSION, PARROT_JIT_CAPABLE... */
+Index: include/parrot/stacks.h
+===================================================================
+--- include/parrot/stacks.h	(revision 18422)
++++ include/parrot/stacks.h	(working copy)
+@@ -10,7 +10,7 @@
+  *  References: See also enums.h
+  */
+ 
+-#if !defined(PARROT_STACKS_H_GUARD)
++#ifndef PARROT_STACKS_H_GUARD
+ #define PARROT_STACKS_H_GUARD
+ 
+ #include "parrot/parrot.h"
+Index: compilers/bcg/src/bcg_emitter.h
+===================================================================
+--- compilers/bcg/src/bcg_emitter.h	(revision 18422)
++++ compilers/bcg/src/bcg_emitter.h	(working copy)
+@@ -1,12 +1,12 @@
+-#ifndef PARROT_BCG_EMTITTER_H_GUARD
+-#define PARROT_BCG_EMTITTER_H_GUARD
++#ifndef PARROT_BCG_EMITTER_H_GUARD
++#define PARROT_BCG_EMITTER_H_GUARD
+ 
+ #include "bcg.h"
+ 
+ /* TODO Define standard emitter API that can support multiple emitter*/
+ void emit_pasm(BCG_info * info);
+ 
+-#endif
++#endif /* PARROT_BCG_EMITTER_H_GUARD */
+ 
+ /*
+  * Local variables:
+Index: compilers/imcc/parser.h
+===================================================================
+--- compilers/imcc/parser.h	(revision 18422)
++++ compilers/imcc/parser.h	(working copy)
+@@ -4,7 +4,7 @@
+  * $Id$
+  */
+ 
+-#if !defined(PARROT_IMCC_PARSER_H_GUARD)
++#ifndef PARROT_IMCC_PARSER_H_GUARD
+ #define PARROT_IMCC_PARSER_H_GUARD
+ 
+ #ifdef PARSER_MAIN
+Index: compilers/imcc/cfg.h
+===================================================================
+--- compilers/imcc/cfg.h	(revision 18422)
++++ compilers/imcc/cfg.h	(working copy)
+@@ -2,7 +2,7 @@
+ /* Data structures: */
+ 
+ /* Two-way linked list of predecessors and successors */
+-#if !defined(PARROT_CFG_H_GUARD)
++#ifndef PARROT_CFG_H_GUARD
+ #define PARROT_CFG_H_GUARD
+ 
+ typedef struct _edge {
+Index: compilers/imcc/instructions.h
+===================================================================
+--- compilers/imcc/instructions.h	(revision 18422)
++++ compilers/imcc/instructions.h	(working copy)
+@@ -1,4 +1,4 @@
+-#if !defined(PARROT_IMCC_INSTRUCTIONS_H_GUARD)
++#ifndef PARROT_IMCC_INSTRUCTIONS_H_GUARD
+ #define PARROT_IMCC_INSTRUCTIONS_H_GUARD
+ 
+ /* Types */
+Index: compilers/imcc/pbc.h
+===================================================================
+--- compilers/imcc/pbc.h	(revision 18422)
++++ compilers/imcc/pbc.h	(working copy)
+@@ -1,4 +1,4 @@
+-#if !defined(PARROT_IMCC_PBC_H_GUARD)
++#ifndef PARROT_IMCC_PBC_H_GUARD
+ #define PARROT_IMCC_PBC_H_GUARD
+ 
+ int e_pbc_open(Interp *, void *);
+Index: compilers/imcc/symreg.h
+===================================================================
+--- compilers/imcc/symreg.h	(revision 18422)
++++ compilers/imcc/symreg.h	(working copy)
+@@ -1,4 +1,4 @@
+-#if !defined(PARROT_IMCC_SYMREG_H_GUARD)
++#ifndef PARROT_IMCC_SYMREG_H_GUARD
+ #define PARROT_IMCC_SYMREG_H_GUARD
+ 
+ /* types */
+Index: compilers/imcc/unit.h
+===================================================================
+--- compilers/imcc/unit.h	(revision 18422)
++++ compilers/imcc/unit.h	(working copy)
+@@ -1,4 +1,4 @@
+-#if !defined(PARROT_IMCC_UNIT_H_GUARD)
++#ifndef PARROT_IMCC_UNIT_H_GUARD
+ #define PARROT_IMCC_UNIT_H_GUARD
+ 
+ /* A IMC compilation unit or atomic metadata item.
+Index: compilers/imcc/optimizer.h
+===================================================================
+--- compilers/imcc/optimizer.h	(revision 18422)
++++ compilers/imcc/optimizer.h	(working copy)
+@@ -1,4 +1,4 @@
+-#if !defined(PARROT_IMCC_OPTIMIZER_H_GUARD)
++#ifndef PARROT_IMCC_OPTIMIZER_H_GUARD
+ #define PARROT_IMCC_OPTIMIZER_H_GUARD
+ int pre_optimize(Interp *, IMC_Unit *);
+ int cfg_optimize(Interp *, IMC_Unit *);
+Index: compilers/imcc/imcparser.h
+===================================================================
+--- compilers/imcc/imcparser.h	(revision 18422)
++++ compilers/imcc/imcparser.h	(working copy)
+@@ -157,7 +157,7 @@
+      CONCAT = 373,
+      POINTY = 374
+    };
+-#endif
++#endif /* YYTOKENTYPE */
+ /* Tokens.  */
+ #define LOW_PREC 258
+ #define PARAM 259
+@@ -296,7 +296,7 @@
+ # define yystype YYSTYPE /* obsolescent; will be withdrawn */
+ # define YYSTYPE_IS_DECLARED 1
+ # define YYSTYPE_IS_TRIVIAL 1
+-#endif
++#endif /* !YYSTYPE && !YYSTYPE_IS_DECLARED */
+ 
+ 
+ 
+Index: compilers/imcc/debug.h
+===================================================================
+--- compilers/imcc/debug.h	(revision 18422)
++++ compilers/imcc/debug.h	(working copy)
+@@ -1,4 +1,4 @@
+-#if !defined(PARROT_IMCC_DEBUG_H_GUARD)
++#ifndef PARROT_IMCC_DEBUG_H_GUARD
+ #define PARROT_IMCC_DEBUG_H_GUARD
+ 
+ #define DEBUG_PARROT 0x0001
+Index: compilers/imcc/imc.h
+===================================================================
+--- compilers/imcc/imc.h	(revision 18422)
++++ compilers/imcc/imc.h	(working copy)
+@@ -1,6 +1,6 @@
+ /* $Id$ */
+ 
+-#if !defined(PARROT_IMCC_IMC_H_GUARD)
++#ifndef PARROT_IMCC_IMC_H_GUARD
+ #define PARROT_IMCC_IMC_H_GUARD
+ 
+ #include <stdio.h>
+Index: compilers/imcc/sets.h
+===================================================================
+--- compilers/imcc/sets.h	(revision 18422)
++++ compilers/imcc/sets.h	(working copy)
+@@ -1,4 +1,4 @@
+-#if !defined(PARROT_IMCC_SETS_H_GUARD)
++#ifndef PARROT_IMCC_SETS_H_GUARD
+ #define PARROT_IMCC_SETS_H_GUARD
+ 
+ typedef struct _Set {
+Index: compilers/pirc/src/pirlexer.h
+===================================================================
+--- compilers/pirc/src/pirlexer.h	(revision 18422)
++++ compilers/pirc/src/pirlexer.h	(working copy)
+@@ -1,5 +1,5 @@
+-#ifndef __PIRLEXER_H
+-#  define __PIRLEXER_H
++#ifndef PARROT_PIRC_PIRLEXER_H_GUARD
++#  define PARROT_PIRC_PIRLEXER_H_GUARD
+ 
+ typedef enum tokens {
+     T_GLOBAL,                           /* "global"                   */
+@@ -202,7 +202,7 @@
+ /* get the spelling of a keyword */
+ extern char const * find_keyword(token t);
+ 
+-#endif
++#endif /* PARROT_PIRC_PIRLEXER_H_GUARD */
+ 
+ /*
+  * Local variables:
+Index: compilers/pirc/src/pbcout.h
+===================================================================
+--- compilers/pirc/src/pbcout.h	(revision 18422)
++++ compilers/pirc/src/pbcout.h	(working copy)
+@@ -1,10 +1,10 @@
+-#ifndef __PBCOUT_H
+-#  define __PBCOUT_H
++#ifndef PARROT_PIRC_PBCOUT_H_GUARD
++#  define PARROT_PIRC_PBCOUT_H_GUARD
+ 
+ 
+ extern struct pirvtable *init_pbc_vtable(char *outputfile);
+ 
+-#endif
++#endif /* PARROT_PIRC_PBCOUT_H_GUARD */
+ 
+ 
+ /*
+Index: compilers/pirc/src/pastout.h
+===================================================================
+--- compilers/pirc/src/pastout.h	(revision 18422)
++++ compilers/pirc/src/pastout.h	(working copy)
+@@ -1,12 +1,12 @@
+-#ifndef __PASTOUT_H
+-#  define __PASTOUT_H
++#ifndef PARROT_PIRC_PASTOUT_H_GUARD
++#  define PARROT_PIRC_PASTOUT_H_GUARD
+ 
+ /* predeclare */
+ struct pirvtable;
+ 
+ extern struct pirvtable *init_past_vtable(char *outputfile);
+ 
+-#endif
++#endif /* PARROT_PIRC_PASTOUT_H_GUARD */
+ 
+ /*
+  * Local variables:
+Index: compilers/pirc/src/jsonout.h
+===================================================================
+--- compilers/pirc/src/jsonout.h	(revision 18422)
++++ compilers/pirc/src/jsonout.h	(working copy)
+@@ -1,12 +1,12 @@
+-#ifndef __JSONOUT_H
+-#  define __JSONOUT_H
++#ifndef PARROT_PIRC_JSONOUT_H_GUARD
++#  define PARROT_PIRC_JSONOUT_H_GUARD
+ 
+ /* predeclare */
+ struct pirvtable;
+ 
+ extern struct pirvtable *init_json_vtable(char *outputfile);
+ 
+-#endif
++#endif /* PARROT_PIRC_JSONOUT_H_GUARD */
+ 
+ 
+ /*
+Index: compilers/pirc/src/pirparser.h
+===================================================================
+--- compilers/pirc/src/pirparser.h	(revision 18422)
++++ compilers/pirc/src/pirparser.h	(working copy)
+@@ -1,5 +1,5 @@
+-#ifndef __PIRPARSER_H
+-#  define __PIRPARSER_H
++#ifndef PARROT_PIRC_PIRPARSER_H_GUARD
++#  define PARROT_PIRC_PIRPARSER_H_GUARD
+ 
+ #  include "pirlexer.h"
+ #  include "pirvtable.h"
+@@ -24,7 +24,7 @@
+ 
+ extern token get_token(struct parser_state *p);
+ 
+-#endif
++#endif /* PARROT_PIRC_PIRPARSER_H_GUARD */
+ 
+ /*
+  * Local variables:
+Index: compilers/pirc/src/pirout.h
+===================================================================
+--- compilers/pirc/src/pirout.h	(revision 18422)
++++ compilers/pirc/src/pirout.h	(working copy)
+@@ -1,12 +1,12 @@
+-#ifndef __PIROUT_H
+-#  define __PIROUT_H
++#ifndef PARROT_PIRC_PIROUT_H_GUARD
++#  define PARROT_PIRC_PIROUT_H_GUARD
+ 
+ /* predeclare */
+ struct pirvtable;
+ 
+ extern struct pirvtable *init_pir_vtable(char *outputfile);
+ 
+-#endif
++#endif /* PARROT_PIRC_PIROUT_H_GUARD */
+ 
+ /*
+  * Local variables:
+Index: compilers/pirc/src/pirutil.h
+===================================================================
+--- compilers/pirc/src/pirutil.h	(revision 18422)
++++ compilers/pirc/src/pirutil.h	(working copy)
+@@ -1,5 +1,5 @@
+-#ifndef __PIRUTIL_H
+-#  define __PIRUTIL_H
++#ifndef PARROT_PIRC_PIRUTIL_H_GUARD
++#  define PARROT_PIRC_PIRUTIL_H_GUARD
+ 
+ 
+ #  include <stdio.h>
+@@ -31,7 +31,7 @@
+ 
+ 
+ 
+-#endif
++#endif /* PARROT_PIRC_PIRUTIL_H_GUARD */
+ 
+ /*
+  * Local variables:
+Index: compilers/pirc/src/pirvtable.h
+===================================================================
+--- compilers/pirc/src/pirvtable.h	(revision 18422)
++++ compilers/pirc/src/pirvtable.h	(working copy)
+@@ -1,5 +1,5 @@
+-#ifndef __VTABLE_H
+-#  define __VTABLE_H
++#ifndef PARROT_PIRC_PIRVTABLE_H_GUARD
++#  define PARROT_PIRC_PIRVTABLE_H_GUARD
+ 
+ /* predeclaration; the actual definition is left to the back-end(s) */
+ struct emit_data;
+@@ -133,7 +133,7 @@
+ extern void destroy_pirvtable(pirvtable *vtable);
+ 
+ 
+-#endif
++#endif /* PARROT_PIRC_PIRVTABLE_H_GUARD */
+ 
+ /*
+  * Local variables:
+Index: config/gen/platform/win32/string.h
+===================================================================
+--- config/gen/platform/win32/string.h	(revision 18422)
++++ config/gen/platform/win32/string.h	(working copy)
+@@ -1,16 +1,16 @@
+-#ifndef PLATFORM_WIN32_STRING_H
+-#  define PLATFORM_WIN32_STRING_H
++#ifndef PARROT_PLATFORM_WIN32_STRING_H_GUARD
++#define PARROT_PLATFORM_WIN32_STRING_H_GUARD
+ 
+-#  include <string.h>
++#include <string.h>
+ 
+-#  ifdef _MSC_VER
+-#    if _MSC_VER >= 1400
+-#      define strdup _strdup
+-#    endif
++#ifdef _MSC_VER
++#  if _MSC_VER >= 1400
++#    define strdup _strdup
+ #  endif
+-
+ #endif
+ 
++#endif /* PARROT_PLATFORM_WIN32_STRING_H_GUARD */
++
+ /*
+  * Local variables:
+  *   c-file-style: "parrot"
+Index: config/gen/platform/platform_interface.h
+===================================================================
+--- config/gen/platform/platform_interface.h	(revision 18422)
++++ config/gen/platform/platform_interface.h	(working copy)
+@@ -126,7 +126,7 @@
+ INTVAL Parrot_Run_OS_Command_Argv(Interp*, struct PMC *);
+ void Parrot_Exec_OS_Command_Argv(Interp*, struct PMC *);
+ 
+-#endif
++#endif /* PLATFORM_INTERFACE_H_GUARD */
+ 
+ /*
+  * Local variables:
+Index: config/gen/config_h/config_h.in
+===================================================================
+--- config/gen/config_h/config_h.in	(revision 18422)
++++ config/gen/config_h/config_h.in	(working copy)
+@@ -7,7 +7,7 @@
+  *
+  */
+ 
+-#if !defined(PARROT_CONFIG_H_GUARD)
++#ifndef PARROT_CONFIG_H_GUARD
+ #define PARROT_CONFIG_H_GUARD
+ 
+ /*
+@@ -142,7 +142,7 @@
+ 
+ #endif
+ 
+-#endif
++#endif /* PARROT_CONFIG_H_GUARD */
+ 
+ /*
+  * Local variables:
+Index: languages/pugs/include/pugs_common.h
+===================================================================
+--- languages/pugs/include/pugs_common.h	(revision 18422)
++++ languages/pugs/include/pugs_common.h	(working copy)
+@@ -1,6 +1,6 @@
+ /* $Id$ */
+ 
+-#if !defined(PARROT_PUGS_COMMONL_H_GUARD)
++#ifndef PARROT_PUGS_COMMONL_H_GUARD
+ #define PARROT_PUGS_COMMONL_H_GUARD
+ 
+ #ifndef PUGS_BOOL
+@@ -8,7 +8,7 @@
+ extern PMC *pugs_bool_false;
+ #endif
+ 
+-#endif
++#endif /* PARROT_PUGS_COMMONL_H_GUARD */
+ 
+ /*
+  * Local variables:
+Index: languages/cola/cola.h
+===================================================================
+--- languages/cola/cola.h	(revision 18422)
++++ languages/cola/cola.h	(working copy)
+@@ -8,8 +8,8 @@
+  * The giant, hulking header file.
+  */
+ 
+-#ifndef _COLA_H
+-#  define _COLA_H
++#ifndef PARROT_LANGUAGES_COLA_H_GUARD
++#  define PARROT_LANGUAGES_COLA_H_GUARD
+ 
+ #  define COLA_VERSION "0.0.11.1"
+ 
+@@ -393,7 +393,7 @@
+ 
+ extern long         line;
+ 
+-#endif
++#endif /* PARROT_LANGUAGES_COLA_H_GUARD */
+ 
+ /*
+  * Local variables:
+
+------------=_1178314794-29410-0--
+

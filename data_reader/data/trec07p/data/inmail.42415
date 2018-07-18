@@ -1,0 +1,536 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May 23 16:32:14 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4NKWEqD029458
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 23 May 2007 16:32:14 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 3BEB516388F
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 23 May 2007 20:32:10 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1013)
+	id 1F7A1162AD2; Wed, 23 May 2007 20:31:30 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jpeach@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070523203130.1F7A1162AD2@lists.samba.org>
+Date: Wed, 23 May 2007 20:31:30 +0000 (GMT)
+Subject: svn commit: samba r23095 - in branches: SAMBA_3_0/source
+	SAMBA_3_0/source/auth SAMBA_3_0/source/lib
+	SAMBA_3_0/source/nsswitch SAMBA_3_0/source/pam_smbpass
+	SAMBA_3_0_26/source SAMBA_3_0_26/source/auth
+	SAMBA_3_0_26/source/lib SAMBA_3_0_26/source/nsswitch
+	SAMBA_3_0_26/source/pam_smbpass
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: jpeach
+Date: 2007-05-23 20:31:28 +0000 (Wed, 23 May 2007)
+New Revision: 23095
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23095
+
+Log:
+Support systems that have their PAM headers in /usr/include/pam.
+
+Modified:
+   branches/SAMBA_3_0/source/auth/pampass.c
+   branches/SAMBA_3_0/source/configure.in
+   branches/SAMBA_3_0/source/lib/pam_errors.c
+   branches/SAMBA_3_0/source/nsswitch/pam_winbind.h
+   branches/SAMBA_3_0/source/pam_smbpass/general.h
+   branches/SAMBA_3_0/source/pam_smbpass/pam_smb_acct.c
+   branches/SAMBA_3_0/source/pam_smbpass/pam_smb_auth.c
+   branches/SAMBA_3_0/source/pam_smbpass/pam_smb_passwd.c
+   branches/SAMBA_3_0_26/source/auth/pampass.c
+   branches/SAMBA_3_0_26/source/configure.in
+   branches/SAMBA_3_0_26/source/lib/pam_errors.c
+   branches/SAMBA_3_0_26/source/nsswitch/pam_winbind.h
+   branches/SAMBA_3_0_26/source/pam_smbpass/general.h
+   branches/SAMBA_3_0_26/source/pam_smbpass/pam_smb_acct.c
+   branches/SAMBA_3_0_26/source/pam_smbpass/pam_smb_auth.c
+   branches/SAMBA_3_0_26/source/pam_smbpass/pam_smb_passwd.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/auth/pampass.c
+===================================================================
+--- branches/SAMBA_3_0/source/auth/pampass.c	2007-05-23 19:57:13 UTC (rev 23094)
++++ branches/SAMBA_3_0/source/auth/pampass.c	2007-05-23 20:31:28 UTC (rev 23095)
+@@ -41,7 +41,11 @@
+  *   which determines what actions/limitations/allowances become affected.
+  *********************************************************************/
+ 
++#if defined(HAVE_SECURITY_PAM_APPL_H)
+ #include <security/pam_appl.h>
++#elif defined(HAVE_PAM_PAM_APPL_H)
++#include <pam/pam_appl.h>
++#endif
+ 
+ /*
+  * Structure used to communicate between the conversation function
+
+Modified: branches/SAMBA_3_0/source/configure.in
+===================================================================
+--- branches/SAMBA_3_0/source/configure.in	2007-05-23 19:57:13 UTC (rev 23094)
++++ branches/SAMBA_3_0/source/configure.in	2007-05-23 20:31:28 UTC (rev 23095)
+@@ -4399,7 +4399,11 @@
+ 
+ 
+ #################################################
+-# check for a PAM clear-text auth, accounts, password and session support
++# Check for a PAM clear-text auth, accounts, password
++# and session support. Most PAM implementations keep their
++# headers in /usr/include/security. Darwin keeps its in
++# /usr/include/pam.
++
+ with_pam_for_crypt=no
+ try_pam=no
+ AC_MSG_CHECKING(whether to try PAM support)
+@@ -4419,10 +4423,13 @@
+ 	use_pam=yes
+ 	create_pam_modules=yes
+ 
+-	AC_CHECK_HEADERS(security/pam_appl.h)
+-	if test x"$ac_cv_header_security_pam_appl_h" != x"yes"; then
++	# Most systems have PAM headers in /usr/include/security, but Darwin
++	# has them in /usr/include/pam.
++	AC_CHECK_HEADERS(security/pam_appl.h pam/pam_appl.h)
++	if test x"$ac_cv_header_security_pam_appl_h" != x"yes" -a \
++		x"$ac_cv_header_pam_pam_appl_h" != x"yes"; then
+ 		if test x"${try_pam}" = x"yes";then
+-			AC_MSG_ERROR([--with-pam=yes but security/pam_appl.h not found])
++			AC_MSG_ERROR([--with-pam=yes but pam_appl.h not found])
+ 		fi
+ 		use_pam=no
+ 		create_pam_modules=no
+@@ -4437,14 +4444,18 @@
+ 		create_pam_modules=no
+ 	fi
+ 
+-	AC_CHECK_HEADERS(security/pam_modules.h,,,[[
++	AC_CHECK_HEADERS(security/pam_modules.h pam/pam_modules.h,,,[[
+ 		#if HAVE_SECURITY_PAM_APPL_H
+ 		#include <security/pam_appl.h>
+ 		#endif
++		#if HAVE_PAM_PAM_APPL_H
++		#include <pam/pam_appl.h>
++		#endif
+ 	]])
+-	if test x"$ac_cv_header_security_pam_modules_h" = x"no"; then
++	if test x"$ac_cv_header_security_pam_modules_h" = x"no" -a \
++		x"$ac_cv_header_pam_pam_modules_h" = x"no" ; then
+ 		if test x"${try_pam}" = x"yes";then
+-			AC_MSG_ERROR([--with-pam=yes but security/pam_modules.h not found])
++			AC_MSG_ERROR([--with-pam=yes but pam_modules.h not found])
+ 		fi
+ 		create_pam_modules=no
+ 	fi
+@@ -4460,6 +4471,7 @@
+ 			# this checks are optional,
+ 			# we don't care about the results here
+ 			AC_CHECK_HEADERS(security/pam_ext.h security/_pam_macros.h)
++			AC_CHECK_HEADERS(pam/pam_ext.h pam/_pam_macros.h)
+ 			AC_CHECK_FUNC_EXT(pam_vsyslog,$PAM_LIBS)
+ 		else
+ 			AC_MSG_WARN([PAM support detected but PAM MODULES support is missing])		
+
+Modified: branches/SAMBA_3_0/source/lib/pam_errors.c
+===================================================================
+--- branches/SAMBA_3_0/source/lib/pam_errors.c	2007-05-23 19:57:13 UTC (rev 23094)
++++ branches/SAMBA_3_0/source/lib/pam_errors.c	2007-05-23 20:31:28 UTC (rev 23095)
+@@ -21,7 +21,11 @@
+ #include "includes.h"
+ 
+ #ifdef WITH_PAM
++#if defined(HAVE_SECURITY_PAM_APPL_H)
+ #include <security/pam_appl.h>
++#elif defined(HAVE_PAM_PAM_APPL_H)
++#include <pam/pam_appl.h>
++#endif
+ 
+ #if defined(PAM_AUTHTOK_RECOVERY_ERR) && !defined(PAM_AUTHTOK_RECOVER_ERR)
+ #define PAM_AUTHTOK_RECOVER_ERR PAM_AUTHTOK_RECOVERY_ERR
+
+Modified: branches/SAMBA_3_0/source/nsswitch/pam_winbind.h
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/pam_winbind.h	2007-05-23 19:57:13 UTC (rev 23094)
++++ branches/SAMBA_3_0/source/nsswitch/pam_winbind.h	2007-05-23 20:31:28 UTC (rev 23095)
+@@ -23,7 +23,11 @@
+ 
+ /* Solaris always uses dynamic pam modules */
+ #define PAM_EXTERN extern
++#if defined(HAVE_SECURITY_PAM_APPL_H)
+ #include <security/pam_appl.h> 
++#elif defined(HAVE_PAM_PAM_APPL_H)
++#include <pam/pam_appl.h>
++#endif
+ 
+ #ifndef PAM_AUTHTOK_RECOVER_ERR
+ #define PAM_AUTHTOK_RECOVER_ERR PAM_AUTHTOK_RECOVERY_ERR
+@@ -31,12 +35,16 @@
+ 
+ #endif /* defined(SUNOS5) || defined(SUNOS4) || defined(HPUX) || defined(FREEBSD) || defined(AIX) */
+ 
+-#ifdef HAVE_SECURITY_PAM_MODULES_H
++#if defined(HAVE_SECURITY_PAM_MODULES_H)
+ #include <security/pam_modules.h>
++#elif defined(HAVE_PAM_PAM_MODULES_H)
++#include <pam/pam_modules.h>
+ #endif
+ 
+-#ifdef HAVE_SECURITY__PAM_MACROS_H
++#if defined(HAVE_SECURITY__PAM_MACROS_H)
+ #include <security/_pam_macros.h>
++#elif defined(HAVE_PAM__PAM_MACROS_H)
++#include <pam/_pam_macros.h>
+ #else
+ /* Define required macros from (Linux PAM 0.68) security/_pam_macros.h */
+ #define _pam_drop_reply(/* struct pam_response * */ reply, /* int */ replies) \
+
+Modified: branches/SAMBA_3_0/source/pam_smbpass/general.h
+===================================================================
+--- branches/SAMBA_3_0/source/pam_smbpass/general.h	2007-05-23 19:57:13 UTC (rev 23094)
++++ branches/SAMBA_3_0/source/pam_smbpass/general.h	2007-05-23 20:31:28 UTC (rev 23095)
+@@ -1,9 +1,17 @@
+ #ifndef LINUX
+ /* This is only needed by modules in the Sun implementation. */
++#if defined(HAVE_SECURITY_PAM_APPL_H)
+ #include <security/pam_appl.h>
++#elif defined(HAVE_PAM_PAM_APPL_H)
++#include <pam/pam_appl.h>
++#endif
+ #endif  /* LINUX */
+ 
++#if defined(HAVE_SECURITY_PAM_MODULES_H)
+ #include <security/pam_modules.h>
++#elif defined(HAVE_PAM_PAM_MODULES_H)
++#include <pam/pam_modules.h>
++#endif
+ 
+ #ifndef PAM_AUTHTOK_RECOVER_ERR  
+ #define PAM_AUTHTOK_RECOVER_ERR PAM_AUTHTOK_RECOVERY_ERR
+
+Modified: branches/SAMBA_3_0/source/pam_smbpass/pam_smb_acct.c
+===================================================================
+--- branches/SAMBA_3_0/source/pam_smbpass/pam_smb_acct.c	2007-05-23 19:57:13 UTC (rev 23094)
++++ branches/SAMBA_3_0/source/pam_smbpass/pam_smb_acct.c	2007-05-23 20:31:28 UTC (rev 23095)
+@@ -23,11 +23,19 @@
+ #ifndef LINUX
+ 
+ /* This is only used in the Sun implementation. */
++#if defined(HAVE_SECURITY_PAM_APPL_H)
+ #include <security/pam_appl.h>
++#elif defined(HAVE_PAM_PAM_APPL_H)
++#include <pam/pam_appl.h>
++#endif
+ 
+ #endif  /* LINUX */
+ 
++#if defined(HAVE_SECURITY_PAM_MODULES_H)
+ #include <security/pam_modules.h>
++#elif defined(HAVE_PAM_PAM_MODULES_H)
++#include <pam/pam_modules.h>
++#endif
+ 
+ #include "general.h"
+ 
+
+Modified: branches/SAMBA_3_0/source/pam_smbpass/pam_smb_auth.c
+===================================================================
+--- branches/SAMBA_3_0/source/pam_smbpass/pam_smb_auth.c	2007-05-23 19:57:13 UTC (rev 23094)
++++ branches/SAMBA_3_0/source/pam_smbpass/pam_smb_auth.c	2007-05-23 20:31:28 UTC (rev 23095)
+@@ -24,11 +24,19 @@
+ #ifndef LINUX
+ 
+ /* This is only used in the Sun implementation. */
++#if defined(HAVE_SECURITY_PAM_APPL_H)
+ #include <security/pam_appl.h>
++#elif defined(HAVE_PAM_PAM_APPL_H)
++#include <pam/pam_appl.h>
++#endif
+ 
+ #endif  /* LINUX */
+ 
++#if defined(HAVE_SECURITY_PAM_MODULES_H)
+ #include <security/pam_modules.h>
++#elif defined(HAVE_PAM_PAM_MODULES_H)
++#include <pam/pam_modules.h>
++#endif
+ 
+ #include "general.h"
+ 
+
+Modified: branches/SAMBA_3_0/source/pam_smbpass/pam_smb_passwd.c
+===================================================================
+--- branches/SAMBA_3_0/source/pam_smbpass/pam_smb_passwd.c	2007-05-23 19:57:13 UTC (rev 23094)
++++ branches/SAMBA_3_0/source/pam_smbpass/pam_smb_passwd.c	2007-05-23 20:31:28 UTC (rev 23095)
+@@ -29,10 +29,18 @@
+    and others (including FreeBSD). */
+ 
+ #ifndef LINUX
++#if defined(HAVE_SECURITY_PAM_APPL_H)
+ #include <security/pam_appl.h>
++#elif defined(HAVE_PAM_PAM_APPL_H)
++#include <pam/pam_appl.h>
+ #endif
++#endif
+ 
++#if defined(HAVE_SECURITY_PAM_MODULES_H)
+ #include <security/pam_modules.h>
++#elif defined(HAVE_PAM_PAM_MODULES_H)
++#include <pam/pam_modules.h>
++#endif
+ 
+ #include "general.h" 
+ 
+
+Modified: branches/SAMBA_3_0_26/source/auth/pampass.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/auth/pampass.c	2007-05-23 19:57:13 UTC (rev 23094)
++++ branches/SAMBA_3_0_26/source/auth/pampass.c	2007-05-23 20:31:28 UTC (rev 23095)
+@@ -41,7 +41,11 @@
+  *   which determines what actions/limitations/allowances become affected.
+  *********************************************************************/
+ 
++#if defined(HAVE_SECURITY_PAM_APPL_H)
+ #include <security/pam_appl.h>
++#elif defined(HAVE_PAM_PAM_APPL_H)
++#include <pam/pam_appl.h>
++#endif
+ 
+ /*
+  * Structure used to communicate between the conversation function
+
+Modified: branches/SAMBA_3_0_26/source/configure.in
+===================================================================
+--- branches/SAMBA_3_0_26/source/configure.in	2007-05-23 19:57:13 UTC (rev 23094)
++++ branches/SAMBA_3_0_26/source/configure.in	2007-05-23 20:31:28 UTC (rev 23095)
+@@ -4248,7 +4248,11 @@
+ 
+ 
+ #################################################
+-# check for a PAM clear-text auth, accounts, password and session support
++# Check for a PAM clear-text auth, accounts, password
++# and session support. Most PAM implementations keep their
++# headers in /usr/include/security. Darwin keeps its in
++# /usr/include/pam.
++
+ with_pam_for_crypt=no
+ try_pam=no
+ AC_MSG_CHECKING(whether to try PAM support)
+@@ -4268,10 +4272,13 @@
+ 	use_pam=yes
+ 	create_pam_modules=yes
+ 
+-	AC_CHECK_HEADERS(security/pam_appl.h)
+-	if test x"$ac_cv_header_security_pam_appl_h" != x"yes"; then
++	# Most systems have PAM headers in /usr/include/security, but Darwin
++	# has them in /usr/include/pam.
++	AC_CHECK_HEADERS(security/pam_appl.h pam/pam_appl.h)
++	if test x"$ac_cv_header_security_pam_appl_h" != x"yes" -a \
++		x"$ac_cv_header_pam_pam_appl_h" != x"yes"; then
+ 		if test x"${try_pam}" = x"yes";then
+-			AC_MSG_ERROR([--with-pam=yes but security/pam_appl.h not found])
++			AC_MSG_ERROR([--with-pam=yes but pam_appl.h not found])
+ 		fi
+ 		use_pam=no
+ 		create_pam_modules=no
+@@ -4286,14 +4293,18 @@
+ 		create_pam_modules=no
+ 	fi
+ 
+-	AC_CHECK_HEADERS(security/pam_modules.h,,,[[
++	AC_CHECK_HEADERS(security/pam_modules.h pam/pam_modules.h,,,[[
+ 		#if HAVE_SECURITY_PAM_APPL_H
+ 		#include <security/pam_appl.h>
+ 		#endif
++		#if HAVE_PAM_PAM_APPL_H
++		#include <pam/pam_appl.h>
++		#endif
+ 	]])
+-       if test x"$ac_cv_header_security_pam_modules_h" = x"no"; then
++	if test x"$ac_cv_header_security_pam_modules_h" = x"no" -a \
++		x"$ac_cv_header_pam_pam_modules_h" = x"no" ; then
+ 		if test x"${try_pam}" = x"yes";then
+-			AC_MSG_ERROR([--with-pam=yes but security/pam_modules.h not found])
++			AC_MSG_ERROR([--with-pam=yes but pam_modules.h not found])
+        fi
+ 		create_pam_modules=no
+     fi
+@@ -4309,6 +4320,7 @@
+ 			# this checks are optional,
+ 			# we don't care about the results here
+ 			AC_CHECK_HEADERS(security/pam_ext.h security/_pam_macros.h)
++			AC_CHECK_HEADERS(pam/pam_ext.h pam/_pam_macros.h)
+ 			AC_CHECK_FUNC_EXT(pam_vsyslog,$PAM_LIBS)
+ 		else
+ 			AC_MSG_WARN([PAM support detected but PAM MODULES support is missing])		
+
+Modified: branches/SAMBA_3_0_26/source/lib/pam_errors.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/lib/pam_errors.c	2007-05-23 19:57:13 UTC (rev 23094)
++++ branches/SAMBA_3_0_26/source/lib/pam_errors.c	2007-05-23 20:31:28 UTC (rev 23095)
+@@ -21,7 +21,11 @@
+ #include "includes.h"
+ 
+ #ifdef WITH_PAM
++#if defined(HAVE_SECURITY_PAM_APPL_H)
+ #include <security/pam_appl.h>
++#elif defined(HAVE_PAM_PAM_APPL_H)
++#include <pam/pam_appl.h>
++#endif
+ 
+ #if defined(PAM_AUTHTOK_RECOVERY_ERR) && !defined(PAM_AUTHTOK_RECOVER_ERR)
+ #define PAM_AUTHTOK_RECOVER_ERR PAM_AUTHTOK_RECOVERY_ERR
+
+Modified: branches/SAMBA_3_0_26/source/nsswitch/pam_winbind.h
+===================================================================
+--- branches/SAMBA_3_0_26/source/nsswitch/pam_winbind.h	2007-05-23 19:57:13 UTC (rev 23094)
++++ branches/SAMBA_3_0_26/source/nsswitch/pam_winbind.h	2007-05-23 20:31:28 UTC (rev 23095)
+@@ -23,7 +23,11 @@
+ 
+ /* Solaris always uses dynamic pam modules */
+ #define PAM_EXTERN extern
++#if defined(HAVE_SECURITY_PAM_APPL_H)
+ #include <security/pam_appl.h> 
++#elif defined(HAVE_PAM_PAM_APPL_H)
++#include <pam/pam_appl.h>
++#endif
+ 
+ #ifndef PAM_AUTHTOK_RECOVER_ERR
+ #define PAM_AUTHTOK_RECOVER_ERR PAM_AUTHTOK_RECOVERY_ERR
+@@ -31,12 +35,16 @@
+ 
+ #endif /* defined(SUNOS5) || defined(SUNOS4) || defined(HPUX) || defined(FREEBSD) || defined(AIX) */
+ 
+-#ifdef HAVE_SECURITY_PAM_MODULES_H
++#if defined(HAVE_SECURITY_PAM_MODULES_H)
+ #include <security/pam_modules.h>
++#elif defined(HAVE_PAM_PAM_MODULES_H)
++#include <pam/pam_modules.h>
+ #endif
+ 
+-#ifdef HAVE_SECURITY__PAM_MACROS_H
++#if defined(HAVE_SECURITY__PAM_MACROS_H)
+ #include <security/_pam_macros.h>
++#elif defined(HAVE_PAM__PAM_MACROS_H)
++#include <pam/_pam_macros.h>
+ #else
+ /* Define required macros from (Linux PAM 0.68) security/_pam_macros.h */
+ #define _pam_drop_reply(/* struct pam_response * */ reply, /* int */ replies) \
+
+Modified: branches/SAMBA_3_0_26/source/pam_smbpass/general.h
+===================================================================
+--- branches/SAMBA_3_0_26/source/pam_smbpass/general.h	2007-05-23 19:57:13 UTC (rev 23094)
++++ branches/SAMBA_3_0_26/source/pam_smbpass/general.h	2007-05-23 20:31:28 UTC (rev 23095)
+@@ -1,9 +1,17 @@
+ #ifndef LINUX
+ /* This is only needed by modules in the Sun implementation. */
++#if defined(HAVE_SECURITY_PAM_APPL_H)
+ #include <security/pam_appl.h>
++#elif defined(HAVE_PAM_PAM_APPL_H)
++#include <pam/pam_appl.h>
++#endif
+ #endif  /* LINUX */
+ 
++#if defined(HAVE_SECURITY_PAM_MODULES_H)
+ #include <security/pam_modules.h>
++#elif defined(HAVE_PAM_PAM_MODULES_H)
++#include <pam/pam_modules.h>
++#endif
+ 
+ #ifndef PAM_AUTHTOK_RECOVER_ERR  
+ #define PAM_AUTHTOK_RECOVER_ERR PAM_AUTHTOK_RECOVERY_ERR
+
+Modified: branches/SAMBA_3_0_26/source/pam_smbpass/pam_smb_acct.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/pam_smbpass/pam_smb_acct.c	2007-05-23 19:57:13 UTC (rev 23094)
++++ branches/SAMBA_3_0_26/source/pam_smbpass/pam_smb_acct.c	2007-05-23 20:31:28 UTC (rev 23095)
+@@ -23,11 +23,19 @@
+ #ifndef LINUX
+ 
+ /* This is only used in the Sun implementation. */
++#if defined(HAVE_SECURITY_PAM_APPL_H)
+ #include <security/pam_appl.h>
++#elif defined(HAVE_PAM_PAM_APPL_H)
++#include <pam/pam_appl.h>
++#endif
+ 
+ #endif  /* LINUX */
+ 
++#if defined(HAVE_SECURITY_PAM_MODULES_H)
+ #include <security/pam_modules.h>
++#elif defined(HAVE_PAM_PAM_MODULES_H)
++#include <pam/pam_modules.h>
++#endif
+ 
+ #include "general.h"
+ 
+
+Modified: branches/SAMBA_3_0_26/source/pam_smbpass/pam_smb_auth.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/pam_smbpass/pam_smb_auth.c	2007-05-23 19:57:13 UTC (rev 23094)
++++ branches/SAMBA_3_0_26/source/pam_smbpass/pam_smb_auth.c	2007-05-23 20:31:28 UTC (rev 23095)
+@@ -24,11 +24,19 @@
+ #ifndef LINUX
+ 
+ /* This is only used in the Sun implementation. */
++#if defined(HAVE_SECURITY_PAM_APPL_H)
+ #include <security/pam_appl.h>
++#elif defined(HAVE_PAM_PAM_APPL_H)
++#include <pam/pam_appl.h>
++#endif
+ 
+ #endif  /* LINUX */
+ 
++#if defined(HAVE_SECURITY_PAM_MODULES_H)
+ #include <security/pam_modules.h>
++#elif defined(HAVE_PAM_PAM_MODULES_H)
++#include <pam/pam_modules.h>
++#endif
+ 
+ #include "general.h"
+ 
+
+Modified: branches/SAMBA_3_0_26/source/pam_smbpass/pam_smb_passwd.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/pam_smbpass/pam_smb_passwd.c	2007-05-23 19:57:13 UTC (rev 23094)
++++ branches/SAMBA_3_0_26/source/pam_smbpass/pam_smb_passwd.c	2007-05-23 20:31:28 UTC (rev 23095)
+@@ -29,10 +29,18 @@
+    and others (including FreeBSD). */
+ 
+ #ifndef LINUX
++#if defined(HAVE_SECURITY_PAM_APPL_H)
+ #include <security/pam_appl.h>
++#elif defined(HAVE_PAM_PAM_APPL_H)
++#include <pam/pam_appl.h>
+ #endif
++#endif
+ 
++#if defined(HAVE_SECURITY_PAM_MODULES_H)
+ #include <security/pam_modules.h>
++#elif defined(HAVE_PAM_PAM_MODULES_H)
++#include <pam/pam_modules.h>
++#endif
+ 
+ #include "general.h" 
+ 
+

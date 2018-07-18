@@ -1,0 +1,130 @@
+From r-help-bounces@stat.math.ethz.ch  Sun Apr 29 11:02:02 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3TF216w002088
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 29 Apr 2007 11:02:02 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3TF0l23013093;
+	Sun, 29 Apr 2007 17:01:02 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.1 required=5.0 tests=AWL autolearn=no version=3.1.8
+Received: from an-out-0708.google.com (an-out-0708.google.com [209.85.132.243])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3TF0cJn012986
+	for <r-help@stat.math.ethz.ch>; Sun, 29 Apr 2007 17:00:38 +0200
+Received: by an-out-0708.google.com with SMTP id c24so1112807ana
+	for <r-help@stat.math.ethz.ch>; Sun, 29 Apr 2007 08:00:38 -0700 (PDT)
+Received: by 10.100.111.16 with SMTP id j16mr3460521anc.1177858837976;
+	Sun, 29 Apr 2007 08:00:37 -0700 (PDT)
+Received: by 10.100.212.14 with HTTP; Sun, 29 Apr 2007 08:00:36 -0700 (PDT)
+Message-ID: <40e66e0b0704290800n21244816i1139194fcf04382c@mail.gmail.com>
+Date: Sun, 29 Apr 2007 10:00:36 -0500
+From: "Spielas Bates" <bates@stat.wisc.edu>
+To: "Michael Kubovy" <kubovy@virginia.edu>
+In-Reply-To: <442EB3D5-20AD-4BAD-BB24-4238DC5288F3@virginia.edu>
+MIME-Version: 1.0
+Content-Disposition: inline
+References: <442EB3D5-20AD-4BAD-BB24-4238DC5288F3@virginia.edu>
+X-Google-Sender-Auth: 402651bbbcdaacd4
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] Example of mcmcsamp() failing with lmer() output
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+Status: O
+Content-Length: 2775
+Lines: 79
+
+On 4/27/07, Michael Kubovy <kubovy@virginia.edu> wrote:
+> Hi,
+>
+> I would appreciate help with the following model
+>
+> <<1>>=
+> gunload <- read.table(hh('datasets/gunload.dat'), header = T)
+> gunload$method <- factor(gunload$method, labels = c('new', 'old'))
+> gunload$physique <- factor(gunload$group, labels = c('slight',
+> 'average', 'heavy'))
+> gunload$team9 <- factor(rep(1:9, each = 2))
+> @
+>
+> This is a split plot design with randomly selected teams for each
+> physique, which was crossed with two methods.
+>
+> Following the Oats example in chap. 1 of MEMSS, and adapting to lmer:
+>
+> <<2>>=
+> require(lme4)
+> gl.lmer <- lmer(rounds ~ method * physique + (1 | physique/team),
+> data = gunload)
+> mcmcsamp(gl.lmer)
+> @
+> lmer runs as expected, but mcmcsamp() gives:
+> Error: Leading minor of order 1 in downdated X'X is not positive
+> definite
+> Error in t(.Call(mer_MCMCsamp, object, saveb, n, trans, verbose,
+> deviance)) :
+>         error in evaluating the argument 'x' in selecting a method for
+> function 't'
+
+I think you are overfitting the model - you have a fixed effect for
+physique and a random effect for physique.  This is not the same as
+the Oats example where there is a fixed effect for variety and a
+random effect for variety within block, which designates the plot
+within the block.
+
+Try fitting the model with the random effects as  (1|physique:team)
+and you will see that you get the same fitted values but you are able
+to run mcmcsamp on this fit.
+
+
+> I tried:
+>
+> <<3>>=
+> require(nlme)
+> gl.lme <- lme(rounds ~ method * physique, random = ~1 | physique/
+> team, data = gunload)
+> @
+> which gave all the expected output except that two p-values were NaN.
+>
+> Which aspect of the data is making the simulation fail, and is there
+> anything to be done about it?
+>
+> _____________________________
+> Professor Michael Kubovy
+> University of Virginia
+> Department of Psychology
+> USPS:     P.O.Box 400400    Charlottesville, VA 22904-4400
+> Parcels:    Room 102        Gilmer Hall
+>          McCormick Road    Charlottesville, VA 22903
+> Office:    B011    +1-434-982-4729
+> Lab:        B019    +1-434-982-4751
+> Fax:        +1-434-982-4766
+> WWW:    http://www.people.virginia.edu/~mk9y/
+>
+> ______________________________________________
+> R-help@stat.math.ethz.ch mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-help
+> PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+> and provide commented, minimal, self-contained, reproducible code.
+>
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

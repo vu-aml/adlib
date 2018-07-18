@@ -1,0 +1,181 @@
+From sugar-bounces@laptop.org  Wed May 16 06:40:30 2007
+Return-Path: <sugar-bounces@laptop.org>
+Received: from pedal.laptop.org (pedal.laptop.org [18.85.2.148])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4GAeUqD017489
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 16 May 2007 06:40:30 -0400
+Received: from pedal.laptop.org (localhost [127.0.0.1])
+	by pedal.laptop.org (Postfix) with ESMTP id 864604EEB9;
+	Wed, 16 May 2007 06:40:01 -0400 (EDT)
+X-Original-To: sugar@laptop.org
+Delivered-To: sugar@laptop.org
+Received: from spam.laptop.org (spam.laptop.org [18.85.46.23])
+	by pedal.laptop.org (Postfix) with ESMTP id 286234EEB9
+	for <sugar@laptop.org>; Wed, 16 May 2007 06:40:00 -0400 (EDT)
+X-ASG-Debug-ID: 1179312024-56e400040000-3Xmyjt
+X-Barracuda-URL: http://18.85.46.23:8000/cgi-bin/mark.cgi
+X-Barracuda-Connect: dhansak.collabora.co.uk[195.10.223.134]
+X-Barracuda-Start-Time: 1179312024
+X-Barracuda-Encrypted: DHE-RSA-AES256-SHA
+Received: from dhansak.collabora.co.uk (dhansak.collabora.co.uk
+	[195.10.223.134])
+	(using TLSv1 with cipher DHE-RSA-AES256-SHA (256/256 bits))
+	(No client certificate requested)
+	by spam.laptop.org (Spam Firewall) with ESMTP id CEC17BAA8
+	for <sugar@laptop.org>; Wed, 16 May 2007 06:40:24 -0400 (EDT)
+Received: by dhansak.collabora.co.uk (Postfix, from userid 1014)
+	id E950230AFBBF; Wed, 16 May 2007 11:40:21 +0100 (BST)
+Date: Wed, 16 May 2007 11:40:15 +0100
+From: Simon McVittie <simon.mcvittie@collabora.co.uk>
+To: sugar@laptop.org
+X-ASG-Orig-Subj: [PATCH] services/presence/server_plugin.py: Handle presence
+	more correctly.
+Message-ID: <20070516104015.GA24138@celebrin.pseudorandom.co.uk>
+Mail-Followup-To: sugar@laptop.org
+MIME-Version: 1.0
+Content-Disposition: inline
+User-Agent: Mutt/1.5.13 (2006-08-11)
+X-Barracuda-Bayes: INNOCENT GLOBAL 0.0000 1.0000 -2.0210
+X-Barracuda-Virus-Scanned: by Barracuda Spam Firewall at laptop.org
+X-Barracuda-Spam-Score: -2.02
+X-Barracuda-Spam-Status: No, SCORE=-2.02 using global scores of TAG_LEVEL=3.5
+	QUARANTINE_LEVEL=1000.0 KILL_LEVEL=5.5 tests=
+X-Barracuda-Spam-Report: Code version 3.1, rules version 3.1.17105
+	Rule breakdown below
+	pts rule name              description
+	---- ----------------------
+	--------------------------------------------------
+Subject: [sugar] [PATCH] services/presence/server_plugin.py: Handle presence
+	more correctly.
+X-BeenThere: sugar@laptop.org
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Discussion of OLPC design,
+	desktop platform and user experience" <sugar.laptop.org>
+List-Unsubscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=unsubscribe>
+List-Archive: <http://mailman.laptop.org/pipermail/sugar>
+List-Post: <mailto:sugar@laptop.org>
+List-Help: <mailto:sugar-request@laptop.org?subject=help>
+List-Subscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: sugar-bounces@laptop.org
+Errors-To: sugar-bounces@laptop.org
+
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA1
+
+This avoids unnecessary attempts to look up the buddy properties of
+channel-specific handles (which doesn't work) by only looking up the buddy
+properties of people we're subscribed to.
+Also, this approves subscription requests that come in while we're online,
+rather than handling them when we next go from offline to online.
+- ---
+ services/presence/server_plugin.py |   53 +++++++++++++++++++++++++++++++++---
+ 1 files changed, 49 insertions(+), 4 deletions(-)
+
+diff --git a/services/presence/server_plugin.py b/services/presence/server_plugin.py
+index b3b9482..ac569ba 100644
+- --- a/services/presence/server_plugin.py
++++ b/services/presence/server_plugin.py
+@@ -320,11 +320,22 @@ class ServerPlugin(gobject.GObject):
+ 
+         # the group of contacts who may receive your presence
+         publish = self._request_list_channel('publish')
+- -        publish_handles, local_pending, remote_pending = publish[CHANNEL_INTERFACE_GROUP].GetAllMembers()
++        self._publish_channel = publish
++        publish[CHANNEL_INTERFACE_GROUP].connect_to_signal('MembersChanged',
++                self._publish_members_changed_cb)
++        publish_handles, local_pending, remote_pending = \
++                publish[CHANNEL_INTERFACE_GROUP].GetAllMembers()
+ 
+         # the group of contacts for whom you wish to receive presence
+         subscribe = self._request_list_channel('subscribe')
+- -        subscribe_handles = subscribe[CHANNEL_INTERFACE_GROUP].GetMembers()
++        self._subscribe_channel = subscribe
++        subscribe[CHANNEL_INTERFACE_GROUP].connect_to_signal('MembersChanged',
++                self._subscribe_members_changed_cb)
++        subscribe_handles, subscribe_lp, subscribe_rp = \
++                subscribe[CHANNEL_INTERFACE_GROUP].GetAllMembers()
++        self._subscribe_members = set(subscribe_handles)
++        self._subscribe_local_pending = set(subscribe_lp)
++        self._subscribe_remote_pending = set(subscribe_rp)
+ 
+         if local_pending:
+             # accept pending subscriptions
+@@ -364,8 +375,7 @@ class ServerPlugin(gobject.GObject):
+         self._set_self_current_activity()
+         self._set_self_avatar()
+ 
+- -        # Request presence for everyone on the channel
+- -        subscribe_handles = subscribe[CHANNEL_INTERFACE_GROUP].GetMembers()
++        # Request presence for everyone we're subscribed to
+         self._conn[CONN_INTERFACE_PRESENCE].RequestPresence(subscribe_handles)
+         return True
+ 
+@@ -690,6 +700,13 @@ class ServerPlugin(gobject.GObject):
+ 
+     def _contact_online(self, handle):
+         """Handle a contact coming online"""
++        if (handle not in self._subscribe_members and
++                handle not in self._subscribe_local_pending and
++                handle not in self._subscribe_remote_pending):
++            # it's probably a channel-specific handle - can't create a Buddy
++            # object
++            return
++
+         self._online_contacts[handle] = None
+         if handle == self._conn[CONN_INTERFACE].GetSelfHandle():
+             jid = self._conn[CONN_INTERFACE].InspectHandles(CONNECTION_HANDLE_TYPE_CONTACT, [handle])[0]
+@@ -702,6 +719,34 @@ class ServerPlugin(gobject.GObject):
+             reply_handler=lambda *args: self._contact_online_properties_cb(handle, *args),
+             error_handler=lambda *args: self._contact_online_properties_error_cb(handle, *args))
+ 
++    def _subscribe_members_changed_cb(self, added, removed, local_pending,
++            remote_pending, actor, reason):
++        for handle in added:
++            self._subscribe_members.add(handle)
++        for handle in local_pending:
++            self._subscribe_local_pending.add(handle)
++        for handle in remote_pending:
++            self._subscribe_remote_pending.add(handle)
++        for handle in removed:
++            self._subscribe_members.discard(handle)
++            self._subscribe_local_pending.discard(handle)
++            self._subscribe_remote_pending.discard(handle)
++
++    def _publish_members_changed_cb(self, added, removed, local_pending,
++            remote_pending, actor, reason):
++
++        if local_pending:
++            # accept all requested subscriptions
++            self._publish_channel[CHANNEL_INTERFACE_GROUP].AddMembers(
++                    local_pending, '')
++
++        # subscribe to people who've subscribed to us, if necessary
++        added = list(set(added) - self._subscribe_members
++                     - self._subscribe_remote_pending)
++        if added:
++            self._subscribe_channel[CHANNEL_INTERFACE_GROUP].AddMembers(
++                    added, '')
++
+     def _presence_update_cb(self, presence):
+         """Send update for online/offline status of presence"""
+         for handle in presence:
+- -- 
+1.5.2-rc2.GIT
+
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.6 (GNU/Linux)
+Comment: OpenPGP key: http://www.pseudorandom.co.uk/2003/contact/ or pgp.net
+
+iD8DBQFGSt+PWSc8zVUw7HYRAmTjAJ4wT5vmv7wOLkNeXekAcee4H2eR/ACgh+I3
+wf36dxS4smqSWF1atTqgBQA=
+=D7w9
+-----END PGP SIGNATURE-----
+_______________________________________________
+Sugar mailing list
+Sugar@laptop.org
+http://mailman.laptop.org/mailman/listinfo/sugar
+

@@ -2,7 +2,11 @@ from typing import List
 from scipy.sparse import csr_matrix
 from data_reader.binary_input import Instance, BinaryFeatureVector
 from data_reader.real_input import RealFeatureVector
+from sklearn.feature_selection import SelectFromModel
+from sklearn.feature_selection import chi2
+from sklearn.feature_selection import SelectKBest
 from data_reader.dataset import EmailDataset
+from sklearn.ensemble import ExtraTreesClassifier
 import math
 
 
@@ -48,6 +52,20 @@ def find_max(instances: List[Instance]):
         max_val_list.append(max)
     return max_val_list
 
+    # num_features = instances[0].get_feature_vector().feature_count
+    # indices = []
+    # data = []
+    # for i in range(num_features):
+    #    max = 0
+    #    for instance in instances:
+    #        value = instance.get_feature_vector().get_feature(i)
+    #        if value >= max:
+    #            max = value
+    #    if max != 0:
+    #        indices.append(i)
+    #        data.append(max)
+    # return RealFeatureVector(num_features, indices, data)
+
 
 def find_min(instances: List[Instance]):
     num_features = instances[0].get_feature_vector().feature_count
@@ -81,9 +99,64 @@ def sparsify(instances: List[Instance]):
         ind_ += 1
         indices += fv.indices
         data.extend(instance.get_feature_vector().data)
-    a = len(data)
-    b = len(indices)
+
     return (labels, csr_matrix((data, indices, indptr), shape=(len(instances), num_features)))
+
+
+def csr_mat_to_instances(csr_mat, labels, binary=False):
+    """
+    Return a list of instances
+    :param nd_arr:
+    :param labels:
+    :return:
+    """
+    data = csr_mat.data
+    indices = csr_mat.indices
+    indptr = csr_mat.indptr
+    instance_len, num_features = csr_mat.shape
+    instance_lst = []
+    for i in range(instance_len):
+        label = labels[i]
+        instance_data = data[indptr[i]:indptr[i + 1]]
+        instance_indices = list(indices[indptr[i]:indptr[i + 1]])
+        if binary:
+            instance_lst.append(
+                Instance(label, BinaryFeatureVector(num_features, instance_indices)))
+        else:
+            instance_lst.append(
+                Instance(label, RealFeatureVector(num_features, instance_indices, instance_data)))
+    return instance_lst
+
+
+def nd_arr_to_instances(nd_arr, labels=None, binary=False):
+    """
+    Return a list of instances
+    :param nd_arr:
+    :param labels:
+    :param binary:
+    :return:
+    """
+    num_instances = nd_arr.shape[0]
+    if labels is None:
+        labels = nd_arr[:, :1]
+        data = nd_arr[:, 1:]
+        num_features = nd_arr.shape[1] - 1
+    else:
+        data = nd_arr
+        num_features = nd_arr.shape[1]
+
+    instance_lst = []
+    for i in range(num_instances):
+        if binary:
+            mat_indices = [x for x in range(0, num_features) if data[i][x] != 0]
+            instance_lst.append(
+                Instance(labels[i], BinaryFeatureVector(num_instances, mat_indices)))
+        else:
+            mat_indices = [x for x in range(0, num_features) if data[i][x] != 0]
+            mat_data = [data[i][x] for x in range(0, num_features) if data[0][x] != 0]
+            instance_lst.append(
+                Instance(labels[i], RealFeatureVector(num_instances, mat_indices, mat_data)))
+    return instance_lst
 
 
 def load_dataset(emailData: EmailDataset) -> List[Instance]:
@@ -127,3 +200,12 @@ def summarize(instances):
             data.append(instance.get_feature_vector().get_feature(i))
         summaries.append((mean(data), stdev(data)))
     return summaries
+
+
+def feature_selection(instances, max_features, selection_type="chi2", binary=False):
+    label, sparse_data = sparsify(instances)
+    data = sparse_data.toarray()
+    if selection_type == "chi2":
+        data_new = SelectKBest(chi2, k=max_features).fit_transform(data, label)
+        return nd_arr_to_instances(data_new, label, binary)
+    # TODO:ADD Other data selection methods if necessary

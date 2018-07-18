@@ -1,0 +1,249 @@
+From r-help-bounces@stat.math.ethz.ch  Thu May 24 23:23:22 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4P3NKqD013903
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 24 May 2007 23:23:21 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4P3Ml4v010754;
+	Fri, 25 May 2007 05:22:54 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=5.0 tests=AWL, BAYES_50,
+	FORGED_RCVD_HELO autolearn=no version=3.1.8
+Received: from markov.stats.ox.ac.uk (markov.stats.ox.ac.uk [163.1.210.1])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4P3Mc8w010702
+	for <r-help@stat.math.ethz.ch>; Fri, 25 May 2007 05:22:38 +0200
+Received: from gannet.stats.ox.ac.uk (gannet.stats [163.1.211.17])
+	by markov.stats.ox.ac.uk (8.13.6/8.13.6) with ESMTP id l4P3MRfX002424; 
+	Fri, 25 May 2007 04:22:28 +0100 (BST)
+Date: Fri, 25 May 2007 04:22:27 +0100 (BST)
+From: Prof Brian Ripley <ripley@stats.ox.ac.uk>
+To: Deepankar Basu <basu.15@osu.edu>
+In-Reply-To: <1180044834.14913.31.camel@localhost>
+Message-ID: <Pine.LNX.4.64.0705250403470.26205@gannet.stats.ox.ac.uk>
+References: <1180044834.14913.31.camel@localhost>
+MIME-Version: 1.0
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] Problem with numerical integration and optimization with
+ BFGS
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+You are trying to use a derivative-based optimization method without 
+supplying derivatives.  This will use numerical approoximations to the 
+derivatives, and your objective function will not be suitable as it is 
+internally using adaptive numerical quadrature and hence is probably not 
+close enough to a differentiable function (it may well have steps).
+
+I believe you can integrate analytically (the answer will involve pnorm), 
+and that you can also find analytical derivatives.
+
+Using (each of) numerical optimization and integration is a craft, and it 
+seems you need to know more about it.  The references on ?optim are too 
+advanced I guess, so you could start with Chapter 16 of MASS and its 
+references.
+
+On Thu, 24 May 2007, Deepankar Basu wrote:
+
+> Hi R users,
+>
+> I have a couple of questions about some problems that I am facing with
+> regard to numerical integration and optimization of likelihood
+> functions. Let me provide a little background information: I am trying
+> to do maximum likelihood estimation of an econometric model that I have
+> developed recently. I estimate the parameters of the model using the
+> monthly US unemployment rate series obtained from the Federal Reserve
+> Bank of St. Louis. (The data is freely available from their web-based
+> database called FRED-II).
+>
+> For my model, the likelihood function for each observation is the sum of
+> three integrals. The integrand in each of these integrals is of the
+> following form:
+>
+> A*exp(B+C*x-D*x^2)
+>
+> where A, B, C and D are constants, exp() is the exponential function and
+> x is the variable of integration. The constants A and D are always
+> positive; B is always negative, while there is no a priori knowledge
+> about the sign of C. All the constants are finite.
+>
+> Of the three integrals, one has finite limits while the other two have
+> the following limits:
+>
+> lower = -Inf
+> upper = some finite number (details can be found in the code below)
+
+Try integrating that analytically by change of variable to a normal CDF.
+
+
+> My problem is the following: when I try to maximize the log-likelihood
+> function using "optim" with method "BFGS", I get the following error
+> message (about the second integral):
+>
+>> out <- optim(alpha.start, LLK, gr=NULL, method="BFGS", y=urate$y)
+> Error in integrate(f3, lower = -Inf, upper = upr2) :
+>        the integral is probably divergent
+>
+> Since I know that all the three integrals are convergent, I do not
+> understand why I am getting this error message. My first question: can
+> someone explain what mistake I am making?
+>
+> What is even more intriguing is that when I use the default method
+> (Nelder-Mead) in "optim" instead of BFGS, I do not get any such error
+> message. Since both methods (Nelder-Mead and BFGS) will need to evaluate
+> the integrals, my second question is: why this difference?
+>
+> Below, I am providing the code that I use. Any help will be greatly
+> appreciated.
+>
+>
+> Deepankar
+>
+>
+> ************ CODE START *******************
+>
+>
+>
+> #############################
+> # COMPUTING THE LOGLIKELIHOOD
+> # USING NUMERICAL INTEGRALS
+> #############################
+>
+> LLK <- function(alpha, y) {
+>
+>  n <- length(y)
+>  lglik <- numeric(n) # TO BE SUMMED LATER TO GET THE LOGLIKELIHOOD
+>
+>           lambda <- numeric(n-1)    # GENERATING *lstar*
+>           for (i in 1:(n-1)) {      # TO USE IN THE
+>           lambda[i] <- y[i+1]/y[i]  # RE-PARAMETRIZATION BELOW
+>           }
+>           lstar <- (min(lambda)-0.01)
+>
+>
+> # NOTE RE-PARAMETRIZATION
+> # THESE RESTRICTIONS EMERGE FROM THE MODEL
+>
+>  muep <- alpha[1]                                      # NO RESTRICTION
+>  sigep <-  0.01 + exp(alpha[2])                        # greater than
+> 0.01
+>  sigeta <- 0.01 + exp(alpha[3])                        # greater than
+> 0.01
+>  rho2 <- 0.8*sin(alpha[4])                             # between -0.8
+> and 0.8
+>  rho1 <- lstar*abs(alpha[5])/(1+abs(alpha[5]))         # between 0 and
+> lstar
+>  delta <- 0.01 + exp(alpha[6])                         # greater than
+> 0.01
+>
+>
+> ##########################################
+> # THE THREE FUNCTIONS TO INTEGRATE
+> # FOR COMPUTING THE LOGLIKELIHOOD
+> ##########################################
+>
+>  denom <- 2*pi*sigep*sigeta*(sqrt(1-rho2^2)) # A CONSTANT TO BE USED
+>                                              # FOR DEFINING THE
+>                                              # THREE FUNCTIONS
+>
+>
+>  f1 <- function(z1) {  # FIRST FUNCTION
+>
+>       b11 <- ((z1-muep)^2)/((-2)*(1-rho2^2)*(sigep^2))
+>       b12 <-
+> (rho2*(z1-muep)*(y[i]-y[i-1]+delta))/((1-rho2^2)*sigep*sigeta)
+>       b13 <- ((y[i]-y[i-1]+delta)^2)/((-2)*(1-rho2^2)*(sigeta^2))
+>
+>     return((exp(b11+b12+b13))/denom)
+>  }
+>
+>  f3 <- function(z3) { # SECOND FUNCTION
+>
+>       b31 <- ((y[i]-rho1*y[i-1]-muep)^2)/((-2)*(1-rho2^2)*(sigep^2))
+>       b32 <-
+> (rho2*(y[i]-rho1*y[i-1]-muep)*z3)/((1-rho2^2)*sigep*sigeta)
+>       b33 <- ((z3)^2)/((-2)*(1-rho2^2)*(sigeta^2))
+>
+>     return((exp(b31+b32+b33))/denom)
+>  }
+>
+>  f5 <- function(z5) { # THIRD FUNCTION
+>
+>       b51 <- ((-y[i]+rho1*y[i-1]-muep)^2)/((-2)*(1-rho2^2)*sigep^2)
+>       b52 <-
+> (rho2*(-y[i]+rho1*y[i-1]-muep)*(z5))/((1-rho2^2)*sigep*sigeta)
+>       b53 <- ((z5)^2)/((-2)*(1-rho2^2)*(sigeta^2))
+>
+>     return((exp(b51+b52+b53))/denom)
+>  }
+>
+>
+>  for (i in 2:n) {   # START FOR LOOP
+>
+>        upr1 <- (y[i]-rho1*y[i-1])
+>        upr2 <- (y[i]-y[i-1]+delta)
+>
+>     # INTEGRATING THE THREE FUNCTIONS
+>      out1 <- integrate(f1, lower = (-1)*upr1, upper = upr1)
+>      out3 <- integrate(f3, lower = -Inf, upper = upr2)
+>      out5 <- integrate(f5, lower= -Inf, upper = upr2)
+>
+>       pdf <- (out1$val + out3$val + out5$val)
+>
+>     lglik[i] <- log(pdf) # LOGLIKELIHOOD FOR OBSERVATION i
+>
+>     }               # END FOR LOOP
+>
+> return(-sum(lglik)) # RETURNING NEGATIVE OF THE LOGLIKELIHOOD
+>                     # BECAUSE optim DOES MINIMIZATION BY DEFAULT
+> }
+>
+> ***************** CODE ENDS *********************************
+>
+> Then I use:
+>
+>> urate <- read.table("~/Desktop/UNRATE1.txt", header=TRUE) # DATA
+>> alpha.start <- c(0.5, -1, -1, 0, 1, -1) # STARTING VALUES
+>> out <- optim(alpha.start, LLK, gr=NULL, y=urate$y) # THIS GIVES NO
+> ERROR
+>
+> or
+>
+>> out <- optim(alpha.start, LLK, gr=NULL, method="BFGS", y=urate$y)
+> Error in integrate(f3, lower = -Inf, upper = upr2) :
+>        the integral is probably divergent
+>
+> ______________________________________________
+> R-help@stat.math.ethz.ch mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-help
+> PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+> and provide commented, minimal, self-contained, reproducible code.
+>
+
+-- 
+Brian D. Ripley,                  ripley@stats.ox.ac.uk
+Professor of Applied Statistics,  http://www.stats.ox.ac.uk/~ripley/
+University of Oxford,             Tel:  +44 1865 272861 (self)
+1 South Parks Road,                     +44 1865 272866 (PA)
+Oxford OX1 3TG, UK                Fax:  +44 1865 272595
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

@@ -1,0 +1,124 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun Apr 22 11:14:56 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3MFEt0I021422
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 22 Apr 2007 11:14:55 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id B5D01163A43
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 22 Apr 2007 15:14:30 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.3 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1004)
+	id 1D60E162C2E; Sun, 22 Apr 2007 15:13:51 +0000 (GMT)
+To: samba-cvs@samba.org
+From: gd@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070422151351.1D60E162C2E@lists.samba.org>
+Date: Sun, 22 Apr 2007 15:13:51 +0000 (GMT)
+Subject: svn commit: samba r22459 - in branches/SAMBA_3_0/source/libads: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2080
+Lines: 82
+
+Author: gd
+Date: 2007-04-22 15:13:50 +0000 (Sun, 22 Apr 2007)
+New Revision: 22459
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22459
+
+Log:
+Adding ads_get_dn_from_extended_dn(), in preparation of making ranged LDAP
+queries more generic. Michael, feel free to overwrite these and the following.
+
+Guenther
+
+Modified:
+   branches/SAMBA_3_0/source/libads/ldap.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/libads/ldap.c
+===================================================================
+--- branches/SAMBA_3_0/source/libads/ldap.c	2007-04-22 14:51:07 UTC (rev 22458)
++++ branches/SAMBA_3_0/source/libads/ldap.c	2007-04-22 15:13:50 UTC (rev 22459)
+@@ -2678,23 +2678,57 @@
+ }
+ 
+ /**
++ * pull a dn from an extended dn string
++ * @param mem_ctx TALLOC_CTX 
++ * @param extended_dn string
++ * @param dn pointer to the dn
++ * @return boolean inidicating success
++ **/
++BOOL ads_get_dn_from_extended_dn(TALLOC_CTX *mem_ctx, 
++				 const char *extended_dn,
++				 char **dn)
++{
++	char *p;
++	pstring tok;
++
++	if (!extended_dn) {
++		return False;
++	}
++
++	while (next_token(&extended_dn, tok, ";", sizeof(tok))) {
++		p = tok;
++	}
++
++	if ((*dn = talloc_strdup(mem_ctx, p)) == NULL) {
++		return False;
++	}
++
++	return True;
++}
++
++/**
+  * pull a DOM_SID from an extended dn string
+  * @param mem_ctx TALLOC_CTX 
++ * @param extended_dn string
+  * @param flags string type of extended_dn
+  * @param sid pointer to a DOM_SID
+  * @return boolean inidicating success
+  **/
+ BOOL ads_get_sid_from_extended_dn(TALLOC_CTX *mem_ctx, 
+-				  const char *dn, 
++				  const char *extended_dn, 
+ 				  enum ads_extended_dn_flags flags, 
+ 				  DOM_SID *sid)
+ {
+-	char *p, *q;
++	char *p, *q, *dn;
+ 
+-	if (!dn) {
++	if (!extended_dn) {
+ 		return False;
+ 	}
+ 
++	/* otherwise extended_dn gets stripped off */
++	if ((dn = talloc_strdup(mem_ctx, extended_dn)) == NULL) {
++		return False;
++	}
+ 	/* 
+ 	 * ADS_EXTENDED_DN_HEX_STRING:
+ 	 * <GUID=238e1963cb390f4bb032ba0105525a29>;<SID=010500000000000515000000bb68c8fd6b61b427572eb04556040000>;CN=gd,OU=berlin,OU=suse,DC=ber,DC=suse,DC=de
+

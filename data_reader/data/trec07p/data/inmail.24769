@@ -1,0 +1,149 @@
+From r-help-bounces@stat.math.ethz.ch  Sun Apr 29 18:20:49 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3TMKm6w005996
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 29 Apr 2007 18:20:48 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3TMJU4L018854;
+	Mon, 30 Apr 2007 00:19:51 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.3 required=5.0 tests=AWL,
+	BAYES_50 autolearn=no version=3.1.8
+Received: from smtp103.sbc.mail.mud.yahoo.com (smtp103.sbc.mail.mud.yahoo.com
+	[68.142.198.202])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with SMTP id l3TMJNGo018825
+	for <R-help@stat.math.ethz.ch>; Mon, 30 Apr 2007 00:19:24 +0200
+Received: (qmail 72947 invoked from network); 29 Apr 2007 22:19:22 -0000
+Received: from unknown (HELO ?192.168.1.3?)
+	(jarrettbyrnes@sbcglobal.net@69.107.103.90 with plain)
+	by smtp103.sbc.mail.mud.yahoo.com with SMTP; 29 Apr 2007 22:19:22 -0000
+X-YMail-OSG: dbbeE9oVM1nmwYOg9FpGJLIS5su1fNfs3xB46js9vqfbTZEkjzR2TfoeNFSlxoXhgDiNy8_jKhQ_4enY3paPP6xH7OkVS7Btdvkxicus16z83ngvvno-
+Mime-Version: 1.0 (Apple Message framework v752.2)
+Message-Id: <8B99A885-2536-4ED9-ACD9-384F96CE09C1@ucdavis.edu>
+From: Jarrett Byrnes <jebyrnes@ucdavis.edu>
+Date: Sun, 29 Apr 2007 15:19:25 -0700
+To: R-help@stat.math.ethz.ch
+X-Mailer: Apple Mail (2.752.2)
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Subject: [R] Going from Coda Files to R2WinBUGS
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+Status: O
+Content-Length: 3137
+Lines: 100
+
+I'm currently using JAGS as my Bayesian program of choice due to  
+working off of an older mac running OSX.  I'd like to utilize some of  
+the functions from R2WinBUGS, however.  As such, I'm attempting to  
+write something to go from coda output dumped by JAGS into the bugs  
+object format - I've looked for functions that will convert from an  
+mcmc object to a bugs object, but have had no luck as of yet.  I've  
+attempted to adapt Yu-Sung Su's method over at http:// 
+yusung.blogspot.com/2007/01/analyzing-coda-statistics-produced- 
+by.html .  However, whenever I run it for a coda file set generated  
+by jags, I get the following error:
+
+
+Error in if (trans[i] == "log") { : missing value where TRUE/FALSE  
+needed
+
+This is for a run whose jags.ind is as follows
+
+cypraea.effect	1	10000
+intercept	10001	20000
+sponge.sd	20001	30000
+deviance	30001	40000
+
+When I debuged R2WinBUGS:::monitor, which is where the whole thing  
+borks, I found that trans is as follows
+
+cypraea.effect      intercept      sponge.sd       deviance
+             ""           	  NA		             NA             		NA
+
+And the error comes when first looking at intercept, which is NA, not  
+"".  I am somewhat unclear as to why this is so.
+
+The code for the method is as follows.  Any thoughts would be greatly  
+appreciated, and if this works out, feel free to use it yourself!   
+Could be quite useful!
+
+-Jarrett
+
+
+#note, the test run was something along the lines of c.bugs<-coda2bugs 
+(n.burnin=1000)
+
+coda2bugs<-function(codafile="jags.out", indexfile="jags.ind",  
+n.chains=1,
+					n.iter=NA, n.burnin=NA, n.thin=1, DIC=FALSE, file.rm=T, ...){
+
+		require(R2WinBUGS)
+		
+
+		#first, split up the coda file for R2WinBUGS
+		codaSplit(codafile, indexfile)
+		
+		#get the parameter names
+		index.table<-read.table(indexfile)
+		
+		varNames<-as.vector(index.table[,1])
+
+		#determine the n.iter
+		if(is.na(n.iter)){n.iter<-index.table[1,3]}
+		
+		#you will need to put the n.burnin in yourself
+		#for the cypraea example, it is 1000
+		
+		bugs.fit <- R2WinBUGS:::bugs.sims(varNames, n.chains=n.chains,
+				 n.iter=n.iter, n.burnin=n.burnin, n.thin=n.thin, DIC = DIC)
+		
+		class(bugs.fit)<-"bugs"
+		
+		bugs.fit$isDIC <- FALSE
+		
+		#clean up the new coda files
+		if(file.rm==T){
+			file.remove("codaIndex.txt")
+			for(i in rownames(index.table)){
+				file.remove(paste("coda",i,".txt",sep=""))
+			}
+		}
+		
+		
+		return(bugs.fit)
+}
+
+codaSplit<-function(codafile="jags.out", indexfile="jags.ind"){
+	index.table<-read.table(indexfile)
+	write.table(index.table, "codaIndex.txt", quote=F, row.names=F,  
+col.names=F, sep="\t")
+	coda.table<-read.table(codafile)
+	
+	#write the new coda files
+	for(i in rownames(index.table)){
+		new.file=paste("coda",i,".txt", sep="")
+		new.out<-coda.table[index.table[i,2]:index.table[i,3],]
+		write.table(new.out, new.file, row.names=F, col.names=F, sep="\t")
+	}
+}
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

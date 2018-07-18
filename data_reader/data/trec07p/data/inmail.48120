@@ -1,0 +1,171 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu May 31 20:04:54 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5104shB002399
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 31 May 2007 20:04:54 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id EFF00162AE4
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri,  1 Jun 2007 00:04:48 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1017)
+	id CC3C3162AC3; Fri,  1 Jun 2007 00:04:15 +0000 (GMT)
+To: samba-cvs@samba.org
+From: obnox@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070601000415.CC3C3162AC3@lists.samba.org>
+Date: Fri,  1 Jun 2007 00:04:15 +0000 (GMT)
+Subject: svn commit: samba r23285 - in
+	branches/SAMBA_3_0_26/source/nsswitch: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: obnox
+Date: 2007-06-01 00:04:13 +0000 (Fri, 01 Jun 2007)
+New Revision: 23285
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23285
+
+Log:
+r23283 and r23284 also for SAMBA_3_0_26.
+
+Use a temporary talloc context in ads:lookup_groupmem and clean up
+at the end. And fix one nasty typo.
+
+
+Modified:
+   branches/SAMBA_3_0_26/source/nsswitch/winbindd_ads.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0_26/source/nsswitch/winbindd_ads.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/nsswitch/winbindd_ads.c	2007-05-31 23:58:56 UTC (rev 23284)
++++ branches/SAMBA_3_0_26/source/nsswitch/winbindd_ads.c	2007-06-01 00:04:13 UTC (rev 23285)
+@@ -912,12 +912,20 @@
+ 	uint32 *name_types_nocache = NULL;
+ 	char **domains_nocache = NULL;     /* only needed for rpccli_lsa_lookup_sids */
+ 	uint32 num_nocache = 0;
++	TALLOC_CTX *tmp_ctx = NULL;
+ 
+ 	DEBUG(10,("ads: lookup_groupmem %s sid=%s\n", domain->name, 
+ 		  sid_string_static(group_sid)));
+ 
+ 	*num_names = 0;
+ 
++	tmp_ctx = talloc_new(mem_ctx);
++	if (!tmp_ctx) {
++		DEBUG(1, ("ads: lookup_groupmem: talloc failed\n"));
++		status = NT_STATUS_NO_MEMORY;
++		goto done;
++	}
++
+ 	if ( !winbindd_can_contact_domain( domain ) ) {
+ 		DEBUG(10,("lookup_groupmem: No incoming trust for domain %s\n",
+ 			  domain->name));		
+@@ -932,8 +940,8 @@
+ 	}
+ 
+ 	/* search for all members of the group */
+-	if (!(ldap_exp = talloc_asprintf(mem_ctx, "(objectSid=%s)",
+-				         sid_string_static(group_sid)))) 
++	if (!(ldap_exp = talloc_asprintf(tmp_ctx, "(objectSid=%s)",
++					 sid_string_static(group_sid)))) 
+ 	{
+ 		DEBUG(1, ("ads: lookup_groupmem: talloc_asprintf for ldap_exp failed!\n"));
+ 		status = NT_STATUS_NO_MEMORY;
+@@ -944,7 +952,7 @@
+ 	args.val = ADS_EXTENDED_DN_HEX_STRING;
+ 	args.critical = True;
+ 
+-	rc = ads_ranged_search(ads, mem_ctx, LDAP_SCOPE_SUBTREE, ads->config.bind_path, 
++	rc = ads_ranged_search(ads, tmp_ctx, LDAP_SCOPE_SUBTREE, ads->config.bind_path, 
+ 			       ldap_exp, &args, "member", &members, &num_members);
+ 
+ 	if (!ADS_ERR_OK(rc)) {
+@@ -967,17 +975,17 @@
+ 	 * we try to resolve as many sids as possible from the
+ 	 * cache. Only the rest is passed to the lsa_lookup_sids call. */
+ 	
+-	if (num_names) {
++	if (num_members) {
+ 		(*sid_mem) = TALLOC_ZERO_ARRAY(mem_ctx, DOM_SID, num_members);
+ 		(*names) = TALLOC_ZERO_ARRAY(mem_ctx, char *, num_members);
+ 		(*name_types) = TALLOC_ZERO_ARRAY(mem_ctx, uint32, num_members);
+-		(sid_mem_nocache) = TALLOC_ZERO_ARRAY(mem_ctx, DOM_SID, num_members);
++		(sid_mem_nocache) = TALLOC_ZERO_ARRAY(tmp_ctx, DOM_SID, num_members);
+ 
+ 		if ((members == NULL) || (*sid_mem == NULL) ||
+ 		    (*names == NULL) || (*name_types == NULL) ||
+ 		    (sid_mem_nocache == NULL))
+ 		{
+-			DEBUG(1, ("talloc failed\n"));
++			DEBUG(1, ("ads: lookup_groupmem: talloc failed\n"));
+ 			status = NT_STATUS_NO_MEMORY;
+ 			goto done;
+ 		}
+@@ -993,7 +1001,7 @@
+ 		char *name, *domain_name;
+ 		DOM_SID sid;
+ 
+-	        if (!ads_get_sid_from_extended_dn(mem_ctx, members[i], args.val, &sid)) {
++	        if (!ads_get_sid_from_extended_dn(tmp_ctx, members[i], args.val, &sid)) {
+ 			status = NT_STATUS_INVALID_PARAMETER;
+ 	                goto done;
+ 		}
+@@ -1019,13 +1027,13 @@
+ 	/* handle sids not resolved from cache by lsa_lookup_sids */
+ 	if (num_nocache > 0) {
+ 
+-		status = cm_connect_lsa(domain, mem_ctx, &cli, &lsa_policy);
++		status = cm_connect_lsa(domain, tmp_ctx, &cli, &lsa_policy);
+ 
+ 		if (!NT_STATUS_IS_OK(status)) {
+ 			goto done;
+ 		}
+ 
+-		status = rpccli_lsa_lookup_sids_all(cli, mem_ctx, 
++		status = rpccli_lsa_lookup_sids_all(cli, tmp_ctx, 
+ 						    &lsa_policy,
+ 						    num_nocache, 
+ 						    sid_mem_nocache, 
+@@ -1046,7 +1054,7 @@
+ 				{
+ 					sid_copy(&(*sid_mem)[*num_names],
+ 						 &sid_mem_nocache[i]);
+-					(*names)[*num_names] = names_nocache[i];
++					(*names)[*num_names] = talloc_steal(names, names_nocache[i]);
+ 					(*name_types)[*num_names] = name_types_nocache[i];
+ 					(*num_names)++;
+ 				}
+@@ -1073,11 +1081,7 @@
+ 
+ done:
+ 
+-	/* free intermediate lists. - a temp talloc ctx might be better. */
+-	TALLOC_FREE(sid_mem_nocache);
+-	TALLOC_FREE(names_nocache);
+-	TALLOC_FREE(name_types_nocache);
+-	TALLOC_FREE(domains_nocache);
++	TALLOC_FREE(tmp_ctx);
+ 
+ 	return status;
+ }
+

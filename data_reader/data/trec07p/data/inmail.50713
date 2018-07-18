@@ -1,0 +1,125 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Jun  4 11:53:35 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l54FrZhB029849
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 4 Jun 2007 11:53:35 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id E31E01639CF
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon,  4 Jun 2007 15:53:28 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-3.4 required=3.8 tests=ALL_TRUSTED,AWL,BAYES_00 
+	autolearn=ham version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from [IPv6:::1] (dp [66.70.73.150])
+	by lists.samba.org (Postfix) with ESMTP id B636C162ADE;
+	Mon,  4 Jun 2007 15:52:38 +0000 (GMT)
+Message-Id: <7DE4205F-AFFD-4E06-9200-1B530C5AB8CD@samba.org>
+From: James Peach <jpeach@samba.org>
+To: tridge@samba.org
+In-Reply-To: <18019.32313.233845.201794@samba.org>
+Content-Type: text/plain; charset=US-ASCII; format=flowed; delsp=yes
+Content-Transfer-Encoding: 7bit
+Mime-Version: 1.0 (Apple Message framework v886.1)
+Date: Mon, 4 Jun 2007 08:52:36 -0700
+References: <D4ADD9E4-9613-466E-9618-6DC251575315@samba.org>
+	<1180906540.24923.198.camel@localhost.localdomain>
+	<46636B0C.2030202@samba.org>
+	<20070604015924.GA6189@jeremy2.wintest.samba.local>
+	<3FF5ACC6-A967-4C42-B42F-127D3235977F@samba.org>
+	<18019.32313.233845.201794@samba.org>
+X-Mailer: Apple Mail (2.886.1)
+Cc: "Gerald \(Jerry\) Carter" <jerry@samba.org>, simo <idra@samba.org>,
+   samba-technical@lists.samba.org, Jeremy Allison <jra@samba.org>
+Subject: Re: getting rid of mkproto.sh from Samba3
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+On Jun 3, 2007, at 7:51 PM, tridge@samba.org wrote:
+
+> James,
+>
+>>>> mkproto.sh promotes lazing programming, leads to bad interfaces
+>>>> and to monolithic code.
+>>
+>> This is the basic reason why I don't like mkproto.sh. I'd also add  
+>> that
+>> 	- it makes it impossible to do incremental builds
+>> 	- it makes it harder to find existing interfaces, raising the
+>> barrier to contributions
+>> 	- it makes it harder to document existing interfaces
+>> 	- leads to false sharing, forcing trivial tools to link most of lib/
+>
+> This is not a result of mkproto. In Samba4 we do automatic prototype
+> generation for many of our subsystems but not for all, yet it doesn't
+> suffer from any of the above problems:
+>
+> - we do incremental builds, as each subsystem gets its own
+>    proto.h. So for example, the libcli/raw library gets
+>    libcli/raw/raw_proto.h. Only subsystems that need that library
+>    include that header
+>
+> - it is not hard to find existing interfaces, as we separate the
+>   headers for each interface. The generated headers are short, and
+>   are located in the same directory as the library code that are for
+>
+> - I think it makes it easier to document interfaces as the interfaces
+>   to the library are conveniently located next to the code
+>
+> - it doesn't lead to false sharing, as we separate the headers
+>
+> - the samba4 code is not monolithic
+>
+> - the samba4 code doesn't have bad interfaces.
+>
+> The problems you are seeing are due to my original design of mkproto
+> which do it all as one big proto.h. Jelmer re-designed our mkproto to
+> split up the generated headers, and that got rid of all of the
+> problems you mentioned. Jelmer also did a much faster and cleaner
+> mkproto in perl.
+>
+> We control which subsystems get automatic prototype generation using
+> options like this:
+>
+> [SUBSYSTEM::LIBCLI_RAW]
+>  PRIVATE_PROTO_HEADER = raw/raw_proto.h
+>  PRIVATE_DEPENDENCIES = LIBCLI_COMPOSITE
+>  PUBLIC_DEPENDENCIES = samba-socket LIBPACKET gensec LIBCRYPTO
+>  LDFLAGS = $(SUBSYSTEM_LIBCLI_SMB_COMPOSITE_OUTPUT)
+>  OBJ_FILES = raw/rawfile.o \ (etc etc)
+>
+> If you have a read through the generated prototypes, I think you'll
+> find them clean, and easy to read.
+>
+> So you can use prototype generation without the problems you
+> mention. It just takes a bit more work upfront to get it right.
+
+In general my view is that code written by humans should also have a  
+declaration written by humans. I've never found adding prototypes to  
+be a burden, so I have difficulty understanding the point of view that  
+maintaining header files is such an imposition.
+
+Yes, the autogenerated headers in Samba4 are done much better than in  
+Samba3, but the cost is additional complexity in the build system. My  
+view is that the gain is trivial.
+
+And you still can't read the headers without getting past configure  
+(ie. having a working toolchain installed).
+
+--
+James Peach | jpeach@samba.org
+

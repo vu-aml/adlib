@@ -1,0 +1,129 @@
+From r-help-bounces@stat.math.ethz.ch  Wed Jul  4 15:26:33 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l64JQVL9014563
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 4 Jul 2007 15:26:32 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l64JPoTv009959;
+	Wed, 4 Jul 2007 21:26:03 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.0 required=5.0 tests=AWL, BAYES_50,
+	DKIM_POLICY_SIGNSOME autolearn=no version=3.2.0
+Received: from alnrmhc12.comcast.net (alnrmhc12.comcast.net [206.18.177.52])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l64JGDwo006300
+	for <r-help@stat.math.ethz.ch>; Wed, 4 Jul 2007 21:16:14 +0200
+Received: from basebud.nulle.part
+	(c-67-174-13-164.hsd1.il.comcast.net[67.174.13.164])
+	by comcast.net (alnrmhc12) with ESMTP
+	id <20070704191549b1200jsvjpe>; Wed, 4 Jul 2007 19:16:10 +0000
+Received: from edd by basebud.nulle.part with local (Exim 4.67)
+	(envelope-from <edd@debian.org>)
+	id 1I6AKL-0000wh-1U; Wed, 04 Jul 2007 14:15:49 -0500
+MIME-Version: 1.0
+Message-ID: <18059.61925.16253.545535@basebud.nulle.part>
+Date: Wed, 4 Jul 2007 14:15:49 -0500
+To: ocelma@iua.upf.edu
+In-Reply-To: <32298.148.204.211.251.1183569945.squirrel@iua-mail.upf.es>
+References: <32298.148.204.211.251.1183569945.squirrel@iua-mail.upf.es>
+X-Mailer: VM 7.19 under Emacs 21.4.1
+From: Dirk Eddelbuettel <edd@debian.org>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] Long-tail model in R ... anyone?
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="iso-2022-jp"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+
+I think you simply had your nls() syntax wrong.  Works here:
+
+
+## first a neat trick to read the data from embedded text
+> fmdata <- read.csv(textConnection("
++ rank,cum_value
+10,     17396510
+32,     31194809
+96,     53447300
+420,    100379331
+1187,   152238166
+24234,  432238757
+91242,  581332371
+294180, 650880870
+1242185,665227287"))
+> 
+
+
+## then compute cumulative share
+> fmdata[,"cumshare"] <- fmdata[,"cum_value"] / fmdata[nrow(fmdata),"cum_value"]
+> 
+
+
+## then check the data, just in case
+> summary(fmdata)
+      rank           cum_value            cumshare      
+ Min.   :     10   Min.   : 17396510   Min.   :0.02615  
+ 1st Qu.:     96   1st Qu.: 53447300   1st Qu.:0.08034  
+ Median :   1187   Median :152238166   Median :0.22885  
+ Mean   : 183732   Mean   :298259489   Mean   :0.44836  
+ 3rd Qu.:  91242   3rd Qu.:581332371   3rd Qu.:0.87389  
+ Max.   :1242185   Max.   :665227287   Max.   :1.00000  
+> 
+
+## finally estimate the model, using only the first seven rows of data
+## using the parametric form from the paper and some wild guesses as
+## starting values:
+> fit <- nls(cumshare ~ Beta / ((N50 / rank)^Alpha + 1), data=fmdata[1:7,], start=list(Alpha=1, Beta=1, N50=1e4))
+> summary(fit)
+
+Formula: cumshare ~ Beta/((N50/rank)^Alpha + 1)
+
+Parameters:
+       Estimate Std. Error t value Pr(>|t|)    
+Alpha 4.829e-01  5.374e-03   89.86 9.20e-08 ***
+Beta  1.429e+00  2.745e-02   52.07 8.14e-07 ***
+N50   3.560e+04  3.045e+03   11.69 0.000306 ***
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1 
+
+Residual standard error: 0.002193 on 4 degrees of freedom
+
+Number of iterations to convergence: 8 
+Achieved convergence tolerance: 1.297e-06 
+
+> 
+
+which is reasonably close to the quoted 
+	N50 = 30714, α = 0.49, and β = 1.38.
+
+You can probably play a little with the nls options to see what effect this
+has. 
+
+That said, seven observations for three parameters in non-linear model may be
+a little hazardous.  One indication is that the estimated parameters values
+are not too stable once you add the eights and nineth row of data.
+
+Dirk
+
+-- 
+Hell, there are no rules here - we're trying to accomplish something. 
+                                                  -- Thomas A. Edison
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

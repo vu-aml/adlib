@@ -1,0 +1,151 @@
+From beginners-return-91382-ktwarwic=speedy.uwaterloo.ca@perl.org  Mon May  7 13:58:24 2007
+Return-Path: <beginners-return-91382-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l47HwNqD001673
+	for <ktwarwic@flax9.uwaterloo.ca>; Mon, 7 May 2007 13:58:24 -0400
+Received: (qmail 14171 invoked by uid 514); 7 May 2007 17:58:17 -0000
+Mailing-List: contact beginners-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:beginners@perl.org>
+List-Help: <mailto:beginners-help@perl.org>
+List-Unsubscribe: <mailto:beginners-unsubscribe@perl.org>
+List-Subscribe: <mailto:beginners-subscribe@perl.org>
+List-Id: <beginners.perl.org>
+Delivered-To: mailing list beginners@perl.org
+Received: (qmail 14162 invoked from network); 7 May 2007 17:58:17 -0000
+Received: from x1a.develooper.com (HELO x1.develooper.com) (216.52.237.111)
+  by lists.develooper.com with SMTP; 7 May 2007 17:58:17 -0000
+Received: (qmail 9038 invoked by uid 225); 7 May 2007 17:58:16 -0000
+Delivered-To: beginners@perl.org
+Received: (qmail 9006 invoked by alias); 7 May 2007 17:58:14 -0000
+X-Spam-Status: No, hits=-0.7 required=8.0
+	tests=BAYES_20,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: domain of cavac@magicbooks.org designates 217.79.181.111 as permitted sender)
+Received: from www.magicbooks.org (HELO mail.magicbooks.org) (217.79.181.111)
+    by la.mx.develooper.com (qpsmtpd/0.28) with ESMTP; Mon, 07 May 2007 10:57:50 -0700
+Received: from mail.magicbooks.org (localhost [127.0.0.1])
+	by mail.magicbooks.org (8.12.10/8.12.10/SuSE Linux 0.7) with ESMTP id l47HvhPe024329
+	for <beginners@perl.org>; Mon, 7 May 2007 19:57:43 +0200
+Received: from 85.127.207.126
+        (SquirrelMail authenticated user cavac)
+        by mail.magicbooks.org with HTTP;
+        Mon, 7 May 2007 19:57:43 +0200 (CEST)
+Message-ID: <3784.85.127.207.126.1178560663.squirrel@mail.magicbooks.org>
+In-Reply-To: <463F5018.7020502@miswebdesign.com>
+References: <8AB6E1A249644643AF0A32306C7F37D41E56@sktymail1.sktydev.com>
+    <463F5018.7020502@miswebdesign.com>
+Date: Mon, 7 May 2007 19:57:43 +0200 (CEST)
+Subject: Re: Diff on a database structure
+From: "Rene Schickbauer" <cavac@magicbooks.org>
+To: beginners@perl.org
+User-Agent: SquirrelMail/1.4.6
+MIME-Version: 1.0
+Content-Type: text/plain;charset=iso-8859-1
+Content-Transfer-Encoding: 8bit
+X-Priority: 3 (Normal)
+Importance: Normal
+
+Hi!
+
+> I'd like to find a way of comparing the two MySQL database strcutures
+> and getting a list of the differences, anyone know of any
+> modules/methods for doing this?
+
+Here's more or less what some commercial tools do:
+
+**pseudocode start**
+
+get all lines, split them into a datastructure like this
+$tables[x}->{"dev" or "orig"}->line[x]
+
+foreach $table (@tables) {
+    if($table->{"prod"} is constraint or index) {
+         "drop bla bla bla"
+    }
+}
+
+
+foreach $table (@tables) {
+    if($table->{"prod" or "dev"} is constraint or index) {
+         next
+    }
+
+
+    if(all lines $tables->{"dev"} eq all lines $tables->{"dev"} eq) {
+        next;
+    }
+
+   if(dev && !prod) {
+        "create bla bla bla"
+       next
+   } elsif(!dev && prod) {
+        "drop bla bla bla"
+         next
+    }
+
+    if(dev has lines not in prod) {
+        for every extra line: "alter table add bla bla bla");
+    }
+    if(prod has lines not in dev) {
+        for every extra line: "alter table drop bla bla bla");
+    }
+}
+
+foreach $table (@tables) {
+    if($table->{"dev"} is constraint or index) {
+         "create bla bla bla"
+    }
+}
+
+**pseudocode end**
+
+I'd say, as long as you got that reader/parser to give you a nice data
+struct, you should get a beta working in an hour or two.
+
+Tip: You might notice that there is normally a newline and/or semicolon at
+the end of each statement. Also the TYPE and NAME of the object should more
+or less always be second and third word of every statement such as in
+"create TABLE hello".
+
+I didn't try with mysqldump, but most database tool write the fields of any
+"create table" on a line-by-line basis, effectively pre-parsing the
+statement for you.
+
+Ok, and here's the reason i'm dropping indexes and constraints at the top
+and re-creating them at the end: Constraints can be a bitch, when you're
+altering tables, because you're having to do that in the proper{tm} order...
+Indexes: After altering tables, it might be a good idea to re-create them
+anyway. I've seen databases (mysql, postgresql, oracle...) where indexes
+silently failed after excessive "alter table"s. Meaning: Performance breaks
+down, cause the db decides to do full table scans every f...ing time...
+
+PS: You also might want to peek at DBD::Anydata, maybe there's something in
+there to help you,
+PPS: If you can't get it working, post two example dumps (without data, just
+the creates), and i'll see what i can do.
+
+LLAP & LG
+Rene
+
+-- 
+-----BEGIN GEEK CODE BLOCK-----
+Version: 3.1    Visit <http://www.ebb.org/ungeek/> to decode
+GCS d- s:- a-- C++$ UBLA*++++$ P++++$ L+$ !E !W+++$ N+ o+ K--?
+w++$ !O M+ V-- PS PE Y+ PGP+ t+ 5 X- !R tv b+++ DI-- D++ G e h-- r-- y+
+------END GEEK CODE BLOCK------
+
+
+-----------------------------------------
+This E-Mail was sent through MagicMail
+
+Download our Jump'n'Run "BlinkenSisters":
+    http://www.blinkensisters.org
+
+
+-- 
+To unsubscribe, e-mail: beginners-unsubscribe@perl.org
+For additional commands, e-mail: beginners-help@perl.org
+http://learn.perl.org/
+
+

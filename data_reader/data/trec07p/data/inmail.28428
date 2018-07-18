@@ -1,0 +1,139 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri May  4 06:45:31 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l44AjVqD014405
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 4 May 2007 06:45:31 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 382C2162C4C
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri,  4 May 2007 10:45:30 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 620)
+	id 6008D162AE8; Fri,  4 May 2007 10:44:42 +0000 (GMT)
+To: samba-cvs@samba.org
+From: metze@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070504104442.6008D162AE8@lists.samba.org>
+Date: Fri,  4 May 2007 10:44:42 +0000 (GMT)
+Subject: svn commit: samba r22667 - in
+	branches/SAMBA_4_0/source/pidl/lib/Parse/Pidl/Samba4: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: metze
+Date: 2007-05-04 10:44:41 +0000 (Fri, 04 May 2007)
+New Revision: 22667
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22667
+
+Log:
+revert revision 22640 as it breaks nested structs in idl
+
+metze
+Modified:
+   branches/SAMBA_4_0/source/pidl/lib/Parse/Pidl/Samba4/Header.pm
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/pidl/lib/Parse/Pidl/Samba4/Header.pm
+===================================================================
+--- branches/SAMBA_4_0/source/pidl/lib/Parse/Pidl/Samba4/Header.pm	2007-05-04 10:21:39 UTC (rev 22666)
++++ branches/SAMBA_4_0/source/pidl/lib/Parse/Pidl/Samba4/Header.pm	2007-05-04 10:44:41 UTC (rev 22667)
+@@ -43,7 +43,7 @@
+ 	}
+ 
+ 	if ($ret) {
+-		pidl " /* [" . substr($ret, 0, -1) . "] */";
++		pidl "/* [" . substr($ret, 0, -1) . "] */";
+ 	}
+ }
+ 
+@@ -108,12 +108,10 @@
+ 	    pidl tabs()."char _empty_;\n";
+     }
+     $tab_depth--;
+-
+-    pidl "};";
++    pidl tabs()."}";
+ 	if (defined $struct->{PROPERTIES}) {
+ 		HeaderProperties($struct->{PROPERTIES}, []);
+ 	}
+-    pidl "\n\n";
+ }
+ 
+ #####################################################################
+@@ -134,10 +132,10 @@
+ 	}
+ 	pidl "\n";
+ 	$tab_depth--;
+-	pidl "};\n";
++	pidl "}\n";
+ 	pidl "#else\n";
+ 	my $count = 0;
+-	pidl "enum $name { __donnot_use_enum_$name=0x7FFFFFFF};\n";
++	pidl "enum $name { __donnot_use_enum_$name=0x7FFFFFFF}\n";
+ 	my $with_val = 0;
+ 	my $without_val = 0;
+ 	foreach my $e (@{$enum->{ELEMENTS}}) {
+@@ -193,12 +191,11 @@
+ 		}
+ 	}
+ 	$tab_depth--;
++	pidl "}";
+ 
+-	pidl "};";
+ 	if (defined $union->{PROPERTIES}) {
+ 		HeaderProperties($union->{PROPERTIES}, []);
+ 	}
+-	pidl "\n\n";
+ }
+ 
+ #####################################################################
+@@ -300,7 +297,7 @@
+ 	    HeaderFunctionInOut($fn, "in");
+ 	    HeaderFunctionInOut($fn, "inout");
+ 	    $tab_depth--;
+-	    pidl tabs()."} in;\n";
++	    pidl tabs()."} in;\n\n";
+ 	    $needed++;
+     }
+ 
+@@ -314,7 +311,7 @@
+ 		    pidl tabs().mapTypeName($fn->{RETURN_TYPE}) . " result;\n";
+ 	    }
+ 	    $tab_depth--;
+-	    pidl tabs()."} out;\n";
++	    pidl tabs()."} out;\n\n";
+ 	    $needed++;
+     }
+ 
+@@ -365,6 +362,11 @@
+ 		HeaderUnion($d, $d->{NAME}) if ($d->{TYPE} eq "UNION");
+ 		HeaderEnum($d, $d->{NAME}) if ($d->{TYPE} eq "ENUM");
+ 		HeaderBitmap($d, $d->{NAME}) if ($d->{TYPE} eq "BITMAP");
++		pidl ";\n\n" if ($d->{TYPE} eq "BITMAP" or 
++			             $d->{TYPE} eq "STRUCT" or 
++						 $d->{TYPE} eq "TYPEDEF" or 
++						 $d->{TYPE} eq "UNION" or 
++						 $d->{TYPE} eq "ENUM");
+ 	}
+ 
+ 	foreach my $d (@{$interface->{DATA}}) {
+

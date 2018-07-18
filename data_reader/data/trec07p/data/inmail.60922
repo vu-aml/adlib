@@ -1,0 +1,155 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Jun 19 17:41:17 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5JLfHL9002235
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 19 Jun 2007 17:41:17 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 7061E162B00
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 19 Jun 2007 21:41:15 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.4 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1017)
+	id 905A2162ABF; Tue, 19 Jun 2007 21:40:29 +0000 (GMT)
+To: samba-cvs@samba.org
+From: obnox@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070619214029.905A2162ABF@lists.samba.org>
+Date: Tue, 19 Jun 2007 21:40:29 +0000 (GMT)
+Subject: svn commit: samba r23549 - in branches: SAMBA_3_0/source/utils
+	SAMBA_3_0_26/source/utils
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: obnox
+Date: 2007-06-19 21:40:27 +0000 (Tue, 19 Jun 2007)
+New Revision: 23549
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23549
+
+Log:
+Make "net conf setparm" always use registry data type "sz".
+This simplifies the usage of this command from
+"net conf setparm <section> <param> <type> <value>"
+to
+"net conf setparm <section> <param> <value>".
+
+Micheal
+
+
+Modified:
+   branches/SAMBA_3_0/source/utils/net_conf.c
+   branches/SAMBA_3_0_26/source/utils/net_conf.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/utils/net_conf.c
+===================================================================
+--- branches/SAMBA_3_0/source/utils/net_conf.c	2007-06-19 21:08:46 UTC (rev 23548)
++++ branches/SAMBA_3_0/source/utils/net_conf.c	2007-06-19 21:40:27 UTC (rev 23549)
+@@ -82,8 +82,7 @@
+ 
+ static int net_conf_setparm_usage(int argc, const char **argv)
+ {
+-	d_printf("USAGE: net conf setparm <section> <param> <type> <value>\n"
+-		 "\t(Supported types are 'dword' and 'sz' by now.)\n");
++	d_printf("USAGE: net conf setparm <section> <param> <value>\n");
+ 	return -1;
+ }
+ 
+@@ -918,20 +917,18 @@
+ 	struct registry_key *key = NULL;
+ 	char *service = NULL;
+ 	char *param = NULL;
+-	char *type = NULL;
+ 	const char *value_str = NULL;
+ 	TALLOC_CTX *ctx;
+ 
+ 	ctx = talloc_init("setparm");
+ 
+-	if (argc != 4) {
++	if (argc != 3) {
+ 		net_conf_setparm_usage(argc, argv);
+ 		goto done;
+ 	}
+ 	service = strdup_lower(argv[0]);
+ 	param = strdup_lower(argv[1]);
+-	type = strdup_lower(argv[2]);
+-	value_str = argv[3];
++	value_str = argv[2];
+ 
+ 	if (!smbconf_key_exists(ctx, service)) {
+ 		werr = reg_createkey_internal(ctx, service, &key);
+@@ -943,7 +940,7 @@
+ 		goto done;
+ 	}
+ 
+-	werr = reg_setvalue_internal(key, param, type, value_str);
++	werr = reg_setvalue_internal(key, param, "sz", value_str);
+ 	if (!W_ERROR_IS_OK(werr)) {
+ 		d_fprintf(stderr, "Error setting value '%s': %s\n",
+ 			  param, dos_errstr(werr));
+
+Modified: branches/SAMBA_3_0_26/source/utils/net_conf.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/utils/net_conf.c	2007-06-19 21:08:46 UTC (rev 23548)
++++ branches/SAMBA_3_0_26/source/utils/net_conf.c	2007-06-19 21:40:27 UTC (rev 23549)
+@@ -82,8 +82,7 @@
+ 
+ static int net_conf_setparm_usage(int argc, const char **argv)
+ {
+-	d_printf("USAGE: net conf setparm <section> <param> <type> <value>\n"
+-		 "\t(Supported types are 'dword' and 'sz' by now.)\n");
++	d_printf("USAGE: net conf setparm <section> <param> <value>\n");
+ 	return -1;
+ }
+ 
+@@ -918,20 +917,18 @@
+ 	struct registry_key *key = NULL;
+ 	char *service = NULL;
+ 	char *param = NULL;
+-	char *type = NULL;
+ 	const char *value_str = NULL;
+ 	TALLOC_CTX *ctx;
+ 
+ 	ctx = talloc_init("setparm");
+ 
+-	if (argc != 4) {
++	if (argc != 3) {
+ 		net_conf_setparm_usage(argc, argv);
+ 		goto done;
+ 	}
+ 	service = strdup_lower(argv[0]);
+ 	param = strdup_lower(argv[1]);
+-	type = strdup_lower(argv[2]);
+-	value_str = argv[3];
++	value_str = argv[2];
+ 
+ 	if (!smbconf_key_exists(ctx, service)) {
+ 		werr = reg_createkey_internal(ctx, service, &key);
+@@ -943,7 +940,7 @@
+ 		goto done;
+ 	}
+ 
+-	werr = reg_setvalue_internal(key, param, type, value_str);
++	werr = reg_setvalue_internal(key, param, "sz", value_str);
+ 	if (!W_ERROR_IS_OK(werr)) {
+ 		d_fprintf(stderr, "Error setting value '%s': %s\n",
+ 			  param, dos_errstr(werr));
+

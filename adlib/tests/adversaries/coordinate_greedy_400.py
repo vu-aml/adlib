@@ -6,8 +6,6 @@ from adlib.adversaries.coordinate_greedy import CoordinateGreedy
 from sklearn import metrics
 
 
-# Failing
-
 def summary(y_pred, y_true):
     if len(y_pred) != len(y_true):
         raise ValueError("lengths of two label lists do not match")

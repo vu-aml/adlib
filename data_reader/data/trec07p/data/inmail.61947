@@ -1,0 +1,178 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Jun 20 22:39:51 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5L2doL9017674
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 20 Jun 2007 22:39:50 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 29C4B163883
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 21 Jun 2007 02:39:48 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: **
+X-Spam-Status: No, score=2.0 required=3.8 tests=BAYES_50,NO_MORE_FUNN,
+	RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+X-Greylist: delayed 964 seconds by postgrey-1.24 at dp.samba.org;
+	Thu, 21 Jun 2007 02:39:14 GMT
+Received: from uit.com.cn (unknown [60.195.248.81])
+	by lists.samba.org (Postfix) with SMTP id 2D3C5162AED
+	for <samba-technical@lists.samba.org>;
+	Thu, 21 Jun 2007 02:39:13 +0000 (GMT)
+Received: (eyou send program); Thu, 21 Jun 2007 10:16:33 +0800
+X-EYOUMAIL-SMTPAUTH: huangxiong@uit.com.cn
+Received: from 219.134.186.220 (HELO [192.168.3.26]) (219.134.186.220)
+	by 60.195.248.81 with SMTP; Thu, 21 Jun 2007 10:16:33 +0800
+From: Huang Xiong <huangxiong@uit.com.cn>
+To: samba-technical@lists.samba.org
+Date: Thu, 21 Jun 2007 10:23:10 +0800
+User-Agent: KMail/1.9.4
+MIME-Version: 1.0
+Content-Type: text/plain;
+  charset="iso-8859-1"
+Content-Disposition: inline
+Message-Id: <200706211023.10169.huangxiong@uit.com.cn>
+Subject: Network issue in RHCS/GFS environment
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Content-Transfer-Encoding: 8bit
+X-MIME-Autoconverted: from quoted-printable to 8bit by flax9.uwaterloo.ca id l5L2doL9017674
+
+Hello folks,
+
+This thread is long, please pay more patients for your kindly reading.
+
+1. Set up Storage-Cluster.
+
+Cluster
+---------
+node1: eth1 192.168.3.249 -- Connect to Storage
+eth2 192.168.11.249 -- Access IP
+eth0 192.168.13.249 -- HeartBeat
+CentOS4.4(kernel 2.6.9-42.0.3.ELsmp)
+cman-kernel-smp-2.6.9-45.8
+cman-devel-1.0.11-0
+cman-kernheaders-2.6.9-45.8
+cman-1.0.11-0
+GFS-6.1.6-1
+GFS-kernel-smp-2.6.9-60.3
+lvm2-cluster-2.02.06-7.0.RHEL4
+iscsi-initiator-utils-4.0.3.0-4
+samba-3.0.10-1.4E.9
+dlm-1.0.1-1
+dlm-kernel-smp-2.6.9-44.3
+dlm-devel-1.0.1-1
+dlm-kernheaders-2.6.9-44.3
+
+node2: eth1 192.168.3.52 -- Connect to Storage
+eth2 192.168.11.52 -- Access IP
+eth0 192.168.13.52 -- HeartBeat
+other setting as same as node1
+
+2.Create lv and mount
+
+The background storage is implemented by iscsi, I create logic volumn as 500G, 
+and then format it to GFS filesystem.
+
+Code:
+
+# gfs_mkfs -p lock_dlm -t real:gfs -j 2 /dev/vg_milan/nesta
+
+Here, the string "real" is the cluster name.
+
+Then, I mount the formatted lv on the nodes one by one:
+
+In node1:
+[root@node1 ~]# mkdir -p /share 
+[root@node1 ~]# mount -t gfs /dev/vg_milan/netsa /share 
+[root@node1 ~]# chmod 777 /share
+
+Repeat the above three steps in node2.
+
+3. Configure the samba on node1 and node2, export /share as SMB share 
+named "stress".
+
+Now, I installed Windows on other two machines:
+192.168.11.31 and 192.168.11.32
+
+In 192.168.11.31, map the //192.168.11.249/stress as "Z:";
+In 192.168.11.32, map the //192.168.11.52/stress as "Z:"
+
+4. Running pressure programs on 192.168.11.31 and 192.168.11.32 to create a 
+large number of writing operations on the "/stress" samba share. The pressure 
+tools is writen by my customer, it is used in Windows Operating System to 
+create many processes to write random files into the mapped(Samba share) 
+directory. As I seen(while not very sure),it doesn't use own locking, all the 
+processes are running parallelly,
+
+Use "dstat" command to monitor the networking status on nodes:
+
+In node1, "eth1 send" and "eth2 recv" are both high, it is reasonable as I 
+expect:
+
+# dstat -N eth0,eth3,eth4 2
+----total-cpu-usage---- -dsk/total- --net/eth0----net/eth1----net/eth2->
+usr sys idl wai hiq siq|_read _writ|_recv _send:_recv _send:_recv _send>
+  0   2  94   4   0   0|4322B 3753k|   0     0 :   0     0 :   0     0 >
+  0   1  50  49   0   0| 554k 2202k|   0     0 : 584k   26k: 462B    0 >
+  0   2  49  49   0   0| 532k 2098k|   0    35B: 743k 4544k: 809B    0 >
+  0   1  50  49   0   0| 484k   80k|  35B    0 : 573k   24k: 569B    0 >
+  0   1  50  49   0   0| 500k 2352k|   0     0 : 548k  739k: 440B    0 >
+  0   1  50  49   0   0| 510k    0 |  35B   35B: 604k 1775k:1066B    0 >
+  0   2  50  49   0   0| 526k 2212k|   0     0 : 575k   25k: 412B    0 >
+  0   1  50  49   0   0| 534k  458k|   0    35B: 663k 2804k:1739B    0 >
+  0   1  50  49   0   0| 538k    0 |  35B    0 : 574k   37k: 591B    0 >
+  0  11  37  51   0   0| 496k   24M| 121k  128k: 864k 6799k:8131B 4978B>
+  0   2  53  44   1   0| 494k    0 | 162k  196k:1481k   19M: 806B    0 >
+  1  19  58  22   1   0| 408k 9754k| 178k  243k: 597k 5339k:  35M  223k>
+  1  17  31  50   1   0| 506k  862k| 132B  158B: 914k 5904k:  60M  378k>
+  1  19  29  51   1   0| 300k 7182k|  35B    0 : 435k   19k:  60M  377k>
+  1  32  27  39   1   0| 176k   47M|   0     0 :1216k   25M:  51M  323k>
+  1  29  27  43   1   0| 192k   42M|  35B   35B:2042k   50M:  42M  249k>
+  0  29  38  32   1   0| 198k   41M| 936B 1293B:1748k   40M:  41M  233k>
+  1  26  34  38   0   0| 246k   38M|   0    35B:1804k   42M:  41M  231k>
+  1  27  33  38   1   0| 234k   41M|  35B    0 :1800k   40M:  40M  250k>
+
+However, it is very stranger in node2: "eth1 recv and send" are both very 
+high! while eth0 and eth2 have low I/O.
+# dstat -N eth0,eth3,eth4 2
+----total-cpu-usage---- -dsk/total- --net/eth0----net/eth1----net/eth2->
+usr sys idl wai hiq siq|_read _writ|_recv _send:_recv _send:_recv _send>
+  0  25  72   3   1   0|  38k  192k| 125k  119k: 949B  268B: 584B   37k>
+  1  21  76   1   1   0|   0   446k| 191k  160k:  18M  339k: 843B  506k>
+  1  22  75   2   1   0|  40k  524k| 250k  183k:  69M  694k:1066B  490k>
+  1  35  61   1   1   0|   0    51M| 158B  123B:  72M  135k: 611B  467k>
+  1  33  61   5   1   0|  94k   52M|   0    35B:  61M   58M: 814B  399k>
+  0  19  60  20   0   0|  12k   33M|   0     0 :  54M   47M: 478B  260k>
+  1  33  40  25   1   0|   0    52M|  35B   35B:  38M   41M: 874B  576k>
+  1  41  19  39   1   0|   0    59M|1293B  936B:  60M   54M: 462B  552k>
+  0  25  61  13   0   0|   0    42M|  35B    0 :  62M   62M: 575B  453k>
+  1  40  56   2   1   0|   0    56M|   0    35B:  41M   44M: 484B  400k>
+  1  39  52   7   1   0|   0    60M|   0     0 :  63M   59M: 442B  636k>
+  1  39  58   2   1   0|   0    57M|  35B   35B:  63M   63M: 638B  607k>
+  1  25  74   0   1   0|   0    38M|   0     0 :  56M   56M: 847B  221k>
+  1  37  60   2   1   0|   0    55M|  35B    0 :  44M   42M:1354B  399k>
+  1  40  57   1   1   0|   0    61M|   0    35B:  63M   60M: 713B  447k>
+
+My question is, why does eth1 run in high level "recv and send"? while eth2 
+has such low run level?I really do no know why eth1-recv rate is so high in 
+this test.
+
+Please give me some hints or suggestions.
+
+
+Thanks and Regards,
+Phillip
+

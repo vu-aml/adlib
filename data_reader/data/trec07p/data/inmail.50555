@@ -1,0 +1,468 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Jun  4 08:29:57 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l54CTuhB027779
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 4 Jun 2007 08:29:56 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id CEFF616399A
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon,  4 Jun 2007 12:29:50 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1017)
+	id 5591E1639E0; Mon,  4 Jun 2007 12:29:18 +0000 (GMT)
+To: samba-cvs@samba.org
+From: obnox@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070604122918.5591E1639E0@lists.samba.org>
+Date: Mon,  4 Jun 2007 12:29:18 +0000 (GMT)
+Subject: svn commit: samba r23336 - in branches/SAMBA_3_0_26/source: . auth
+	include nsswitch passdb rpc_server utils
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: obnox
+Date: 2007-06-04 12:29:15 +0000 (Mon, 04 Jun 2007)
+New Revision: 23336
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23336
+
+Log:
+Merge r20824 from 3_0: 
+
+Send access to the trusted domain passwords through the pdb backend.
+
+I did not yet find the time to implement the next step: trusted
+domain passwords support in pdb_ldap. But at I wanted to have the
+infrastructure available at least.
+
+Michael
+
+
+Modified:
+   branches/SAMBA_3_0_26/source/Makefile.in
+   branches/SAMBA_3_0_26/source/auth/auth_domain.c
+   branches/SAMBA_3_0_26/source/auth/auth_util.c
+   branches/SAMBA_3_0_26/source/include/passdb.h
+   branches/SAMBA_3_0_26/source/nsswitch/winbindd_ads.c
+   branches/SAMBA_3_0_26/source/nsswitch/winbindd_passdb.c
+   branches/SAMBA_3_0_26/source/passdb/lookup_sid.c
+   branches/SAMBA_3_0_26/source/passdb/passdb.c
+   branches/SAMBA_3_0_26/source/passdb/pdb_interface.c
+   branches/SAMBA_3_0_26/source/passdb/secrets.c
+   branches/SAMBA_3_0_26/source/rpc_server/srv_lsa_nt.c
+   branches/SAMBA_3_0_26/source/utils/net_rpc.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0_26/source/Makefile.in
+===================================================================
+--- branches/SAMBA_3_0_26/source/Makefile.in	2007-06-04 09:57:59 UTC (rev 23335)
++++ branches/SAMBA_3_0_26/source/Makefile.in	2007-06-04 12:29:15 UTC (rev 23336)
+@@ -642,6 +642,7 @@
+ TOOL_OBJ = client/smbctool.o client/clitar.o $(PARAM_OBJ) $(LIBSMB_OBJ) \
+ 	     $(LIB_NONSMBD_OBJ) $(KRBCLIENT_OBJ) \
+              $(READLINE_OBJ) $(POPT_LIB_OBJ) $(SECRETS_OBJ) \
++             $(PASSDB_OBJ) $(SMBLDAP_OBJ) $(GROUPDB_OBJ) $(LDB_OBJ) \
+ 	     $(DISPLAY_SEC_OBJ)
+ 
+ NET_OBJ1 = utils/net.o utils/net_ads.o utils/net_domain.o utils/net_help.o \
+
+Modified: branches/SAMBA_3_0_26/source/auth/auth_domain.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/auth/auth_domain.c	2007-06-04 09:57:59 UTC (rev 23335)
++++ branches/SAMBA_3_0_26/source/auth/auth_domain.c	2007-06-04 12:29:15 UTC (rev 23336)
+@@ -408,8 +408,8 @@
+ 	 * No need to become_root() as secrets_init() is done at startup.
+ 	 */
+ 
+-	if (!secrets_fetch_trusted_domain_password(user_info->domain, &trust_password,
+-				&sid, &last_change_time)) {
++	if (!pdb_get_trusteddom_pw(user_info->domain, &trust_password,
++				   &sid, &last_change_time)) {
+ 		DEBUG(0, ("check_trustdomain_security: could not fetch trust "
+ 			  "account password for domain %s\n",
+ 			  user_info->domain));
+
+Modified: branches/SAMBA_3_0_26/source/auth/auth_util.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/auth/auth_util.c	2007-06-04 09:57:59 UTC (rev 23335)
++++ branches/SAMBA_3_0_26/source/auth/auth_util.c	2007-06-04 12:29:15 UTC (rev 23336)
+@@ -1669,8 +1669,7 @@
+ 		become_root();
+ 		DEBUG (5,("is_trusted_domain: Checking for domain trust with "
+ 			  "[%s]\n", dom_name ));
+-		ret = secrets_fetch_trusted_domain_password(dom_name, NULL,
+-							    NULL, NULL);
++		ret = pdb_get_trusteddom_pw(dom_name, NULL, NULL, NULL);
+ 		unbecome_root();
+ 		if (ret)
+ 			return True;
+
+Modified: branches/SAMBA_3_0_26/source/include/passdb.h
+===================================================================
+--- branches/SAMBA_3_0_26/source/include/passdb.h	2007-06-04 09:57:59 UTC (rev 23335)
++++ branches/SAMBA_3_0_26/source/include/passdb.h	2007-06-04 12:29:15 UTC (rev 23336)
+@@ -400,6 +400,19 @@
+ 	BOOL (*rid_algorithm)(struct pdb_methods *methods);
+ 	BOOL (*new_rid)(struct pdb_methods *methods, uint32 *rid);
+ 
++
++	BOOL (*get_trusteddom_pw)(struct pdb_methods *methods,
++				  const char *domain, char** pwd, 
++				  DOM_SID *sid, time_t *pass_last_set_time);
++	BOOL (*set_trusteddom_pw)(struct pdb_methods *methods, 
++				  const char* domain, const char* pwd,
++	        	  	  const DOM_SID *sid);
++	BOOL (*del_trusteddom_pw)(struct pdb_methods *methods, 
++				  const char *domain);
++	NTSTATUS (*enum_trusteddoms)(struct pdb_methods *methods,
++				     TALLOC_CTX *mem_ctx, uint32 *num_domains,
++				     struct trustdom_info ***domains);
++
+ 	void *private_data;  /* Private data of some kind */
+ 	
+ 	void (*free_private_data)(void **);
+
+Modified: branches/SAMBA_3_0_26/source/nsswitch/winbindd_ads.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/nsswitch/winbindd_ads.c	2007-06-04 09:57:59 UTC (rev 23335)
++++ branches/SAMBA_3_0_26/source/nsswitch/winbindd_ads.c	2007-06-04 12:29:15 UTC (rev 23336)
+@@ -88,7 +88,7 @@
+ 		DOM_SID sid;
+ 		time_t last_set_time;
+ 
+-		if ( !secrets_fetch_trusted_domain_password( domain->name, &ads->auth.password, &sid, &last_set_time ) ) {
++		if ( !pdb_get_trusteddom_pw( domain->name, &ads->auth.password, &sid, &last_set_time ) ) {
+ 			ads_destroy( &ads );
+ 			return NULL;
+ 		}
+
+Modified: branches/SAMBA_3_0_26/source/nsswitch/winbindd_passdb.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/nsswitch/winbindd_passdb.c	2007-06-04 09:57:59 UTC (rev 23335)
++++ branches/SAMBA_3_0_26/source/nsswitch/winbindd_passdb.c	2007-06-04 12:29:15 UTC (rev 23336)
+@@ -413,8 +413,7 @@
+ 		return NT_STATUS_NO_MEMORY;
+ 	}
+ 
+-	nt_status = secrets_trusted_domains(tmp_ctx, num_domains,
+-					    &domains);
++	nt_status = pdb_enum_trusteddoms(tmp_ctx, num_domains, &domains);
+ 	if (!NT_STATUS_IS_OK(nt_status)) {
+ 		TALLOC_FREE(tmp_ctx);
+ 		return nt_status;
+
+Modified: branches/SAMBA_3_0_26/source/passdb/lookup_sid.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/passdb/lookup_sid.c	2007-06-04 09:57:59 UTC (rev 23335)
++++ branches/SAMBA_3_0_26/source/passdb/lookup_sid.c	2007-06-04 12:29:15 UTC (rev 23336)
+@@ -178,8 +178,7 @@
+ 	/* 5. Trusted domains as such, to me it looks as if members don't do
+               this, tested an XP workstation in a NT domain -- vl */
+ 
+-	if (IS_DC && (secrets_fetch_trusted_domain_password(name, NULL,
+-							    &sid, NULL))) {
++	if (IS_DC && (pdb_get_trusteddom_pw(name, NULL, &sid, NULL))) {
+ 		/* Swap domain and name */
+ 		tmp = name; name = domain; domain = tmp;
+ 		type = SID_NAME_DOMAIN;
+@@ -592,9 +591,9 @@
+ 		 * and for SIDs that have 4 sub-authorities and thus look like
+ 		 * domains */
+ 
+-		if (!NT_STATUS_IS_OK(secrets_trusted_domains(mem_ctx,
+-							     &num_domains,
+-							     &domains))) {
++		if (!NT_STATUS_IS_OK(pdb_enum_trusteddoms(mem_ctx,
++						          &num_domains,
++						          &domains))) {
+ 			return False;
+ 		}
+ 
+
+Modified: branches/SAMBA_3_0_26/source/passdb/passdb.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/passdb/passdb.c	2007-06-04 09:57:59 UTC (rev 23335)
++++ branches/SAMBA_3_0_26/source/passdb/passdb.c	2007-06-04 12:29:15 UTC (rev 23336)
+@@ -1517,3 +1517,46 @@
+ 
+ 	return True;
+ }
++
++
++/*******************************************************************
++ Wrapper around retrieving the trust account password
++*******************************************************************/
++
++BOOL get_trust_pw(const char *domain, uint8 ret_pwd[16], uint32 *channel)
++{
++	DOM_SID sid;
++	char *pwd;
++	time_t last_set_time;
++                                                                                                                     
++	/* if we are a DC and this is not our domain, then lookup an account
++		for the domain trust */
++                                                                                                                     
++	if ( IS_DC && !strequal(domain, lp_workgroup()) && lp_allow_trusted_domains() ) {
++		if (!pdb_get_trusteddom_pw(domain, &pwd, &sid, &last_set_time)) {
++			DEBUG(0, ("get_trust_pw: could not fetch trust "
++				"account password for trusted domain %s\n",
++				domain));
++			return False;
++		}
++                                                                                                                     
++		*channel = SEC_CHAN_DOMAIN;
++		E_md4hash(pwd, ret_pwd);
++		SAFE_FREE(pwd);
++
++		return True;
++	}
++                                                                                                                     
++	/* Just get the account for the requested domain. In the future this
++	 * might also cover to be member of more than one domain. */
++                                                                                                                     
++	if (secrets_fetch_trust_account_password(domain, ret_pwd,
++						&last_set_time, channel))
++		return True;
++
++	DEBUG(5, ("get_trust_pw: could not fetch trust account "
++		"password for domain %s\n", domain));
++	return False;
++}
++
++/* END */
+
+Modified: branches/SAMBA_3_0_26/source/passdb/pdb_interface.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/passdb/pdb_interface.c	2007-06-04 09:57:59 UTC (rev 23335)
++++ branches/SAMBA_3_0_26/source/passdb/pdb_interface.c	2007-06-04 12:29:15 UTC (rev 23336)
+@@ -2023,6 +2023,77 @@
+ }
+ 
+ /*******************************************************************
++ trustodm methods
++ *******************************************************************/
++
++BOOL pdb_get_trusteddom_pw(const char *domain, char** pwd, DOM_SID *sid, 
++			   time_t *pass_last_set_time)
++{
++	struct pdb_methods *pdb = pdb_get_methods();
++	return pdb->get_trusteddom_pw(pdb, domain, pwd, sid, 
++			pass_last_set_time);
++}
++
++BOOL pdb_set_trusteddom_pw(const char* domain, const char* pwd,
++			   const DOM_SID *sid)
++{
++	struct pdb_methods *pdb = pdb_get_methods();
++	return pdb->set_trusteddom_pw(pdb, domain, pwd, sid);
++}
++
++BOOL pdb_del_trusteddom_pw(const char *domain)
++{
++	struct pdb_methods *pdb = pdb_get_methods();
++	return pdb->del_trusteddom_pw(pdb, domain);
++}
++
++NTSTATUS pdb_enum_trusteddoms(TALLOC_CTX *mem_ctx, uint32 *num_domains,
++			      struct trustdom_info ***domains)
++{
++	struct pdb_methods *pdb = pdb_get_methods();
++	return pdb->enum_trusteddoms(pdb, mem_ctx, num_domains, domains);
++}
++
++/*******************************************************************
++ the defaults for trustdom methods: 
++ these simply call the original passdb/secrets.c actions,
++ to be replaced by pdb_ldap.
++ *******************************************************************/
++
++static BOOL pdb_default_get_trusteddom_pw(struct pdb_methods *methods,
++					  const char *domain, 
++					  char** pwd, 
++					  DOM_SID *sid, 
++	        	 		  time_t *pass_last_set_time)
++{
++	return secrets_fetch_trusted_domain_password(domain, pwd,
++				sid, pass_last_set_time);
++
++}
++
++static BOOL pdb_default_set_trusteddom_pw(struct pdb_methods *methods, 
++					  const char* domain, 
++					  const char* pwd,
++	        	  		  const DOM_SID *sid)
++{
++	return secrets_store_trusted_domain_password(domain, pwd, sid);
++}
++
++static BOOL pdb_default_del_trusteddom_pw(struct pdb_methods *methods, 
++					  const char *domain)
++{
++	return trusted_domain_password_delete(domain);
++}
++
++static NTSTATUS pdb_default_enum_trusteddoms(struct pdb_methods *methods,
++					     TALLOC_CTX *mem_ctx, 
++					     uint32 *num_domains,
++					     struct trustdom_info ***domains)
++{
++	return secrets_trusted_domains(mem_ctx, num_domains, domains);
++}
++
++/*******************************************************************
+  Create a pdb_methods structure and initialize it with the default
+  operations.  In this way a passdb module can simply implement
+  the functionality it cares about.  However, normally this is done 
+@@ -2085,5 +2156,10 @@
+ 	(*methods)->search_groups = pdb_default_search_groups;
+ 	(*methods)->search_aliases = pdb_default_search_aliases;
+ 
++	(*methods)->get_trusteddom_pw = pdb_default_get_trusteddom_pw;
++	(*methods)->set_trusteddom_pw = pdb_default_set_trusteddom_pw;
++	(*methods)->del_trusteddom_pw = pdb_default_del_trusteddom_pw;
++	(*methods)->enum_trusteddoms  = pdb_default_enum_trusteddoms;
++
+ 	return NT_STATUS_OK;
+ }
+
+Modified: branches/SAMBA_3_0_26/source/passdb/secrets.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/passdb/secrets.c	2007-06-04 09:57:59 UTC (rev 23335)
++++ branches/SAMBA_3_0_26/source/passdb/secrets.c	2007-06-04 12:29:15 UTC (rev 23336)
+@@ -655,47 +655,6 @@
+ 	return ret;
+ }
+ 
+-/*******************************************************************
+- Wrapper around retrieving the trust account password
+-*******************************************************************/
+-                                                                                                                     
+-BOOL get_trust_pw(const char *domain, uint8 ret_pwd[16], uint32 *channel)
+-{
+-	DOM_SID sid;
+-	char *pwd;
+-	time_t last_set_time;
+-                                                                                                                     
+-	/* if we are a DC and this is not our domain, then lookup an account
+-		for the domain trust */
+-                                                                                                                     
+-	if ( IS_DC && !strequal(domain, lp_workgroup()) && lp_allow_trusted_domains() ) {
+-		if (!secrets_fetch_trusted_domain_password(domain, &pwd, &sid,
+-							&last_set_time)) {
+-			DEBUG(0, ("get_trust_pw: could not fetch trust "
+-				"account password for trusted domain %s\n",
+-				domain));
+-			return False;
+-		}
+-                                                                                                                     
+-		*channel = SEC_CHAN_DOMAIN;
+-		E_md4hash(pwd, ret_pwd);
+-		SAFE_FREE(pwd);
+-
+-		return True;
+-	}
+-                                                                                                                     
+-	/* Just get the account for the requested domain. In the future this
+-	 * might also cover to be member of more than one domain. */
+-                                                                                                                     
+-	if (secrets_fetch_trust_account_password(domain, ret_pwd,
+-						&last_set_time, channel))
+-		return True;
+-
+-	DEBUG(5, ("get_trust_pw: could not fetch trust account "
+-		"password for domain %s\n", domain));
+-	return False;
+-}
+-
+ /************************************************************************
+  Routine to delete the machine trust account password file for a domain.
+ ************************************************************************/
+
+Modified: branches/SAMBA_3_0_26/source/rpc_server/srv_lsa_nt.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/rpc_server/srv_lsa_nt.c	2007-06-04 09:57:59 UTC (rev 23335)
++++ branches/SAMBA_3_0_26/source/rpc_server/srv_lsa_nt.c	2007-06-04 12:29:15 UTC (rev 23336)
+@@ -648,8 +648,7 @@
+ 	if (!(info->access & POLICY_VIEW_LOCAL_INFORMATION))
+ 		return NT_STATUS_ACCESS_DENIED;
+ 
+-	nt_status = secrets_trusted_domains(p->mem_ctx, &num_domains,
+-					    &domains);
++	nt_status = pdb_enum_trusteddoms(p->mem_ctx, &num_domains, &domains);
+ 
+ 	if (!NT_STATUS_IS_OK(nt_status)) {
+ 		return nt_status;
+
+Modified: branches/SAMBA_3_0_26/source/utils/net_rpc.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/utils/net_rpc.c	2007-06-04 09:57:59 UTC (rev 23335)
++++ branches/SAMBA_3_0_26/source/utils/net_rpc.c	2007-06-04 12:29:15 UTC (rev 23336)
+@@ -5712,9 +5712,7 @@
+ 	 * Store the password in secrets db
+ 	 */
+ 
+-	if (!secrets_store_trusted_domain_password(domain_name,
+-						   opt_password,
+-						   domain_sid)) {
++	if (!pdb_set_trusteddom_pw(domain_name, opt_password, domain_sid)) {
+ 		DEBUG(0, ("Storing password for trusted domain failed.\n"));
+ 		cli_shutdown(cli);
+ 		talloc_destroy(mem_ctx);
+@@ -5754,6 +5752,7 @@
+ static int rpc_trustdom_revoke(int argc, const char **argv)
+ {
+ 	char* domain_name;
++	int rc = -1;
+ 
+ 	if (argc < 1) return -1;
+ 	
+@@ -5762,13 +5761,16 @@
+ 	strupper_m(domain_name);
+ 
+ 	/* delete password of the trust */
+-	if (!trusted_domain_password_delete(domain_name)) {
++	if (!pdb_del_trusteddom_pw(domain_name)) {
+ 		DEBUG(0, ("Failed to revoke relationship to the trusted domain %s\n",
+ 			  domain_name));
+-		return -1;
++		goto done;
+ 	};
+ 	
+-	return 0;
++	rc = 0;
++done:
++	SAFE_FREE(domain_name);
++	return rc;
+ }
+ 
+ /**
+@@ -5854,9 +5856,7 @@
+ 		goto done;
+ 	}
+ 	
+-	if (!secrets_store_trusted_domain_password(trusted_dom_name,
+-						   cleartextpwd,
+-						   &dom_sid)) {
++	if (!pdb_set_trusteddom_pw(trusted_dom_name, cleartextpwd, &dom_sid)) {
+ 		DEBUG(0, ("Storing password for trusted domain failed.\n"));
+ 		nt_status = NT_STATUS_UNSUCCESSFUL;
+ 		goto done;
+

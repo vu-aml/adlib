@@ -1,0 +1,160 @@
+From r-help-bounces@stat.math.ethz.ch  Fri Jun 15 15:24:34 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5FJOXL9005875
+	for <ktwarwic@flax9.uwaterloo.ca>; Fri, 15 Jun 2007 15:24:34 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5FJNu2K020688;
+	Fri, 15 Jun 2007 21:24:05 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.4 required=5.0 tests=AWL, BAYES_50, DKIM_SIGNED,
+	DKIM_VERIFIED autolearn=no version=3.2.0
+Received: from nz-out-0506.google.com (nz-out-0506.google.com [64.233.162.232])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5FJNnY9020658
+	for <r-help@stat.math.ethz.ch>; Fri, 15 Jun 2007 21:23:50 +0200
+Received: by nz-out-0506.google.com with SMTP id o37so888140nzf
+	for <r-help@stat.math.ethz.ch>; Fri, 15 Jun 2007 12:23:49 -0700 (PDT)
+Received: by 10.143.165.13 with SMTP id s13mr174827wfo.1181935428476;
+	Fri, 15 Jun 2007 12:23:48 -0700 (PDT)
+Received: by 10.143.155.18 with HTTP; Fri, 15 Jun 2007 12:23:48 -0700 (PDT)
+Message-ID: <eb555e660706151223p1d1f45e9j2dc835b3bec9e242@mail.gmail.com>
+Date: Fri, 15 Jun 2007 12:23:48 -0700
+From: "Deepayan Sarkar" <deepayan.sarkar@gmail.com>
+To: "Dirk Eddelbuettel" <edd@debian.org>
+In-Reply-To: <18034.46215.223478.311352@basebud.nulle.part>
+MIME-Version: 1.0
+Content-Disposition: inline
+References: <18034.46215.223478.311352@basebud.nulle.part>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch, Philipp Benner <mail@philipp-benner.de>
+Subject: Re: [R] model.frame: how does one use it?
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+On 6/15/07, Dirk Eddelbuettel <edd@debian.org> wrote:
+>
+> Philipp Benner reported a Debian bug report against r-cran-rpart aka rpart.
+> In short, the issue has to do with how rpart evaluates a formula and
+> supporting arguments, in particular 'weights'.
+>
+> A simple contrived example is
+>
+> -----------------------------------------------------------------------------
+> library(rpart)
+>
+> ## using data from help(rpart), set up simple example
+> myformula <- formula(Kyphosis ~ Age + Number + Start)
+> mydata <- kyphosis
+> myweight <- abs(rnorm(nrow(mydata)))
+>
+> goodFunction <- function(mydata, myformula, myweight) {
+>   hyp <- rpart(myformula, data=mydata, weights=myweight, method="class")
+>   prev <- hyp
+> }
+> goodFunction(mydata, myformula, myweight)
+> cat("Ok\n")
+>
+> ## now remove myweight and try to compute it inside a function
+> rm(myweight)
+>
+> badFunction <- function(mydata, myformula) {
+>   myweight <- abs(rnorm(nrow(mydata)))
+>   mf <- model.frame(myformula, mydata, myweight)
+>   print(head(df))
+>   hyp <- rpart(myformula,
+>                data=mf,
+>                weights=myweight,
+>                method="class")
+>   prev <- hyp
+> }
+> badFunction(mydata, myformula)
+> cat("Done\n")
+> -----------------------------------------------------------------------------
+>
+> Here goodFunction works, but only because myweight (with useless random
+> weights, but that is not the point here) is found from the calling
+> environment.
+>
+> badFunction fails after we remove myweight from there:
+>
+> :~> cat /tmp/philipp.R | R --slave
+> Ok
+> Error in eval(expr, envir, enclos) : object "myweight" not found
+> Execution halted
+> :~>
+>
+> As I was able to replicate it, I reported this to the package maintainer.  It
+> turns out that seemingly all is well as this is supposed to work this way,
+> and I got a friendly pointer to study model.frame and its help page.
+>
+> Now I am stuck as I can't make sense of model.frame -- see badFunction
+> above. I would greatly appreciate any help in making rpart work with a local
+> argument weights so that I can tell Philipp that there is no bug.  :)
+
+I don't know if ?model.frame is the best place page to look. There's a
+more detailed description at
+
+http://developer.r-project.org/nonstandard-eval.pdf
+
+but here are the non-standard evaluation rules as I understand them:
+given a name in either (1) the formula or (2) ``special'' arguments like
+'weights' in this case, or 'subset', try to find the name
+
+1. in 'data'
+2. failing that, in environment(formula)
+3. failing that, in the enclosing environment, and so on.
+
+By 'name', I mean a symbol, such as 'Age' or 'myweight'.  So
+basically, everything is as you would expect if the name is visible in
+data, but if not, the search starts in the environment of the formula,
+not the environment where the function call is being made (which is
+the standard evaulation behaviour).  This is a feature, not a bug
+(things would be a lot more confusing if it were the other way round).
+
+
+With this in mind, either of the following might do what you want:
+
+badFunction <- function(mydata, myformula) {
+    mydata$myweight <- abs(rnorm(nrow(mydata)))
+    hyp <-
+        rpart(myformula,
+              data=mydata,
+              weights=myweight,
+              method="class")
+    prev <- hyp
+}
+
+
+badFunction <- function(mydata, myformula) {
+    myweight <- abs(rnorm(nrow(mydata)))
+    environment(myformula) <- environment()
+    hyp <-
+        rpart(myformula,
+              data=mydata,
+              weights=myweight,
+              method="class")
+    prev <- hyp
+}
+
+-Deepayan
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

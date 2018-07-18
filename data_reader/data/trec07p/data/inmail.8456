@@ -1,0 +1,212 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat Apr 14 06:45:18 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3EAjI0I000821
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 14 Apr 2007 06:45:18 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 86A5A162BCD
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 14 Apr 2007 10:44:54 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: **
+X-Spam-Status: No, score=2.5 required=3.8 tests=BAYES_50,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id CE070162AF7; Sat, 14 Apr 2007 10:44:27 +0000 (GMT)
+Date: Sat, 14 Apr 2007 20:44:44 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070414104427.CE070162AF7@lists.samba.org>
+Subject: Rev 104: merge from ronnie in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 5544
+Lines: 172
+
+------------------------------------------------------------
+revno: 104
+revision-id: tridge@samba.org-20070414104443-0b90a6105ca1c1d5
+parent: tridge@samba.org-20070413103824-0c5e1dbd679c73bd
+parent: ronniesahlberg@gmail.com-20070413103741-t7jc7c48i2rl2v1d
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Sat 2007-04-14 20:44:43 +1000
+message:
+  merge from ronnie
+modified:
+  common/ctdb_client.c           ctdb_client.c-20070411010216-3kd8v37k61steeya-1
+  common/ctdb_daemon.c           ctdb_daemon.c-20070409200331-3el1kqgdb9m4ib0g-1
+  tests/ctdb_fetch1.c            ctdb_fetch1.c-20070412111848-xawz6wqk9r0v8jdk-1
+    ------------------------------------------------------------
+    merged: ronniesahlberg@gmail.com-20070413103741-t7jc7c48i2rl2v1d
+    parent: ronniesahlberg@gmail.com-20070412234456-b80kjt2dz2213ijc
+    committer: Ronnie sahlberg <ronniesahlberg@gmail.com>
+    branch nick: ctdb
+    timestamp: Fri 2007-04-13 20:37:41 +1000
+    message:
+      add missing code to store_unlock so that the data that a client writes is stored in ltdb
+      
+      this makes it possible to do fetch_lock and store_unlock across a domain socket to read/write data.
+      
+      
+      note that the actual locking is NOT implemented yet
+=== modified file 'common/ctdb_client.c'
+--- a/common/ctdb_client.c	2007-04-13 10:38:24 +0000
++++ b/common/ctdb_client.c	2007-04-14 10:44:43 +0000
+@@ -586,7 +586,7 @@
+   This is called when the program wants to wait for a ctdb_fetch_lock to complete and get the 
+   results. This call will block unless the call has already completed.
+ */
+-struct ctdb_record_handle *ctdb_client_fetch_lock_recv(struct ctdb_call_state *state, TALLOC_CTX *mem_ctx, TDB_DATA key)
++struct ctdb_record_handle *ctdb_client_fetch_lock_recv(struct ctdb_call_state *state, TALLOC_CTX *mem_ctx, TDB_DATA key, TDB_DATA *data)
+ {
+ 	struct ctdb_record_handle *rec;
+ 
+@@ -609,6 +609,9 @@
+ 	rec->data->dsize = state->call.reply_data.dsize;
+ 	rec->data->dptr  = talloc_memdup(rec, state->call.reply_data.dptr, rec->data->dsize);
+ 
++	if (data) {
++		*data = *rec->data;
++	}
+ 	return rec;
+ }
+ 
+@@ -633,13 +636,14 @@
+ 
+ struct ctdb_record_handle *ctdb_client_fetch_lock(struct ctdb_db_context *ctdb_db, 
+ 						  TALLOC_CTX *mem_ctx, 
+-						  TDB_DATA key, TDB_DATA *data)
++						  TDB_DATA key,
++						  TDB_DATA *data)
+ {
+ 	struct ctdb_call_state *state;
+ 	struct ctdb_record_handle *rec;
+ 
+ 	state = ctdb_client_fetch_lock_send(ctdb_db, mem_ctx, key);
+-	rec = ctdb_client_fetch_lock_recv(state, mem_ctx, key);
++	rec = ctdb_client_fetch_lock_recv(state, mem_ctx, key, data);
+ 
+ 	return rec;
+ }
+
+=== modified file 'common/ctdb_daemon.c'
+--- a/common/ctdb_daemon.c	2007-04-13 10:38:24 +0000
++++ b/common/ctdb_daemon.c	2007-04-14 10:44:43 +0000
+@@ -214,12 +214,36 @@
+ {
+ 	struct ctdb_db_context *ctdb_db;
+ 	struct ctdb_reply_store_unlock r;
++	uint32_t caller = ctdb_get_vnn(client->ctdb);
++	struct ctdb_ltdb_header header;
++	TDB_DATA key, data;
+ 	int res;
+ 
+ 	ctdb_db = find_ctdb_db(client->ctdb, f->db_id);
++
+ 	/* write the data to ltdb */
+-/*XXX*/
+-
++	key.dsize = f->keylen;
++	key.dptr  = &f->data[0];
++	res = ctdb_ltdb_fetch(ctdb_db, key, &header, NULL, NULL);
++	if (res) {
++		ctdb_set_error(ctdb_db->ctdb, "Fetch of locally held record failed");
++		res = -1;
++		goto done;
++	}
++	if (header.laccessor != caller) {
++		header.lacount = 0;
++	}
++	header.laccessor = caller;
++	header.lacount++;
++	data.dsize = f->datalen;
++	data.dptr  = &f->data[f->keylen];
++	res = ctdb_ltdb_store(ctdb_db, key, &header, data);
++	if ( res != 0) {
++		ctdb_set_error(ctdb_db->ctdb, "ctdb_call tdb_store failed\n");
++	}
++
++
++done:
+ 	/* now send the reply */
+ 	ZERO_STRUCT(r);
+ 
+@@ -228,7 +252,7 @@
+ 	r.hdr.ctdb_version = CTDB_VERSION;
+ 	r.hdr.operation  = CTDB_REPLY_STORE_UNLOCK;
+ 	r.hdr.reqid      = f->hdr.reqid;
+-	r.state          = CTDB_CALL_DONE;
++	r.state          = res;
+ 	
+ 	res = ctdb_queue_send(client->queue, (uint8_t *)&r.hdr, r.hdr.length);
+ 	if (res != 0) {
+
+=== modified file 'tests/ctdb_fetch1.c'
+--- a/tests/ctdb_fetch1.c	2007-04-13 10:38:24 +0000
++++ b/tests/ctdb_fetch1.c	2007-04-14 10:44:43 +0000
+@@ -42,7 +42,7 @@
+ 	const char *myaddress = NULL;
+ 	int self_connect=0;
+ 	int daemon_mode=0;
+-	TDB_DATA key, *data, *data2, store_data;
++	TDB_DATA key, data, data2, store_data;
+ 	struct ctdb_record_handle *rh;
+ 
+ 	struct poptOption popt_options[] = {
+@@ -137,26 +137,29 @@
+ 	ctdb_connect_wait(ctdb);
+ 
+ 	key.dptr  = "Record";
+-	key.dsize = strlen(key.dptr);
+-	data      = NULL;
+-	rh = ctdb_fetch_lock(ctdb_db, ctdb_db, key, data);
++	key.dsize = strlen(key.dptr)+1;
++	rh = ctdb_fetch_lock(ctdb_db, ctdb_db, key, &data);
+ 
+ 	store_data.dptr  = "data to store";
+ 	store_data.dsize = strlen(store_data.dptr)+1;
+ 	ret = ctdb_store_unlock(rh, store_data);
+-	printf("ctdb_store_unlock ret:%d\n",ret);
+-
+-	data2     = NULL;
+-	rh = ctdb_fetch_lock(ctdb_db, ctdb_db, key, data2);
+-/* hopefully   data2 will now contain the record written above */
+-
++
++	rh = ctdb_fetch_lock(ctdb_db, ctdb_db, key, &data2);
++	/* hopefully   data2 will now contain the record written above */
++	if (!strcmp("data to store", data2.dptr)) {
++		printf("woohoo we read back the data we stored\n");
++	} else {
++		printf("ERROR: we read back different data than we stored\n");
++	}
++	
+ 	/* just write it back to unlock it */
+-	ret = ctdb_store_unlock(rh, data2);
+-	printf("ctdb_store_unlock ret:%d\n",ret);
++	ret = ctdb_store_unlock(rh, store_data);
+ 
++#if 0
+ 	while (1) {
+ 		event_loop_once(ev);
+ 	}
++#endif
+ 
+ 	/* shut it down */
+ 	talloc_free(ctdb);
+

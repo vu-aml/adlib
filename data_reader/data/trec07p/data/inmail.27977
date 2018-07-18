@@ -1,0 +1,138 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu May  3 15:21:07 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l43JL7qD006872
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 3 May 2007 15:21:07 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 0E0431638BF
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu,  3 May 2007 19:21:07 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.3 required=3.8 tests=AWL,BAYES_00,
+	RCVD_IN_BLARS_RBL,RCVD_IN_DSBL,SPF_PASS autolearn=no version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: from mail.gmx.net (mail.gmx.net [213.165.64.20])
+	by lists.samba.org (Postfix) with SMTP id 0741D162B72
+	for <samba-technical@samba.org>; Thu,  3 May 2007 19:20:39 +0000 (GMT)
+Received: (qmail invoked by alias); 03 May 2007 19:20:38 -0000
+Received: from ppp-88-217-25-72.dynamic.mnet-online.de (EHLO dh3mb)
+	[88.217.25.72]
+	by mail.gmx.net (mp040) with SMTP; 03 May 2007 21:20:38 +0200
+X-Authenticated: #13703797
+X-Provags-ID: V01U2FsdGVkX1/GHjgeHcLGblC1ZNUlcgRINOsQ1Rs0CcvhH+0pAI
+	zm0n6TgeYgqfhZ
+From: Johann Hanne <jhml@gmx.net>
+To: simo <idra@samba.org>
+Date: Thu, 3 May 2007 21:00:59 +0200
+User-Agent: KMail/1.8.2
+References: <200704291340.32645.jhml@gmx.net> <200704301311.34322.jhml@gmx.net>
+	<1178197715.28758.7.camel@localhost.localdomain>
+In-Reply-To: <1178197715.28758.7.camel@localhost.localdomain>
+MIME-Version: 1.0
+Content-Type: text/plain;
+  charset="iso-8859-1"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+Message-Id: <200705032100.59943.jhml@gmx.net>
+X-Y-GMX-Trusted: 0
+Cc: "Gerald \(Jerry\) Carter" <jerry@samba.org>, samba-technical@samba.org
+Subject: Re: "valid users = domain_user" without specifying domain
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+On Thursday 03 May 2007 15:08, you wrote:
+> On Mon, 2007-04-30 at 13:11 +0200, Johann Hanne wrote:
+> > > I'm pretty sure this behavior is described in the release notes for
+> > > the 3.0.23 release series.  It is by deisgn.  DOMAION\group1 and
+> > > (local) group1 have different SIDs.
+> >
+> > Yes, I've read the release notes, but maybe I'm misunderstanding
+> > something. I thought that "valid users = +apache" is the same as "valid
+> > users = +MACHINE\apache" and that MACHINE is the literal string
+> > "MACHINE"?
+>
+> no, MACHINE is the name of your machine (netbios name), and MACHINE
+> +apache refer to a mapped group you can create (mapped to the local
+> apache).
+>
+> > > > Shouldn't this be a configuration that works? user1,
+> > > > user2 and user3 are actually winbind/nss mapped users, so why
+> > > > do I have to specify the domain name here?
+> > >
+> > > Just make MACHINE\Apache and add domain users to that.
+> >
+> > I really tried everything I could think of. And I've also added all
+> > possible combinations (even those which don't make sense to me),
+> > currently I have:
+>
+> just map a local group to apache and it should just work.
+I tried:
+--
+# net groupmap add unixgroup=apache type=local
+No rid or sid specified, choosing a RID
+Got RID 1163
+Successfully added group apache to the mapping db as a alias (local) group
+# net groupmap list
+apache (S-1-5-21-3048374563-2127316528-2660899232-1163) -> apache
+# net sam list localgroups
+apache
+# net sam listmem apache
+MYSERVER\apache has 0 members
+--
+(It works if I add MYDOMAIN\user1 with "net sam addmem", but this is not what 
+I want - I'd like to maintain 1 group only...)
+
+/etc/group has:
+--
+apache::81:user1
+--
+
+smb.conf has:
+--
+[www]
+  comment = Web
+  path = /var/www
+  valid users = +apache
+--
+
+smbd -i -S -d 100
+--
+...
+enum_group_mapping: returning group apache of type Local Group
+...
+making a connection to 'normal' service www
+string_to_sid: Sid +apache does not start with 'S-'.
+lookup_name: MYSERVER\apache => MYSERVER (domain), apache (name)
+push_sec_ctx(0, 0) : sec_ctx_stack_ndx = 1
+push_conn_ctx(0) : conn_ctx_stack_ndx = 0
+setting sec ctx (0, 0) - sec_ctx_stack_ndx = 1
+NT user token: (NULL)
+UNIX token of user 0
+Primary group is 0 and contains 0 supplementary groups
+tdb_unpack(ddff, 32) -> 32
+pop_sec_ctx (0, 0) - sec_ctx_stack_ndx = 0
+User MYDOMAIN\user1 not in 'valid users'
+...
+--
+
+Am I still missing something?? I really can't find anything related in the 
+HOWTOs...
+
+Thanks for your help!
+
+Cheers, Johann
+

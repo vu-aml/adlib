@@ -1,0 +1,102 @@
+From perl6-all-return-81039-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue May  1 17:42:38 2007
+Return-Path: <perl6-all-return-81039-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l41Lgbb9013613
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 1 May 2007 17:42:37 -0400
+Received: (qmail 22140 invoked by uid 514); 1 May 2007 21:42:36 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 22135 invoked from network); 1 May 2007 21:42:35 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-0.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO,KARMA_CONNECT_NEGATIVE
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: softfail (x1.develooper.com: transitioning domain of chromatic@wgz.org does not designate 63.251.223.186 as permitted sender)
+Delivered-To: perlmail-parrot-porters@onion.perl.org
+Delivered-To: parrot-porters@perl.org
+Received-SPF: pass (x1.develooper.com: domain of chromatic@wgz.org designates 63.105.17.39 as permitted sender)
+From: chromatic <chromatic@wgz.org>
+Organization: Snafu
+To: parrot-porters@perl.org
+Subject: FOTW: src/pmc/orderedhash.pmc
+Date: Tue, 1 May 2007 14:38:16 -0700
+User-Agent: KMail/1.9.6
+MIME-Version: 1.0
+Content-Type: text/plain;
+  charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+Message-Id: <200705011438.16151.chromatic@wgz.org>
+X-Virus-Scanned: by amavisd-new at wgz.org
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO,SPF_PASS
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+
+The OrderedHash PMC provides keyed and indexed access to its elements.  It's a 
+hash that remembers the order of its key/value pair additions and it's an 
+array that allows keyed access to (some of) its members.
+
+While the naive approach might be to use both a hash and an array underneath, 
+this PMC uses a hash and mangles its keys to encode insertion order.  I'm not 
+sure this is necessarily a good idea.  I haven't studied the code in 
+sufficient detail to convince myself that the escaping system used (see the 
+Parrot_sprintf() call in set_pmc_keyed_int(), for example) is free of bugs; 
+there could be collisions.
+
+The iteration code is complex, but that's due more to the design of our hashes 
+(src/hash.c), which expose way too much information.  See the use of 
+key_next() in get_pmc_keyed(), for example.
+
+The code has some cleverness; the way it handles negative indices is clean and 
+clear (once you know what it does).  Again, see get_pmc_keyed_int():
+
+        n = h->entries;
+
+	if (idx < 0)
+            idx += n;
+
+There's similar code in set_pmc_keyed_int(), but I don't understand quite what 
+the extra clause does, nor why we need to support it:
+
+	n = h->entries;
+
+        if (idx < -n)
+            idx = -idx - n - 1;
+        else if (idx < 0)
+            idx += n;
+
+All of the vtable methods that access keys share their internal logic; there's 
+a lot of very-near dupication here.  I've almost convinced myself that a 
+short macro would remove this duplication and help avoid bugs in maintenance.
+
+The same type of duplication is evident in the exists() and defined() methods.
+
+I decided to look into this code while tracking down its behavior for clone().  
+My questions are:
+
+	- should this method copy null values?
+	- are the semantics of delete() sane at all?
+	- why does this code access the contained hash directly instead of through an 
+interface?
+	- how are the tests?
+
+I welcome any and all comments on this file.  I've already checked in some 
+minor cleanups, though they mostly affected formatting.
+
+-- c
+

@@ -1,0 +1,185 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri May  4 08:41:43 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l44CfhqD015461
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 4 May 2007 08:41:43 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 5E253163918
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri,  4 May 2007 12:41:42 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 9D3BB162BCA; Fri,  4 May 2007 12:41:28 +0000 (GMT)
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070504124128.9D3BB162BCA@lists.samba.org>
+Date: Fri,  4 May 2007 12:41:28 +0000 (GMT)
+Subject: svn commit: samba r22670 - in
+	branches/SAMBA_4_0/source/torture/raw: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: tridge
+Date: 2007-05-04 12:41:28 +0000 (Fri, 04 May 2007)
+New Revision: 22670
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22670
+
+Log:
+
+changed the RAW-NOTIFY test to support clustered testing (two nodes)
+
+Modified:
+   branches/SAMBA_4_0/source/torture/raw/notify.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/torture/raw/notify.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/raw/notify.c	2007-05-04 11:26:25 UTC (rev 22669)
++++ branches/SAMBA_4_0/source/torture/raw/notify.c	2007-05-04 12:41:28 UTC (rev 22670)
+@@ -55,7 +55,8 @@
+ /* 
+    basic testing of change notify on directories
+ */
+-static BOOL test_notify_dir(struct smbcli_state *cli, TALLOC_CTX *mem_ctx)
++static BOOL test_notify_dir(struct smbcli_state *cli, struct smbcli_state *cli2, 
++			    TALLOC_CTX *mem_ctx)
+ {
+ 	BOOL ret = True;
+ 	NTSTATUS status;
+@@ -110,7 +111,7 @@
+ 	printf("testing notify mkdir\n");
+ 
+ 	req = smb_raw_changenotify_send(cli->tree, &notify);
+-	smbcli_mkdir(cli->tree, BASEDIR "\\subdir-name");
++	smbcli_mkdir(cli2->tree, BASEDIR "\\subdir-name");
+ 
+ 	status = smb_raw_changenotify_recv(req, mem_ctx, &notify);
+ 	CHECK_STATUS(status, NT_STATUS_OK);
+@@ -122,7 +123,7 @@
+ 	printf("testing notify rmdir\n");
+ 
+ 	req = smb_raw_changenotify_send(cli->tree, &notify);
+-	smbcli_rmdir(cli->tree, BASEDIR "\\subdir-name");
++	smbcli_rmdir(cli2->tree, BASEDIR "\\subdir-name");
+ 
+ 	status = smb_raw_changenotify_recv(req, mem_ctx, &notify);
+ 	CHECK_STATUS(status, NT_STATUS_OK);
+@@ -132,10 +133,10 @@
+ 
+ 	printf("testing notify mkdir - rmdir - mkdir - rmdir\n");
+ 
+-	smbcli_mkdir(cli->tree, BASEDIR "\\subdir-name");
+-	smbcli_rmdir(cli->tree, BASEDIR "\\subdir-name");
+-	smbcli_mkdir(cli->tree, BASEDIR "\\subdir-name");
+-	smbcli_rmdir(cli->tree, BASEDIR "\\subdir-name");
++	smbcli_mkdir(cli2->tree, BASEDIR "\\subdir-name");
++	smbcli_rmdir(cli2->tree, BASEDIR "\\subdir-name");
++	smbcli_mkdir(cli2->tree, BASEDIR "\\subdir-name");
++	smbcli_rmdir(cli2->tree, BASEDIR "\\subdir-name");
+ 	req = smb_raw_changenotify_send(cli->tree, &notify);
+ 	status = smb_raw_changenotify_recv(req, mem_ctx, &notify);
+ 	CHECK_STATUS(status, NT_STATUS_OK);
+@@ -174,11 +175,14 @@
+ 	notify.nttrans.in.file.fnum = fnum;
+ 	req = smb_raw_changenotify_send(cli->tree, &notify);
+ 
++	status = smbcli_unlink(cli->tree, BASEDIR "\\nonexistant.txt");
++	CHECK_STATUS(status, NT_STATUS_OBJECT_NAME_NOT_FOUND);
++
+ 	/* (1st unlink) as the 2nd notify directly returns,
+ 	   this unlink is only seen by the 1st notify and 
+ 	   the 3rd notify (later) */
+ 	printf("testing notify on unlink for the first file\n");
+-	status = smbcli_unlink(cli->tree, BASEDIR "\\test0.txt");
++	status = smbcli_unlink(cli2->tree, BASEDIR "\\test0.txt");
+ 	CHECK_STATUS(status, NT_STATUS_OK);
+ 
+ 	/* receive the reply from the 2nd notify */
+@@ -186,24 +190,27 @@
+ 	CHECK_STATUS(status, NT_STATUS_OK);
+ 
+ 	CHECK_VAL(notify.nttrans.out.num_changes, count);
+-	for (i=1;i<notify.nttrans.out.num_changes;i++) {
++	for (i=1;i<count;i++) {
+ 		CHECK_VAL(notify.nttrans.out.changes[i].action, NOTIFY_ACTION_ADDED);
+ 	}
+ 	CHECK_WSTR(notify.nttrans.out.changes[0].name, "test0.txt", STR_UNICODE);
+ 
+-	/* and now from the 1st notify */
++	printf("and now from the 1st notify\n");
+ 	status = smb_raw_changenotify_recv(req2, mem_ctx, &notify);
+ 	CHECK_STATUS(status, NT_STATUS_OK);
+ 	CHECK_VAL(notify.nttrans.out.num_changes, 1);
+ 	CHECK_VAL(notify.nttrans.out.changes[0].action, NOTIFY_ACTION_REMOVED);
+ 	CHECK_WSTR(notify.nttrans.out.changes[0].name, "test0.txt", STR_UNICODE);
+ 
+-	/* (3rd notify) this notify will only see the 1st unlink */
++	printf("(3rd notify) this notify will only see the 1st unlink\n");
+ 	req = smb_raw_changenotify_send(cli->tree, &notify);
+ 
++	status = smbcli_unlink(cli->tree, BASEDIR "\\nonexistant.txt");
++	CHECK_STATUS(status, NT_STATUS_OBJECT_NAME_NOT_FOUND);
++
+ 	printf("testing notify on wildcard unlink for %d files\n", count-1);
+ 	/* (2nd unlink) do a wildcard unlink */
+-	status = smbcli_unlink(cli->tree, BASEDIR "\\test*.txt");
++	status = smbcli_unlink(cli2->tree, BASEDIR "\\test*.txt");
+ 	CHECK_STATUS(status, NT_STATUS_OK);
+ 
+ 	/* receive the 3rd notify */
+@@ -1149,13 +1156,16 @@
+ */
+ BOOL torture_raw_notify(struct torture_context *torture)
+ {
+-	struct smbcli_state *cli;
++	struct smbcli_state *cli, *cli2;
+ 	BOOL ret = True;
+ 	TALLOC_CTX *mem_ctx;
+ 		
+ 	if (!torture_open_connection(&cli, 0)) {
+ 		return False;
+ 	}
++	if (!torture_open_connection(&cli2, 0)) {
++		return False;
++	}
+ 
+ 	mem_ctx = talloc_init("torture_raw_notify");
+ 
+@@ -1163,7 +1173,7 @@
+ 		return False;
+ 	}
+ 
+-	ret &= test_notify_dir(cli, mem_ctx);
++	ret &= test_notify_dir(cli, cli2, mem_ctx);
+ 	ret &= test_notify_mask(cli, mem_ctx);
+ 	ret &= test_notify_recursive(cli, mem_ctx);
+ 	ret &= test_notify_file(cli, mem_ctx);
+@@ -1177,6 +1187,7 @@
+ 	smb_raw_exit(cli->session);
+ 	smbcli_deltree(cli->tree, BASEDIR);
+ 	torture_close_connection(cli);
++	torture_close_connection(cli2);
+ 	talloc_free(mem_ctx);
+ 	return ret;
+ }
+

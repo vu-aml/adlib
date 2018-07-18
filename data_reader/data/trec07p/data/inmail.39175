@@ -1,0 +1,104 @@
+From r-help-bounces@stat.math.ethz.ch  Fri May 18 11:45:13 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4IFjBqD015561
+	for <ktwarwic@flax9.uwaterloo.ca>; Fri, 18 May 2007 11:45:13 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4IFidxu023932;
+	Fri, 18 May 2007 17:44:49 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=5.0 tests=AWL autolearn=no version=3.1.8
+Received: from mxout3.cac.washington.edu (mxout3.cac.washington.edu
+	[140.142.32.166])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4IF99g4008841
+	(version=TLSv1/SSLv3 cipher=DHE-RSA-AES256-SHA bits=256 verify=FAIL)
+	for <r-help@stat.math.ethz.ch>; Fri, 18 May 2007 17:09:12 +0200
+Received: from homer21.u.washington.edu (homer21.u.washington.edu
+	[140.142.12.133])
+	by mxout3.cac.washington.edu (8.13.7+UW06.06/8.13.7+UW07.03) with ESMTP
+	id l4IF98L4030169
+	(version=TLSv1/SSLv3 cipher=DHE-RSA-AES256-SHA bits=256 verify=NO);
+	Fri, 18 May 2007 08:09:09 -0700
+Received: from localhost (tlumley@localhost)
+	by homer21.u.washington.edu (8.13.7+UW06.06/8.13.7+Submit) with ESMTP
+	id l4IF98TU025795; Fri, 18 May 2007 08:09:08 -0700
+Date: Fri, 18 May 2007 08:09:08 -0700 (PDT)
+From: Thomas Lumley <tlumley@u.washington.edu>
+To: jiho <jo.irisson@gmail.com>
+In-Reply-To: <6DA9A4C3-A9A4-4CC3-A7B5-4C8470D2C58E@gmail.com>
+Message-ID: <Pine.LNX.4.64.0705180802120.22035@homer21.u.washington.edu>
+References: <6DA9A4C3-A9A4-4CC3-A7B5-4C8470D2C58E@gmail.com>
+MIME-Version: 1.0
+X-PMX-Version: 5.3.1.294258, Antispam-Engine: 2.5.1.298604,
+	Antispam-Data: 2007.5.18.75435
+X-Uwash-Spam: Gauge=IIIIIII, Probability=7%, Report='__CT 0, __CT_TEXT_PLAIN 0,
+	__HAS_MSGID 0, __MIME_TEXT_ONLY 0, __MIME_VERSION 0,
+	__SANE_MSGID 0'
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] lapply not reading arguments from the correct environment
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+On Fri, 18 May 2007, jiho wrote:
+
+> Hello,
+>
+> I am facing a problem with lapply which I ''''think''' may be a bug.
+> This is the most basic function in which I can reproduce it:
+>
+> myfun <- function()
+> {
+> 	foo = data.frame(1:10,10:1)
+> 	foos = list(foo)
+> 	fooCollumn=2
+> 	cFoo = lapply(foos,subset,select=fooCollumn)
+> 	return(cFoo)
+> }
+>
+<snip>
+> I get this error:
+> 	Error in eval(expr, envir, enclos) : object "fooCollumn" not found
+> while fooCollumn is defined, in the function, right before lapply.
+<snip>
+> This is with R 2.5.0 on both OS X and Linux (Fedora Core 6)
+> What did I do wrong? Is this indeed a bug? An intended behavior?
+
+No, it isn't a bug (though it may be confusing).
+
+The problem is that subset() evaluates its "select" argument in an unusual 
+way. Usually the argument would be evaluated inside myfun() and the value 
+passed to lapply(), and everything would work as you expect.
+
+subset() bypasses the normal evaluation and explicitly evaluates the 
+"select" argument in the calling frame, ie, inside lapply(), where 
+fooCollumn is not visible.
+
+You could do
+   lapply(foos, function(foo) subset(foo, select=fooCollum))
+capturing fooCollum by lexical scope.  In R this is often a better option 
+than passing extra arguments to lapply (or other functions that take 
+function arguments).
+
+ 	-thomas
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

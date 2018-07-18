@@ -1,0 +1,101 @@
+From perl6-all-return-81623-ktwarwic=speedy.uwaterloo.ca@perl.org  Mon May 28 02:58:28 2007
+Return-Path: <perl6-all-return-81623-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4S6wRqD011052
+	for <ktwarwic@flax9.uwaterloo.ca>; Mon, 28 May 2007 02:58:28 -0400
+Received: (qmail 4120 invoked by uid 514); 28 May 2007 06:58:22 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 4115 invoked from network); 28 May 2007 06:58:22 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-0.7 required=8.0
+	tests=BAYES_20,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+Delivered-To: perlmail-parrot-porters@onion.perl.org
+Delivered-To: parrot-porters@perl.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+X-Virus-Scanned: by both ClamAV and Kaspersky at http://aliencamel.com/
+Message-ID: <465A7C82.6070501@perl.org>
+Date: Sun, 27 May 2007 23:53:54 -0700
+From: Allison Randal <allison@perl.org>
+User-Agent: Thunderbird 1.5.0.10 (Macintosh/20070221)
+MIME-Version: 1.0
+To: Allison Randal <allison@perl.org>
+CC: p2 <parrot-porters@perl.org>
+Subject: Re: PMC architecture discussion
+References: <46524BE9.7030808@perl.org>
+In-Reply-To: <46524BE9.7030808@perl.org>
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=2.7 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,KARMA_CONNECT_NEGATIVE,SPF_NEUTRAL
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-0.2 required=8.0
+	tests=BAYES_40,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+
+Being generally in favor of moving quickly toward a 1.0 release, I'm 
+looking at this from the perspective of "what's essential and what's not 
+essential"?
+
+Allison Randal wrote:
+> 
+> I'd like to do away with the PMC_DATA_IN_EXT flag so the "DPOINTER 
+> *data;" struct element is always in the PMC struct instead of being 
+> sometimes in the PMC struct and sometimes in the PMC_EXT struct. Access 
+> is all hidden behind macros anyway, so the change shouldn't affect 
+> anything outside of include/parrot/pobj.h. And, PMC_DATA_IN_EXT is 
+> currently set to 1 in include/parrot/pobj.h, and never unset anywhere in 
+> the repository.
+
+This change we might as well go ahead and make. There's no reason to 
+have *data in two alternate locations. Let's put it in PMC_EXT (which is 
+where it is now because of the fixed-value flag).
+
+> Combining this with the proposal to give PMCs a vtable function 
+> responsible for constructing the PMC: calling the C<new> opcode 
+> constructs the core PMC struct for all PMCs, and then calls the 
+> C<construct> (or C<create>) vtable function. Each PMC that overrides 
+> C<construct> creates its own struct to store in C<data>. The C<default> 
+> PMC's C<construct> does nothing. C<construct> is separated from C<init> 
+> so they can be overridden separately.
+> 
+> To accommodate low-level role composition, the C<data> struct for a PMC 
+> isn't defined directly in C, it's defined with a bit of Pmc2c syntactic 
+> sugar. Pmc2c takes all the struct members defined in the PMC and in any 
+> compile-time roles and builds them into one struct for the PMC. Also 
+> included are any struct members defined in inherited PMCs. (A PMC is not 
+> permitted to redefine any struct members defined in parents, and roles 
+> may not contain struct members of the same name. Yes, this is rather 
+> strict, but it is C.)
+
+We add this functionality without removing or changing any of the old 
+functionality. PMCs that want to use compile-time composition have to 
+use this interface for defining the core attributes, but with other PMCs 
+it's optional.
+
+> Low-level PMCs can also have roles composed at runtime, but these are 
+> entirely different creatures. They are added through the C<add_role> 
+> vtable function and live in a PMC data structure that hangs off the 
+> PMC_EXT struct. Runtime composed roles are Role PMCs or subclasses of 
+> the Role PMC.
+
+We add another pointer to PMC_EXT.
+
+No other changes are really necessary to get to the 1.0 release.
+
+Allison
+

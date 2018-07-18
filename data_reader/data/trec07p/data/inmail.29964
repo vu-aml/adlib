@@ -1,0 +1,117 @@
+From r-help-bounces@stat.math.ethz.ch  Sun May  6 12:24:50 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l46GOnqD020613
+	for <ktwarwic@flax9.uwaterloo.ca>; Sun, 6 May 2007 12:24:50 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l46GOKrc003825;
+	Sun, 6 May 2007 18:24:27 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.4 required=5.0 tests=AWL autolearn=no version=3.1.8
+Received: from raptor.centroin.com (asmtp.centroin.com [64.251.27.169])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l46GJsXA001636
+	(version=TLSv1/SSLv3 cipher=DHE-RSA-AES256-SHA bits=256 verify=NO)
+	for <r-help@stat.math.ethz.ch>; Sun, 6 May 2007 18:19:56 +0200
+Received: from 20151018201.user.veloxzone.com.br
+	(20151018201.user.veloxzone.com.br [201.51.18.201])
+	(authenticated bits=0)
+	by raptor.centroin.com (8.14.1/8.13.6/CIP SMTP HOST) with ESMTP id
+	l46GK3BC056827; Sun, 6 May 2007 13:20:09 -0300 (BRT)
+	(envelope-from albmont@centroin.com.br)
+From: Alberto Vieira Ferreira Monteiro <albmont@centroin.com.br>
+To: r-help@stat.math.ethz.ch
+Date: Sun, 6 May 2007 16:19:49 +0000
+User-Agent: KMail/1.8
+References: <463DEAA9.2020106@ksu.edu>
+In-Reply-To: <463DEAA9.2020106@ksu.edu>
+MIME-Version: 1.0
+Content-Disposition: inline
+Message-Id: <200705061619.50192.albmont@centroin.com.br>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: attenka@utu.fi, "Ron E. VanNimwegen" <vanron@ksu.edu>
+Subject: Re: [R] A function for raising a matrix to a power?
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+Ron E. VanNimwegen wrote:
+>
+> I was looking for a similar operator, because R uses scalar products
+> when raising a matrix to a power with "^".  There might be something
+> more elegant, but this little loop function will do what you need for a
+> matrix "mat" raised to a power "pow":
+>
+> mp <- function(mat,pow){
+> ans <- mat
+> for ( i in 1:(pow-1)){
+> ans <- mat%*%ans
+> }
+> return(ans)
+> }
+>
+This function is extremely inefficient for high powers of pow
+[an unhappy choice of variables, because pow is the power
+function in many languages]
+
+A better method would keep track of the powers of two,
+and would optimize according to it.
+
+For example, in order to compute mat^42, we just have to
+compute mat^2, mat^4, mat^8, mat^16, mat^32, and
+then mat^40 and mat^42, with "only" 7 multiplications, instead
+of 41.
+
+See the technique in...
+http://en.wikipedia.org/wiki/Exponentiation_by_squaring
+
+matrix.power <- function(mat, n)
+{
+  # test if mat is a square matrix
+  # treat n < 0 and n = 0 -- this is left as an exercise
+  # trap non-integer n and return an error
+  if (n == 1) return(mat)
+  result <- diag(1, ncol(mat))
+  while (n > 0) {
+    if (n %% 2 != 0) {
+      result <- result %*% mat
+      n <- n - 1
+    }
+    mat <- mat %*% mat
+    n <- n / 2
+  }
+  return(result)
+}
+
+# Test case:
+mat <- matrix(c(1,1,1,0), 2, 2)
+mat42 <- matrix.power(mat, 42)
+det(mat) # -1
+det(mat42) # not 1, because of truncation errors, but close enough :-)
+# I hate floating point arithmetics :-/
+
+# Another test case:
+mat <- matrix(c(1,1,0,1), 2, 2)
+mat314159 <- matrix.power(mat, 314159)
+# mat314159 is matrix(c(1,314159,0,1), 2, 2)
+
+Alberto Monteiro
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

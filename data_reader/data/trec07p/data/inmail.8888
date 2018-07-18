@@ -1,0 +1,178 @@
+From perl6-all-return-80596-ktwarwic=speedy.uwaterloo.ca@perl.org  Sat Apr 14 19:06:38 2007
+Return-Path: <perl6-all-return-80596-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3EN6b0I006399
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 14 Apr 2007 19:06:37 -0400
+Received: (qmail 29384 invoked by uid 514); 14 Apr 2007 23:06:13 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 29379 invoked from network); 14 Apr 2007 23:06:12 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+Delivered-To: perlmail-parrot-porters@onion.perl.org
+Delivered-To: parrot-porters@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Transfer-Encoding: 7bit
+Message-ID: <17953.24137.588076.13954@rgrjr.dyndns.org>
+Date: Sat, 14 Apr 2007 19:05:45 -0400
+From: Bob Rogers <rogers-perl6@rgrjr.dyndns.org>
+To: "Alek Storm" <alek.storm@gmail.com>
+CC: "Allison Randal" <allison@perl.org>, p2 <parrot-porters@perl.org>
+Subject: Re: modifying classes after they're instantiated
+In-Reply-To: <189adbd0704121955n2b293d74ta4beb3a6b3cfdb92@mail.gmail.com>
+References: <461C0EEF.1010107@perl.org>
+	<189adbd0704101702g34d86254t75708dd9035094f2@mail.gmail.com>
+	<17948.15469.601953.730369@rgrjr.dyndns.org>
+	<189adbd0704101917j758f43afj5fe0d800f684e891@mail.gmail.com>
+	<461C9889.5010800@perl.org>
+	<17949.42366.701237.632831@rgrjr.dyndns.org>
+	<189adbd0704121955n2b293d74ta4beb3a6b3cfdb92@mail.gmail.com>
+X-Mailer: VM 7.19 under Emacs 22.0.97.1
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=1.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO,RCVD_IN_NJABL_DUL,RCVD_IN_PBL,RCVD_IN_SORBS_DUL
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+Status: O
+Content-Length: 5638
+Lines: 117
+
+   From: "Alek Storm" <alek.storm@gmail.com>
+   Date: Thu, 12 Apr 2007 21:55:34 -0500
+
+   On 4/11/07, Allison Randal <allison@perl.org> wrote:
+
+   > They might not clone their classes from the user perspective, but
+   > internally it's the only truly safe way to modify a class that already
+   > has objects instantiated (especially when you're talking about remove
+   > operations). Otherwise, you have objects referencing attributes that
+   > don't exist any longer in the class, or methods referencing attributes
+   > that were never initialized in the object. The closest they can come is
+   > the option 1) I listed.
+
+   Whether it's safe or not, languages need the option of not cloning their
+   classes.  Therefore, Parrot needs it.  We can't tell language implementors
+   that we can't support their language because it's not "safe" . . .
+
+Now that I've finally read that part of the spec, it turns out that Lisp
+doesn't allow the class to be cloned when it is modified.  And (as I
+mentioned earlier) it *does* require that modified instances be updated
+to reflect the new class definition.  I am in the process of studying
+how CMUCL achieves this feat, which involves an intermediate data
+structure, and can post a summary if anyone is interested.
+
+   As a result, I withdraw my statements in support of explicit cloning,
+and would prefer a solution that avoids *any* cloning.
+
+   Any language whose class modifications affect already-instantiated
+   objects would have its own way of resolving removed
+   methods/attributes in find_method() or (get|set)_attribute().
+
+True, but cross-language inheritance complicates the situation.  If
+Language A permits radical class redefinition and exports ClassA, which
+is used as a superclass of ClassB in Language B that does not permit any
+redefinition, what should happen to ClassB instances when ClassA is
+redefined in a way that requires updating instances?  Here are some
+possibilities:
+
+   1.  Redefinition in ClassA is prevented, effectively propagating the
+Language B restriction up the inheritance chain.
+
+   2.  ClassB instances are magically updated, because ClassB also
+inherits the Language A metaclass behavior.  (This need not require
+Language B to permit class modification itself, since the propagation of
+changes to subclasses would need to be handled independently.)
+
+   3.  ClassB is forbidden to inherit from ClassA at all, due to
+metaclass incompatibility.
+
+   Since there aren't many formal constraints on inter-language
+inheritance, I think pretty much any behavior (short of segfaulting)
+could be argued to be correct.  Furthermore, dynamic class redefinition
+is mostly useful in development, so this isn't a real use case; the
+ClassB developer is presumably using a packaged ClassA.
+
+   Nevertheless, the implementor of Language B has a choice:  Use the
+more fluid update semantics (which I hope is intended to be the Parrot
+default) and risk violating letter of the Language B spec, or restrict
+the update semantics and risk interoperability problems.  Since the
+first choice is easier to implement, more helpful to users for
+debugging, and stands a good change of behaving as a compatible
+extension to the language, I know which I would pick.  ;-}
+
+   On 4/11/07, Bob Rogers <rogers-perl6@rgrjr.dyndns.org > wrote:
+
+   > Hmm.  If a Lisp implementation ever worked this way, FWIW, it would be
+   > considered buggy . . .
+
+   You've hit the nail on the head.  The problem is that Parrot can't assume
+   that every language clones its classes.  With solution 4, all classes are
+   cloned, whether the language they belong to likes it or not.  With the
+   solution I proposed, LispClass would not clone itself on 'add_method', but
+   ParrotClass would.
+
+Apart from the cloning issue, I submit that this would be buggy even for
+ParrotClass.  Consider:
+
+   1.  If 'add_method' always clones a ParrotClass, then autoloading
+methods would be self-defeating.  (Maybe even class-defeating.  ;-)
+
+   2.  At some point later in the session, the user (who is developing
+in a Parrot language) will have some ParrotClass objects that support
+the new protocol, and some lying around that don't.  I've been there,
+and can attest that this is a pain.
+
+   To clarify, the 'instantiated' bit should be cleared on the newly-created
+   clone, not on the original class, since cloning does not change the fact
+   that it has instantiated objects.  If that's what you meant, sorry, just
+   making sure I understand you.
+
+Yes, exactly.  No extra charge for double-checking.  ;-}
+
+   > The normal use case for this class-changing API, it seems to me, is to
+   > redefine an HLL class definition incrementally by recompiling it.
+   > Having one HLL mutate the class of another HLL seems relatively arcane.
+   > Are you suggesting that this is a bad idea simply because it can be
+   > abused in this manner?
+
+   Yes.  For example, code that deals with classes through their abstracted
+   interface (good design from an OO standpoint) would have no idea which
+   language they came from.  It wouldn't be too common . . .
+
+Actually, now that I think about it, it's not arcane at all.  Basic
+inheritance is enough to provide a natural mechanism for one language's
+class manipulation to affect the classes of another, just by normal
+redefinition.  IMHO, that is all the more reason for Parrot to adopt the
+broadest practical functionality in ParrotClass, and to discourage
+language designers from dumbing it down.
+
+   . . .
+
+   Sorry for the length - couldn't help myself ;)
+
+Length shouldn't be something to apologize for.  (I sure hope not; if it
+were, I'd be in trouble.  ;-)
+
+					-- Bob
+

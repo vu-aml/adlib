@@ -1,0 +1,143 @@
+From beginners-return-92550-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue Jun 19 14:59:40 2007
+Return-Path: <beginners-return-92550-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l5JIxcL9032763
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 19 Jun 2007 14:59:39 -0400
+Received: (qmail 15240 invoked by uid 514); 19 Jun 2007 18:59:32 -0000
+Mailing-List: contact beginners-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:beginners@perl.org>
+List-Help: <mailto:beginners-help@perl.org>
+List-Unsubscribe: <mailto:beginners-unsubscribe@perl.org>
+List-Subscribe: <mailto:beginners-subscribe@perl.org>
+List-Id: <beginners.perl.org>
+Delivered-To: mailing list beginners@perl.org
+Received: (qmail 15230 invoked from network); 19 Jun 2007 18:59:31 -0000
+Received: from x1a.develooper.com (HELO x1.develooper.com) (216.52.237.111)
+  by lists.develooper.com with SMTP; 19 Jun 2007 18:59:31 -0000
+Received: (qmail 27249 invoked by uid 225); 19 Jun 2007 18:59:31 -0000
+Delivered-To: beginners@perl.org
+Received: (qmail 27243 invoked by alias); 19 Jun 2007 18:59:30 -0000
+X-Spam-Status: No, hits=-1.9 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_NEUTRAL
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: neutral (x1.develooper.com: local policy)
+Received: from x6.develooper.com (HELO lists.develooper.com) (63.251.223.186)
+    by la.mx.develooper.com (qpsmtpd/0.28) with SMTP; Tue, 19 Jun 2007 11:59:21 -0700
+Received: (qmail 15218 invoked by uid 515); 19 Jun 2007 18:59:17 -0000
+To: beginners@perl.org
+From: zentara <zentara@highstream.net>
+Subject: Re: Inter-thread communications
+Date: Tue, 19 Jun 2007 14:54:49 -0400
+Sender: Linux@lists.develooper.com
+Message-ID: <ee9g73tn1mgg10usjfk06kokk9q5alqnqa@4ax.com>
+References: <FF8482A96323694490C194BABEAC24A0010EC84E@Email.cbord.com>
+X-Newsreader:  :  :/Li.nux English (American)
+X-No-Archive: yes
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Transfer-Encoding: 7bit
+X-Posted-By: 68.79.102.181
+
+On Mon, 18 Jun 2007 12:58:31 -0400, rvm@CBORD.com ("Bob McConnell")
+wrote:
+
+>I have two questions about this. First, is there a standard Perl IPC
+>interface between threads? I am not familiar with pipes in this context,
+>although I have used mailboxes and single word messages in various
+>multi-processing environments, including POSIX threads.
+
+This is a big topic, so I'll briefly try to bring you up to speed.
+
+I'm assuming you are talking about threads in the pure sense, as opposed
+to calling separate processes "threads". ( It's further confused by
+MSWindows, emulating fork with threads).
+
+There are totally independent processes, for which you can do IPC with
+pipes, sockets, shared memory segments, etc.
+
+Threads are different.
+Threads are sort of concurrent code which can all run under the same
+parent pid. If one thread exits, the whole thread system will die. So
+care must be taken. However, you can easily share scalar data between
+running threads, and this is their advantage.
+
+So the standard Perl IPC interface for threads, is shared variables:
+see "perldoc threads::shared". Also to be
+happy with threads under Perl, you need a version greater than 5.8
+Perl5.6 uses an obsolete thread version which will give you trouble.
+
+If you are not specifically interested in perl threads, you may want to
+read "perldoc perlipc". The things mentioned in perlipc, are the
+original methods of ipc, before threads came along (only recently). 
+
+There are 2 things threads can do for you.
+1. Share variables in realtime between threads.
+2. Share filehandles between threads, by passing their fileno
+    thru the shared variable mechanism.
+
+The problem is that one thread will not know if another thread has
+changed a shared variable, so you either need an event-loop system,
+or a complex while() loop to constantly monitor the values of the shared
+variables.
+
+The typical setup is a main thread which has an event loop (Tk, POE,
+Glib, etc), and as many worker threads as you want. The worker threads
+will do things and set shared variables, and the main thread will
+monitor the value of the shared vars and do what is needed.
+
+The main thread will also clean up the worker threads at program end.
+
+>
+>Second, is there a way to set this up so the transmit thread timeout can
+>be easily implemented as a side effect of waiting for the ACK/NAK to
+>arrive on that interface? I was thinking of using a semaphore, but they
+>don't appear to be implemented on Win32.
+
+Yeah, it depends on how your code is written, but you can setup many
+timers in an event-loop system to time out something. Warning.... alarm 
+does not work well in threads, you need timers.
+
+See how GLib can help
+http://perlmonks.org?node_id=538341
+
+Also there is POE, and (Tk and Gtk2 if you want a GUI).
+
+>
+>For this emulation, the outgoing messages are read from a text file and
+>the incoming messages are stored in another text file. Timing of
+>outgoing messages is controlled when that file is read. I am hoping this
+>can provide a workaround for the alarm failure I ran into on the single
+>threaded version as well as being a better emulation of the actual
+>system.
+
+
+I run linux, so there may be win32 problems that I'm unfamiliar with,
+but all of it seems feasible.
+
+It seems that once the serial port connection is established, and you
+have the filehandle, you could have a main thread to control, and 2 
+worker threads, one to send, and one to receive.  You would setup
+some shared variables, like "$ack_received" , etc., and share the fileno
+of the port filehandle between the threads.
+Then again, with a proper IO::Select setup, you may not need threads
+at all.
+
+You might want to ask this on http://perlmonks.org
+A few monks there are good with win32, and Win32::SerialPort.
+If you could show some pseudo-code it would be helpful to them.
+
+Goodluck,
+zentara
+
+
+-- 
+I'm not really a human, but I play one on earth.
+http://zentara.net/japh.html
+
+-- 
+To unsubscribe, e-mail: beginners-unsubscribe@perl.org
+For additional commands, e-mail: beginners-help@perl.org
+http://learn.perl.org/
+
+

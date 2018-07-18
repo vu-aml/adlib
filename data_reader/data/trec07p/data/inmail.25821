@@ -1,0 +1,127 @@
+From perl6-all-return-81026-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue May  1 13:24:30 2007
+Return-Path: <perl6-all-return-81026-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l41HOTb9009973
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 1 May 2007 13:24:29 -0400
+Received: (qmail 23163 invoked by uid 514); 1 May 2007 17:24:28 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 23158 invoked from network); 1 May 2007 17:24:28 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-language-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-language
+List-Id: <perl6-language.perl.org>
+Delivered-To: mailing list perl6-language@perl.org
+Delivered-To: perl6-language@perl.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+X-ORBL: [71.139.27.123]
+Date: Tue, 1 May 2007 10:18:20 -0700
+From: Larry Wall <larry@wall.org>
+To: p6l <perl6-language@perl.org>
+Subject: Re: Default filehandles, or topicalizing filehandles, or something
+Message-ID: <20070501171820.GA6050@wall.org>
+Mail-Followup-To: p6l <perl6-language@perl.org>
+References: <010520071001251494%brian.d.foy@gmail.com> <ef30550b0705010926i551fa130l6edb31f29f49e860@mail.gmail.com>
+Mime-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+In-Reply-To: <ef30550b0705010926i551fa130l6edb31f29f49e860@mail.gmail.com>
+User-Agent: Mutt/1.4.2.2i
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+Status: O
+Content-Length: 2810
+Lines: 80
+
+On Tue, May 01, 2007 at 09:26:38AM -0700, Jonathan Lang wrote:
+: On 5/1/07, brian d foy <brian.d.foy@gmail.com> wrote:
+: >I was thinking about default filehandles yesterday. select() doesn't
+: >seem to be around except as an "Unfiled" function in S16.
+: >
+: >Then, as I was looking at
+: >
+: >   .say( "Hello World" );
+: 
+: At various times, I have seen something to the effect of each of the
+: following being bandied about:
+: 
+:  $*OUT.say( "Hello World" );
+:  "Hello World".say;
+: 
+: That is, both filehandles and strings have 'say' methods that do
+: essentially the same thing, but using subtly different syntax.  How
+: would I use &("Hello World".say) to write to filehandle $FH?  My gut
+: reaction would be to use an adverb for the purpose:
+: 
+:  "Hello World".say :to($FH);
+: 
+: This would also work for the sub version:
+: 
+:  say :to($FH) "Hello World";
+
+Don't need a named arg, since we can simply be polymorphic on strings vs
+filehandles, which thankfully do not overlap semantically:
+
+    "Hello World".say($FH)
+    $FH.say("Hello World")
+
+: With this in mind, you probably could create a localized alias for
+: 'say', if you wanted to:
+: 
+:  {
+:    my &say := &OUTER::say.assuming(:to($FH));
+:    say "Hello World"; # same as 'say "Hello World" :to($FH);'
+:  }
+: 
+: The catch with this is that you'd have to do this for each output
+: routine separately.
+
+You don't always want lexical scoping for this sort of thing; you
+often want dynamic scoping instead.
+
+: How about this: Do the output routines default to the global
+: filehandles directly, or do they default to lexical bindings of them?
+: That is, does 'say' output to $*OUT in the absence of an explicit
+: filehandle, or does it output to $OUT (with the latter normally being
+: bound to $*OUT)?  If the latter, you should be able to redirect all of
+: your output in the rest of the current scope by saying:
+: 
+:  $OUT := $*ERR;
+: 
+: I can understand not being able to rebind the global filehandles.
+: After all: once they're rebound, how would you ever find what they
+: were originally bound to?
+
+The plan introduced in A06 was to leave $*('IN'|'OUT'|'ERR') bound
+to stdin, stdout, and stderr (which can still be dickered with on
+the POSIXy level, of course), and instead emulate p5's select(FH)
+using a global variable $*DEFOUT for the default handle of print
+(and now say as well).
+
+I note that $*DEFOUT didn't make it into any of the synopses (though it
+did make it to pugs/t/builtins/io/say_and_print.t, oddly), so I've just
+added it to pugs/docs/Spec/IO.pod, the proto-synopsis on IO.
+
+Anyway, you should (eventually) just be able to say
+
+    {
+	temp $*DEFOUT := $MYFH;
+	foo();
+    }
+
+to redirect the default output of foo() and then restore at the end of the
+dynamic scope.  That's an improvement over dancing the select twostep.
+
+Larry
+

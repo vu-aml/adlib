@@ -1,0 +1,324 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Jun 27 05:24:18 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5R9OIL9024688
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 27 Jun 2007 05:24:18 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id ECC4C163961
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 27 Jun 2007 09:24:14 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1004)
+	id 167D9162BCB; Wed, 27 Jun 2007 09:23:51 +0000 (GMT)
+To: samba-cvs@samba.org
+From: gd@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070627092351.167D9162BCB@lists.samba.org>
+Date: Wed, 27 Jun 2007 09:23:51 +0000 (GMT)
+Subject: svn commit: samba r23623 - in branches: SAMBA_3_0/source/rpc_server
+	SAMBA_3_0/source/rpcclient SAMBA_3_0_26/source/rpc_server
+	SAMBA_3_0_26/source/rpcclient
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: gd
+Date: 2007-06-27 09:23:50 +0000 (Wed, 27 Jun 2007)
+New Revision: 23623
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23623
+
+Log:
+Fix rpcclient and rpc_server with new DFS idl.
+
+Guenther
+
+Modified:
+   branches/SAMBA_3_0/source/rpc_server/srv_dfs_nt.c
+   branches/SAMBA_3_0/source/rpcclient/cmd_dfs.c
+   branches/SAMBA_3_0_26/source/rpc_server/srv_dfs_nt.c
+   branches/SAMBA_3_0_26/source/rpcclient/cmd_dfs.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/rpc_server/srv_dfs_nt.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpc_server/srv_dfs_nt.c	2007-06-27 09:17:52 UTC (rev 23622)
++++ branches/SAMBA_3_0/source/rpc_server/srv_dfs_nt.c	2007-06-27 09:23:50 UTC (rev 23623)
+@@ -32,10 +32,11 @@
+ 
+ void _dfs_GetManagerVersion(pipes_struct *p, struct dfs_GetManagerVersion *r)
+ {
+-	if(lp_host_msdfs()) 
+-		*r->out.exist_flag = 1;
+-	else
+-		*r->out.exist_flag = 0;
++	if (lp_host_msdfs()) {
++		*r->out.version = DFS_MANAGER_VERSION_NT4;
++	} else {
++		*r->out.version = 0;
++	}
+ }
+ 
+ WERROR _dfs_Add(pipes_struct *p, struct dfs_Add *r)
+@@ -109,22 +110,22 @@
+ 		return WERR_ACCESS_DENIED;
+ 	}
+ 
+-	if (r->in.server && r->in.share) {
+-		pstrcpy(altpath, r->in.server);
++	if (r->in.servername && r->in.sharename) {
++		pstrcpy(altpath, r->in.servername);
+ 		pstrcat(altpath, "\\");
+-		pstrcat(altpath, r->in.share);
++		pstrcat(altpath, r->in.sharename);
+ 		strlower_m(altpath);
+ 	}
+ 
+ 	DEBUG(5,("init_reply_dfs_remove: Request to remove %s -> %s\\%s.\n",
+-		r->in.path, r->in.server, r->in.share));
++		r->in.dfs_entry_path, r->in.servername, r->in.sharename));
+ 
+-	if(!NT_STATUS_IS_OK(get_referred_path(p->mem_ctx, r->in.path, &jn, &consumedcnt, &self_ref))) {
++	if(!NT_STATUS_IS_OK(get_referred_path(p->mem_ctx, r->in.dfs_entry_path, &jn, &consumedcnt, &self_ref))) {
+ 		return WERR_DFS_NO_SUCH_VOL;
+ 	}
+ 
+ 	/* if no server-share pair given, remove the msdfs link completely */
+-	if(!r->in.server && !r->in.share) {
++	if(!r->in.servername && !r->in.sharename) {
+ 		if(!remove_msdfs_link(&jn)) {
+ 			vfs_ChDir(p->conn,p->conn->connectpath);
+ 			return WERR_DFS_NO_SUCH_VOL;
+@@ -324,11 +325,11 @@
+ 	BOOL self_ref = False;
+ 	BOOL ret;
+ 
+-	if(!create_junction(r->in.path, &jn))
++	if(!create_junction(r->in.dfs_entry_path, &jn))
+ 		return WERR_DFS_NO_SUCH_SERVER;
+   
+ 	/* The following call can change the cwd. */
+-	if(!NT_STATUS_IS_OK(get_referred_path(p->mem_ctx, r->in.path, &jn, &consumedcnt, &self_ref)) || consumedcnt < strlen(r->in.path)) {
++	if(!NT_STATUS_IS_OK(get_referred_path(p->mem_ctx, r->in.dfs_entry_path, &jn, &consumedcnt, &self_ref)) || consumedcnt < strlen(r->in.dfs_entry_path)) {
+ 		vfs_ChDir(p->conn,p->conn->connectpath);
+ 		return WERR_DFS_NO_SUCH_VOL;
+ 	}
+
+Modified: branches/SAMBA_3_0/source/rpcclient/cmd_dfs.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpcclient/cmd_dfs.c	2007-06-27 09:17:52 UTC (rev 23622)
++++ branches/SAMBA_3_0/source/rpcclient/cmd_dfs.c	2007-06-27 09:23:50 UTC (rev 23623)
+@@ -25,10 +25,10 @@
+ 
+ /* Check DFS is supported by the remote server */
+ 
+-static NTSTATUS cmd_dfs_exist(struct rpc_pipe_client *cli, TALLOC_CTX *mem_ctx,
+-                              int argc, const char **argv)
++static NTSTATUS cmd_dfs_version(struct rpc_pipe_client *cli, TALLOC_CTX *mem_ctx,
++				int argc, const char **argv)
+ {
+-	uint32 dfs_exists;
++	enum dfs_ManagerVersion version;
+ 	NTSTATUS result;
+ 
+ 	if (argc != 1) {
+@@ -36,12 +36,19 @@
+ 		return NT_STATUS_OK;
+ 	}
+ 
+-	result = rpccli_dfs_GetManagerVersion(cli, mem_ctx, &dfs_exists);
++	result = rpccli_dfs_GetManagerVersion(cli, mem_ctx, &version);
+ 
+-	if (NT_STATUS_IS_OK(result))
+-		printf("dfs is %spresent\n", dfs_exists ? "" : "not ");
++	if (!NT_STATUS_IS_OK(result)) {
++		return result;
++	}
+ 
+-	return result;
++	if (version > 0) {
++		printf("dfs is present (%d)\n", version);
++	} else {
++		printf("dfs is not present\n");
++	}
++
++	return NT_STATUS_OK;
+ }
+ 
+ static NTSTATUS cmd_dfs_add(struct rpc_pipe_client *cli, TALLOC_CTX *mem_ctx,
+@@ -183,7 +190,6 @@
+ 
+ 	NTSTATUS result;
+ 	uint32 total = 0;
+-	uint32 unknown = 0;
+ 
+ 	if (argc > 2) {
+ 		printf("Usage: %s [info_level]\n", argv[0]);
+@@ -207,7 +213,7 @@
+ 	}
+ 
+ 	result = rpccli_dfs_Enum(cli, mem_ctx, str.level, 0xFFFFFFFF, &str,
+-				 &unknown, &total);
++				 &total);
+ 
+ 	if (NT_STATUS_IS_OK(result))
+ 		display_dfs_enumstruct(&str);
+@@ -297,7 +303,7 @@
+ 
+ 	{ "DFS" },
+ 
+-	{ "dfsexist",  RPC_RTYPE_NTSTATUS, cmd_dfs_exist,   NULL, PI_NETDFS, NULL, "Query DFS support",    "" },
++	{ "dfsversion",  RPC_RTYPE_NTSTATUS, cmd_dfs_version,   NULL, PI_NETDFS, NULL, "Query DFS support",    "" },
+ 	{ "dfsadd",    RPC_RTYPE_NTSTATUS, cmd_dfs_add,     NULL, PI_NETDFS, NULL, "Add a DFS share",      "" },
+ 	{ "dfsremove", RPC_RTYPE_NTSTATUS, cmd_dfs_remove,  NULL, PI_NETDFS, NULL, "Remove a DFS share",   "" },
+ 	{ "dfsgetinfo",RPC_RTYPE_NTSTATUS, cmd_dfs_getinfo, NULL, PI_NETDFS, NULL, "Query DFS share info", "" },
+
+Modified: branches/SAMBA_3_0_26/source/rpc_server/srv_dfs_nt.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/rpc_server/srv_dfs_nt.c	2007-06-27 09:17:52 UTC (rev 23622)
++++ branches/SAMBA_3_0_26/source/rpc_server/srv_dfs_nt.c	2007-06-27 09:23:50 UTC (rev 23623)
+@@ -32,10 +32,11 @@
+ 
+ void _dfs_GetManagerVersion(pipes_struct *p, struct dfs_GetManagerVersion *r)
+ {
+-	if(lp_host_msdfs()) 
+-		*r->out.exist_flag = 1;
+-	else
+-		*r->out.exist_flag = 0;
++	if (lp_host_msdfs()) {
++		*r->out.version = DFS_MANAGER_VERSION_NT4;
++	} else {
++		*r->out.version = 0;
++	}
+ }
+ 
+ WERROR _dfs_Add(pipes_struct *p, struct dfs_Add *r)
+@@ -109,22 +110,22 @@
+ 		return WERR_ACCESS_DENIED;
+ 	}
+ 
+-	if (r->in.server && r->in.share) {
+-		pstrcpy(altpath, r->in.server);
++	if (r->in.servername && r->in.sharename) {
++		pstrcpy(altpath, r->in.servername);
+ 		pstrcat(altpath, "\\");
+-		pstrcat(altpath, r->in.share);
++		pstrcat(altpath, r->in.sharename);
+ 		strlower_m(altpath);
+ 	}
+ 
+ 	DEBUG(5,("init_reply_dfs_remove: Request to remove %s -> %s\\%s.\n",
+-		r->in.path, r->in.server, r->in.share));
++		r->in.dfs_entry_path, r->in.servername, r->in.sharename));
+ 
+-	if(!NT_STATUS_IS_OK(get_referred_path(p->mem_ctx, r->in.path, &jn, &consumedcnt, &self_ref))) {
++	if(!NT_STATUS_IS_OK(get_referred_path(p->mem_ctx, r->in.dfs_entry_path, &jn, &consumedcnt, &self_ref))) {
+ 		return WERR_DFS_NO_SUCH_VOL;
+ 	}
+ 
+ 	/* if no server-share pair given, remove the msdfs link completely */
+-	if(!r->in.server && !r->in.share) {
++	if(!r->in.servername && !r->in.sharename) {
+ 		if(!remove_msdfs_link(&jn)) {
+ 			vfs_ChDir(p->conn,p->conn->connectpath);
+ 			return WERR_DFS_NO_SUCH_VOL;
+@@ -324,11 +325,11 @@
+ 	BOOL self_ref = False;
+ 	BOOL ret;
+ 
+-	if(!create_junction(r->in.path, &jn))
++	if(!create_junction(r->in.dfs_entry_path, &jn))
+ 		return WERR_DFS_NO_SUCH_SERVER;
+   
+ 	/* The following call can change the cwd. */
+-	if(!NT_STATUS_IS_OK(get_referred_path(p->mem_ctx, r->in.path, &jn, &consumedcnt, &self_ref)) || consumedcnt < strlen(r->in.path)) {
++	if(!NT_STATUS_IS_OK(get_referred_path(p->mem_ctx, r->in.dfs_entry_path, &jn, &consumedcnt, &self_ref)) || consumedcnt < strlen(r->in.dfs_entry_path)) {
+ 		vfs_ChDir(p->conn,p->conn->connectpath);
+ 		return WERR_DFS_NO_SUCH_VOL;
+ 	}
+
+Modified: branches/SAMBA_3_0_26/source/rpcclient/cmd_dfs.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/rpcclient/cmd_dfs.c	2007-06-27 09:17:52 UTC (rev 23622)
++++ branches/SAMBA_3_0_26/source/rpcclient/cmd_dfs.c	2007-06-27 09:23:50 UTC (rev 23623)
+@@ -25,10 +25,10 @@
+ 
+ /* Check DFS is supported by the remote server */
+ 
+-static NTSTATUS cmd_dfs_exist(struct rpc_pipe_client *cli, TALLOC_CTX *mem_ctx,
+-                              int argc, const char **argv)
++static NTSTATUS cmd_dfs_version(struct rpc_pipe_client *cli, TALLOC_CTX *mem_ctx,
++				int argc, const char **argv)
+ {
+-	uint32 dfs_exists;
++	enum dfs_ManagerVersion version;
+ 	NTSTATUS result;
+ 
+ 	if (argc != 1) {
+@@ -36,11 +36,19 @@
+ 		return NT_STATUS_OK;
+ 	}
+ 
+-	result = rpccli_dfs_GetManagerVersion(cli, mem_ctx, &dfs_exists);
++	result = rpccli_dfs_GetManagerVersion(cli, mem_ctx, &version);
+ 
+-	printf("dfs is %spresent\n", dfs_exists ? "" : "not ");
++	if (!NT_STATUS_IS_OK(result)) {
++		return result;
++	}
+ 
+-	return result;
++	if (version > 0) {
++		printf("dfs is present (%d)\n", version);
++	} else {
++		printf("dfs is not present\n");
++	}
++
++	return NT_STATUS_OK;
+ }
+ 
+ static NTSTATUS cmd_dfs_add(struct rpc_pipe_client *cli, TALLOC_CTX *mem_ctx,
+@@ -182,7 +190,6 @@
+ 
+ 	NTSTATUS result;
+ 	uint32 total = 0;
+-	uint32 unknown = 0;
+ 
+ 	if (argc > 2) {
+ 		printf("Usage: %s [info_level]\n", argv[0]);
+@@ -206,7 +213,7 @@
+ 	}
+ 
+ 	result = rpccli_dfs_Enum(cli, mem_ctx, str.level, 0xFFFFFFFF, &str,
+-				 &unknown, &total);
++				 &total);
+ 
+ 	if (NT_STATUS_IS_OK(result))
+ 		display_dfs_enumstruct(&str);
+@@ -296,7 +303,7 @@
+ 
+ 	{ "DFS" },
+ 
+-	{ "dfsexist",  RPC_RTYPE_NTSTATUS, cmd_dfs_exist,   NULL, PI_NETDFS, NULL, "Query DFS support",    "" },
++	{ "dfsversion",  RPC_RTYPE_NTSTATUS, cmd_dfs_version,   NULL, PI_NETDFS, NULL, "Query DFS support",    "" },
+ 	{ "dfsadd",    RPC_RTYPE_NTSTATUS, cmd_dfs_add,     NULL, PI_NETDFS, NULL, "Add a DFS share",      "" },
+ 	{ "dfsremove", RPC_RTYPE_NTSTATUS, cmd_dfs_remove,  NULL, PI_NETDFS, NULL, "Remove a DFS share",   "" },
+ 	{ "dfsgetinfo",RPC_RTYPE_NTSTATUS, cmd_dfs_getinfo, NULL, PI_NETDFS, NULL, "Query DFS share info", "" },
+

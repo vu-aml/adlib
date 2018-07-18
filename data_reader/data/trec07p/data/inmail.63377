@@ -1,0 +1,110 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Jun 22 18:46:12 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5MMkBL9010155
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 22 Jun 2007 18:46:11 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id EBB29163A13
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 22 Jun 2007 15:44:51 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.5 required=3.8 tests=AWL,BAYES_00,RCVD_IN_DSBL 
+	autolearn=no version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: from cassoulet.panasas.com (gw-e.panasas.com [65.194.124.178])
+	by lists.samba.org (Postfix) with ESMTP id 82078163A51;
+	Fri, 22 Jun 2007 15:43:41 +0000 (GMT)
+Received: from laguna.int.panasas.com (localhost.localdomain [127.0.0.1])
+	by cassoulet.panasas.com (8.13.1/8.13.1) with ESMTP id l5MFherN017770; 
+	Fri, 22 Jun 2007 11:43:40 -0400
+Received: from 172.17.132.41 ([172.17.132.41] helo=laguna.int.panasas.com)
+	by ASSP-nospam; 22 Jun 2007 11:43:40 -0400
+Received: from [172.17.132.117] ([172.17.132.117]) by laguna.int.panasas.com
+	with Microsoft SMTPSVC(6.0.3790.1830); 
+	Fri, 22 Jun 2007 08:43:39 -0700
+Message-ID: <467BEE2B.9010108@panasas.com>
+Date: Fri, 22 Jun 2007 08:43:39 -0700
+From: Herb Lewis <hlewis@panasas.com>
+User-Agent: Mozilla/5.0 (X11; U; Linux i686; en-US;
+	rv:1.7.13) Gecko/20060501 Fedora/1.7.13-1.1.fc4
+X-Accept-Language: en-us, en
+MIME-Version: 1.0
+To: Jim McDonough <jmcd@samba.org>
+References: <517eb05c0706220715n5c32f802g31e0b381371fe721@mail.gmail.com>
+In-Reply-To: <517eb05c0706220715n5c32f802g31e0b381371fe721@mail.gmail.com>
+Content-Type: text/plain; charset=us-ascii; format=flowed
+Content-Transfer-Encoding: 7bit
+X-OriginalArrivalTime: 22 Jun 2007 15:43:39.0728 (UTC)
+	FILETIME=[1AB9DD00:01C7B4E4]
+Cc: jerry@samba.org, samba-technical@samba.org
+Subject: Re: winbindd 32/64 offset issues
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+maybe we could do something like bsd does in stat.h
+
+struct timespec st_birthtimespec; /* time of file creation */
+/*
+  * Explicitly pad st_birthtimespec to 16 bytes so that the size of
+  * struct stat is backwards compatible.  We use bitfields instead
+  * of an array of chars so that this doesn't require a C99 compiler
+  * to compile if the size of the padding is 0.  We use 2 bitfields
+  * to cover up to 64 bits on 32-bit machines.  We assume that
+  * CHAR_BIT is 8...
+  */
+unsigned int :(8 / 2) * (16 - (int)sizeof(struct timespec));
+unsigned int :(8 / 2) * (16 - (int)sizeof(struct timespec));
+
+
+Jim McDonough wrote:
+> Jerry,
+> Despite your comments about testing with 32bit libs on 64bit platforms in
+> the winbindd_request struct in winbindd_nss.h, it seems we're out of sync,
+> and the following comment may be part of the issue:
+> 
+> nsswitch/winbindd_nss.h:40
+> -------
+> /* Have to deal with time_t being 4 or 8 bytes due to structure alignment.
+>   On a 64bit Linux box, we have to support a constant structure size
+>   between /lib/libnss_winbind.so.2 and /li64/libnss_winbind.so.2.
+>   The easiest way to do this is to always use 8byte values for time_t. */
+> ------
+> 
+> I can say that I've recently found this to not be true.  On multiple
+> platforms (RHEL4 at a customer site, ubuntu Edgy on my laptop right now),
+> the stabs output shows the extra_data union (containing the SMB_TIME_T for
+> alignment) to start at 16544 bits offset, which is 2068 bytes..._not_ a
+> multiple of 8.  This is on 3.0.25...on 3.0.26 there is an extra enum 
+> earlier
+> that hides this problem, I think.  I tried several approaches, but there is
+> simply not a guarantee on a 32-bit platform that anything I tried is going
+> to be aligned on an 8-byte boundary.
+> 
+> The only solution I found was the old method that hasn't been updated in 
+> the
+> code in a while...the padding member of the huge data union needs to be set
+> to that 8-byte boundary, and still, since that data union isn't guaranteed
+> to be on an 8-byte boundary to start, we have to really just look at the
+> offset in stabs output and see if each union lines up between 
+> architectures.
+> 
+> Or we could just start up that marshalling discussion again :-)
+> 
+> In any case, before I check anything in, can someone run any quick tests of
+> your various binaries on 64-bit platforms using 32-bit winbind libs?
+> 
+

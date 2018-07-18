@@ -1,0 +1,121 @@
+From perl6-all-return-80474-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue Apr 10 21:41:02 2007
+Return-Path: <perl6-all-return-80474-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3B1f10I011304
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 10 Apr 2007 21:41:01 -0400
+Received: (qmail 9363 invoked by uid 514); 11 Apr 2007 01:40:35 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 9358 invoked from network); 11 Apr 2007 01:40:35 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+Delivered-To: perlmail-parrot-porters@onion.perl.org
+Delivered-To: parrot-porters@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Transfer-Encoding: 7bit
+Message-ID: <17948.15469.601953.730369@rgrjr.dyndns.org>
+Date: Tue, 10 Apr 2007 21:39:57 -0400
+From: Bob Rogers <rogers-perl6@rgrjr.dyndns.org>
+To: "Alek Storm" <alek.storm@gmail.com>
+CC: "Allison Randal" <allison@perl.org>, p2 <parrot-porters@perl.org>
+Subject: Re: modifying classes after they're instantiated
+In-Reply-To: <189adbd0704101702g34d86254t75708dd9035094f2@mail.gmail.com>
+References: <461C0EEF.1010107@perl.org>
+	<189adbd0704101702g34d86254t75708dd9035094f2@mail.gmail.com>
+X-Mailer: VM 7.19 under Emacs 22.0.96.1
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=1.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO,RCVD_IN_NJABL_DUL,RCVD_IN_PBL,RCVD_IN_SORBS_DUL
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+Status: O
+Content-Length: 2952
+Lines: 68
+
+   From: "Alek Storm" <alek.storm@gmail.com>
+   Date: Wed, 11 Apr 2007 00:02:29 +0000
+
+   On 4/10/07, Allison Randal <allison@perl.org> wrote:
+   > 4) Do away with automatic morphing. Attempting to make changes to a
+   > class that's already been instantiated is not allowed (add_method, etc.
+   > will throw an exception). This also eliminates the need for
+   > remove_method, remove_attribute, remove_role, and remove_parent. To
+   > modify a class that has instantiated objects you must clone it first:
+   >
+   >    classobj = newclass 'Foo'
+   >    object = classobj.'new'()
+   >
+   >    newclassobj = classobj.'clone'('exclude_methods'=>$P1)
+   >    newclassobj.'add_method'('bar', $P3)
+   >    object2 = newclassobj.'new'()
+   >
+   > And 'clone' could take an option specifying whether this particular
+   > clone will replace the existing class in the namespace. Disadvantage: It
+   > eliminates some of the DWIMery of the system. On the other hand, it
+   > might make it easier to implement a language that doesn't allow
+   > modifications to instantiated classes. (This is currently my favorite
+   > alternative.)
+   >
+   > Allison
+
+   I like this one, but I also have another alternative.  First, make all
+   class-modification code (add_method, remove_attribute, etc) return a
+   PMC*.  Whenever one of these methods is called on a class, the class
+   is cloned . . .
+
+What does "find_class" return after one of these?  If it returns the new
+class, then there is no need for the class-mutating ops to do so, except
+possibly for convenience.
+
+   classobj = newclass 'Foo'
+   object = classobj.'new'()
+
+   # add_method returns a clone of the original class with "bar" added
+   # C<object> keeps its reference to the original class
+   classobj = classobj.'add_method'('bar', $P3)
+   object2 = classobj.'new'()
+
+Surely you are not suggesting that any random "add_method" should
+require creating a new class?  Did you mean "add_attribute" (or
+whatever)?
+
+   The only downside I can think of is the overhead involved in creating
+   a new clone of the class for every change to it, for example, when
+   many attributes are added at once . . .
+
+This is not necessary; you only need to clone the class after the first
+time it is instantiated.  So you can put an "instantiated_p" flag in the
+class to keep track, and keep mutating the same new class until the next
+instantiation.  The remove_* operations could stay, they would just
+throw errors on instantiated classes.
+
+   But in that case, it might be simpler for HLL code to stick to
+Allison's original alternative 4, i.e. make an explicit clone, mutate it
+as required, and then install it as "the" class returned by find_class.
+Error recovery would also be easier for explicit cloning; what happens
+if one of the class-mutating methods throws an error?
+
+   Sorry if this is misplaced; I haven't been paying a whole lot of
+attention to objects.
+
+					-- Bob Rogers
+					   http://rgrjr.dyndns.org/
+

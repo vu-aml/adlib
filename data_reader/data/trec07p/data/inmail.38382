@@ -1,0 +1,126 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu May 17 09:56:45 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4HDujqD032737
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 17 May 2007 09:56:45 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 7CB0F16382E
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 17 May 2007 13:56:42 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.6 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 614)
+	id 453F5162AFE; Thu, 17 May 2007 13:56:20 +0000 (GMT)
+To: samba-cvs@samba.org
+From: ab@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070517135620.453F5162AFE@lists.samba.org>
+Date: Thu, 17 May 2007 13:56:20 +0000 (GMT)
+Subject: svn commit: samba r22973 - in branches: SAMBA_3_0/source/utils
+	SAMBA_3_0_25/source/utils SAMBA_3_0_26/source/utils
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: ab
+Date: 2007-05-17 13:56:19 +0000 (Thu, 17 May 2007)
+New Revision: 22973
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22973
+
+Log:
+Apparently, 3.0.25 broke smb4k badly ;-)
+smb4k uses 'net rap server domain' to list servers in domain.
+Previously we just ignored all arguments in net_rap_server() but now we don't
+as 'net rap server name' has added an explicit check on arguments.
+
+Allow 'net rap server domain' to aid smb4k. Any other arguments will cause help message.
+
+Modified:
+   branches/SAMBA_3_0/source/utils/net_rap.c
+   branches/SAMBA_3_0_25/source/utils/net_rap.c
+   branches/SAMBA_3_0_26/source/utils/net_rap.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/utils/net_rap.c
+===================================================================
+--- branches/SAMBA_3_0/source/utils/net_rap.c	2007-05-17 10:33:40 UTC (rev 22972)
++++ branches/SAMBA_3_0/source/utils/net_rap.c	2007-05-17 13:56:19 UTC (rev 22973)
+@@ -435,10 +435,14 @@
+ 	int ret;
+ 
+ 	if (argc > 0) {
+-		if (!strequal(argv[0], "name")) {
++		if (strequal(argv[0], "name")) {
++			return net_rap_server_name(argc, argv);
++		}
++		/* smb4k uses 'net [rap|rpc] server domain' to query servers in a domain */
++		/* Fall through for 'domain', any other forms will cause to show usage message */
++		if (!strequal(argv[0], "domain")) {
+ 			return net_rap_server_usage(argc-1, argv+1);
+ 		}
+-		return net_rap_server_name(argc, argv);
+ 	}
+ 
+ 	if (!(cli = net_make_ipc_connection(0))) 
+
+Modified: branches/SAMBA_3_0_25/source/utils/net_rap.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/utils/net_rap.c	2007-05-17 10:33:40 UTC (rev 22972)
++++ branches/SAMBA_3_0_25/source/utils/net_rap.c	2007-05-17 13:56:19 UTC (rev 22973)
+@@ -435,10 +435,14 @@
+ 	int ret;
+ 
+ 	if (argc > 0) {
+-		if (!strequal(argv[0], "name")) {
++		if (strequal(argv[0], "name")) {
++			return net_rap_server_name(argc, argv);
++		}
++		/* smb4k uses 'net [rap|rpc] server domain' to query servers in a domain */
++		/* Fall through for 'domain', any other forms will cause to show usage message */
++		if (!strequal(argv[0], "domain")) {
+ 			return net_rap_server_usage(argc-1, argv+1);
+ 		}
+-		return net_rap_server_name(argc, argv);
+ 	}
+ 
+ 	if (!(cli = net_make_ipc_connection(0))) 
+
+Modified: branches/SAMBA_3_0_26/source/utils/net_rap.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/utils/net_rap.c	2007-05-17 10:33:40 UTC (rev 22972)
++++ branches/SAMBA_3_0_26/source/utils/net_rap.c	2007-05-17 13:56:19 UTC (rev 22973)
+@@ -435,10 +435,14 @@
+ 	int ret;
+ 
+ 	if (argc > 0) {
+-		if (!strequal(argv[0], "name")) {
++		if (strequal(argv[0], "name")) {
++			return net_rap_server_name(argc, argv);
++		}
++		/* smb4k uses 'net [rap|rpc] server domain' to query servers in a domain */
++		/* Fall through for 'domain', any other forms will cause to show usage message */
++		if (!strequal(argv[0], "domain")) {
+ 			return net_rap_server_usage(argc-1, argv+1);
+ 		}
+-		return net_rap_server_name(argc, argv);
+ 	}
+ 
+ 	if (!(cli = net_make_ipc_connection(0))) 
+

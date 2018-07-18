@@ -1,0 +1,118 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Apr 17 11:55:48 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3HFtm0I029800
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 11:55:48 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 1F21016389F
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 15:55:24 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.6 required=3.8 tests=AWL,BAYES_05,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 620)
+	id 87ACE16384D; Tue, 17 Apr 2007 15:55:08 +0000 (GMT)
+To: samba-cvs@samba.org
+From: metze@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070417155508.87ACE16384D@lists.samba.org>
+Date: Tue, 17 Apr 2007 15:55:08 +0000 (GMT)
+Subject: svn commit: samba r22312 - in branches/SAMBA_4_0/source: . script
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2094
+Lines: 76
+
+Author: metze
+Date: 2007-04-17 15:55:08 +0000 (Tue, 17 Apr 2007)
+New Revision: 22312
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22312
+
+Log:
+avoid the need of typing 'run' into each gdb xterm
+
+if someone knows how to tell gdb to only exit
+if 'run' exists clean via the if/else logic
+please tell me!
+
+see http://davis.lbl.gov/Manuals/GDB/gdb_20.html#SEC194)
+but there's no useful example :-(
+
+metze
+Added:
+   branches/SAMBA_4_0/source/script/gdb_run
+Modified:
+   branches/SAMBA_4_0/source/main.mk
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/main.mk
+===================================================================
+--- branches/SAMBA_4_0/source/main.mk	2007-04-17 15:33:50 UTC (rev 22311)
++++ branches/SAMBA_4_0/source/main.mk	2007-04-17 15:55:08 UTC (rev 22312)
+@@ -330,15 +330,15 @@
+ gdbtest: gdbtest-quick
+ 
+ gdbtest-quick: all
+-	SMBD_VALGRIND="xterm -n smbd -e gdb --args " \
++	SMBD_VALGRIND="xterm -n smbd -e $(srcdir)/script/gdb_run " \
+ 	$(SELFTEST) --immediate --quick --socket-wrapper
+ 
+ gdbtest-all: everything
+-	SMBD_VALGRIND="xterm -n smbd -e gdb --args " \
++	SMBD_VALGRIND="xterm -n smbd -e $(srcdir)/script/gdb_run " \
+ 	$(SELFTEST) --immediate --socket-wrapper
+ 
+ gdbtest-env: everything
+-	SMBD_VALGRIND="xterm -n smbd -e gdb --args " \
++	SMBD_VALGRIND="xterm -n smbd -e $(srcdir)/script/gdb_run " \
+ 	$(SELFTEST) --socket-wrapper --testenv
+ 
+ wintest: all
+
+Added: branches/SAMBA_4_0/source/script/gdb_run
+===================================================================
+--- branches/SAMBA_4_0/source/script/gdb_run	2007-04-17 15:33:50 UTC (rev 22311)
++++ branches/SAMBA_4_0/source/script/gdb_run	2007-04-17 15:55:08 UTC (rev 22312)
+@@ -0,0 +1,17 @@
++#!/bin/sh
++
++if test -z "$TMPDIR"; then
++	TMPDIR="/tmp"
++fi
++
++TMPFILE=$TMPDIR/gdb_run.$$
++cat << EOF  > $TMPFILE
++run
++bt
++quit
++EOF
++
++trap "/bin/rm -f $TMPFILE" EXIT
++CMD="gdb -x $TMPFILE --args $@"
++echo $CMD
++eval "$CMD"
+
+
+Property changes on: branches/SAMBA_4_0/source/script/gdb_run
+___________________________________________________________________
+Name: svn:executable
+   + *
+

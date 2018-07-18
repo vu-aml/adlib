@@ -1,0 +1,141 @@
+From perl6-all-return-81671-ktwarwic=speedy.uwaterloo.ca@perl.org  Wed May 30 13:46:37 2007
+Return-Path: <perl6-all-return-81671-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4UHkahB016795
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 30 May 2007 13:46:36 -0400
+Received: (qmail 9556 invoked by uid 514); 30 May 2007 17:46:30 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 9541 invoked from network); 30 May 2007 17:46:30 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-language-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-language
+List-Id: <perl6-language.perl.org>
+Delivered-To: mailing list perl6-language@perl.org
+Delivered-To: perl6-language@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: larry@cvs.develooper.com
+To: perl6-language@perl.org
+Subject: [svn:perl6-synopsis] r14409 - doc/trunk/design/syn
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Message-Id: <20070530161336.8EB01CB9B8@x12.develooper.com>
+Date: Wed, 30 May 2007 09:13:36 -0700 (PDT)
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-1.1 required=8.0
+	tests=BAYES_05,DK_POLICY_SIGNSOME,SPF_PASS
+
+Author: larry
+Date: Wed May 30 09:13:35 2007
+New Revision: 14409
+
+Modified:
+   doc/trunk/design/syn/S06.pod
+
+Log:
+Added "is reparsed" and removed $<KEY> kludge
+Explained caching semantics more thoroughly as suggested by Tim Bunce++
+
+
+Modified: doc/trunk/design/syn/S06.pod
+==============================================================================
+--- doc/trunk/design/syn/S06.pod	(original)
++++ doc/trunk/design/syn/S06.pod	Wed May 30 09:13:35 2007
+@@ -13,9 +13,9 @@
+ 
+   Maintainer: Larry Wall <larry@wall.org>
+   Date: 21 Mar 2003
+-  Last Modified: 29 May 2007
++  Last Modified: 30 May 2007
+   Number: 6
+-  Version: 85
++  Version: 86
+ 
+ 
+ This document summarizes Apocalypse 6, which covers subroutines and the
+@@ -1467,31 +1467,61 @@
+ =item C<is parsed>
+ 
+ Specifies the subrule by which a macro call is parsed.  The parse
+-always starts after the macro token, but the token may be referred
+-to within the subrule as C<< $<KEY> >>.
++always starts after the macro's initial token.
++
++=item C<is reparsed>
++
++Also specifies the subrule by which a macro call is parsed, but restarts
++the parse before the macro's initial token, usually because you want
++to parse using an existing rule that expects to traverse the initial
++token.
+ 
+ =item C<is cached>
+ 
+-Marks a subroutine as being memoized, or at least memoizable.  The
++Marks a subroutine as being memoized, or at least memoizable.
++In the abstract, this cache is just a hash where incoming argument
++C<Capture>s are mapped to return values.  If the C<Capture> is found in
++the hash, the return value need not be recalculated.  If you use
++this trait, the compiler will assume two things:
++
++=over
++
++=item *
++
++A given C<Capture> would always calculate the same return value.  That is,
++there is no state hidden within the dynamic scope of the call.
++
++=item *
++
++The cache lookup is likely to be more efficient than recalculating
++the value in at least some cases, because either most uncached calls
++would be slower (and reduce throughput), or you're trying to avoid a
++significant number of pathological cases that are unacceptably slow
++(and increase latency).
++
++=back
++
++This trait is a suggestion to the compiler that caching is okay.  The
+ compiler is free to choose any kind of caching algorithm (including
+ non-expiring, random, lru, pseudo-lru, or adaptive algoritms, or
+ even no caching algorithm at all).  The run-time system is free to
+ choose any kind of maximum cache size depending on the availability
+ of memory and trends in usage patterns.  You may suggest a particular
+-cache size by passing a numeric argument, and some of the possible
++cache size by passing a numeric argument (representing the maximum number
++of unique C<Capture> values allowed), and some of the possible
+ algorithms may pay attention to it.  You may also pass C<*> for the
+ size to request a non-expiring cache (complete memoization).  The
+ compiler is free to ignore this too.
+ 
+-The intent of this pragma is to specify performance hints without
+-mandating any exact behavior.  Use of this pragma should not change
+-semantics of the program, and this pragma will not be extended to
+-reinvent other existing ways of achieving the same effect.  To gain
+-more control, write your own trait handler to allow the use of a more
+-specific trait, such as "C<is lru(42)>".  Alternately, just
+-use a state hash keyed on the sub's argument capture to write
+-your own memoization with complete control from within the subroutine
+-itself.
++The intent of this trait is to specify performance hints without
++mandating any exact behavior.  Proper use of this trait should not
++change semantics of the program; it functions as a kind of "pragma".
++This trait will not be extended to reinvent other existing ways of
++achieving the same effect.  To gain more control, write your own
++trait handler to allow the use of a more specific trait, such as
++"C<is lru(42)>".  Alternately, just use a state hash keyed on the
++sub's argument capture to write your own memoization with complete
++control from within the subroutine itself.
+ 
+ =item C<is inline>
+ 
+

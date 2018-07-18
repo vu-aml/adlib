@@ -1,0 +1,135 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Jun  1 08:28:02 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l51CS2hB009637
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 1 Jun 2007 08:28:02 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 40D39163C61
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri,  1 Jun 2007 12:27:57 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1017)
+	id 23B19163BE8; Fri,  1 Jun 2007 12:24:59 +0000 (GMT)
+To: samba-cvs@samba.org
+From: obnox@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070601122459.23B19163BE8@lists.samba.org>
+Date: Fri,  1 Jun 2007 12:24:59 +0000 (GMT)
+Subject: svn commit: samba r23291 - in branches: SAMBA_3_0/source/nsswitch
+	SAMBA_3_0_26/source/nsswitch
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: obnox
+Date: 2007-06-01 12:24:57 +0000 (Fri, 01 Jun 2007)
+New Revision: 23291
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23291
+
+Log:
+Undo the somewhat naive change of r23279:
+The clear text presentaion of the sid in the ldap expression
+does work with w2k3 but not with w2k....
+
+Thanks to Guenther for advising me of this issue.
+
+Michael
+
+
+Modified:
+   branches/SAMBA_3_0/source/nsswitch/winbindd_ads.c
+   branches/SAMBA_3_0_26/source/nsswitch/winbindd_ads.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/nsswitch/winbindd_ads.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/winbindd_ads.c	2007-06-01 12:18:16 UTC (rev 23290)
++++ branches/SAMBA_3_0/source/nsswitch/winbindd_ads.c	2007-06-01 12:24:57 UTC (rev 23291)
+@@ -901,6 +901,7 @@
+ 	ADS_STRUCT *ads = NULL;
+ 	char *ldap_exp;
+ 	NTSTATUS status = NT_STATUS_UNSUCCESSFUL;
++	char *sidbinstr;
+ 	char **members = NULL;
+ 	int i;
+ 	size_t num_members = 0;
+@@ -939,14 +940,21 @@
+ 		goto done;
+ 	}
+ 
++	if ((sidbinstr = sid_binstring(group_sid)) == NULL) {
++		status = NT_STATUS_NO_MEMORY;
++		goto done;
++	}
++
+ 	/* search for all members of the group */
+-	if (!(ldap_exp = talloc_asprintf(tmp_ctx, "(objectSid=%s)",
+-					 sid_string_static(group_sid)))) 
++	if (!(ldap_exp = talloc_asprintf(tmp_ctx, "(objectSid=%s)", 
++					 sidbinstr))) 
+ 	{
++		SAFE_FREE(sidbinstr);
+ 		DEBUG(1, ("ads: lookup_groupmem: talloc_asprintf for ldap_exp failed!\n"));
+ 		status = NT_STATUS_NO_MEMORY;
+ 		goto done;
+ 	}
++	SAFE_FREE(sidbinstr);
+ 
+ 	args.control = ADS_EXTENDED_DN_OID;
+ 	args.val = ADS_EXTENDED_DN_HEX_STRING;
+
+Modified: branches/SAMBA_3_0_26/source/nsswitch/winbindd_ads.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/nsswitch/winbindd_ads.c	2007-06-01 12:18:16 UTC (rev 23290)
++++ branches/SAMBA_3_0_26/source/nsswitch/winbindd_ads.c	2007-06-01 12:24:57 UTC (rev 23291)
+@@ -901,6 +901,7 @@
+ 	ADS_STRUCT *ads = NULL;
+ 	char *ldap_exp;
+ 	NTSTATUS status = NT_STATUS_UNSUCCESSFUL;
++	char *sidbinstr;
+ 	char **members = NULL;
+ 	int i;
+ 	size_t num_members = 0;
+@@ -939,14 +940,21 @@
+ 		goto done;
+ 	}
+ 
++	if ((sidbinstr = sid_binstring(group_sid)) == NULL) {
++		status = NT_STATUS_NO_MEMORY;
++		goto done;
++	}
++
+ 	/* search for all members of the group */
+-	if (!(ldap_exp = talloc_asprintf(tmp_ctx, "(objectSid=%s)",
+-					 sid_string_static(group_sid)))) 
++	if (!(ldap_exp = talloc_asprintf(tmp_ctx, "(objectSid=%s)", 
++					 sidbinstr))) 
+ 	{
++		SAFE_FREE(sidbinstr);
+ 		DEBUG(1, ("ads: lookup_groupmem: talloc_asprintf for ldap_exp failed!\n"));
+ 		status = NT_STATUS_NO_MEMORY;
+ 		goto done;
+ 	}
++	SAFE_FREE(sidbinstr);
+ 
+ 	args.control = ADS_EXTENDED_DN_OID;
+ 	args.val = ADS_EXTENDED_DN_HEX_STRING;
+

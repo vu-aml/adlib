@@ -1,0 +1,140 @@
+From beginners-return-92305-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue Jun 12 09:49:42 2007
+Return-Path: <beginners-return-92305-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l5CDngL9026967
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 12 Jun 2007 09:49:42 -0400
+Received: (qmail 10651 invoked by uid 514); 12 Jun 2007 13:49:00 -0000
+Mailing-List: contact beginners-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:beginners@perl.org>
+List-Help: <mailto:beginners-help@perl.org>
+List-Unsubscribe: <mailto:beginners-unsubscribe@perl.org>
+List-Subscribe: <mailto:beginners-subscribe@perl.org>
+List-Id: <beginners.perl.org>
+Delivered-To: mailing list beginners@perl.org
+Received: (qmail 10567 invoked from network); 12 Jun 2007 13:48:59 -0000
+Received: from x1a.develooper.com (HELO x1.develooper.com) (216.52.237.111)
+  by lists.develooper.com with SMTP; 12 Jun 2007 13:48:59 -0000
+Received: (qmail 22095 invoked by uid 225); 12 Jun 2007 13:48:58 -0000
+Delivered-To: beginners@perl.org
+Received: (qmail 22079 invoked by alias); 12 Jun 2007 13:48:57 -0000
+X-Spam-Status: No, hits=0.0 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+Received: from h205.core.ignum.cz (HELO h205.core.ignum.cz) (217.31.49.205)
+    by la.mx.develooper.com (qpsmtpd/0.28) with ESMTP; Tue, 12 Jun 2007 06:48:45 -0700
+Received: from localhost (localhost [127.0.0.1])
+	by hroch.core.ignum.cz (Postfix) with SMTP id 6347858D099
+	for <beginners@perl.org>; Tue, 12 Jun 2007 15:48:23 +0200 (CEST)
+Received: from kartac.core.ignum.cz (kartac.local.ignum.cz [192.168.1.62])
+	by hroch.core.ignum.cz (Postfix) with ESMTP id F032058D53E
+	for <beginners@perl.org>; Tue, 12 Jun 2007 15:48:22 +0200 (CEST)
+Received: from [10.118.11.232] (unknown [194.228.230.147])
+	by kartac.core.ignum.cz (Postfix) with ESMTP id B2CAB24CFA0
+	for <beginners@perl.org>; Tue, 12 Jun 2007 15:48:35 +0200 (CEST)
+From: "Jenda Krynicky" <Jenda@Krynicky.cz>
+To: beginners@perl.org
+Date: Tue, 12 Jun 2007 15:48:35 +0200
+MIME-Version: 1.0
+Subject: Re: Declaring constants in perl
+Message-ID: <466EC053.25396.10925EE@Jenda.Krynicky.cz>
+Priority: normal
+In-reply-to: <1181306452.426726.176350@p47g2000hsd.googlegroups.com>
+References: <C4A55E6959ED6F498EA07FFB09DAB2E007252737@bgeexc04.asiapacific.cpqcorp.net>, <1181306452.426726.176350@p47g2000hsd.googlegroups.com>
+X-mailer: Pegasus Mail for Windows (4.41)
+Content-type: text/plain; charset=US-ASCII
+Content-transfer-encoding: 7BIT
+Content-description: Mail message body
+
+From: Paul Lalli <mritty@gmail.com>
+> On Jun 8, 7:33 am, alok.n...@hp.com (Alok Nath) wrote:
+> >         What is the convention used to declare constants in perl ?
+> >         In C we declare constant type in Capital letters , not sure
+> >         how its in perl.
+> 
+> There is a 'constant' pragma in Perl that you can use:
+> use constant PI => 3.14;
+> 
+> but it is "better" these days to use the Readonly module, available on
+> the CPAN.  They have several advantages over constants:
+> 1) They can be defined lexically - constants are globals (because
+> they're implemented as subroutines)
+> 2) They interpolate into strings, because they're real variables
+> 3) You can define Readonly hashes and arrays as well as scalars.
+> 
+> So many people would prefer you abandon the first example I gave, and
+> replace it with:
+> use Readonly;
+> Readonly my $PI => 3.14;
+> 
+> Paul Lalli
+
+Everything has it's pros and cons. 
+
+1) The constant pragma is already installed with any Perl 5.004 or 
+newer, while you have to install Readonly.pm
+
+2) The constants created by the constant pragma are actually known 
+and believed to be constant in compiletime and the optimizer may use 
+that knowledge. 
+
+Compare
+
+perl -MO=Deparse -e "use constant FOO => 0; expensive() if FOO; print 
+1;"
+	  ==>
+	use constant ('FOO', 0);
+	'???';
+	print 1;
+
+and
+
+perl -MO=Deparse -e "use Readonly; Readonly my $FOO => 0; expensive() 
+if $FOO; print 1;"
+	  ==>
+	use Readonly;
+	Readonly my $FOO, 0;
+	expensive() if $FOO;
+	print 1;
+
+or
+
+perl -MO=Deparse -e "use constant X => 12414; print X*78.7;"
+	  ==>
+	use constant ('X', 12414);
+	print 976981.8;
+
+and
+
+perl -MO=Deparse -e "use Readonly; Readonly my $X => 12414; print 
+$X*78.7;"
+	  ==>
+	use Readonly;
+	Readonly my $X, 12414;
+	print $X * 78.7;
+
+As you can see with "use constant" the optimizer has a chance to 
+remove inaccessible code or precompute some constant dependent 
+expressions, with Readonly it can't.
+
+
+Which may or may not matter, but you should be aware of that.
+
+Jenda
+P.S.: The -MO=Deparse tells perl to parse, compile and optimize the 
+code and then instead of executing it, convert it "back" to readable 
+code and print.
+
+===== Jenda@Krynicky.cz === http://Jenda.Krynicky.cz =====
+When it comes to wine, women and song, wizards are allowed 
+to get drunk and croon as much as they like.
+	-- Terry Pratchett in Sourcery
+
+
+-- 
+To unsubscribe, e-mail: beginners-unsubscribe@perl.org
+For additional commands, e-mail: beginners-help@perl.org
+http://learn.perl.org/
+
+

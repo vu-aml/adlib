@@ -1,0 +1,91 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May  8 20:45:03 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l490j3qD022273
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 8 May 2007 20:45:03 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 859C816382E
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed,  9 May 2007 00:44:59 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.4 required=3.8 tests=AWL,BAYES_40,
+	DNS_FROM_RFC_ABUSE,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from relay.sgi.com (netops-testserver-3-out.sgi.com [192.48.171.28])
+	by lists.samba.org (Postfix) with ESMTP id 58B8C162AC7
+	for <samba-technical@lists.samba.org>;
+	Wed,  9 May 2007 00:44:34 +0000 (GMT)
+Received: from larry.melbourne.sgi.com (larry.melbourne.sgi.com
+	[134.14.52.130])
+	by netops-testserver-3.corp.sgi.com (Postfix) with SMTP id A75A29089D
+	for <samba-technical@lists.samba.org>;
+	Tue,  8 May 2007 17:44:32 -0700 (PDT)
+Received: from [134.14.55.78] (redback.melbourne.sgi.com [134.14.55.78]) by
+	larry.melbourne.sgi.com (950413.SGI.8.6.12/950213.SGI.AUTOCF)
+	via ESMTP id KAA24437 for <samba-technical@lists.samba.org>;
+	Wed, 9 May 2007 10:44:29 +1000
+Message-ID: <46411971.9070402@sgi.com>
+Date: Wed, 09 May 2007 10:44:33 +1000
+From: Alison Winters <alisonw@sgi.com>
+User-Agent: Thunderbird 1.5.0.10 (Windows/20070221)
+MIME-Version: 1.0
+To: samba-technical@lists.samba.org
+Content-Type: multipart/mixed; boundary="------------040708050805070200030001"
+Subject: bug in send_file_readbraw?
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+This is a multi-part message in MIME format.
+--------------040708050805070200030001
+Content-Type: text/plain; charset=ISO-8859-1
+Content-Transfer-Encoding: 7bit
+
+I've been poking around in reply.c the past few days working on some
+profiling improvements, and i noticed something that appears to be a bug
+in the send_file_readbraw function.  I could be wrong in identifying
+this as a bug because i don't know what Windows does in this case, but
+it seems a bit bizarre to me that if the sendfile() call succeeds, we
+then continue to call read_file() and write_data() immediately
+afterwards.  It looks to me like we'll be sending duplicate data in this
+case.  Patch against SAMBA_3_0 is attached, though this is evident in
+3.0.24 and presumably other versions too.
+
+Alison
+
+--------------040708050805070200030001
+Content-Type: text/plain;
+ name="fix-sendfile-readbraw.patch"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline;
+ filename="fix-sendfile-readbraw.patch"
+
+Index: source/smbd/reply.c
+===================================================================
+--- source/smbd/reply.c	(revision 22764)
++++ source/smbd/reply.c	(working copy)
+@@ -2237,7 +2237,7 @@
+ 				fsp->fsp_name, strerror(errno) ));
+ 			exit_server_cleanly("send_file_readbraw sendfile failed");
+ 		}
+-
++		return;
+ 	}
+ 
+   normal_readbraw:
+
+--------------040708050805070200030001--
+

@@ -1,0 +1,138 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Apr 17 13:08:24 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3HH8N0I030641
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 13:08:23 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 8690F163B38
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 17:07:59 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 620)
+	id C37EA163AFC; Tue, 17 Apr 2007 17:07:14 +0000 (GMT)
+To: samba-cvs@samba.org
+From: metze@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070417170714.C37EA163AFC@lists.samba.org>
+Date: Tue, 17 Apr 2007 17:07:14 +0000 (GMT)
+Subject: svn commit: samba r22317 - in
+	branches/SAMBA_3_0/source/lib/tdb/common: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 3566
+Lines: 95
+
+Author: metze
+Date: 2007-04-17 17:07:14 +0000 (Tue, 17 Apr 2007)
+New Revision: 22317
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22317
+
+Log:
+add tdb_ prefix to non static function
+
+metze
+Modified:
+   branches/SAMBA_3_0/source/lib/tdb/common/freelist.c
+   branches/SAMBA_3_0/source/lib/tdb/common/freelistcheck.c
+   branches/SAMBA_3_0/source/lib/tdb/common/tdb_private.h
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/lib/tdb/common/freelist.c
+===================================================================
+--- branches/SAMBA_3_0/source/lib/tdb/common/freelist.c	2007-04-17 17:03:38 UTC (rev 22316)
++++ branches/SAMBA_3_0/source/lib/tdb/common/freelist.c	2007-04-17 17:07:14 UTC (rev 22317)
+@@ -29,7 +29,7 @@
+ #include "tdb_private.h"
+ 
+ /* read a freelist record and check for simple errors */
+-int rec_free_read(struct tdb_context *tdb, tdb_off_t off, struct list_struct *rec)
++int tdb_rec_free_read(struct tdb_context *tdb, tdb_off_t off, struct list_struct *rec)
+ {
+ 	if (tdb->methods->tdb_read(tdb, off, rec, sizeof(*rec),DOCONV()) == -1)
+ 		return -1;
+@@ -37,7 +37,7 @@
+ 	if (rec->magic == TDB_MAGIC) {
+ 		/* this happens when a app is showdown while deleting a record - we should
+ 		   not completely fail when this happens */
+-		TDB_LOG((tdb, TDB_DEBUG_WARNING, "rec_free_read non-free magic 0x%x at offset=%d - fixing\n", 
++		TDB_LOG((tdb, TDB_DEBUG_WARNING, "tdb_rec_free_read non-free magic 0x%x at offset=%d - fixing\n", 
+ 			 rec->magic, off));
+ 		rec->magic = TDB_FREE_MAGIC;
+ 		if (tdb->methods->tdb_write(tdb, off, rec, sizeof(*rec)) == -1)
+@@ -47,7 +47,7 @@
+ 	if (rec->magic != TDB_FREE_MAGIC) {
+ 		/* Ensure ecode is set for log fn. */
+ 		tdb->ecode = TDB_ERR_CORRUPT;
+-		TDB_LOG((tdb, TDB_DEBUG_WARNING, "rec_free_read bad magic 0x%x at offset=%d\n", 
++		TDB_LOG((tdb, TDB_DEBUG_WARNING, "tdb_rec_free_read bad magic 0x%x at offset=%d\n", 
+ 			   rec->magic, off));
+ 		return TDB_ERRCODE(TDB_ERR_CORRUPT, -1);
+ 	}
+@@ -286,7 +286,7 @@
+ 	   issues when faced with a slowly increasing record size.
+ 	 */
+ 	while (rec_ptr) {
+-		if (rec_free_read(tdb, rec_ptr, rec) == -1) {
++		if (tdb_rec_free_read(tdb, rec_ptr, rec) == -1) {
+ 			goto fail;
+ 		}
+ 
+@@ -311,7 +311,7 @@
+ 	}
+ 
+ 	if (bestfit.rec_ptr != 0) {
+-		if (rec_free_read(tdb, bestfit.rec_ptr, rec) == -1) {
++		if (tdb_rec_free_read(tdb, bestfit.rec_ptr, rec) == -1) {
+ 			goto fail;
+ 		}
+ 
+
+Modified: branches/SAMBA_3_0/source/lib/tdb/common/freelistcheck.c
+===================================================================
+--- branches/SAMBA_3_0/source/lib/tdb/common/freelistcheck.c	2007-04-17 17:03:38 UTC (rev 22316)
++++ branches/SAMBA_3_0/source/lib/tdb/common/freelistcheck.c	2007-04-17 17:07:14 UTC (rev 22317)
+@@ -88,7 +88,7 @@
+ 			goto fail;
+ 		}
+ 
+-		if (rec_free_read(tdb, rec_ptr, &rec) == -1) {
++		if (tdb_rec_free_read(tdb, rec_ptr, &rec) == -1) {
+ 			goto fail;
+ 		}
+ 
+
+Modified: branches/SAMBA_3_0/source/lib/tdb/common/tdb_private.h
+===================================================================
+--- branches/SAMBA_3_0/source/lib/tdb/common/tdb_private.h	2007-04-17 17:03:38 UTC (rev 22316)
++++ branches/SAMBA_3_0/source/lib/tdb/common/tdb_private.h	2007-04-17 17:07:14 UTC (rev 22317)
+@@ -206,7 +206,7 @@
+ 			   struct list_struct *rec);
+ void tdb_io_init(struct tdb_context *tdb);
+ int tdb_expand(struct tdb_context *tdb, tdb_off_t size);
+-int rec_free_read(struct tdb_context *tdb, tdb_off_t off,
+-		  struct list_struct *rec);
++int tdb_rec_free_read(struct tdb_context *tdb, tdb_off_t off,
++		      struct list_struct *rec);
+ 
+ 
+

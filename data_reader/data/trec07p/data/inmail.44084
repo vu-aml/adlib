@@ -1,0 +1,149 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat May 26 04:16:59 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4Q8GxqD005703
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 26 May 2007 04:16:59 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 1F84B162BC9
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 26 May 2007 08:16:55 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id DFDCD162AF4; Sat, 26 May 2007 08:16:25 +0000 (GMT)
+Date: Sat, 26 May 2007 16:32:33 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070526081625.DFDCD162AF4@lists.samba.org>
+Subject: Rev 351: paranoid checks for bad packets in tcp layer. Close the
+	socket if it gets a bad packet in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 351
+revision-id: tridge@samba.org-20070526063232-f11jm7mw39jlmq8o
+parent: tridge@samba.org-20070526044612-v0alyob7oxnvdun3
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Sat 2007-05-26 16:32:32 +1000
+message:
+  paranoid checks for bad packets in tcp layer. Close the socket if it gets a bad packet
+modified:
+  common/ctdb.c                  ctdb.c-20061127094323-t50f58d65iaao5of-2
+  tcp/tcp_io.c                   tcp_io.c-20061128004937-x70q1cu5xzg5g2tm-3
+=== modified file 'common/ctdb.c'
+--- a/common/ctdb.c	2007-05-25 07:04:13 +0000
++++ b/common/ctdb.c	2007-05-26 06:32:32 +0000
+@@ -347,26 +347,6 @@
+ 
+ 	ctdb->status.node_packets_recv++;
+ 
+-	if (length < sizeof(*hdr)) {
+-		ctdb_set_error(ctdb, "Bad packet length %u\n", length);
+-		return;
+-	}
+-	if (length != hdr->length) {
+-		ctdb_set_error(ctdb, "Bad header length %u expected %u\n", 
+-			       hdr->length, length);
+-		return;
+-	}
+-
+-	if (hdr->ctdb_magic != CTDB_MAGIC) {
+-		ctdb_set_error(ctdb, "Non CTDB packet rejected\n");
+-		return;
+-	}
+-
+-	if (hdr->ctdb_version != CTDB_VERSION) {
+-		ctdb_set_error(ctdb, "Bad CTDB version 0x%x rejected\n", hdr->ctdb_version);
+-		return;
+-	}
+-
+ 	/* up the counter for this source node, so we know its alive */
+ 	if (ctdb_validate_vnn(ctdb, hdr->srcnode)) {
+ 		/* as a special case, redirected calls don't increment the rx_cnt */
+
+=== modified file 'tcp/tcp_io.c'
+--- a/tcp/tcp_io.c	2007-04-28 09:35:49 +0000
++++ b/tcp/tcp_io.c	2007-05-26 06:32:32 +0000
+@@ -34,38 +34,48 @@
+ void ctdb_tcp_read_cb(uint8_t *data, size_t cnt, void *args)
+ {
+ 	struct ctdb_incoming *in = talloc_get_type(args, struct ctdb_incoming);
+-	struct ctdb_req_header *hdr;
++	struct ctdb_req_header *hdr = (struct ctdb_req_header *)data;
+ 
+ 	if (data == NULL) {
+ 		/* incoming socket has died */
+-		talloc_free(in);
+-		return;
++		goto failed;
+ 	}
+ 
+ 	if (cnt < sizeof(*hdr)) {
+-		ctdb_set_error(in->ctdb, "Bad packet length %u\n", (unsigned)cnt);
+-		return;
+-	}
+-	hdr = (struct ctdb_req_header *)data;
++		DEBUG(0,(__location__ " Bad packet length %u\n", (unsigned)cnt));
++		goto failed;
++	}
++
++	if (cnt & (CTDB_TCP_ALIGNMENT-1)) {
++		DEBUG(0,(__location__ " Length 0x%x not multiple of alignment\n", cnt));
++		goto failed;
++	}
++
++
+ 	if (cnt != hdr->length) {
+-		ctdb_set_error(in->ctdb, "Bad header length %u expected %u\n", 
+-			       (unsigned)hdr->length, (unsigned)cnt);
+-		return;
++		DEBUG(0,(__location__ " Bad header length %u expected %u\n", 
++			 (unsigned)hdr->length, (unsigned)cnt));
++		goto failed;
+ 	}
+ 
+ 	if (hdr->ctdb_magic != CTDB_MAGIC) {
+-		ctdb_set_error(in->ctdb, "Non CTDB packet rejected\n");
+-		return;
++		DEBUG(0,(__location__ " Non CTDB packet 0x%x rejected\n", 
++			 hdr->ctdb_magic));
++		goto failed;
+ 	}
+ 
+ 	if (hdr->ctdb_version != CTDB_VERSION) {
+-		ctdb_set_error(in->ctdb, "Bad CTDB version 0x%x rejected\n", hdr->ctdb_version);
+-		return;
++		DEBUG(0, (__location__ " Bad CTDB version 0x%x rejected\n", 
++			  hdr->ctdb_version));
++		goto failed;
+ 	}
+ 
+-	/* most common case - we got a whole packet in one go
+-	   tell the ctdb layer above that we have a packet */
++	/* tell the ctdb layer above that we have a packet */
+ 	in->ctdb->upcalls->recv_pkt(in->ctdb, data, cnt);
++	return;
++
++failed:
++	talloc_free(in);
+ }
+ 
+ /*
+

@@ -1,0 +1,311 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Jun 18 05:25:53 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5I9PrL9016042
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 18 Jun 2007 05:25:53 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 0FE76163846
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 18 Jun 2007 09:25:51 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id F3ACB162AC2; Mon, 18 Jun 2007 09:25:34 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070618092534.F3ACB162AC2@lists.samba.org>
+Date: Mon, 18 Jun 2007 09:25:34 +0000 (GMT)
+Subject: svn commit: samba r23537 - in branches: SAMBA_3_0/source/smbd
+	SAMBA_3_0_26/source/smbd
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-06-18 09:25:31 +0000 (Mon, 18 Jun 2007)
+New Revision: 23537
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23537
+
+Log:
+Revert the inbuf/outbuf part of r23528: This caused the Solaris CC make test
+to break. The Solaris CC put the static char InBuffer[TOTAL_BUFFER_SIZE] on an
+odd address, the malloc'ed one is always aligned. The problem showed up in
+pull_ucs2, ucs2_align uses the address of InBuffer as an indication whether to
+bump up the src of the string by one. Unfortunately in the trans calls the
+data portion is malloced and thus has different alignment guarantees than a
+static variable. This one is bigger....
+
+Volker
+
+
+Modified:
+   branches/SAMBA_3_0/source/smbd/process.c
+   branches/SAMBA_3_0_26/source/smbd/process.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/smbd/process.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/process.c	2007-06-17 23:13:32 UTC (rev 23536)
++++ branches/SAMBA_3_0/source/smbd/process.c	2007-06-18 09:25:31 UTC (rev 23537)
+@@ -25,11 +25,10 @@
+ extern struct auth_context *negprot_global_auth_context;
+ extern int smb_echo_count;
+ 
+-#define TOTAL_BUFFER_SIZE (BUFFER_SIZE+LARGE_WRITEX_HDR_SIZE+SAFETY_MARGIN)
++static char *InBuffer = NULL;
++static char *OutBuffer = NULL;
++static char *current_inbuf = NULL;
+ 
+-static char InBuffer[TOTAL_BUFFER_SIZE];
+-static char OutBuffer[TOTAL_BUFFER_SIZE];
+-
+ /* 
+  * Size of data we can send to client. Set
+  *  by the client for all protocols above CORE.
+@@ -209,11 +208,11 @@
+ 
+ 	DEBUG(10,("push_deferred_open_smb_message: pushing message len %u mid %u "
+ 		  "timeout time [%u.%06u]\n",
+-		  (unsigned int) smb_len(InBuffer)+4, (unsigned int)mid,
++		  (unsigned int) smb_len(current_inbuf)+4, (unsigned int)mid,
+ 		  (unsigned int)end_time.tv_sec,
+ 		  (unsigned int)end_time.tv_usec));
+ 
+-	return push_queued_message(InBuffer, smb_len(InBuffer)+4,
++	return push_queued_message(current_inbuf, smb_len(current_inbuf)+4,
+ 				   request_time, end_time,
+ 				   private_data, priv_len);
+ }
+@@ -1008,6 +1007,7 @@
+ 			return(ERROR_DOS(ERRSRV,ERRaccess));
+ 		}
+ 
++		current_inbuf = inbuf; /* In case we need to defer this message in open... */
+ 		outsize = smb_messages[type].fn(conn, inbuf,outbuf,size,bufsize);
+ 	}
+ 
+@@ -1441,8 +1441,49 @@
+ 	return OutBuffer;
+ }
+ 
++const int total_buffer_size = (BUFFER_SIZE + LARGE_WRITEX_HDR_SIZE + SAFETY_MARGIN);
+ 
+ /****************************************************************************
++ Allocate a new InBuffer. Returns the new and old ones.
++****************************************************************************/
++
++static char *NewInBuffer(char **old_inbuf)
++{
++	char *new_inbuf = (char *)SMB_MALLOC(total_buffer_size);
++	if (!new_inbuf) {
++		return NULL;
++	}
++	if (old_inbuf) {
++		*old_inbuf = InBuffer;
++	}
++	InBuffer = new_inbuf;
++#if defined(DEVELOPER)
++	clobber_region(SAFE_STRING_FUNCTION_NAME, SAFE_STRING_LINE, InBuffer, total_buffer_size);
++#endif
++	return InBuffer;
++}
++
++/****************************************************************************
++ Allocate a new OutBuffer. Returns the new and old ones.
++****************************************************************************/
++
++static char *NewOutBuffer(char **old_outbuf)
++{
++	char *new_outbuf = (char *)SMB_MALLOC(total_buffer_size);
++	if (!new_outbuf) {
++		return NULL;
++	}
++	if (old_outbuf) {
++		*old_outbuf = OutBuffer;
++	}
++	OutBuffer = new_outbuf;
++#if defined(DEVELOPER)
++	clobber_region(SAFE_STRING_FUNCTION_NAME, SAFE_STRING_LINE, OutBuffer, total_buffer_size);
++#endif
++	return OutBuffer;
++}
++
++/****************************************************************************
+  Process commands from the client
+ ****************************************************************************/
+ 
+@@ -1451,6 +1492,11 @@
+ 	time_t last_timeout_processing_time = time(NULL);
+ 	unsigned int num_smbs = 0;
+ 
++	/* Allocate the primary Inbut/Output buffers. */
++
++	if ((NewInBuffer(NULL) == NULL) || (NewOutBuffer(NULL) == NULL)) 
++		return;
++
+ 	max_recv = MIN(lp_maxxmit(),BUFFER_SIZE);
+ 
+ 	while (True) {
+@@ -1474,8 +1520,7 @@
+ 		run_events(smbd_event_context(), 0, NULL, NULL);
+ 
+ #if defined(DEVELOPER)
+-		clobber_region(SAFE_STRING_FUNCTION_NAME, SAFE_STRING_LINE,
+-			       InBuffer, TOTAL_BUFFER_SIZE);
++		clobber_region(SAFE_STRING_FUNCTION_NAME, SAFE_STRING_LINE, InBuffer, total_buffer_size);
+ #endif
+ 
+ 		while (!receive_message_or_smb(InBuffer,BUFFER_SIZE+LARGE_WRITEX_HDR_SIZE,select_timeout)) {
+@@ -1496,8 +1541,7 @@
+ 		 */ 
+ 		num_echos = smb_echo_count;
+ 
+-		clobber_region(SAFE_STRING_FUNCTION_NAME, SAFE_STRING_LINE,
+-			       OutBuffer, TOTAL_BUFFER_SIZE);
++		clobber_region(SAFE_STRING_FUNCTION_NAME, SAFE_STRING_LINE, OutBuffer, total_buffer_size);
+ 
+ 		process_smb(InBuffer, OutBuffer);
+ 
+
+Modified: branches/SAMBA_3_0_26/source/smbd/process.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/smbd/process.c	2007-06-17 23:13:32 UTC (rev 23536)
++++ branches/SAMBA_3_0_26/source/smbd/process.c	2007-06-18 09:25:31 UTC (rev 23537)
+@@ -26,11 +26,10 @@
+ extern struct auth_context *negprot_global_auth_context;
+ extern int smb_echo_count;
+ 
+-#define TOTAL_BUFFER_SIZE (BUFFER_SIZE+LARGE_WRITEX_HDR_SIZE+SAFETY_MARGIN)
++static char *InBuffer = NULL;
++static char *OutBuffer = NULL;
++static char *current_inbuf = NULL;
+ 
+-static char InBuffer[TOTAL_BUFFER_SIZE];
+-static char OutBuffer[TOTAL_BUFFER_SIZE];
+-
+ /* 
+  * Size of data we can send to client. Set
+  *  by the client for all protocols above CORE.
+@@ -210,11 +209,11 @@
+ 
+ 	DEBUG(10,("push_deferred_open_smb_message: pushing message len %u mid %u "
+ 		  "timeout time [%u.%06u]\n",
+-		  (unsigned int) smb_len(InBuffer)+4, (unsigned int)mid,
++		  (unsigned int) smb_len(current_inbuf)+4, (unsigned int)mid,
+ 		  (unsigned int)end_time.tv_sec,
+ 		  (unsigned int)end_time.tv_usec));
+ 
+-	return push_queued_message(InBuffer, smb_len(InBuffer)+4,
++	return push_queued_message(current_inbuf, smb_len(current_inbuf)+4,
+ 				   request_time, end_time,
+ 				   private_data, priv_len);
+ }
+@@ -1000,6 +999,7 @@
+ 			return(ERROR_DOS(ERRSRV,ERRaccess));
+ 		}
+ 
++		current_inbuf = inbuf; /* In case we need to defer this message in open... */
+ 		outsize = smb_messages[type].fn(conn, inbuf,outbuf,size,bufsize);
+ 	}
+ 
+@@ -1484,8 +1484,49 @@
+ 	return OutBuffer;
+ }
+ 
++const int total_buffer_size = (BUFFER_SIZE + LARGE_WRITEX_HDR_SIZE + SAFETY_MARGIN);
+ 
+ /****************************************************************************
++ Allocate a new InBuffer. Returns the new and old ones.
++****************************************************************************/
++
++static char *NewInBuffer(char **old_inbuf)
++{
++	char *new_inbuf = (char *)SMB_MALLOC(total_buffer_size);
++	if (!new_inbuf) {
++		return NULL;
++	}
++	if (old_inbuf) {
++		*old_inbuf = InBuffer;
++	}
++	InBuffer = new_inbuf;
++#if defined(DEVELOPER)
++	clobber_region(SAFE_STRING_FUNCTION_NAME, SAFE_STRING_LINE, InBuffer, total_buffer_size);
++#endif
++	return InBuffer;
++}
++
++/****************************************************************************
++ Allocate a new OutBuffer. Returns the new and old ones.
++****************************************************************************/
++
++static char *NewOutBuffer(char **old_outbuf)
++{
++	char *new_outbuf = (char *)SMB_MALLOC(total_buffer_size);
++	if (!new_outbuf) {
++		return NULL;
++	}
++	if (old_outbuf) {
++		*old_outbuf = OutBuffer;
++	}
++	OutBuffer = new_outbuf;
++#if defined(DEVELOPER)
++	clobber_region(SAFE_STRING_FUNCTION_NAME, SAFE_STRING_LINE, OutBuffer, total_buffer_size);
++#endif
++	return OutBuffer;
++}
++
++/****************************************************************************
+  Process commands from the client
+ ****************************************************************************/
+ 
+@@ -1494,6 +1535,11 @@
+ 	time_t last_timeout_processing_time = time(NULL);
+ 	unsigned int num_smbs = 0;
+ 
++	/* Allocate the primary Inbut/Output buffers. */
++
++	if ((NewInBuffer(NULL) == NULL) || (NewOutBuffer(NULL) == NULL)) 
++		return;
++
+ 	max_recv = MIN(lp_maxxmit(),BUFFER_SIZE);
+ 
+ 	while (True) {
+@@ -1520,8 +1566,7 @@
+ 		run_events(smbd_event_context(), 0, NULL, NULL);
+ 
+ #if defined(DEVELOPER)
+-		clobber_region(SAFE_STRING_FUNCTION_NAME, SAFE_STRING_LINE,
+-			       InBuffer, TOTAL_BUFFER_SIZE);
++		clobber_region(SAFE_STRING_FUNCTION_NAME, SAFE_STRING_LINE, InBuffer, total_buffer_size);
+ #endif
+ 
+ 		while (!receive_message_or_smb(InBuffer,BUFFER_SIZE+LARGE_WRITEX_HDR_SIZE,select_timeout)) {
+@@ -1541,8 +1586,7 @@
+ 		 */ 
+ 		num_echos = smb_echo_count;
+ 
+-		clobber_region(SAFE_STRING_FUNCTION_NAME, SAFE_STRING_LINE,
+-			       OutBuffer, TOTAL_BUFFER_SIZE);
++		clobber_region(SAFE_STRING_FUNCTION_NAME, SAFE_STRING_LINE, OutBuffer, total_buffer_size);
+ 
+ 		process_smb(InBuffer, OutBuffer);
+ 
+

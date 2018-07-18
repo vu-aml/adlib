@@ -1,0 +1,152 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May 30 06:25:04 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4UAP3hB012595
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 30 May 2007 06:25:03 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id C9BFC16387F
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 30 May 2007 10:24:58 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,SUBJECT_FUZZY_TION autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1004)
+	id 2D547162B00; Wed, 30 May 2007 10:24:41 +0000 (GMT)
+To: samba-cvs@samba.org
+From: gd@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070530102441.2D547162B00@lists.samba.org>
+Date: Wed, 30 May 2007 10:24:41 +0000 (GMT)
+Subject: svn commit: samba r23240 - in branches/SAMBA_4_0/source: librpc/idl
+	rpc_server/netlogon torture/rpc
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: gd
+Date: 2007-05-30 10:24:40 +0000 (Wed, 30 May 2007)
+New Revision: 23240
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23240
+
+Log:
+Fill in netr_DsrGetDcSiteCoverageW.
+
+Guenther
+
+Modified:
+   branches/SAMBA_4_0/source/librpc/idl/netlogon.idl
+   branches/SAMBA_4_0/source/rpc_server/netlogon/dcerpc_netlogon.c
+   branches/SAMBA_4_0/source/torture/rpc/netlogon.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/librpc/idl/netlogon.idl
+===================================================================
+--- branches/SAMBA_4_0/source/librpc/idl/netlogon.idl	2007-05-30 09:54:19 UTC (rev 23239)
++++ branches/SAMBA_4_0/source/librpc/idl/netlogon.idl	2007-05-30 10:24:40 UTC (rev 23240)
+@@ -1145,8 +1145,17 @@
+ 
+ 	/****************/
+ 	/* Function 0x26 */
+-	WERROR netr_DSRGETDCSITECOVERAGEW();
+ 
++	typedef struct {
++		uint32 num_sites;
++		[size_is(num_sites)] [unique] lsa_String *sites;
++	} DcSitesCtr;
++
++	WERROR netr_DsrGetDcSiteCoverageW(
++		[in] [string,charset(UTF16)] uint16 *server_name,
++		[out] DcSitesCtr *ctr
++		);
++
+ 	/****************/
+ 	/* Function 0x27 */
+ 	NTSTATUS netr_LogonSamLogonEx(
+
+Modified: branches/SAMBA_4_0/source/rpc_server/netlogon/dcerpc_netlogon.c
+===================================================================
+--- branches/SAMBA_4_0/source/rpc_server/netlogon/dcerpc_netlogon.c	2007-05-30 09:54:19 UTC (rev 23239)
++++ branches/SAMBA_4_0/source/rpc_server/netlogon/dcerpc_netlogon.c	2007-05-30 10:24:40 UTC (rev 23240)
+@@ -1119,10 +1119,10 @@
+ 
+ 
+ /* 
+-  netr_DSRGETDCSITECOVERAGEW 
++  netr_DsrGetDcSiteCoverageW
+ */
+-static WERROR dcesrv_netr_DSRGETDCSITECOVERAGEW(struct dcesrv_call_state *dce_call, TALLOC_CTX *mem_ctx,
+-		       struct netr_DSRGETDCSITECOVERAGEW *r)
++static WERROR dcesrv_netr_DsrGetDcSiteCoverageW(struct dcesrv_call_state *dce_call, TALLOC_CTX *mem_ctx,
++		       struct netr_DsrGetDcSiteCoverageW *r)
+ {
+ 	DCESRV_FAULT(DCERPC_FAULT_OP_RNG_ERROR);
+ }
+
+Modified: branches/SAMBA_4_0/source/torture/rpc/netlogon.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/rpc/netlogon.c	2007-05-30 09:54:19 UTC (rev 23239)
++++ branches/SAMBA_4_0/source/torture/rpc/netlogon.c	2007-05-30 10:24:40 UTC (rev 23240)
+@@ -594,7 +594,6 @@
+ 
+ 	}
+ 
+-
+ 	return ret;
+ }
+ 
+@@ -1318,6 +1317,30 @@
+ 	return ret;
+ }
+ 
++static BOOL test_netr_DsrGetDcSiteCoverageW(struct dcerpc_pipe *p, TALLOC_CTX *mem_ctx) 
++{
++	NTSTATUS status;
++	struct netr_DsrGetDcSiteCoverageW r;
++	BOOL ret = True;
++
++	if (lp_parm_bool(-1, "torture", "samba4", False)) {
++		printf("skipping DsrGetDcSiteCoverageW test against Samba4\n");
++		return True;
++	}
++
++	r.in.server_name = "";
++	printf("Testing netr_DsrGetDcSiteCoverageW\n");
++
++	status = dcerpc_netr_DsrGetDcSiteCoverageW(p, mem_ctx, &r);
++	if (!NT_STATUS_IS_OK(status) || !W_ERROR_IS_OK(r.out.result)) {
++		printf("netr_DsrGetDcSiteCoverageW - %s/%s\n", 
++		       nt_errstr(status), win_errstr(r.out.result));
++		ret = False;
++	}
++	return ret;
++}
++
++
+ static BOOL test_GetDomainInfo(struct dcerpc_pipe *p, TALLOC_CTX *mem_ctx)
+ {
+ 	NTSTATUS status;
+@@ -1605,6 +1628,7 @@
+ 	ret &= test_netr_DsRGetDCName(p, mem_ctx);
+ 	ret &= test_netr_DsRGetDCNameEx(p, mem_ctx);
+ 	ret &= test_netr_DsRGetDCNameEx2(p, mem_ctx);
++	ret &= test_netr_DsrGetDcSiteCoverageW(p, mem_ctx);
+ 
+ 	talloc_free(mem_ctx);
+ 
+

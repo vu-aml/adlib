@@ -1,0 +1,221 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Jun 12 18:02:20 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5CM2KL9032356
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 12 Jun 2007 18:02:20 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 84513162AEB
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 12 Jun 2007 22:02:19 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.1 required=3.8 tests=AWL,BAYES_40,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id B8171162AC3; Tue, 12 Jun 2007 22:01:45 +0000 (GMT)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Transfer-Encoding: 7bit
+Message-ID: <18031.6160.110598.579712@samba.org>
+Date: Wed, 13 Jun 2007 08:02:56 +1000
+To: Lars Marowsky-Bree <lmb@suse.de>
+In-Reply-To: <20070612161516.GS27088@marowsky-bree.de>
+References: <18030.8115.792109.279880@samba.org>
+	<20070612091820.GE27088@marowsky-bree.de>
+	<18030.30871.182414.914955@samba.org>
+	<20070612161516.GS27088@marowsky-bree.de>
+X-Mailer: VM 7.19 under Emacs 22.0.95.1
+From: tridge@samba.org
+Cc: sahlberg@samba.org, samba-technical@lists.samba.org,
+   High-Availability Linux Development List <linux-ha-dev@lists.linux-ha.org>
+Subject: Re: [Linux-ha-dev] CTDB and clustered Samba
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: tridge@samba.org
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Lars,
+
+ > OK. So you're using the CFS as a DLM. Expensive, but possible. ;-)
+
+no, the DLM in CTDB is on our own transport. The single lock is
+gained once when a node becomes the recovery master. That means one
+lock every few days in a typical setup, which is hardly expensive!
+
+ > (That also means that with OCFS2, you can't do that; it doesn't have
+ > cluster-wide flock yet, _but_ it allows you to access it's DLM via
+ > dlmfs, so that could be used.)
+
+yes, we could support OCFS2 by having a config option to dispense with
+this lock, as its really a paranoia check. CTDB already has its own
+election code, so the lock in the filesystem is a double check for
+split-brain scenarious and to prevent race conditions at startup when
+our transport is still establishing itself.
+
+I'm hoping some OCFS2 developers will get involved a bit with CTDB and
+recommend a better approach. In the meantime you would need to use
+some other distributed filesystem (even NFS) for this lock, or disable
+that lock in the code.
+
+ > No, not at all. DLM usually also cache locks mastered locally.
+ > 
+ > (I know your lock semantics are very complex, but I'm just sayin' ;-)
+
+yes, many of them do, although often quite slowly, and when there is
+lock contention the performance drops a lot.
+
+See for example the ping_pong.c test http://junkcode.samba.org/#ping_pong. Run that
+on several nodes at once and the performance is awful.
+
+ > After an fsync, or with O_DIRECT etc, sure, but otherwise, no.
+
+you would think so, but testing showed its horribly slow. Run
+something like our tdb test tool on a cluster filesystem and its
+terrible. Run on more than one node at a time and it gets even worse.
+
+If you look at page 17 of this presentation:
+
+  http://samba.org/~tridge/sambaxp-07/ctdb.pdf
+
+then you can see what sort of results we were getting when we let the
+cluster filesystem do all the work, and what we're getting now (the
+super-linear speedup is due to cache effects on GPFS). The results
+differed between cluster filesystems, but none were good.
+
+The non-CTDB results are a bit misleading because they leave the whole
+tdb in one file on the cluster (which is normally how a tdb is
+done). Volker experimented with other schemes where he split out each
+record into a separate file, and that improved things, but to nothing
+like the degree that CTDB does.
+
+ > Well, attaching the page to the DLM reply makes that replication
+ > basically free, at least in terms of latency.
+
+Is this really done a page at a time?
+
+ > Sure, that makes sense. Can you elaborate on this a bit more?
+
+ok, we can look at one of the most heavily used databases in Samba,
+which is brlock.tdb. That database maps windows byte range locking
+semantics onto posix byte range locking semantics. Every time a
+windows client does a read or write operation this database needs to
+be checked (as windows locks are mandatory, whereas posix are
+advisory).
+
+So, we have a record in that database per open file on the
+cluster. The record is keyed by device:inode (or for some cluster
+filesystems fsid:inode or fsname:inode). Inside the record is a set of
+sub-records which describe the windows byte range locks held by all
+clients. The sub-records are tagged with an id saying which instance
+of Samba put it there (nodenumber:pid). On each IO operation, Samba
+needs to look inside that record and see if the read/write conflicts
+with an existing lock.
+
+Now what happens if a node goes down? The open file handles of that
+node are lost (they will need to be re-established by clients when
+they reconnect to a new node) which means the sub-records associated
+with that node are no longer needed. 
+
+We cope with this in a recovery run, where the elected recovery master
+scans the whole db and looks for the instance of each record with the
+highest 'RSN' (record serial number). That means it gathers the most
+recent record it can find. That record is then scrubbed of any
+sub-records associated with the dead node.
+
+This way we guarantee to get correct data for all of the sub-records
+associated with any of the nodes that are still alive, and remove all
+of the sub-records associated with the dead nodes. So we've recovered
+all the data we need, but without at any time having to do any sort of
+replication, and without having to write any data to shared storage.
+
+ > OK, I'm not questioning your judgement and experience, I'm just trying
+ > to understand why, and what we might be able to accomodate (as we're
+ > looking at switching commlayers anyway). Or, if you're right, what we
+ > could reuse - as the Linux HA v2 code has a "CIB" (cluster information
+ > base) which is a replicated/distributed db thingy too, maybe we could
+ > reuse parts of the CTDB or something ;-)
+
+possibly, though you would probably want a different data persistence
+model to us. We are planning on adding support for persistent data (so
+we can't assume the above logic for sub-records) but that isn't done
+yet. It's much less important for Samba than our temporary data, as
+its the temporary data that is accessed a lot.
+
+ > TCP in a controlled LAN environment likely performs pretty well, yes.
+ > But you will open N:N connections in your cluster as well, no? Don't you
+ > need some broadcasts?
+
+currently each node has 2*N sockets open, giving a total of 2*N*N
+across the whole cluster.
+
+We broadcast by sending to each node separately. Broadcasts aren't a
+big problem though, as they are really only used for management tasks
+(such as by the recovery master). They aren't used for anything that
+is speed sensitive.
+
+Internally, ctdbd is event driven. It never makes any blocking system
+calls, so when you broadcast you don't sit waiting for all the sockets
+to complete sending their data. 
+
+ > Or easier - is there a document I can read which outlines the CTDB
+ > requirements?
+
+There isn't a document on the internals yet apart from the code
+itself. 
+
+Writing a backend is fairly simple though, you fill in a structure
+like this:
+
+static const struct ctdb_methods ctdb_tcp_methods = {
+	.initialise   = ctdb_tcp_initialise,
+	.start        = ctdb_tcp_start,
+	.queue_pkt    = ctdb_tcp_queue_pkt,
+	.add_node     = ctdb_tcp_add_node,
+	.allocate_pkt = ctdb_tcp_allocate_pkt,
+	.shutdown     = ctdb_tcp_shutdown,
+};
+
+and each of those functions is fairly simple.
+
+The backend needs to queue packets when the connection to the node is
+down, and needs to handle errors pretty carefully, but nothing too
+hard. It does need to be careful to never do a blocking operation
+though, and never to use a polling loop (the latter can be fatal with
+SCHED_FIFO). So for example it must use non-blocking connect()
+calls. It also needs to use our event framework, so it can be called
+when something happens on one of the sockets. CTDB provides IO library
+routines that make this a bit easier.
+
+ > Right, just like TCP on TCP is a bad idea I expect this would be as
+ > well. (Just like the misdesigned approach to try running heartbeat's
+ > native comm layer on top of openAIS; it's the same stacking issue.)
+
+yep
+
+ > If not, that's a conference paper I'd fly a few miles for to attend the
+ > presentation ;-)
+
+I've given some papers (see my home page) but not in the level of
+detail you would want. We do plan on writing up the internal design of
+CTDB, but for now I'm afraid the code is the only guide to the
+details.
+
+There is an old design doc on our wiki
+(http://wiki.samba.org/index.php/CTDB_Project) but its pretty dated
+now. It might confuse more than it enlightens :)
+
+Cheers, Tridge
+

@@ -1,0 +1,142 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat Apr 28 11:18:55 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3SFIt6w008882
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 28 Apr 2007 11:18:55 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 22524163921
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 28 Apr 2007 15:18:54 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.4 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 501)
+	id 33BBB162BC1; Sat, 28 Apr 2007 15:18:26 +0000 (GMT)
+To: samba-cvs@samba.org
+From: abartlet@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070428151826.33BBB162BC1@lists.samba.org>
+Date: Sat, 28 Apr 2007 15:18:26 +0000 (GMT)
+Subject: svn commit: samba r22557 - in branches/SAMBA_4_0/source:
+	dsdb/samdb/ldb_modules lib/ldb/common
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2995
+Lines: 99
+
+Author: abartlet
+Date: 2007-04-28 15:18:25 +0000 (Sat, 28 Apr 2007)
+New Revision: 22557
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22557
+
+Log:
+Simo has long bugged me that the paths in the sam.ldb partitions were
+not relative to the location of the sam.ldb, but instead
+lp_private_dir().
+
+This fixes that issue.
+
+Andrew Bartlett
+
+Modified:
+   branches/SAMBA_4_0/source/dsdb/samdb/ldb_modules/partition.c
+   branches/SAMBA_4_0/source/lib/ldb/common/ldb.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/dsdb/samdb/ldb_modules/partition.c
+===================================================================
+--- branches/SAMBA_4_0/source/dsdb/samdb/ldb_modules/partition.c	2007-04-28 15:17:03 UTC (rev 22556)
++++ branches/SAMBA_4_0/source/dsdb/samdb/ldb_modules/partition.c	2007-04-28 15:18:25 UTC (rev 22557)
+@@ -703,6 +703,33 @@
+ 	return ldb_dn_compare(partition1->dn, partition2->dn);
+ }
+ 
++static const char *relative_path(struct ldb_module *module, 
++				 TALLOC_CTX *mem_ctx, 
++				 const char *name) 
++{
++	const char *base_url = ldb_get_opaque(module->ldb, "ldb_url");
++	char *path, *p, *full_name;
++	if (name == NULL) {
++		return NULL;
++	}
++	if (name[0] == 0 || name[0] == '/' || strstr(name, ":/")) {
++		return talloc_strdup(mem_ctx, name);
++	}
++	path = talloc_strdup(mem_ctx, base_url);
++	if (path == NULL) {
++		return NULL;
++	}
++	if ( (p = strrchr(path, '/')) != NULL) {
++		p[0] = '\0';
++	} else {
++		talloc_free(path);
++		return NULL;
++	}
++	full_name = talloc_asprintf(mem_ctx, "%s/%s", path, name);
++	talloc_free(path);
++	return full_name;
++}
++
+ static int partition_init(struct ldb_module *module)
+ {
+ 	int ret, i;
+@@ -791,7 +818,9 @@
+ 			return LDB_ERR_CONSTRAINT_VIOLATION;
+ 		}
+ 
+-		data->partitions[i]->backend = private_path(data->partitions[i], p);
++		data->partitions[i]->backend = relative_path(module, 
++							     data->partitions[i], 
++							     p);
+ 		ret = ldb_connect_backend(module->ldb, data->partitions[i]->backend, NULL, &data->partitions[i]->module);
+ 		if (ret != LDB_SUCCESS) {
+ 			talloc_free(mem_ctx);
+
+Modified: branches/SAMBA_4_0/source/lib/ldb/common/ldb.c
+===================================================================
+--- branches/SAMBA_4_0/source/lib/ldb/common/ldb.c	2007-04-28 15:17:03 UTC (rev 22556)
++++ branches/SAMBA_4_0/source/lib/ldb/common/ldb.c	2007-04-28 15:18:25 UTC (rev 22557)
+@@ -231,12 +231,22 @@
+ int ldb_connect(struct ldb_context *ldb, const char *url, unsigned int flags, const char *options[])
+ {
+ 	int ret;
+-
++	const char *url2;
+ 	/* We seem to need to do this here, or else some utilities don't get ldb backends */
+ 	ldb_global_init();
+ 
+ 	ldb->flags = flags;
+ 
++	url2 = talloc_strdup(ldb, url);
++	if (!url2) {
++		ldb_oom(ldb);
++		return LDB_ERR_OPERATIONS_ERROR;
++	}
++	ret = ldb_set_opaque(ldb, "ldb_url", talloc_strdup(ldb, url2));
++	if (ret != LDB_SUCCESS) {
++		return ret;
++	}
++
+ 	ret = ldb_connect_backend(ldb, url, options, &ldb->modules);
+ 	if (ret != LDB_SUCCESS) {
+ 		return ret;
+

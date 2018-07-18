@@ -1,0 +1,557 @@
+From r-help-bounces@stat.math.ethz.ch  Mon Jun 11 09:24:32 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5BDOUL9014386
+	for <ktwarwic@flax9.uwaterloo.ca>; Mon, 11 Jun 2007 09:24:31 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5BDNlQ1001118;
+	Mon, 11 Jun 2007 15:24:06 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.6 required=5.0 tests=AWL, BAYES_50,
+	DKIM_POLICY_SIGNSOME autolearn=no version=3.2.0
+Received: from carpa.ciagri.usp.br (carpa.ciagri.usp.br [143.107.209.25])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5BDNVSk001054
+	for <r-help@stat.math.ethz.ch>; Mon, 11 Jun 2007 15:23:32 +0200
+Received: from [143.107.212.23] (unknown [143.107.212.23])
+	by carpa.ciagri.usp.br (Postfix) with ESMTP id A793315089394
+	for <r-help@stat.math.ethz.ch>; Mon, 11 Jun 2007 10:23:27 -0300 (BRT)
+Message-ID: <466D4CD6.8050807@terra.com.br>
+Date: Mon, 11 Jun 2007 10:23:34 -0300
+From: terra <joseclaudio.faria@terra.com.br>
+User-Agent: Thunderbird 2.0.0.0 (Windows/20070326)
+MIME-Version: 1.0
+To: r-help@stat.math.ethz.ch
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Subject: [R] biplot package II
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+Dear all,
+
+I've been learning biplot (Gabriel, 1971) and some days ago I sent for
+this list a procedural function with invitation for a collaborative package.
+Jari Oksanen made some suggestions and I agree with all.
+
+So, I reworked the function under the object-oriented programming
+(OOP/S3). I think it is now a good frame for more resources.
+
+Below it is the function and a small script to learn it:
+
+#===============================================================================
+# Name           : biplot.s
+# Author         : Jose Claudio Faria (DCET/USC/BRAZIL)
+# Date (dd/mm/yy): 9/6/2007 13:33:48
+# Version        : v1.1
+# Aim            : 2d and 3d (under scaterplot3d and rgl packages) biplot
+# Mail           : joseclaudio.faria@terra.com.br
+#===============================================================================
+# Arguments:
+# x             Data (frame or matrix: objects in lines variables in columns)
+#               or a object of the class 'prcomp'.
+# lambda.ini    First eigenvalue to be considered (default is 1)
+# lambda.end    Latest eigenvalue to be considered
+#               (default is 2 to 2d or 3 to 3d)
+# center        Either a logical value or a numeric vector of length equal
+#               to the number of columns of x (TRUE is the default).
+# scale         Either a logical value or a numeric vector of length equal
+#               to the number of columns of x (FALSE is the default).
+# weight        Way of factorize: 'equal', 'objects', 'variables'
+#               ('equal' is the default).
+# plot          Logical to produce or not a graphical representation of
+#               biplot (TRUE is the default).
+# rgl.use       If TRUE the 3d scatter will be under the rgl environment, in
+#               another way the scatterplot3d will be used ( the default).
+# aspect3d      Apparent ratios of the x, y, and z axes of the bounding box.
+# clear3d       Logical to clear or not a 3d graphical representation of
+#               biplot before to make a new (TRUE is the default).
+# simple.axes   Whether to draw simple axes (TRUE or FALSE).
+# box           Whether to draw a box (the default is FALSE).
+# spheres       Logical to represent objects as spheres (FALSE is the default).
+# sphere.factor Relative size factor of sphere representing points; the
+#               default size is dependent on the scale of observations.
+# col.obj       Color of spheres or labels of objects.
+# col.var       Color of lines and labels of variables.
+# var.factor    Factor of expansion/reduction of length lines of the variables.
+#               graphical variables representation (<=1, 1 is the default).
+# cex           Character expansion (for while valid only to graphics and
+#               scatterplot3d, not to rgl, packages).
+#===============================================================================
+# Require       'rgl' and 'scatterplot3d' packages.
+#===============================================================================
+
+# check the necessary packages
+necessary = c('rgl', 'scatterplot3d')
+if(!all(necessary %in% installed.packages()[, 'Package']))
+   install.packages(c('rgl', 'scatterplot3d'), dep = T)
+
+# Plot 2d with 'graphics' packages
+plot.biplot.2d = function(scores,
+                           g,
+                           hl,
+                           lambda.ini,
+                           lambda.end,
+                           col.obj,
+                           col.var,
+                           var.factor,
+                           cex)
+{
+   plot(scores,
+        xlab=paste('PC', lambda.ini, sep=''),
+        ylab=paste('PC', lambda.end, sep=''),
+        type='n')
+   text(x=g[,1], y=g[,2],
+        labels=rownames(g),
+        cex=cex, col=col.obj)
+   arrows(x0=0, y0=0,
+          x1=hl[,1]*var.factor, y1=hl[,2]*var.factor,
+          length=0.1, angle=20,
+          col=col.var)
+   text(x=hl[,1]*var.factor, y=hl[,2]*var.factor,
+        labels = rownames(hl),
+        cex=cex, col=col.var)
+}
+
+# Plot 3d with 'scatterplot3d' package
+plot.biplot.3d.default = function(scores,
+                                   g,
+                                   hl,
+                                   lambda.ini,
+                                   lambda.end,
+                                   col.obj,
+                                   col.var,
+                                   var.factor,
+                                   spheres,
+                                   box,
+                                   cex)
+{
+   require(scatterplot3d)
+   graph = scatterplot3d(scores,
+                         type = if(spheres) 'p' else 'n',
+                         xlab=paste('PC', lambda.ini, sep=''),
+                         ylab=paste('PC', lambda.ini+1, sep=''),
+                         zlab=paste('PC', lambda.end, sep=''),
+                         grid=F,
+                         box=box,
+                         cex.symbols=cex,
+                         color=col.obj,
+                         pch=20)
+    if(!spheres)
+      text(graph$xyz.convert(g),
+           labels=rownames(g),
+           col=col.obj, cex=cex)
+   for(i in 1:nrow(hl)) {
+     graph$points3d(c(0, hl[i,1]*var.factor),
+                    c(0, hl[i,2]*var.factor),
+                    c(0, hl[i,3]*var.factor),
+                    type='l', col=col.var)
+   }
+   text(graph$xyz.convert(hl*var.factor),
+        labels=rownames(hl),
+        col=col.var, cex=cex)
+}
+
+# Plot 3d with 'rgl' package
+plot.biplot.3d.rgl = function(g,
+                               hl,
+                               lambda.ini,
+                               lambda.end,
+                               simple.axes,
+                               clear3d,
+                               aspect3d,
+                               col.obj,
+                               col.var,
+                               var.factor,
+                               spheres,
+                               sphere.factor,
+                               box)
+{
+   require(rgl)
+   size = max(g)/20 * sphere.factor
+   if (clear3d)
+     clear3d()
+   if (spheres)
+     spheres3d(g, col=col.obj, radius=size, alpha=.5)
+   else
+     text3d(g, texts=rownames(g), col=col.obj, alpha=.5)
+   aspect3d(aspect3d)
+   for(i in 1:nrow(hl)) {
+     segments3d(rbind(matrix(0, nc=3),
+                hl[i,]*var.factor),
+                col=col.var)
+   }
+   text3d(hl*var.factor,
+          texts=rownames(hl),
+          col=col.var)
+   if(simple.axes) {
+     axes3d(c('x', 'y', 'z'))
+     title3d(xlab=paste('PC', lambda.ini, sep=''),
+             ylab=paste('PC', lambda.ini+1, sep=''),
+             zlab=paste('PC', lambda.end, sep=''))
+   }
+   else
+     decorate3d(xlab=paste('PC', lambda.ini, sep=''),
+                ylab=paste('PC', lambda.ini+1, sep=''),
+                zlab=paste('PC', lambda.end, sep=''),
+                box = box)
+}
+
+plot.biplot = function(scores,
+                        g,
+                        hl,
+                        lambda.ini,
+                        lambda.end,
+                        rgl.use,
+                        simple.axes,
+                        clear3d,
+                        aspect3d,
+                        col.obj,
+                        col.var,
+                        var.factor,
+                        spheres,
+                        sphere.factor,
+                        size,
+                        box,
+                        cex)
+{
+   n.values = (lambda.end - lambda.ini + 1)
+   if(n.values == 2) plot.biplot.2d(scores,
+                                    g,
+                                    hl,
+                                    lambda.ini,
+                                    lambda.end,
+                                    col.obj,
+                                    col.var,
+                                    var.factor,
+                                    cex)
+
+   else if(n.values == 3)
+     if (!rgl.use)
+       plot.biplot.3d.default(scores,
+                              g,
+                              hl,
+                              lambda.ini,
+                              lambda.end,
+                              col.obj,
+                              col.var,
+                              var.factor,
+                              spheres,
+                              box,
+                              cex)
+
+     else
+       plot.biplot.3d.rgl(g,
+                          hl,
+                          lambda.ini,
+                          lambda.end,
+                          simple.axes,
+                          clear3d,
+                          aspect3d,
+                          col.obj,
+                          col.var,
+                          var.factor,
+                          spheres,
+                          sphere.factor,
+                          box)
+}
+
+# main function
+biplot.s = function(x, ...) UseMethod('biplot.s', x)
+
+# x is 'data.frame' or 'matrix'
+biplot.s.default = function(x,
+                             lambda.ini=1,
+                             lambda.end=2,
+                             center=T,
+                             scale=F,
+                             weight=c('equal', 'objects', 'variables'),
+                             plot=T,
+                             rgl.use=F,
+                             aspect3d=c(1, 1, 1),
+                             clear3d=T,
+                             simple.axes=T,
+                             box=F,
+                             spheres=F,
+                             sphere.factor=1,
+                             col.obj=1,
+                             col.var=2,
+                             var.factor=1,
+                             cex=.6)
+{
+   stopifnot(is.matrix(x) || is.data.frame(x))
+   n.values = (lambda.end - lambda.ini + 1)
+   if(n.values < 2 || n.values > 3)
+     stop('Please, check the parameters: lambda.ini and lambda.end!')
+
+   x = as.matrix(x)
+   x = scale(x, center=center, scale=scale)
+   svdx = svd(x)
+   s2 = diag(sqrt(svdx$d[lambda.ini:lambda.end]))
+   # 'prcomp.default' of 'stats' package (and 'pca' of 'pcurve') is like the below!
+   #s2 = diag(svdx$d[lambda.ini:lambda.end])
+
+   switch(match.arg(weight),
+     equal = {
+       g  = svdx$u[,lambda.ini:lambda.end] %*% s2
+       h  = s2 %*% t(svdx$v[,lambda.ini:lambda.end])
+       hl = t(h)
+     },
+     objects = {
+       g  = svdx$u[,lambda.ini:lambda.end] %*% s2
+       h  = t(svdx$v[,lambda.ini:lambda.end])
+       hl = t(h)
+     },
+     variables = {
+       g  = svdx$u[,lambda.ini:lambda.end]
+       h  = s2 %*% t(svdx$v[,lambda.ini:lambda.end])
+       hl = t(h)
+     })
+
+   if(is.null(rownames(x)))
+     rownames = 1:nrow(x)
+   else
+     rownames = rownames(x)
+   if(is.null(colnames(x)))
+     colnames = paste('V', 1:ncol(x), sep='')
+   else
+     colnames = colnames(x)
+
+   cnames       = paste('PC', lambda.ini:lambda.end, sep='')
+   rownames(g)  = rownames
+   colnames(g)  = cnames
+   rownames(hl) = colnames
+   colnames(hl) = cnames
+   scores       = rbind(g, hl)
+   rownames(scores) = c(rownames, colnames)
+   colnames(scores) = cnames
+
+   res = list(values=svdx$d,
+              explained=round(sum(svdx$d[lambda.ini:lambda.end]^2) /
+                              sum(svdx$d^2), 3),
+              objects=g,
+              variables=hl,
+              all=scores)
+
+   if(plot) {
+     scores = rbind(g, hl*var.factor)
+     scores = rbind(scores, rep(0, n.values)) # to correct visualization
+
+     plot.biplot(scores,
+                 g,
+                 hl,
+                 lambda.ini,
+                 lambda.end,
+                 rgl.use,
+                 simple.axes,
+                 clear3d,
+                 aspect3d,
+                 col.obj,
+                 col.var,
+                 var.factor,
+                 spheres,
+                 sphere.factor,
+                 size,
+                 box,
+                 cex)
+   }
+   invisible(res)
+}
+
+# x is of the class 'prcomp'
+biplot.s.prcomp = function(x,
+                            lambda.ini=1,
+                            lambda.end=2,
+                            ...)
+{
+   stopifnot(class(x) == 'prcomp')
+   if (!length(x$x))
+     stop(gettextf("object '%s' has no objects coordinates!",
+          deparse(substitute(x))), domain = NA)
+   if (is.complex(x$x))
+     stop("biplots are not defined for complex PCA!")
+
+   n.values = (lambda.end - lambda.ini + 1)
+   if(n.values < 2 || n.values > 3)
+     stop('Please, check the parameters: lambda.ini and lambda.end!')
+
+   # Go back from prcom, i.e, regenerate the x already scaled under 'prcomp'
+   # due to necessity of different kinds of factoration!
+   # I'm still in doubt if this is the best alternative!
+   xreg = x$x %*% (solve(t(x$rotation) %*% x$rotation) %*% t(x$rotation))
+   #xreg = x$x %*% ginv(x$rotation) # another option
+   biplot.s.default(xreg,
+                    lambda.ini,
+                    lambda.end,
+                    center=ifelse(x$center[1] == F, F, T),
+                    scale=ifelse(x$scale[1] == F, F, T),
+                    ...)
+}
+
+#===============================================================================
+# Name           : biplot.s_to_learn
+# Author         : Jose Claudio Faria (DCET/USC/BRAZIL)
+# Date (dd/mm/yy): 9/6/2007 13:33:32
+# Version        : v1.1
+# Aim            : to learn and to test the 'biplot.s' function
+# Mail           : joseclaudio.faria@terra.com.br
+#===============================================================================
+
+#===============================================================================
+# to debug 'biplot.s' functions
+#===============================================================================
+#mtrace(biplot.s.2d, T)
+#mtrace(biplot.s.3d.default, T)
+#mtrace(biplot.s.3d.rgl, T)
+#mtrace(biplot.s.default, T)
+#mtrace(biplot.s.prcomp, T)
+#
+#mtrace(biplot.s.2d, F)
+#mtrace(biplot.s.3d.default, F)
+#mtrace(biplot.s.3d.rgl, F)
+#mtrace(biplot.s.default, F)
+#mtrace(biplot.s.prcomp, F)
+
+#===============================================================================
+# example: Gabriel(1971)
+#===============================================================================
+gabriel.1971 = matrix(c(98.2, 97.2, 97.3, 96.9, 97.6, 94.4, 90.2, 94.0, 70.5,
+                         78.8, 81.0, 65.6, 73.3, 91.4, 88.7, 82.2, 84.2, 55.1,
+                         14.4, 17.6,  6.0,  9.6, 56.2, 69.5, 31.8, 19.5, 10.7,
+                         86.2, 82.1, 54.5, 74.7, 87.2, 80.4, 68.6, 65.5, 26.1,
+                         32.9, 30.3, 21.1, 26.9, 80.1, 74.3, 46.3, 36.2,  9.8,
+                         73.0, 70.4, 53.0, 60.5, 81.2, 78.0, 67.9, 64.8, 57.1,
+                          4.6,  6.0,  1.5,  3.4, 12.7, 23.0,  5.6,  2.7,  1.3,
+                         29.2, 26.3,  5.3, 10.5, 52.8, 49.7, 21.7,  9.5,  1.2),
+                         nr=8, byrow=T)
+
+dimnames(gabriel.1971) = list(c('toilet', 'kitchen', 'bath', 'eletricity',
+                                 'water', 'radio', 'tv set', 'refrigerator'),
+                               c('CRISTIAN', 'ARMENIAN', 'JEWISH', 'MOSLEM',
+                                 'MODERN_1', 'MODERN_2', 'OTHER_1', 'OTHER_2',
+                                 'RUR'))
+
+#===============================================================================
+# 2d with graphics package
+#===============================================================================
+x = gabriel.1971
+bp1 = biplot.s(x, plot=F)
+bp1$val
+bp1$expl
+bp1$obj
+bp1$var
+bp1$all
+
+biplot.s(x, center=F, scale=F)
+biplot.s(x, center=T, scale=F)
+biplot.s(x, center=T, scale=T)
+biplot.s(x, lambda.ini=2, lambda.end=3)
+biplot.s(x, lambda.ini=2, lambda.end=3, scale=T)
+biplot.s(x, scale=T, weight='eq')
+biplot.s(x, scale=T, weight='ob')
+biplot.s(x, scale=T, weight='va')
+
+#===============================================================================
+# 3d with scatterplot3d package
+#===============================================================================
+x = gabriel.1971
+bp2 = biplot.s(x, lambda.end=3, plot=F)
+bp2$val
+bp2$expl
+bp2$obj
+bp2$var
+bp2$all
+
+biplot.s(x, lambda.end=3)
+biplot.s(x, lambda.ini=2, lambda.end=4)
+biplot.s(x, lambda.end=3, spheres=T, box=T)
+biplot.s(x, lambda.end=3, col.obj='gray', col.var='red', var.factor=.8)
+biplot.s(x, lambda.end=3, center=T, scale=T, weight='eq')
+biplot.s(x, lambda.end=3, center=T, scale=F, weight='eq')
+biplot.s(x, lambda.end=3, center=T, scale=T, weight='ob')
+biplot.s(x, lambda.end=3, center=T, scale=F, weight='ob')
+biplot.s(x, lambda.end=3, center=T, scale=T, weight='va')
+biplot.s(x, lambda.end=3, center=T, scale=T, weight='va', var.factor=.5)
+
+#===============================================================================
+# 2d associated with 'prcomp' function ('stas' package)
+#===============================================================================
+biplot.s(prcomp(gabriel.1971, center=T, scale=F), plot=T)
+biplot.s(prcomp(gabriel.1971, center=T, scale=T), plot=T)
+
+pc = prcomp(gabriel.1971, center=T, scale=F)
+biplot(pc) # to compare
+bp = biplot.s(pc)
+bp$val
+bp$expl
+bp$obj
+bp$var
+bp$all
+
+biplot.s(pc, lambda.ini=2, lambda.end=4)
+biplot.s(pc, lambda.end=3, spheres=T, box=T)
+biplot.s(pc, lambda.end=3, col.obj='gray', col.var='red', var.factor=.8)
+biplot.s(pc, lambda.end=3, weight='eq')
+biplot.s(pc, lambda.end=3, weight='ob')
+biplot.s(pc, lambda.end=3, weight='va')
+biplot.s(pc, lambda.end=3, weight='va', var.factor=.5)
+
+#===============================================================================
+# 3d with rgl package
+#===============================================================================
+x = gabriel.1971
+clear3d()
+rgl.bringtotop(stay=T)
+biplot.s(x, lambda.end=3, rgl.use=T)
+rgl.bringtotop(stay=T)
+biplot.s(x, lambda.end=3, rgl.use=T, box=T, aspect3d=c(1.5, 1.5, 1))
+rgl.bringtotop(stay=T)
+biplot.s(x, lambda.end=3, rgl.use=T, col.obj=3, col.var=4, var.factor=.5)
+rgl.bringtotop(stay=T)
+biplot.s(x, lambda.end=3, rgl.use=T, spheres=T)
+rgl.bringtotop(stay=T)
+biplot.s(x, lambda.end=3, rgl.use=T, weight='eq')
+rgl.bringtotop(stay=T)
+biplot.s(x, lambda.end=3, rgl.use=T, weight='ob')
+rgl.bringtotop(stay=T)
+biplot.s(x, lambda.end=3, rgl.use=T, weight='va')
+rgl.bringtotop(stay=T)
+biplot.s(x, lambda.end=3, rgl.use=T, weight='va', var.factor=.09)
+
+rgl.bringtotop(stay=T)
+biplot.s(prcomp(gabriel.1971, center=T, scale=F), lambda.end=3, rgl.use=T, plot=T)
+
+Regards,
+-- 
+/////\\\\\/////\\\\\/////\\\\\/////\\\\\
+  Jose Claudio Faria
+  Brasil/Bahia/UESC/DCET
+  Estatistica Experimental/Prof. Titular
+    joseclaudio.faria@terra.com.br
+    joseclaudio.faria@oi.com.br
+    jc_faria@uesc.br
+    jc_faria@uol.com.br
+  Tels:
+    73-3634.2779 (res - Ilheus/BA)
+    19-3435.1536 (res - Piracicaba/SP) *
+    19-9144.8979 (cel - Piracicaba/SP) *
+/////\\\\\/////\\\\\/////\\\\\/////\\\\\
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

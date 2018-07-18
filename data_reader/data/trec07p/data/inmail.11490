@@ -1,0 +1,123 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Apr 17 12:07:14 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3HG7E0I029975
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 12:07:14 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 479CB163ADF
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 16:06:50 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.6 required=3.8 tests=AWL,BAYES_05,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 620)
+	id 72F95163AD1; Tue, 17 Apr 2007 16:06:21 +0000 (GMT)
+To: samba-cvs@samba.org
+From: metze@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070417160621.72F95163AD1@lists.samba.org>
+Date: Tue, 17 Apr 2007 16:06:21 +0000 (GMT)
+Subject: svn commit: samba r22313 - in branches/SAMBA_3_0/source/nsswitch: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2541
+Lines: 81
+
+Author: metze
+Date: 2007-04-17 16:06:20 +0000 (Tue, 17 Apr 2007)
+New Revision: 22313
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22313
+
+Log:
+as discussed with simo:
+
+remove the only usage of backup_tdb() in samba3.
+As backup_tdb() will go completely soon.
+
+metze
+Modified:
+   branches/SAMBA_3_0/source/nsswitch/idmap_tdb.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/nsswitch/idmap_tdb.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/idmap_tdb.c	2007-04-17 15:55:08 UTC (rev 22312)
++++ branches/SAMBA_3_0/source/nsswitch/idmap_tdb.c	2007-04-17 16:06:20 UTC (rev 22313)
+@@ -115,13 +115,15 @@
+  Convert the idmap database from an older version.
+ *****************************************************************************/
+ 
+-static BOOL idmap_tdb_convert(const char *idmap_name)
++static BOOL idmap_tdb_upgrade(const char *idmap_name)
+ {
+ 	int32 vers;
+ 	BOOL bigendianheader;
+ 	BOOL failed = False;
+ 	TDB_CONTEXT *idmap_tdb;
+ 
++	DEBUG(0, ("Upgrading winbindd_idmap.tdb from an old version\n"));
++
+ 	if (!(idmap_tdb = tdb_open_log(idmap_name, 0,
+ 					TDB_DEFAULT, O_RDWR,
+ 					0600))) {
+@@ -189,32 +191,6 @@
+ 	return True;
+ }
+ 
+-/*****************************************************************************
+- Convert the idmap database from an older version if necessary
+-*****************************************************************************/
+-
+-BOOL idmap_tdb_upgrade(TALLOC_CTX *ctx, const char *tdbfile)
+-{
+-	char *backup_name;
+-
+-	DEBUG(0, ("Upgrading winbindd_idmap.tdb from an old version\n"));
+-
+-	backup_name = talloc_asprintf(ctx, "%s.bak", tdbfile);
+-	if ( ! backup_name) {
+-		DEBUG(0, ("Out of memory!\n"));
+-		return False;
+-	}
+-
+-	if (backup_tdb(tdbfile, backup_name, 0) != 0) {
+-		DEBUG(0, ("Could not backup idmap database\n"));
+-		talloc_free(backup_name);
+-		return False;
+-	}
+-
+-	talloc_free(backup_name);
+-	return idmap_tdb_convert(tdbfile);
+-}
+-
+ /* WARNING: We can't open a tdb twice inthe same process, for that reason
+  * I'm going to use a hack with open ref counts to open the winbindd_idmap.tdb
+  * only once. We will later decide whether to split the db in multiple files
+@@ -282,7 +258,7 @@
+ 		/* backup_tdb expects the tdb not to be open */
+ 		tdb_close(idmap_tdb_common_ctx);
+ 
+-		if ( ! idmap_tdb_upgrade(ctx, tdbfile)) {
++		if ( ! idmap_tdb_upgrade(tdbfile)) {
+ 		
+ 			DEBUG(0, ("Unable to open idmap database, it's in an old formati, and upgrade failed!\n"));
+ 			ret = NT_STATUS_INTERNAL_DB_ERROR;
+

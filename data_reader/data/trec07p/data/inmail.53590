@@ -1,0 +1,148 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Jun  7 23:37:53 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l583brhB010266
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 7 Jun 2007 23:37:53 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id B5D06162C22
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri,  8 Jun 2007 03:37:46 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-3.6 required=3.8 tests=ALL_TRUSTED,AWL,BAYES_00 
+	autolearn=ham version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from [?????$??P????w?$IPv6:::1] (dp [66.70.73.150])
+	by lists.samba.org (Postfix) with ESMTP id B2A0A162ACC
+	for <samba-technical@lists.samba.org>;
+	Fri,  8 Jun 2007 03:37:17 +0000 (GMT)
+Mime-Version: 1.0 (Apple Message framework v752.3)
+Content-Transfer-Encoding: 7bit
+Message-Id: <B9E49A36-D8AE-45EA-A568-F1469BFC5521@samba.org>
+Content-Type: text/plain; charset=US-ASCII; delsp=yes; format=flowed
+To: samba-technical@lists.samba.org
+From: James Peach <jpeach@samba.org>
+Date: Thu, 7 Jun 2007 20:37:12 -0700
+X-Mailer: Apple Mail (2.752.3)
+Subject: [PATCH 3/4] Support dynamic group membership on Darwin. 
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Using setgroups(2) in Darwin opts out of the dynamic group resolution
+mechanism. Use the initgroups system call directly to make sure we  
+opt in. Make sure the order of credential operations is correct.
+---
+source/smbd/sec_ctx.c |   51 +++++++++++++++++++++++++++++++++++++++++ 
++------
+1 files changed, 44 insertions(+), 7 deletions(-)
+
+diff --git a/source/smbd/sec_ctx.c b/source/smbd/sec_ctx.c
+index ca9a6f2..d7a229e 100644
+--- a/source/smbd/sec_ctx.c
++++ b/source/smbd/sec_ctx.c
+@@ -20,6 +20,10 @@
+#include "includes.h"
++#if defined(HAVE_DARWIN_INITGROUPS)
++#include <sys/syscall.h>
++#endif
++
+extern struct current_user current_user;
+struct sec_ctx {
+@@ -187,7 +191,7 @@ fail:
+static BOOL apply_unix_token(const UNIX_USER_TOKEN *ut)
+{
+-	int max = groups_max();
++	int ngroups = 0;
+#ifdef FREEBSD
+	/* Most (all?) BSD systems expect that the first element in the groups
+@@ -217,26 +221,59 @@ static BOOL apply_unix_token(const  
+UNIX_USER_TOKEN *ut)
+#endif /* FREEBSD */
+-
+	/* Always truncate the groups list at the system maximum. On most
+	 * systems, setgroups(2) will fail with EINVAL otherwise.
+	 */
+-	if (sys_setgroups((ut->ngroups > max) ? max : ut->ngroups,
+-			    ut->groups) == -1) {
++	ngroups = (ut->ngroups > groups_max()) ? groups_max() : ut->ngroups,
++
++	if (!become_gid(ut->gid)) {
++		return False;
++	}
++
++#if defined(HAVE_DARWIN_INITGROUPS)
++
++       /* The Darwin groups implementation is a little unusual. The  
+list of
++        * groups in the kernel credential is not exhaustive, but  
+more like
++        * a cache. The full group list is held in userspace and checked
++        * dynamically.
++	*
++        * This is an optional mechanism, and setgroups(2) opts out
++        * of it. That is, if you call setgroups, then the list of  
+groups you
++        * set are the only groups that are ever checked. This is not  
+what we
++        * want. We want to opt in to the dynamic resolution  
+mechanism, so we
++        * need to specify the uid of the user whose group list  
+(cache) we are
++        * setting.
++        *
++        * The Darwin rules are:
++        *  1. Thou shalt setegid, initgroups and seteuid IN THAT ORDER
++        *  2. Thou shalt not pass more that NGROUPS_MAX to initgroups
++        *  3. Thou shalt leave the first entry in the groups list  
+well alone
++        */
++
++       if (syscall(SYS_initgroups, ngroups, ut->groups, ut->uid) ==  
+1) {
++		DEBUG(0, ("WARNING: failed to set group list "
++			"(%d groups) for UID %ld: %s\n",
++			ngroups, (long)ut->uid, strerror(errno)));
++       }
++
++#else
++	if (sys_setgroups(ngroups, ut->groups) == -1) {
+		if (errno != ENOSYS) {
+			DEBUG(0, ("WARNING: failed to set group list "
+				"(%d groups) for UID %ld: %s\n",
+-				ut->ngroups, (long)ut->uid, strerror(errno)));
++				ngroups, (long)ut->uid, strerror(errno)));
+		}
+	}
+-	/* If setgroups fails, it's bad, but it might not be the end of
++#endif /* defined(HAVE_DARWIN_INITGROUPS) */
++
++	/* XXX If setgroups fails, it's bad, but it might not be the end of
+	 * the world. OTOH, we don't want to have a group list from
+	 * some other credential since that could grant access we might
+	 * not otherwise have.
+	 */
+-	if (!become_id(ut->uid, ut->gid)) {
++	if (!become_uid(ut->uid)) {
+		return False;
+	}
+--
+1.5.2.1
+
+
+--
+James Peach | jpeach@samba.org
+
+

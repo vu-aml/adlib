@@ -1,0 +1,114 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Apr 30 08:49:11 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3UCnB6w012866
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 30 Apr 2007 08:49:11 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 2277216399A
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 30 Apr 2007 12:49:10 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 539)
+	id 38C65162BCB; Mon, 30 Apr 2007 12:48:43 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jelmer@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070430124843.38C65162BCB@lists.samba.org>
+Date: Mon, 30 Apr 2007 12:48:43 +0000 (GMT)
+Subject: svn commit: samba r22605 - in branches/SAMBA_4_0: . source/selftest
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 1973
+Lines: 72
+
+Author: jelmer
+Date: 2007-04-30 12:48:42 +0000 (Mon, 30 Apr 2007)
+New Revision: 22605
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22605
+
+Log:
+Set up all required environments before starting tests.
+Modified:
+   branches/SAMBA_4_0/
+   branches/SAMBA_4_0/source/selftest/selftest.pl
+
+
+Changeset:
+
+Property changes on: branches/SAMBA_4_0
+___________________________________________________________________
+Name: bzr:merge
+...skipped...
+
+Modified: branches/SAMBA_4_0/source/selftest/selftest.pl
+===================================================================
+--- branches/SAMBA_4_0/source/selftest/selftest.pl	2007-04-30 12:11:45 UTC (rev 22604)
++++ branches/SAMBA_4_0/source/selftest/selftest.pl	2007-04-30 12:48:42 UTC (rev 22605)
+@@ -134,6 +134,7 @@
+ my $opt_analyse_cmd = undef;
+ my $opt_resetup_env = undef;
+ my $opt_bindir = undef;
++my $opt_no_lazy_setup = undef;
+ 
+ my $srcdir = ".";
+ my $builddir = ".";
+@@ -454,6 +455,7 @@
+ 		'testenv' => \$opt_testenv,
+ 		'ldap:s' => \$ldap,
+ 		'analyse-cmd=s' => \$opt_analyse_cmd,
++		'no-lazy-setup' => \$opt_no_lazy_setup,
+ 		'resetup-environment' => \$opt_resetup_env,
+ 		'bindir:s' => \$opt_bindir,
+ 	    );
+@@ -647,6 +649,7 @@
+ my $testsdir = "$srcdir/selftest";
+ $ENV{CONFIGURATION} = "--configfile=$conffile";
+ 
++my %required_envs = ();
+ 
+ if ($opt_quick) {
+ 	open(IN, "$testsdir/tests_quick.sh|");
+@@ -661,8 +664,10 @@
+ 		$env =~ s/\n//g;
+ 		my $cmdline = <IN>;
+ 		$cmdline =~ s/\n//g;
+-		push (@todo, [$name, $env, $cmdline]) 
+-			if (not defined($tests) or $name =~ /$tests/);
++		if (not defined($tests) or $name =~ /$tests/) {
++			$required_envs{$env} = 1;
++			push (@todo, [$name, $env, $cmdline]);
++		}
+ 	} else {
+ 		print;
+ 	}
+@@ -777,6 +782,10 @@
+ 	$msg_ops = $plain_msg_ops;
+ }
+ 
++if ($opt_no_lazy_setup) {
++	setup_env($_) foreach (keys %required_envs);
++}
++
+ if ($opt_testenv) {
+ 	my $testenv_name = $ENV{SELFTEST_TESTENV};
+ 	$testenv_name = "dc" unless defined($testenv_name);
+

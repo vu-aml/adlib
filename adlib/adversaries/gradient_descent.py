@@ -3,26 +3,31 @@ from data_reader.binary_input import Instance
 from data_reader.real_input import RealFeatureVector
 from adlib.learners.simple_learner import SimpleLearner
 from typing import List, Dict
+from random import shuffle
 import numpy as np
+import adlib.learners as learners
+from copy import deepcopy
 from sklearn.svm import SVC
 from sklearn.metrics import pairwise
+from collections import deque
 from data_reader.operations import sparsify
 import operator
 
 # import matplotlib.pyplot as plt
 
 """
-    Gradient Desecent Evasion Attack from Evasion Attacks Against Machine Learning at Test Time,
-    written by Battista Biggio, Igino Corona, et. al.
-    Concept: The gradient descent based attack that modifies the malicious sample by minimizing its
-    classification function
+   Gradient Desecent Evasion Attack from Evasion Attacks Against Machine Learning at Test Time,
+   written by Battista Biggio, Igino Corona, et. al.
+   Concept: The gradient descent based attack that modifies the malicious sample by minimizing its
+   classification function
     (g(x)) result, subject to a bound on its distance. An extra mimicry component is added to avoid
     descending to meaningless
     regions.
 
     This algorithm is based on adversariaLib - Advanced library for the evaluation of machine
-    learning algorithms and classifiers against adversarial attacks. Copyright (C) 2013, Igino
-    Corona, Battista Biggio, Davide Maiorca, Dept. of Electrical and Electronic Engineering,
+    learning algorithms and classifiers against adversarial attacks. Copyright (C) 2013,
+    Igino Corona,
+    Battista Biggio, Davide Maiorca, Dept. of Electrical and Electronic Engineering,
     University of Cagliari, Italy.
 """
 
@@ -30,12 +35,13 @@ import operator
 class GradientDescent(Adversary):
     def __init__(self, learn_model=None, step_size=0.01, trade_off=10,
                  stp_constant=0.000000001, mimicry='euclidean',
-                 max_iter=1000, mimicry_params={}, bound=0.1):
+                 max_iter=1000, mimicry_params={}, bound=0.1, binary=False):
         """
         :param learner: Learner(from learners)
         :param max_change: max times allowed to change the feature
         :param lambda_val: weight in quodratic distances calculation
-        :param epsilon: the limit of difference between transform costs of xij+1,xij, and original x
+        :param epsilon: the limit of difference between transform costs of ,xij+1, xij, and
+                        orginal x
         :param step_size: weight for coordinate descent
         :param max_boundaries: maximum number of gradient descent iterations to be performed
                                set it to a large number by default.
@@ -53,6 +59,7 @@ class GradientDescent(Adversary):
         self.max_iter = max_iter
         self.mimicry_params = mimicry_params
         self.bound = bound
+        self.binary = binary
 
     def get_available_params(self) -> Dict:
         return {'step_size': self.step_size,
@@ -62,7 +69,8 @@ class GradientDescent(Adversary):
                 'mimicry': self.minicry,
                 'max_iteration': self.max_iteration,
                 'mimicry_params': self.mimicry_params,
-                'bound': self.bound}
+                'bound': self.bound,
+                'binary': self.binary}
 
     def set_params(self, params: Dict):
         if 'step_size' in params.keys():
@@ -81,6 +89,8 @@ class GradientDescent(Adversary):
             self.mimicry_params = params['mimicry_params']
         if 'bound' in params.keys():
             self.bound = params['bound']
+        if 'binary' in params.keys():
+            self.binary = params['binary']
 
     def set_adversarial_params(self, learner, train_instances: List[Instance]):
         self.learn_model = learner
@@ -152,8 +162,8 @@ class GradientDescent(Adversary):
             # if obj_func_value == obj_function_value_list[-1]:
             #    print("Local min is reached. Iteration: %d, Obj value %d" %(iter,obj_func_value))
             #    mat_indices = [x for x in range(0, self.num_features) if new_instance[0][x] != 0]
-            #    mat_data = [new_instance[0][x] for x in range(0, self.num_features) if new_
-            #    instance[0][x] != 0]
+            #    mat_data = [new_instance[0][x] for x in range(0, self.num_features)
+            #               if new_instance[0][x] != 0]
             #    return Instance(-1, RealFeatureVector(self.num_features, mat_indices, mat_data))
 
             # check a small epsilon(difference is a small value after
@@ -249,26 +259,25 @@ class GradientDescent(Adversary):
         support sklearn.svc rbr/linear and robust learner classes
         :return:
         """
-        if self.learn_model == SimpleLearner and self.learn_model.model == SVC \
-                and self.learn_model.model.kernel == 'rbf':
-            grad = []
-            dual_coef = self.learn_model.dual_coef_
-            support = self.learn_model.support_vectors_
-            gamma = self.learn_model.get_params()['gamma']
-            kernel = pairwise.rbf_kernel(support, attack_instance, gamma)
-            for element in range(0, len(support)):
-                if grad == []:
-                    grad = (dual_coef[0][element] * kernel[0][element] * 2 * gamma * (
-                            support[element] -
-                            attack_instance))
-                else:
-                    grad = grad + (
-                            dual_coef[0][element] * kernel[element][0] * 2 * gamma *
-                            (support[element] - attack_instance))
-            return -grad
-        if self.learn_model == SimpleLearner and self.learn_model.model == SVC \
-                and self.learn_model.model.kernel == 'linear':
-            return self.learn_model.coef_[0]
+        if type(self.learn_model) == SimpleLearner and type(self.learn_model.model.learner) == SVC:
+            param_map = self.learn_model.get_params()
+            attribute_map = self.learn_model.get_attributes()
+            if param_map["kernel"] == "rbf":
+                grad = []
+                dual_coef = attribute_map["dual_coef_"]
+                support = attribute_map["support_vectors_"]
+                gamma = param_map["gamma"]
+                kernel = pairwise.rbf_kernel(support, attack_instance, gamma)
+                for element in range(0, len(support)):
+                    if grad == []:
+                        grad = (dual_coef[0][element] * kernel[0][element] * 2 * gamma *
+                                (support[element] - attack_instance))
+                    else:
+                        grad += (dual_coef[0][element] * kernel[element][0] * 2 * gamma *
+                                 (support[element] - attack_instance))
+                return -grad
+            if param_map["kernel"] == "linear":
+                return attribute_map["coef_"][0]
         else:
             try:
                 grad = self.learn_model.get_weight()
@@ -308,9 +317,10 @@ class GradientDescent(Adversary):
     def gradient_euclidean(self, attack_instance, negative_instances, max_neg_instance=10,
                            weights=1):
         # compute the euclidean distance of the attack_instance to the negative instances.
-        dist = [
-            (negative_instance, self.euclidean_dist(attack_instance, negative_instance, weights))
-            for negative_instance in negative_instances]
+        dist = [(negative_instance, self.euclidean_dist(attack_instance,
+                                                        negative_instance,
+                                                        weights))
+                for negative_instance in negative_instances]
 
         # acquire the first max_neg_instance # of best fitted instances
         # sort the resulting dist list according to cmp(a,b).

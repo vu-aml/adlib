@@ -1,0 +1,251 @@
+From r-help-bounces@stat.math.ethz.ch  Tue May  8 06:49:30 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l48AnTqD010856
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 8 May 2007 06:49:30 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l48AmBrB019884;
+	Tue, 8 May 2007 12:48:26 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.0 required=5.0 tests=AWL,
+	BAYES_50 autolearn=no version=3.1.8
+Received: from lapo.berkeley.edu (lapo.Berkeley.EDU [128.32.165.212])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l48Am3Uc019838
+	(version=TLSv1/SSLv3 cipher=DHE-RSA-AES256-SHA bits=256 verify=NO)
+	for <r-help@stat.math.ethz.ch>; Tue, 8 May 2007 12:48:05 +0200
+Received: from lapo.berkeley.edu (localhost [127.0.0.1])
+	by lapo.berkeley.edu (8.13.5.20060308/8.13.5/Debian-3ubuntu1.1) with
+	ESMTP id l48Am378004548; Tue, 8 May 2007 03:48:03 -0700
+Received: (from sekhon@localhost)
+	by lapo.berkeley.edu (8.13.5.20060308/8.13.5/Submit) id l48Am2Ue004545; 
+	Tue, 8 May 2007 03:48:02 -0700
+MIME-Version: 1.0
+Message-ID: <17984.21857.870463.731038@lapo.berkeley.edu>
+Date: Tue, 8 May 2007 03:48:01 -0700
+From: Jasjeet Singh Sekhon <sekhon@berkeley.edu>
+To: "Paul Smith" <phhs80@gmail.com>
+In-Reply-To: <6ade6f6c0705080133s5034ac1aga7a8fb9f2ad26705@mail.gmail.com>
+References: <6ade6f6c0705071430h69a7130enc0e6955b031cca91@mail.gmail.com>
+	<OFB4CE2D9A.F2723538-ON862572D4.007962F8-862572D4.0079BD59@mmm.com>
+	<6ade6f6c0705071521u1f6a99b5nfe71d33c0e1212a7@mail.gmail.com>
+	<6ade6f6c0705071525v95172d8r1aa72dee9f3ce573@mail.gmail.com>
+	<000001c790fc$efe5ed90$7c94100a@win.ad.jhu.edu>
+	<6ade6f6c0705080133s5034ac1aga7a8fb9f2ad26705@mail.gmail.com>
+X-Mailer: VM 7.17 under 21.4 (patch 18) "Social Property" XEmacs Lucid
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: R-help <r-help@stat.math.ethz.ch>
+Subject: Re: [R] Bad optimization solution
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+
+The issue is that you are using a derivative based optimizer for a
+problem for which it is well known that such optimizers will not
+perform well.  You should consider using a global optimizer.  For
+example, "rgenoud" combines a genetic search algorithm with a BFGS
+optimizer and it works well for your problem:
+
+library(rgenoud)
+
+myfunc <- function(x) {
+  x1 <- x[1]
+   x2 <- x[2]
+   abs(x1-x2)
+ }
+
+optim(c(0.5,0.5),myfunc,lower=c(0,0),upper=c(1,1),method="L-BFGS-B",control=list(fnscale=-1))
+
+genoud(myfunc, nvars=2, Domains=rbind(c(0,1),c(0,1)),max=TRUE,boundary.enforcement=2)
+
+myfunc <- function(x) {
+  x1 <- x[1]
+  x2 <- x[2]
+  (x1-x2)^2
+}
+
+optim(c(0.2,0.2),myfunc,lower=c(0,0),upper=c(1,1),method="L-BFGS-B",control=list(fnscale=-1))
+genoud(myfunc, nvars=2, Domains=rbind(c(0,1),c(0,1)),max=TRUE,boundary.enforcement=2)
+
+Cheers,
+Jas.
+
+=======================================
+Jasjeet S. Sekhon                     
+                                      
+Associate Professor             
+Travers Department of Political Science
+Survey Research Center          
+UC Berkeley                     
+
+http://sekhon.berkeley.edu/
+V: 510-642-9974  F: 617-507-5524
+=======================================
+
+
+
+
+
+
+Paul Smith writes:
+ > It seems that there is here a problem of reliability, as one never
+ > knows whether the solution provided by R is correct or not. In the
+ > case that I reported, it is fairly simple to see that the solution
+ > provided by R (without any warning!) is incorrect, but, in general,
+ > that is not so simple and one may take a wrong solution as a correct
+ > one.
+ > 
+ > Paul
+ > 
+ > 
+ > On 5/8/07, Ravi Varadhan <rvaradhan@jhmi.edu> wrote:
+ > > Your function, (x1-x2)^2, has zero gradient at all the starting values such
+ > > that x1 = x2, which means that the gradient-based search methods will
+ > > terminate there because they have found a critical point, i.e. a point at
+ > > which the gradient is zero (which can be a maximum or a minimum or a saddle
+ > > point).
+ > >
+ > > However, I do not why optim converges to the boundary maximum, when analytic
+ > > gradient is supplied (as shown by Sundar).
+ > >
+ > > Ravi.
+ > >
+ > > ----------------------------------------------------------------------------
+ > > -------
+ > >
+ > > Ravi Varadhan, Ph.D.
+ > >
+ > > Assistant Professor, The Center on Aging and Health
+ > >
+ > > Division of Geriatric Medicine and Gerontology
+ > >
+ > > Johns Hopkins University
+ > >
+ > > Ph: (410) 502-2619
+ > >
+ > > Fax: (410) 614-9625
+ > >
+ > > Email: rvaradhan@jhmi.edu
+ > >
+ > > Webpage:  http://www.jhsph.edu/agingandhealth/People/Faculty/Varadhan.html
+ > >
+ > >
+ > >
+ > > ----------------------------------------------------------------------------
+ > > --------
+ > >
+ > >
+ > > -----Original Message-----
+ > > From: r-help-bounces@stat.math.ethz.ch
+ > > [mailto:r-help-bounces@stat.math.ethz.ch] On Behalf Of Paul Smith
+ > > Sent: Monday, May 07, 2007 6:26 PM
+ > > To: R-help
+ > > Subject: Re: [R] Bad optimization solution
+ > >
+ > > On 5/7/07, Paul Smith <phhs80@gmail.com> wrote:
+ > > > > I think the problem is the starting point.  I do not remember the
+ > > details
+ > > > > of the BFGS method, but I am almost sure the (.5, .5) starting point is
+ > > > > suspect, since the abs function is not differentiable at 0.  If you
+ > > perturb
+ > > > > the starting point even slightly you will have no problem.
+ > > > >
+ > > > >              "Paul Smith"
+ > > > >              <phhs80@gmail.com
+ > > > >              >
+ > > To
+ > > > >              Sent by:                  R-help <r-help@stat.math.ethz.ch>
+ > > > >              r-help-bounces@st
+ > > cc
+ > > > >              at.math.ethz.ch
+ > > > >
+ > > Subject
+ > > > >                                        [R] Bad optimization solution
+ > > > >              05/07/2007 04:30
+ > > > >              PM
+ > > > >
+ > > > >
+ > > > >
+ > > > >
+ > > > >
+ > > > >
+ > > > >
+ > > > >
+ > > > > Dear All
+ > > > >
+ > > > > I am trying to perform the below optimization problem, but getting
+ > > > > (0.5,0.5) as optimal solution, which is wrong; the correct solution
+ > > > > should be (1,0) or (0,1).
+ > > > >
+ > > > > Am I doing something wrong? I am using R 2.5.0 on Fedora Core 6 (Linux).
+ > > > >
+ > > > > Thanks in advance,
+ > > > >
+ > > > > Paul
+ > > > >
+ > > > > ------------------------------------------------------
+ > > > > myfunc <- function(x) {
+ > > > >   x1 <- x[1]
+ > > > >   x2 <- x[2]
+ > > > >   abs(x1-x2)
+ > > > > }
+ > > > >
+ > > > >
+ > > optim(c(0.5,0.5),myfunc,lower=c(0,0),upper=c(1,1),method="L-BFGS-B",control=
+ > > list(fnscale=-1))
+ > > >
+ > > > Yes, with (0.2,0.9), a correct solution comes out. However, how can
+ > > > one be sure in general that the solution obtained by optim is correct?
+ > > > In ?optim says:
+ > > >
+ > > >      Method '"L-BFGS-B"' is that of Byrd _et. al._ (1995) which allows
+ > > >      _box constraints_, that is each variable can be given a lower
+ > > >      and/or upper bound. The initial value must satisfy the
+ > > >      constraints. This uses a limited-memory modification of the BFGS
+ > > >      quasi-Newton method. If non-trivial bounds are supplied, this
+ > > >      method will be selected, with a warning.
+ > > >
+ > > > which only demands that "the initial value must satisfy the constraints".
+ > >
+ > > Furthermore, X^2 is everywhere differentiable and notwithstanding the
+ > > reported problem occurs with
+ > >
+ > > myfunc <- function(x) {
+ > >   x1 <- x[1]
+ > >   x2 <- x[2]
+ > >   (x1-x2)^2
+ > > }
+ > >
+ > > optim(c(0.2,0.2),myfunc,lower=c(0,0),upper=c(1,1),method="L-BFGS-B",control=
+ > > list(fnscale=-1))
+ > >
+ > > Paul
+ > >
+ > > ______________________________________________
+ > > R-help@stat.math.ethz.ch mailing list
+ > > https://stat.ethz.ch/mailman/listinfo/r-help
+ > > PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+ > > and provide commented, minimal, self-contained, reproducible code.
+ > >
+ > 
+ >
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

@@ -1,0 +1,151 @@
+From r-help-bounces@stat.math.ethz.ch  Fri Apr 27 09:39:11 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3RDd96w026033
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 27 Apr 2007 09:39:10 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3RDbce2004526;
+	Fri, 27 Apr 2007 15:38:01 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.0 required=5.0 tests=BAYES_50 autolearn=no
+	version=3.1.8
+Received: from an-out-0708.google.com (an-out-0708.google.com [209.85.132.245])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3RDbTZI004488
+	for <r-help@stat.math.ethz.ch>; Fri, 27 Apr 2007 15:37:29 +0200
+Received: by an-out-0708.google.com with SMTP id c24so625759ana
+	for <r-help@stat.math.ethz.ch>; Fri, 27 Apr 2007 06:37:28 -0700 (PDT)
+Received: by 10.100.189.17 with SMTP id m17mr2004205anf.1177681048592;
+	Fri, 27 Apr 2007 06:37:28 -0700 (PDT)
+Received: by 10.100.201.8 with HTTP; Fri, 27 Apr 2007 06:37:28 -0700 (PDT)
+Message-ID: <e603d4040704270637k3bdd38f6y41c75a68b95831c@mail.gmail.com>
+Date: Fri, 27 Apr 2007 09:37:28 -0400
+From: "Eric Thompson" <ericthompso@gmail.com>
+To: r-help@stat.math.ethz.ch
+MIME-Version: 1.0
+Content-Disposition: inline
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Subject: [R] error returned by "make check" in R-2.5.0
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+Status: O
+Content-Length: 3772
+Lines: 103
+
+Today I tried to install the R-2.5.0 (currently running R-2.4.1) on
+Mandriva Linux. The ./configure and make commands seem to run fine,
+but "make check" gives the following messages:
+
+running regression tests
+make[3]: Entering directory `/home/ethomp04/R-2.5.0/tests'
+running code in 'reg-tests-1.R' ...make[3]: *** [reg-tests-1.Rout] Error 1
+make[3]: Leaving directory `/home/ethomp04/R-2.5.0/tests'
+make[2]: *** [test-Reg] Error 2
+make[2]: Leaving directory `/home/ethomp04/R-2.5.0/tests'
+make[1]: *** [test-all-basics] Error 1
+make[1]: Leaving directory `/home/ethomp04/R-2.5.0/tests'
+make: *** [check] Error 2
+
+Regarding "make check", the R-admin.html page says "Failures are not
+necessarily problems as they might be caused by missing
+functionality..."
+
+So, looking at the "reg-tests-1.Rout.fail" file, I see that the error
+occurs here:
+
+> ## eigen
+> Meps <- .Machine$double.eps
+> set.seed(321, kind = "default")	 # force a particular seed
+> m <- matrix(round(rnorm(25),3), 5,5)
+> sm <- m + t(m) #- symmetric matrix
+> em <- eigen(sm); V <- em$vect
+> print(lam <- em$values) # ordered DEcreasingly
+[1]  5.1738946  3.1585064  0.6849974 -1.6299494 -2.5074489
+>
+> stopifnot(
++  abs(sm %*% V - V %*% diag(lam))	  < 60*Meps,
++  abs(sm	      - V %*% diag(lam) %*% t(V)) < 60*Meps)
+>
+> ##------- Symmetric = FALSE:  -- different to above : ---
+>
+> em <- eigen(sm, symmetric = FALSE); V2 <- em$vect
+> print(lam2 <- em$values) # ordered decreasingly in ABSolute value !
+[1]  5.1738946  3.1585064 -2.5074489 -1.6299494  0.6849974
+> print(i <- rev(order(lam2)))
+[1] 1 2 5 4 3
+> stopifnot(abs(lam - lam2[i]) < 60 * Meps)
+Error: abs(lam - lam2[i]) < 60 * Meps is not all TRUE
+Execution halted
+
+
+Interestingly, running these same tests on R-2.4.1 on the same system
+does not give an error:
+
+> Meps <- .Machine$double.eps
+> set.seed(321, kind = "default") # force a particular seed
+> m <- matrix(round(rnorm(25),3), 5,5)
+> sm <- m + t(m) #- symmetric matrix
+> em <- eigen(sm); V <- em$vect
+> print(lam <- em$values) # ordered DEcreasingly
+[1]  5.17389456321  3.15850637323  0.68499738238 -1.62994940108 -2.50744891774
+> stopifnot(
++  abs(sm %*% V - V %*% diag(lam))  < 60*Meps,
++  abs(sm      - V %*% diag(lam) %*% t(V)) < 60*Meps)
+>
+> ##------- Symmetric = FALSE:  -- different to above : ---
+>
+> em <- eigen(sm, symmetric = FALSE); V2 <- em$vect
+> print(lam2 <- em$values) # ordered decreasingly in ABSolute value !
+[1]  5.17389456321  3.15850637323 -2.50744891774 -1.62994940108  0.68499738238
+> print(i <- rev(order(lam2)))
+[1] 1 2 5 4 3
+> stopifnot(abs(lam - lam2[i]) < 60 * Meps)
+> abs(lam - lam2[i]) < 60 * Meps
+[1] TRUE TRUE TRUE TRUE TRUE
+
+I'm not sure what to do next, or how serious of a problem this might
+be. I would appreciate any suggestions or advice. I thought maybe this
+was due to something about how my system is setup, but since I don't
+get the error in R-2.4.1, that seems to imply to me that there is
+something different in R-2.5.0 that is causing it.
+
+Thanks.
+
+Eric Thompson
+Tufts University
+Civil & Environmental Engineering
+
+> sessionInfo()
+R version 2.4.1 (2006-12-18)
+i686-pc-linux-gnu
+
+locale:
+LC_CTYPE=en_US.UTF-8;LC_NUMERIC=C;LC_TIME=en_US.UTF-8;LC_COLLATE=en_US.UTF-8;LC_MONETARY=en_US.UTF-8;LC_MESSAGES=en_US.UTF-8;LC_PAPER=en_US.UTF-8;LC_NAME=C;LC_ADDRESS=C;LC_TELEPHONE=C;LC_MEASUREMENT=en_US.UTF-8;LC_IDENTIFICATION=C
+
+attached base packages:
+[1] "datasets"  "utils"     "stats"     "graphics"  "grDevices" "methods"
+[7] "base"
+
+other attached packages:
+    MASS
+"7.2-31"
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

@@ -1,0 +1,73 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Jul  4 21:07:03 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l65173L9019485
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 4 Jul 2007 21:07:03 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 471F0163882
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu,  5 Jul 2007 01:06:59 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id CA8DB162BCA; Thu,  5 Jul 2007 01:06:01 +0000 (GMT)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Transfer-Encoding: 7bit
+Message-ID: <18060.17498.28240.531581@samba.org>
+Date: Thu, 5 Jul 2007 11:07:38 +1000
+To: abartlet@samba.org, simo@samba.org
+X-Mailer: VM 7.19 under Emacs 22.0.95.1
+From: tridge@samba.org
+Cc: samba-technical@samba.org
+Subject: samdb and the session info
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: tridge@samba.org
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Andrew and Simo,
+
+I've been looking into memory usage in Samba4. When we first got the
+single process model I had measured memory usage of about 15k-20k per
+connection (as seen with vmstat and BASE-BENCH-HOLDCON).
+
+A test on the current code shows 312k per connection. Approximately
+90% of this is due to samdb_connect().
+
+By making a small (hackish) patch to samdb_connect() to use a shared
+ldb with talloc_reference(), I found that memory usage dropped to 26k
+per connection, which is not too much bloat over what we had before
+considering the new features. It also halved the time it takes to
+establish 1000 connections, and I expect it will greatly speed up many
+other operations (as much more memory will be in level 1 cache).
+
+The problem is the session_info argument to samdb_connect(). That
+argument is put into the ldb using ldb_set_opaque() then it is used to
+get the current credentials for many operations. For my hack I used
+system_session() for all ldb contexts, which is obviously not a good
+solution!
+
+So, I'd like to look at ways of getting the session_info argument out
+of samdb_connect(), and in general remove any connection or user
+specific attributes to the ldb context itself. Obviously we could use
+a global instead of the ldb opaque approach, but I'd like to see if we
+can find a neater way.
+
+Cheers, Tridge
+

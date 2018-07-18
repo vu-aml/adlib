@@ -1,0 +1,134 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Apr 10 10:27:57 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3AERu0I030239
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 10 Apr 2007 10:27:57 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 64EC3162C38
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 10 Apr 2007 14:27:31 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.4 required=3.8 tests=AWL,BAYES_00,RCVD_IN_DSBL,
+	SPF_NEUTRAL autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from mail.mx-netz.de (ip-217-172-181-76.mx-netz.de [217.172.181.76])
+	by lists.samba.org (Postfix) with ESMTP id A38B3162ADB
+	for <samba-technical@lists.samba.org>;
+	Tue, 10 Apr 2007 14:26:37 +0000 (GMT)
+Received: from [172.30.76.9] (unknown [172.30.76.9])
+	(using TLSv1 with cipher RC4-MD5 (128/128 bits))
+	(No client certificate requested)
+	(SASL METHOD:[PLAIN] USERNAME:[metze])
+	by mail.mx-netz.de (SMTP-MAIL-SERVER) with ESMTP id D2D5520C549
+	for <samba-technical@lists.samba.org>;
+	Tue, 10 Apr 2007 16:26:35 +0200 (CEST)
+Message-ID: <461B9EB7.8000307@samba.org>
+Date: Tue, 10 Apr 2007 16:27:03 +0200
+From: "Stefan (metze) Metzmacher" <metze@samba.org>
+User-Agent: Thunderbird 1.5.0.10 (X11/20060911)
+MIME-Version: 1.0
+To: Samba Technical <samba-technical@lists.samba.org>
+X-Enigmail-Version: 0.94.2.0
+OpenPGP: id=0E53083F
+Content-Type: multipart/mixed; boundary="------------000604070803070000060205"
+Subject: fix SASL "GSSAPI" bind against w2k3
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2344
+Lines: 79
+
+This is a multi-part message in MIME format.
+--------------000604070803070000060205
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 7bit
+
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA1
+
+Hi,
+
+I'm about to commit the following patch to SAMBA_3_0, which fixes
+the LDAP SASL "GSSAPI" bind against w2k3.
+
+Any comments?
+
+metze
+
+
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.5 (GNU/Linux)
+Comment: Using GnuPG with SUSE - http://enigmail.mozdev.org
+
+iD8DBQFGG561m70gjA5TCD8RAi93AJ4+in2qaD1/+f8MGAgWoK+T+qhHEACfRmf3
+Muxjcc4ufclYGNel6E8mVKc=
+=T2nc
+-----END PGP SIGNATURE-----
+
+--------------000604070803070000060205
+Content-Type: text/x-patch;
+ name="sasl-gssapi-bind-fix-01.diff"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline;
+ filename="sasl-gssapi-bind-fix-01.diff"
+
+=== libads/sasl.c
+==================================================================
+--- libads/sasl.c	(revision 36205)
++++ libads/sasl.c	(local)
+@@ -441,7 +441,8 @@
+ 
+ 	gss_release_buffer(&minor_status, &output_token);
+ 
+-	output_token.value = SMB_MALLOC(strlen(ads->config.bind_path) + 8);
++	output_token.length = 4;
++	output_token.value = SMB_MALLOC(output_token.length);
+ 	p = (uint8 *)output_token.value;
+ 
+ 	*p++ = 1; /* no sign & seal selection */
+@@ -449,11 +450,15 @@
+ 	*p++ = max_msg_size>>16;
+ 	*p++ = max_msg_size>>8;
+ 	*p++ = max_msg_size;
+-	snprintf((char *)p, strlen(ads->config.bind_path)+4, "dn:%s", ads->config.bind_path);
+-	p += strlen((const char *)p);
++	/*
++	 * we used to add sprintf("dn:%s", ads->config.bind_path) here.
++	 * but using ads->config.bind_path is the wrong! It should be
++	 * the DN of the user object!
++	 *
++	 * w2k3 gives an error when we send an incorrect DN, but sending nothing
++	 * is ok and matches the information flow used in GSS-SPNEGO.
++	 */
+ 
+-	output_token.length = PTR_DIFF(p, output_token.value);
+-
+ 	gss_rc = gss_wrap(&minor_status, context_handle,0,GSS_C_QOP_DEFAULT,
+ 			  &output_token, (int *)&conf_state,
+ 			  &input_token);
+
+--------------000604070803070000060205
+Content-Type: application/pgp-signature;
+	name="sasl-gssapi-bind-fix-01.diff.sig"
+Content-Transfer-Encoding: base64
+Content-Disposition: inline;
+ filename="sasl-gssapi-bind-fix-01.diff.sig"
+
+iD8DBQBGG562m70gjA5TCD8RArdTAKDF/U6ad8f18U5SF119d80UL1GbwACgkET9LgMJaihA
+0BvyAPB1erNSOMk=
+--------------000604070803070000060205--
+

@@ -1,0 +1,300 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun Apr 22 19:01:32 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3MN1V0I025036
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 22 Apr 2007 19:01:31 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 2DECE163959
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 22 Apr 2007 23:01:06 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 620)
+	id A7F48162AEC; Sun, 22 Apr 2007 23:00:23 +0000 (GMT)
+To: samba-cvs@samba.org
+From: metze@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070422230023.A7F48162AEC@lists.samba.org>
+Date: Sun, 22 Apr 2007 23:00:23 +0000 (GMT)
+Subject: svn commit: samba r22470 - in branches/SAMBA_4_0/source/librpc/rpc:
+	.
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 7091
+Lines: 257
+
+Author: metze
+Date: 2007-04-22 23:00:22 +0000 (Sun, 22 Apr 2007)
+New Revision: 22470
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22470
+
+Log:
+merge handling of broken connections from wins replication client code
+to the rpc client code
+
+we need to always ask for read events on the socket otherwise we never
+get the connection error reported.
+
+shutdown the transport when a request timeout.
+
+metze
+Modified:
+   branches/SAMBA_4_0/source/librpc/rpc/dcerpc.c
+   branches/SAMBA_4_0/source/librpc/rpc/dcerpc.h
+   branches/SAMBA_4_0/source/librpc/rpc/dcerpc_smb.c
+   branches/SAMBA_4_0/source/librpc/rpc/dcerpc_smb2.c
+   branches/SAMBA_4_0/source/librpc/rpc/dcerpc_sock.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/librpc/rpc/dcerpc.c
+===================================================================
+--- branches/SAMBA_4_0/source/librpc/rpc/dcerpc.c	2007-04-22 21:23:37 UTC (rev 22469)
++++ branches/SAMBA_4_0/source/librpc/rpc/dcerpc.c	2007-04-22 23:00:22 UTC (rev 22470)
+@@ -37,14 +37,17 @@
+ 	return NT_STATUS_OK;
+ }
+ 
++static void dcerpc_connection_dead(struct dcerpc_connection *conn, NTSTATUS status);
+ static void dcerpc_ship_next_request(struct dcerpc_connection *c);
+ 
+ /* destroy a dcerpc connection */
+-static int dcerpc_connection_destructor(struct dcerpc_connection *c)
++static int dcerpc_connection_destructor(struct dcerpc_connection *conn)
+ {
+-	if (c->transport.shutdown_pipe) {
+-		c->transport.shutdown_pipe(c);
++	if (conn->dead) {
++		conn->free_skipped = True;
++		return -1;
+ 	}
++	dcerpc_connection_dead(conn, NT_STATUS_LOCAL_DISCONNECT);
+ 	return 0;
+ }
+ 
+@@ -553,6 +556,14 @@
+ */
+ static void dcerpc_connection_dead(struct dcerpc_connection *conn, NTSTATUS status)
+ {
++	if (conn->dead) return;
++
++	conn->dead = true;
++
++	if (conn->transport.shutdown_pipe) {
++		conn->transport.shutdown_pipe(conn, status);
++	}
++
+ 	/* all pending requests get the error */
+ 	while (conn->pending) {
+ 		struct rpc_request *req = conn->pending;
+@@ -563,6 +574,11 @@
+ 			req->async.callback(req);
+ 		}
+ 	}	
++
++	talloc_set_destructor(conn, NULL);
++	if (conn->free_skipped) {
++		talloc_free(conn);
++	}
+ }
+ 
+ /*
+@@ -657,18 +673,7 @@
+ 				   struct timeval t, void *private)
+ {
+ 	struct rpc_request *req = talloc_get_type(private, struct rpc_request);
+-
+-	if (req->state == RPC_REQUEST_DONE) {
+-		return;
+-	}
+-
+-	dcerpc_req_dequeue(req);
+-
+-	req->status = NT_STATUS_IO_TIMEOUT;
+-	req->state = RPC_REQUEST_DONE;
+-	if (req->async.callback) {
+-		req->async.callback(req);
+-	}
++	dcerpc_connection_dead(req->p->conn, NT_STATUS_IO_TIMEOUT);
+ }
+ 
+ /*
+
+Modified: branches/SAMBA_4_0/source/librpc/rpc/dcerpc.h
+===================================================================
+--- branches/SAMBA_4_0/source/librpc/rpc/dcerpc.h	2007-04-22 21:23:37 UTC (rev 22469)
++++ branches/SAMBA_4_0/source/librpc/rpc/dcerpc.h	2007-04-22 23:00:22 UTC (rev 22470)
+@@ -57,11 +57,14 @@
+ 	const char *binding_string;
+ 	struct event_context *event_ctx;
+ 
++	bool dead;
++	bool free_skipped;
++
+ 	struct dcerpc_transport {
+ 		enum dcerpc_transport_t transport;
+ 		void *private;
+ 
+-		NTSTATUS (*shutdown_pipe)(struct dcerpc_connection *);
++		NTSTATUS (*shutdown_pipe)(struct dcerpc_connection *, NTSTATUS status);
+ 
+ 		const char *(*peer_name)(struct dcerpc_connection *);
+ 
+
+Modified: branches/SAMBA_4_0/source/librpc/rpc/dcerpc_smb.c
+===================================================================
+--- branches/SAMBA_4_0/source/librpc/rpc/dcerpc_smb.c	2007-04-22 21:23:37 UTC (rev 22469)
++++ branches/SAMBA_4_0/source/librpc/rpc/dcerpc_smb.c	2007-04-22 23:00:22 UTC (rev 22470)
+@@ -326,14 +326,14 @@
+ /* 
+    shutdown SMB pipe connection
+ */
+-static NTSTATUS smb_shutdown_pipe(struct dcerpc_connection *c)
++static NTSTATUS smb_shutdown_pipe(struct dcerpc_connection *c, NTSTATUS status)
+ {
+ 	struct smb_private *smb = c->transport.private;
+ 	union smb_close io;
+ 	struct smbcli_request *req;
+ 
+ 	/* maybe we're still starting up */
+-	if (!smb) return NT_STATUS_OK;
++	if (!smb) return status;
+ 
+ 	io.close.level = RAW_CLOSE_CLOSE;
+ 	io.close.in.file.fnum = smb->fnum;
+@@ -346,7 +346,7 @@
+ 
+ 	talloc_free(smb);
+ 
+-	return NT_STATUS_OK;
++	return status;
+ }
+ 
+ /*
+
+Modified: branches/SAMBA_4_0/source/librpc/rpc/dcerpc_smb2.c
+===================================================================
+--- branches/SAMBA_4_0/source/librpc/rpc/dcerpc_smb2.c	2007-04-22 21:23:37 UTC (rev 22469)
++++ branches/SAMBA_4_0/source/librpc/rpc/dcerpc_smb2.c	2007-04-22 23:00:22 UTC (rev 22470)
+@@ -299,14 +299,14 @@
+ /* 
+    shutdown SMB pipe connection
+ */
+-static NTSTATUS smb2_shutdown_pipe(struct dcerpc_connection *c)
++static NTSTATUS smb2_shutdown_pipe(struct dcerpc_connection *c, NTSTATUS status)
+ {
+ 	struct smb2_private *smb = c->transport.private;
+ 	struct smb2_close io;
+ 	struct smb2_request *req;
+ 
+ 	/* maybe we're still starting up */
+-	if (!smb) return NT_STATUS_OK;
++	if (!smb) return status;
+ 
+ 	ZERO_STRUCT(io);
+ 	io.in.file.handle = smb->handle;
+@@ -318,7 +318,7 @@
+ 
+ 	talloc_free(smb);
+ 
+-	return NT_STATUS_OK;
++	return status;
+ }
+ 
+ /*
+
+Modified: branches/SAMBA_4_0/source/librpc/rpc/dcerpc_sock.c
+===================================================================
+--- branches/SAMBA_4_0/source/librpc/rpc/dcerpc_sock.c	2007-04-22 21:23:37 UTC (rev 22469)
++++ branches/SAMBA_4_0/source/librpc/rpc/dcerpc_sock.c	2007-04-22 23:00:22 UTC (rev 22470)
+@@ -48,12 +48,34 @@
+ {
+ 	struct sock_private *sock = p->transport.private;
+ 
+-	if (sock && sock->sock != NULL) {
++	if (!sock) return;
++
++	if (sock->fde) {
+ 		talloc_free(sock->fde);
++		sock->fde = NULL;
++	}
++
++	if (sock->sock) {
++		talloc_free(sock->fde);
++		sock->fde = NULL;
+ 		talloc_free(sock->sock);
+ 		sock->sock = NULL;
+ 	}
+ 
++	if (sock->packet) {
++		packet_recv_disable(sock->packet);
++		packet_set_fde(sock->packet, NULL);
++		packet_set_socket(sock->packet, NULL);
++	}
++
++	if (NT_STATUS_EQUAL(NT_STATUS_UNSUCCESSFUL, status)) {
++		status = NT_STATUS_UNEXPECTED_NETWORK_ERROR;
++	}
++
++	if (NT_STATUS_EQUAL(NT_STATUS_OK, status)) {
++		status = NT_STATUS_END_OF_FILE;
++	}
++
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		p->transport.recv_data(p, NULL, status);
+ 	}
+@@ -172,15 +194,15 @@
+ /* 
+    shutdown sock pipe connection
+ */
+-static NTSTATUS sock_shutdown_pipe(struct dcerpc_connection *p)
++static NTSTATUS sock_shutdown_pipe(struct dcerpc_connection *p, NTSTATUS status)
+ {
+ 	struct sock_private *sock = p->transport.private;
+ 
+ 	if (sock && sock->sock) {
+-		sock_dead(p, NT_STATUS_OK);
++		sock_dead(p, status);
+ 	}
+ 
+-	return NT_STATUS_OK;
++	return status;
+ }
+ 
+ /*
+@@ -253,7 +275,7 @@
+ 	sock->server_name   = strupper_talloc(sock, s->target_hostname);
+ 
+ 	sock->fde = event_add_fd(conn->event_ctx, sock->sock, socket_get_fd(sock->sock),
+-				 0, sock_io_handler, conn);
++				 EVENT_FD_READ, sock_io_handler, conn);
+ 	
+ 	conn->transport.private = sock;
+ 
+@@ -272,7 +294,6 @@
+ 	packet_set_event_context(sock->packet, conn->event_ctx);
+ 	packet_set_fde(sock->packet, sock->fde);
+ 	packet_set_serialise(sock->packet);
+-	packet_recv_disable(sock->packet);
+ 	packet_set_initial_read(sock->packet, 16);
+ 
+ 	/* ensure we don't get SIGPIPE */
+

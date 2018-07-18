@@ -1,0 +1,132 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 22 09:40:30 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4MDeUqD012819
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 22 May 2007 09:40:30 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id C86641638B6
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 22 May 2007 13:40:25 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1017)
+	id C22F4162B01; Tue, 22 May 2007 13:40:02 +0000 (GMT)
+To: samba-cvs@samba.org
+From: obnox@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070522134002.C22F4162B01@lists.samba.org>
+Date: Tue, 22 May 2007 13:40:02 +0000 (GMT)
+Subject: svn commit: samba r23073 - in branches/SAMBA_3_0/source/rpc_client:
+	.
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: obnox
+Date: 2007-05-22 13:40:01 +0000 (Tue, 22 May 2007)
+New Revision: 23073
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23073
+
+Log:
+In the internal rpccli_lsa_lookup_sids_noalloc(), use a temporary 
+talloc context for use with the actual rpc query and response.
+So the the parent context does not get flooded by the posslibly
+large amount of response data (when looking up a lot of sids).
+
+Note: It not possible, to simply use the names and domains arrays
+as talloc contexts for the talloc_strdup calls, because from 
+rpccli_lsa_lookup_sids_all, this is called with names + offset
+and domains + offset where names and domains are talloced 
+arraye for the complete response.
+
+
+Modified:
+   branches/SAMBA_3_0/source/rpc_client/cli_lsarpc.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/rpc_client/cli_lsarpc.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpc_client/cli_lsarpc.c	2007-05-22 12:49:41 UTC (rev 23072)
++++ branches/SAMBA_3_0/source/rpc_client/cli_lsarpc.c	2007-05-22 13:40:01 UTC (rev 23073)
+@@ -129,9 +129,8 @@
+ 
+ /* Lookup a list of sids
+  *
+- * internal version withOUT memory allocation.
+- * this assumes suffciently sized arrays to store
+- * domains, names and types */
++ * internal version withOUT memory allocation of the target arrays.
++ * this assumes suffciently sized arrays to store domains, names and types. */
+ 
+ static NTSTATUS rpccli_lsa_lookup_sids_noalloc(struct rpc_pipe_client *cli,
+ 					       TALLOC_CTX *mem_ctx,
+@@ -148,12 +147,20 @@
+ 	DOM_R_REF ref;
+ 	LSA_TRANS_NAME_ENUM t_names;
+ 	NTSTATUS result = NT_STATUS_OK;
++	TALLOC_CTX *tmp_ctx = NULL;
+ 	int i;
+ 
++	tmp_ctx = talloc_new(mem_ctx);
++	if (!tmp_ctx) {
++		DEBUG(0, ("rpccli_lsa_lookup_sids_noalloc: out of memory!\n"));
++		result = NT_STATUS_UNSUCCESSFUL;
++		goto done;
++	}
++
+ 	ZERO_STRUCT(q);
+ 	ZERO_STRUCT(r);
+ 
+-	init_q_lookup_sids(mem_ctx, &q, pol, num_sids, sids, 1);
++	init_q_lookup_sids(tmp_ctx, &q, pol, num_sids, sids, 1);
+ 
+ 	ZERO_STRUCT(ref);
+ 	ZERO_STRUCT(t_names);
+@@ -161,7 +168,7 @@
+ 	r.dom_ref = &ref;
+ 	r.names = &t_names;
+ 
+-	CLI_DO_RPC( cli, mem_ctx, PI_LSARPC, LSA_LOOKUPSIDS,
++	CLI_DO_RPC( cli, tmp_ctx, PI_LSARPC, LSA_LOOKUPSIDS,
+ 			q, r,
+ 			qbuf, rbuf,
+ 			lsa_io_q_lookup_sids,
+@@ -213,8 +220,8 @@
+ 		}
+ 	}
+ 
+- done:
+-
++done:
++	TALLOC_FREE(tmp_ctx);
+ 	return result;
+ }
+ 
+@@ -401,7 +408,8 @@
+ 			   sids_processed + hunk_num_sids - 1,
+ 			   num_sids));
+ 
+-		hunk_result = rpccli_lsa_lookup_sids_noalloc(cli, mem_ctx, 
++		hunk_result = rpccli_lsa_lookup_sids_noalloc(cli,
++							     mem_ctx,
+ 							     pol,
+ 							     hunk_num_sids, 
+ 							     hunk_sids,
+

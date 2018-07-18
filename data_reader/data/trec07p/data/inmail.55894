@@ -1,0 +1,140 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Jun 12 06:42:22 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5CAgLL9025518
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 12 Jun 2007 06:42:21 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id E6EC61638E2
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 12 Jun 2007 10:42:19 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 0E3FC162AE3; Tue, 12 Jun 2007 10:41:22 +0000 (GMT)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Transfer-Encoding: 7bit
+Message-ID: <18030.30871.182414.914955@samba.org>
+Date: Tue, 12 Jun 2007 20:42:31 +1000
+To: Lars Marowsky-Bree <lmb@suse.de>
+In-Reply-To: <20070612091820.GE27088@marowsky-bree.de>
+References: <18030.8115.792109.279880@samba.org>
+	<20070612091820.GE27088@marowsky-bree.de>
+X-Mailer: VM 7.19 under Emacs 22.0.95.1
+From: tridge@samba.org
+Cc: sahlberg@samba.org, samba-technical@lists.samba.org,
+   linux-ha-dev@lists.linux-ha.org
+Subject: Re: [Linux-ha-dev] CTDB and clustered Samba
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: tridge@samba.org
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Lars,
+
+ > CTDB is built on top of a cluster filesystem layer.
+
+not quite - CTDB relies on one being there, but doesn't actually use
+it much itself. CTDB opens exactly 1 file on the cluster fs, that file
+never has any data in it, and CTDB holds exactly 1 byte of lock on
+that file on one of the nodes. That's it. That file is the key to CTDB
+ensuring that it has the same view of the topology of the cluster as
+the filesystem does.
+
+The services that use CTDB (such as Samba and NFS) open heaps of files
+on the cluster fs of course :)
+
+The data that CTDB holds is actually held in memory on each node
+(using mmap to local database files). That makes access very
+fast. This memory is shared directly with applications (via tdb) which
+means a Samba process can access a database record as local memory
+with zero context switches in the (very likely!) event that the record
+happens to reside on the local node at the time it needs it.
+
+This all means that Samba on a CTDB cluster runs just as fast as
+non-clustered Samba for most operations. That's very hard to achieve
+with the normal approach to clustering.
+
+ > Any cluster filesystem layer (be it GFS2 on openAIS or OCFS2
+ > w/Linux HA, both moving towards openAIS) already has a reliable
+ > messaging and locking layer beneath it, and almost always, a
+ > fail-over, DLM, election etc solution too.
+
+yes, and they all are slow and provide the wrong sorts of guarantees
+for what CTDB is doing. I spent years waiting for one of those systems
+to get to the point that Samba could use it. I wrote tests showing
+what the problems were, and then walked up to all the cluster fs
+vendors at conferences and showed them my tests. They all performed
+terribly.
+
+Then I realised _why_ they all are so bad. When you write some data to
+a cluster fs, or a cluster database, and the node you wrote to dies
+immediately after it replies, then the developers of that cluster fs
+want to guarantee that the data you wrote is not lost. That's what
+they mean by a reliable clustering system. 
+
+How do they provide this guarantee? They either have to ensure the
+data is committed to stable shared storage (pieces of metal or very
+slow shared nv-ram) or they need to replicate the data to all nodes
+before they reply. That is the only way to provide that guarantee.
+
+The thing is, Samba on CTDB does not need that guarantee. Samba needs
+to guarantee that user data is not lost. Samba is quite happy to lose
+certain well defined pieces of the meta-data associated with its
+connections. Knowing exactly what you can safely lose is the key to
+CTDB. It turns out that the data that CTDB can lose is the data that
+is most frequently updated and written, so by designing a system where
+we can lose that data, we remove the biggest bottleneck.
+
+ > At first glance, it appears you're reimplementing those infrastructure
+ > services then on top of the clustered fs again.
+
+no, CTDB is built on top of a stream network transport (TCP or
+Infiniband currently). 
+
+ > Would it not be more efficient to directly use the same services the fs
+ > is also using ...?
+
+you are welcome to try. I spent years trying to get these services to
+get good enough for Samba to use. The problems that cluster
+filesystems try to solve and the problems that Samba+CTDB try to solve
+are different enough that trying to build one on the other doesn't
+work.
+
+ > More specifically, because this is what we're currently working on
+ > moving the Linux HA project (the clustered resource manager parts at
+ > least) towards - have you investigated whether openAIS can meet your
+ > requirements as well?
+
+I haven't run my tests against openAIS, no. I'd be very surprised if
+its a good fit though. 
+
+Basically the perfect transport for CTDB is TCP or a similar stream
+transport, and luckily enough that's pretty widely available, so I'm
+happy to use it :-)
+
+I guess you could write a CTDB backend that uses openAIS messaging
+(the backends are pluggable in CTDB). If someone tries that then I'd
+be interested in hearing how it goes. I'll be quite surprised if it
+does any better than what we do now, and I actually expect it will do
+worse, as it means two layers of event driven programming rather than
+one, and extra layers of marshalling, extra layers of error handling
+etc.
+
+Cheers, Tridge
+

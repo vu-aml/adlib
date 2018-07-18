@@ -1,0 +1,169 @@
+From perl6-all-return-80459-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue Apr 10 04:37:06 2007
+Return-Path: <perl6-all-return-80459-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3A8b50I026880
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 10 Apr 2007 04:37:05 -0400
+Received: (qmail 21536 invoked by uid 514); 10 Apr 2007 08:36:40 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 21529 invoked from network); 10 Apr 2007 08:36:40 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-4.4 required=8.0
+	tests=ALL_TRUSTED,BAYES_00,DK_POLICY_SIGNSOME
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: moderator for perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: "Alek Storm" (via RT) <parrotbug-followup@parrotcode.org>
+X-RT-NewTicket: yes
+To: bugs-bitbucket@netlabs.develooper.com
+Resent-To: perl6-internals@perl.org
+Mail-Followup-To: perl6-internals@perl.org
+Reply-To: perl6-internals@perl.org
+Date: Mon, 09 Apr 2007 18:25:32 -0700
+Subject: [perl #42406] [PATCH] improper null testing in Parrot_instantiate_object 
+In-Reply-To: <189adbd0704091823o2ef82fv947589a55cfdb154@mail.gmail.com>
+References: <RT-Ticket-42406@perl.org> <189adbd0704091823o2ef82fv947589a55cfdb154@mail.gmail.com>
+Message-ID: <rt-3.6.HEAD-1687-1176168332-931.42406-72-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #42406
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: alek.storm@gmail.com
+MIME-Version: 1.0
+X-RT-Original-Encoding: utf-8
+Content-type: multipart/mixed; boundary="----------=_1176168332-1687-130"
+Resent-Message-Id: <20070410012533.2F9F82AFEA@x3.develooper.com>
+Resent-Date: Mon,  9 Apr 2007 18:25:33 -0700 (PDT)
+Resent-From: rt-alek.storm=gmail.com@netlabs.develooper.com
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-4.4 required=8.0
+	tests=ALL_TRUSTED,BAYES_00,DK_POLICY_SIGNSOME
+Status: O
+Content-Length: 3592
+Lines: 113
+
+------------=_1176168332-1687-130
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+# New Ticket Created by  "Alek Storm" 
+# Please include the string:  [perl #42406]
+# in the subject line of all future correspondence about this issue. 
+# <URL: http://rt.perl.org/rt3/Ticket/Display.html?id=42406 >
+
+
+This patch fixes the bug in which the "init" vtable method override is
+called instead of "init_pmc" when init=NULL is passed to
+Parrot_instantiate_object_init, instead of init=PMCNULL.  The choice
+of which method to call rested on an C<if(init)> statement, which can
+incorrectly return true if init == PMCNULL.
+
+-- 
+Alek Storm
+
+------------=_1176168332-1687-130
+Content-Type: text/x-diff; charset="ascii"; name="instantiate.patch"
+Content-Disposition: inline; filename="instantiate.patch"
+Content-Transfer-Encoding: 7bit
+RT-Attachment: 42406/242470/109799
+
+Index: src/objects.c
+===================================================================
+--- src/objects.c	(revision 18044)
++++ src/objects.c	(working copy)
+@@ -763,7 +763,7 @@
+ 
+ 
+ static void
+-do_initcall(Interp *interp, PMC* class, PMC *object, PMC *init)
++do_initcall(Interp *interp, PMC* class, PMC *object, PMC *init, int init_param)
+ {
+     PMC * const classsearch_array = class->vtable->mro;
+     PMC *parent_class;
+@@ -780,7 +780,7 @@
+     int default_meth;
+ 
+     if (meth) {
+-        if (init)
++        if (init_param)
+             Parrot_run_meth_fromc_args(interp, meth,
+                     object, meth_str, "vP", init);
+         else
+@@ -829,7 +829,7 @@
+             STRING *meth_str_v;
+             /* use __init or __init_pmc (depending on if an argument was passed)
+              * as fallback constructor method, if it exists */
+-            if (init) {
++            if (init_param) {
+                 meth_str   = CONST_STRING(interp, "__init_pmc");
+                 meth_str_v = CONST_STRING(interp, "init_pmc");
+             }
+@@ -850,7 +850,7 @@
+         else
+             default_meth = 0;
+         if (meth) {
+-            if (init)
++            if (init_param)
+                 Parrot_run_meth_fromc_args(interp, meth,
+                         object, meth_str, "vP", init);
+             else
+@@ -868,7 +868,7 @@
+ /*
+ 
+ =item C<void
+-Parrot_instantiate_object(Interp *interp, PMC *object, PMC *init)>
++Parrot_instantiate_object(Interp *interp, PMC *object, PMC *init, int init_param)>
+ 
+ Creates a Parrot object. Takes a passed-in class PMC that has sufficient
+ information to describe the layout of the object and, well, makes the
+@@ -878,23 +878,23 @@
+ 
+ */
+ 
+-static void instantiate_object(Interp*, PMC *object, PMC *init);
++static void instantiate_object(Interp*, PMC *object, PMC *init, int init_param);
+ 
+ void
+ Parrot_instantiate_object_init(Interp *interp,
+         PMC *object, PMC *init)
+ {
+-    instantiate_object(interp, object, init);
++    instantiate_object(interp, object, init, 1);
+ }
+ 
+ void
+ Parrot_instantiate_object(Interp *interp, PMC *object)
+ {
+-    instantiate_object(interp, object, NULL);
++    instantiate_object(interp, object, PMCNULL, 0);
+ }
+ 
+ static void
+-instantiate_object(Interp *interp, PMC *object, PMC *init)
++instantiate_object(Interp *interp, PMC *object, PMC *init, int init_param)
+ {
+     SLOTTYPE *new_object_array;
+     INTVAL attrib_count, i;
+@@ -928,7 +928,7 @@
+     /* We really ought to call the class init routines here...
+      * this assumes that an object isa delegate
+      */
+-    do_initcall(interp, class, object, init);
++    do_initcall(interp, class, object, init, init_param);
+ }
+ 
+ /*
+
+------------=_1176168332-1687-130--
+

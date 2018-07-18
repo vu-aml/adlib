@@ -1,0 +1,122 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Apr 16 23:48:55 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3H3ms0I022719
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 16 Apr 2007 23:48:55 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 71082163989
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 03:48:30 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.7 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 501)
+	id 01315162ADB; Tue, 17 Apr 2007 03:47:51 +0000 (GMT)
+To: samba-cvs@samba.org
+From: abartlet@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070417034752.01315162ADB@lists.samba.org>
+Date: Tue, 17 Apr 2007 03:47:51 +0000 (GMT)
+Subject: svn commit: samba r22292 - in
+	branches/SAMBA_4_0/source/script/tests: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2239
+Lines: 79
+
+Author: abartlet
+Date: 2007-04-17 03:47:51 +0000 (Tue, 17 Apr 2007)
+New Revision: 22292
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22292
+
+Log:
+Start the LDAP server inside the same fifo as smbd, as OpenLDAP (like
+smbd, but not Fedora DS yet) will then shut down when it looses stdin.
+
+This avoids leaving stray slapd processes around, if we don't finish
+the script to run the kill.
+
+Also set KRB5_CONFIG in the smbd process again, as we do actually need
+this...
+
+Andrew Bartlett
+
+Modified:
+   branches/SAMBA_4_0/source/script/tests/Samba4.pm
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/script/tests/Samba4.pm
+===================================================================
+--- branches/SAMBA_4_0/source/script/tests/Samba4.pm	2007-04-17 02:14:28 UTC (rev 22291)
++++ branches/SAMBA_4_0/source/script/tests/Samba4.pm	2007-04-17 03:47:51 UTC (rev 22292)
+@@ -67,32 +67,35 @@
+ 	my ($self, $env_vars, $max_time) = @_;
+ 	return 0 if ( -p $env_vars->{SMBD_TEST_FIFO});
+ 
+-	# Start slapd before smbd
+-	if (defined($self->{ldap})) {
+-		$self->slapd_start($env_vars) or 
+-			die("couldn't start slapd");
+-
+-		print "LDAP PROVISIONING...";
+-		$self->provision_ldap($env_vars);
+-	}
+-
+-	SocketWrapper::set_default_iface(1);
+-
+ 	unlink($env_vars->{SMBD_TEST_FIFO});
+ 	POSIX::mkfifo($env_vars->{SMBD_TEST_FIFO}, 0700);
+ 	unlink($env_vars->{SMBD_TEST_LOG});
+ 	
+-	my $valgrind = "";
+-	if (defined($ENV{SMBD_VALGRIND})) {
+-		$valgrind = $ENV{SMBD_VALGRIND};
+-	} 
+-
+ 	print "STARTING SMBD... ";
+ 	my $pid = fork();
+ 	if ($pid == 0) {
+ 		open STDIN, $env_vars->{SMBD_TEST_FIFO};
+ 		open STDOUT, ">$env_vars->{SMBD_TEST_LOG}";
+ 		open STDERR, '>&STDOUT';
++		
++		SocketWrapper::set_default_iface(1);
++		
++		# Start slapd before smbd, but with the fifo on stdin
++		if (defined($self->{ldap})) {
++		    $self->slapd_start($env_vars) or 
++			die("couldn't start slapd");
++		    
++		    print "LDAP PROVISIONING...";
++		    $self->provision_ldap($env_vars);
++		}
++		
++		my $valgrind = "";
++		if (defined($ENV{SMBD_VALGRIND})) {
++		    $valgrind = $ENV{SMBD_VALGRIND};
++		} 
++
++		$ENV{KRB5_CONFIG} = $env_vars->{KRB5_CONFIG}; 
++
+ 		my $optarg = "";
+ 		if (defined($max_time)) {
+ 			$optarg = "--maximum-runtime=$max_time ";
+

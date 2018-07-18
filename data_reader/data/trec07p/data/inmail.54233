@@ -1,0 +1,172 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Jun  8 18:00:52 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l58M0qL9002125
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 8 Jun 2007 18:00:52 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id C9E8B16395D
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri,  8 Jun 2007 22:00:51 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-3.6 required=3.8 tests=ALL_TRUSTED,AWL,BAYES_00 
+	autolearn=ham version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from [?i???+?IPv6:::1] (dp [66.70.73.150])
+	by lists.samba.org (Postfix) with ESMTP id 2954B16384E;
+	Fri,  8 Jun 2007 21:59:06 +0000 (GMT)
+Mime-Version: 1.0 (Apple Message framework v752.3)
+To: samba-technical@lists.samba.org
+Message-Id: <2B45BD1B-05CD-4FE2-A2BE-E9DB422B2F94@samba.org>
+Content-Type: multipart/mixed; boundary=Apple-Mail-3--978207086
+From: James Peach <jpeach@samba.org>
+Date: Fri, 8 Jun 2007 14:58:59 -0700
+X-Mailer: Apple Mail (2.752.3)
+Cc: Jeremy Allison <jra@samba.org>
+Subject: [PATCH] support >16 supplementary groups on Darwin
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+
+--Apple-Mail-3--978207086
+Content-Transfer-Encoding: 7bit
+Content-Type: text/plain;
+	charset=US-ASCII;
+	delsp=yes;
+	format=flowed
+
+Hi all,
+
+The attached patch add support for groups lists of more that 16 on  
+Darwin/Mac OS X. This requires that we perform a very specific dance  
+when switching our UNIX credential.
+
+
+--Apple-Mail-3--978207086
+Content-Transfer-Encoding: 7bit
+Content-Type: text/plain; x-unix-mode=0644;
+	name=support-darwin-dynamic-groups.txt
+Content-Disposition: attachment;
+	filename=support-darwin-dynamic-groups.txt
+
+diff --git a/source/configure.in b/source/configure.in
+index be92a91..d69a40e 100644
+--- a/source/configure.in
++++ b/source/configure.in
+@@ -3100,6 +3100,21 @@ if test x"$samba_cv_USE_SETUIDX" = x"yes"; then
+ fi
+ fi
+ 
++AC_CACHE_CHECK([for the Darwin initgroups system call],
++	samba_cv_DARWIN_INITGROUPS,
++	AC_TRY_LINK([
++#include <sys/syscall.h>
++#include <unistd.h>
++	],
++	[ syscall(SYS_initgroups, 16, NULL, NULL, 0); ],
++	samba_cv_DARWIN_INITGROUPS=yes,
++	samba_cv_DARWIN_INITGROUPS=no)
++)
++
++if test x"$samba_cv_DARWIN_INITGROUPS" = x"yes" ; then
++    AC_DEFINE(HAVE_DARWIN_INITGROUPS, 1,
++	[Whether to use the Darwin-specific initgroups system call])
++fi
+ 
+ AC_CACHE_CHECK([for working mmap],samba_cv_HAVE_MMAP,[
+ AC_TRY_RUN([#include "${srcdir-.}/tests/shared_mmap.c"],
+diff --git a/source/smbd/sec_ctx.c b/source/smbd/sec_ctx.c
+index fd79fbb..6a2d389 100644
+--- a/source/smbd/sec_ctx.c
++++ b/source/smbd/sec_ctx.c
+@@ -231,6 +231,10 @@ BOOL push_sec_ctx(void)
+  Change UNIX security context. Calls panic if not successful so no return value.
+ ****************************************************************************/
+ 
++#ifndef HAVE_DARWIN_INITGROUPS
++
++/* Normal credential switch path. */
++
+ static void set_unix_security_ctx(uid_t uid, gid_t gid, int ngroups, gid_t *groups)
+ {
+ 	/* Start context switch */
+@@ -242,6 +246,51 @@ static void set_unix_security_ctx(uid_t uid, gid_t gid, int ngroups, gid_t *grou
+ 	/* end context switch */
+ }
+ 
++#else /* HAVE_DARWIN_INITGROUPS */
++
++/* The Darwin groups implementation is a little unusual. The list of
++* groups in the kernel credential is not exhaustive, but more like
++* a cache. The full group list is held in userspace and checked
++* dynamically.
++*
++* This is an optional mechanism, and setgroups(2) opts out
++* of it. That is, if you call setgroups, then the list of groups you
++* set are the only groups that are ever checked. This is not what we
++* want. We want to opt in to the dynamic resolution mechanism, so we
++* need to specify the uid of the user whose group list (cache) we are
++* setting.
++*
++* The Darwin rules are:
++*  1. Thou shalt setegid, initgroups and seteuid IN THAT ORDER
++*  2. Thou shalt not pass more that NGROUPS_MAX to initgroups
++*  3. Thou shalt leave the first entry in the groups list well alone
++*/
++
++#include <sys/syscall.h>
++
++static void set_unix_security_ctx(uid_t uid, gid_t gid, int ngroups, gid_t *groups)
++{
++	int max = groups_max();
++
++	/* Start context switch */
++	gain_root();
++
++	become_gid(gid);
++
++
++	if (syscall(SYS_initgroups, (ngroups > max) ? max : ngroups,
++			groups, uid) == 1) {
++		DEBUG(0, ("WARNING: failed to set group list "
++			"(%d groups) for UID %ld: %s\n",
++			ngroups, uid, strerror(errno)));
++	}
++
++	become_uid(uid);
++	/* end context switch */
++}
++
++#endif /* HAVE_DARWIN_INITGROUPS */
++
+ /****************************************************************************
+  Set the current security context to a given user.
+ ****************************************************************************/
+
+--Apple-Mail-3--978207086
+Content-Transfer-Encoding: 7bit
+Content-Type: text/plain;
+	charset=US-ASCII;
+	format=flowed
+
+
+--
+James Peach | jpeach@samba.org
+
+
+
+--Apple-Mail-3--978207086--
+

@@ -1,0 +1,163 @@
+From r-help-bounces@stat.math.ethz.ch  Fri Apr 13 17:04:44 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3DL4g0I026936
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 13 Apr 2007 17:04:43 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3DL3IeK031347;
+	Fri, 13 Apr 2007 23:03:30 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.5 required=5.0 tests=AWL,
+	BAYES_50 autolearn=no version=3.1.8
+Received: from wr-out-0506.google.com (wr-out-0506.google.com [64.233.184.236])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3DL3B8h031255
+	for <r-help@stat.math.ethz.ch>; Fri, 13 Apr 2007 23:03:12 +0200
+Received: by wr-out-0506.google.com with SMTP id i21so961959wra
+	for <r-help@stat.math.ethz.ch>; Fri, 13 Apr 2007 14:03:11 -0700 (PDT)
+Received: by 10.114.156.1 with SMTP id d1mr1104108wae.1176498190749;
+	Fri, 13 Apr 2007 14:03:10 -0700 (PDT)
+Received: by 10.114.169.18 with HTTP; Fri, 13 Apr 2007 14:03:10 -0700 (PDT)
+Message-ID: <eb555e660704131403p300f1db0t253149bbc3eb0828@mail.gmail.com>
+Date: Fri, 13 Apr 2007 14:03:10 -0700
+From: "Deepayan Sarkar" <deepayan.sarkar@gmail.com>
+To: "=?UTF-8?Q?Arne_Schr=C3=B6der?=" <arne.schroder@emg.umu.se>
+In-Reply-To: <eb555e660704131103g69a2e3efi46ef4690ba4daf04@mail.gmail.com>
+MIME-Version: 1.0
+Content-Disposition: inline
+References: <002301c77dad$d29b3630$9432ef82@ad.umu.se>
+	<eb555e660704131103g69a2e3efi46ef4690ba4daf04@mail.gmail.com>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help <r-help@stat.math.ethz.ch>
+Subject: Re: [R] stacked histograms
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+Status: O
+Content-Length: 3360
+Lines: 111
+
+On 4/13/07, Deepayan Sarkar <deepayan.sarkar@gmail.com> wrote:
+
+[...]
+
+> Write your own panel function, it shouldn't be too hard.
+
+And since this comes up every once in a while, here's a possible implementation:
+
+
+library(lattice)
+
+hist.constructor <-
+    function(x, breaks,
+             include.lowest = TRUE,
+             right = TRUE, ...)
+{
+    if (is.numeric(breaks) && length(breaks) > 1)
+        hist(as.numeric(x), breaks = breaks, plot = FALSE,
+             include.lowest = include.lowest,
+             right = right)
+    else
+        hist(as.numeric(x), breaks = breaks, plot = FALSE)
+}
+
+
+
+panel.grouped.histogram <-
+    function(x,
+             groups = stop("groups must be specified"), subscripts,
+             breaks, equal.widths = TRUE, type = "density",
+             nint = round(log2(length(x)) + 1),
+             alpha = plot.polygon$alpha,
+             col = plot.polygon$col,
+             border = plot.polygon$border,
+             lty = plot.polygon$lty,
+             lwd = plot.polygon$lwd, ...)
+{
+    plot.polygon <- trellis.par.get("superpose.polygon")
+    if (length(x) < 1) return()
+    if (is.null(breaks)) {
+        breaks <- if (is.factor(x))
+            seq_len(1 + nlevels(x)) - 0.5
+        else if (equal.widths)
+            do.breaks(range(x, finite = TRUE), nint)
+        else quantile(x, 0:nint/nint, na.rm = TRUE)
+    }
+    h <- hist.constructor(x, breaks = breaks, ...)
+    y <-
+        switch(type,
+               count = h$counts,
+               percent = 100 * h$counts/length(x),
+               density = h$intensities)
+    breaks <- h$breaks
+    stopifnot((nb <- length(breaks)) > 1)
+
+    ## support for groups
+    vals <-
+        if (is.factor(groups)) levels(groups)
+        else sort(unique(groups))
+    nvals <- length(vals)
+    subg <- groups[subscripts]
+    ok <- !is.na(subg)
+
+    alpha <- rep(alpha, nvals)
+    col <- rep(col, nvals)
+    border <- rep(border, nvals)
+    lty <- rep(lty, nvals)
+    lwd <- rep(lwd, nvals)
+
+    props.group <-
+        sapply(vals,
+               function(v) {
+                   id <- subg == v
+                   hv <- hist.constructor(x[id], breaks = breaks, ...)
+                   if (type == "density") hv$intensities
+                   else hv$counts
+               })
+    props.group <- prop.table(props.group, margin = 1)
+    y.group <-
+        sapply(seq_along(y),
+               function(i) y[i] * c(0, cumsum(props.group[i, ])))
+    for (i in seq_len(nvals))
+    {
+        panel.rect(x = breaks[-nb],
+                   y = y.group[i, ],
+                   height = y.group[i + 1, ] - y.group[i, ],
+                   width = diff(breaks),
+                   col = col[i], alpha = alpha[i],
+                   border = border[i], lty = lty[i],
+                   lwd = lwd[i],
+                   just = c("left", "bottom"))
+    }
+}
+
+
+histogram(~height, singer)
+
+histogram(~height, singer, groups = voice.part,
+          panel = panel.grouped.histogram,
+          auto.key =
+          list(space = "right", reverse.rows = TRUE,
+               points = FALSE, rectangles = TRUE))
+
+
+-Deepayan
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

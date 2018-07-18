@@ -1,0 +1,205 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 22 00:53:36 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4M4raqD007948
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 22 May 2007 00:53:36 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id B35A216387F
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 22 May 2007 04:53:32 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 50112162AC7; Tue, 22 May 2007 04:53:07 +0000 (GMT)
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070522045307.50112162AC7@lists.samba.org>
+Date: Tue, 22 May 2007 04:53:07 +0000 (GMT)
+Subject: svn commit: samba r23061 - in
+	branches/SAMBA_4_0/source/torture/raw: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: tridge
+Date: 2007-05-22 04:53:05 +0000 (Tue, 22 May 2007)
+New Revision: 23061
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23061
+
+Log:
+
+keep the RAW-BENCH-OPEN test balanced
+
+Modified:
+   branches/SAMBA_4_0/source/torture/raw/openbench.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/torture/raw/openbench.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/raw/openbench.c	2007-05-22 04:13:17 UTC (rev 23060)
++++ branches/SAMBA_4_0/source/torture/raw/openbench.c	2007-05-22 04:53:05 UTC (rev 23061)
+@@ -40,17 +40,20 @@
+ static char **fnames;
+ static int num_connected;
+ 
++enum open_stage {OPEN_INITIAL, OPEN_OPEN, OPEN_CLOSE};
++
+ struct benchopen_state {
+ 	TALLOC_CTX *mem_ctx;
+ 	struct event_context *ev;
+ 	struct smbcli_state *cli;
+ 	struct smbcli_tree *tree;
++	enum open_stage stage;
+ 	int client_num;
++	int old_fnum;
+ 	int fnum;
+ 	int file_num;
+ 	int count;
+ 	int lastcount;
+-	BOOL waiting_open, waiting_close;
+ 	union smb_open open_parms;
+ 	union smb_close close_parms;
+ 	struct smbcli_request *req_open;
+@@ -65,6 +68,7 @@
+ };
+ 
+ static void next_open(struct benchopen_state *state);
++static void next_operation(struct benchopen_state *state);
+ static void reopen_connection(struct event_context *ev, struct timed_event *te, 
+ 			      struct timeval t, void *private_data);
+ 
+@@ -93,7 +97,9 @@
+ 	DEBUG(0,("reconnect to %s finished (%u connected)\n", state->dest_host,
+ 		 num_connected));
+ 
+-	next_open(state);
++	state->stage = OPEN_INITIAL;
++	state->fnum = -1;
++	next_operation(state);
+ }
+ 
+ 	
+@@ -127,8 +133,6 @@
+ 	talloc_free(state->tree);
+ 	state->tree = NULL;
+ 	state->fnum = -1;
+-	state->waiting_open = False;
+-	state->waiting_close = False;
+ 
+ 	ctx = smb_composite_connect_send(io, state->mem_ctx, state->ev);
+ 	if (ctx == NULL) {
+@@ -165,20 +169,18 @@
+ 	state->req_open = smb_raw_open_send(state->tree, &state->open_parms);
+ 	state->req_open->async.fn = open_completed;
+ 	state->req_open->async.private = state;
+-	state->waiting_open = True;
++}
+ 
+-	if (state->fnum == -1) {
+-		return;
+-	}
+ 
++static void next_close(struct benchopen_state *state)
++{
+ 	state->close_parms.close.level = RAW_CLOSE_CLOSE;
+-	state->close_parms.close.in.file.fnum = state->fnum;
++	state->close_parms.close.in.file.fnum = state->old_fnum;
+ 	state->close_parms.close.in.write_time = 0;
+ 
+ 	state->req_close = smb_raw_close_send(state->tree, &state->close_parms);
+ 	state->req_close->async.fn = close_completed;
+ 	state->req_close->async.private = state;
+-	state->waiting_close = True;
+ }
+ 
+ /*
+@@ -190,6 +192,8 @@
+ 	TALLOC_CTX *tmp_ctx = talloc_new(state->mem_ctx);
+ 	NTSTATUS status;
+ 
++	state->old_fnum = state->fnum;
++
+ 	status = smb_raw_open_recv(req, tmp_ctx, &state->open_parms);
+ 
+ 	talloc_free(tmp_ctx);
+@@ -225,11 +229,8 @@
+ 	}
+ 
+ 	state->fnum = state->open_parms.ntcreatex.out.file.fnum;
+-	state->waiting_open = False;
+ 
+-	if (!state->waiting_close) {
+-		next_open(state);
+-	}
++	next_operation(state);
+ }	
+ 
+ /*
+@@ -262,14 +263,27 @@
+ 		return;
+ 	}
+ 
+-	state->waiting_close = False;
++	next_operation(state);
++}	
+ 
+-	if (!state->waiting_open) {
++static void next_operation(struct benchopen_state *state)
++{
++	switch (state->stage) {
++	case OPEN_INITIAL:
+ 		next_open(state);
++		state->stage = OPEN_OPEN;
++		break;
++	case OPEN_OPEN:
++		next_open(state);
++		state->stage = OPEN_CLOSE;
++		break;
++	case OPEN_CLOSE:
++		next_close(state);
++		state->stage = OPEN_OPEN;
++		break;
+ 	}
+-}	
++}
+ 
+-
+ static void report_rate(struct event_context *ev, struct timed_event *te, 
+ 			struct timeval t, void *private_data)
+ {
+@@ -311,6 +325,7 @@
+ 		state[i].mem_ctx = talloc_new(state);
+ 		state[i].client_num = i;
+ 		state[i].ev = ev;
++		state[i].stage = OPEN_INITIAL;
+ 		if (!torture_open_connection_ev(&state[i].cli, i, ev)) {
+ 			return False;
+ 		}
+@@ -339,7 +354,7 @@
+ 	for (i=0;i<nprocs;i++) {
+ 		state[i].fnum = -1;
+ 		state[i].file_num = i;		
+-		next_open(&state[i]);
++		next_operation(&state[i]);
+ 	}
+ 
+ 	tv = timeval_current();	
+

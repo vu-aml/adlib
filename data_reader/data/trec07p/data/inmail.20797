@@ -1,0 +1,101 @@
+From perl6-all-return-80890-ktwarwic=speedy.uwaterloo.ca@perl.org  Thu Apr 26 01:44:45 2007
+Return-Path: <perl6-all-return-80890-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3Q5ii6w008485
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 26 Apr 2007 01:44:44 -0400
+Received: (qmail 18333 invoked by uid 514); 26 Apr 2007 05:44:43 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 18327 invoked from network); 26 Apr 2007 05:44:42 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+Subject: [perl #42300] [PATCH] t/pmc/sub.t: test for creation of lex by clone op 
+From: "Matt Diephouse via RT" <parrotbug-followup@parrotcode.org>
+Reply-To: parrotbug-followup@parrotcode.org
+In-Reply-To: <136714b40704040724g26876a46je6602f95c8961087@mail.gmail.com>
+References: <RT-Ticket-42300@perl.org> <136714b40704040724g26876a46je6602f95c8961087@mail.gmail.com>
+Message-ID: <rt-3.6.HEAD-6655-1177566221-1029.42300-15-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #42300
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: matt@diephouse.com
+Cc: perl6-internals@perl.org, allison@perl.org
+To: "OtherRecipients of perl Ticket #42300": ;
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+X-RT-Original-Encoding: utf-8
+Date: Wed, 25 Apr 2007 22:43:42 -0700
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME
+Status: O
+Content-Length: 1671
+Lines: 50
+
+First, the test (rearranged to include only the relevant parts):
+
++.sub main :main
++    .local string ok, not_ok
++    ok = "ok"
++    not_ok = "not ok"
++    
++    # if 'not ok' is printed, it means that the lexical environment
++    # for the first closure in each pair, (where "out" = "ok")
++    # was overwritten by the lexical environment created for the
++    # second closure (where "out" = "not ok")
++    
++    $P10 = makebar_clone(ok)
++    $P20 = makebar_clone(not_ok)
++    $P10()
++.end
++
++.sub makebar_clone
++    .param pmc out
++    .lex 'out', out
++    .const .Sub s = 'bar'
++    $P0 = clone s
++    .return($P0)
++.end
++
++.sub bar :outer(makebar_clone)
++    $P0 = find_lex 'out'
++    say $P0
++.end
+
+(This prints "not ok". The test in the patch expects "ok".)
+
+You're arguing that the different copies of "bar" that are returned from makebar_clone 
+should have different lexical environments. I'm pretty sure that this is not the case. Without 
+using "newclosure", there's no closure so the lexical environments are the same.
+
+What the :outer does in this case is rearrange the lexical stack so that "makebar_clone" 
+appears in the lexical stack for "bar". So we're using the lexical environment from the last 
+time that "makebar_clone" was called. It's bizarre that this even works because without the 
+closure, I'd think that the lexical environment would have destroyed.
+
+I'm not sure how intentional this is. The PDD isn't clear (to me) about what :outer means in 
+the absence of "newclosure". I'd definitely be interested in seeing why this would be a useful 
+feature. More detail in the PDD would be nice.
+
+Thanks for the interesting patch.
+
+--
+Matt Diephouse
+
+

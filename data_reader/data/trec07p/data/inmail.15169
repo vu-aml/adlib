@@ -1,0 +1,172 @@
+From r-help-bounces@stat.math.ethz.ch  Fri Apr 20 14:17:24 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3KIHN0I009535
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 20 Apr 2007 14:17:24 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3KIFspd014367;
+	Fri, 20 Apr 2007 20:16:07 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.0 required=5.0 tests=AWL,
+	BAYES_50 autolearn=no version=3.1.8
+Received: from pharmstorage.pharm.emory.edu (pharmstorage.pharm.emory.edu
+	[170.140.240.190])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3KI31cH010106
+	for <r-help@stat.math.ethz.ch>; Fri, 20 Apr 2007 20:03:01 +0200
+Received: from [127.0.0.1] (unverified [170.140.252.54]) by
+	pharmstorage.pharm.emory.edu (Rockliffe SMTPRA 7.0.3) with ESMTP id
+	<B0002035019@pharmstorage.pharm.emory.edu>; 
+	Fri, 20 Apr 2007 15:03:12 -0400
+Message-ID: <4629005B.7090208@pharm.emory.edu>
+Date: Fri, 20 Apr 2007 14:03:07 -0400
+From: Iestyn Lewis <ilewis@pharm.emory.edu>
+User-Agent: Thunderbird 1.5.0.10 (Windows/20070221)
+MIME-Version: 1.0
+To: Phil Spector <spector@stat.berkeley.edu>, r-help@stat.math.ethz.ch
+References: <4628EA82.3040207@pharm.emory.edu>
+	<Pine.LNX.4.64.0704201024280.18437@springer.Berkeley.EDU>
+In-Reply-To: <Pine.LNX.4.64.0704201024280.18437@springer.Berkeley.EDU>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Subject: Re: [R] Fastest way to repeatedly subset a data frame?
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+Status: O
+Content-Length: 3816
+Lines: 121
+
+Hi Phil -
+
+Sadly, although your syntax is certainly a lot cleaner and more elegant 
+than mine, the elapsed time is about the same.  5 minutes may have been 
+an exaggeration, but we are looking at a timescale of minutes, where the 
+C# hashtable method was under a second. 
+
+I have a feeling the inherent problem in both of our approaches is the 
+use of is.element and %in%, both of which operate over vectors.  
+
+Maybe what really needs to happen is each vector of Ids needs to be 
+converted to a list - does anyone know if the R implementation of named 
+lists is similar to a Hashtable like you'd find in perl or C# or 
+whatever?  IE, is searching for membership in an  R list faster than 
+looking for an element in a vector?
+
+Thanks,
+
+Iestyn
+
+Phil Spector wrote:
+> Iestyn -
+>    Don't know if this is the fastest, but I suspect it will be
+> quite a bit faster than your current method:
+>
+> makecol = function(x,df=my.df)replace(df$result,!df$id %in% x,NA)
+> result = cbind(my.df,sapply(my.idlist,makecol))
+>
+>                                        - Phil Spector
+>                      Statistical Computing Facility
+>                      Department of Statistics
+>                      UC Berkeley
+>                      spector@stat.berkeley.edu
+>
+>
+> On Fri, 20 Apr 2007, Iestyn Lewis wrote:
+>
+>> Hi -
+>>
+>> I have a data frame with a large number of observations (62,000 rows,
+>> but only 2 columns - a character ID and a result list).
+>>
+>> Sample:
+>>
+>> > my.df <- data.frame(id=c("ID1", "ID2", "ID3"), result=1:3)
+>> > my.df
+>>   id result
+>> 1 ID1      1
+>> 2 ID2      2
+>> 3 ID3      3
+>>
+>> I have a list of ID vectors.  This list will have anywhere from 100 to
+>> 1000 members, and each member will have anywhere from 10 to 5000 id 
+>> entries.
+>>
+>> Sample:
+>>
+>> > my.idlist[["List1"]] <- c("ID1", "ID3")
+>> > my.idlist[["List2"]] <- c("ID2")
+>> > my.idlist
+>> $List1
+>> [1] "ID1" "ID3"
+>>
+>> $List2
+>> [1] "ID2"
+>>
+>>
+>> I need to subset that data frame by the list of IDs in each vector, to
+>> end up with vectors that contain just the results for the IDs found in
+>> each vector in the list.  My current approach is to create new columns
+>> in the original data frame with the names of the list items, and any
+>> results that don't match replaced with NA.  Here is what I've done so 
+>> far:
+>>
+>> createSubsets <- function(res, slib) {
+>>    for(i in 1:length(slib)) {
+>>        res[ ,names(slib)[i]] <- replace(res$result,
+>> which(!is.element(res$sid, slib[[i]])), NA)
+>>        return (res)
+>>    }
+>> }
+>>
+>> I have 2 problems:
+>>
+>> 1)  My function only works for the first item in the list:
+>>
+>> > my.df <- createSubsets(my.df, my.idlist)
+>> > my.df
+>>   id result List1
+>> 1 ID1      1     1
+>> 2 ID2      2    NA
+>> 3 ID3      3     3
+>>
+>> In order to get all results, I have to copy the loop out of the function
+>> and paste it into R directly.
+>>
+>> 2)  It is very, very slow.  For a dataset of 62,000 rows and 253 list
+>> entries, it takes probably 5 minutes on a pentium D.  An implementation
+>> of this kind of subsetting using hashtables in C# takes a neglible
+>> amount of time.
+>>
+>> I am open to any suggestions about data format, methods, anything.
+>>
+>> Thanks,
+>>
+>> Iestyn Lewis
+>> Emory University
+>>
+>> ______________________________________________
+>> R-help@stat.math.ethz.ch mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-help
+>> PLEASE do read the posting guide 
+>> http://www.R-project.org/posting-guide.html
+>> and provide commented, minimal, self-contained, reproducible code.
+>>
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

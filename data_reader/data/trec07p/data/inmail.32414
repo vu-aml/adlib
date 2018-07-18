@@ -1,0 +1,427 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May  9 12:27:06 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l49GR4qD031095
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 9 May 2007 12:27:04 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id C9FDC16390F
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed,  9 May 2007 16:27:02 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 540)
+	id 3D00B162AEB; Wed,  9 May 2007 16:26:45 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jerry@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070509162645.3D00B162AEB@lists.samba.org>
+Date: Wed,  9 May 2007 16:26:45 +0000 (GMT)
+Subject: svn commit: samba r22770 - in branches/SAMBA_3_0_RELEASE/source: .
+	lib modules nsswitch rpc_client rpc_parse rpc_server smbd
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: jerry
+Date: 2007-05-09 16:26:43 +0000 (Wed, 09 May 2007)
+New Revision: 22770
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22770
+
+Log:
+sync with SAMBA_3_0_25 as of svn r22765
+Modified:
+   branches/SAMBA_3_0_RELEASE/source/configure.in
+   branches/SAMBA_3_0_RELEASE/source/lib/charcnv.c
+   branches/SAMBA_3_0_RELEASE/source/modules/vfs_afsacl.c
+   branches/SAMBA_3_0_RELEASE/source/nsswitch/idmap.c
+   branches/SAMBA_3_0_RELEASE/source/nsswitch/winbindd_async.c
+   branches/SAMBA_3_0_RELEASE/source/nsswitch/winbindd_group.c
+   branches/SAMBA_3_0_RELEASE/source/rpc_client/cli_svcctl.c
+   branches/SAMBA_3_0_RELEASE/source/rpc_parse/parse_misc.c
+   branches/SAMBA_3_0_RELEASE/source/rpc_server/srv_lsa_nt.c
+   branches/SAMBA_3_0_RELEASE/source/smbd/notify.c
+   branches/SAMBA_3_0_RELEASE/source/smbd/reply.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0_RELEASE/source/configure.in
+===================================================================
+--- branches/SAMBA_3_0_RELEASE/source/configure.in	2007-05-09 11:51:39 UTC (rev 22769)
++++ branches/SAMBA_3_0_RELEASE/source/configure.in	2007-05-09 16:26:43 UTC (rev 22770)
+@@ -5764,10 +5764,6 @@
+ AC_SUBST(WINBIND_NSS_EXTRA_LIBS)
+ AC_SUBST(NSSSONAMEVERSIONSUFFIX)
+ 
+-if test $BLDSHARED = true -a x"$HAVE_WINBIND" = x"yes"; then
+-	NSS_MODULES="${WINBIND_NSS} ${WINBIND_WINS_NSS}"
+-fi
+-
+ AC_SUBST(SMB_KRB5_LOCATOR)
+ 
+ # Check the setting of --with-winbind
+@@ -5802,6 +5798,10 @@
+ 	WINBIND_WINS_NSS=""
+ fi
+ 
++if test $BLDSHARED = true -a x"$HAVE_WINBIND" = x"yes"; then
++	NSS_MODULES="${WINBIND_NSS} ${WINBIND_WINS_NSS}"
++fi
++
+ if test x"$HAVE_WINBIND" = x"yes"; then
+         AC_MSG_RESULT(yes)
+ 	AC_DEFINE(WITH_WINBIND,1,[Whether to build winbind])
+
+Modified: branches/SAMBA_3_0_RELEASE/source/lib/charcnv.c
+===================================================================
+--- branches/SAMBA_3_0_RELEASE/source/lib/charcnv.c	2007-05-09 11:51:39 UTC (rev 22769)
++++ branches/SAMBA_3_0_RELEASE/source/lib/charcnv.c	2007-05-09 16:26:43 UTC (rev 22770)
+@@ -972,13 +972,18 @@
+ 
+ 	ret = convert_string(CH_DOS, CH_UNIX, src, src_len, dest, dest_len, True);
+ 	if (ret == (size_t)-1) {
++		ret = 0;
+ 		dest_len = 0;
+ 	}
+ 
+-	if (dest_len)
+-		dest[MIN(ret, dest_len-1)] = 0;
+-	else 
++	if (dest_len && ret) {
++		/* Did we already process the terminating zero ? */
++		if (dest[MIN(ret-1, dest_len-1)] != 0) {
++			dest[MIN(ret, dest_len-1)] = 0;
++		}
++	} else  {
+ 		dest[0] = 0;
++	}
+ 
+ 	return src_len;
+ }
+@@ -1219,10 +1224,14 @@
+ 	if (src_len == (size_t)-1)
+ 		src_len = ret*2;
+ 		
+-	if (dest_len)
+-		dest[MIN(ret, dest_len-1)] = 0;
+-	else 
++	if (dest_len && ret) {
++		/* Did we already process the terminating zero ? */
++		if (dest[MIN(ret-1, dest_len-1)] != 0) {
++			dest[MIN(ret, dest_len-1)] = 0;
++		}
++	} else {
+ 		dest[0] = 0;
++	}
+ 
+ 	return src_len;
+ }
+
+Modified: branches/SAMBA_3_0_RELEASE/source/modules/vfs_afsacl.c
+===================================================================
+--- branches/SAMBA_3_0_RELEASE/source/modules/vfs_afsacl.c	2007-05-09 11:51:39 UTC (rev 22769)
++++ branches/SAMBA_3_0_RELEASE/source/modules/vfs_afsacl.c	2007-05-09 16:26:43 UTC (rev 22770)
+@@ -616,7 +616,7 @@
+ 	uid_to_sid(&owner_sid, sbuf.st_uid);
+ 	gid_to_sid(&group_sid, sbuf.st_gid);
+ 
+-	if (num_aces) {
++	if (afs_acl->num_aces) {
+ 		nt_ace_list = TALLOC_ARRAY(mem_ctx, SEC_ACE, afs_acl->num_aces);
+ 
+ 		if (nt_ace_list == NULL)
+
+Modified: branches/SAMBA_3_0_RELEASE/source/nsswitch/idmap.c
+===================================================================
+--- branches/SAMBA_3_0_RELEASE/source/nsswitch/idmap.c	2007-05-09 11:51:39 UTC (rev 22769)
++++ branches/SAMBA_3_0_RELEASE/source/nsswitch/idmap.c	2007-05-09 16:26:43 UTC (rev 22770)
+@@ -1025,17 +1025,16 @@
+ 	DEBUG(10, ("Query backends to map sids->ids\n"));
+ 
+ 	/* split list per domain */
+-
+-	if (num_domains) {
+-		dom_ids = TALLOC_ZERO_ARRAY(ctx, struct id_map **, num_domains);
+-		IDMAP_CHECK_ALLOC(dom_ids);
+-		counters = TALLOC_ZERO_ARRAY(ctx, int, num_domains);
+-		IDMAP_CHECK_ALLOC(counters);
+-	} else {
+-		dom_ids = NULL;
+-		counters = NULL;
++	if (num_domains == 0) {
++		DEBUG(1, ("No domains available?\n"));
++		return NT_STATUS_UNSUCCESSFUL;
+ 	}
+ 
++	dom_ids = TALLOC_ZERO_ARRAY(ctx, struct id_map **, num_domains);
++	IDMAP_CHECK_ALLOC(dom_ids);
++	counters = TALLOC_ZERO_ARRAY(ctx, int, num_domains);
++	IDMAP_CHECK_ALLOC(counters);
++
+ 	/* partition the requests by domain */
+ 
+ 	for (i = 0; ids[i]; i++) {
+
+Modified: branches/SAMBA_3_0_RELEASE/source/nsswitch/winbindd_async.c
+===================================================================
+--- branches/SAMBA_3_0_RELEASE/source/nsswitch/winbindd_async.c	2007-05-09 11:51:39 UTC (rev 22769)
++++ branches/SAMBA_3_0_RELEASE/source/nsswitch/winbindd_async.c	2007-05-09 16:26:43 UTC (rev 22770)
+@@ -163,6 +163,7 @@
+ 	map.sid = &sid;
+ 	map.xid.id = state->request.data.dual_idmapset.id;
+ 	map.xid.type = state->request.data.dual_idmapset.type;
++	map.status = ID_MAPPED;
+ 
+ 	result = idmap_set_mapping(&map);
+ 	return NT_STATUS_IS_OK(result) ? WINBINDD_OK : WINBINDD_ERROR;
+@@ -273,6 +274,11 @@
+ 
+ 	DEBUG(3, ("[%5lu]: sids to unix ids\n", (unsigned long)state->pid));
+ 
++	if (state->request.extra_len == 0) {
++		DEBUG(0, ("Invalid buffer size!\n"));
++		return WINBINDD_ERROR;
++	}
++
+ 	sids = (DOM_SID *)state->request.extra_data.data;
+ 	num = state->request.extra_len / sizeof(DOM_SID);
+ 
+
+Modified: branches/SAMBA_3_0_RELEASE/source/nsswitch/winbindd_group.c
+===================================================================
+--- branches/SAMBA_3_0_RELEASE/source/nsswitch/winbindd_group.c	2007-05-09 11:51:39 UTC (rev 22769)
++++ branches/SAMBA_3_0_RELEASE/source/nsswitch/winbindd_group.c	2007-05-09 16:26:43 UTC (rev 22770)
+@@ -479,6 +479,9 @@
+ 	memset(name_group, 0, sizeof(fstring));
+ 
+ 	tmp = state->request.data.groupname;
++
++	name_domain[0] = '\0';
++	name_group[0] = '\0';
+ 	
+ 	parse_domain_user(tmp, name_domain, name_group);
+ 
+
+Modified: branches/SAMBA_3_0_RELEASE/source/rpc_client/cli_svcctl.c
+===================================================================
+--- branches/SAMBA_3_0_RELEASE/source/rpc_client/cli_svcctl.c	2007-05-09 11:51:39 UTC (rev 22769)
++++ branches/SAMBA_3_0_RELEASE/source/rpc_client/cli_svcctl.c	2007-05-09 16:26:43 UTC (rev 22770)
+@@ -209,8 +209,12 @@
+ 		return out.status;
+ 		
+ 	/* pull out the data */
+-	if ( !(services = TALLOC_ARRAY( mem_ctx, ENUM_SERVICES_STATUS, out.returned )) ) 
+-		return WERR_NOMEM;
++	if (out.returned) {
++		if ( !(services = TALLOC_ARRAY( mem_ctx, ENUM_SERVICES_STATUS, out.returned )) ) 
++			return WERR_NOMEM;
++	} else {
++		services = NULL;
++	}
+ 		
+ 	for ( i=0; i<out.returned; i++ ) {
+ 		svcctl_io_enum_services_status( "", &services[i], &out.buffer, 0 );
+
+Modified: branches/SAMBA_3_0_RELEASE/source/rpc_parse/parse_misc.c
+===================================================================
+--- branches/SAMBA_3_0_RELEASE/source/rpc_parse/parse_misc.c	2007-05-09 11:51:39 UTC (rev 22769)
++++ branches/SAMBA_3_0_RELEASE/source/rpc_parse/parse_misc.c	2007-05-09 16:26:43 UTC (rev 22770)
+@@ -530,12 +530,17 @@
+  Allocate the RPC_DATA_BLOB memory.
+ ********************************************************************/
+ 
+-size_t create_rpc_blob(RPC_DATA_BLOB *str, size_t len)
++static void create_rpc_blob(RPC_DATA_BLOB *str, size_t len)
+ {
+-	str->buffer = (uint8 *)TALLOC_ZERO(get_talloc_ctx(), len);
+-	if (str->buffer == NULL)
+-		smb_panic("create_rpc_blob: talloc fail\n");
+-	return len;
++	if (len) {
++		str->buffer = (uint8 *)TALLOC_ZERO(get_talloc_ctx(), len);
++		if (str->buffer == NULL)
++			smb_panic("create_rpc_blob: talloc fail\n");
++		str->buf_len = len;
++	} else {
++		str->buffer = NULL;
++		str->buf_len = 0;
++	}
+ }
+ 
+ /*******************************************************************
+@@ -547,7 +552,7 @@
+ 	ZERO_STRUCTP(str);
+ 
+ 	/* set up string lengths. */
+-	str->buf_len = create_rpc_blob(str, sizeof(uint32));
++	create_rpc_blob(str, sizeof(uint32));
+ 	SIVAL(str->buffer, 0, val);
+ }
+ 
+@@ -560,9 +565,10 @@
+ 	ZERO_STRUCTP(str);
+ 
+ 	/* set up string lengths. */
+-	str->buf_len = create_rpc_blob(str, len*2);
+-	rpcstr_push(str->buffer, buf, (size_t)str->buf_len, STR_TERMINATE);
+-	
++	if (len) {
++		create_rpc_blob(str, len*2);
++		rpcstr_push(str->buffer, buf, (size_t)str->buf_len, STR_TERMINATE);
++	}
+ }
+ 
+ /*******************************************************************
+@@ -572,8 +578,10 @@
+ void init_rpc_blob_hex(RPC_DATA_BLOB *str, const char *buf)
+ {
+ 	ZERO_STRUCTP(str);
+-	str->buf_len = create_rpc_blob(str, strlen(buf));
+-	str->buf_len = strhex_to_str((char *)str->buffer, str->buf_len, buf);
++	if (buf && *buf) {
++		create_rpc_blob(str, strlen(buf));
++		str->buf_len = strhex_to_str((char *)str->buffer, str->buf_len, buf);
++	}
+ }
+ 
+ /*******************************************************************
+@@ -585,8 +593,8 @@
+ 	ZERO_STRUCTP(str);
+ 
+ 	/* max buffer size (allocated size) */
+-	if (buf != NULL) {
+-		len = create_rpc_blob(str, len);
++	if (buf != NULL && len) {
++		create_rpc_blob(str, len);
+ 		memcpy(str->buffer, buf, len);
+ 	}
+ 	str->buf_len = len;
+
+Modified: branches/SAMBA_3_0_RELEASE/source/rpc_server/srv_lsa_nt.c
+===================================================================
+--- branches/SAMBA_3_0_RELEASE/source/rpc_server/srv_lsa_nt.c	2007-05-09 11:51:39 UTC (rev 22769)
++++ branches/SAMBA_3_0_RELEASE/source/rpc_server/srv_lsa_nt.c	2007-05-09 16:26:43 UTC (rev 22770)
+@@ -826,7 +826,11 @@
+ 	*pp_mapped_count = 0;
+ 	*pp_ref = NULL;
+ 	*pp_names = NULL;
+-	
++
++	if (num_sids == 0) {
++		return NT_STATUS_OK;
++	}
++
+ 	names = TALLOC_ZERO_P(p->mem_ctx, LSA_TRANS_NAME_ENUM2);
+ 	sids = TALLOC_ARRAY(p->mem_ctx, const DOM_SID *, num_sids);
+ 	ref = TALLOC_ZERO_P(p->mem_ctx, DOM_R_REF);
+@@ -846,12 +850,10 @@
+ 		return status;
+ 	}
+ 
+-	if (num_sids > 0) {
+-		names->name = TALLOC_ARRAY(names, LSA_TRANS_NAME2, num_sids);
+-		names->uni_name = TALLOC_ARRAY(names, UNISTR2, num_sids);
+-		if ((names->name == NULL) || (names->uni_name == NULL)) {
+-			return NT_STATUS_NO_MEMORY;
+-		}
++	names->name = TALLOC_ARRAY(names, LSA_TRANS_NAME2, num_sids);
++	names->uni_name = TALLOC_ARRAY(names, UNISTR2, num_sids);
++	if ((names->name == NULL) || (names->uni_name == NULL)) {
++		return NT_STATUS_NO_MEMORY;
+ 	}
+ 
+ 	for (i=0; i<MAX_REF_DOMAINS; i++) {
+
+Modified: branches/SAMBA_3_0_RELEASE/source/smbd/notify.c
+===================================================================
+--- branches/SAMBA_3_0_RELEASE/source/smbd/notify.c	2007-05-09 11:51:39 UTC (rev 22769)
++++ branches/SAMBA_3_0_RELEASE/source/smbd/notify.c	2007-05-09 16:26:43 UTC (rev 22770)
+@@ -336,7 +336,7 @@
+ static void notify_fsp(files_struct *fsp, uint32 action, const char *name)
+ {
+ 	struct notify_change *change, *changes;
+-	char *name2;
++	pstring name2;
+ 
+ 	if (fsp->notify == NULL) {
+ 		/*
+@@ -345,11 +345,7 @@
+ 		return;
+ 	}
+ 
+-	if (!(name2 = talloc_strdup(fsp->notify, name))) {
+-		DEBUG(0, ("talloc_strdup failed\n"));
+-			return;
+-	}
+-
++	pstrcpy(name2, name);
+ 	string_replace(name2, '/', '\\');
+ 
+ 	/*
+@@ -363,7 +359,6 @@
+ 		 * guard against a DoS here.
+ 		 */
+ 		TALLOC_FREE(fsp->notify->changes);
+-		TALLOC_FREE(name2);
+ 		fsp->notify->num_changes = -1;
+ 		return;
+ 	}
+@@ -376,7 +371,6 @@
+ 		      fsp->notify, fsp->notify->changes,
+ 		      struct notify_change, fsp->notify->num_changes+1))) {
+ 		DEBUG(0, ("talloc_realloc failed\n"));
+-		TALLOC_FREE(name2);
+ 		return;
+ 	}
+ 
+@@ -384,7 +378,11 @@
+ 
+ 	change = &(fsp->notify->changes[fsp->notify->num_changes]);
+ 
+-	change->name = talloc_move(changes, &name2);
++	if (!(change->name = talloc_strdup(changes, name2))) {
++		DEBUG(0, ("talloc_strdup failed\n"));
++		return;
++	}
++
+ 	change->action = action;
+ 	fsp->notify->num_changes += 1;
+ 
+@@ -400,7 +398,7 @@
+ 		 * We have to send the two rename events in one reply. So hold
+ 		 * the first part back.
+ 		 */
+-	return;
++		return;
+ 	}
+ 
+ 	/*
+
+Modified: branches/SAMBA_3_0_RELEASE/source/smbd/reply.c
+===================================================================
+--- branches/SAMBA_3_0_RELEASE/source/smbd/reply.c	2007-05-09 11:51:39 UTC (rev 22769)
++++ branches/SAMBA_3_0_RELEASE/source/smbd/reply.c	2007-05-09 16:26:43 UTC (rev 22770)
+@@ -2237,6 +2237,7 @@
+ 			exit_server_cleanly("send_file_readbraw sendfile failed");
+ 		}
+ 
++		return;
+ 	}
+ 
+   normal_readbraw:
+

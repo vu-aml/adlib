@@ -1,0 +1,113 @@
+From perl6-all-return-82274-ktwarwic=speedy.uwaterloo.ca@perl.org  Fri Jun 22 18:30:24 2007
+Return-Path: <perl6-all-return-82274-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l5MMUNL9009817
+	for <ktwarwic@flax9.uwaterloo.ca>; Fri, 22 Jun 2007 18:30:24 -0400
+Received: (qmail 27680 invoked by uid 514); 22 Jun 2007 20:43:40 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 27675 invoked from network); 22 Jun 2007 20:43:40 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-compiler-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-compiler
+List-Id: <perl6-compiler.perl.org>
+Delivered-To: mailing list perl6-compiler@perl.org
+Delivered-To: perl6-compiler@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+Date: Fri, 22 Jun 2007 15:43:18 -0500
+From: "Patrick R. Michaud" <pmichaud@pobox.com>
+To: perl6-compiler@perl.org
+Subject: Str autoincrement
+Message-ID: <20070622204317.GA17463@host.pmichaud.com>
+Mime-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+User-Agent: Mutt/1.4.2.1i
+X-AntiAbuse: This header was added to track abuse, please include it with any abuse report
+X-AntiAbuse: Primary Hostname - host.pmichaud.com
+X-AntiAbuse: Original Domain - perl.org
+X-AntiAbuse: Originator/Caller UID/GID - [32003 505] / [47 12]
+X-AntiAbuse: Sender Address Domain - host.pmichaud.com
+X-Source: 
+X-Source-Args: 
+X-Source-Dir: 
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+
+S03 says:
+
+   Increment of a Str (in a suitable container) works similarly 
+   to Perl 5 except that the final alphanumeric sequence in the 
+   string is incremented regardless of what comes before it.
+
+What does "final alphanumeric sequence" really mean here?
+Perl 5 does magic autoincrementing of non-empty strings that match
+the (perl5) pattern  /^[A-Za-z]*[0-9]*\z/ .  Does it continue to
+have a Perl 5'ish interpretation -- i.e., alphas followed by
+digits (non-empty match of /[A-Za-z]*[0-9]\z/), or is it really 
+any alphanumeric sequence ( /[A-Za-z0-9]+\z/ ) ?  And, of course,
+what about Unicode?
+
+The choices make for different results -- consider incrementing
+
+    Original      /[A-Za-z]*[0-9]*\z/       /[A-Za-z0-9]*\z/
+    '123zzz'         '123aaaa'                 '124aaa'
+    '4z99'           '4aa00'                   '5a00'
+
+Any clues here?
+
+I'm also assuming that a string that doesn't have a final
+alphanumeric sequence ends up performing a numeric increment,
+as Perl 5 does.
+
+For completeness:  Strings that matched the Perl 5 pattern
+do continue to work the same (under either interpretation of
+"final alphanumeric sequence"):
+
+    '12'  becomes '13'
+    '99'          '100'
+    'a0'          'a1'
+    'aa'          'ab'
+    'az'          'ba'
+    'Aa'          'Ab'
+    'Az'          'ba'
+    'zz'          'aaa'
+    'Zz'          'AAz'
+
+Allowing magic autoincrement to work on any final alphanumeric
+sequence also means that we get things like:
+
+    '123Any' becomes '123Anz'
+    '@34'            '@35'
+    '@99'            '@100'
+    'x.54'           'x.55'
+    'x.99'           'x.100'
+    '0.27'           '0.28'
+    '0.99'           '0.100'    # not '1.00'
+    '0x99'           '0y00'     # not '0x9a' or '0x100' 
+    '0d99'           '0e00'
+
+Any comments or suggestions for interpreting S03 here are
+greatly appreciated.  :-)  If this gets into detailed
+design issues, we may need to move the subject to
+perl6-language for interpretation.
+
+And, of course, tests for the above are welcome.  Currently
+there are some tests for string autoincrement in t/operators/auto.t
+(there may be others I haven't found yet).
+
+Thanks!
+
+Pm
+

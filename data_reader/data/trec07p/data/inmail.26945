@@ -1,0 +1,142 @@
+From r-help-bounces@stat.math.ethz.ch  Wed May  2 10:27:03 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l42ER1b9023068
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 2 May 2007 10:27:02 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l42EQ7Lf021353;
+	Wed, 2 May 2007 16:26:25 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: **
+X-Spam-Status: No, score=2.9 required=5.0 tests=AWL, BAYES_50, EMAIL_ROT13,
+	OBSCURED_EMAIL, SARE_URI_EQUALS autolearn=no version=3.1.8
+Received: from mail.udec.cl (mail.udec.cl [152.74.16.12])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l42EP6l1020989
+	for <r-help@stat.math.ethz.ch>; Wed, 2 May 2007 16:25:09 +0200
+Received: (qmail 28085 invoked from network); 2 May 2007 14:25:05 -0000
+Received: from unknown (HELO [152.74.101.234]) ([152.74.101.234])
+	(envelope-sender <rroa@udec.cl>)
+	by mail.udec.cl (qmail-ldap-1.03) with SMTP
+	for <lhodgson@postoffice.utas.edu.au>; 2 May 2007 14:25:05 -0000
+Message-ID: <46389F38.2040406@udec.cl>
+Date: Wed, 02 May 2007 10:24:56 -0400
+From: =?windows-1252?Q?Rub=E9n_Roa?= <rroa@udec.cl>
+User-Agent: Thunderbird 1.5.0.10 (Windows/20070221)
+MIME-Version: 1.0
+To: Kate Stark <lhodgson@postoffice.utas.edu.au>
+References: <200705020137.l421bMJX011553@corinna.its.utas.edu.au>
+In-Reply-To: <200705020137.l421bMJX011553@corinna.its.utas.edu.au>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] ED50 from logistic model with interactions
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="windows-1252"
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+Content-Transfer-Encoding: 8bit
+X-MIME-Autoconverted: from quoted-printable to 8bit by flax9.uwaterloo.ca id l42ER1b9023068
+
+Kate Stark wrote:
+> Hi,
+>
+> I was wondering if someone could please help me. I am doing a logistic
+> regression to compare size at maturity between 3 seasons. My model is:
+>
+> fit <- glm(Mature ~ Season * Size - 1, family = binomial, data=dat)
+>
+> where Mature is a binary response, 0 for immature, 1 for mature. There
+> are 3 Seasons.
+>
+> The Season * Size interaction is significant. I would like to compare the 
+> size at 50% maturity between Seasons, which I have calculated as:
+>
+> Mat50_S1 <- -fit$coef[1]/fit$coef[4]
+> Mat50_S2 <- -fit$coef[2]/(fit$coef[4] + fit$coef[5])
+> Mat50_S3 <- -fit$coef[3]/(fit$coef[4] + fit$coef[6])
+>
+> But I am not sure how to calculate the standard error around each of
+> these estimates. The p.dose function from the MASS package does this
+> automatically, but it doesn’t seem to allow interaction terms.
+>
+> In Faraway(2006) he has an example using the delta method to calculate
+> the StdErr, but again without any interactions. I can apply this for the
+> first Season, as there is just one intercept and one slope coefficient,
+> but for the other 2 Seasons, the slope is a combination of the Size
+> coefficient and the Size*Season coefficient, and I am not sure how to use 
+> the covariance matrix in the delta calculation.
+>
+> I could divide the data and do 3 different logistic regressions, one for
+> each season, but while the Mat50 (i.e. mean Size at 50% maturity) is the
+> same as that calculated by the separate lines regression, Im not sure how 
+> this may change the StdErr?
+>
+> Regards,
+>
+> Kate
+>   
+Hi,
+Maybe you can re-parameterize the logistic model in such a way that the 
+size at 50% maturity for each season are explicit parameters in the 
+model, so the support function is maximized for those arguments and you 
+get the standard errors directly. For example, the following code 
+estimate the size at 50% maturity when the only predictor variable is 
+size. I guess you can use it to generalize to the case of an additional 
+factor such as season. I wrote this code as a translation from ADMB to R 
+so it is rather detailed (it uses nlm for maximization). count is real 
+data from a squid population and size (l) is in cm. Note in prop.ini, 
+prop.est, and prop.fit the reparameterization that introduces the size 
+at 50% maturity directly (along with the size at 95% maturity).
+Rubén Roa-Ureta
+
+l<-sort(c(8:33,8:33))
+mat<-rep.int(x=c(0,1),times=26)
+imat<-rep.int(x=c(1,0),times=26)
+count<-c(2,0,3,0,3,0,6,0,7,0,9,0,6,0,3,0,6,0,2,0,4,0,1,0,4,1,2,1,2,0,1,2,1,1,2,0,1,2,2,2,0,0,1,1,0,0,0,0,0,0,0,1)
+l.plot<-8:33
+contot<-vector(mode="numeric",length=26)
+prop.obs<-vector(mode="numeric",length=26)
+for (i in 1:26) {
+countot[i]<-count[i*2-1]+count[i*2]
+ifelse(countot[i]>0,prop.obs[i]<-count[i*2]/countot[i],NA)
+}
+l_50=25
+l_95=35
+prop.ini<-1/(1+exp((log(1/19))*((l.plot-l_50)/(l_95-l_50))))
+plot(l.plot,prop.obs)
+lines(l.plot,prop.ini)
+fn<-function(p){
+prop.est<-1/(1+exp(log(1/19)*(l-p[1])/(p[2]-p[1])));
+iprop.est<-1-prop.est;
+negloglik<--sum(count*(mat*log(prop.est)+imat*log(iprop.est)));
+}
+prop.lik<-nlm(fn,p=c(25.8,33.9),hessian=TRUE)
+prop.lik
+L_50<-prop.lik$estimate[1]
+L_95<-prop.lik$estimate[2]
+prop.covmat<-solve(prop.lik$hessian)
+seL_50<-sqrt(prop.covmat[1,1])
+seL_95<-sqrt(prop.covmat[2,2])
+covL_50_95<-prop.covmat[1,2]
+prop.fit<-1/(1+exp((log(1/19))*((l_plot-L_50)/(L_95-L_50))))
+plot(l.plot,prop.obs,pch=19,xlab="Length (cm)",ylab="Proportion Mature")
+lines(l.plot,prop.fit)
+text(x=12.5,y=0.9,expression(paste("p(l)=",frac(1,1+e^frac(ln(1/19)(l-l[50]),(l[95]-l[50]))))))
+text(x=12.5,y=0.7,expression(paste(hat(l)[50],"=25.8")))
+text(x=12.5,y=0.55,expression(paste(hat(l)[95],"=34.0")))
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

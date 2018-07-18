@@ -1,0 +1,135 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Jun  8 06:54:29 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l58AsShB014237
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 8 Jun 2007 06:54:28 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 43D29162C2C
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri,  8 Jun 2007 10:54:22 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1004)
+	id 7BD8C162AD9; Fri,  8 Jun 2007 10:53:47 +0000 (GMT)
+To: samba-cvs@samba.org
+From: gd@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070608105347.7BD8C162AD9@lists.samba.org>
+Date: Fri,  8 Jun 2007 10:53:47 +0000 (GMT)
+Subject: svn commit: samba r23385 - in
+	branches/SAMBA_4_0/source/torture/rpc: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: gd
+Date: 2007-06-08 10:53:47 +0000 (Fri, 08 Jun 2007)
+New Revision: 23385
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23385
+
+Log:
+Adding netr_DsRGetForestTrustInformation() test to query transitive forest
+trusts as well as our primary domain.
+
+Guenther
+
+Modified:
+   branches/SAMBA_4_0/source/torture/rpc/netlogon.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/torture/rpc/netlogon.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/rpc/netlogon.c	2007-06-08 10:49:46 UTC (rev 23384)
++++ branches/SAMBA_4_0/source/torture/rpc/netlogon.c	2007-06-08 10:53:47 UTC (rev 23385)
+@@ -1141,7 +1141,36 @@
+ 	return ret;
+ }
+ 
++static BOOL test_netr_DsRGetForestTrustInformation(struct dcerpc_pipe *p, TALLOC_CTX *mem_ctx, const char *trusted_domain_name) 
++{
++	NTSTATUS status;
++	struct netr_DsRGetForestTrustInformation r;
++	BOOL ret = True;
++	struct lsa_ForestTrustInformation info, *info_ptr;
+ 
++	if (lp_parm_bool(-1, "torture", "samba4", False)) {
++		printf("skipping DsRGetForestTrustInformation test against Samba4\n");
++		return True;
++	}
++
++	info_ptr = &info;
++
++	r.in.server_name = talloc_asprintf(mem_ctx, "\\\\%s", dcerpc_server_name(p));
++	r.in.trusted_domain_name = trusted_domain_name;
++	r.in.flags = 0;
++	r.out.forest_trust_info = &info_ptr;
++
++	printf("Testing netr_DsRGetForestTrustInformation\n");
++
++	status = dcerpc_netr_DsRGetForestTrustInformation(p, mem_ctx, &r);
++	if (!NT_STATUS_IS_OK(status) || !W_ERROR_IS_OK(r.out.result)) {
++		printf("netr_DsRGetForestTrustInformation - %s/%s\n", 
++		       nt_errstr(status), win_errstr(r.out.result));
++		ret = False;
++	}
++	return ret;
++}
++
+ /*
+   try a netlogon netr_DsrEnumerateDomainTrusts
+ */
+@@ -1149,6 +1178,7 @@
+ {
+ 	NTSTATUS status;
+ 	struct netr_DsrEnumerateDomainTrusts r;
++	int i;
+ 
+ 	r.in.server_name = talloc_asprintf(mem_ctx, "\\\\%s", dcerpc_server_name(p));
+ 	r.in.trust_flags = 0x3f;
+@@ -1162,6 +1192,28 @@
+ 		return False;
+ 	}
+ 
++	/* when trusted_domain_name is NULL, netr_DsRGetForestTrustInformation
++	 * will show non-forest trusts and all UPN suffixes of the own forest
++	 * as LSA_FOREST_TRUST_TOP_LEVEL_NAME types */
++
++	if (r.out.count) {
++		if (!test_netr_DsRGetForestTrustInformation(p, mem_ctx, NULL)) {
++			return False;
++		}
++	}
++
++	for (i=0; i<r.out.count; i++) {
++
++		/* get info for transitive forest trusts */
++
++		if (r.out.trusts[i].trust_attributes & NETR_TRUST_ATTRIBUTE_FOREST_TRANSITIVE) {
++			if (!test_netr_DsRGetForestTrustInformation(p, mem_ctx, 
++								    r.out.trusts[i].dns_name)) {
++				return False;
++			}
++		}
++	}
++
+ 	return True;
+ }
+ 
+

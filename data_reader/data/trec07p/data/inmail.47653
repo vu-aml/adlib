@@ -1,0 +1,162 @@
+From r-help-bounces@stat.math.ethz.ch  Thu May 31 09:21:55 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4VDLshB028229
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 31 May 2007 09:21:55 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4VDKg9T022475;
+	Thu, 31 May 2007 15:21:19 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=5.0 tests=AWL, BAYES_50,
+	DKIM_POLICY_SIGNSOME autolearn=no version=3.2.0
+Received: from postrelay-1.pdf.com (postrelay-1.pdf.com [209.128.81.152])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4VDDqTG018893
+	(version=TLSv1/SSLv3 cipher=DHE-RSA-AES256-SHA bits=256 verify=NO)
+	for <r-help@stat.math.ethz.ch>; Thu, 31 May 2007 15:13:55 +0200
+Received: from postbox.pdf.com (postbox.pdf.com [10.10.8.7])
+	by postrelay-1.pdf.com (Switch-3.2.5/Switch-3.2.5) with ESMTP id
+	l4VDClO5029277; Thu, 31 May 2007 06:12:47 -0700
+Received: from malt.pdf.com (malt.pdf.com [10.10.8.80])
+	by postbox.pdf.com (Switch-3.2.6/Switch-3.2.6) with ESMTP id
+	l4VDDmd1027351
+	(version=TLSv1/SSLv3 cipher=DHE-RSA-AES256-SHA bits=256 verify=NO);
+	Thu, 31 May 2007 06:13:49 -0700
+Received: from [10.2.8.84] ([10.2.8.166])
+	by malt.pdf.com (8.12.11/8.12.11) with ESMTP id l4VDDmtc029237;
+	Thu, 31 May 2007 06:13:48 -0700
+Message-ID: <465ECA14.5030407@pdf.com>
+Date: Thu, 31 May 2007 06:13:56 -0700
+From: Sundar Dorai-Raj <sundar.dorai-raj@pdf.com>
+Organization: PDF Solutions, Inc.
+User-Agent: Thunderbird 1.5.0.10 (Windows/20070221)
+MIME-Version: 1.0
+To: Vladimir Eremeev <wl2776@gmail.com>
+References: <465DF258.7000503@pdf.com> <10892459.post@talk.nabble.com>
+In-Reply-To: <10892459.post@talk.nabble.com>
+X-Spam: Internal
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] determining a parent function name
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+Hi, Vladimir,
+
+In general, this won't work since traceback only contains the stack from 
+the last uncaught error (see ?traceback). When traceback is called below 
+it would be from the previous error, not the current one.
+
+error <- function() {
+   parent <- tail(capture.output(traceback()), n = 1)
+   parent <- sub("^.*:[ ]+", "", parent)
+   stop(parent)
+}
+foo <- function() error()
+bar <- function() error()
+
+ > foo()
+Error in error() : No traceback available
+ > bar()
+Error in error() : foo()
+
+Thanks,
+
+--sundar
+
+Vladimir Eremeev said the following on 5/31/2007 4:57 AM:
+> Does
+>   tail(capture.output(traceback()),n=1)
+> do what you want?
+> 
+> that is 
+> 
+> error <- function(...) {
+>    msg <- paste(..., sep = "")
+>    if(!length(msg)) msg <- ""
+>    if(require(tcltk, quiet = TRUE)) {
+>      tt <- tktoplevel()
+>      tkwm.title(tt, "Error")
+>      tkmsg <- tktext(tt, bg = "white")
+> 
+>      parent<-tail(capture.output(traceback()),n=1)
+>      parent<-gsub("[0-9]: ","",parent) # deleting 1: from the captured
+> string
+> 
+>      tkinsert(tkmsg, "end", sprintf("Error in %s: %s", parent , msg))
+>      tkconfigure(tkmsg, state = "disabled", font = "Tahoma 12",
+>                  width = 50, height = 3)
+>      tkpack(tkmsg, side = "bottom", fill = "y")
+>    }
+>    stop(msg)
+> }
+> 
+> 
+> Sundar Dorai-Raj wrote:
+>> Hi, All,
+>>
+>> I'm writing a wrapper for stop that produces a popup window using tcltk. 
+>> Something like:
+>>
+>> error <- function(...) {
+>>    msg <- paste(..., sep = "")
+>>    if(!length(msg)) msg <- ""
+>>    if(require(tcltk, quiet = TRUE)) {
+>>      tt <- tktoplevel()
+>>      tkwm.title(tt, "Error")
+>>      tkmsg <- tktext(tt, bg = "white")
+>>      tkinsert(tkmsg, "end", sprintf("Error in %s: %s", "???", msg))
+>>      tkconfigure(tkmsg, state = "disabled", font = "Tahoma 12",
+>>                  width = 50, height = 3)
+>>      tkpack(tkmsg, side = "bottom", fill = "y")
+>>    }
+>>    stop(msg)
+>> }
+>>
+>> But, I would like to know from which function error() is called. For 
+>> example, if I have
+>>
+>> foo <- function() stop()
+>> bar <- function() error()
+>>  > foo()
+>> Error in foo() :
+>>  > bar()
+>> Error in error() :
+>>
+>> and in the tk window I get
+>>
+>> Error in ???:
+>>
+>> I need the output of bar (in the tk window only) to be
+>>
+>> Error in bar():
+>>
+>> then it's clear where error is called. I'm not worried about the output 
+>> bar() produces on the console.
+>>
+>> Hope this makes sense.
+>>
+>> Thanks,
+>>
+>>
+>
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

@@ -1,0 +1,160 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Jul  3 20:42:34 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l640gYL9003579
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 3 Jul 2007 20:42:34 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id D88F3162C40
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed,  4 Jul 2007 00:42:29 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.4 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL,UPPERCASE_25_50 autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 540)
+	id 34D09162AEF; Wed,  4 Jul 2007 00:41:59 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jerry@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070704004159.34D09162AEF@lists.samba.org>
+Date: Wed,  4 Jul 2007 00:41:59 +0000 (GMT)
+Subject: svn commit: samba r23694 - in branches: SAMBA_3_0/source
+	SAMBA_3_0_26/source
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: jerry
+Date: 2007-07-04 00:41:58 +0000 (Wed, 04 Jul 2007)
+New Revision: 23694
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23694
+
+Log:
+Make sure that when builddir != srcdir, we can still find the exports 
+files and library-versions file.  
+
+Also move the "-o $@" from the individual targets and into the SHLD_DSO 
+command.
+
+
+Modified:
+   branches/SAMBA_3_0/source/Makefile.in
+   branches/SAMBA_3_0_26/source/Makefile.in
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/Makefile.in
+===================================================================
+--- branches/SAMBA_3_0/source/Makefile.in	2007-07-04 00:34:16 UTC (rev 23693)
++++ branches/SAMBA_3_0/source/Makefile.in	2007-07-04 00:41:58 UTC (rev 23694)
+@@ -22,10 +22,10 @@
+ SHLD=@SHLD@
+ 
+ ## Dynamic shared libraries build settings
+-DSO_EXPORTS_CMD=-Wl,--version-script,exports/`basename $@ | sed 's/@SHLIBEXT@$$/syms/'`
++DSO_EXPORTS_CMD=-Wl,--version-script,$(srcdir)/exports/`basename $@ | sed 's/@SHLIBEXT@$$/syms/'`
+ DSO_EXPORTS=@DSO_EXPORTS@
+-SONAME_VER=`grep ^$@ $(srcdir)/library-versions | cut -d: -f2`
+-SHLD_DSO = $(SHLD) $(LDSHFLAGS) $(DSO_EXPORTS) 
++SONAME_VER=`grep ^$@ $(builddir)/library-versions | cut -d: -f2`
++SHLD_DSO = $(SHLD) $(LDSHFLAGS) $(DSO_EXPORTS) -o $@
+ 
+ # Add $(DEVELOPER_CFLAGS) to $(CFLAGS) to enable extra compiler
+ # (GCC) warnings. This is done automtically for --enable-developer
+@@ -1352,7 +1352,7 @@
+ 
+ bin/libaddns.@SHLIBEXT@: $(BINARY_PREREQS) $(LIBADDNS_OBJ)
+ 	@echo Linking libaddns shared library $@
+-	@$(SHLD_DSO) -o $@ $(LIBADDNS_OBJ) $(LDFLAGS) $(LIBS) \
++	@$(SHLD_DSO) $(LIBADDNS_OBJ) $(LDFLAGS) $(LIBS) \
+ 		$(KRB5LIBS) $(UUID_LIBS)\
+ 		@SONAMEFLAG@`basename $@`.$(SONAME_VER)
+ 
+@@ -1362,7 +1362,7 @@
+ 
+ bin/libsmbclient.@SHLIBEXT@: $(BINARY_PREREQS) $(LIBSMBCLIENT_OBJ)
+ 	@echo Linking libsmbclient shared library $@
+-	@$(SHLD_DSO) -o $@ $(LIBSMBCLIENT_OBJ) $(LDFLAGS) $(LIBS) \
++	@$(SHLD_DSO) $(LIBSMBCLIENT_OBJ) $(LDFLAGS) $(LIBS) \
+ 		$(KRB5LIBS) $(LDAP_LIBS) $(NSCD_LIBS) \
+ 		@SONAMEFLAG@`basename $@`.$(SONAME_VER)
+ 
+@@ -1372,7 +1372,7 @@
+ 
+ bin/libsmbsharemodes.@SHLIBEXT@: $(BINARY_PREREQS) $(LIBSMBSHAREMODES_OBJ)
+ 	@echo Linking libsmbsharemodes shared library $@
+-	@$(SHLD_DSO) -o $@ $(LIBSMBSHAREMODES_OBJ) $(LDFLAGS) $(LIBS) \
++	@$(SHLD_DSO) $(LIBSMBSHAREMODES_OBJ) $(LDFLAGS) $(LIBS) \
+ 		$(KRB5LIBS) $(LDAP_LIBS) \
+ 		@SONAMEFLAG@`basename $@`.$(SONAME_VER)
+ 
+@@ -1382,7 +1382,7 @@
+ 
+ bin/libmsrpc.@SHLIBEXT@: $(BINARY_PREREQS) $(CAC_OBJ)
+ 	@echo Linking libmsrpc shared library $@
+-	@$(SHLD_DSO) -o $@ $(CAC_OBJ) $(LDFLAGS) $(LIBS) \
++	@$(SHLD_DSO) $(CAC_OBJ) $(LDFLAGS) $(LIBS) \
+ 		@SONAMEFLAG@`basename $@`.$(SONAME_VER)
+ 
+ bin/libmsrpc.a: $(BINARY_PREREQS) $(CAC_OBJ)
+
+Modified: branches/SAMBA_3_0_26/source/Makefile.in
+===================================================================
+--- branches/SAMBA_3_0_26/source/Makefile.in	2007-07-04 00:34:16 UTC (rev 23693)
++++ branches/SAMBA_3_0_26/source/Makefile.in	2007-07-04 00:41:58 UTC (rev 23694)
+@@ -22,10 +22,10 @@
+ SHLD=@SHLD@
+ 
+ ## Dynamic shared libraries build settings
+-DSO_EXPORTS_CMD=-Wl,--version-script,exports/`basename $@ | sed 's/@SHLIBEXT@$$/syms/'`
++DSO_EXPORTS_CMD=-Wl,--version-script,$(srcdir)/exports/`basename $@ | sed 's/@SHLIBEXT@$$/syms/'`
+ DSO_EXPORTS=@DSO_EXPORTS@
+-SONAME_VER=`grep ^$@ $(srcdir)/library-versions | cut -d: -f2`
+-SHLD_DSO = $(SHLD) $(LDSHFLAGS) $(DSO_EXPORTS) 
++SONAME_VER=`grep ^$@ $(builddir)/library-versions | cut -d: -f2`
++SHLD_DSO = $(SHLD) $(LDSHFLAGS) $(DSO_EXPORTS) -o $@
+ 
+ # Add $(DEVELOPER_CFLAGS) to $(CFLAGS) to enable extra compiler
+ # (GCC) warnings. This is done automtically for --enable-developer
+@@ -1310,7 +1310,7 @@
+ 
+ bin/libaddns.@SHLIBEXT@: $(BINARY_PREREQS) $(LIBADDNS_OBJ)
+ 	@echo Linking libaddns shared library $@
+-	@$(SHLD_DSO) -o $@ $(LIBADDNS_OBJ) $(LDFLAGS) $(LIBS) \
++	@$(SHLD_DSO) $(LIBADDNS_OBJ) $(LDFLAGS) $(LIBS) \
+ 		$(KRB5LIBS) $(UUID_LIBS)\
+ 		@SONAMEFLAG@`basename $@`.$(SONAME_VER)
+ 
+@@ -1320,7 +1320,7 @@
+ 
+ bin/libsmbclient.@SHLIBEXT@: $(BINARY_PREREQS) $(LIBSMBCLIENT_OBJ)
+ 	@echo Linking libsmbclient shared library $@
+-	@$(SHLD_DSO) -o $@ $(LIBSMBCLIENT_OBJ) $(LDFLAGS) $(LIBS) \
++	@$(SHLD_DSO) $(LIBSMBCLIENT_OBJ) $(LDFLAGS) $(LIBS) \
+ 		$(KRB5LIBS) $(LDAP_LIBS) $(NSCD_LIBS) \
+ 		@SONAMEFLAG@`basename $@`.$(SONAME_VER)
+ 
+@@ -1330,7 +1330,7 @@
+ 
+ bin/libsmbsharemodes.@SHLIBEXT@: $(BINARY_PREREQS) $(LIBSMBSHAREMODES_OBJ)
+ 	@echo Linking libsmbsharemodes shared library $@
+-	@$(SHLD_DSO) -o $@ $(LIBSMBSHAREMODES_OBJ) $(LDFLAGS) $(LIBS) \
++	@$(SHLD_DSO) $(LIBSMBSHAREMODES_OBJ) $(LDFLAGS) $(LIBS) \
+ 		$(KRB5LIBS) $(LDAP_LIBS) \
+ 		@SONAMEFLAG@`basename $@`.$(SONAME_VER)
+ 
+

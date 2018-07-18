@@ -1,0 +1,145 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Apr 10 17:15:53 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3ALFq0I002089
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 10 Apr 2007 17:15:52 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id AEFB8162C3C
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 10 Apr 2007 21:15:29 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.2 required=3.8 tests=AWL,BAYES_20,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 540)
+	id 6CC97162AD0; Tue, 10 Apr 2007 21:14:46 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jerry@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070410211446.6CC97162AD0@lists.samba.org>
+Date: Tue, 10 Apr 2007 21:14:46 +0000 (GMT)
+Subject: svn commit: samba r22158 - in branches: SAMBA_3_0/source/nsswitch
+	SAMBA_3_0_25/source/nsswitch
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 3252
+Lines: 102
+
+Author: jerry
+Date: 2007-04-10 21:14:44 +0000 (Tue, 10 Apr 2007)
+New Revision: 22158
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22158
+
+Log:
+BUG 4501 (partial): Fix a crash caused by not using the 
+nss_info_{rfc2307,sfu} plugin with idmap_ad.
+
+
+Modified:
+   branches/SAMBA_3_0/source/nsswitch/idmap_ad.c
+   branches/SAMBA_3_0_25/source/nsswitch/idmap_ad.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/nsswitch/idmap_ad.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/idmap_ad.c	2007-04-10 20:35:30 UTC (rev 22157)
++++ branches/SAMBA_3_0/source/nsswitch/idmap_ad.c	2007-04-10 21:14:44 UTC (rev 22158)
+@@ -164,14 +164,10 @@
+ {
+ 	struct idmap_ad_context *ctx;
+ 	char *config_option;
+-	const char *range;
++	const char *range = NULL;
++	const char *schema_mode = NULL;	
+ 	ADS_STRUCT *ads;
+ 
+-	/* verify AD is reachable (not critical, we may just be offline at start) */
+-	if ( (ads = ad_idmap_cached_connection()) == NULL ) {
+-		DEBUG(1, ("WARNING: Could not init an AD connection! Mapping might not work.\n"));
+-	}
+-
+ 	if ( (ctx = talloc_zero(dom, struct idmap_ad_context)) == NULL ) {
+ 		DEBUG(0, ("Out of memory!\n"));
+ 		return NT_STATUS_NO_MEMORY;
+@@ -194,6 +190,20 @@
+ 		}
+ 	}
+ 
++	/* schema mode */
++	if ( ad_map_type == WB_POSIX_MAP_UNKNOWN )
++		ad_map_type = WB_POSIX_MAP_RFC2307;
++	schema_mode = lp_parm_const_string(-1, config_option, "schema_mode", NULL);
++	if ( schema_mode && schema_mode[0] ) {
++		if ( strequal(schema_mode, "sfu") )
++			ad_map_type = WB_POSIX_MAP_SFU;
++		else if ( strequal(schema_mode, "rfc2307" ) )
++			ad_map_type = WB_POSIX_MAP_RFC2307;
++		else
++			DEBUG(0,("idmap_ad_initialize: Unknown schema_mode (%s)\n",
++				 schema_mode));
++	}
++
+ 	dom->private_data = ctx;
+ 
+ 	talloc_free(config_option);
+
+Modified: branches/SAMBA_3_0_25/source/nsswitch/idmap_ad.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/nsswitch/idmap_ad.c	2007-04-10 20:35:30 UTC (rev 22157)
++++ branches/SAMBA_3_0_25/source/nsswitch/idmap_ad.c	2007-04-10 21:14:44 UTC (rev 22158)
+@@ -164,14 +164,10 @@
+ {
+ 	struct idmap_ad_context *ctx;
+ 	char *config_option;
+-	const char *range;
++	const char *range = NULL;
++	const char *schema_mode = NULL;	
+ 	ADS_STRUCT *ads;
+ 
+-	/* verify AD is reachable (not critical, we may just be offline at start) */
+-	if ( (ads = ad_idmap_cached_connection()) == NULL ) {
+-		DEBUG(1, ("WARNING: Could not init an AD connection! Mapping might not work.\n"));
+-	}
+-
+ 	if ( (ctx = talloc_zero(dom, struct idmap_ad_context)) == NULL ) {
+ 		DEBUG(0, ("Out of memory!\n"));
+ 		return NT_STATUS_NO_MEMORY;
+@@ -194,6 +190,20 @@
+ 		}
+ 	}
+ 
++	/* schema mode */
++	if ( ad_map_type == WB_POSIX_MAP_UNKNOWN )
++		ad_map_type = WB_POSIX_MAP_RFC2307;
++	schema_mode = lp_parm_const_string(-1, config_option, "schema_mode", NULL);
++	if ( schema_mode && schema_mode[0] ) {
++		if ( strequal(schema_mode, "sfu") )
++			ad_map_type = WB_POSIX_MAP_SFU;
++		else if ( strequal(schema_mode, "rfc2307" ) )
++			ad_map_type = WB_POSIX_MAP_RFC2307;
++		else
++			DEBUG(0,("idmap_ad_initialize: Unknown schema_mode (%s)\n",
++				 schema_mode));
++	}
++
+ 	dom->private_data = ctx;
+ 
+ 	talloc_free(config_option);
+

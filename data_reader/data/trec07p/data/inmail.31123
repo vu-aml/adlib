@@ -1,0 +1,119 @@
+From r-help-bounces@stat.math.ethz.ch  Tue May  8 02:32:46 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l486WjqD007624
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 8 May 2007 02:32:46 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l486VEiB005914;
+	Tue, 8 May 2007 08:31:36 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.6 required=5.0 tests=AWL,
+	BAYES_60 autolearn=no version=3.1.8
+Received: from an-out-0708.google.com (an-out-0708.google.com [209.85.132.251])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l486V7s3005850
+	for <r-help@stat.math.ethz.ch>; Tue, 8 May 2007 08:31:08 +0200
+Received: by an-out-0708.google.com with SMTP id c31so261147anc
+	for <r-help@stat.math.ethz.ch>; Mon, 07 May 2007 23:31:07 -0700 (PDT)
+Received: by 10.100.171.16 with SMTP id t16mr5487239ane.1178605867472;
+	Mon, 07 May 2007 23:31:07 -0700 (PDT)
+Received: by 10.100.198.8 with HTTP; Mon, 7 May 2007 23:31:07 -0700 (PDT)
+Message-ID: <f8e6ff050705072331r722bb55fobd91c45a38431999@mail.gmail.com>
+Date: Tue, 8 May 2007 08:31:07 +0200
+From: "hadley wickham" <h.wickham@gmail.com>
+To: "Bert Gunter" <gunter.berton@gene.com>
+In-Reply-To: <003d01c790c6$20f41560$4d908980@gne.windows.gene.com>
+MIME-Version: 1.0
+Content-Disposition: inline
+References: <f8e6ff050705070526o383ab841gb8f45285b1bcd74@mail.gmail.com>
+	<003d01c790c6$20f41560$4d908980@gne.windows.gene.com>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] Neural Nets (nnet) - evaluating success rate of predictions
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+On 5/7/07, Bert Gunter <gunter.berton@gene.com> wrote:
+> Folks:
+>
+> If I understand correctly, the following may be pertinent.
+>
+> Note that the procedure:
+>
+> min.nnet = nnet[k] such that error rate of nnet[k] = min[i] {error
+> rate(nnet(training data) from ith random start) }
+>
+> does not guarantee a classifier with a lower error rate on **new** data than
+> any single one of the random starts. That is because you are using the same
+> training set to choose the model (= nnet parameters) as you are using to
+> determine the error rate. I know it's tempting to think that choosing the
+> best among many random starts always gets you a better classifier, but it
+> need not. The error rate on the training set for any classifier -- be it a
+> single one or one derived in some way from many -- is a biased estimate of
+> the true error rate, so that choosing a classifer on this basis does not
+> assure better performance for future data. In particular, I would guess that
+> choosing the best among many (hundreds/thousands) random starts is probably
+> almost guaranteed to produce a poor predictor (ergo the importance of
+> parsimony/penalization).  I would appreciate comments from anyone, pro or
+> con, with knowledge and experience of these things, however, as I'm rather
+> limited on both.
+
+I agree - it's never a good idea to use the same data for creating
+your classifier and determining it's effectiveness (I meant to say
+"pick the one with the lowest error rate on your TEST data").
+
+The reason to choose from many random starts is that fitting a given
+neural network _model_ (ie. input x, n nodes, ...) is very hard due to
+the large overparameterisation of the problem space.  For example, the
+parameters for one node in a given layer can be exchanged with the
+parameters of another node (as well as the parameters that use those
+nodes in next layer), without changing the overall model.  This makes
+it very hard to optimise, and nnet in R often gets stuck in local
+minima.
+Looking at what individual nodes are doing, you often see examples
+where some nodes contribute nothing to the overall classification.
+The random starts aren't to find different models but to find the
+parameters for the given model that fits best.  And following this
+line of argument, you would probably want to use the internal
+criterion value, rather than some external measure of accuracy.
+
+> The simple answer to the question of obtaining the error rate using
+> validation data is: Do whatever you like to choose/fit a classifier on the
+> training set. **Once you are done,** the estimate of your error rate is the
+> error rate you get on applying that classifier to the validation set. But
+> you can do this only once! If you don't like that error rate and go back to
+> finding a a better predictor in some way, then your validation data have now
+> been used to derive the classifier and thus has become part of the training
+> data, so any further assessment of the error rate of a new classifier on it
+> is now also a biased estimate. You need yet new validation data for that.
+
+Understanding that that estimate is biased is important, but in
+practice, do people really care that much?  If you have looked at a
+single plot of your data and used that to inform your choice of the
+classifier your estimates will already be biased (but if you have used
+other knowledge of the data or subject area, you might expect them to
+be biased in a positive direction). Are the estimates of model really
+the most important thing?  Surely an understanding of the problem/data
+is what you are really trying to gain.
+
+Hadley
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

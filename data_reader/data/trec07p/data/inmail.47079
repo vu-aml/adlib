@@ -1,0 +1,90 @@
+From r-help-bounces@stat.math.ethz.ch  Wed May 30 14:46:37 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4UIkahB017363
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 30 May 2007 14:46:37 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4UIj0Gk007673;
+	Wed, 30 May 2007 20:45:23 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.6 required=5.0 tests=AWL, BAYES_50, DKIM_SIGNED,
+	DKIM_VERIFIED autolearn=no version=3.2.0
+Received: from ug-out-1314.google.com (ug-out-1314.google.com [66.249.92.175])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4UIiXrn007473
+	for <r-help@stat.math.ethz.ch>; Wed, 30 May 2007 20:44:35 +0200
+Received: by ug-out-1314.google.com with SMTP id 36so237206uga
+	for <r-help@stat.math.ethz.ch>; Wed, 30 May 2007 11:44:33 -0700 (PDT)
+Received: by 10.78.175.14 with SMTP id x14mr2336773hue.1180550673177;
+	Wed, 30 May 2007 11:44:33 -0700 (PDT)
+Received: by 10.78.196.2 with HTTP; Wed, 30 May 2007 11:44:33 -0700 (PDT)
+Message-ID: <9d3ef91d0705301144u4e99eca8hae45da3a14f4309e@mail.gmail.com>
+Date: Wed, 30 May 2007 20:44:33 +0200
+From: "Shiazy Fuzzy" <shiazy@gmail.com>
+To: r-help@stat.math.ethz.ch
+MIME-Version: 1.0
+Content-Disposition: inline
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Subject: [R] Empirical Complementary CDF
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+Hi all,
+
+I'd like to plot an empirical LLCD (log-log-CCDF, where CCDF == 1-CDF).
+It seems ecdf() and plot(ecdf()) can't do it. I'd like to reuse some
+graphics features of ECDF plot.
+The fastest way I've found is to copy&paste the ecdf code and writing
+this function:
+--- [R-code] ---
+eccdf <- function(x)
+{
+        x <- sort(x)
+        n <- length(x)
+        if (n < 1)
+                stop("'x' must have 1 or more non-missing values")
+        vals <- sort(unique(x))
+        rval <- approxfun(vals, 1-cumsum(tabulate(match(x, vals)))/n, #[CHANGED]
+        method = "constant", yleft = 1, yright = 0, f = 0, ties = "ordered")
+        class(rval) <- c("eccdf", "stepfun", class(rval)) #[CHANGED]
+        attr(rval, "call") <- sys.call()
+        rval
+}
+--- [/R-code] ---
+
+and the rewriting the plot.ecdf function:
+
+--- [R code] ---
+plot.eccdf <- function (x, ..., ylab = "1-Fn(x)", verticals = FALSE,
+col.01line = "gray70") #CHANGED
+{
+    plot.stepfun(x, ..., ylab = ylab, verticals = verticals)
+    abline(h = c(0, 1), col = col.01line, lty = 2)
+}
+--- [/R-code] ---
+
+So, is there a even faster way to get it?
+
+Thank you so much!!
+
+-- Marco
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

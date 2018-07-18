@@ -1,0 +1,162 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May  8 18:05:03 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l48M53qD020911
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 8 May 2007 18:05:03 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 9F4CB162C26
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue,  8 May 2007 22:05:01 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.4 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 615)
+	id 865B4162ACA; Tue,  8 May 2007 22:04:28 +0000 (GMT)
+To: samba-cvs@samba.org
+From: mimir@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070508220428.865B4162ACA@lists.samba.org>
+Date: Tue,  8 May 2007 22:04:28 +0000 (GMT)
+Subject: svn commit: samba r22763 - in branches/SAMBA_4_0/source/libnet: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: mimir
+Date: 2007-05-08 22:04:28 +0000 (Tue, 08 May 2007)
+New Revision: 22763
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22763
+
+Log:
+replace talloc_zero calls with composite_create and add more
+allocation checks.
+
+
+rafal
+
+
+Modified:
+   branches/SAMBA_4_0/source/libnet/userinfo.c
+   branches/SAMBA_4_0/source/libnet/userman.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/libnet/userinfo.c
+===================================================================
+--- branches/SAMBA_4_0/source/libnet/userinfo.c	2007-05-08 21:17:58 UTC (rev 22762)
++++ branches/SAMBA_4_0/source/libnet/userinfo.c	2007-05-08 22:04:28 UTC (rev 22763)
+@@ -262,24 +262,22 @@
+ 
+ 	if (!p || !io) return NULL;
+ 	
+-	c = talloc_zero(p, struct composite_context);
+-	if (c == NULL) goto failure;
++	c = composite_create(p, dcerpc_event_context(p));
++	if (c == NULL) return c;
+ 	
+ 	s = talloc_zero(c, struct userinfo_state);
+-	if (s == NULL) goto failure;
++	if (composite_nomem(s, c)) return c;
+ 
++	c->private_data = s;
++
+ 	s->level         = io->in.level;
+ 	s->pipe          = p;
+ 	s->domain_handle = io->in.domain_handle;
+ 	s->monitor_fn    = monitor;
+ 
+-	c->state        = COMPOSITE_STATE_IN_PROGRESS;
+-	c->private_data = s;
+-	c->event_ctx    = dcerpc_event_context(p);
+-
+ 	if (io->in.sid) {
+ 		sid = dom_sid_parse_talloc(s, io->in.sid);
+-		if (sid == NULL) goto failure;	
++		if (composite_nomem(sid, c)) return c;
+ 
+ 		s->openuser.in.domain_handle  = &s->domain_handle;
+ 		s->openuser.in.access_mask    = SEC_FLAG_MAXIMUM_ALLOWED;
+@@ -288,7 +286,7 @@
+ 		
+ 		/* send request */
+ 		s->req = dcerpc_samr_OpenUser_send(p, c, &s->openuser);
+-		if (s->req == NULL) goto failure;
++		if (composite_nomem(s->req, c)) return c;
+ 		
+ 		s->stage = USERINFO_OPENUSER;
+ 
+@@ -303,7 +301,7 @@
+ 		
+ 		/* send request */
+ 		s->req = dcerpc_samr_LookupNames_send(p, c, &s->lookup);
+-		if (s->req == NULL) goto failure;
++		if (composite_nomem(s->req, c)) return c;
+ 		
+ 		s->stage = USERINFO_LOOKUP;
+ 	}
+@@ -313,10 +311,6 @@
+ 	s->req->async.private = c;
+ 
+ 	return c;
+-	
+-failure:
+-	talloc_free(c);
+-	return NULL;
+ }
+ 
+ 
+
+Modified: branches/SAMBA_4_0/source/libnet/userman.c
+===================================================================
+--- branches/SAMBA_4_0/source/libnet/userman.c	2007-05-08 21:17:58 UTC (rev 22762)
++++ branches/SAMBA_4_0/source/libnet/userman.c	2007-05-08 22:04:28 UTC (rev 22763)
+@@ -127,16 +127,16 @@
+ 	struct composite_context *c;
+ 	struct useradd_state *s;
+ 
++	if (!p || !io) return NULL;
++
+ 	/* composite allocation and setup */
+-	c = talloc_zero(p, struct composite_context);
++	c = composite_create(p, dcerpc_event_context(p));
+ 	if (c == NULL) return NULL;
+ 	
+ 	s = talloc_zero(c, struct useradd_state);
+ 	if (composite_nomem(s, c)) return c;
+ 	
+-	c->state        = COMPOSITE_STATE_IN_PROGRESS;
+ 	c->private_data = s;
+-	c->event_ctx    = dcerpc_event_context(p);
+ 
+ 	/* put passed arguments to the state structure */
+ 	s->domain_handle = io->in.domain_handle;
+@@ -145,8 +145,13 @@
+ 	
+ 	/* preparing parameters to send rpc request */
+ 	s->createuser.in.domain_handle         = &io->in.domain_handle;
++
+ 	s->createuser.in.account_name          = talloc_zero(c, struct lsa_String);
++	if (composite_nomem(s->createuser.in.account_name, c)) return c;
++
+ 	s->createuser.in.account_name->string  = talloc_strdup(c, io->in.username);
++	if (composite_nomem(s->createuser.in.account_name->string, c)) return c;
++
+ 	s->createuser.out.user_handle          = &s->user_handle;
+ 	s->createuser.out.rid                  = &s->user_rid;
+ 
+

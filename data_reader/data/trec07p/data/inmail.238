@@ -1,0 +1,119 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun Apr  8 19:56:30 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l38NuU0I007065
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 8 Apr 2007 19:56:30 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id C956A162C4B
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun,  8 Apr 2007 23:56:07 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.9 required=3.8 tests=AWL,BAYES_40,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 539)
+	id 94A3C162AD1; Sun,  8 Apr 2007 23:55:02 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jelmer@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070408235502.94A3C162AD1@lists.samba.org>
+Date: Sun,  8 Apr 2007 23:55:02 +0000 (GMT)
+Subject: svn commit: samba r22133 - in branches/SAMBA_4_0: .
+	source/script/tests
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2302
+Lines: 76
+
+Author: jelmer
+Date: 2007-04-08 23:55:01 +0000 (Sun, 08 Apr 2007)
+New Revision: 22133
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22133
+
+Log:
+Don't push parameters into environment until necessary.
+Modified:
+   branches/SAMBA_4_0/
+   branches/SAMBA_4_0/source/script/tests/selftest.pl
+
+
+Changeset:
+
+Property changes on: branches/SAMBA_4_0
+___________________________________________________________________
+Name: bzr:merge
+...skipped...
+
+Modified: branches/SAMBA_4_0/source/script/tests/selftest.pl
+===================================================================
+--- branches/SAMBA_4_0/source/script/tests/selftest.pl	2007-04-08 19:41:47 UTC (rev 22132)
++++ branches/SAMBA_4_0/source/script/tests/selftest.pl	2007-04-08 23:55:01 UTC (rev 22133)
+@@ -366,7 +366,6 @@
+ 
+ $prefix =~ s+//+/+;
+ $ENV{PREFIX} = $prefix;
+-
+ $ENV{SRCDIR} = $srcdir;
+ 
+ my $tls_enabled = not $opt_quick;
+@@ -384,8 +383,6 @@
+ $ENV{PKG_CONFIG_PATH} = "$old_pwd/bin/pkgconfig:$ENV{PKG_CONFIG_PATH}";
+ $ENV{PATH} = "$old_pwd/bin:$ENV{PATH}";
+ 
+-my @torture_options = ();
+-
+ if ($opt_socket_wrapper_pcap) {
+ 	SocketWrapper::setup_pcap($opt_socket_wrapper_pcap);
+ 	# Socket wrapper pcap implies socket wrapper
+@@ -435,7 +432,7 @@
+ SocketWrapper::set_default_iface(6);
+ 
+ foreach ("PASSWORD", "DOMAIN", "SERVER", "CONFIGURATION", 
+-	      "USERNAME", "PREFIX", "NETBIOSNAME", "KRB5_CONFIG", "PIDDIR") {
++	      "USERNAME", "NETBIOSNAME") {
+ 	$ENV{$_} = $testenv_vars->{$_};
+ }
+ 
+@@ -446,6 +443,7 @@
+ 						 "127.0.0.10/8",
+ 						 "127.0.0.11/8"));
+ 
++my @torture_options = ();
+ push (@torture_options, "--option=interfaces=$interfaces");
+ push (@torture_options, $testenv_vars->{CONFIGURATION});
+ # ensure any one smbtorture call doesn't run too long
+@@ -490,14 +488,16 @@
+ # The Kerberos tests fail if this variable is set.
+ delete $ENV{DOMAIN};
+ 
++$ENV{KRB5_CONFIG} = $testenv_vars->{KRB5_CONFIG};
++
+ if ($opt_testenv) {
++	$ENV{PIDDIR} = $testenv_vars->{PIDDIR};
+ 	my $term = ($ENV{TERM} or "xterm");
+ 	system("$term -e 'echo -e \"Welcome to the Samba4 Test environment
+ This matches the client environment used in make test
+ smbd is pid `cat \$PIDDIR/smbd.pid`
+ 
+ Some useful environment variables:
+-AUTH=\$AUTH
+ TORTURE_OPTIONS=\$TORTURE_OPTIONS
+ CONFIGURATION=\$CONFIGURATION
+ SERVER=\$SERVER
+

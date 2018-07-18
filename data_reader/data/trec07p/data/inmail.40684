@@ -1,0 +1,144 @@
+From sugar-bounces@laptop.org  Mon May 21 07:20:20 2007
+Return-Path: <sugar-bounces@laptop.org>
+Received: from pedal.laptop.org (pedal.laptop.org [18.85.2.148])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4LBKJqD030638
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 21 May 2007 07:20:19 -0400
+Received: from pedal.laptop.org (localhost [127.0.0.1])
+	by pedal.laptop.org (Postfix) with ESMTP id 783444EF33;
+	Mon, 21 May 2007 07:19:40 -0400 (EDT)
+X-Original-To: sugar@laptop.org
+Delivered-To: sugar@laptop.org
+Received: from spam.laptop.org (spam.laptop.org [18.85.46.23])
+	by pedal.laptop.org (Postfix) with ESMTP id B20F94EF33
+	for <sugar@laptop.org>; Mon, 21 May 2007 07:19:39 -0400 (EDT)
+X-ASG-Debug-ID: 1179746413-6df200040000-3Xmyjt
+X-Barracuda-URL: http://18.85.46.23:8000/cgi-bin/mark.cgi
+X-Barracuda-Connect: dhansak.collabora.co.uk[195.10.223.134]
+X-Barracuda-Start-Time: 1179746413
+X-Barracuda-Encrypted: DHE-RSA-AES256-SHA
+Received: from dhansak.collabora.co.uk (dhansak.collabora.co.uk
+	[195.10.223.134])
+	(using TLSv1 with cipher DHE-RSA-AES256-SHA (256/256 bits))
+	(No client certificate requested)
+	by spam.laptop.org (Spam Firewall) with ESMTP id 479E5D41C
+	for <sugar@laptop.org>; Mon, 21 May 2007 07:20:14 -0400 (EDT)
+Received: by dhansak.collabora.co.uk (Postfix, from userid 1014)
+	id 196C63090A11; Mon, 21 May 2007 12:20:13 +0100 (BST)
+Date: Mon, 21 May 2007 12:20:07 +0100
+From: Simon McVittie <simon.mcvittie@collabora.co.uk>
+To: sugar@laptop.org
+X-ASG-Orig-Subj: [PATCH] services/presence: buddy: add mapping to/from
+	Telepathy handles
+Message-ID: <20070521112007.GA15377@celebrin.pseudorandom.co.uk>
+Mail-Followup-To: sugar@laptop.org
+MIME-Version: 1.0
+Content-Disposition: inline
+User-Agent: Mutt/1.5.13 (2006-08-11)
+X-Barracuda-Bayes: INNOCENT GLOBAL 0.0000 1.0000 -2.0210
+X-Barracuda-Virus-Scanned: by Barracuda Spam Firewall at laptop.org
+X-Barracuda-Spam-Score: -2.02
+X-Barracuda-Spam-Status: No, SCORE=-2.02 using global scores of TAG_LEVEL=3.5
+	QUARANTINE_LEVEL=1000.0 KILL_LEVEL=5.5 tests=
+X-Barracuda-Spam-Report: Code version 3.1, rules version 3.1.17585
+	Rule breakdown below
+	pts rule name              description
+	---- ----------------------
+	--------------------------------------------------
+Subject: [sugar] [PATCH] services/presence: buddy: add mapping to/from
+	Telepathy handles
+X-BeenThere: sugar@laptop.org
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Discussion of OLPC design,
+	desktop platform and user experience" <sugar.laptop.org>
+List-Unsubscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=unsubscribe>
+List-Archive: <http://mailman.laptop.org/pipermail/sugar>
+List-Post: <mailto:sugar@laptop.org>
+List-Help: <mailto:sugar-request@laptop.org?subject=help>
+List-Subscribe: <http://mailman.laptop.org/mailman/listinfo/sugar>,
+	<mailto:sugar-request@laptop.org?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: sugar-bounces@laptop.org
+Errors-To: sugar-bounces@laptop.org
+
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA1
+
+- ---
+ services/presence/buddy.py |   38 ++++++++++++++++++++++++++++++++++++++
+ 1 files changed, 38 insertions(+), 0 deletions(-)
+
+diff --git a/services/presence/buddy.py b/services/presence/buddy.py
+index 53999e8..ab397ef 100644
+- --- a/services/presence/buddy.py
++++ b/services/presence/buddy.py
+@@ -236,6 +236,28 @@ class Buddy(ExportedGObject):
+             full set of properties, just the changes.
+         """
+ 
++    @dbus.service.signal(_BUDDY_INTERFACE, signature='sou')
++    def TelepathyHandleAdded(self, tp_conn_name, tp_conn_path, handle):
++        """Another Telepathy handle has become associated with the buddy.
++
++        This must only be emitted for non-channel-specific handles.
++
++        tp_conn_name -- The bus name at which the Telepathy connection may be
++            found
++        tp_conn_path -- The object path at which the Telepathy connection may
++            be found
++        handle -- The handle of type CONTACT, which is not channel-specific,
++            newly associated with the buddy
++        """
++
++    @dbus.service.signal(_BUDDY_INTERFACE, signature='sou')
++    def TelepathyHandleRemoved(self, tp_conn_name, tp_conn_path, handle):
++        """A Telepathy handle has ceased to be associated with the buddy,
++        probably because that contact went offline.
++
++        The parameters are the same as for TelepathyHandleAdded.
++        """
++
+     # dbus methods
+     @dbus.service.method(_BUDDY_INTERFACE,
+                         in_signature="", out_signature="ay")
+@@ -294,6 +316,22 @@ class Buddy(ExportedGObject):
+             props[_PROP_CURACT] = ""
+         return props
+ 
++    @dbus.service.method(_BUDDY_INTERFACE,
++                         in_signature='', out_signature='a(sou)')
++    def GetTelepathyHandles(self):
++        """Return a list of non-channel-specific Telepathy contact handles
++        associated with this Buddy.
++
++        :Returns:
++            An array of triples (connection well-known bus name, connection
++            object path, handle).
++        """
++        ret = []
++        for plugin in self.handles:
++            conn = plugin.get_connection()
++            ret.append((str(conn.service_name), conn.object_path,
++                        self.handles[plugin]))
++
+     # methods
+     def object_path(self):
+         """Retrieve our dbus.ObjectPath object"""
+- -- 
+1.5.2-rc3.GIT
+
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.6 (GNU/Linux)
+Comment: OpenPGP key: http://www.pseudorandom.co.uk/2003/contact/ or pgp.net
+
+iD8DBQFGUYBnWSc8zVUw7HYRAjzLAJ9tGJwOybMRFgPxzRPHf/bxMxgvgACfRZai
+mrDbiRdLbT5/Sst0u1ruqPw=
+=sLDo
+-----END PGP SIGNATURE-----
+_______________________________________________
+Sugar mailing list
+Sugar@laptop.org
+http://mailman.laptop.org/mailman/listinfo/sugar
+

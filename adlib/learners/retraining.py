@@ -23,31 +23,29 @@ Concept:
 
 
 class Retraining(Learner):
-    def __init__(self, base_model=None, training_instances=None, attacker=None,
-                 params: Dict = None):
+    def __init__(self, base_model=None, training_instances=None, attack_alg=None):
         Learner.__init__(self)
         self.model = Model(base_model)
-        # self.attack_alg = None  # Type: class
-        # self.adv_params = None
-        self.attacker = attacker  # Type: Adversary
+        self.attack_alg = attack_alg  # Type: class
+        self.adv_params = None
+        self.attacker = None  # Type: Adversary
         self.set_training_instances(training_instances)
-        self.iteration_times = 5  # int: control the number of rounds directly
-        # self.set_params(params)
+        self.iterations = 5  # int: control the number of rounds directly
 
     def set_params(self, params: Dict):
-        # if 'attack_alg' in params.keys():
-        #    self.attack_alg = params['attack_alg']
+        if 'attack_alg' in params.keys():
+            self.attack_alg = params['attack_alg']
         if 'attacker' in params.keys():
             self.attacker = params['attacker']
-        # if params['adv_params'] is not None:
-        #   self.adv_params = params['adv_params']
-        if 'iteration_times' in params.keys() and 'iteration_times' is not None:
-            self.iteration_times = params['iteration_times']
+        if params['adv_params'] is not None:
+            self.adv_params = params['adv_params']
+        if 'iterations' in params.keys() and 'iterations' is not None:
+            self.iterations = params['iterations']
 
     def get_available_params(self) -> Dict:
         params = {'attacker': self.attacker,
-                  'attack_params': self.adv_params,
-                  'iteration_times': self.iteration_times}
+                  'adv_params': self.adv_params,
+                  'iterations': self.iterations}
         return params
 
     def train(self):
@@ -59,17 +57,15 @@ class Retraining(Learner):
         :return: None
         '''
         self.model.train(self.training_instances)
-        iteration = self.iteration_times
-        # self.attacker = self.attack_alg()
-        # self.attacker.set_params(self.adv_params)
-        # self.attacker.set_adversarial_params(self.model, self.training_instances)
-
-        print("==> Training...")
+        iteration = self.iterations
+        self.attacker = self.attack_alg()
+        self.attacker.set_params(self.adv_params)
+        self.attacker.set_adversarial_params(self.model, self.training_instances)
         malicious_instances = [x for x in self.training_instances if
                                self.model.predict(x) == 1]
         augmented_instances = self.training_instances
-
         while iteration != 0:
+            print('iteration: {}'.format(iteration))
             new = []
             transformed_instances = self.attacker.attack(malicious_instances)
             for instance in transformed_instances:
@@ -103,7 +99,8 @@ class Retraining(Learner):
         return self.model.predict_proba(instances)
 
     def get_weight(self):
-        return self.model.learner.coef_[0]
+        print("weight shape in retraining: {}".format(self.model.learner.coef_[0].T.shape))
+        return self.model.learner.coef_[0].T
 
     def get_constant(self):
         return self.model.learner.intercept_

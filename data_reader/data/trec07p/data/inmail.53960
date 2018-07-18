@@ -1,0 +1,122 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Jun  8 10:29:45 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l58ETjhB016417
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 8 Jun 2007 10:29:45 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id BE452163960
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri,  8 Jun 2007 14:29:38 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.3 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1017)
+	id 53D12163895; Fri,  8 Jun 2007 14:29:31 +0000 (GMT)
+To: samba-cvs@samba.org
+From: obnox@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070608142931.53D12163895@lists.samba.org>
+Date: Fri,  8 Jun 2007 14:29:31 +0000 (GMT)
+Subject: svn commit: samba r23388 - in
+	branches/SAMBA_3_0_26/source/registry: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: obnox
+Date: 2007-06-08 14:29:30 +0000 (Fri, 08 Jun 2007)
+New Revision: 23388
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23388
+
+Log:
+Start merging the newer registry code.
+
+I found some checkins that apply almost seamlessly: 
+r19837, r19838, r19839
+There is not much flesh to these. - Inteded do reduce 
+the diff for subsequent merges.
+
+* reformat some long lines 
+* in regdb_store_keys(), delete value record too when deleting 
+  old keys, otherwise the old values will pop up again when
+  re-creating the key.
+
+Michael
+
+
+Modified:
+   branches/SAMBA_3_0_26/source/registry/reg_db.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0_26/source/registry/reg_db.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/registry/reg_db.c	2007-06-08 12:32:13 UTC (rev 23387)
++++ branches/SAMBA_3_0_26/source/registry/reg_db.c	2007-06-08 14:29:30 UTC (rev 23388)
+@@ -396,7 +396,8 @@
+ 	REGSUBKEY_CTR *subkeys, *old_subkeys;
+ 	char *oldkeyname;
+ 	
+-	/* fetch a list of the old subkeys so we can determine if any were deleted */
++	/* fetch a list of the old subkeys so we can determine if any were
++	 * deleted */
+ 	
+ 	if ( !(old_subkeys = TALLOC_ZERO_P( ctr, REGSUBKEY_CTR )) ) {
+ 		DEBUG(0,("regdb_store_keys: talloc() failure!\n"));
+@@ -408,7 +409,8 @@
+ 	/* store the subkey list for the parent */
+ 	
+ 	if ( !regdb_store_keys_internal( key, ctr ) ) {
+-		DEBUG(0,("regdb_store_keys: Failed to store new subkey list for parent [%s}\n", key ));
++		DEBUG(0,("regdb_store_keys: Failed to store new subkey list "
++			 "for parent [%s]\n", key ));
+ 		return False;
+ 	}
+ 	
+@@ -421,6 +423,10 @@
+ 			pstr_sprintf( path, "%s%c%s", key, '/', oldkeyname );
+ 			normalize_reg_path( path );
+ 			tdb_delete_bystring( tdb_reg, path );
++			pstr_sprintf( path, "%s/%s/%s", VALUE_PREFIX, key,
++				      oldkeyname );
++			normalize_reg_path( path );
++			tdb_delete_bystring( tdb_reg, path );
+ 		}
+ 	}
+ 
+@@ -430,7 +436,8 @@
+ 	
+ 	num_subkeys = regsubkey_ctr_numkeys( ctr );
+ 	for ( i=0; i<num_subkeys; i++ ) {
+-		pstr_sprintf( path, "%s%c%s", key, '/', regsubkey_ctr_specific_key( ctr, i ) );
++		pstr_sprintf( path, "%s%c%s", key, '/',
++			      regsubkey_ctr_specific_key( ctr, i ) );
+ 
+ 		if ( !(subkeys = TALLOC_ZERO_P( ctr, REGSUBKEY_CTR )) ) {
+ 			DEBUG(0,("regdb_store_keys: talloc() failure!\n"));
+@@ -440,7 +447,8 @@
+ 		if ( regdb_fetch_keys( path, subkeys ) == -1 ) {
+ 			/* create a record with 0 subkeys */
+ 			if ( !regdb_store_keys_internal( path, subkeys ) ) {
+-				DEBUG(0,("regdb_store_keys: Failed to store new record for key [%s}\n", path ));
++				DEBUG(0,("regdb_store_keys: Failed to store "
++					 "new record for key [%s]\n", path ));
+ 				TALLOC_FREE( subkeys );
+ 				return False;
+ 			}
+

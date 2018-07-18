@@ -1,0 +1,86 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May  1 21:15:58 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l421Fvb9015543
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 1 May 2007 21:15:57 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 631AB162BE2
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 30 Apr 2007 20:54:44 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.3 required=3.8 tests=AWL,BAYES_40,
+	RCVD_IN_BLARS_RBL,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from cassoulet.panasas.com (gw-e.panasas.com [65.194.124.178])
+	by lists.samba.org (Postfix) with ESMTP id 41888162ADB
+	for <samba-technical@lists.samba.org>;
+	Mon, 30 Apr 2007 20:54:15 +0000 (GMT)
+Received: from laguna.int.panasas.com (localhost.localdomain [127.0.0.1])
+	by cassoulet.panasas.com (8.13.1/8.13.1) with ESMTP id l3UKsCop028074
+	for <samba-technical@lists.samba.org>; Mon, 30 Apr 2007 16:54:14 -0400
+Received: from 172.17.132.41 ([172.17.132.41] helo=laguna.int.panasas.com)
+	by ASSP-nospam; 30 Apr 2007 16:54:12 -0400
+Received: from [172.17.132.117] ([172.17.132.117]) by laguna.int.panasas.com
+	with Microsoft SMTPSVC(6.0.3790.1830); 
+	Mon, 30 Apr 2007 13:54:11 -0700
+Message-ID: <46365773.6070002@panasas.com>
+Date: Mon, 30 Apr 2007 13:54:11 -0700
+From: Herb Lewis <hlewis@panasas.com>
+User-Agent: Mozilla/5.0 (X11; U; Linux i686; en-US;
+	rv:1.7.13) Gecko/20060501 Fedora/1.7.13-1.1.fc4
+X-Accept-Language: en-us, en
+MIME-Version: 1.0
+To: samba tech <samba-technical@lists.samba.org>
+Content-Type: text/plain; charset=us-ascii; format=flowed
+Content-Transfer-Encoding: 7bit
+X-OriginalArrivalTime: 30 Apr 2007 20:54:11.0911 (UTC)
+	FILETIME=[B47A9D70:01C78B69]
+Subject: question about netsamlogon_cache_get
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+we have the following code in this function ifdef'ed out.  I don't know
+if it is this or something else causing my problem. If you login as a
+user that is a member of several groups and then have a file that is
+accessable through only one of those groups, access is granted as
+expected. If you now remove the user from that group and logout and
+log back in, access is still granted because of the entry in
+netsamlogon_cache.tdb. It seems that access will get denied about
+20 minutes later so something else is refreshing the group membership
+but I'm not sure what. Any ideas where we need to fix this?
+
+#if 0   /* The netsamlogon cache needs to hang around.  Something about
+            this feels wrong, but it is the only way we can get all of the
+            groups.  The old universal groups cache didn't expire either.
+            --jerry */
+         {
+                 time_t          now = time(NULL);
+                 uint32          time_diff;
+
+                 /* is the entry expired? */
+                 time_diff = now - t;
+
+                 if ( (time_diff < 0 ) || (time_diff > 
+lp_winbind_cache_time()) ) {
+                         DEBUG(10,("netsamlogon_cache_get: cache entry 
+expired \n"));
+                         tdb_delete( netsamlogon_tdb, key );
+                         SAFE_FREE( user );
+                 }
+#endif
+
+

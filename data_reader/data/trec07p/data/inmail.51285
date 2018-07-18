@@ -1,0 +1,222 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Jun  5 03:58:28 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l557wRhB005725
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 5 Jun 2007 03:58:27 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id B18DA162C3B
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue,  5 Jun 2007 07:58:21 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id C0E1E162ADA; Tue,  5 Jun 2007 07:57:37 +0000 (GMT)
+Date: Tue, 05 Jun 2007 17:43:20 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070605075737.C0E1E162ADA@lists.samba.org>
+Subject: Rev 469: first step in health monitoring of cluster nodes. When not
+	healthy they will be marked disabled in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 469
+revision-id: tridge@samba.org-20070605074319-o4w21cijnl57gh4v
+parent: tridge@samba.org-20070605051837-j5h7se616o7a7zbz
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Tue 2007-06-05 17:43:19 +1000
+message:
+  first step in health monitoring of cluster nodes. When not healthy they will be marked disabled
+modified:
+  common/ctdb.c                  ctdb.c-20061127094323-t50f58d65iaao5of-2
+  common/ctdb_client.c           ctdb_client.c-20070411010216-3kd8v37k61steeya-1
+  common/ctdb_recoverd.c         recoverd.c-20070503213540-bvxuyd9jm1f7ig90-1
+  common/ctdb_traverse.c         ctdb_traverse.c-20070503021550-ztfs5rwx8jfm8qqx-1
+  common/ctdb_tunables.c         ctdb_tunables.c-20070604095258-4m34d7cm1qa7yos9-1
+  config/events.d/50.samba       samba-20070601105340-vlcvnp6euoj3zdwy-3
+  include/ctdb_private.h         ctdb_private.h-20061117234101-o3qt14umlg9en8z0-13
+  takeover/ctdb_takeover.c       ctdb_takeover.c-20070525071636-a5n1ihghjtppy08r-2
+  tools/ctdb_control.c           ctdb_control.c-20070426122705-9ehj1l5lu2gn9kuj-1
+=== modified file 'common/ctdb.c'
+--- a/common/ctdb.c	2007-06-04 10:22:44 +0000
++++ b/common/ctdb.c	2007-06-05 07:43:19 +0000
+@@ -222,14 +222,16 @@
+ }
+ 
+ /*
+-  return the number of connected nodes
++  return the number of enabled nodes
+ */
+-uint32_t ctdb_get_num_connected_nodes(struct ctdb_context *ctdb)
++uint32_t ctdb_get_num_enabled_nodes(struct ctdb_context *ctdb)
+ {
+ 	int i;
+ 	uint32_t count=0;
+ 	for (i=0;i<ctdb->vnn_map->size;i++) {
+-		if (ctdb->nodes[ctdb->vnn_map->map[i]]->flags & NODE_FLAGS_CONNECTED) {
++		struct ctdb_node *node = ctdb->nodes[ctdb->vnn_map->map[i]];
++		if ((node->flags & NODE_FLAGS_CONNECTED) &&
++		    !(node->flags & NODE_FLAGS_DISABLED)) {
+ 			count++;
+ 		}
+ 	}
+
+=== modified file 'common/ctdb_client.c'
+--- a/common/ctdb_client.c	2007-06-04 11:11:51 +0000
++++ b/common/ctdb_client.c	2007-06-05 07:43:19 +0000
+@@ -1364,7 +1364,7 @@
+ 	ctdb_db->db_id = *(uint32_t *)data.dptr;
+ 	talloc_free(data.dptr);
+ 
+-	ret = ctdb_ctrl_getdbpath(ctdb, timeval_current_ofs(1, 0), CTDB_CURRENT_NODE, ctdb_db->db_id, ctdb_db, &ctdb_db->db_path);
++	ret = ctdb_ctrl_getdbpath(ctdb, timeval_current_ofs(2, 0), CTDB_CURRENT_NODE, ctdb_db->db_id, ctdb_db, &ctdb_db->db_path);
+ 	if (ret != 0) {
+ 		DEBUG(0,("Failed to get dbpath for database '%s'\n", name));
+ 		talloc_free(ctdb_db);
+
+=== modified file 'common/ctdb_recoverd.c'
+--- a/common/ctdb_recoverd.c	2007-06-04 10:22:44 +0000
++++ b/common/ctdb_recoverd.c	2007-06-05 07:43:19 +0000
+@@ -697,6 +697,8 @@
+ 			      "MonitorFrequency", &ctdb->tunable.monitor_frequency);
+ 	ctdb_ctrl_get_tunable(ctdb, CONTROL_TIMEOUT(), CTDB_CURRENT_NODE, 
+ 			      "ElectionTimeout", &ctdb->tunable.election_timeout);
++	ctdb_ctrl_get_tunable(ctdb, CONTROL_TIMEOUT(), CTDB_CURRENT_NODE, 
++			      "TakeoverTimeout", &ctdb->tunable.takeover_timeout);
+ 
+ 	vnn = ctdb_ctrl_getvnn(ctdb, CONTROL_TIMEOUT(), CTDB_CURRENT_NODE);
+ 	if (vnn == (uint32_t)-1) {
+
+=== modified file 'common/ctdb_traverse.c'
+--- a/common/ctdb_traverse.c	2007-06-04 07:46:37 +0000
++++ b/common/ctdb_traverse.c	2007-06-05 07:43:19 +0000
+@@ -372,7 +372,7 @@
+ 
+ 	if (key.dsize == 0 && data.dsize == 0) {
+ 		state->null_count++;
+-		if (state->null_count != ctdb_get_num_connected_nodes(ctdb)) {
++		if (state->null_count != ctdb_get_num_enabled_nodes(ctdb)) {
+ 			return 0;
+ 		}
+ 	}
+
+=== modified file 'common/ctdb_tunables.c'
+--- a/common/ctdb_tunables.c	2007-06-04 10:22:44 +0000
++++ b/common/ctdb_tunables.c	2007-06-05 07:43:19 +0000
+@@ -35,6 +35,7 @@
+ 	{ "RecoverTimeout",    5,  offsetof(struct ctdb_tunable, recover_timeout) },
+ 	{ "MonitorFrequency",  1,  offsetof(struct ctdb_tunable, monitor_frequency) },
+ 	{ "ElectionTimeout",   3,  offsetof(struct ctdb_tunable, election_timeout) },
++	{ "TakeoverTimeout",   5,  offsetof(struct ctdb_tunable, takeover_timeout) },
+ };
+ 
+ /*
+
+=== modified file 'config/events.d/50.samba'
+--- a/config/events.d/50.samba	2007-06-05 05:18:37 +0000
++++ b/config/events.d/50.samba	2007-06-05 07:43:19 +0000
+@@ -21,8 +21,10 @@
+ 	service smb stop > /dev/null 2>&1
+ 	service winbind stop > /dev/null 2>&1
+ 
+-	# start Samba service
+-	service smb start
++	# start Samba service. Start it reniced, as under very heavy load 
++	# the number of smbd processes will mean that it leaves few cycles for
++	# anything else
++	nice service smb start
+ 	service winbind start
+ 
+ 	# wait for the Samba tcp ports to become available
+
+=== modified file 'include/ctdb_private.h'
+--- a/include/ctdb_private.h	2007-06-04 12:13:59 +0000
++++ b/include/ctdb_private.h	2007-06-05 07:43:19 +0000
+@@ -50,6 +50,7 @@
+ 	uint32_t recover_timeout;
+ 	uint32_t monitor_frequency;
+ 	uint32_t election_timeout;
++	uint32_t takeover_timeout;
+ };
+ 
+ /*
+@@ -109,6 +110,7 @@
+ 	void *private_data; /* private to transport */
+ 	uint32_t vnn;
+ #define NODE_FLAGS_CONNECTED 0x00000001
++#define NODE_FLAGS_DISABLED  0x00000002
+ 	uint32_t flags;
+ 
+ 	/* used by the dead node monitoring */
+@@ -905,7 +907,7 @@
+ 
+ int ctdb_start_recoverd(struct ctdb_context *ctdb);
+ 
+-uint32_t ctdb_get_num_connected_nodes(struct ctdb_context *ctdb);
++uint32_t ctdb_get_num_enabled_nodes(struct ctdb_context *ctdb);
+ 
+ int ctdb_start_monitoring(struct ctdb_context *ctdb);
+ void ctdb_send_keepalive(struct ctdb_context *ctdb, uint32_t destnode);
+
+=== modified file 'takeover/ctdb_takeover.c'
+--- a/takeover/ctdb_takeover.c	2007-06-04 13:54:56 +0000
++++ b/takeover/ctdb_takeover.c	2007-06-05 07:43:19 +0000
+@@ -27,7 +27,7 @@
+ #include "../include/ctdb_private.h"
+ 
+ 
+-#define TAKEOVER_TIMEOUT() timeval_current_ofs(5,0)
++#define TAKEOVER_TIMEOUT() timeval_current_ofs(ctdb->tunable.takeover_timeout,0)
+ 
+ #define CTDB_ARP_INTERVAL 1
+ #define CTDB_ARP_REPEAT   3
+@@ -403,7 +403,8 @@
+ 
+ 	/* work out which node will look after each public IP */
+ 	for (i=0;i<nodemap->num;i++) {
+-		if (nodemap->nodes[i].flags & NODE_FLAGS_CONNECTED) {
++		if ((nodemap->nodes[i].flags & NODE_FLAGS_CONNECTED) && 
++		    !(nodemap->nodes[i].flags & NODE_FLAGS_DISABLED)) {
+ 			ctdb->nodes[i]->takeover_vnn = nodemap->nodes[i].vnn;
+ 		} else {
+ 			/* assign this dead nodes IP to the next higher node */
+@@ -411,6 +412,7 @@
+ 			     j != i;
+ 			     j=(j+1)%nodemap->num) {
+ 				if ((nodemap->nodes[j].flags & NODE_FLAGS_CONNECTED) &&
++				    !(nodemap->nodes[j].flags & NODE_FLAGS_DISABLED) &&
+ 				    ctdb_same_subnet(ctdb->nodes[j]->public_address, 
+ 						     ctdb->nodes[i]->public_address, 
+ 						     ctdb->nodes[j]->public_netmask_bits)) {
+
+=== modified file 'tools/ctdb_control.c'
+--- a/tools/ctdb_control.c	2007-06-04 11:11:51 +0000
++++ b/tools/ctdb_control.c	2007-06-05 07:43:19 +0000
+@@ -383,7 +383,7 @@
+ {
+ 	int ret;
+ 
+-	ret = ctdb_ctrl_shutdown(ctdb, timeval_current_ofs(1, 0), options.vnn);
++	ret = ctdb_ctrl_shutdown(ctdb, TIMELIMIT(), options.vnn);
+ 	if (ret != 0) {
+ 		printf("Unable to shutdown node %u\n", options.vnn);
+ 		return ret;
+

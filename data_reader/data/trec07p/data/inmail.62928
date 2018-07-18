@@ -1,0 +1,309 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Jun 22 00:10:25 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5M4APL9001162
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 22 Jun 2007 00:10:25 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id E8719162C53
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 22 Jun 2007 04:10:22 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.3 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 540)
+	id 99AF9162AD2; Fri, 22 Jun 2007 04:09:39 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jerry@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070622040939.99AF9162AD2@lists.samba.org>
+Date: Fri, 22 Jun 2007 04:09:39 +0000 (GMT)
+Subject: svn commit: samba r23580 - in branches/SAMBA_3_0_RELEASE: .
+	source/client source/nsswitch
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: jerry
+Date: 2007-06-22 04:09:38 +0000 (Fri, 22 Jun 2007)
+New Revision: 23580
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23580
+
+Log:
+Merge bug fix for 4720 and Jeremy's winbindd_dual.c changes (still testing these)
+Modified:
+   branches/SAMBA_3_0_RELEASE/WHATSNEW.txt
+   branches/SAMBA_3_0_RELEASE/source/client/client.c
+   branches/SAMBA_3_0_RELEASE/source/nsswitch/winbindd_dual.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0_RELEASE/WHATSNEW.txt
+===================================================================
+--- branches/SAMBA_3_0_RELEASE/WHATSNEW.txt	2007-06-21 23:11:21 UTC (rev 23579)
++++ branches/SAMBA_3_0_RELEASE/WHATSNEW.txt	2007-06-22 04:09:38 UTC (rev 23580)
+@@ -55,6 +55,11 @@
+     * Add more netlogon GetDcName() client calls.
+ 
+ 
++o   SATOH Fumiyasu <fumiyas@osstech.co.jp>
++    * BUG 4720: Fix smbclient connections to share names containing 
++      multibyte characters.
++
++
+ o   Steve Langasek <vorlon@debian.org>
+     * Allow SIGTERM to cause nmbd to exit on awaiting an interface 
+       to come up.
+
+Modified: branches/SAMBA_3_0_RELEASE/source/client/client.c
+===================================================================
+--- branches/SAMBA_3_0_RELEASE/source/client/client.c	2007-06-21 23:11:21 UTC (rev 23579)
++++ branches/SAMBA_3_0_RELEASE/source/client/client.c	2007-06-22 04:09:38 UTC (rev 23580)
+@@ -3915,14 +3915,6 @@
+ 		/* if the service has not yet been specified lets see if it is available in the popt stack */
+ 		if (!service_opt && poptPeekArg(pc)) {
+ 			pstrcpy(service, poptGetArg(pc));
+-			/* Convert any '/' characters in the service name to '\' characters */
+-			string_replace(service, '/','\\');
+-
+-			if (count_chars(service,'\\') < 3) {
+-				d_printf("\n%s: Not enough '\\' characters in service\n",service);
+-				poptPrintUsage(pc, stderr, 0);
+-				exit(1);
+-			}
+ 			service_opt = True;
+ 		}
+ 
+@@ -4010,14 +4002,6 @@
+ 	/* if the service has not yet been specified lets see if it is available in the popt stack */
+ 	if (!service_opt && poptPeekArg(pc)) {
+ 		pstrcpy(service, poptGetArg(pc));
+-		/* Convert any '/' characters in the service name to '\' characters */
+-		string_replace(service, '/','\\');
+-
+-		if (count_chars(service,'\\') < 3) {
+-			d_printf("\n%s: Not enough '\\' characters in service\n",service);
+-			poptPrintUsage(pc, stderr, 0);
+-			exit(1);
+-		}
+ 		service_opt = True;
+ 	}
+ 
+@@ -4056,6 +4040,16 @@
+ 	}
+ 	
+ 	load_interfaces();
++
++	if (service_opt) {
++		/* Convert any '/' characters in the service name to '\' characters */
++		string_replace(service, '/','\\');
++		if (count_chars(service,'\\') < 3) {
++			d_printf("\n%s: Not enough '\\' characters in service\n",service);
++			poptPrintUsage(pc, stderr, 0);
++			exit(1);
++		}
++	}
+ 	
+ 	if ( strlen(new_workgroup) != 0 )
+ 		set_global_myworkgroup( new_workgroup );
+
+Modified: branches/SAMBA_3_0_RELEASE/source/nsswitch/winbindd_dual.c
+===================================================================
+--- branches/SAMBA_3_0_RELEASE/source/nsswitch/winbindd_dual.c	2007-06-21 23:11:21 UTC (rev 23579)
++++ branches/SAMBA_3_0_RELEASE/source/nsswitch/winbindd_dual.c	2007-06-22 04:09:38 UTC (rev 23580)
+@@ -97,6 +97,8 @@
+ 	struct winbindd_response *response;
+ 	void (*continuation)(void *private_data, BOOL success);
+ 	struct timed_event *reply_timeout_event;
++	pid_t child_pid; /* pid of the child we're waiting on. Used to detect
++			    a restart of the child (child->pid != child_pid). */
+ 	void *private_data;
+ };
+ 
+@@ -174,36 +176,51 @@
+ 	struct winbindd_async_request *state =
+ 		talloc_get_type_abort(private_data, struct winbindd_async_request);
+ 
++	DEBUG(0,("async_request_timeout_handler: child pid %u is not responding. "
++		"Closing connection to it.\n",
++		state->child_pid ));
++
+ 	/* Deal with the reply - set to error. */
+-
+ 	async_reply_recv(private_data, False);
++}
+ 
+-	DEBUG(0,("async_request_timeout_handler: child pid %u is not responding. "
+-		"Closing connection to it.\n",
+-		state->child->pid ));
++/**************************************************************
++ Common function called on both async send and recv fail.
++ Cleans up the child and schedules the next request.
++**************************************************************/
+ 
+-	/* Send kill signal to child. */
+-	kill(state->child->pid, SIGTERM);
++static void async_request_fail(struct winbindd_async_request *state)
++{
++	DLIST_REMOVE(state->child->requests, state);
+ 
+-	/* 
+-	 * Close the socket to the child.
+-	 */
++	TALLOC_FREE(state->reply_timeout_event);
+ 
+-	winbind_child_died(state->child->pid);
++	SMB_ASSERT(state->child_pid != (pid_t)0);
++
++	/* If not already reaped, send kill signal to child. */
++	if (state->child->pid == state->child_pid) {
++		kill(state->child_pid, SIGTERM);
++
++		/* 
++		 * Close the socket to the child.
++		 */
++		winbind_child_died(state->child_pid);
++	}
++
++	state->response->length = sizeof(struct winbindd_response);
++	state->response->result = WINBINDD_ERROR;
++	state->continuation(state->private_data, False);
+ }
+ 
+ static void async_request_sent(void *private_data_data, BOOL success)
+ {
+-	uint32_t timeout = 30;
+ 	struct winbindd_async_request *state =
+ 		talloc_get_type_abort(private_data_data, struct winbindd_async_request);
+ 
+ 	if (!success) {
+-		DEBUG(5, ("Could not send async request\n"));
+-
+-		state->response->length = sizeof(struct winbindd_response);
+-		state->response->result = WINBINDD_ERROR;
+-		state->continuation(state->private_data, False);
++		DEBUG(5, ("Could not send async request to child pid %u\n",
++			(unsigned int)state->child_pid ));
++		async_request_fail(state);
+ 		return;
+ 	}
+ 
+@@ -215,25 +232,14 @@
+ 			 async_reply_recv, state);
+ 
+ 	/* 
+-	 * Normal timeouts are 30s, but auth requests may take a long
+-	 * time to timeout.
+-	 */
+-
+-	if (state->request->cmd == WINBINDD_PAM_AUTH ||
+-			state->request->cmd == WINBINDD_PAM_AUTH_CRAP ) {
+-
+-		timeout = 300;
+-	}
+-
+-	/* 
+-	 * Set up a timeout of 30 seconds for the response.
++	 * Set up a timeout of 300 seconds for the response.
+ 	 * If we don't get it close the child socket and
+ 	 * report failure.
+ 	 */
+ 
+ 	state->reply_timeout_event = event_add_timed(winbind_event_context(),
+ 							NULL,
+-							timeval_current_ofs(timeout,0),
++							timeval_current_ofs(300,0),
+ 							"async_request_timeout",
+ 							async_request_timeout_handler,
+ 							state);
+@@ -248,27 +254,23 @@
+ 		talloc_get_type_abort(private_data, struct winbindd_async_request);
+ 	struct winbindd_child *child = state->child;
+ 
+-	if (state->reply_timeout_event) {
+-		TALLOC_FREE(state->reply_timeout_event);
+-	}
++	TALLOC_FREE(state->reply_timeout_event);
+ 
+ 	state->response->length = sizeof(struct winbindd_response);
+ 
+ 	if (!success) {
+-		DEBUG(5, ("Could not receive async reply\n"));
++		DEBUG(5, ("Could not receive async reply from child pid %u\n",
++			(unsigned int)state->child_pid ));
+ 
+-		cache_cleanup_response(child->pid);
+-		DLIST_REMOVE(child->requests, state);
+-
+-		state->response->result = WINBINDD_ERROR;
+-		state->continuation(state->private_data, False);
++		cache_cleanup_response(state->child_pid);
++		async_request_fail(state);
+ 		return;
+ 	}
+ 
+-	SMB_ASSERT(cache_retrieve_response(child->pid,
++	SMB_ASSERT(cache_retrieve_response(state->child_pid,
+ 					   state->response));
+ 
+-	cache_cleanup_response(child->pid);
++	cache_cleanup_response(state->child_pid);
+ 	
+ 	DLIST_REMOVE(child->requests, state);
+ 
+@@ -303,6 +305,9 @@
+ 		return;
+ 	}
+ 
++	/* Now we know who we're sending to - remember the pid. */
++	request->child_pid = child->pid;
++
+ 	setup_async_write(&child->event, request->request,
+ 			  sizeof(*request->request),
+ 			  async_main_request_sent, request);
+@@ -517,7 +522,7 @@
+ 	}
+ 
+ 	if (child == NULL) {
+-		DEBUG(0, ("Unknown child %d died!\n", pid));
++		DEBUG(5, ("Already reaped child %u died\n", (unsigned int)pid));
+ 		return;
+ 	}
+ 
+@@ -713,9 +718,7 @@
+ 
+ 	DEBUG(10,("account_lockout_policy_handler called\n"));
+ 
+-	if (child->lockout_policy_event) {
+-		TALLOC_FREE(child->lockout_policy_event);
+-	}
++	TALLOC_FREE(child->lockout_policy_event);
+ 
+ 	methods = child->domain->methods;
+ 
+@@ -962,9 +965,7 @@
+ 
+ 	for (domain = domain_list(); domain; domain = domain->next) {
+ 		if (domain != child->domain) {
+-			if (domain->check_online_event) {
+-				TALLOC_FREE(domain->check_online_event);
+-			}
++			TALLOC_FREE(domain->check_online_event);
+ 		}
+ 	}
+ 
+

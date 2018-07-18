@@ -1,0 +1,175 @@
+From r-help-bounces@stat.math.ethz.ch  Fri May  4 04:00:31 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4480UqD012758
+	for <ktwarwic@flax9.uwaterloo.ca>; Fri, 4 May 2007 04:00:30 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l447xqEV027788;
+	Fri, 4 May 2007 10:00:06 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.8 required=5.0 tests=ALL_TRUSTED, AWL,
+	BAYES_05 autolearn=ham version=3.1.8
+Received: from lynne.ethz.ch (lynne [129.132.58.30])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l447xjxJ027736
+	(version=TLSv1/SSLv3 cipher=DHE-RSA-AES256-SHA bits=256 verify=NO);
+	Fri, 4 May 2007 09:59:45 +0200
+Received: (from maechler@localhost)
+	by lynne.ethz.ch (8.13.1/8.13.1/Submit) id l447ximU004716;
+	Fri, 4 May 2007 09:59:44 +0200
+From: Martin Maechler <maechler@stat.math.ethz.ch>
+MIME-Version: 1.0
+Message-ID: <17978.59376.131602.775210@stat.math.ethz.ch>
+Date: Fri, 4 May 2007 09:59:44 +0200
+To: "Tony Chiang" <tchiang@fhcrc.org>
+In-Reply-To: <52f663c40705031607x29414b9am9b625aeae2123351@mail.gmail.com>
+References: <52f663c40705031607x29414b9am9b625aeae2123351@mail.gmail.com>
+X-Mailer: VM 7.19 under Emacs 21.3.1
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch, Matrix-authors@R-project.org
+Subject: Re: [R] Issue with the Matrix package
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+Reply-To: Martin Maechler <maechler@stat.math.ethz.ch>
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+>>>>> "Tony" == Tony Chiang <tchiang@fhcrc.org>
+>>>>>     on Fri, 4 May 2007 00:07:04 +0100 writes:
+
+    Tony> Hi all,
+
+    Tony> I am wondering if this is a bug in the Matrix package
+    Tony> or if it something that I am just getting wrong...
+
+    Tony> here is an example: 
+    [..............]
+
+It's a bug.
+
+A shorter example - w/o dimnames - and showing what the semantic
+really is for traditional matrices :
+
+------------------------------------------------------------
+> a <- matrix(0,4,4); a[c(1,2,1), 2] <- 1:3; a
+     [,1] [,2] [,3] [,4]
+[1,]    0    3    0    0
+[2,]    0    2    0    0
+[3,]    0    0    0    0
+[4,]    0    0    0    0
+
+> A <- Matrix(0,4,4); A[c(1,2,1), 2] <- 1:3; A
+4 x 4 sparse Matrix of class "dgCMatrix"
+            
+[1,] . 4 . .
+[2,] . 2 . .
+[3,] . . . .
+[4,] . . . .
+------------------------------------------------------------
+
+so we see that multiple assignments are supposed to happen
+consecutively such that "the last wins".
+
+
+    Tony> The documentation reads:
+
+    Tony> " Most of the time, the function works via a traditional (_full_)
+    Tony> 'matrix'.  However, 'Matrix(0, nrow,ncol)' directly constructs an
+    Tony> "empty" sparseMatrix, as does 'Matrix(FALSE, *)'."
+
+    Tony> So is this when an exception comes,
+no
+
+    Tony> and if so can someone explain to me why we get the 2?
+    Tony> It would seem that it should just reassign the 1 to a
+    Tony> 1 not add the number of times it is assigning a 1.
+
+If you are interested: Things go via TsparseMatrix, i.e. the
+triplet representation.  and there the convention is the
+following: an index pair (i_0,j_0) can appear more than once. If
+it does it *means* that all the 'x' values are summed up.
+
+  ?dgTMatrix-class
+
+does explain that, too.
+
+Here's an example - using the auxiliary function I had posted a
+while ago on R-help:
+
+spMatrix <- function(nrow, ncol, i,j,x) {
+    ## Purpose: User friendly construction of sparse "Matrix" from triple
+    ## ----------------------------------------------------------------------
+    ## Arguments: (i,j,x): 2 integer and 1 numeric vector of the same length:
+    ##
+    ##	The matrix M will have
+    ##       M[i[k], j[k]] == x[k] , for k = 1,2,..., length(i)
+    ##    and M[ i', j' ]  ==  0  for `` all other pairs (i',j')
+    ## ----------------------------------------------------------------------
+    ## Author: Martin Maechler, Date:  8 Jan 2007, 18:46
+    dim <- c(as.integer(nrow), as.integer(ncol))
+    ## The conformability of (i,j,x) with itself and with 'dim'
+    ## will be checked automatically
+    ## by an internal "validObject()" which is part of new(.):
+    new("dgTMatrix", x = as.double(x), Dim = dim,
+        ## our "Tsparse" Matrices use  0-based indices :
+        i = as.integer(i - 1:1),
+        j = as.integer(j - 1:1))
+}
+
+and now uses this lower-level construction of Tsparse Matrices:
+
+> (A <- spMatrix(3,4, i= c(1:3, 1:2), j = c(2:4, 3:4), x = 1:5))
+3 x 4 sparse Matrix of class "dgTMatrix"
+            
+[1,] . 1 4 .
+[2,] . . 2 5
+[3,] . . . 3
+
+## ok
+
+> (B <- spMatrix(3,4, i= c(1:3, 1:2), j = c(2:4, 2:3), x = 1:5))
+3 x 4 sparse Matrix of class "dgTMatrix"
+            
+[1,] . 5 . .
+[2,] . . 7 .
+[3,] . . . 3
+
+## oops!
+
+> str(B)
+Formal class 'dgTMatrix' [package "Matrix"] with 6 slots
+  ..@ i       : int [1:5] 0 1 2 0 1
+  ..@ j       : int [1:5] 1 2 3 1 2
+  ..@ Dim     : int [1:2] 3 4
+  ..@ Dimnames:List of 2
+  .. ..$ : NULL
+  .. ..$ : NULL
+  ..@ x       : num [1:5] 1 2 3 4 5
+  ..@ factors : list()
+
+## which shows that you have 5 entries in B, with the "sum those
+## with equal index" convention mentioned above.
+
+
+Thank you for the report, Tony.
+This will be fixed in the next release of Matrix.
+
+Martin Maechler, ETH Zurich
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

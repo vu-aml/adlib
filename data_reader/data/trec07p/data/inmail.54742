@@ -1,0 +1,199 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat Jun  9 18:47:16 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l59MlGL9015200
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 9 Jun 2007 18:47:16 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id BFD96162BCF
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat,  9 Jun 2007 22:47:15 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.4 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id EDC73162AE7; Sat,  9 Jun 2007 22:46:32 +0000 (GMT)
+Date: Sun, 10 Jun 2007 08:46:33 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070609224632.EDC73162AE7@lists.samba.org>
+Subject: Rev 525: - send tcp info to all connected nodes,
+	not just vnnmap nodes in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 525
+revision-id: tridge@samba.org-20070609224633-eo5a0r2uf2u83u3q
+parent: tridge@samba.org-20070609115850-l2fqzlhyvl68lzrl
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Sun 2007-06-10 08:46:33 +1000
+message:
+  - send tcp info to all connected nodes, not just vnnmap nodes
+  - use a non-blocking freeze when banned
+  - release all IPs when banned
+modified:
+  include/ctdb_private.h         ctdb_private.h-20061117234101-o3qt14umlg9en8z0-13
+  server/ctdb_daemon.c           ctdb_daemon.c-20070409200331-3el1kqgdb9m4ib0g-1
+  server/ctdb_freeze.c           ctdb_freeze.c-20070512051503-935zdtyuqknqnhmo-1
+  server/ctdb_monitor.c          ctdb_monitor.c-20070518100625-8jf4ft1mjzmb22ck-1
+  takeover/ctdb_takeover.c       ctdb_takeover.c-20070525071636-a5n1ihghjtppy08r-2
+=== modified file 'include/ctdb_private.h'
+--- a/include/ctdb_private.h	2007-06-07 08:07:38 +0000
++++ b/include/ctdb_private.h	2007-06-09 22:46:33 +0000
+@@ -1022,4 +1022,6 @@
+ 			       uint32_t destnode,
+ 			       struct ctdb_tunable *tunables);
+ 
++void ctdb_start_freeze(struct ctdb_context *ctdb);
++
+ #endif
+
+=== modified file 'server/ctdb_daemon.c'
+--- a/server/ctdb_daemon.c	2007-06-07 12:06:19 +0000
++++ b/server/ctdb_daemon.c	2007-06-09 22:46:33 +0000
+@@ -54,6 +54,12 @@
+ 		(ctdb->nodes[c->vnn]->flags&NODE_FLAGS_DISCONNECTED) 
+ 		| (c->flags & ~NODE_FLAGS_DISCONNECTED);	
+ 	DEBUG(2,("Node flags for node %u are now 0x%x\n", c->vnn, ctdb->nodes[c->vnn]->flags));
++
++	/* make sure we don't hold any IPs when we shouldn't */
++	if (c->vnn == ctdb->vnn &&
++	    (ctdb->nodes[c->vnn]->flags & (NODE_FLAGS_INACTIVE|NODE_FLAGS_BANNED))) {
++		ctdb_release_all_ips(ctdb);
++	}
+ }
+ 
+ /* called when the "startup" event script has finished */
+
+=== modified file 'server/ctdb_freeze.c'
+--- a/server/ctdb_freeze.c	2007-06-07 12:06:19 +0000
++++ b/server/ctdb_freeze.c	2007-06-09 22:46:33 +0000
+@@ -182,6 +182,24 @@
+ }
+ 
+ /*
++  start the freeze process
++ */
++void ctdb_start_freeze(struct ctdb_context *ctdb)
++{
++	if (ctdb->freeze_mode == CTDB_FREEZE_FROZEN) {
++		/* we're already frozen */
++		return;
++	}
++
++	/* if there isn't a freeze lock child then create one */
++	if (!ctdb->freeze_handle) {
++		ctdb->freeze_handle = ctdb_freeze_lock(ctdb);
++		CTDB_NO_MEMORY_VOID(ctdb, ctdb->freeze_handle);
++		ctdb->freeze_mode = CTDB_FREEZE_PENDING;
++	}
++}
++
++/*
+   freeze the databases
+  */
+ int32_t ctdb_control_freeze(struct ctdb_context *ctdb, struct ctdb_req_control *c, bool *async_reply)
+@@ -193,12 +211,7 @@
+ 		return 0;
+ 	}
+ 
+-	/* if there isn't a freeze lock child then create one */
+-	if (!ctdb->freeze_handle) {
+-		ctdb->freeze_handle = ctdb_freeze_lock(ctdb);
+-		CTDB_NO_MEMORY(ctdb, ctdb->freeze_handle);
+-		ctdb->freeze_mode = CTDB_FREEZE_PENDING;
+-	}
++	ctdb_start_freeze(ctdb);
+ 
+ 	/* add ourselves to list of waiters */
+ 	w = talloc(ctdb->freeze_handle, struct ctdb_freeze_waiter);
+@@ -220,17 +233,7 @@
+  */
+ bool ctdb_blocking_freeze(struct ctdb_context *ctdb)
+ {
+-	if (ctdb->freeze_mode == CTDB_FREEZE_FROZEN) {
+-		/* we're already frozen */
+-		return true;
+-	}
+-
+-	/* if there isn't a freeze lock child then create one */
+-	if (!ctdb->freeze_handle) {
+-		ctdb->freeze_handle = ctdb_freeze_lock(ctdb);
+-		CTDB_NO_MEMORY(ctdb, ctdb->freeze_handle);
+-		ctdb->freeze_mode = CTDB_FREEZE_PENDING;
+-	}
++	ctdb_start_freeze(ctdb);
+ 
+ 	/* block until frozen */
+ 	while (ctdb->freeze_mode == CTDB_FREEZE_PENDING) {
+
+=== modified file 'server/ctdb_monitor.c'
+--- a/server/ctdb_monitor.c	2007-06-09 11:58:50 +0000
++++ b/server/ctdb_monitor.c	2007-06-09 22:46:33 +0000
+@@ -219,9 +219,8 @@
+ 	if ((node->flags & NODE_FLAGS_BANNED) && !(old_flags & NODE_FLAGS_BANNED)) {
+ 		/* make sure we are frozen */
+ 		DEBUG(0,("This node has been banned - forcing freeze and recovery\n"));
+-		if (!ctdb_blocking_freeze(ctdb)) {
+-			ctdb_fatal(ctdb, "Unable to freeze when banned");
+-		}
++		ctdb_start_freeze(ctdb);
++		ctdb_release_all_ips(ctdb);
+ 		ctdb->recovery_mode = CTDB_RECOVERY_ACTIVE;
+ 	}
+ 	
+
+=== modified file 'takeover/ctdb_takeover.c'
+--- a/takeover/ctdb_takeover.c	2007-06-09 11:47:06 +0000
++++ b/takeover/ctdb_takeover.c	2007-06-09 22:46:33 +0000
+@@ -247,7 +247,7 @@
+ 			data.dptr = (uint8_t *)&t;
+ 			data.dsize = sizeof(t);
+ 
+-			ctdb_daemon_send_control(ctdb, CTDB_BROADCAST_VNNMAP, 0, 
++			ctdb_daemon_send_control(ctdb, CTDB_BROADCAST_CONNECTED, 0, 
+ 						 CTDB_CONTROL_TCP_ADD,
+ 						 0, CTDB_CTRL_FLAG_NOREPLY, data, NULL, NULL);
+ 		}
+@@ -469,7 +469,6 @@
+ 
+ 	/* at this point ctdb->nodes[i]->takeover_vnn is the vnn which will own each IP */
+ 
+-
+ 	/* now tell all nodes to delete any alias that they should not
+ 	   have.  This will be a NOOP on nodes that don't currently
+ 	   hold the given alias */
+@@ -557,7 +556,7 @@
+ 	data.dsize = sizeof(t);
+ 
+ 	/* tell all nodes about this tcp connection */
+-	ret = ctdb_daemon_send_control(ctdb, CTDB_BROADCAST_VNNMAP, 0, 
++	ret = ctdb_daemon_send_control(ctdb, CTDB_BROADCAST_CONNECTED, 0, 
+ 				       CTDB_CONTROL_TCP_ADD,
+ 				       0, CTDB_CTRL_FLAG_NOREPLY, data, NULL, NULL);
+ 	if (ret != 0) {
+@@ -703,7 +702,7 @@
+ 		p.dest = tcp->daddr;
+ 		data.dptr = (uint8_t *)&p;
+ 		data.dsize = sizeof(p);
+-		ctdb_daemon_send_control(client->ctdb, CTDB_BROADCAST_VNNMAP, 0, 
++		ctdb_daemon_send_control(client->ctdb, CTDB_BROADCAST_CONNECTED, 0, 
+ 					 CTDB_CONTROL_TCP_REMOVE,
+ 					 0, CTDB_CTRL_FLAG_NOREPLY, data, NULL, NULL);
+ 		talloc_free(tcp);
+

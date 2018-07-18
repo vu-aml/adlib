@@ -1,0 +1,151 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Apr 23 12:32:38 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3NGWb0I003539
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 23 Apr 2007 12:32:37 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id A2FFD163965
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 23 Apr 2007 16:32:12 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1017)
+	id 41BF9162BBC; Mon, 23 Apr 2007 16:31:32 +0000 (GMT)
+To: samba-cvs@samba.org
+From: obnox@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070423163132.41BF9162BBC@lists.samba.org>
+Date: Mon, 23 Apr 2007 16:31:32 +0000 (GMT)
+Subject: svn commit: samba r22489 - in branches/SAMBA_3_0/source/rpcclient: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 3544
+Lines: 109
+
+Author: obnox
+Date: 2007-04-23 16:31:31 +0000 (Mon, 23 Apr 2007)
+New Revision: 22489
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22489
+
+Log:
+Add a deletedomgroup command to rpcclient (samr).
+Corresponding to deletedomuser.
+
+Michael
+
+
+Modified:
+   branches/SAMBA_3_0/source/rpcclient/cmd_samr.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/rpcclient/cmd_samr.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpcclient/cmd_samr.c	2007-04-23 15:32:47 UTC (rev 22488)
++++ branches/SAMBA_3_0/source/rpcclient/cmd_samr.c	2007-04-23 16:31:31 UTC (rev 22489)
+@@ -1895,6 +1895,78 @@
+ 	return result;
+ }
+ 
++/* Delete domain group */
++
++static NTSTATUS cmd_samr_delete_dom_group(struct rpc_pipe_client *cli, 
++                                         TALLOC_CTX *mem_ctx,
++                                         int argc, const char **argv) 
++{
++	NTSTATUS result = NT_STATUS_UNSUCCESSFUL;
++	POLICY_HND connect_pol, domain_pol, group_pol;
++	uint32 access_mask = MAXIMUM_ALLOWED_ACCESS;
++
++	if ((argc < 2) || (argc > 3)) {
++		printf("Usage: %s groupname\n", argv[0]);
++		return NT_STATUS_OK;
++	}
++	
++	if (argc > 2)
++                sscanf(argv[2], "%x", &access_mask);
++
++	/* Get sam policy and domain handles */
++
++	result = try_samr_connects(cli, mem_ctx, MAXIMUM_ALLOWED_ACCESS, 
++				   &connect_pol);
++
++	if (!NT_STATUS_IS_OK(result))
++		goto done;
++
++	result = rpccli_samr_open_domain(cli, mem_ctx, &connect_pol,
++				      MAXIMUM_ALLOWED_ACCESS,
++				      &domain_sid, &domain_pol);
++
++	if (!NT_STATUS_IS_OK(result))
++		goto done;
++
++	/* Get handle on group */
++
++	{
++		uint32 *group_rids, num_rids, *name_types;
++		uint32 flags = 0x000003e8; /* Unknown */
++
++		result = rpccli_samr_lookup_names(cli, mem_ctx, &domain_pol,
++					       flags, 1, (const char **)&argv[1],
++					       &num_rids, &group_rids,
++					       &name_types);
++
++		if (!NT_STATUS_IS_OK(result))
++			goto done;
++
++		result = rpccli_samr_open_group(cli, mem_ctx, &domain_pol,
++						access_mask,
++						group_rids[0], &group_pol);
++
++		if (!NT_STATUS_IS_OK(result))
++			goto done;
++	}
++
++	/* Delete user */
++
++	result = rpccli_samr_delete_dom_group(cli, mem_ctx, &group_pol);
++
++	if (!NT_STATUS_IS_OK(result))
++		goto done;
++
++	/* Display results */
++
++	rpccli_samr_close(cli, mem_ctx, &group_pol);
++	rpccli_samr_close(cli, mem_ctx, &domain_pol);
++	rpccli_samr_close(cli, mem_ctx, &connect_pol);
++
++ done:
++	return result;
++}
++
+ /* Delete domain user */
+ 
+ static NTSTATUS cmd_samr_delete_dom_user(struct rpc_pipe_client *cli, 
+@@ -2340,6 +2412,7 @@
+ 	{ "createdomalias",     RPC_RTYPE_NTSTATUS, cmd_samr_create_dom_alias,      NULL, PI_SAMR, NULL,	"Create domain alias",     "" },
+ 	{ "samlookupnames",     RPC_RTYPE_NTSTATUS, cmd_samr_lookup_names,          NULL, PI_SAMR, NULL,	"Look up names",           "" },
+ 	{ "samlookuprids",      RPC_RTYPE_NTSTATUS, cmd_samr_lookup_rids,           NULL, PI_SAMR, NULL,	"Look up names",           "" },
++	{ "deletedomgroup",     RPC_RTYPE_NTSTATUS, cmd_samr_delete_dom_group,      NULL, PI_SAMR, NULL,	"Delete domain group",     "" },
+ 	{ "deletedomuser",      RPC_RTYPE_NTSTATUS, cmd_samr_delete_dom_user,       NULL, PI_SAMR, NULL,	"Delete domain user",      "" },
+ 	{ "samquerysecobj",     RPC_RTYPE_NTSTATUS, cmd_samr_query_sec_obj,         NULL, PI_SAMR, NULL, "Query SAMR security object",   "" },
+ 	{ "getdompwinfo",       RPC_RTYPE_NTSTATUS, cmd_samr_get_dom_pwinfo,        NULL, PI_SAMR, NULL, "Retrieve domain password info", "" },
+

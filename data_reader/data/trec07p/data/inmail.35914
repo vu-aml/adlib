@@ -1,0 +1,83 @@
+From perl6-all-return-81309-ktwarwic=speedy.uwaterloo.ca@perl.org  Mon May 14 09:28:21 2007
+Return-Path: <perl6-all-return-81309-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4EDSKqD022327
+	for <ktwarwic@flax9.uwaterloo.ca>; Mon, 14 May 2007 09:28:20 -0400
+Received: (qmail 28141 invoked by uid 514); 14 May 2007 13:28:17 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 28136 invoked from network); 14 May 2007 13:28:17 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-0.2 required=8.0
+	tests=BAYES_40,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: domain of spiehera@lafayette.edu designates 139.147.8.40 as permitted sender)
+Date: Mon, 14 May 2007 09:03:17 -0400 (EDT)
+From: Andy Spieherty <spiehera@lafayette.edu>
+X-X-Sender: spiehera@fractal.phys.lafayette.edu
+To: Perl6 Internals <perl6-internals@perl.org>
+Subject: [PATCH] Add a few clarifying comments about res_lea.c
+Message-ID: <Pine.LNX.4.62.0705140901340.525@fractal.phys.lafayette.edu>
+MIME-Version: 1.0
+Content-Type: TEXT/PLAIN; charset=US-ASCII
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=0.0 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_HELO_PASS,SPF_PASS
+
+This patch adds a few clarifications to comments.  And I'm afraid this is 
+how I'll have to leave it for now.
+
+diff -r -u parrot-current/include/parrot/pobj.h parrot-andy/include/parrot/pobj.h
+--- parrot-current/include/parrot/pobj.h	2007-05-13 19:15:14.000000000 -0400
++++ parrot-andy/include/parrot/pobj.h	2007-05-14 08:57:38.000000000 -0400
+@@ -75,14 +75,14 @@
+ is also suitably aligned for any use.  If, for example, malloc() returns
+ objects aligned on 8-byte boundaries, and obj->bufstart is also aligned
+ on 8-byte boundaries, then there should be 4 bytes of padding.  It is
+-handled differently in the two files resources.c and res_lea.c.  (I have
+-not yet figured out how the 'possible padding' is handled in resources.c.
+---A.D.  2007-05-11.)
++handled differently in the two files resources.c and res_lea.c.
++In resources.c, the buffer is carved out of a larger memory pool.  In
++res_lea.c, each buffer is individually allocated.
+ 
+                      src/gc/resources.c:       src/gc/res_lea.c:
+ 
+ ptr from malloc ->  +------------------+      +------------------+
+-                    | possible padding |      | INTVAL ref_count |
++                      [other blocks?]         | INTVAL ref_count |
+                     | INTVAL ref_count |      | possible padding |
+ obj->bufstart   ->  +------------------+      +------------------+
+                     |     data         |      |      data        |
+diff -r -u parrot-current/src/gc/res_lea.c parrot-andy/src/gc/res_lea.c
+--- parrot-current/src/gc/res_lea.c	2007-05-12 19:15:12.000000000 -0400
++++ parrot-andy/src/gc/res_lea.c	2007-05-14 09:03:17.000000000 -0400
+@@ -15,6 +15,12 @@
+ The "lea" in the file name refers to Spie Lea, who wrote malloc
+ implementation found in F<src/malloc.c>.
+ 
++As of May 14, 2007, it doesn't work (and hasn't worked for some
++time.)  The problem appears to be related to strings, but actually
++could be somewhere else.  This allocator does not support any of
++Parrot's Copy-on-Write schemes.  Nor does the string allocator
++handle "external" strings.
++
+ =head2 Functions
+ 
+ =over 4
+
+-- 
+    Andy Spieherty		spiehera@lafayette.edu
+

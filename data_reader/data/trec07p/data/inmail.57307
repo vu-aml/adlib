@@ -1,0 +1,374 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Jun 14 08:15:33 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5ECFXL9021205
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 14 Jun 2007 08:15:33 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 3ED061639D9
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 14 Jun 2007 12:15:32 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id 8FB08163826; Thu, 14 Jun 2007 12:03:49 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070614120349.8FB08163826@lists.samba.org>
+Date: Thu, 14 Jun 2007 12:03:49 +0000 (GMT)
+Subject: svn commit: samba r23486 - in branches: SAMBA_3_0/source/locking
+	SAMBA_3_0/source/smbd SAMBA_3_0_26/source/locking
+	SAMBA_3_0_26/source/smbd
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-06-14 12:03:46 +0000 (Thu, 14 Jun 2007)
+New Revision: 23486
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23486
+
+Log:
+Ok, this time with a hopefully successful make test in the right place:
+Remove two local variables
+
+Modified:
+   branches/SAMBA_3_0/source/locking/locking.c
+   branches/SAMBA_3_0/source/smbd/reply.c
+   branches/SAMBA_3_0_26/source/locking/locking.c
+   branches/SAMBA_3_0_26/source/smbd/reply.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/locking/locking.c
+===================================================================
+--- branches/SAMBA_3_0/source/locking/locking.c	2007-06-14 11:29:35 UTC (rev 23485)
++++ branches/SAMBA_3_0/source/locking/locking.c	2007-06-14 12:03:46 UTC (rev 23486)
+@@ -844,10 +844,6 @@
+ 	char *frm = NULL;
+ 	int i;
+ 
+-	if (!lck) {
+-		return False;
+-	}
+-
+ 	DEBUG(10, ("rename_share_filename: servicepath %s newname %s\n",
+ 		servicepath, newname));
+ 
+
+Modified: branches/SAMBA_3_0/source/smbd/reply.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/reply.c	2007-06-14 11:29:35 UTC (rev 23485)
++++ branches/SAMBA_3_0/source/smbd/reply.c	2007-06-14 12:03:46 UTC (rev 23486)
+@@ -4168,13 +4168,15 @@
+  asynchronously.
+ ****************************************************************************/
+ 
+-static void rename_open_files(connection_struct *conn, struct share_mode_lock *lck,
+-			      struct file_id id, const char *newname)
++static void rename_open_files(connection_struct *conn,
++			      struct share_mode_lock *lck,
++			      const char *newname)
+ {
+ 	files_struct *fsp;
+ 	BOOL did_rename = False;
+ 
+-	for(fsp = file_find_di_first(id); fsp; fsp = file_find_di_next(fsp)) {
++	for(fsp = file_find_di_first(lck->id); fsp;
++	    fsp = file_find_di_next(fsp)) {
+ 		/* fsp_name is a relative path under the fsp. To change this for other
+ 		   sharepaths we need to manipulate relative paths. */
+ 		/* TODO - create the absolute path and manipulate the newname
+@@ -4191,7 +4193,7 @@
+ 
+ 	if (!did_rename) {
+ 		DEBUG(10,("rename_open_files: no open files on file_id %s for %s\n",
+-			  file_id_static_string(&id), newname ));
++			  file_id_static_string(&lck->id), newname ));
+ 	}
+ 
+ 	/* Send messages to all smbd's (not ourself) that the name has changed. */
+@@ -4237,7 +4239,6 @@
+ 	SMB_STRUCT_STAT sbuf;
+ 	pstring newname_last_component;
+ 	NTSTATUS status = NT_STATUS_OK;
+-	BOOL dest_exists;
+ 	struct share_mode_lock *lck = NULL;
+ 
+ 	ZERO_STRUCT(sbuf);
+@@ -4306,9 +4307,7 @@
+ 		return NT_STATUS_OK;
+ 	}
+ 
+-	dest_exists = vfs_object_exist(conn,newname,NULL);
+-
+-	if(!replace_if_exists && dest_exists) {
++	if(!replace_if_exists && vfs_object_exist(conn, newname, NULL)) {
+ 		DEBUG(3,("rename_internals_fsp: dest exists doing rename %s -> %s\n",
+ 			fsp->fsp_name,newname));
+ 		return NT_STATUS_OBJECT_NAME_COLLISION;
+@@ -4341,13 +4340,20 @@
+ 
+ 	lck = get_share_mode_lock(NULL, fsp->file_id, NULL, NULL);
+ 
++	/*
++	 * We have the file open ourselves, so not being able to get the
++	 * corresponding share mode lock is a fatal error.
++	 */
++
++	SMB_ASSERT(lck != NULL);
++
+ 	if(SMB_VFS_RENAME(conn,fsp->fsp_name, newname) == 0) {
+ 		uint32 create_options = fsp->fh->private_options;
+ 
+ 		DEBUG(3,("rename_internals_fsp: succeeded doing rename on %s -> %s\n",
+ 			fsp->fsp_name,newname));
+ 
+-		rename_open_files(conn, lck, fsp->file_id, newname);
++		rename_open_files(conn, lck, newname);
+ 
+ 		/*
+ 		 * A rename acts as a new file create w.r.t. allowing an initial delete
+@@ -4455,7 +4461,6 @@
+ 	const char *dname;
+ 	long offset = 0;
+ 	pstring destname;
+-	struct file_id id;
+ 
+ 	*directory = *mask = 0;
+ 
+@@ -4605,8 +4610,6 @@
+ 		 * don't do the rename, just return success.
+ 		 */
+ 
+-		id = file_id_sbuf(&sbuf1);
+-
+ 		if (strcsequal(directory, newname)) {
+ 			DEBUG(3, ("rename_internals: identical names in "
+ 				  "rename %s - returning success\n",
+@@ -4624,12 +4627,19 @@
+ 			return NT_STATUS_SHARING_VIOLATION;
+ 		}
+ 
+-		lck = get_share_mode_lock(NULL, id, NULL, NULL);
++		lck = get_share_mode_lock(NULL, file_id_sbuf(&sbuf1),
++					  NULL, NULL);
+ 
+ 		if(SMB_VFS_RENAME(conn,directory, newname) == 0) {
+ 			DEBUG(3,("rename_internals: succeeded doing rename "
+ 				 "on %s -> %s\n", directory, newname));
+-			rename_open_files(conn, lck, id, newname);
++			if (lck != NULL) {
++				/*
++				 * Only in this case there are open files at
++				 * all.
++				 */
++				rename_open_files(conn, lck, newname);
++			}
+ 			TALLOC_FREE(lck);
+ 			notify_rename(conn, S_ISDIR(sbuf1.st_mode),
+ 				      directory, newname);
+@@ -4740,8 +4750,6 @@
+ 			return status;
+ 		}
+ 
+-		id = file_id_sbuf(&sbuf1);
+-
+ 		if (strcsequal(fname,destname)) {
+ 			DEBUG(3,("rename_internals: identical names "
+ 				 "in wildcard rename %s - success\n",
+@@ -4761,10 +4769,17 @@
+ 			return NT_STATUS_SHARING_VIOLATION;
+ 		}
+ 
+-		lck = get_share_mode_lock(NULL, id, NULL, NULL);
++		lck = get_share_mode_lock(NULL, file_id_sbuf(&sbuf1), NULL,
++					  NULL);
+ 
+ 		if (!SMB_VFS_RENAME(conn,fname,destname)) {
+-			rename_open_files(conn, lck, id, newname);
++			if (lck != NULL) {
++				/*
++				 * Only in this case there are open files at
++				 * all.
++				 */
++				rename_open_files(conn, lck, newname);
++			}
+ 			count++;
+ 			status = NT_STATUS_OK;
+ 		}
+
+Modified: branches/SAMBA_3_0_26/source/locking/locking.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/locking/locking.c	2007-06-14 11:29:35 UTC (rev 23485)
++++ branches/SAMBA_3_0_26/source/locking/locking.c	2007-06-14 12:03:46 UTC (rev 23486)
+@@ -844,10 +844,6 @@
+ 	char *frm = NULL;
+ 	int i;
+ 
+-	if (!lck) {
+-		return False;
+-	}
+-
+ 	DEBUG(10, ("rename_share_filename: servicepath %s newname %s\n",
+ 		servicepath, newname));
+ 
+
+Modified: branches/SAMBA_3_0_26/source/smbd/reply.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/smbd/reply.c	2007-06-14 11:29:35 UTC (rev 23485)
++++ branches/SAMBA_3_0_26/source/smbd/reply.c	2007-06-14 12:03:46 UTC (rev 23486)
+@@ -4166,13 +4166,15 @@
+  asynchronously.
+ ****************************************************************************/
+ 
+-static void rename_open_files(connection_struct *conn, struct share_mode_lock *lck,
+-			      struct file_id id, const char *newname)
++static void rename_open_files(connection_struct *conn,
++			      struct share_mode_lock *lck,
++			      const char *newname)
+ {
+ 	files_struct *fsp;
+ 	BOOL did_rename = False;
+ 
+-	for(fsp = file_find_di_first(id); fsp; fsp = file_find_di_next(fsp)) {
++	for(fsp = file_find_di_first(lck->id); fsp;
++	    fsp = file_find_di_next(fsp)) {
+ 		/* fsp_name is a relative path under the fsp. To change this for other
+ 		   sharepaths we need to manipulate relative paths. */
+ 		/* TODO - create the absolute path and manipulate the newname
+@@ -4189,7 +4191,7 @@
+ 
+ 	if (!did_rename) {
+ 		DEBUG(10,("rename_open_files: no open files on file_id %s for %s\n",
+-			  file_id_static_string(&id), newname ));
++			  file_id_static_string(&lck->id), newname ));
+ 	}
+ 
+ 	/* Send messages to all smbd's (not ourself) that the name has changed. */
+@@ -4235,7 +4237,6 @@
+ 	SMB_STRUCT_STAT sbuf;
+ 	pstring newname_last_component;
+ 	NTSTATUS status = NT_STATUS_OK;
+-	BOOL dest_exists;
+ 	struct share_mode_lock *lck = NULL;
+ 
+ 	ZERO_STRUCT(sbuf);
+@@ -4304,9 +4305,7 @@
+ 		return NT_STATUS_OK;
+ 	}
+ 
+-	dest_exists = vfs_object_exist(conn,newname,NULL);
+-
+-	if(!replace_if_exists && dest_exists) {
++	if(!replace_if_exists && vfs_object_exist(conn, newname, NULL)) {
+ 		DEBUG(3,("rename_internals_fsp: dest exists doing rename %s -> %s\n",
+ 			fsp->fsp_name,newname));
+ 		return NT_STATUS_OBJECT_NAME_COLLISION;
+@@ -4339,13 +4338,20 @@
+ 
+ 	lck = get_share_mode_lock(NULL, fsp->file_id, NULL, NULL);
+ 
++	/*
++	 * We have the file open ourselves, so not being able to get the
++	 * corresponding share mode lock is a fatal error.
++	 */
++
++	SMB_ASSERT(lck != NULL);
++
+ 	if(SMB_VFS_RENAME(conn,fsp->fsp_name, newname) == 0) {
+ 		uint32 create_options = fsp->fh->private_options;
+ 
+ 		DEBUG(3,("rename_internals_fsp: succeeded doing rename on %s -> %s\n",
+ 			fsp->fsp_name,newname));
+ 
+-		rename_open_files(conn, lck, fsp->file_id, newname);
++		rename_open_files(conn, lck, newname);
+ 
+ 		/*
+ 		 * A rename acts as a new file create w.r.t. allowing an initial delete
+@@ -4453,7 +4459,6 @@
+ 	const char *dname;
+ 	long offset = 0;
+ 	pstring destname;
+-	struct file_id id;
+ 
+ 	*directory = *mask = 0;
+ 
+@@ -4603,8 +4608,6 @@
+ 		 * don't do the rename, just return success.
+ 		 */
+ 
+-		id = file_id_sbuf(&sbuf1);
+-
+ 		if (strcsequal(directory, newname)) {
+ 			DEBUG(3, ("rename_internals: identical names in "
+ 				  "rename %s - returning success\n",
+@@ -4622,12 +4625,19 @@
+ 			return NT_STATUS_SHARING_VIOLATION;
+ 		}
+ 
+-		lck = get_share_mode_lock(NULL, id, NULL, NULL);
++		lck = get_share_mode_lock(NULL, file_id_sbuf(&sbuf1),
++					  NULL, NULL);
+ 
+ 		if(SMB_VFS_RENAME(conn,directory, newname) == 0) {
+ 			DEBUG(3,("rename_internals: succeeded doing rename "
+ 				 "on %s -> %s\n", directory, newname));
+-			rename_open_files(conn, lck, id, newname);
++			if (lck != NULL) {
++				/*
++				 * Only in this case there are open files at
++				 * all.
++				 */
++				rename_open_files(conn, lck, newname);
++			}
+ 			TALLOC_FREE(lck);
+ 			notify_rename(conn, S_ISDIR(sbuf1.st_mode),
+ 				      directory, newname);
+@@ -4738,8 +4748,6 @@
+ 			return status;
+ 		}
+ 
+-		id = file_id_sbuf(&sbuf1);
+-
+ 		if (strcsequal(fname,destname)) {
+ 			DEBUG(3,("rename_internals: identical names "
+ 				 "in wildcard rename %s - success\n",
+@@ -4759,10 +4767,17 @@
+ 			return NT_STATUS_SHARING_VIOLATION;
+ 		}
+ 
+-		lck = get_share_mode_lock(NULL, id, NULL, NULL);
++		lck = get_share_mode_lock(NULL, file_id_sbuf(&sbuf1), NULL,
++					  NULL);
+ 
+ 		if (!SMB_VFS_RENAME(conn,fname,destname)) {
+-			rename_open_files(conn, lck, id, newname);
++			if (lck != NULL) {
++				/*
++				 * Only in this case there are open files at
++				 * all.
++				 */
++				rename_open_files(conn, lck, newname);
++			}
+ 			count++;
+ 			status = NT_STATUS_OK;
+ 		}
+

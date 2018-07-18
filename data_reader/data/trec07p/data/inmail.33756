@@ -1,0 +1,137 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri May 11 06:16:19 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4BAGIqD021943
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 11 May 2007 06:16:18 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id F18C1162C2A
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 11 May 2007 10:16:16 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 620)
+	id 4E206162AC4; Fri, 11 May 2007 10:15:25 +0000 (GMT)
+To: samba-cvs@samba.org
+From: metze@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070511101526.4E206162AC4@lists.samba.org>
+Date: Fri, 11 May 2007 10:15:25 +0000 (GMT)
+Subject: svn commit: samba r22793 - in
+	branches/SAMBA_4_0/source/wrepl_server: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: metze
+Date: 2007-05-11 10:15:20 +0000 (Fri, 11 May 2007)
+New Revision: 22793
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22793
+
+Log:
+use a state struct for r_do_release_demand to avoid a memleak on errors
+
+metze
+Modified:
+   branches/SAMBA_4_0/source/wrepl_server/wrepl_apply_records.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/wrepl_server/wrepl_apply_records.c
+===================================================================
+--- branches/SAMBA_4_0/source/wrepl_server/wrepl_apply_records.c	2007-05-11 10:13:10 UTC (rev 22792)
++++ branches/SAMBA_4_0/source/wrepl_server/wrepl_apply_records.c	2007-05-11 10:15:20 UTC (rev 22793)
+@@ -1082,11 +1082,20 @@
+ 	return NT_STATUS_OK;
+ }
+ 
++struct r_do_release_demand_state {
++	struct messaging_context *msg_ctx;
++	struct nbtd_proxy_wins_release_demand r;
++};
++
+ static void r_do_release_demand_handler(struct irpc_request *ireq)
+ {
+ 	NTSTATUS status;
++	struct r_do_release_demand_state *state = talloc_get_type(ireq->async.private,
++						  struct r_do_release_demand_state);
++
+ 	status = irpc_call_recv(ireq);
+ 	/* don't care about the result */
++	talloc_free(state);
+ }
+ 
+ static NTSTATUS r_do_release_demand(struct wreplsrv_partner *partner,
+@@ -1100,7 +1109,7 @@
+ 	struct server_id *nbt_servers;
+ 	const char **addrs;
+ 	struct winsdb_addr **addresses;
+-	struct nbtd_proxy_wins_release_demand r;
++	struct r_do_release_demand_state *state;
+ 	uint32_t i;
+ 
+ 	/*
+@@ -1116,30 +1125,36 @@
+ 	DEBUG(4,("release demand record %s\n",
+ 		 nbt_name_string(mem_ctx, &replica->name)));
+ 
+-	nbt_servers = irpc_servers_byname(partner->service->task->msg_ctx, mem_ctx, "nbt_server");
++	state = talloc_zero(mem_ctx, struct r_do_release_demand_state);
++	NT_STATUS_HAVE_NO_MEMORY(state);
++	state->msg_ctx	= partner->service->task->msg_ctx;
++
++	nbt_servers = irpc_servers_byname(state->msg_ctx, state, "nbt_server");
+ 	if ((nbt_servers == NULL) || (nbt_servers[0].id == 0)) {
+ 		return NT_STATUS_INTERNAL_ERROR;
+ 	}
+ 
+-	r.in.name	= *rec->name;
+-	r.in.num_addrs	= winsdb_addr_list_length(addresses);
+-	r.in.addrs	= talloc_array(partner, struct nbtd_proxy_wins_addr, r.in.num_addrs);
+-	NT_STATUS_HAVE_NO_MEMORY(r.in.addrs);
++	state->r.in.name	= *rec->name;
++	state->r.in.num_addrs	= winsdb_addr_list_length(addresses);
++	state->r.in.addrs	= talloc_array(state, struct nbtd_proxy_wins_addr,
++					       state->r.in.num_addrs);
++	NT_STATUS_HAVE_NO_MEMORY(state->r.in.addrs);
+ 	/* TODO: fix pidl to handle inline ipv4address arrays */
+-	addrs			= winsdb_addr_string_list(r.in.addrs, addresses);
++	addrs			= winsdb_addr_string_list(state->r.in.addrs, addresses);
+ 	NT_STATUS_HAVE_NO_MEMORY(addrs);
+-	for (i=0; i < r.in.num_addrs; i++) {
+-		r.in.addrs[i].addr = addrs[i];
++	for (i=0; i < state->r.in.num_addrs; i++) {
++		state->r.in.addrs[i].addr = addrs[i];
+ 	}
+ 
+-	ireq = IRPC_CALL_SEND(partner->service->task->msg_ctx, nbt_servers[0],
++	ireq = IRPC_CALL_SEND(state->msg_ctx, nbt_servers[0],
+ 			      irpc, NBTD_PROXY_WINS_RELEASE_DEMAND,
+-			      &r, partner);
++			      &state->r, state);
+ 	NT_STATUS_HAVE_NO_MEMORY(ireq);
+ 
+ 	ireq->async.fn		= r_do_release_demand_handler;
+-	ireq->async.private	= NULL;
++	ireq->async.private	= state;
+ 
++	talloc_steal(partner, state);
+ 	return NT_STATUS_OK;
+ }
+ 
+

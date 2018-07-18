@@ -1,0 +1,115 @@
+From r-help-bounces@stat.math.ethz.ch  Thu Jul  5 06:05:38 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l65A5bL9024558
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 5 Jul 2007 06:05:38 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l65A50bP017553;
+	Thu, 5 Jul 2007 12:05:08 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.0 required=5.0 tests=BAYES_50,
+	DKIM_POLICY_SIGNSOME autolearn=no version=3.2.0
+Received: from out1.smtp.messagingengine.com (out1.smtp.messagingengine.com
+	[66.111.4.25])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l659uKRs014330
+	for <r-help@stat.math.ethz.ch>; Thu, 5 Jul 2007 11:56:21 +0200
+Received: from compute2.internal (compute2.internal [10.202.2.42])
+	by out1.messagingengine.com (Postfix) with ESMTP id 8342F63EB;
+	Thu,  5 Jul 2007 05:56:20 -0400 (EDT)
+Received: from web7.messagingengine.com ([10.202.2.216])
+	by compute2.internal (MEProxy); Thu, 05 Jul 2007 05:56:20 -0400
+Received: by web7.messagingengine.com (Postfix, from userid 99)
+	id 599B812A0E; Thu,  5 Jul 2007 05:56:20 -0400 (EDT)
+Message-Id: <1183629380.13417.1198603635@webmail.messagingengine.com>
+X-Sasl-Enc: pIPSUmaoyjRNNgRwB2qLba6/Z40sclvgREiWILTF3x1P 1183629380
+From: "Michael Frumin" <michael@frumin.net>
+To: deepayan.sarkar@gmail.com, "Martin Morgan" <mtmorgan@fhcrc.org>
+Content-Disposition: inline
+MIME-Version: 1.0
+X-Mailer: MessagingEngine.com Webmail Interface
+In-Reply-To: <eb555e660707041715j4e0906f2i93e03fbb77104284@mail.gmail.com>
+Date: Thu, 05 Jul 2007 05:56:20 -0400
+References: <11435994.post@talk.nabble.com> <468BF958.9060102@biostat.ku.dk>
+	<6phy7hv3kdl.fsf@gopher4.fhcrc.org>
+	<eb555e660707041715j4e0906f2i93e03fbb77104284@mail.gmail.com>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] Lookups in R
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+the problem I have is that userid's are not just sequential from
+1:n_users.  if they were, of course I'd have made a big matrix that was
+n_users x n_fields and that would be that.  but, I think what I cando is
+just use the hash to store the index into the result matrix, nothing
+more. then the rest of it will be easy.
+
+but please tell me more about eliminating loops.  In many cases in R I
+have used lapply and derivatives to avoid loops, but in this case they
+seem to give me extra overhead simply by the generation of their result
+lists:
+
+> system.time(lapply(1:10^4, mean))
+   user  system elapsed 
+   1.31    0.00    1.31 
+> system.time(for(i in 1:10^4) mean(i))
+   user  system elapsed 
+   0.33    0.00    0.32 
+
+
+thanks,
+mike
+
+
+> I don't think that's a fair comparison--- much of the overhead comes
+> from the use of data frames and the creation of the indexing vector. I
+> get
+> 
+> > n_accts <- 10^3
+> > n_trans <- 10^4
+> > t <- list()
+> > t$amt <- runif(n_trans)
+> > t$acct <- as.character(round(runif(n_trans, 1, n_accts)))
+> > uhash <- new.env(hash=TRUE, parent=emptyenv(), size=n_accts)
+> > for (acct in as.character(1:n_accts)) uhash[[acct]] <- list(amt=0, n=0)
+> > system.time(for (i in seq_along(t$amt)) {
+> +     acct <- t$acct[i]
+> +     x <- uhash[[acct]]
+> +     uhash[[acct]] <- list(amt=x$amt + t$amt[i], n=x$n + 1)
+> + }, gcFirst = TRUE)
+>    user  system elapsed
+>   0.508   0.008   0.517
+> > udf <- matrix(0, nrow = n_accts, ncol = 2)
+> > rownames(udf) <- as.character(1:n_accts)
+> > colnames(udf) <- c("amt", "n")
+> > system.time(for (i in seq_along(t$amt)) {
+> +     idx <- t$acct[i]
+> +     udf[idx, ] <- udf[idx, ] + c(t$amt[i], 1)
+> + }, gcFirst = TRUE)
+>    user  system elapsed
+>   1.872   0.008   1.883
+> 
+> The loop is still going to be the problem for realistic examples.
+> 
+> -Deepayan
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

@@ -1,0 +1,133 @@
+From r-help-bounces@stat.math.ethz.ch  Mon Jun  4 14:30:04 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l54IU3hB031316
+	for <ktwarwic@flax9.uwaterloo.ca>; Mon, 4 Jun 2007 14:30:04 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l54ISRvP028684;
+	Mon, 4 Jun 2007 20:28:45 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.0 required=5.0 tests=BAYES_50, DKIM_POLICY_SIGNSOME,
+	HTML_MESSAGE autolearn=no version=3.2.0
+Received: from natkenexv02.dfo-mpo.gc.ca (natkenexv02.dfo-mpo.gc.ca
+	[198.103.161.102])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l54IR3U8028191
+	for <r-help@stat.math.ethz.ch>; Mon, 4 Jun 2007 20:27:04 +0200
+Received: from lauimlex01.lau.dfo-mpo.ca ([198.103.161.1]) by
+	natkenexv02.dfo-mpo.gc.ca with Microsoft SMTPSVC(6.0.3790.1830);
+	Mon, 4 Jun 2007 14:27:02 -0400
+MIME-Version: 1.0
+x-mimeole: Produced By Microsoft Exchange V6.5
+Date: Mon, 4 Jun 2007 14:27:00 -0400
+Message-ID: <A61708A2D512974BAD5C77CD88B83C089E89B3@lauimlex01.lau.dfo-mpo.ca>
+X-MS-Has-Attach: 
+X-MS-TNEF-Correlator: 
+Thread-Topic: Local polynomial regression using locfit
+Thread-Index: Acem1fEPhsjOQKUTR6iY/3+VXNSDNA==
+From: "Caskenette, Amanda" <CaskenetteA@dfo-mpo.gc.ca>
+To: <r-help@stat.math.ethz.ch>
+X-OriginalArrivalTime: 04 Jun 2007 18:27:02.0615 (UTC)
+	FILETIME=[F2443670:01C7A6D5]
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Content-Disposition: inline
+Subject: [R] Local polynomial regression using locfit
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+
+I have a dataset of pregnancy values for multiple years (and ages, not
+included) with missing years. I would like to use local polynomial
+regression to smooth the values and estimate for the missing years. I
+would also like to use GCV to justify the smoothing parameter selection.
+
+
+When using locfit() with lp() I found that the gcvplot function does not
+work as it is looking for an alpha value to replace so I used gcv():
+
+########################################################################
+#
+library(locfit)
+### approx. my data
+Year=
+c(1954,1965,1966,1967,1968,1969,1970,1978,1979,1980,1981,1982,1985,1987,
+1988,1989,1990,1991,1992,1993,1994,1995,1996,1997,1998,1999,2000,2002,20
+03,2004)
+Num.sampled=
+c(3,44,9,19,19,25,13,38,15,2,4,5,3,8,6,9,7,11,11,17,16,13,6,4,10,7,9,4,3
+,4)
+Num.preg=
+c(1,5,1,4,6,4,3,23,8,1,3,2,1,3,1,1,1,2,3,2,2,6,0,0,3,0,3,1,2,1)
+
+x =  Year
+y = Num.preg/Num.sampled
+
+gcv.fit = c(0) 
+b = seq(from = 0.4, to = 1, by = 0.01)
+for(i in 1:length(b))
+{
+fit = locfit(y~lp(x, nn = b[i]))         
+gcv.fit[i] =  gcv(fit)[4]
+}
+gcv.fit = round(gcv.fit,4)
+b1 = b[min(which.min(gcv.fit))]
+fit = locfit(y~lp(x, nn = b1))
+
+## plots and predicting missing years
+xg = 1954:2004
+plot(x,y,xlab="Years",ylab="Proportion Pregnant",pch=16,cex=0.5)
+lines(xg,predict(fit,newdata=xg),col=4)
+x11()
+plot(b,gcv.fit) 
+########################################################################
+#
+
+This seems to work (correct me if I am wrong), however, now I am looking
+for a way to penalise pregnancy rates that are derived from low sample
+sizes. There isn't much documentation on the arguments to lp() 
+The locfit function has the argument "weights", I tried this function
+outside of lp() and it had no effect.  It is not listed as an argument
+to lp()...however I tried using it as an argument and it changed the
+output:
+
+for(i in 1:length(b))
+{
+fit = locfit(y~lp(x, nn = b[i], weights = n))    
+gcv.fit[i] =  gcv(fit)[4]
+}
+gcv.fit = round(gcv.fit,3)
+b1 = b[min(which.min(gcv.fit))]
+fit = locfit(y~lp(x, nn = b1, weights = n))    
+
+However, this does not give "pretty" results, so I have a feeling that
+it really isn't doing what I think it is doing. (I also tried log(n)).
+Can weights be a vector? Should I be altering the sample size is some
+way? There isn't much documentation on the weights argument, can it even
+be used within the lp()?
+
+
+Thank you
+Amanda
+
+
+	[[alternative HTML version deleted]]
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

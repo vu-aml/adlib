@@ -1,0 +1,207 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Apr 19 03:43:59 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3J7hw0I021537
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 19 Apr 2007 03:43:58 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 2223716393C
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 19 Apr 2007 07:43:34 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 3C996162AC8; Thu, 19 Apr 2007 07:43:02 +0000 (GMT)
+Date: Thu, 19 Apr 2007 17:43:28 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070419074302.3C996162AC8@lists.samba.org>
+Subject: Rev 165: - split out ctdb_ltdb_lock_fetch_requeue() into a simpler
+	in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 5555
+Lines: 166
+
+------------------------------------------------------------
+revno: 165
+revision-id: tridge@samba.org-20070419074327-cdc474844a1e1d90
+parent: tridge@samba.org-20070419062756-3173365728e1cd4f
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Thu 2007-04-19 17:43:27 +1000
+message:
+  - split out ctdb_ltdb_lock_fetch_requeue() into a simpler
+    ctdb_ltdb_lock_requeue() and a small wrapper
+  
+  - use ctdb_ltdb_lock_requeue() to fix a possible hang in
+    ctdb_reply_dmaster(), where the ctdb_ltdb_store() could hang waiting
+    for a client. We now requeue the reply_dmaster packet until we have
+    the lock
+modified:
+  common/ctdb_call.c             ctdb_call.c-20061128065342-to93h6eejj5kon81-1
+  common/ctdb_ltdb.c             ctdb_ltdb.c-20061128065342-to93h6eejj5kon81-2
+  include/ctdb_private.h         ctdb_private.h-20061117234101-o3qt14umlg9en8z0-13
+=== modified file 'common/ctdb_call.c'
+--- a/common/ctdb_call.c	2007-04-19 06:27:56 +0000
++++ b/common/ctdb_call.c	2007-04-19 07:43:27 +0000
+@@ -314,7 +314,9 @@
+ 	memcpy(&r->data[0], data.dptr, data.dsize);
+ 
+ 	if (r->hdr.destnode == r->hdr.srcnode) {
+-		ctdb_reply_dmaster(ctdb, &r->hdr);
++		/* inject the packet back into the input queue */
++		talloc_steal(ctdb, r);
++		ctdb_recv_pkt(ctdb, (uint8_t *)&r->hdr, r->hdr.length);
+ 	} else {
+ 		ctdb_queue_packet(ctdb, &r->hdr);
+ 	}
+@@ -456,6 +458,7 @@
+ 	struct ctdb_call_state *state;
+ 	struct ctdb_db_context *ctdb_db;
+ 	TDB_DATA data;
++	int ret;
+ 
+ 	state = idr_find_type(ctdb->idr, hdr->reqid, struct ctdb_call_state);
+ 	if (state == NULL) {
+@@ -464,6 +467,16 @@
+ 
+ 	ctdb_db = state->ctdb_db;
+ 
++	ret = ctdb_ltdb_lock_requeue(ctdb_db, state->call.key, hdr,
++				     ctdb_recv_raw_pkt, ctdb);
++	if (ret == -2) {
++		return;
++	}
++	if (ret != 0) {
++		DEBUG(0,(__location__ " Failed to get lock in ctdb_reply_dmaster\n"));
++		return;
++	}
++
+ 	data.dptr = c->data;
+ 	data.dsize = c->datalen;
+ 
+@@ -474,12 +487,15 @@
+ 	state->header.dmaster = ctdb->vnn;
+ 
+ 	if (ctdb_ltdb_store(ctdb_db, state->call.key, &state->header, data) != 0) {
++		ctdb_ltdb_unlock(ctdb_db, state->call.key);
+ 		ctdb_fatal(ctdb, "ctdb_reply_dmaster store failed\n");
+ 		return;
+ 	}
+ 
+ 	ctdb_call_local(ctdb_db, &state->call, &state->header, &data, ctdb->vnn);
+ 
++	ctdb_ltdb_unlock(ctdb_db, state->call.key);
++
+ 	talloc_steal(state, state->call.reply_data.dptr);
+ 
+ 	state->state = CTDB_CALL_DONE;
+
+=== modified file 'common/ctdb_ltdb.c'
+--- a/common/ctdb_ltdb.c	2007-04-19 06:27:56 +0000
++++ b/common/ctdb_ltdb.c	2007-04-19 07:43:27 +0000
+@@ -244,14 +244,14 @@
+ 	DEBUG(2,(__location__ " PACKET REQUEUED\n"));
+ }
+ 
++
+ /*
+-  do a non-blocking ltdb_fetch with a locked record, deferring this
+-  ctdb request until we have the chainlock
++  do a non-blocking ltdb_lock, deferring this ctdb request until we
++  have the chainlock
+ 
+   It does the following:
+ 
+-   1) tries to get the chainlock. If it succeeds, then it fetches the record, and 
+-      returns 0
++   1) tries to get the chainlock. If it succeeds, then it returns 0
+ 
+    2) if it fails to get a chainlock immediately then it sets up a
+    non-blocking chainlock via ctdb_lockwait, and when it gets the
+@@ -269,11 +269,10 @@
+       -1:    means that it failed to get the lock, and won't retry
+       -2:    means that it failed to get the lock immediately, but will retry
+  */
+-int ctdb_ltdb_lock_fetch_requeue(struct ctdb_db_context *ctdb_db, 
+-				 TDB_DATA key, struct ctdb_ltdb_header *header, 
+-				 struct ctdb_req_header *hdr, TDB_DATA *data,
+-				 void (*recv_pkt)(void *, uint8_t *, uint32_t ),
+-				 void *recv_context)
++int ctdb_ltdb_lock_requeue(struct ctdb_db_context *ctdb_db, 
++			   TDB_DATA key, struct ctdb_req_header *hdr,
++			   void (*recv_pkt)(void *, uint8_t *, uint32_t ),
++			   void *recv_context)
+ {
+ 	int ret;
+ 	struct tdb_context *tdb = ctdb_db->ltdb->tdb;
+@@ -297,11 +296,7 @@
+ 
+ 	/* first the non-contended path */
+ 	if (ret == 0) {
+-		ret = ctdb_ltdb_fetch(ctdb_db, key, header, hdr, data);
+-		if (ret != 0) {
+-			tdb_chainunlock(tdb, key);
+-		}	
+-		return ret;
++		return 0;
+ 	}
+ 
+ 	state = talloc(ctdb_db, struct lock_fetch_state);
+@@ -325,3 +320,24 @@
+ 	/* now tell the caller than we will retry asynchronously */
+ 	return -2;
+ }
++
++/*
++  a varient of ctdb_ltdb_lock_requeue that also fetches the record
++ */
++int ctdb_ltdb_lock_fetch_requeue(struct ctdb_db_context *ctdb_db, 
++				 TDB_DATA key, struct ctdb_ltdb_header *header, 
++				 struct ctdb_req_header *hdr, TDB_DATA *data,
++				 void (*recv_pkt)(void *, uint8_t *, uint32_t ),
++				 void *recv_context)
++{
++	int ret;
++
++	ret = ctdb_ltdb_lock_requeue(ctdb_db, key, hdr, recv_pkt, recv_context);
++	if (ret == 0) {
++		ret = ctdb_ltdb_fetch(ctdb_db, key, header, hdr, data);
++		if (ret != 0) {
++			ctdb_ltdb_unlock(ctdb_db, key);
++		}
++	}
++	return ret;
++}
+
+=== modified file 'include/ctdb_private.h'
+--- a/include/ctdb_private.h	2007-04-19 06:27:56 +0000
++++ b/include/ctdb_private.h	2007-04-19 07:43:27 +0000
+@@ -341,6 +341,10 @@
+ int ctdb_ltdb_store(struct ctdb_db_context *ctdb_db, TDB_DATA key, 
+ 		    struct ctdb_ltdb_header *header, TDB_DATA data);
+ void ctdb_queue_packet(struct ctdb_context *ctdb, struct ctdb_req_header *hdr);
++int ctdb_ltdb_lock_requeue(struct ctdb_db_context *ctdb_db, 
++			   TDB_DATA key, struct ctdb_req_header *hdr,
++			   void (*recv_pkt)(void *, uint8_t *, uint32_t ),
++			   void *recv_context);
+ int ctdb_ltdb_lock_fetch_requeue(struct ctdb_db_context *ctdb_db, 
+ 				 TDB_DATA key, struct ctdb_ltdb_header *header, 
+ 				 struct ctdb_req_header *hdr, TDB_DATA *data,
+

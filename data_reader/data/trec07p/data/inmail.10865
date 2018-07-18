@@ -1,0 +1,95 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Apr 16 21:20:43 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3H1Kg0I021563
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 16 Apr 2007 21:20:43 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id B21C01638F5
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 17 Apr 2007 01:20:18 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id AFD0B162ABF; Tue, 17 Apr 2007 01:19:28 +0000 (GMT)
+Date: Tue, 17 Apr 2007 11:20:00 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070417011928.AFD0B162ABF@lists.samba.org>
+Subject: Rev 121: better error handling in ctdb_ltdb_lock_fetch_requeue() in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 1826
+Lines: 54
+
+------------------------------------------------------------
+revno: 121
+revision-id: tridge@samba.org-20070417012000-dd8a85395a077110
+parent: tridge@samba.org-20070416231820-74f66bb640e03880
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Tue 2007-04-17 11:20:00 +1000
+message:
+  better error handling in ctdb_ltdb_lock_fetch_requeue()
+modified:
+  common/ctdb_ltdb.c             ctdb_ltdb.c-20061128065342-to93h6eejj5kon81-2
+=== modified file 'common/ctdb_ltdb.c'
+--- a/common/ctdb_ltdb.c	2007-04-16 23:18:20 +0000
++++ b/common/ctdb_ltdb.c	2007-04-17 01:20:00 +0000
+@@ -244,6 +244,12 @@
+    immediately satisfied until it can get the lock. This means that
+    the main ctdb daemon will not block waiting for a chainlock held by
+    a client
++
++   There are 3 possible return values:
++
++       0:    means that it got the lock immediately.
++      -1:    means that it failed to get the lock, and won't retry
++      -2:    means that it failed to get the lock immediately, but will retry
+  */
+ int ctdb_ltdb_lock_fetch_requeue(struct ctdb_db_context *ctdb_db, 
+ 				 TDB_DATA key, struct ctdb_ltdb_header *header, 
+@@ -255,6 +261,12 @@
+ 	
+ 	ret = tdb_chainlock_nonblock(tdb, key);
+ 
++	if (ret != 0 &&
++	    !(errno == EACCES || errno == EAGAIN || errno == EDEADLK)) {
++		/* a hard failure - don't try again */
++		return -1;
++	}
++
+ 	/* first the non-contended path */
+ 	if (ret == 0) {
+ 		ret = ctdb_ltdb_fetch(ctdb_db, key, header, hdr, data);
+@@ -273,6 +285,11 @@
+ 
+ 	/* we get an extra reference to the packet here, to 
+ 	   stop it being freed in the top level packet handler */
+-	(void)talloc_reference(ctdb_db, hdr);
+-	return 0;
++	if (talloc_reference(ctdb_db, hdr) == NULL) {
++		talloc_free(h);
++		return -1;
++	}
++
++	/* now tell the caller than we will retry asynchronously */
++	return -2;
+ }
+

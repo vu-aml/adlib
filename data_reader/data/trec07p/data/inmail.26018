@@ -1,0 +1,194 @@
+From perl6-all-return-81010-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue May  1 13:55:38 2007
+Return-Path: <perl6-all-return-81010-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l41Htbb9011029
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 1 May 2007 13:55:37 -0400
+Received: (qmail 27919 invoked by uid 514); 1 May 2007 01:55:35 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 27914 invoked from network); 1 May 2007 01:55:35 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-language-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-language
+List-Id: <perl6-language.perl.org>
+Delivered-To: mailing list perl6-language@perl.org
+Delivered-To: perl6-language@perl.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+X-ORBL: [71.139.27.123]
+Date: Mon, 30 Apr 2007 18:54:13 -0700
+From: Larry Wall <larry@wall.org>
+To: perl6-language@perl.org
+Subject: Re: S12: can(), signatures and casting
+Message-ID: <20070501015413.GA18605@wall.org>
+Mail-Followup-To: perl6-language@perl.org
+References: <62482.87743.qm@web60813.mail.yahoo.com> <ef30550b0704290342n23956d07xa7efa70a73d64060@mail.gmail.com>
+Mime-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+In-Reply-To: <ef30550b0704290342n23956d07xa7efa70a73d64060@mail.gmail.com>
+User-Agent: Mutt/1.4.2.2i
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+Status: O
+Content-Length: 6203
+Lines: 145
+
+On Sun, Apr 29, 2007 at 03:42:31AM -0700, Jonathan Lang wrote:
+: Ovid wrote:
+: >My apologies if these have been answered.  I've been chatting with
+: >Jonathan Worthington about some of this and any misconceptions are
+: >mine, not his.
+: >
+: >In reading through S12, I see that .can() returns an iterator for the
+: >methods matched.  What I'm curious about is this:
+: >
+: >  if $obj.can('fribble') {
+: >    my BadPoet $jibbet = $obj.fribble('repeatedly');
+: >  }
+: >
+: >Just because $obj.can('fribble') does not mean that the available
+: >fribble(s) will accept a string argument or return BadPoet instances.
+: >In chatting with Jonathan about this, he speculated that I would have
+: >to manually walk the method objects in the iterator to find out if I
+: >really have a suitable method.  This seems like what we really have is
+: >$object.might($method).  Is there a simpler way of determining if
+: >there's an appropriate method for what I need?  It seems like what we
+: >really want is a method object where I can declare a signature and then
+: >do this:
+: >
+: >  if $obj.can($object_with_signature){ ... }
+: 
+: I suppose.  Still, an easier solution might be to allow an optional
+: second parameter for .can that takes a signature object:
+: 
+:  if $obj.can('fribble', :(string -> BadPoet)) {
+:    my BadPoet $jibbet = $obj.fribble('repeatedly');
+:  }
+: 
+: Or you could allow signatures to be attached to strings:
+: 
+:  # pseudo-code:
+:  if $obj.can('fribble':(string -> BadPoet)) {
+:    my BadPoet $jibbet = $obj.fribble('repeatedly');
+:  }
+: 
+: In effect, the signature gets attached as a property of the string,
+: and 'can()' checks for the signature property.
+: 
+: The only problem that I have with this idea is that I can't think of
+: any uses for a "signatory string" outside of '.can()'.
+
+The fundamental problem here is that we're forcing a method name to be
+represented as a string.  We're basically missing the &foo equivalent
+for methods.  Maybe we need to allow the & indirection on method names
+too:
+
+    if $obj.&fribble:(Str --> BadPoet) {
+
+In addition to allowing the :() signature addition already used by
+&foo syntax, this would also allow for assumed arguments:
+
+    &callit := $obj.&foo.assuming(1,2,3);
+    callit();
+
+One could go as far as to claim that &foo:(Foo: Bar --> Baz) should
+be able to figure out that the presence of an invocant means you're
+trying to ref a single dispatch to an object that will match type Foo.
+
+Note that we already define &foo:(Int, Str) to return a list of candidates
+if there's more than one, so extending this from the multi dispatcher
+to the single dispatcher just seem like a SMOS (small matter of syntax).
+
+And then we basically just can the .can method since it'd be redundant.
+
+: >This raises my second question.  What if I have this?
+: >
+: >  class MadHatter is BadPoet { ... }
+: >
+: >If I get back a MadHatter instead of a BadPoet, but I really want the
+: >superclass and not a subclass, how can I enforce that?  Do I have to do
+: >something like this?  (pseudo-code)
+: 
+: What are you looking for that .is() doesn't provide?  The only thing I
+: can think of is that you're trying to insist that $obj's
+: implementation be BadPoet - not "BadPoet or a class derived from it",
+: but "BadPoet".  This strikes me as getting into the same territory as
+: finalized classes.
+: 
+: >  subset ReallyABadPoet where { $^N.type eq "BadPoet" }
+: >  my ReallyABadPoet = $obj.fribble('repeatedly');
+: 
+: I'll assume that you meant to include a variable name on the second line:
+: 
+:  subset ReallyABadPoet where { $^N.type eq "BadPoet" }
+:  my ReallyABadPoet $obj2 = $obj.fribble('repeatedly');
+: 
+: If so, I fail to see what you gain from this, as opposed to:
+: 
+:  my BadPoet $obj2 = $obj.fribble('repeatedly');
+: 
+: In this case, $obj2 won't accept the product of
+: $obj.fribble('repeatedly') unless that product ".does('BadPoet')".
+: 
+: >That seems to fail because the you'd have to invoke every method to
+: >guarantee that you're really getting back the exact type you want.
+: 
+: As I understand it, Perl 6's typing system does not do "duck typing" -
+: that is, it uses ".does()" as its primary means of type-checking, not
+: ".can()".  As such, you can check an object's type directly without
+: having to examine its set of methods - just scan the set of roles that
+: the object composes until you find the role that you're looking for.
+: 
+: Or am I misunderstanding you?
+
+I see this as almost exactly equivalent to the race conditions you
+run into trying to determine if you ought to be able to access a file
+without actually trying to access it.  Eventually you just have to
+call the silly thing and see if it fails, since (especially with active
+code) candidates can decide to fail all on their own after you initiate
+the call, and since you don't know how many times that happens compared
+to the length of your candidate list, predicting whether there will
+be a next candidate to try is something akin to the halting problem.
+
+The & syntax is basically saying, "do as much as you can with the
+information you've got to trim down the candidate list, but don't
+actually do more than that, and certainly don't attempt to actually
+call any of the candidates".
+
+: >As such, it seems like we'd need return values to guarantee that the
+: >returned type is exactly what we claimed.
+: >
+: >  method foo(Int $bar, Int $baz) returns Int {
+: >    return $foo/$baz;
+: >  }
+: >
+: >Since the return value might be a Float, does it get cast to an Int,
+: >thereby discarding information?
+: 
+: As I understand it, yes; a Float would be cast into an Int in this
+: case.  Though my understanding is that this says more about Ints and
+: Nums than it does about objects in general.
+
+Hmm, well, "returns Int" is explicitly asking for a coercion of the
+return value, so it's at least as general as the coercion semantics
+of the type system.  (Which doesn't contradict what you just said,
+of course.)  However, that particular syntax doesn't advertise the
+Int type as return value to the outside world, which means it could
+not be used to trim a candidate list even if the provided sig filter
+specified a return type.  Need to use an --> (an "of" type) for that...
+
+Larry
+

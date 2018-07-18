@@ -1,0 +1,168 @@
+From perl6-all-return-80765-ktwarwic=speedy.uwaterloo.ca@perl.org  Sun Apr 22 00:27:30 2007
+Return-Path: <perl6-all-return-80765-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3M4RT0I002653
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 22 Apr 2007 00:27:30 -0400
+Received: (qmail 1042 invoked by uid 514); 22 Apr 2007 04:27:03 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 1037 invoked from network); 22 Apr 2007 04:27:03 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: domain of rutski89@gmail.com designates 209.85.132.247 as permitted sender)
+DKIM-Signature: a=rsa-sha1; c=relaxed/relaxed;
+        d=gmail.com; s=beta;
+        h=domainkey-signature:received:received:mime-version:in-reply-to:references:content-type:message-id:content-transfer-encoding:from:subject:date:to:x-mailer;
+        b=n2FAf//P4qq57o4E969Bza5j1KJlJIK6tBz8G0JQVGXo5QSzU1trIF/EY8sjIcsPR305OQvnB8JBK73mdte4bFtcx8pRPgYWj3BN+KT2U+MYToD9g6zEQhrt9K9tl4b24LizALMaeFyW+MQBvSo4SUUK2B2DN7WBuz/IGYVjSaU=
+DomainKey-Signature: a=rsa-sha1; c=nofws;
+        d=gmail.com; s=beta;
+        h=received:mime-version:in-reply-to:references:content-type:message-id:content-transfer-encoding:from:subject:date:to:x-mailer;
+        b=kQqy5ZLm8RqdMRTpGGqcyFem/mrtoVi3d2SCM/ilcY1I0GAlPhd743xn2Y8+UkJNRZjUO0C41nn99k9/6SAFrou3lXK+fkPEpoT9lFpucMVx7qLml6ynz2ApEPhwd7pewclBy2BDwBaMSeojtyzH+G48X9onM+b5bATLHsp4l1I=
+Mime-Version: 1.0 (Apple Message framework v752.2)
+In-Reply-To: <200704211824.18554.chromatic@wgz.org>
+References: <200704211824.18554.chromatic@wgz.org>
+Content-Type: text/plain; charset=US-ASCII; delsp=yes; format=flowed
+Message-Id: <9F8EAA72-57B2-443B-A86C-32B97D949165@gmail.com>
+Content-Transfer-Encoding: 7bit
+From: Patrick Rutkowski <rutski89@gmail.com>
+Subject: Re: I Don't Understand The Context Allocation/Destruction Code
+Date: Sun, 22 Apr 2007 00:26:37 -0400
+To: perl6-internals@perl.org
+X-Mailer: Apple Mail (2.752.2)
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED,SPF_PASS
+Status: O
+Content-Length: 3825
+Lines: 115
+
+I was just reading (s/reading/trying to read/) the same routine
+earlier this morning. I'm glad to see that I'm not alone in my
+confusion.
+
+Is it possible to track down the author of those odd bit-shifting
+statements in order to ask him about it directly? I would do it myself
+but I'm still learning my way around the finer points of SVN.
+
+On Apr 21, 2007, at 9:24 PM, chromatic wrote:
+
+> Parrot_alloc_context() performs some calculations about the number of
+> registers used to determine how much memory to allocate:
+>
+>     const size_t size_n = sizeof (FLOATVAL) * n_regs_used[REGNO_NUM];
+>     const size_t size_nip = size_n +
+>         sizeof (INTVAL) *   n_regs_used[REGNO_INT] +
+>         sizeof (PMC*) *     n_regs_used[REGNO_PMC];
+>     size_t reg_alloc = size_nip +
+>         sizeof (STRING*) *  n_regs_used[REGNO_STR];
+>
+> Then it calculates a slot value:
+>
+>     const int slot = (reg_alloc + 7) >> 3;
+>     reg_alloc = slot << 3;
+>
+> This is where I start not to understand.  Why reg_alloc + 7?  Why  
+> shift left
+> and right by 3?
+>
+> It gets less clear.  The interpreter holds a structure for context  
+> memory with
+> a free list (an array of void pointers) and the number of free slots,
+> presumably in this list.
+>
+> After all of that calculation of slot, the function uses it as an  
+> index into
+> the free list.
+>
+> I don't understand that at all.
+>
+> I do understand the purpose of the resizing code, but not how slot  
+> relates to
+> it:
+>
+>     if (slot >= interp->ctx_mem.n_free_slots) {
+>         const int n = slot + 1;
+>         int i;
+>
+>         interp->ctx_mem.free_list = (void **)mem_sys_realloc(
+>                 interp->ctx_mem.free_list, n * sizeof (void*));
+>
+>         for (i = interp->ctx_mem.n_free_slots; i < n; ++i)
+>             interp->ctx_mem.free_list[i] = NULL;
+>         interp->ctx_mem.n_free_slots = n;
+>     }
+>
+> This is doubly weird because when Parrot initializes the free list in
+> create_initial_context(), it allocates a small number of free slots:
+>
+> #define INITIAL_FREE_SLOTS 8
+>
+>     interp->ctx_mem.n_free_slots = INITIAL_FREE_SLOTS;
+>     interp->ctx_mem.free_list    =
+>         (void **)mem_sys_allocate(INITIAL_FREE_SLOTS * sizeof (void  
+> *));
+>
+>     for (i = 0; i < INITIAL_FREE_SLOTS; ++i)
+>         interp->ctx_mem.free_list[i] = NULL;
+>
+> The result is that the free_list extends quite a bit over the initial
+> allocation, but it's mostly just an array of null.  It's fairly  
+> sparse apart
+> from that.
+>
+> Here's another curious thing when allocating a context:
+>
+>     ptr = interp->ctx_mem.free_list[slot];
+>     old = CONTEXT(interp->ctx);
+>     if (ptr) {
+>         interp->ctx_mem.free_list[slot] = *(void **) ptr;
+>     }
+>
+> I wish I could tell you what the assignments to and from ptr do  
+> here, but I
+> can't, nor what they signify.  There's a similar form to free a  
+> context:
+>
+>         ptr = ctxp;
+>         slot = ctxp->regs_mem_size >> 3;
+>
+>         assert(slot < interp->ctx_mem.n_free_slots);
+>         *(void **)ptr = interp->ctx_mem.free_list[slot];
+>         interp->ctx_mem.free_list[slot] = ptr;
+>
+> I originally thought the free_list was an array of recycled  
+> contexts to avoid
+> malloc() and free() pairs by reusing already-allocated-but-unused  
+> memory, but
+> now I can't tell what it's doing.  I tried to change this into a  
+> linked list,
+> but that failed with invalid reads.
+>
+> My best guess is that this is an odd way to store contexts of a  
+> specific size
+> in an array structure so that they're reusable with our new  
+> variable-sized
+> register sets... but the code is unclear and undocumented.  I think  
+> it's also
+> leaking memory.
+>
+> I'd like to find a simpler scheme, if it's possible.  Otherwise,  
+> I'd like to
+> figure out what's going on so we can at least explain it somehow.
+>
+> -- c
+

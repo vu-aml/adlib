@@ -1,0 +1,310 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 29 08:19:14 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4TCJDhB030607
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 08:19:13 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id AF7C7163912
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 12:19:08 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.5 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 501)
+	id E8C19162AE1; Tue, 29 May 2007 12:18:42 +0000 (GMT)
+To: samba-cvs@samba.org
+From: abartlet@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070529121842.E8C19162AE1@lists.samba.org>
+Date: Tue, 29 May 2007 12:18:42 +0000 (GMT)
+Subject: svn commit: samba r23189 - in branches/SAMBA_4_0/source: script
+	scripting/libjs selftest setup
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: abartlet
+Date: 2007-05-29 12:18:41 +0000 (Tue, 29 May 2007)
+New Revision: 23189
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23189
+
+Log:
+Work towards a totally scripted setup of LDAP backends, so others can
+easily try this out.
+
+I also intend to use this for the selftest, but I'm chasing issues
+with the OpenlDAP (but not Fedora DS) backend.
+
+Andrew Bartlett
+
+Modified:
+   branches/SAMBA_4_0/source/script/installmisc.sh
+   branches/SAMBA_4_0/source/scripting/libjs/provision.js
+   branches/SAMBA_4_0/source/selftest/Samba4.pm
+   branches/SAMBA_4_0/source/setup/fedorads-partitions.ldif
+   branches/SAMBA_4_0/source/setup/fedorads.inf
+   branches/SAMBA_4_0/source/setup/provision
+   branches/SAMBA_4_0/source/setup/provision-backend
+   branches/SAMBA_4_0/source/setup/slapd.conf
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/script/installmisc.sh
+===================================================================
+--- branches/SAMBA_4_0/source/script/installmisc.sh	2007-05-29 11:13:07 UTC (rev 23188)
++++ branches/SAMBA_4_0/source/script/installmisc.sh	2007-05-29 12:18:41 UTC (rev 23189)
+@@ -15,6 +15,7 @@
+ echo "Installing setup templates"
+ mkdir -p $SETUPDIR || exit 1
+ cp setup/schema-map-* $SETUPDIR || exit 1
++cp setup/DB_CONFIG $SETUPDIR || exit 1
+ cp setup/*.inf $SETUPDIR || exit 1
+ cp setup/*.ldif $SETUPDIR || exit 1
+ cp setup/*.zone $SETUPDIR || exit 1
+
+Modified: branches/SAMBA_4_0/source/scripting/libjs/provision.js
+===================================================================
+--- branches/SAMBA_4_0/source/scripting/libjs/provision.js	2007-05-29 11:13:07 UTC (rev 23188)
++++ branches/SAMBA_4_0/source/scripting/libjs/provision.js	2007-05-29 12:18:41 UTC (rev 23189)
+@@ -385,10 +385,10 @@
+ 	paths.keytab = "secrets.keytab";
+ 	paths.dns = lp.get("private dir") + "/" + subobj.DNSDOMAIN + ".zone";
+ 	paths.winsdb = "wins.ldb";
+-	paths.ldap_basedn_ldif = lp.get("private dir") + "/" + subobj.DNSDOMAIN + ".ldif";
+-	paths.ldap_config_basedn_ldif = lp.get("private dir") + "/" + subobj.DNSDOMAIN + "-config.ldif";
+-	paths.ldap_schema_basedn_ldif = lp.get("private dir") + "/" + subobj.DNSDOMAIN + "-schema.ldif";
+ 	paths.ldapdir = lp.get("private dir") + "/ldap";
++	paths.ldap_basedn_ldif = paths.ldapdir + "/" + subobj.DNSDOMAIN + ".ldif";
++	paths.ldap_config_basedn_ldif = paths.ldapdir + "/" + subobj.DNSDOMAIN + "-config.ldif";
++	paths.ldap_schema_basedn_ldif = paths.ldapdir + "/" + subobj.DNSDOMAIN + "-schema.ldif";
+ 	return paths;
+ }
+ 
+@@ -793,6 +793,8 @@
+ 
+ 	subobj.RDN_DC = substr(rdns[0], strlen("DC="));
+ 
++	sys.mkdir(paths.ldapdir, 0700);
++
+ 	setup_file("provision_basedn.ldif", 
+ 		   message, paths.ldap_basedn_ldif, 
+ 		   subobj);
+@@ -805,7 +807,6 @@
+ 		   message, paths.ldap_schema_basedn_ldif, 
+ 		   subobj);
+ 
+-	message("Please install the LDIF located in " + paths.ldap_basedn_ldif + ", " + paths.ldap_config_basedn_ldif + " and " + paths.ldap_schema_basedn_ldif + " into your LDAP server, and re-run with --ldap-backend=ldap://my.ldap.server\n");
+ }
+ 
+ 
+
+Modified: branches/SAMBA_4_0/source/selftest/Samba4.pm
+===================================================================
+--- branches/SAMBA_4_0/source/selftest/Samba4.pm	2007-05-29 11:13:07 UTC (rev 23188)
++++ branches/SAMBA_4_0/source/selftest/Samba4.pm	2007-05-29 12:18:41 UTC (rev 23189)
+@@ -422,8 +422,8 @@
+ 	}
+ 
+ 	system("slaptest -u -f $slapd_conf") == 0 or die("slaptest still fails after adding modules");
+-	system("slapadd -b cn=Configuration,$basedn -f $slapd_conf -l $privatedir/$dnsname-config.ldif >/dev/null") == 0 or die("slapadd failed");
+-	system("slapadd -b cn=Schema,cn=Configuration,$basedn -f $slapd_conf -l $privatedir/$dnsname-schema.ldif >/dev/null") == 0 or die("slapadd failed");
++	system("slapadd -b cn=Configuration,$basedn -f $slapd_conf -l $ldapdir/$dnsname-config.ldif >/dev/null") == 0 or die("slapadd failed");
++	system("slapadd -b cn=Schema,cn=Configuration,$basedn -f $slapd_conf -l $ldapdir/$dnsname-schema.ldif >/dev/null") == 0 or die("slapadd failed");
+ 
+     system("slaptest -u -f $slapd_conf >/dev/null") == 0 or 
+ 		die ("slaptest after database load failed");
+@@ -458,7 +458,7 @@
+ 	my $winbindd_socket_dir = "$prefix_abs/winbind_socket";
+ 
+ 	my $configuration = "--configfile=$conffile";
+-	my $ldapdir = "$prefix_abs/ldap";
++	my $ldapdir = "$privatedir/ldap";
+ 
+ 	my $tlsdir = "$privatedir/tls";
+ 
+
+Modified: branches/SAMBA_4_0/source/setup/fedorads-partitions.ldif
+===================================================================
+--- branches/SAMBA_4_0/source/setup/fedorads-partitions.ldif	2007-05-29 11:13:07 UTC (rev 23188)
++++ branches/SAMBA_4_0/source/setup/fedorads-partitions.ldif	2007-05-29 12:18:41 UTC (rev 23189)
+@@ -1,4 +1,4 @@
+-dn: cn=\"${CONFIGDN}\",cn=mapping tree,cn=config
++dn: cn="${CONFIGDN}",cn=mapping tree,cn=config
+ objectclass: top
+ objectclass: extensibleObject
+ objectclass: nsMappingTree
+@@ -12,7 +12,7 @@
+ nsslapd-suffix: ${CONFIGDN}
+ cn: configData
+ 
+-dn: cn=\"${SCHEMADN}\",cn=mapping tree,cn=config
++dn: cn="${SCHEMADN}",cn=mapping tree,cn=config
+ objectclass: top
+ objectclass: extensibleObject
+ objectclass: nsMappingTree
+
+Modified: branches/SAMBA_4_0/source/setup/fedorads.inf
+===================================================================
+--- branches/SAMBA_4_0/source/setup/fedorads.inf	2007-05-29 11:13:07 UTC (rev 23188)
++++ branches/SAMBA_4_0/source/setup/fedorads.inf	2007-05-29 12:18:41 UTC (rev 23189)
+@@ -9,6 +9,7 @@
+ RootDN= cn=Manager,${DOMAINDN}
+ RootDNPwd= ${LDAPMANAGERPASS}
+ ServerIdentifier= samba4
++${SERVERPORT}
+ 
+ inst_dir= ${LDAPDIR}/slapd-samba4
+ config_dir= ${LDAPDIR}/slapd-samba4
+
+Modified: branches/SAMBA_4_0/source/setup/provision
+===================================================================
+--- branches/SAMBA_4_0/source/setup/provision	2007-05-29 11:13:07 UTC (rev 23188)
++++ branches/SAMBA_4_0/source/setup/provision	2007-05-29 12:18:41 UTC (rev 23189)
+@@ -150,6 +150,7 @@
+ message("Using administrator password: %s\n", subobj.ADMINPASS);
+ if (ldapbase) {
+ 	provision_ldapbase(subobj, message, paths);
++	message("Please install the LDIF located in " + paths.ldap_basedn_ldif + ", " + paths.ldap_config_basedn_ldif + " and " + paths.ldap_schema_basedn_ldif + " into your LDAP server, and re-run with --ldap-backend=ldap://my.ldap.server\n");
+ } else if (partitions_only) {
+ 	provision_become_dc(subobj, message, false, paths, system_session);
+ } else {
+
+Modified: branches/SAMBA_4_0/source/setup/provision-backend
+===================================================================
+--- branches/SAMBA_4_0/source/setup/provision-backend	2007-05-29 11:13:07 UTC (rev 23188)
++++ branches/SAMBA_4_0/source/setup/provision-backend	2007-05-29 12:18:41 UTC (rev 23189)
+@@ -16,7 +16,8 @@
+ 		'ldap-manager-pass=s',
+ 		'root=s',
+ 		'quiet',
+-		'ldap-backend-type=s');
++		'ldap-backend-type=s',
++                'ldap-backend-port=i');
+ 
+ if (options == undefined) {
+    println("Failed to parse options");
+@@ -52,8 +53,8 @@
+  --ldap-manager-pass	PASSWORD	choose LDAP Manager password (otherwise random)
+  --root         USERNAME	choose 'root' unix username
+  --quiet			Be quiet
+- --ldap-backend-type LDAPSERVER     Select either \"openldap\" or \"fedora-ds\" as a target to configure
+- --ldap-module= MODULE          LDB mapping module to use for the LDAP backend
++ --ldap-backend-type LDAPSERVER Select either \"openldap\" or \"fedora-ds\" as a target to configure
++ --ldap-backend-port PORT       Select the TCP port (if any) that the LDAP backend should listen on (Fedora DS only)
+ You must provide at least a realm and ldap-backend-type
+ 
+ ");
+@@ -84,13 +85,12 @@
+ 	subobj[key] = options[r];
+ }
+ 
+-var ldapbackend = (options["ldap-backend-type"] != undefined);
+ 
++
+ var paths = provision_default_paths(subobj);
+ provision_fix_subobj(subobj, message, paths);
+ message("Provisioning LDAP backend for %s in realm %s into %s\n", subobj.HOSTNAME, subobj.REALM, subobj.LDAPDIR);
+ message("Using LDAP Manager password: %s\n", subobj.LDAPMANAGERPASS);
+-
+ var tmp_schema_ldb = subobj.LDAPDIR + "/schema-tmp.ldb";
+ sys.mkdir(subobj.LDAPDIR, 0700);
+ 
+@@ -101,12 +101,40 @@
+ if (options["ldap-backend-type"] == "fedora-ds") {
+ 	mapping = "schema-map-fedora-ds-1.0";
+ 	ext = "ldif";
++	if (options["ldap-backend-port"] != undefined) {
++		message("Will listen on TCP port " + options["ldap-backend-port"] + "\n");
++		subobj.SERVERPORT="ServerPort = " + options["ldap-backend-port"];
++	} else {
++		message("Will listen on LDAPI only\n");
++		subobj.SERVERPORT="";
++	}
+ 	setup_file("fedorads.inf", message, subobj.LDAPDIR + "/fedorads.inf", subobj);
+ 	setup_file("fedorads-partitions.ldif", message, subobj.LDAPDIR + "/fedorads-partitions.ldif", subobj);
+ } else if (options["ldap-backend-type"] == "openldap") {
++	provision_ldapbase(subobj, message, paths);
+ 	mapping = "schema-map-openldap-2.3";
+ 	ext = "schema";
+ 	setup_file("slapd.conf", message, subobj.LDAPDIR + "/slapd.conf", subobj);
++	setup_file("modules.conf", message, subobj.LDAPDIR + "/modules.conf", subobj);
++	sys.mkdir(subobj.LDAPDIR + "/db", 0700);
++	subobj.LDAPDBDIR = subobj.LDAPDIR + "/db/user";
++	sys.mkdir(subobj.LDAPDBDIR, 0700);
++	sys.mkdir(subobj.LDAPDBDIR + "/bdb-logs", 0700);
++	sys.mkdir(subobj.LDAPDBDIR + "/tmp", 0700);
++	setup_file("DB_CONFIG", message, subobj.LDAPDBDIR + "/DB_CONFIG", subobj);
++	subobj.LDAPDBDIR = subobj.LDAPDIR + "/db/config";
++	sys.mkdir(subobj.LDAPDBDIR, 0700);
++	sys.mkdir(subobj.LDAPDBDIR + "/bdb-logs", 0700);
++	sys.mkdir(subobj.LDAPDBDIR + "/tmp", 0700);
++	setup_file("DB_CONFIG", message, subobj.LDAPDBDIR + "/DB_CONFIG", subobj);
++	subobj.LDAPDBDIR = subobj.LDAPDIR + "/db/schema";
++	sys.mkdir(subobj.LDAPDBDIR, 0700);
++	sys.mkdir(subobj.LDAPDBDIR + "/tmp", 0700);
++	sys.mkdir(subobj.LDAPDBDIR + "/bdb-logs", 0700);
++	setup_file("DB_CONFIG", message, subobj.LDAPDBDIR + "/DB_CONFIG", subobj);
++	if (options["ldap-backend-port"] != undefined) {
++		message("NOTE: OpenLDAP TCP ports are controlled on the command line, not in the generated config file\n");
++	}
+ }
+ message("ad2oLschema --option=convert:target=" + options["ldap-backend-type"] + " -I " + lp.get("setup directory") + "/" + mapping + " -H tdb://" + tmp_schema_ldb + " -O " + subobj.LDAPDIR + "/backend-schema." + ext + "\n");
+ 
+
+Modified: branches/SAMBA_4_0/source/setup/slapd.conf
+===================================================================
+--- branches/SAMBA_4_0/source/setup/slapd.conf	2007-05-29 11:13:07 UTC (rev 23188)
++++ branches/SAMBA_4_0/source/setup/slapd.conf	2007-05-29 12:18:41 UTC (rev 23189)
+@@ -17,13 +17,13 @@
+           uid=([^,]*),cn=([^,]*),cn=digest-md5,cn=auth
+           ldap:///${DOMAINDN}??sub?(samAccountName=\$1)
+ 
+-include $modconf
++include ${LDAPDIR}/modules.conf
+ 
+-defaultsearchbase \"${DOMAINDN}\"
++defaultsearchbase ${DOMAINDN}
+ 
+ backend		bdb
+ database        bdb
+-suffix		\"cn=Schema,cn=Configuration,${DOMAINDN}\"
++suffix		${SCHEMADN}
+ directory	${LDAPDIR}/db/schema
+ index           objectClass eq
+ index           samAccountName eq
+@@ -33,7 +33,7 @@
+ index subClassOf eq
+ 
+ database        bdb
+-suffix		\"cn=Configuration,${DOMAINDN}\"
++suffix		${CONFIGDN}
+ directory	${LDAPDIR}/db/config
+ index           objectClass eq
+ index           samAccountName eq
+@@ -46,8 +46,8 @@
+ index nETBIOSName eq pres
+ 
+ database        bdb
+-suffix		\"${DOMAINDN}\"
+-rootdn          \"cn=Manager,${DOMAINDN}\"
++suffix		${DOMAINDN}
++rootdn          cn=Manager,${DOMAINDN}
+ rootpw          ${LDAPMANAGERPASS}
+ directory	${LDAPDIR}/db/user
+ index           objectClass eq
+

@@ -1,0 +1,117 @@
+From r-help-bounces@stat.math.ethz.ch  Tue Jun 12 18:32:40 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5CMWcL9032646
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 12 Jun 2007 18:32:40 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5CMVfJc023140;
+	Wed, 13 Jun 2007 00:32:05 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.4 required=5.0 tests=AWL, BAYES_50, DKIM_SIGNED,
+	DKIM_VERIFIED autolearn=no version=3.2.0
+Received: from nz-out-0506.google.com (nz-out-0506.google.com [64.233.162.231])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5CMSjaB021785
+	for <r-help@stat.math.ethz.ch>; Wed, 13 Jun 2007 00:28:46 +0200
+Received: by nz-out-0506.google.com with SMTP id o37so4624nzf
+	for <r-help@stat.math.ethz.ch>; Tue, 12 Jun 2007 15:28:45 -0700 (PDT)
+Received: by 10.143.34.11 with SMTP id m11mr367053wfj.1181687324605;
+	Tue, 12 Jun 2007 15:28:44 -0700 (PDT)
+Received: by 10.143.7.9 with HTTP; Tue, 12 Jun 2007 15:28:44 -0700 (PDT)
+Message-ID: <eb555e660706121528r6b950cfasf2c482698d77d4ca@mail.gmail.com>
+Date: Tue, 12 Jun 2007 15:28:44 -0700
+From: "Deepayan Sarkar" <deepayan.sarkar@gmail.com>
+To: asb@mail.nih.gov
+In-Reply-To: <1181660913.17656.30.camel@gestalt.nimh.nih.gov>
+MIME-Version: 1.0
+Content-Disposition: inline
+References: <1181660913.17656.30.camel@gestalt.nimh.nih.gov>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: R-help <r-help@stat.math.ethz.ch>
+Subject: Re: [R] 2 Trellis graphics question
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+On 6/12/07, Alan S Barnett <asb@mail.nih.gov> wrote:
+> 1) I have a data that includes some "bad" data.  I want to make a
+> trellis plot where each panel contains
+> a) A scatter plot of the "good" data
+> b) A scatter plot of the "bad" data in a different color
+> c) A best fit line of all the data, and
+> d) A best fit line of the "good" data.
+>
+> I tried using xyplot and setting the "group" argument, but I'm having
+> trouble.  Here is my code:
+>
+> xyplot(y ~ x | status, data=data,groups=good,
+> +  panel=function(x,y,...){
+> +  panel.xyplot(x,y,...)
+> +  panel.lmline(x,y,col = "red")
+> +  panel.lmline(x[good],y[good],col = "blue")
+> + }
+> + )
+
+You are close, except the last panel.lmline call is not meaningful
+because the 'x' and 'y' in the panel function are not the same length
+as 'good'.  You need to use 'subscripts' for that.
+
+To fix ideas, here's a concrete example (I've changed the names 'x'
+and 'y' to 'xx' and 'yy' to avoid any confusion):
+
+
+mydata <-
+    data.frame(xx = sample(100),
+               yy = rnorm(100) + rep(c(5, 10), c(80, 20)),
+               status = gl(5, 1, 100),
+               good = rep(c(TRUE, FALSE), c(80, 20)))
+
+Then, what you want can be achieved with:
+
+xyplot(yy ~ xx | status, mydata, groups = good,
+
+       panel = function(x, y, groups, subscripts, ...) {
+           panel.xyplot(x, y,
+                        groups = groups,
+                        subscripts = subscripts,
+                        ...)
+           panel.lmline(x, y, col = "red")
+	   good.id <- groups[subscripts]
+	   ## good.id: subset of 'good' relevant for this panel
+           panel.lmline(x[good.id], y[good.id], col = "blue")
+       })
+
+This also works if 'good' is globally visible and not in 'mydata'.
+
+[...]
+
+> 2) There are 5 different values of status, but I only want to plot three
+> of them.  Can I do this without copying only the desired elements into a
+> new data frame?
+
+Sure, just use the additional argument
+
+  subset = (status %in% c("1", "3", "5"))
+
+or whatever the appropriate subset is.
+
+-Deepayan
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

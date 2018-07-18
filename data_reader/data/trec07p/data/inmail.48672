@@ -1,0 +1,126 @@
+From r-help-bounces@stat.math.ethz.ch  Fri Jun  1 11:30:44 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l51FUghB011563
+	for <ktwarwic@flax9.uwaterloo.ca>; Fri, 1 Jun 2007 11:30:43 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l51FT486029960;
+	Fri, 1 Jun 2007 17:29:30 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.4 required=5.0 tests=AWL, BAYES_50,
+	DKIM_POLICY_SIGNSOME autolearn=no version=3.2.0
+Received: from rwcrmhc13.comcast.net (rwcrmhc13.comcast.net [204.127.192.83])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l51FSnjc029770
+	for <r-help@stat.math.ethz.ch>; Fri, 1 Jun 2007 17:28:52 +0200
+Received: from [192.168.0.76]
+	(74-94-87-209-minnesota.hfc.comcastbusiness.net?[74.94.87.209])
+	by comcast.net (rwcrmhc13) with SMTP
+	id <20070601152848m1300do669e>; Fri, 1 Jun 2007 15:28:48 +0000
+From: Marc Schwartz <marc_schwartz@comcast.net>
+To: livia <yn19832@msn.com>
+In-Reply-To: <10912441.post@talk.nabble.com>
+References: <10912441.post@talk.nabble.com>
+Date: Fri, 01 Jun 2007 10:28:47 -0500
+Message-Id: <1180711727.5137.35.camel@localhost.localdomain>
+Mime-Version: 1.0
+X-Mailer: Evolution 2.8.3 (2.8.3-2.fc6) 
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] tapply histogram
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+Reply-To: marc_schwartz@comcast.net
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+On Fri, 2007-06-01 at 06:00 -0700, livia wrote:
+> Dear members,
+> 
+> I would like to pass the histogram settings to each subset of the dataframe,
+> and generate a multiple figures graph.
+> 
+> First, can anyone tell me how to generate a multiple figures environment? I
+> am trying 
+> 
+> mfrow=c(2,4) and nothing appears.
+> 
+> Secondly, I want to pass the following function in tapply()
+> 
+> hist(x, freq=FALSE)
+> lines(density(x), col="red")
+> rug(x)
+> 
+> how can I manage it?
+> 
+> Many thanks
+
+In this case, you would not want to use one of the *apply() family of
+functions. First, it does not save you anything and second, these
+functions are designed to return some type of R object, which you don't
+want here.
+
+Better to use a for() loop and if you wish, encapsulate the loop in a
+function. Something along the lines of the following, which actually
+defines a new 'formula' method for hist() (though not fully tested):
+
+
+hist.formula <- function(formula, data, cols, rows, ...)
+{
+  DF <- model.frame(formula, data = data, ...)
+  DF.split <- split(DF[[1]], DF[[2]])
+  
+  par(mfrow = c(cols, rows))
+
+  for (i in names(DF.split))
+  {
+    Col <- DF.split[[i]]
+    hist(Col, freq = FALSE, main = i, ...)
+    lines(density(Col), col = "red")
+    rug(Col)
+  }
+}
+
+
+
+The function will take the formula, create a data frame comprised of the
+formula terms and then loop over the list of data frames created by
+split(). 
+
+So we call it as follows:
+
+
+  hist(Sepal.Length ~ Species, data = iris, 2, 2)
+
+
+Based upon the formula specification, you will then get a matrix of
+histograms, where each will be titled with the factor level used to
+split the original data frame.
+
+You could further consolidate the function by implementing an automated
+means to determine the number of rows and columns required in the plot
+matrix, but I'll leave that for you.
+
+See ?model.frame and ?split
+
+HTH,
+
+Marc Schwartz
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

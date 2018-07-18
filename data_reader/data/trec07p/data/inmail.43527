@@ -1,0 +1,275 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri May 25 08:00:45 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4PC0jqD027700
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 25 May 2007 08:00:45 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 0A11A162AEC
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 25 May 2007 12:00:40 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.5 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 501)
+	id 36DD6162AC5; Fri, 25 May 2007 11:59:53 +0000 (GMT)
+To: samba-cvs@samba.org
+From: abartlet@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070525115953.36DD6162AC5@lists.samba.org>
+Date: Fri, 25 May 2007 11:59:53 +0000 (GMT)
+Subject: svn commit: samba r23141 - in branches/SAMBA_4_0/source/winbind: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: abartlet
+Date: 2007-05-25 11:59:52 +0000 (Fri, 25 May 2007)
+New Revision: 23141
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23141
+
+Log:
+Use the finddcs() library call rather than a winbind-specific version.
+
+(I created finddcs() from the winbind code a while back, so this
+finishes that work)
+
+Andrew Bartlett
+
+Modified:
+   branches/SAMBA_4_0/source/winbind/wb_dom_info.c
+   branches/SAMBA_4_0/source/winbind/wb_init_domain.c
+   branches/SAMBA_4_0/source/winbind/wb_server.h
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/winbind/wb_dom_info.c
+===================================================================
+--- branches/SAMBA_4_0/source/winbind/wb_dom_info.c	2007-05-25 11:39:43 UTC (rev 23140)
++++ branches/SAMBA_4_0/source/winbind/wb_dom_info.c	2007-05-25 11:59:52 UTC (rev 23141)
+@@ -30,16 +30,14 @@
+ #include "librpc/gen_ndr/ndr_irpc.h"
+ #include "librpc/gen_ndr/samr.h"
+ #include "lib/messaging/irpc.h"
++#include "libcli/finddcs.h"
+ 
+ struct get_dom_info_state {
+ 	struct composite_context *ctx;
+-	struct wbsrv_service *service;
+-	struct nbtd_getdcname r;
+ 	struct wb_dom_info *info;
+ };
+ 
+ static void get_dom_info_recv_addrs(struct composite_context *ctx);
+-static void get_dom_info_recv_dcname(struct irpc_request *ireq);
+ 
+ struct composite_context *wb_get_dom_info_send(TALLOC_CTX *mem_ctx,
+ 					       struct wbsrv_service *service,
+@@ -48,8 +46,7 @@
+ {
+ 	struct composite_context *result, *ctx;
+ 	struct get_dom_info_state *state;
+-	struct nbt_name name;
+-
++	struct dom_sid *dup_sid;
+ 	result = composite_create(mem_ctx, service->task->event_ctx);
+ 	if (result == NULL) goto failed;
+ 
+@@ -58,24 +55,18 @@
+ 	state->ctx = result;
+ 	result->private_data = state;
+ 
+-	state->service = service;
+-
+ 	state->info = talloc_zero(state, struct wb_dom_info);
+ 	if (state->info == NULL) goto failed;
+ 
+-	state->info->name = talloc_strdup(state->info, domain_name);
+-	if (state->info->name == NULL) goto failed;
+-	state->info->sid = dom_sid_dup(state->info, sid);
+-	if (state->info->sid == NULL) goto failed;
++	dup_sid = dom_sid_dup(state, sid);
++	if (dup_sid == NULL) goto failed;
+ 
+-	make_nbt_name(&name, state->info->name, NBT_NAME_LOGON);
+-
+-	ctx = resolve_name_send(&name, result->event_ctx,
+-				lp_name_resolve_order());
++	ctx = finddcs_send(mem_ctx, domain_name, NBT_NAME_LOGON, 
++			   dup_sid, lp_name_resolve_order(), service->task->event_ctx, 
++			   service->task->msg_ctx);
+ 	if (ctx == NULL) goto failed;
+ 
+-	ctx->async.fn = get_dom_info_recv_addrs;
+-	ctx->async.private_data = state;
++	composite_continue(state->ctx, ctx, get_dom_info_recv_addrs, state);
+ 	return result;
+ 
+  failed:
+@@ -88,48 +79,12 @@
+ 	struct get_dom_info_state *state =
+ 		talloc_get_type(ctx->async.private_data,
+ 				struct get_dom_info_state);
+-	struct server_id *nbt_servers;
+-	struct irpc_request *ireq;
+ 
+-	state->ctx->status = resolve_name_recv(ctx, state->info,
+-					       &state->info->dc_address);
++	state->ctx->status = finddcs_recv(ctx, state->info,
++					  &state->info->num_dcs,
++					  &state->info->dcs);
+ 	if (!composite_is_ok(state->ctx)) return;
+ 
+-	nbt_servers = irpc_servers_byname(state->service->task->msg_ctx,
+-					  state, "nbt_server");
+-	if ((nbt_servers == NULL) || (nbt_servers[0].id == 0)) {
+-		composite_error(state->ctx, NT_STATUS_NO_LOGON_SERVERS);
+-		return;
+-	}
+-
+-	state->r.in.domainname = state->info->name;
+-	state->r.in.ip_address = state->info->dc_address;
+-	state->r.in.my_computername = lp_netbios_name();
+-	state->r.in.my_accountname = talloc_asprintf(state, "%s$",
+-						     lp_netbios_name());
+-	if (composite_nomem(state->r.in.my_accountname, state->ctx)) return;
+-	state->r.in.account_control = ACB_WSTRUST;
+-	state->r.in.domain_sid = dom_sid_dup(state, state->info->sid);
+-	if (composite_nomem(state->r.in.domain_sid, state->ctx)) return;
+-
+-	ireq = irpc_call_send(state->service->task->msg_ctx, nbt_servers[0],
+-			      &dcerpc_table_irpc, DCERPC_NBTD_GETDCNAME,
+-			      &state->r, state);
+-	composite_continue_irpc(state->ctx, ireq, get_dom_info_recv_dcname,
+-				state);
+-}
+-
+-static void get_dom_info_recv_dcname(struct irpc_request *ireq)
+-{
+-	struct get_dom_info_state *state =
+-		talloc_get_type(ireq->async.private,
+-				struct get_dom_info_state);
+-
+-
+-	state->ctx->status = irpc_call_recv(ireq);
+-	if (!composite_is_ok(state->ctx)) return;
+-
+-	state->info->dc_name = talloc_steal(state->info, state->r.out.dcname);
+ 	composite_done(state->ctx);
+ }
+ 
+
+Modified: branches/SAMBA_4_0/source/winbind/wb_init_domain.c
+===================================================================
+--- branches/SAMBA_4_0/source/winbind/wb_init_domain.c	2007-05-25 11:39:43 UTC (rev 23140)
++++ branches/SAMBA_4_0/source/winbind/wb_init_domain.c	2007-05-25 11:59:52 UTC (rev 23141)
+@@ -31,6 +31,7 @@
+ #include "librpc/gen_ndr/ndr_netlogon.h"
+ #include "librpc/gen_ndr/ndr_lsa_c.h"
+ #include "librpc/gen_ndr/ndr_samr_c.h"
++#include "libcli/libcli.h"
+ 
+ #include "libcli/auth/credentials.h"
+ #include "libcli/security/security.h"
+@@ -83,9 +84,10 @@
+ {
+ 	struct dcerpc_binding *binding;
+ 	NTSTATUS status;
++
+ 	/* Make a binding string */
+ 	{
+-		char *s = talloc_asprintf(state, "ncacn_np:%s", state->domain->info->dc_name);
++		char *s = talloc_asprintf(state, "ncacn_np:%s", state->domain->dc_name);
+ 		if (s == NULL) return NULL;
+ 		status = dcerpc_parse_binding(state, s, &binding);
+ 		talloc_free(s);
+@@ -95,8 +97,8 @@
+ 	}
+ 
+ 	/* Alter binding to contain hostname, but also address (so we don't look it up twice) */
+-	binding->target_hostname = state->domain->info->dc_name;
+-	binding->host = state->domain->info->dc_address;
++	binding->target_hostname = state->domain->dc_name;
++	binding->host = state->domain->dc_address;
+ 
+ 	/* This shouldn't make a network call, as the mappings for named pipes are well known */
+ 	status = dcerpc_epm_map_binding(binding, binding, table, state->service->task->event_ctx);
+@@ -130,6 +132,17 @@
+ 	state->domain->info = talloc_reference(state->domain, dom_info);
+ 	if (state->domain->info == NULL) goto failed;
+ 
++	/* Caller should check, but to be safe: */
++	if (dom_info->num_dcs < 1) {
++		goto failed;
++	}
++	
++	/* For now, we just pick the first.  The next step will be to
++	 * walk the entire list.  Also need to fix finddcs() to return
++	 * the entire list */
++	state->domain->dc_name = dom_info->dcs[0].name;
++	state->domain->dc_address = dom_info->dcs[0].address;
++
+ 	/* Create a credentials structure */
+ 	state->domain->schannel_creds = cli_credentials_init(state->domain);
+ 	if (state->domain->schannel_creds == NULL) goto failed;
+@@ -377,7 +390,7 @@
+ 	composite_nomem(state->domain->ldap_conn, state->ctx);
+ 
+ 	ldap_url = talloc_asprintf(state, "ldap://%s/",
+-				   state->domain->info->dc_address);
++				   state->domain->dc_address);
+ 	composite_nomem(ldap_url, state->ctx);
+ 
+ 	ctx = ldap_connect_send(state->domain->ldap_conn, ldap_url);
+@@ -394,7 +407,7 @@
+ 	if (NT_STATUS_IS_OK(state->ctx->status)) {
+ 		state->domain->ldap_conn->host =
+ 			talloc_strdup(state->domain->ldap_conn,
+-				      state->domain->info->dc_name);
++				      state->domain->dc_name);
+ 		state->ctx->status =
+ 			ldap_bind_sasl(state->domain->ldap_conn,
+ 				       state->domain->schannel_creds);
+
+Modified: branches/SAMBA_4_0/source/winbind/wb_server.h
+===================================================================
+--- branches/SAMBA_4_0/source/winbind/wb_server.h	2007-05-25 11:39:43 UTC (rev 23140)
++++ branches/SAMBA_4_0/source/winbind/wb_server.h	2007-05-25 11:59:52 UTC (rev 23141)
+@@ -49,9 +49,8 @@
+ 	const char *dns_name;
+ 	const struct dom_sid *sid;
+ 
+-	const char *dc_name;
+-	const char *dc_dns_name;
+-	const char *dc_address;
++	int num_dcs;
++	struct nbt_dc_name *dcs;
+ };
+ 
+ struct wbsrv_domain {
+@@ -59,6 +58,10 @@
+ 
+ 	struct wb_dom_info *info;
+ 
++	/* Details for the server we are currently talking to */
++	const char *dc_address;
++	const char *dc_name;
++
+ 	struct dcerpc_pipe *lsa_pipe;
+ 	struct policy_handle *lsa_policy_handle;
+ 	struct dcerpc_binding *lsa_binding;
+

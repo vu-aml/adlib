@@ -1,0 +1,553 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun Apr 29 21:35:25 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3U1ZO6w007574
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 29 Apr 2007 21:35:24 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 30D8E163844
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 30 Apr 2007 01:35:23 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 549)
+	id 00BE4162AE4; Mon, 30 Apr 2007 01:34:36 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jra@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070430013437.00BE4162AE4@lists.samba.org>
+Date: Mon, 30 Apr 2007 01:34:36 +0000 (GMT)
+Subject: svn commit: samba r22588 - in branches: SAMBA_3_0/source/libmsrpc
+	SAMBA_3_0/source/locking SAMBA_3_0/source/registry
+	SAMBA_3_0/source/rpc_client SAMBA_3_0/source/rpc_parse
+	SAMBA_3_0/source/rpc_server SAMBA_3_0/source/rpcclient
+	SAMBA_3_0/source/utils SAMBA_3_0_25/source/libmsrpc
+	SAMBA_3_0_25/source/locking SAMBA_3_0_25/source/registry
+	SAMBA_3_0_25/source/rpc_client SAMBA_3_0_25/source/rpc_parse
+	SAMBA_3_0_25/source/rpc_server SAMBA_3_0_25/source/rpcclient
+	SAMBA_3_0_25/source/utils
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 17008
+Lines: 503
+
+Author: jra
+Date: 2007-04-30 01:34:28 +0000 (Mon, 30 Apr 2007)
+New Revision: 22588
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22588
+
+Log:
+Make all uses of TALLOC_MEMDUP consistent.
+Jeremy.
+
+Modified:
+   branches/SAMBA_3_0/source/libmsrpc/libmsrpc_internal.c
+   branches/SAMBA_3_0/source/locking/brlock.c
+   branches/SAMBA_3_0/source/registry/reg_objects.c
+   branches/SAMBA_3_0/source/rpc_client/cli_spoolss.c
+   branches/SAMBA_3_0/source/rpc_parse/parse_spoolss.c
+   branches/SAMBA_3_0/source/rpc_server/srv_spoolss_nt.c
+   branches/SAMBA_3_0/source/rpcclient/cmd_spoolss.c
+   branches/SAMBA_3_0/source/utils/net_rpc_printer.c
+   branches/SAMBA_3_0_25/source/libmsrpc/libmsrpc_internal.c
+   branches/SAMBA_3_0_25/source/locking/brlock.c
+   branches/SAMBA_3_0_25/source/registry/reg_objects.c
+   branches/SAMBA_3_0_25/source/rpc_client/cli_spoolss.c
+   branches/SAMBA_3_0_25/source/rpc_parse/parse_spoolss.c
+   branches/SAMBA_3_0_25/source/rpc_server/srv_spoolss_nt.c
+   branches/SAMBA_3_0_25/source/rpcclient/cmd_spoolss.c
+   branches/SAMBA_3_0_25/source/utils/net_rpc_printer.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/libmsrpc/libmsrpc_internal.c
+===================================================================
+--- branches/SAMBA_3_0/source/libmsrpc/libmsrpc_internal.c	2007-04-30 01:17:34 UTC (rev 22587)
++++ branches/SAMBA_3_0/source/libmsrpc/libmsrpc_internal.c	2007-04-30 01:34:28 UTC (rev 22588)
+@@ -264,13 +264,16 @@
+ 
+ 		data->reg_binary.data_length = size;
+ 
+-		data->reg_binary.data =
+-			( uint8 * ) TALLOC_MEMDUP( mem_ctx, buf.buffer,
+-						   size );
+-		if ( !data->reg_binary.data ) {
+-			TALLOC_FREE( data );
+-			errno = ENOMEM;
+-			data = NULL;
++		if (size) {
++			data->reg_binary.data =
++				( uint8 * ) TALLOC_MEMDUP( mem_ctx, buf.buffer, size );
++			if ( !data->reg_binary.data ) {
++				TALLOC_FREE( data );
++				errno = ENOMEM;
++				data = NULL;
++			}
++		} else {
++			data->reg_binary.data = NULL;
+ 		}
+ 		break;
+ 
+
+Modified: branches/SAMBA_3_0/source/locking/brlock.c
+===================================================================
+--- branches/SAMBA_3_0/source/locking/brlock.c	2007-04-30 01:17:34 UTC (rev 22587)
++++ branches/SAMBA_3_0/source/locking/brlock.c	2007-04-30 01:34:28 UTC (rev 22588)
+@@ -1283,10 +1283,15 @@
+ 			unsigned int num_locks_copy;
+ 
+ 			/* Copy the current lock array. */
+-			locks_copy = (struct lock_struct *)TALLOC_MEMDUP(br_lck, locks, br_lck->num_locks * sizeof(struct lock_struct));
+-			if (!locks_copy) {
+-				smb_panic("brl_close_fnum: talloc fail.\n");
++			if (br_lck->num_locks) {
++				locks_copy = (struct lock_struct *)TALLOC_MEMDUP(br_lck, locks, br_lck->num_locks * sizeof(struct lock_struct));
++				if (!locks_copy) {
++					smb_panic("brl_close_fnum: talloc fail.\n");
++	 			}
++			} else {	
++				locks_copy = NULL;
+ 			}
++
+ 			num_locks_copy = br_lck->num_locks;
+ 
+ 			for (i=0; i < num_locks_copy; i++) {
+
+Modified: branches/SAMBA_3_0/source/registry/reg_objects.c
+===================================================================
+--- branches/SAMBA_3_0/source/registry/reg_objects.c	2007-04-30 01:17:34 UTC (rev 22587)
++++ branches/SAMBA_3_0/source/registry/reg_objects.c	2007-04-30 01:34:28 UTC (rev 22588)
+@@ -310,8 +310,16 @@
+ 	
+ 	fstrcpy( ctr->values[ctr->num_values]->valuename, name );
+ 	ctr->values[ctr->num_values]->type = type;
+-	ctr->values[ctr->num_values]->data_p = (uint8 *)TALLOC_MEMDUP(
+-		ctr, data_p, size );
++	if (size) {
++		ctr->values[ctr->num_values]->data_p = (uint8 *)TALLOC_MEMDUP(
++			ctr, data_p, size );
++		if (!ctr->values[ctr->num_values]->data_p) {
++			ctr->num_values = 0;
++			return 0;
++		}
++	} else {
++		ctr->values[ctr->num_values]->data_p = NULL;
++	}
+ 	ctr->values[ctr->num_values]->size = size;
+ 	ctr->num_values++;
+ 
+@@ -350,8 +358,16 @@
+ 	
+ 		fstrcpy( ctr->values[ctr->num_values]->valuename, val->valuename );
+ 		ctr->values[ctr->num_values]->type = val->type;
+-		ctr->values[ctr->num_values]->data_p = (uint8 *)TALLOC_MEMDUP(
+-			ctr, val->data_p, val->size );
++		if (val->size) {
++			ctr->values[ctr->num_values]->data_p = (uint8 *)TALLOC_MEMDUP(
++				ctr, val->data_p, val->size );
++			if (!ctr->values[ctr->num_values]->data_p) {
++				ctr->num_values = 0;
++				return 0;
++			}
++		} else {
++			ctr->values[ctr->num_values]->data_p = NULL;
++		}
+ 		ctr->values[ctr->num_values]->size = val->size;
+ 		ctr->num_values++;
+ 	}
+
+Modified: branches/SAMBA_3_0/source/rpc_client/cli_spoolss.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpc_client/cli_spoolss.c	2007-04-30 01:17:34 UTC (rev 22587)
++++ branches/SAMBA_3_0/source/rpc_client/cli_spoolss.c	2007-04-30 01:34:28 UTC (rev 22588)
+@@ -1609,7 +1609,11 @@
+ 
+ 	/* Return output parameters */
+ 
+-	value->data_p = (uint8 *)TALLOC_MEMDUP(mem_ctx, out.data, out.needed);
++	if (out.needed) {
++		value->data_p = (uint8 *)TALLOC_MEMDUP(mem_ctx, out.data, out.needed);
++	} else {
++		value->data_p = NULL;
++	}
+ 	value->type = out.type;
+ 	value->size = out.size;
+ 
+@@ -1662,7 +1666,11 @@
+ 
+ 	/* Return output parameters */
+ 
+-	value->data_p = (uint8 *)TALLOC_MEMDUP(mem_ctx, out.data, out.needed);
++	if (out.needed) {
++		value->data_p = (uint8 *)TALLOC_MEMDUP(mem_ctx, out.data, out.needed);
++	} else {
++		value->data_p = NULL;
++	}
+ 	value->type = out.type;
+ 	value->size = out.needed;
+ 	
+@@ -1758,8 +1766,12 @@
+ 	if (value) {
+ 		rpcstr_pull(value->valuename, out.value, sizeof(value->valuename), -1,
+ 			    STR_TERMINATE);
+-		value->data_p = (uint8 *)TALLOC_MEMDUP(mem_ctx, out.data,
++		if (out.realdatasize) {
++			value->data_p = (uint8 *)TALLOC_MEMDUP(mem_ctx, out.data,
+ 						       out.realdatasize);
++		} else {
++			value->data_p = NULL;
++		}
+ 		value->type = out.type;
+ 		value->size = out.realdatasize;
+ 	}
+
+Modified: branches/SAMBA_3_0/source/rpc_parse/parse_spoolss.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpc_parse/parse_spoolss.c	2007-04-30 01:17:34 UTC (rev 22587)
++++ branches/SAMBA_3_0/source/rpc_parse/parse_spoolss.c	2007-04-30 01:34:28 UTC (rev 22588)
+@@ -5251,9 +5251,13 @@
+ 
+ 	buf5->buf_len = len;
+ 	if (src) {
+-		if((buf5->buffer=(uint16*)TALLOC_MEMDUP(mem_ctx, src, sizeof(uint16)*len)) == NULL) {
+-			DEBUG(0,("make_spoolss_buffer5: Unable to malloc memory for buffer!\n"));
+-			return False;
++		if (len) {
++			if((buf5->buffer=(uint16*)TALLOC_MEMDUP(mem_ctx, src, sizeof(uint16)*len)) == NULL) {
++				DEBUG(0,("make_spoolss_buffer5: Unable to malloc memory for buffer!\n"));
++				return False;
++			}
++		} else {
++			buf5->buffer = NULL;
+ 		}
+ 	} else {
+ 		buf5->buffer=NULL;
+
+Modified: branches/SAMBA_3_0/source/rpc_server/srv_spoolss_nt.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpc_server/srv_spoolss_nt.c	2007-04-30 01:17:34 UTC (rev 22587)
++++ branches/SAMBA_3_0/source/rpc_server/srv_spoolss_nt.c	2007-04-30 01:34:28 UTC (rev 22588)
+@@ -1416,11 +1416,15 @@
+ 			return NULL;
+ 	}
+ 
+-	d->dev_private = (uint8 *)TALLOC_MEMDUP(ctx, devmode->dev_private,
++	if (devmode->driverextra) {
++		d->dev_private = (uint8 *)TALLOC_MEMDUP(ctx, devmode->dev_private,
+ 						devmode->driverextra);
+-	if (!d->dev_private) {
+-		return NULL;
+-	}	
++		if (!d->dev_private) {
++			return NULL;
++		}	
++	} else {
++		d->dev_private = NULL;
++	}
+ 	return d;
+ }
+ 
+
+Modified: branches/SAMBA_3_0/source/rpcclient/cmd_spoolss.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpcclient/cmd_spoolss.c	2007-04-30 01:17:34 UTC (rev 22587)
++++ branches/SAMBA_3_0/source/rpcclient/cmd_spoolss.c	2007-04-30 01:34:28 UTC (rev 22588)
+@@ -2027,15 +2027,23 @@
+ 		UNISTR2 data;
+ 		init_unistr2(&data, argv[4], UNI_STR_TERMINATE);
+ 		value.size = data.uni_str_len * 2;
+-		value.data_p = (uint8 *)TALLOC_MEMDUP(mem_ctx, data.buffer,
++		if (value.size) {
++			value.data_p = (uint8 *)TALLOC_MEMDUP(mem_ctx, data.buffer,
+ 						      value.size);
++		} else {
++			value.data_p = NULL;
++		}
+ 		break;
+ 	}
+ 	case REG_DWORD: {
+ 		uint32 data = strtoul(argv[4], NULL, 10);
+ 		value.size = sizeof(data);
+-		value.data_p = (uint8 *)TALLOC_MEMDUP(mem_ctx, &data,
++		if (sizeof(data)) {
++			value.data_p = (uint8 *)TALLOC_MEMDUP(mem_ctx, &data,
+ 						      sizeof(data));
++		} else {
++			value.data_p = NULL;
++		}
+ 		break;
+ 	}
+ 	case REG_BINARY: {
+
+Modified: branches/SAMBA_3_0/source/utils/net_rpc_printer.c
+===================================================================
+--- branches/SAMBA_3_0/source/utils/net_rpc_printer.c	2007-04-30 01:17:34 UTC (rev 22587)
++++ branches/SAMBA_3_0/source/utils/net_rpc_printer.c	2007-04-30 01:34:28 UTC (rev 22588)
+@@ -2331,7 +2331,11 @@
+ 
+ 					value.type = REG_SZ;
+ 					value.size = data.uni_str_len * 2;
+-					value.data_p = (uint8 *)TALLOC_MEMDUP(mem_ctx, data.buffer, value.size);
++					if (value.size) {
++						value.data_p = (uint8 *)TALLOC_MEMDUP(mem_ctx, data.buffer, value.size);
++					} else {
++						value.data_p = NULL;
++					}
+ 
+ 					if (opt_verbose) 
+ 						display_reg_value(subkey, value);
+
+Modified: branches/SAMBA_3_0_25/source/libmsrpc/libmsrpc_internal.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/libmsrpc/libmsrpc_internal.c	2007-04-30 01:17:34 UTC (rev 22587)
++++ branches/SAMBA_3_0_25/source/libmsrpc/libmsrpc_internal.c	2007-04-30 01:34:28 UTC (rev 22588)
+@@ -264,13 +264,16 @@
+ 
+ 		data->reg_binary.data_length = size;
+ 
+-		data->reg_binary.data =
+-			( uint8 * ) TALLOC_MEMDUP( mem_ctx, buf.buffer,
+-						   size );
+-		if ( !data->reg_binary.data ) {
+-			TALLOC_FREE( data );
+-			errno = ENOMEM;
+-			data = NULL;
++		if (size) {
++			data->reg_binary.data =
++				( uint8 * ) TALLOC_MEMDUP( mem_ctx, buf.buffer, size );
++			if ( !data->reg_binary.data ) {
++				TALLOC_FREE( data );
++				errno = ENOMEM;
++				data = NULL;
++			}
++		} else {
++			data->reg_binary.data = NULL;
+ 		}
+ 		break;
+ 
+
+Modified: branches/SAMBA_3_0_25/source/locking/brlock.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/locking/brlock.c	2007-04-30 01:17:34 UTC (rev 22587)
++++ branches/SAMBA_3_0_25/source/locking/brlock.c	2007-04-30 01:34:28 UTC (rev 22588)
+@@ -1283,10 +1283,15 @@
+ 			unsigned int num_locks_copy;
+ 
+ 			/* Copy the current lock array. */
+-			locks_copy = (struct lock_struct *)TALLOC_MEMDUP(br_lck, locks, br_lck->num_locks * sizeof(struct lock_struct));
+-			if (!locks_copy) {
+-				smb_panic("brl_close_fnum: talloc fail.\n");
++			if (br_lck->num_locks) {
++				locks_copy = (struct lock_struct *)TALLOC_MEMDUP(br_lck, locks, br_lck->num_locks * sizeof(struct lock_struct));
++				if (!locks_copy) {
++					smb_panic("brl_close_fnum: talloc fail.\n");
++	 			}
++			} else {	
++				locks_copy = NULL;
+ 			}
++
+ 			num_locks_copy = br_lck->num_locks;
+ 
+ 			for (i=0; i < num_locks_copy; i++) {
+
+Modified: branches/SAMBA_3_0_25/source/registry/reg_objects.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/registry/reg_objects.c	2007-04-30 01:17:34 UTC (rev 22587)
++++ branches/SAMBA_3_0_25/source/registry/reg_objects.c	2007-04-30 01:34:28 UTC (rev 22588)
+@@ -308,8 +308,16 @@
+ 	
+ 	fstrcpy( ctr->values[ctr->num_values]->valuename, name );
+ 	ctr->values[ctr->num_values]->type = type;
+-	ctr->values[ctr->num_values]->data_p = (uint8 *)TALLOC_MEMDUP(
+-		ctr, data_p, size );
++	if (size) {
++		ctr->values[ctr->num_values]->data_p = (uint8 *)TALLOC_MEMDUP(
++			ctr, data_p, size );
++		if (!ctr->values[ctr->num_values]->data_p) {
++			ctr->num_values = 0;
++			return 0;
++		}
++	} else {
++		ctr->values[ctr->num_values]->data_p = NULL;
++	}
+ 	ctr->values[ctr->num_values]->size = size;
+ 	ctr->num_values++;
+ 
+@@ -348,8 +356,16 @@
+ 	
+ 		fstrcpy( ctr->values[ctr->num_values]->valuename, val->valuename );
+ 		ctr->values[ctr->num_values]->type = val->type;
+-		ctr->values[ctr->num_values]->data_p = (uint8 *)TALLOC_MEMDUP(
+-			ctr, val->data_p, val->size );
++		if (val->size) {
++			ctr->values[ctr->num_values]->data_p = (uint8 *)TALLOC_MEMDUP(
++				ctr, val->data_p, val->size );
++			if (!ctr->values[ctr->num_values]->data_p) {
++				ctr->num_values = 0;
++				return 0;
++			}
++		} else {
++			ctr->values[ctr->num_values]->data_p = NULL;
++		}
+ 		ctr->values[ctr->num_values]->size = val->size;
+ 		ctr->num_values++;
+ 	}
+
+Modified: branches/SAMBA_3_0_25/source/rpc_client/cli_spoolss.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/rpc_client/cli_spoolss.c	2007-04-30 01:17:34 UTC (rev 22587)
++++ branches/SAMBA_3_0_25/source/rpc_client/cli_spoolss.c	2007-04-30 01:34:28 UTC (rev 22588)
+@@ -1609,7 +1609,11 @@
+ 
+ 	/* Return output parameters */
+ 
+-	value->data_p = (uint8 *)TALLOC_MEMDUP(mem_ctx, out.data, out.needed);
++	if (out.needed) {
++		value->data_p = (uint8 *)TALLOC_MEMDUP(mem_ctx, out.data, out.needed);
++	} else {
++		value->data_p = NULL;
++	}
+ 	value->type = out.type;
+ 	value->size = out.size;
+ 
+@@ -1662,7 +1666,11 @@
+ 
+ 	/* Return output parameters */
+ 
+-	value->data_p = (uint8 *)TALLOC_MEMDUP(mem_ctx, out.data, out.needed);
++	if (out.needed) {
++		value->data_p = (uint8 *)TALLOC_MEMDUP(mem_ctx, out.data, out.needed);
++	} else {
++		value->data_p = NULL;
++	}
+ 	value->type = out.type;
+ 	value->size = out.needed;
+ 	
+@@ -1758,8 +1766,12 @@
+ 	if (value) {
+ 		rpcstr_pull(value->valuename, out.value, sizeof(value->valuename), -1,
+ 			    STR_TERMINATE);
+-		value->data_p = (uint8 *)TALLOC_MEMDUP(mem_ctx, out.data,
++		if (out.realdatasize) {
++			value->data_p = (uint8 *)TALLOC_MEMDUP(mem_ctx, out.data,
+ 						       out.realdatasize);
++		} else {
++			value->data_p = NULL;
++		}
+ 		value->type = out.type;
+ 		value->size = out.realdatasize;
+ 	}
+
+Modified: branches/SAMBA_3_0_25/source/rpc_parse/parse_spoolss.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/rpc_parse/parse_spoolss.c	2007-04-30 01:17:34 UTC (rev 22587)
++++ branches/SAMBA_3_0_25/source/rpc_parse/parse_spoolss.c	2007-04-30 01:34:28 UTC (rev 22588)
+@@ -5255,9 +5255,13 @@
+ 
+ 	buf5->buf_len = len;
+ 	if (src) {
+-		if((buf5->buffer=(uint16*)TALLOC_MEMDUP(mem_ctx, src, sizeof(uint16)*len)) == NULL) {
+-			DEBUG(0,("make_spoolss_buffer5: Unable to malloc memory for buffer!\n"));
+-			return False;
++		if (len) {
++			if((buf5->buffer=(uint16*)TALLOC_MEMDUP(mem_ctx, src, sizeof(uint16)*len)) == NULL) {
++				DEBUG(0,("make_spoolss_buffer5: Unable to malloc memory for buffer!\n"));
++				return False;
++			}
++		} else {
++			buf5->buffer = NULL;
+ 		}
+ 	} else {
+ 		buf5->buffer=NULL;
+
+Modified: branches/SAMBA_3_0_25/source/rpc_server/srv_spoolss_nt.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/rpc_server/srv_spoolss_nt.c	2007-04-30 01:17:34 UTC (rev 22587)
++++ branches/SAMBA_3_0_25/source/rpc_server/srv_spoolss_nt.c	2007-04-30 01:34:28 UTC (rev 22588)
+@@ -1408,11 +1408,15 @@
+ 			return NULL;
+ 	}
+ 
+-	d->dev_private = (uint8 *)TALLOC_MEMDUP(ctx, devmode->dev_private,
++	if (devmode->driverextra) {
++		d->dev_private = (uint8 *)TALLOC_MEMDUP(ctx, devmode->dev_private,
+ 						devmode->driverextra);
+-	if (!d->dev_private) {
+-		return NULL;
+-	}	
++		if (!d->dev_private) {
++			return NULL;
++		}	
++	} else {
++		d->dev_private = NULL;
++	}
+ 	return d;
+ }
+ 
+
+Modified: branches/SAMBA_3_0_25/source/rpcclient/cmd_spoolss.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/rpcclient/cmd_spoolss.c	2007-04-30 01:17:34 UTC (rev 22587)
++++ branches/SAMBA_3_0_25/source/rpcclient/cmd_spoolss.c	2007-04-30 01:34:28 UTC (rev 22588)
+@@ -2022,15 +2022,23 @@
+ 		UNISTR2 data;
+ 		init_unistr2(&data, argv[4], UNI_STR_TERMINATE);
+ 		value.size = data.uni_str_len * 2;
+-		value.data_p = (uint8 *)TALLOC_MEMDUP(mem_ctx, data.buffer,
++		if (value.size) {
++			value.data_p = (uint8 *)TALLOC_MEMDUP(mem_ctx, data.buffer,
+ 						      value.size);
++		} else {
++			value.data_p = NULL;
++		}
+ 		break;
+ 	}
+ 	case REG_DWORD: {
+ 		uint32 data = strtoul(argv[4], NULL, 10);
+ 		value.size = sizeof(data);
+-		value.data_p = (uint8 *)TALLOC_MEMDUP(mem_ctx, &data,
++		if (sizeof(data)) {
++			value.data_p = (uint8 *)TALLOC_MEMDUP(mem_ctx, &data,
+ 						      sizeof(data));
++		} else {
++			value.data_p = NULL;
++		}
+ 		break;
+ 	}
+ 	case REG_BINARY: {
+
+Modified: branches/SAMBA_3_0_25/source/utils/net_rpc_printer.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/utils/net_rpc_printer.c	2007-04-30 01:17:34 UTC (rev 22587)
++++ branches/SAMBA_3_0_25/source/utils/net_rpc_printer.c	2007-04-30 01:34:28 UTC (rev 22588)
+@@ -2327,7 +2327,11 @@
+ 
+ 					value.type = REG_SZ;
+ 					value.size = data.uni_str_len * 2;
+-					value.data_p = TALLOC_MEMDUP(mem_ctx, data.buffer, value.size);
++					if (value.size) {
++						value.data_p = TALLOC_MEMDUP(mem_ctx, data.buffer, value.size);
++					} else {
++						value.data_p = NULL;
++					}
+ 
+ 					if (opt_verbose) 
+ 						display_reg_value(subkey, value);
+

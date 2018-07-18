@@ -1,0 +1,111 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Apr 12 07:43:03 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3CBh30I029088
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 12 Apr 2007 07:43:03 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 338F9163969
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 12 Apr 2007 11:42:40 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 620)
+	id 7F087162AC0; Thu, 12 Apr 2007 11:42:10 +0000 (GMT)
+To: samba-cvs@samba.org
+From: metze@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070412114210.7F087162AC0@lists.samba.org>
+Date: Thu, 12 Apr 2007 11:42:10 +0000 (GMT)
+Subject: svn commit: samba r22194 - in
+	branches/SAMBA_4_0/source/torture/rpc: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2138
+Lines: 68
+
+Author: metze
+Date: 2007-04-12 11:42:09 +0000 (Thu, 12 Apr 2007)
+New Revision: 22194
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22194
+
+Log:
+fix compiler warning and 
+compile in but disable NetShareAddSetDel test
+
+metze
+Modified:
+   branches/SAMBA_4_0/source/torture/rpc/srvsvc.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/torture/rpc/srvsvc.c
+===================================================================
+--- branches/SAMBA_4_0/source/torture/rpc/srvsvc.c	2007-04-12 11:35:00 UTC (rev 22193)
++++ branches/SAMBA_4_0/source/torture/rpc/srvsvc.c	2007-04-12 11:42:09 UTC (rev 22194)
+@@ -525,6 +525,11 @@
+ 	int i;
+ 	BOOL ret = True;
+ 
++	if (!lp_parm_bool(-1, "torture", "dangerous", False)) {
++		d_printf("NetShareAddSetDel disabled - enable dangerous tests to use\n");
++		return True;
++	}
++
+ 	a.in.server_unc = r.in.server_unc = q.in.server_unc = d.in.server_unc =
+ 		talloc_asprintf(mem_ctx, "\\\\%s", dcerpc_server_name(p));
+ 	r.in.share_name = talloc_strdup(mem_ctx, "testshare");
+@@ -1047,7 +1052,7 @@
+ 			}
+ 		}
+ 
+-		talloc_free(r.in.name);
++		talloc_free(name);
+ 
+ 		d_printf("Maximum length for type %2d, flags %08x: %d\n", i, r.in.flags, max);
+ 
+@@ -1056,7 +1061,7 @@
+ 		invalidc = talloc_strdup(mem_ctx, "");
+ 
+ 		for (n = 0x20; n < 0x7e; n++) {
+-			r.in.name = talloc_asprintf(mem_ctx, "%c", (char)n);
++			r.in.name = name = talloc_asprintf(mem_ctx, "%c", (char)n);
+ 
+ 			status = dcerpc_srvsvc_NetNameValidate(p, mem_ctx, &r);
+ 			if (!NT_STATUS_IS_OK(status)) {
+@@ -1069,7 +1074,7 @@
+ 				invalidc = talloc_asprintf_append(invalidc, "%c", (char)n);
+ 			}
+ 
+-			talloc_free(r.in.name);
++			talloc_free(name);
+ 		}
+ 
+ 		d_printf(" Invalid chars for type %2d, flags %08x: \"%s\"\n", i, r.in.flags, invalidc);
+@@ -1115,7 +1120,7 @@
+ 	ret &= test_NetRemoteTOD(p, mem_ctx);
+ 	ret &= test_NetShareEnum(p, mem_ctx, True);
+ 	ret &= test_NetShareGetInfo(p, mem_ctx, "ADMIN$", True);
+-/*	ret &= test_NetShareAddSetDel(p, mem_ctx); */
++	ret &= test_NetShareAddSetDel(p, mem_ctx);
+ 	ret &= test_NetNameValidate(p, mem_ctx);
+ 	
+ 	status = torture_rpc_connection(mem_ctx, &p, &dcerpc_table_srvsvc);
+

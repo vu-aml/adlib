@@ -1,0 +1,127 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Apr 19 15:24:14 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3JJOE0I028649
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 19 Apr 2007 15:24:14 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 93467163B26
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 19 Apr 2007 19:23:49 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-2.0 required=3.8 tests=ALL_TRUSTED,AWL,BAYES_00,
+	RCVD_IN_DSBL autolearn=ham version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from [127.0.0.1] (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id E539A162BCC;
+	Thu, 19 Apr 2007 19:23:04 +0000 (GMT)
+From: simo <idra@samba.org>
+To: "Gerald (Jerry) Carter" <jerry@samba.org>
+In-Reply-To: <4627A2BB.4060108@samba.org>
+References: <20070418205000.88D4B1638B9@lists.samba.org>
+	<1176929909.16886.16.camel@localhost.localdomain>
+	<1176986243.23884.7.camel@localhost.localdomain>
+	<200704191330.l3JDUHaM092847@au.padl.com>
+	<1176990812.23884.9.camel@localhost.localdomain>
+	<46278171.7030301@samba.org>
+	<20070419170128.GC7346@jeremy2.wintest.samba.local>
+	<4627A2BB.4060108@samba.org>
+Content-Type: text/plain
+Organization: Samba Team
+Date: Thu, 19 Apr 2007 15:23:04 -0400
+Message-Id: <1177010584.23884.32.camel@localhost.localdomain>
+Mime-Version: 1.0
+X-Mailer: Evolution 2.8.1 
+Content-Transfer-Encoding: 7bit
+Cc: samba-technical@lists.samba.org, Jeremy Allison <jra@samba.org>
+Subject: Re: Broken idmap interface design
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2836
+Lines: 70
+
+On Thu, 2007-04-19 at 12:11 -0500, Gerald (Jerry) Carter wrote:
+> -----BEGIN PGP SIGNED MESSAGE-----
+> Hash: SHA1
+> 
+> Jeremy Allison wrote:
+> 
+> >> Requiring the idmap_tdb code (or idmap_rid) to issues a
+> >> winbindd client call is wrong and a layering violation.  The
+> >> caller should specify the SID type which is exactly what
+> >> the WINBINDD_SID_TO_UID, et. al. calls used to do.
+> > 
+> > Indeed. Looking at this interface cold after ignoring
+> > it for a while I think the SID_TYPE enum needs to be
+> > present as input on all calls into a "map SID to XXX".
+> 
+> Agreed.  I'm still looking at what would be the minimal
+> appropriate fix.  Simo and I have a call later this afternoon
+> to chat about the current state and how to move forward.
+
+Ok, we cleared out the problem in the call.
+
+Jerry is right, we have a layering violation.
+
+Let me explain why we had the lookup_sid() call in idmap_new_mapping().
+
+Basically we decided that decision on whether to allocate or not a new
+mapping was to be done into idmap. The problem was that to avoid
+malicious ID consumption I decided to add a call to verify if the SID
+was a valid existing SID before going on and asking the alloc backend to
+give as an uid.
+
+The lookup_sid() purpose was never really that of retrieving the SID
+type. The type can be easily passed by the caller, and in fact that is
+what we will do for 3.0.25
+
+The error was in putting the verification inside idmap (causing the
+layering violation). Now what we will do is to make the verification,
+_before_ calling into idmap.
+Winbindd is the gateway to idmap anyway so we can trust nobody else
+should be able to inject calls with bogus requests just to deplete our
+uid space. The only side effect I can see is that, this way, winbindd
+will have to verify the validity of a SID for each idmap request as
+winbindd has no knowledge of whether the mapping already exist (no
+verification required) or it will be allocated just at that point
+(verification absolutely required).
+
+If this will turn out to be a performance problem we will find out how
+to cope with that (maybe via a cache or something).
+
+Also the multiple SIDS to IDS call will not be exposed in 3.0.25, we
+will delay it to 3.0.26, as Jerry want to enhance the interface before
+releasing it. This interface was introduced to solve some performances
+issues for users with many many many SIDs attached when caches are empty
+(we've seen PACs with thousands of SIDs for a single user :-/).
+
+For idmap_rid that was just copying and pasting without thinking (I
+already feel an electric shock here* :), I should never have put such
+calls down there, even with the current design, that was my fault.
+
+Simo.
+
+
+
+* If you don't get this joke don't worry, someone here does :)
+
+-- 
+Simo Sorce
+Samba Team GPL Compliance Officer
+email: idra@samba.org
+http://samba.org
+

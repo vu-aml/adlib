@@ -1,0 +1,465 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri Jun 15 06:40:53 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5FAeqL9032518
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 15 Jun 2007 06:40:53 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id AF06C162BE0
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 15 Jun 2007 10:40:51 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.4 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1017)
+	id 10D2C162ACE; Fri, 15 Jun 2007 10:40:38 +0000 (GMT)
+To: samba-cvs@samba.org
+From: obnox@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070615104038.10D2C162ACE@lists.samba.org>
+Date: Fri, 15 Jun 2007 10:40:38 +0000 (GMT)
+Subject: svn commit: samba r23504 - in branches: SAMBA_3_0/source/registry
+	SAMBA_3_0_26/source/registry
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: obnox
+Date: 2007-06-15 10:40:36 +0000 (Fri, 15 Jun 2007)
+New Revision: 23504
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23504
+
+Log:
+Use tdb_wrap_open (instead of usual tdb_open) in reg_db.
+This eliminates the need of maintaining reg_db's own 
+reference counter for the tdb. Maybe as a next step...
+
+Michael
+
+
+Modified:
+   branches/SAMBA_3_0/source/registry/reg_db.c
+   branches/SAMBA_3_0_26/source/registry/reg_db.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/registry/reg_db.c
+===================================================================
+--- branches/SAMBA_3_0/source/registry/reg_db.c	2007-06-15 00:14:11 UTC (rev 23503)
++++ branches/SAMBA_3_0/source/registry/reg_db.c	2007-06-15 10:40:36 UTC (rev 23504)
+@@ -25,7 +25,7 @@
+ #undef DBGC_CLASS
+ #define DBGC_CLASS DBGC_RPC_SRV
+ 
+-static TDB_CONTEXT *tdb_reg;
++static struct tdb_wrap *tdb_reg = NULL;
+ static int tdb_refcount;
+ 
+ #define VALUE_PREFIX	"SAMBA_REGVAL"
+@@ -109,7 +109,7 @@
+ 	 * transaction behaviour.
+ 	 */
+ 
+-	if ( tdb_transaction_start( tdb_reg ) == -1 ) {
++	if ( tdb_transaction_start( tdb_reg->tdb ) == -1 ) {
+ 		DEBUG(0, ("init_registry_data: tdb_transaction_start "
+ 			  "failed\n"));
+ 		return False;
+@@ -208,7 +208,7 @@
+ 		TALLOC_FREE( values );
+ 	}
+ 	
+-	if (tdb_transaction_commit( tdb_reg ) == -1) {
++	if (tdb_transaction_commit( tdb_reg->tdb ) == -1) {
+ 		DEBUG(0, ("init_registry_data: Could not commit "
+ 			  "transaction\n"));
+ 		return False;
+@@ -218,7 +218,7 @@
+ 
+  fail:
+ 
+-	if (tdb_transaction_cancel( tdb_reg ) == -1) {
++	if (tdb_transaction_cancel( tdb_reg->tdb ) == -1) {
+ 		smb_panic("init_registry_data: tdb_transaction_cancel "
+ 			  "failed\n");
+ 	}
+@@ -238,9 +238,9 @@
+ 	if ( tdb_reg )
+ 		return True;
+ 
+-	if ( !(tdb_reg = tdb_open_log(lock_path("registry.tdb"), 0, REG_TDB_FLAGS, O_RDWR, 0600)) )
++	if ( !(tdb_reg = tdb_wrap_open(NULL, lock_path("registry.tdb"), 0, REG_TDB_FLAGS, O_RDWR, 0600)) )
+ 	{
+-		tdb_reg = tdb_open_log(lock_path("registry.tdb"), 0, REG_TDB_FLAGS, O_RDWR|O_CREAT, 0600);
++		tdb_reg = tdb_wrap_open(NULL, lock_path("registry.tdb"), 0, REG_TDB_FLAGS, O_RDWR|O_CREAT, 0600);
+ 		if ( !tdb_reg ) {
+ 			DEBUG(0,("regdb_init: Failed to open registry %s (%s)\n",
+ 				lock_path("registry.tdb"), strerror(errno) ));
+@@ -251,9 +251,8 @@
+ 	}
+ 
+ 	tdb_refcount = 1;
+-		
+ 
+-	vers_id = tdb_fetch_int32(tdb_reg, vstring);
++	vers_id = tdb_fetch_int32(tdb_reg->tdb, vstring);
+ 
+ 	if ( vers_id != REGVER_V1 ) {
+ 		/* any upgrade code here if needed */
+@@ -285,7 +284,7 @@
+ 	
+ 	become_root();
+ 
+-	tdb_reg = tdb_open_log(lock_path("registry.tdb"), 0, REG_TDB_FLAGS, O_RDWR, 0600);
++	tdb_reg = tdb_wrap_open(NULL, lock_path("registry.tdb"), 0, REG_TDB_FLAGS, O_RDWR, 0600);
+ 	if ( !tdb_reg ) {
+ 		result = ntstatus_to_werror( map_nt_error_from_unix( errno ) );
+ 		DEBUG(0,("regdb_open: Failed to open %s! (%s)\n", 
+@@ -305,8 +304,6 @@
+ 
+ int regdb_close( void )
+ {
+-	int ret;
+-
+ 	tdb_refcount--;
+ 
+ 	DEBUG(10,("regdb_close: decrementing refcount (%d)\n", tdb_refcount));
+@@ -316,10 +313,8 @@
+ 
+ 	SMB_ASSERT( tdb_refcount >= 0 );
+ 
+-	ret = tdb_close( tdb_reg );
+-	tdb_reg = NULL;
+-
+-	return ret;
++	TALLOC_FREE(tdb_reg);
++	return 0;
+ }
+ 
+ /***********************************************************************
+@@ -329,7 +324,7 @@
+  ***********************************************************************/
+ int regdb_get_seqnum(void)
+ {
+-	return tdb_get_seqnum(tdb_reg);
++	return tdb_get_seqnum(tdb_reg->tdb);
+ }
+ 
+ /***********************************************************************
+@@ -387,7 +382,7 @@
+ 	
+ 	dbuf.dptr = buffer;
+ 	dbuf.dsize = len;
+-	if ( tdb_store_bystring( tdb_reg, keyname, dbuf, TDB_REPLACE ) == -1) {
++	if ( tdb_store_bystring( tdb_reg->tdb, keyname, dbuf, TDB_REPLACE ) == -1) {
+ 		ret = False;
+ 		goto done;
+ 	}
+@@ -410,7 +405,7 @@
+ 	REGSUBKEY_CTR *subkeys = NULL, *old_subkeys = NULL;
+ 	char *oldkeyname;
+ 	
+-	if ( tdb_transaction_start( tdb_reg ) == -1 ) {
++	if ( tdb_transaction_start( tdb_reg->tdb ) == -1 ) {
+ 		DEBUG(0, ("regdb_store_keys: tdb_transaction_start failed\n"));
+ 		return False;
+ 	}
+@@ -449,7 +444,7 @@
+ 
+ 		pstr_sprintf( path, "%s/%s", key, oldkeyname );
+ 		normalize_reg_path( path );
+-		if (tdb_delete_bystring( tdb_reg, path ) == -1) {
++		if (tdb_delete_bystring( tdb_reg->tdb, path ) == -1) {
+ 			DEBUG(1, ("Deleting %s failed\n", path));
+ 			goto fail;
+ 		}
+@@ -461,7 +456,7 @@
+ 		/*
+ 		 * Ignore errors here, we might have no values around
+ 		 */
+-		tdb_delete_bystring( tdb_reg, path );
++		tdb_delete_bystring( tdb_reg->tdb, path );
+ 	}
+ 
+ 	TALLOC_FREE( old_subkeys );
+@@ -490,7 +485,7 @@
+ 		TALLOC_FREE( subkeys );
+ 	}
+ 
+-	if (tdb_transaction_commit( tdb_reg ) == -1) {
++	if (tdb_transaction_commit( tdb_reg->tdb ) == -1) {
+ 		DEBUG(0, ("regdb_store_keys: Could not commit transaction\n"));
+ 		return False;
+ 	}
+@@ -501,7 +496,7 @@
+ 	TALLOC_FREE( old_subkeys );
+ 	TALLOC_FREE( subkeys );
+ 
+-	if (tdb_transaction_cancel( tdb_reg ) == -1) {
++	if (tdb_transaction_cancel( tdb_reg->tdb ) == -1) {
+ 		smb_panic("regdb_store_keys: tdb_transaction_cancel failed\n");
+ 	}
+ 
+@@ -532,7 +527,7 @@
+ 	pstring_sub( path, "\\", "/" ); 
+ 	strupper_m( path );
+ 	
+-	dbuf = tdb_fetch_bystring( tdb_reg, path );
++	dbuf = tdb_fetch_bystring( tdb_reg->tdb, path );
+ 	
+ 	buf = dbuf.dptr;
+ 	buflen = dbuf.dsize;
+@@ -650,7 +645,7 @@
+ 	pstr_sprintf( keystr, "%s/%s", VALUE_PREFIX, key );
+ 	normalize_reg_path( keystr );
+ 	
+-	data = tdb_fetch_bystring( tdb_reg, keystr );
++	data = tdb_fetch_bystring( tdb_reg->tdb, keystr );
+ 	
+ 	if ( !data.dptr ) {
+ 		/* all keys have zero values by default */
+@@ -695,7 +690,7 @@
+ 	pstr_sprintf( keystr, "%s/%s", VALUE_PREFIX, key );
+ 	normalize_reg_path( keystr );
+ 	
+-	ret = tdb_trans_store_bystring(tdb_reg, keystr, data, TDB_REPLACE);
++	ret = tdb_trans_store_bystring(tdb_reg->tdb, keystr, data, TDB_REPLACE);
+ 	
+ 	SAFE_FREE( data.dptr );
+ 	
+@@ -723,7 +718,7 @@
+ 	}
+ 	normalize_dbkey(tdbkey);
+ 
+-        data = tdb_fetch_bystring(tdb_reg, tdbkey);
++        data = tdb_fetch_bystring(tdb_reg->tdb, tdbkey);
+ 	SAFE_FREE(tdbkey);
+ 
+ 	if (data.dptr == NULL) {
+@@ -774,7 +769,7 @@
+ 		goto done;
+ 	}
+ 
+-	if (tdb_trans_store_bystring(tdb_reg, tdbkey, tdbdata, 0) == -1) {
++	if (tdb_trans_store_bystring(tdb_reg->tdb, tdbkey, tdbdata, 0) == -1) {
+ 		err = ntstatus_to_werror(map_nt_error_from_unix(errno));
+ 		goto done;
+ 	}
+
+Modified: branches/SAMBA_3_0_26/source/registry/reg_db.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/registry/reg_db.c	2007-06-15 00:14:11 UTC (rev 23503)
++++ branches/SAMBA_3_0_26/source/registry/reg_db.c	2007-06-15 10:40:36 UTC (rev 23504)
+@@ -25,7 +25,7 @@
+ #undef DBGC_CLASS
+ #define DBGC_CLASS DBGC_RPC_SRV
+ 
+-static TDB_CONTEXT *tdb_reg;
++static struct tdb_wrap *tdb_reg = NULL;
+ static int tdb_refcount;
+ 
+ #define VALUE_PREFIX	"SAMBA_REGVAL"
+@@ -109,7 +109,7 @@
+ 	 * transaction behaviour.
+ 	 */
+ 
+-	if ( tdb_transaction_start( tdb_reg ) == -1 ) {
++	if ( tdb_transaction_start( tdb_reg->tdb ) == -1 ) {
+ 		DEBUG(0, ("init_registry_data: tdb_transaction_start "
+ 			  "failed\n"));
+ 		return False;
+@@ -208,7 +208,7 @@
+ 		TALLOC_FREE( values );
+ 	}
+ 	
+-	if (tdb_transaction_commit( tdb_reg ) == -1) {
++	if (tdb_transaction_commit( tdb_reg->tdb ) == -1) {
+ 		DEBUG(0, ("init_registry_data: Could not commit "
+ 			  "transaction\n"));
+ 		return False;
+@@ -218,7 +218,7 @@
+ 
+  fail:
+ 
+-	if (tdb_transaction_cancel( tdb_reg ) == -1) {
++	if (tdb_transaction_cancel( tdb_reg->tdb ) == -1) {
+ 		smb_panic("init_registry_data: tdb_transaction_cancel "
+ 			  "failed\n");
+ 	}
+@@ -238,9 +238,9 @@
+ 	if ( tdb_reg )
+ 		return True;
+ 
+-	if ( !(tdb_reg = tdb_open_log(lock_path("registry.tdb"), 0, REG_TDB_FLAGS, O_RDWR, 0600)) )
++	if ( !(tdb_reg = tdb_wrap_open(NULL, lock_path("registry.tdb"), 0, REG_TDB_FLAGS, O_RDWR, 0600)) )
+ 	{
+-		tdb_reg = tdb_open_log(lock_path("registry.tdb"), 0, REG_TDB_FLAGS, O_RDWR|O_CREAT, 0600);
++		tdb_reg = tdb_wrap_open(NULL, lock_path("registry.tdb"), 0, REG_TDB_FLAGS, O_RDWR|O_CREAT, 0600);
+ 		if ( !tdb_reg ) {
+ 			DEBUG(0,("regdb_init: Failed to open registry %s (%s)\n",
+ 				lock_path("registry.tdb"), strerror(errno) ));
+@@ -251,9 +251,8 @@
+ 	}
+ 
+ 	tdb_refcount = 1;
+-		
+ 
+-	vers_id = tdb_fetch_int32(tdb_reg, vstring);
++	vers_id = tdb_fetch_int32(tdb_reg->tdb, vstring);
+ 
+ 	if ( vers_id != REGVER_V1 ) {
+ 		/* any upgrade code here if needed */
+@@ -285,7 +284,7 @@
+ 	
+ 	become_root();
+ 
+-	tdb_reg = tdb_open_log(lock_path("registry.tdb"), 0, REG_TDB_FLAGS, O_RDWR, 0600);
++	tdb_reg = tdb_wrap_open(NULL, lock_path("registry.tdb"), 0, REG_TDB_FLAGS, O_RDWR, 0600);
+ 	if ( !tdb_reg ) {
+ 		result = ntstatus_to_werror( map_nt_error_from_unix( errno ) );
+ 		DEBUG(0,("regdb_open: Failed to open %s! (%s)\n", 
+@@ -305,8 +304,6 @@
+ 
+ int regdb_close( void )
+ {
+-	int ret;
+-
+ 	tdb_refcount--;
+ 
+ 	DEBUG(10,("regdb_close: decrementing refcount (%d)\n", tdb_refcount));
+@@ -316,10 +313,8 @@
+ 
+ 	SMB_ASSERT( tdb_refcount >= 0 );
+ 
+-	ret = tdb_close( tdb_reg );
+-	tdb_reg = NULL;
+-
+-	return ret;
++	TALLOC_FREE(tdb_reg);
++	return 0;
+ }
+ 
+ /***********************************************************************
+@@ -329,7 +324,7 @@
+  ***********************************************************************/
+ int regdb_get_seqnum(void)
+ {
+-	return tdb_get_seqnum(tdb_reg);
++	return tdb_get_seqnum(tdb_reg->tdb);
+ }
+ 
+ /***********************************************************************
+@@ -387,7 +382,7 @@
+ 	
+ 	dbuf.dptr = buffer;
+ 	dbuf.dsize = len;
+-	if ( tdb_store_bystring( tdb_reg, keyname, dbuf, TDB_REPLACE ) == -1) {
++	if ( tdb_store_bystring( tdb_reg->tdb, keyname, dbuf, TDB_REPLACE ) == -1) {
+ 		ret = False;
+ 		goto done;
+ 	}
+@@ -410,7 +405,7 @@
+ 	REGSUBKEY_CTR *subkeys = NULL, *old_subkeys = NULL;
+ 	char *oldkeyname;
+ 	
+-	if ( tdb_transaction_start( tdb_reg ) == -1 ) {
++	if ( tdb_transaction_start( tdb_reg->tdb ) == -1 ) {
+ 		DEBUG(0, ("regdb_store_keys: tdb_transaction_start failed\n"));
+ 		return False;
+ 	}
+@@ -449,7 +444,7 @@
+ 
+ 		pstr_sprintf( path, "%s/%s", key, oldkeyname );
+ 		normalize_reg_path( path );
+-		if (tdb_delete_bystring( tdb_reg, path ) == -1) {
++		if (tdb_delete_bystring( tdb_reg->tdb, path ) == -1) {
+ 			DEBUG(1, ("Deleting %s failed\n", path));
+ 			goto fail;
+ 		}
+@@ -461,7 +456,7 @@
+ 		/*
+ 		 * Ignore errors here, we might have no values around
+ 		 */
+-		tdb_delete_bystring( tdb_reg, path );
++		tdb_delete_bystring( tdb_reg->tdb, path );
+ 	}
+ 
+ 	TALLOC_FREE( old_subkeys );
+@@ -490,7 +485,7 @@
+ 		TALLOC_FREE( subkeys );
+ 	}
+ 
+-	if (tdb_transaction_commit( tdb_reg ) == -1) {
++	if (tdb_transaction_commit( tdb_reg->tdb ) == -1) {
+ 		DEBUG(0, ("regdb_store_keys: Could not commit transaction\n"));
+ 		return False;
+ 	}
+@@ -501,7 +496,7 @@
+ 	TALLOC_FREE( old_subkeys );
+ 	TALLOC_FREE( subkeys );
+ 
+-	if (tdb_transaction_cancel( tdb_reg ) == -1) {
++	if (tdb_transaction_cancel( tdb_reg->tdb ) == -1) {
+ 		smb_panic("regdb_store_keys: tdb_transaction_cancel failed\n");
+ 	}
+ 
+@@ -532,7 +527,7 @@
+ 	pstring_sub( path, "\\", "/" ); 
+ 	strupper_m( path );
+ 	
+-	dbuf = tdb_fetch_bystring( tdb_reg, path );
++	dbuf = tdb_fetch_bystring( tdb_reg->tdb, path );
+ 	
+ 	buf = dbuf.dptr;
+ 	buflen = dbuf.dsize;
+@@ -650,7 +645,7 @@
+ 	pstr_sprintf( keystr, "%s/%s", VALUE_PREFIX, key );
+ 	normalize_reg_path( keystr );
+ 	
+-	data = tdb_fetch_bystring( tdb_reg, keystr );
++	data = tdb_fetch_bystring( tdb_reg->tdb, keystr );
+ 	
+ 	if ( !data.dptr ) {
+ 		/* all keys have zero values by default */
+@@ -695,7 +690,7 @@
+ 	pstr_sprintf( keystr, "%s/%s", VALUE_PREFIX, key );
+ 	normalize_reg_path( keystr );
+ 	
+-	ret = tdb_trans_store_bystring(tdb_reg, keystr, data, TDB_REPLACE);
++	ret = tdb_trans_store_bystring(tdb_reg->tdb, keystr, data, TDB_REPLACE);
+ 	
+ 	SAFE_FREE( data.dptr );
+ 	
+@@ -723,7 +718,7 @@
+ 	}
+ 	normalize_dbkey(tdbkey);
+ 
+-        data = tdb_fetch_bystring(tdb_reg, tdbkey);
++        data = tdb_fetch_bystring(tdb_reg->tdb, tdbkey);
+ 	SAFE_FREE(tdbkey);
+ 
+ 	if (data.dptr == NULL) {
+@@ -774,7 +769,7 @@
+ 		goto done;
+ 	}
+ 
+-	if (tdb_trans_store_bystring(tdb_reg, tdbkey, tdbdata, 0) == -1) {
++	if (tdb_trans_store_bystring(tdb_reg->tdb, tdbkey, tdbdata, 0) == -1) {
+ 		err = ntstatus_to_werror(map_nt_error_from_unix(errno));
+ 		goto done;
+ 	}
+

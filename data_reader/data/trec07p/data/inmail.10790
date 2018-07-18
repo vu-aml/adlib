@@ -1,0 +1,196 @@
+From perl6-all-return-80642-ktwarwic=speedy.uwaterloo.ca@perl.org  Mon Apr 16 19:39:59 2007
+Return-Path: <perl6-all-return-80642-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3GNdv0I020592
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 16 Apr 2007 19:39:58 -0400
+Received: (qmail 7453 invoked by uid 514); 16 Apr 2007 23:39:32 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 7443 invoked from network); 16 Apr 2007 23:39:32 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-4.4 required=8.0
+	tests=ALL_TRUSTED,BAYES_00,DK_POLICY_SIGNSOME
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: moderator for perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: "Yehoshua Sapir" (via RT) <parrotbug-followup@parrotcode.org>
+X-RT-NewTicket: yes
+To: bugs-bitbucket@netlabs.develooper.com
+Resent-To: perl6-internals@perl.org
+Mail-Followup-To: perl6-internals@perl.org
+Reply-To: perl6-internals@perl.org
+Date: Mon, 16 Apr 2007 13:07:22 -0700
+Subject: [perl #42558] [PATCH] add runtime_prefix for interpinfo and use it in config.pir 
+In-Reply-To: <136714b40704161306n43254c85j807a163f440d6071@mail.gmail.com>
+References: <RT-Ticket-42558@perl.org> <136714b40704161306n43254c85j807a163f440d6071@mail.gmail.com>
+Message-ID: <rt-3.6.HEAD-1687-1176754042-1685.42558-72-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #42558
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: yasapir@gmail.com
+MIME-Version: 1.0
+X-RT-Original-Encoding: utf-8
+Content-type: multipart/mixed; boundary="----------=_1176754042-1687-157"
+Resent-Message-Id: <20070416200723.B912E2AFEA@x3.develooper.com>
+Resent-Date: Mon, 16 Apr 2007 13:07:23 -0700 (PDT)
+Resent-From: rt-yasapir=gmail.com@netlabs.develooper.com
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-3.6 required=8.0
+	tests=ALL_TRUSTED,BAYES_00,DK_POLICY_SIGNSOME,HTML_00_10,HTML_MESSAGE
+Status: O
+Content-Length: 4588
+Lines: 139
+
+------------=_1176754042-1687-157
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+# New Ticket Created by  "Yehoshua Sapir" 
+# Please include the string:  [perl #42558]
+# in the subject line of all future correspondence about this issue. 
+# <URL: http://rt.perl.org/rt3/Ticket/Display.html?id=42558 >
+
+
+Without this patch, for runtime/parrot/library/config.pir to work, parrot
+has to be run in its root directory (in fact, there was an XXX note in there
+saying so.)
+
+I changed Parrot_get_runtime_prefix not to return a const value because the
+value should be free'd later on.
+
+Also, here's an example PIR file to demonstrate.
+
+------------=_1176754042-1687-157
+Content-Type: text/x-patch;
+ charset="ANSI_X3.4-1968";
+ name="runtime_prefix.patch"
+Content-Disposition: inline; filename="runtime_prefix.patch"
+Content-Transfer-Encoding: 7bit
+RT-Attachment: 42558/246343/110531
+
+Index: runtime/parrot/library/config.pir
+===================================================================
+--- runtime/parrot/library/config.pir	(revision 18237)
++++ runtime/parrot/library/config.pir	(working copy)
+@@ -43,10 +43,13 @@
+ 
+ =cut
+ 
++.include "interpinfo.pasm"
++
+ .pcc_sub _config
+     .local pmc CONF
+-    # XXX: this works only if parrot is run from its root directory
+-    .const string conf_file = "runtime/parrot/include/config.fpmc"
++    .local string conf_file
++    conf_file = interpinfo .INTERPINFO_RUNTIME_PREFIX
++    conf_file .= "/runtime/parrot/include/config.fpmc"
+ 
+     open CONF, conf_file, "<"
+     $I0 = defined CONF
+Index: src/ops/core.ops
+===================================================================
+--- src/ops/core.ops	(revision 18237)
++++ src/ops/core.ops	(working copy)
+@@ -881,7 +881,7 @@
+ 
+ =item B<interpinfo>(out STR, in INT)
+ 
+-.EXECUTABLE_FULLNAME, .EXECUTABLE_BASENAME
++.EXECUTABLE_FULLNAME, .EXECUTABLE_BASENAME, .RUNTIME_PREFIX
+ 
+ =back
+ 
+Index: src/inter_misc.c
+===================================================================
+--- src/inter_misc.c	(revision 18237)
++++ src/inter_misc.c	(working copy)
+@@ -333,6 +333,12 @@
+             mem_sys_free(fullname_c);
+             return basename;
+ 
++        case RUNTIME_PREFIX:
++            fullname_c = Parrot_get_runtime_prefix(interp, NULL);
++            fullname = string_from_cstring(interp, fullname_c, 0);
++            mem_sys_free(fullname_c);
++            return fullname;
++
+         default:        /* or a warning only? */
+             internal_exception(UNIMPLEMENTED,
+                     "illegal argument in interpinfo");
+Index: src/library.c
+===================================================================
+--- src/library.c	(revision 18237)
++++ src/library.c	(working copy)
+@@ -345,7 +345,7 @@
+ }
+ /*
+ 
+-=item C<const char* Parrot_get_runtime_prefix(Interp *, STRING **prefix_str)>
++=item C<char* Parrot_get_runtime_prefix(Interp *, STRING **prefix_str)>
+ 
+ If C<prefix_str> is not NULL, set it to the prefix, else
+ return a malloced c-string for the runtime prefix.
+@@ -354,7 +354,7 @@
+ 
+ */
+ 
+-const char*
++char*
+ Parrot_get_runtime_prefix(Interp *interp, STRING **prefix_str)
+ {
+     STRING *s, *key;
+Index: include/parrot/resources.h
+===================================================================
+--- include/parrot/resources.h	(revision 18237)
++++ include/parrot/resources.h	(working copy)
+@@ -141,7 +141,8 @@
+ 
+     /* interpinfo_s constants */
+     EXECUTABLE_FULLNAME,
+-    EXECUTABLE_BASENAME
++    EXECUTABLE_BASENAME,
++    RUNTIME_PREFIX
+ } Interpinfo_enum;
+ 
+ /* &end_gen */
+Index: include/parrot/library.h
+===================================================================
+--- include/parrot/library.h	(revision 18237)
++++ include/parrot/library.h	(working copy)
+@@ -38,7 +38,7 @@
+ PARROT_API STRING* Parrot_locate_runtime_file_str(Interp *, STRING *file_name,
+         enum_runtime_ft);
+ 
+-PARROT_API const char* Parrot_get_runtime_prefix(Interp *, STRING **prefix);
++PARROT_API char* Parrot_get_runtime_prefix(Interp *, STRING **prefix);
+ void parrot_init_library_paths(Interp *);
+ STRING * parrot_split_path_ext(Interp* , STRING *in,
+         STRING **wo_ext, STRING **ext);
+
+------------=_1176754042-1687-157
+Content-Type: application/octet-stream; name="test.pir"
+Content-Disposition: inline; filename="test.pir"
+Content-Transfer-Encoding: base64
+RT-Attachment: 42558/246343/110532
+
+LnN1YiBtYWluIDptYWluCglsb2FkX2J5dGVjb2RlICJsaWJyYXJ5L2NvbmZp
+Zy5waXIiCgkjLmluY2x1ZGUgImludGVycGluZm8ucGFzbSIKCSMkUzAgPSBp
+bnRlcnBpbmZvIC5JTlRFUlBJTkZPX1JVTlRJTUVfUFJFRklYCgkkUzAgPSBp
+bnRlcnBpbmZvIDIwCglzYXkgJFMwCi5lbmQK
+
+------------=_1176754042-1687-157--
+

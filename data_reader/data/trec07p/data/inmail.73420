@@ -1,0 +1,300 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Jul  4 00:15:22 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l644FML9005436
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 4 Jul 2007 00:15:22 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 0E90C163826
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed,  4 Jul 2007 04:15:18 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL,UPPERCASE_25_50 autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 9EE9F162AEF; Wed,  4 Jul 2007 04:15:08 +0000 (GMT)
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070704041508.9EE9F162AEF@lists.samba.org>
+Date: Wed,  4 Jul 2007 04:15:08 +0000 (GMT)
+Subject: svn commit: samba r23696 - in branches/SAMBA_4_0/source/param: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: tridge
+Date: 2007-07-04 04:15:07 +0000 (Wed, 04 Jul 2007)
+New Revision: 23696
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23696
+
+Log:
+
+added the create mask and related share permissions options to Samba4,
+using the new share_int_option() code from Simo
+
+speaking of which, this is the first time I've looked closely at the
+share_classic.c code. It is absolutely and completely braindead and
+broken. Whatever drugs Simo was on at the time, he better not try to
+cross a border with them on him!
+
+Problems with it:
+
+ - if you actually set a value, it gets ignored, and the defvalue gets
+   used instead ('ret' is never returned). If you don't set a value,
+   then defvalue gets returned too. Sound useful?
+
+ - it means we now have to list parameters in source/param/ in lots
+   and lots of places, all of which have to match exactly. code like
+   this is supposed to reduce the likelyhood of errors, not increase
+   it!
+
+ - code which has a long line of if() statements with strcmp() should
+   cause your fingers to burn on the keyboard when you type it
+   in. That's what structure lists are for. Strangely enough, we have
+   all the info in loadparm.c in a structure list, but instead it gets
+   replicated in share_classic.c in this strange if() strcmp() form
+
+expect some changes to this code shortly. I'll need a calming cup of
+tea first though :-)
+
+Modified:
+   branches/SAMBA_4_0/source/param/loadparm.c
+   branches/SAMBA_4_0/source/param/loadparm.h
+   branches/SAMBA_4_0/source/param/share.h
+   branches/SAMBA_4_0/source/param/share_classic.c
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/param/loadparm.c
+===================================================================
+--- branches/SAMBA_4_0/source/param/loadparm.c	2007-07-04 03:25:44 UTC (rev 23695)
++++ branches/SAMBA_4_0/source/param/loadparm.c	2007-07-04 04:15:07 UTC (rev 23696)
+@@ -223,6 +223,10 @@
+ 	int bMap_hidden;
+ 	int bMap_archive;
+ 	int bStrictLocking;
++	int iCreate_mask;
++	int iCreate_force_mode;
++	int iDir_mask;
++	int iDir_force_mode;
+ 	int *copymap;
+ 	int bMSDfsRoot;
+ 	int bStrictSync;
+@@ -259,6 +263,10 @@
+ 	False,			/* bMap_hidden */
+ 	True,			/* bMap_archive */
+ 	True,			/* bStrictLocking */
++	0744,			/* iCreate_mask */
++	0000,			/* iCreate_force_mode */
++	0755,			/* iDir_mask */
++	0000,			/* iDir_force_mode */	
+ 	NULL,			/* copymap */
+ 	False,			/* bMSDfsRoot */
+ 	False,			/* bStrictSync */
+@@ -419,6 +427,11 @@
+ 	
+ 	{"read only", P_BOOL, P_LOCAL, &sDefault.bRead_only, NULL, NULL, FLAG_BASIC | FLAG_ADVANCED | FLAG_SHARE},
+ 
++	{"create mask", P_OCTAL, P_LOCAL, &sDefault.iCreate_mask, NULL, NULL, FLAG_ADVANCED | FLAG_GLOBAL | FLAG_SHARE}, 
++	{"force create mode", P_OCTAL, P_LOCAL, &sDefault.iCreate_force_mode, NULL, NULL, FLAG_ADVANCED | FLAG_GLOBAL | FLAG_SHARE}, 
++	{"directory mask", P_OCTAL, P_LOCAL, &sDefault.iDir_mask, NULL, NULL, FLAG_ADVANCED | FLAG_GLOBAL | FLAG_SHARE}, 
++	{"force directory mode", P_OCTAL, P_LOCAL, &sDefault.iDir_force_mode, NULL, NULL, FLAG_ADVANCED | FLAG_GLOBAL | FLAG_SHARE}, 
++
+ 	{"hosts allow", P_LIST, P_LOCAL, &sDefault.szHostsallow, NULL, NULL, FLAG_GLOBAL | FLAG_BASIC | FLAG_ADVANCED | FLAG_SHARE | FLAG_PRINT | FLAG_DEVELOPER},
+ 	{"hosts deny", P_LIST, P_LOCAL, &sDefault.szHostsdeny, NULL, NULL, FLAG_GLOBAL | FLAG_BASIC | FLAG_ADVANCED | FLAG_SHARE | FLAG_PRINT | FLAG_DEVELOPER},
+ 
+@@ -932,6 +945,10 @@
+ _PUBLIC_ FN_LOCAL_BOOL(lp_map_system, bMap_system)
+ _PUBLIC_ FN_LOCAL_INTEGER(lp_max_connections, iMaxConnections)
+ _PUBLIC_ FN_LOCAL_INTEGER(lp_csc_policy, iCSCPolicy)
++_PUBLIC_ FN_LOCAL_INTEGER(lp_create_mask, iCreate_mask)
++_PUBLIC_ FN_LOCAL_INTEGER(lp_force_create_mode, iCreate_force_mode)
++_PUBLIC_ FN_LOCAL_INTEGER(lp_dir_mask, iDir_mask)
++_PUBLIC_ FN_LOCAL_INTEGER(lp_force_dir_mode, iDir_force_mode)
+ _PUBLIC_ FN_GLOBAL_INTEGER(lp_server_signing, &Globals.server_signing)
+ _PUBLIC_ FN_GLOBAL_INTEGER(lp_client_signing, &Globals.client_signing)
+ 
+@@ -1489,6 +1506,7 @@
+ 					break;
+ 
+ 				case P_INTEGER:
++				case P_OCTAL:
+ 				case P_ENUM:
+ 					*(int *)dest_ptr = *(int *)src_ptr;
+ 					break;
+@@ -1894,6 +1912,10 @@
+ 			*(int *)parm_ptr = atoi(pszParmValue);
+ 			break;
+ 
++		case P_OCTAL:
++			*(int *)parm_ptr = strtol(pszParmValue, NULL, 8);
++			break;
++
+ 		case P_BYTES:
+ 		{
+ 			uint64_t val;
+@@ -2088,6 +2110,10 @@
+ 			fprintf(f, "%d", *(int *)ptr);
+ 			break;
+ 
++		case P_OCTAL:
++			fprintf(f, "0%o", *(int *)ptr);
++			break;
++
+ 		case P_LIST:
+ 			if ((char ***)ptr && *(char ***)ptr) {
+ 				char **list = *(char ***)ptr;
+@@ -2120,6 +2146,7 @@
+ 			return (*((int *)ptr1) == *((int *)ptr2));
+ 
+ 		case P_INTEGER:
++		case P_OCTAL:
+ 		case P_BYTES:
+ 		case P_ENUM:
+ 			return (*((int *)ptr1) == *((int *)ptr2));
+@@ -2209,6 +2236,7 @@
+ 			return parm_table[i].def.bvalue ==
+ 				*(int *)parm_table[i].ptr;
+ 		case P_INTEGER:
++		case P_OCTAL:
+ 		case P_BYTES:
+ 		case P_ENUM:
+ 			return parm_table[i].def.ivalue ==
+
+Modified: branches/SAMBA_4_0/source/param/loadparm.h
+===================================================================
+--- branches/SAMBA_4_0/source/param/loadparm.h	2007-07-04 03:25:44 UTC (rev 23695)
++++ branches/SAMBA_4_0/source/param/loadparm.h	2007-07-04 04:15:07 UTC (rev 23696)
+@@ -30,7 +30,7 @@
+ 
+ /* the following are used by loadparm for option lists */
+ typedef enum {
+-	P_BOOL,P_INTEGER,P_BYTES,P_LIST,P_STRING,P_USTRING,P_ENUM,P_SEP
++	P_BOOL,P_INTEGER,P_OCTAL,P_BYTES,P_LIST,P_STRING,P_USTRING,P_ENUM,P_SEP
+ } parm_type;
+ 
+ typedef enum {
+
+Modified: branches/SAMBA_4_0/source/param/share.h
+===================================================================
+--- branches/SAMBA_4_0/source/param/share.h	2007-07-04 03:25:44 UTC (rev 23695)
++++ branches/SAMBA_4_0/source/param/share.h	2007-07-04 04:15:07 UTC (rev 23696)
+@@ -92,6 +92,11 @@
+ #define SHARE_MSDFS_ROOT	"msdfs-root"
+ #define SHARE_CI_FILESYSTEM	"ci-filesystem"
+ 
++#define SHARE_DIR_MASK             "directory mask"
++#define SHARE_CREATE_MASK          "create mask"
++#define SHARE_FORCE_CREATE_MODE    "force create mode"
++#define SHARE_FORCE_DIR_MODE       "force directory mode"
++
+ /* defaults */
+ 
+ #define SHARE_HOST_ALLOW_DEFAULT	NULL
+@@ -103,6 +108,13 @@
+ #define SHARE_BROWSEABLE_DEFAULT	True
+ #define SHARE_MAX_CONNECTIONS_DEFAULT	0
+ 
++#define SHARE_DIR_MASK_DEFAULT                   0755
++#define SHARE_CREATE_MASK_DEFAULT                0744
++#define SHARE_FORCE_CREATE_MODE_DEFAULT          0000
++#define SHARE_FORCE_DIR_MODE_DEFAULT             0000
++
++
++
+ /* I'd like to see the following options go away
+  * and always use EAs and SECDESCs */
+ #define SHARE_READONLY_DEFAULT		True
+
+Modified: branches/SAMBA_4_0/source/param/share_classic.c
+===================================================================
+--- branches/SAMBA_4_0/source/param/share_classic.c	2007-07-04 03:25:44 UTC (rev 23695)
++++ branches/SAMBA_4_0/source/param/share_classic.c	2007-07-04 04:15:07 UTC (rev 23696)
+@@ -90,6 +90,9 @@
+ 		return lp_fstype(s->snum);
+ 	}
+ 
++	DEBUG(0,("request for unknown share string option '%s'\n",
++		 opt_name));
++
+ 	return defval;
+ }
+ 
+@@ -117,19 +120,33 @@
+ 	}
+ 
+ 	if (strcmp(opt_name, SHARE_CSC_POLICY) == 0) {
+-		ret = lp_csc_policy(s->snum);
+-		if (ret == -1) {
+-			return defval;
+-		}
++		return lp_csc_policy(s->snum);
+ 	}
+ 
+ 	if (strcmp(opt_name, SHARE_MAX_CONNECTIONS) == 0) {
+-		ret = lp_max_connections(s->snum);
+-		if (ret == -1) {
+-			return defval;
+-		}
++		return lp_max_connections(s->snum);
+ 	}
+ 
++	if (strcmp(opt_name, SHARE_CREATE_MASK) == 0) {
++		return lp_create_mask(s->snum);
++	}
++
++	if (strcmp(opt_name, SHARE_DIR_MASK) == 0) {
++		return lp_dir_mask(s->snum);
++	}
++
++	if (strcmp(opt_name, SHARE_FORCE_DIR_MODE) == 0) {
++		return lp_force_dir_mode(s->snum);
++	}
++
++	if (strcmp(opt_name, SHARE_FORCE_CREATE_MODE) == 0) {
++		return lp_force_create_mode(s->snum);
++	}
++
++
++	DEBUG(0,("request for unknown share int option '%s'\n",
++		 opt_name));
++
+ 	return defval;
+ }
+ 
+@@ -193,6 +210,9 @@
+ 		return lp_ci_filesystem(s->snum);
+ 	}
+ 
++	DEBUG(0,("request for unknown share bool option '%s'\n",
++		 opt_name));
++
+ 	return defval;
+ }
+ 
+@@ -228,6 +248,9 @@
+ 		return lp_ntvfs_handler(s->snum);
+ 	}
+ 
++	DEBUG(0,("request for unknown share list option '%s'\n",
++		 opt_name));
++
+ 	return NULL;
+ }
+ 
+

@@ -1,0 +1,178 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Jun 20 18:09:08 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5KM98L9015464
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 20 Jun 2007 18:09:08 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id EAF3D162ABE
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 20 Jun 2007 22:09:05 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-4.0 required=3.8 tests=BAYES_00,FORGED_RCVD_HELO,
+	SPF_HELO_PASS,SPF_PASS autolearn=ham version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+Received: from mx1.redhat.com (mx1.redhat.com [66.187.233.31])
+	by lists.samba.org (Postfix) with ESMTP id B38E8162AED
+	for <samba-technical@lists.samba.org>;
+	Wed, 20 Jun 2007 22:08:19 +0000 (GMT)
+Received: from int-mx1.corp.redhat.com (int-mx1.corp.redhat.com
+	[172.16.52.254])
+	by mx1.redhat.com (8.13.1/8.13.1) with ESMTP id l5KM8IiO012267;
+	Wed, 20 Jun 2007 18:08:18 -0400
+Received: from pobox-2.corp.redhat.com (pobox-2.corp.redhat.com [10.11.255.15])
+	by int-mx1.corp.redhat.com (8.13.1/8.13.1) with ESMTP id l5KM8IOg019476;
+	Wed, 20 Jun 2007 18:08:18 -0400
+Received: from Liberator.local (sebastian-int.corp.redhat.com [172.16.52.221])
+	by pobox-2.corp.redhat.com (8.13.1/8.13.1) with ESMTP id
+	l5KM8H0Y001255; Wed, 20 Jun 2007 18:08:17 -0400
+Message-ID: <4679A558.1010107@redhat.com>
+Date: Wed, 20 Jun 2007 17:08:24 -0500
+From: Eric Sandeen <sandeen@redhat.com>
+User-Agent: Thunderbird 2.0.0.0 (Macintosh/20070326)
+MIME-Version: 1.0
+To: linux-kernel Mailing List <linux-kernel@vger.kernel.org>
+Content-Type: text/plain; charset=ISO-8859-1
+Content-Transfer-Encoding: 7bit
+Cc: cluster-devel@redhat.com, ext4 development <linux-ext4@vger.kernel.org>,
+   samba-technical@lists.samba.org, ocfs2-devel@oss.oracle.com
+Subject: [PATCH] zero_user_page conversion
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Use zero_user_page() in cifs, ocfs2, ext4, and gfs2 where possible.
+
+Compile tested, reviews welcome.
+
+Signed-off-by: Eric Sandeen <sandeen@redhat.com>
+
+Index: linux-2.6.22-rc4-mm2/fs/cifs/inode.c
+===================================================================
+--- linux-2.6.22-rc4-mm2.orig/fs/cifs/inode.c
++++ linux-2.6.22-rc4-mm2/fs/cifs/inode.c
+@@ -1334,17 +1334,13 @@ static int cifs_truncate_page(struct add
+ 	pgoff_t index = from >> PAGE_CACHE_SHIFT;
+ 	unsigned offset = from & (PAGE_CACHE_SIZE - 1);
+ 	struct page *page;
+-	char *kaddr;
+ 	int rc = 0;
+ 
+ 	page = grab_cache_page(mapping, index);
+ 	if (!page)
+ 		return -ENOMEM;
+ 
+-	kaddr = kmap_atomic(page, KM_USER0);
+-	memset(kaddr + offset, 0, PAGE_CACHE_SIZE - offset);
+-	flush_dcache_page(page);
+-	kunmap_atomic(kaddr, KM_USER0);
++	zero_user_page(page, offset, PAGE_CACHE_SIZE - offset, KM_USER0);
+ 	unlock_page(page);
+ 	page_cache_release(page);
+ 	return rc;
+Index: linux-2.6.22-rc4-mm2/fs/ext4/inode.c
+===================================================================
+--- linux-2.6.22-rc4-mm2.orig/fs/ext4/inode.c
++++ linux-2.6.22-rc4-mm2/fs/ext4/inode.c
+@@ -1830,7 +1830,6 @@ int ext4_block_truncate_page(handle_t *h
+ 	struct inode *inode = mapping->host;
+ 	struct buffer_head *bh;
+ 	int err = 0;
+-	void *kaddr;
+ 
+ 	if ((EXT4_I(inode)->i_flags & EXT4_EXTENTS_FL) &&
+ 			test_opt(inode->i_sb, EXTENTS) &&
+@@ -1847,10 +1846,7 @@ int ext4_block_truncate_page(handle_t *h
+ 	 */
+ 	if (!page_has_buffers(page) && test_opt(inode->i_sb, NOBH) &&
+ 	     ext4_should_writeback_data(inode) && PageUptodate(page)) {
+-		kaddr = kmap_atomic(page, KM_USER0);
+-		memset(kaddr + offset, 0, length);
+-		flush_dcache_page(page);
+-		kunmap_atomic(kaddr, KM_USER0);
++		zero_user_page(page, offset, length, KM_USER0);
+ 		set_page_dirty(page);
+ 		goto unlock;
+ 	}
+@@ -1903,10 +1899,7 @@ int ext4_block_truncate_page(handle_t *h
+ 			goto unlock;
+ 	}
+ 
+-	kaddr = kmap_atomic(page, KM_USER0);
+-	memset(kaddr + offset, 0, length);
+-	flush_dcache_page(page);
+-	kunmap_atomic(kaddr, KM_USER0);
++	zero_user_page(page, offset, length, KM_USER0);
+ 
+ 	BUFFER_TRACE(bh, "zeroed end of block");
+ 
+Index: linux-2.6.22-rc4-mm2/fs/gfs2/ops_address.c
+===================================================================
+--- linux-2.6.22-rc4-mm2.orig/fs/gfs2/ops_address.c
++++ linux-2.6.22-rc4-mm2/fs/gfs2/ops_address.c
+@@ -207,10 +207,7 @@ static int stuffed_readpage(struct gfs2_
+ 	 * so we need to supply one here. It doesn't happen often.
+ 	 */
+ 	if (unlikely(page->index)) {
+-		kaddr = kmap_atomic(page, KM_USER0);
+-		memset(kaddr, 0, PAGE_CACHE_SIZE);
+-		kunmap_atomic(kaddr, KM_USER0);
+-		flush_dcache_page(page);
++		zero_user_page(page, 0, PAGE_CACHE_SIZE, KM_USER0);
+ 		SetPageUptodate(page);
+ 		return 0;
+ 	}
+Index: linux-2.6.22-rc4-mm2/fs/ocfs2/aops.c
+===================================================================
+--- linux-2.6.22-rc4-mm2.orig/fs/ocfs2/aops.c
++++ linux-2.6.22-rc4-mm2/fs/ocfs2/aops.c
+@@ -739,18 +739,13 @@ int ocfs2_map_page_blocks(struct page *p
+ 	bh = head;
+ 	block_start = 0;
+ 	do {
+-		void *kaddr;
+-
+ 		block_end = block_start + bsize;
+ 		if (block_end <= from)
+ 			goto next_bh;
+ 		if (block_start >= to)
+ 			break;
+ 
+-		kaddr = kmap_atomic(page, KM_USER0);
+-		memset(kaddr+block_start, 0, bh->b_size);
+-		flush_dcache_page(page);
+-		kunmap_atomic(kaddr, KM_USER0);
++		zero_user_page(page, block_start, bh->b_size, KM_USER0);
+ 		set_buffer_uptodate(bh);
+ 		mark_buffer_dirty(bh);
+ 
+@@ -895,15 +890,11 @@ static void ocfs2_zero_new_buffers(struc
+ 			if (block_end > from && block_start < to) {
+ 				if (!PageUptodate(page)) {
+ 					unsigned start, end;
+-					void *kaddr;
+ 
+ 					start = max(from, block_start);
+ 					end = min(to, block_end);
+ 
+-					kaddr = kmap_atomic(page, KM_USER0);
+-					memset(kaddr+start, 0, end - start);
+-					flush_dcache_page(page);
+-					kunmap_atomic(kaddr, KM_USER0);
++					zero_user_page(page, start, end - start, KM_USER0);
+ 					set_buffer_uptodate(bh);
+ 				}
+ 
+

@@ -1,0 +1,433 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May 29 15:10:05 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4TJA5hB002403
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 15:10:05 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 68461163991
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 29 May 2007 19:10:00 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.0 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL,UPPERCASE_25_50 autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 605)
+	id 66F11162B71; Tue, 29 May 2007 19:09:39 +0000 (GMT)
+To: samba-cvs@samba.org
+From: vlendec@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070529190939.66F11162B71@lists.samba.org>
+Date: Tue, 29 May 2007 19:09:39 +0000 (GMT)
+Subject: svn commit: samba r23224 - in branches: SAMBA_3_0/source
+	SAMBA_3_0/source/lib SAMBA_3_0/source/libsmb
+	SAMBA_3_0_26/source SAMBA_3_0_26/source/lib
+	SAMBA_3_0_26/source/libsmb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: vlendec
+Date: 2007-05-29 19:09:38 +0000 (Tue, 29 May 2007)
+New Revision: 23224
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23224
+
+Log:
+Move map_nt_error_from_unix to lib/errmap_unix.c. This function is
+useful even in binaries that don't link in libsmb
+
+Added:
+   branches/SAMBA_3_0/source/lib/errmap_unix.c
+   branches/SAMBA_3_0_26/source/lib/errmap_unix.c
+Modified:
+   branches/SAMBA_3_0/source/Makefile.in
+   branches/SAMBA_3_0/source/libsmb/errormap.c
+   branches/SAMBA_3_0_26/source/Makefile.in
+   branches/SAMBA_3_0_26/source/libsmb/errormap.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/Makefile.in
+===================================================================
+--- branches/SAMBA_3_0/source/Makefile.in	2007-05-29 18:41:16 UTC (rev 23223)
++++ branches/SAMBA_3_0/source/Makefile.in	2007-05-29 19:09:38 UTC (rev 23224)
+@@ -276,7 +276,7 @@
+ 	  lib/util_unistr.o lib/util_file.o lib/data_blob.o \
+ 	  lib/util.o lib/util_sock.o lib/sock_exec.o lib/util_sec.o \
+ 	  lib/substitute.o lib/fsusage.o \
+-	  lib/ms_fnmatch.o lib/select.o \
++	  lib/ms_fnmatch.o lib/select.o lib/errmap_unix.o \
+ 	  lib/tallocmsg.o lib/dmallocmsg.o libsmb/smb_signing.o \
+ 	  lib/md5.o lib/hmacmd5.o lib/arc4.o lib/iconv.o \
+ 	  nsswitch/wb_client.o $(WBCOMMON_OBJ) \
+
+Added: branches/SAMBA_3_0/source/lib/errmap_unix.c
+===================================================================
+--- branches/SAMBA_3_0/source/lib/errmap_unix.c	2007-05-29 18:41:16 UTC (rev 23223)
++++ branches/SAMBA_3_0/source/lib/errmap_unix.c	2007-05-29 19:09:38 UTC (rev 23224)
+@@ -0,0 +1,92 @@
++/* 
++ *  Unix SMB/CIFS implementation.
++ *  map unix to NT errors, an excerpt of libsmb/errormap.c
++ *  Copyright (C) Andrew Tridgell 2001
++ *  Copyright (C) Andrew Bartlett 2001
++ *  Copyright (C) Tim Potter 2000
++ *  Copyright (C) Jeremy Allison 2007
++ *  
++ *  This program is free software; you can redistribute it and/or modify
++ *  it under the terms of the GNU General Public License as published by
++ *  the Free Software Foundation; either version 2 of the License, or
++ *  (at your option) any later version.
++ *  
++ *  This program is distributed in the hope that it will be useful,
++ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ *  GNU General Public License for more details.
++ *  
++ *  You should have received a copy of the GNU General Public License
++ *  along with this program; if not, write to the Free Software
++ *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
++ */
++
++#include "includes.h"
++
++/* Mapping from Unix, to NT error numbers */
++
++const struct unix_error_map unix_dos_nt_errmap[] = {
++	{ EPERM, ERRDOS, ERRnoaccess, NT_STATUS_ACCESS_DENIED },
++	{ EACCES, ERRDOS, ERRnoaccess, NT_STATUS_ACCESS_DENIED },
++	{ ENOENT, ERRDOS, ERRbadfile, NT_STATUS_OBJECT_NAME_NOT_FOUND },
++	{ ENOTDIR, ERRDOS, ERRbadpath,  NT_STATUS_NOT_A_DIRECTORY },
++	{ EIO, ERRHRD, ERRgeneral, NT_STATUS_IO_DEVICE_ERROR },
++	{ EBADF, ERRSRV, ERRsrverror, NT_STATUS_INVALID_HANDLE },
++	{ EINVAL, ERRSRV, ERRsrverror, NT_STATUS_INVALID_HANDLE },
++	{ EEXIST, ERRDOS, ERRfilexists, NT_STATUS_OBJECT_NAME_COLLISION},
++	{ ENFILE, ERRDOS, ERRnofids, NT_STATUS_TOO_MANY_OPENED_FILES },
++	{ EMFILE, ERRDOS, ERRnofids, NT_STATUS_TOO_MANY_OPENED_FILES },
++	{ ENOSPC, ERRHRD, ERRdiskfull, NT_STATUS_DISK_FULL },
++	{ ENOMEM, ERRDOS, ERRnomem, NT_STATUS_NO_MEMORY },
++	{ EISDIR, ERRDOS, ERRnoaccess, NT_STATUS_FILE_IS_A_DIRECTORY},
++	{ EMLINK, ERRDOS, ERRgeneral, NT_STATUS_TOO_MANY_LINKS },
++	{ EINTR,  ERRHRD, ERRgeneral, NT_STATUS_RETRY },
++#ifdef EDQUOT
++	{ EDQUOT, ERRHRD, ERRdiskfull, NT_STATUS_DISK_FULL }, /* Windows apps need this, not NT_STATUS_QUOTA_EXCEEDED */
++#endif
++#ifdef ENOTEMPTY
++	{ ENOTEMPTY, ERRDOS, ERRnoaccess, NT_STATUS_DIRECTORY_NOT_EMPTY },
++#endif
++#ifdef EXDEV
++	{ EXDEV, ERRDOS, ERRdiffdevice, NT_STATUS_NOT_SAME_DEVICE },
++#endif
++#ifdef EROFS
++	{ EROFS, ERRHRD, ERRnowrite, NT_STATUS_ACCESS_DENIED },
++#endif
++#ifdef ENAMETOOLONG
++	{ ENAMETOOLONG, ERRDOS, 206, NT_STATUS_OBJECT_NAME_INVALID },
++#endif
++#ifdef EFBIG
++	{ EFBIG, ERRHRD, ERRdiskfull, NT_STATUS_DISK_FULL },
++#endif
++#ifdef ENOBUFS
++	{ ENOBUFS, ERRDOS, ERRnomem, NT_STATUS_INSUFFICIENT_RESOURCES },
++#endif
++	{ EAGAIN, ERRDOS, 111, NT_STATUS_NETWORK_BUSY },
++#ifdef EWOULDBLOCK
++	{ EWOULDBLOCK, ERRDOS, 111, NT_STATUS_NETWORK_BUSY },
++#endif
++	{ 0, 0, 0, NT_STATUS_OK }
++};
++
++/*********************************************************************
++ Map an NT error code from a Unix error code.
++*********************************************************************/
++
++NTSTATUS map_nt_error_from_unix(int unix_error)
++{
++	int i = 0;
++
++	if (unix_error == 0)
++		return NT_STATUS_OK;
++
++	/* Look through list */
++	while(unix_dos_nt_errmap[i].unix_error != 0) {
++		if (unix_dos_nt_errmap[i].unix_error == unix_error)
++			return unix_dos_nt_errmap[i].nt_error;
++		i++;
++	}
++
++	/* Default return */
++	return NT_STATUS_ACCESS_DENIED;
++}
+
+Modified: branches/SAMBA_3_0/source/libsmb/errormap.c
+===================================================================
+--- branches/SAMBA_3_0/source/libsmb/errormap.c	2007-05-29 18:41:16 UTC (rev 23223)
++++ branches/SAMBA_3_0/source/libsmb/errormap.c	2007-05-29 19:09:38 UTC (rev 23224)
+@@ -1505,69 +1505,6 @@
+ 	return W_ERROR(NT_STATUS_V(error) & 0xffff);
+ }
+ 
+-/* Mapping between Unix, DOS and NT error numbers */
+-
+-const struct unix_error_map unix_dos_nt_errmap[] = {
+-	{ EPERM, ERRDOS, ERRnoaccess, NT_STATUS_ACCESS_DENIED },
+-	{ EACCES, ERRDOS, ERRnoaccess, NT_STATUS_ACCESS_DENIED },
+-	{ ENOENT, ERRDOS, ERRbadfile, NT_STATUS_OBJECT_NAME_NOT_FOUND },
+-	{ ENOTDIR, ERRDOS, ERRbadpath,  NT_STATUS_NOT_A_DIRECTORY },
+-	{ EIO, ERRHRD, ERRgeneral, NT_STATUS_IO_DEVICE_ERROR },
+-	{ EBADF, ERRSRV, ERRsrverror, NT_STATUS_INVALID_HANDLE },
+-	{ EINVAL, ERRSRV, ERRsrverror, NT_STATUS_INVALID_HANDLE },
+-	{ EEXIST, ERRDOS, ERRfilexists, NT_STATUS_OBJECT_NAME_COLLISION},
+-	{ ENFILE, ERRDOS, ERRnofids, NT_STATUS_TOO_MANY_OPENED_FILES },
+-	{ EMFILE, ERRDOS, ERRnofids, NT_STATUS_TOO_MANY_OPENED_FILES },
+-	{ ENOSPC, ERRHRD, ERRdiskfull, NT_STATUS_DISK_FULL },
+-	{ ENOMEM, ERRDOS, ERRnomem, NT_STATUS_NO_MEMORY },
+-	{ EISDIR, ERRDOS, ERRnoaccess, NT_STATUS_FILE_IS_A_DIRECTORY},
+-	{ EMLINK, ERRDOS, ERRgeneral, NT_STATUS_TOO_MANY_LINKS },
+-#ifdef EDQUOT
+-	{ EDQUOT, ERRHRD, ERRdiskfull, NT_STATUS_DISK_FULL }, /* Windows apps need this, not NT_STATUS_QUOTA_EXCEEDED */
+-#endif
+-#ifdef ENOTEMPTY
+-	{ ENOTEMPTY, ERRDOS, ERRnoaccess, NT_STATUS_DIRECTORY_NOT_EMPTY },
+-#endif
+-#ifdef EXDEV
+-	{ EXDEV, ERRDOS, ERRdiffdevice, NT_STATUS_NOT_SAME_DEVICE },
+-#endif
+-#ifdef EROFS
+-	{ EROFS, ERRHRD, ERRnowrite, NT_STATUS_ACCESS_DENIED },
+-#endif
+-#ifdef ENAMETOOLONG
+-	{ ENAMETOOLONG, ERRDOS, 206, NT_STATUS_OBJECT_NAME_INVALID },
+-#endif
+-#ifdef EFBIG
+-	{ EFBIG, ERRHRD, ERRdiskfull, NT_STATUS_DISK_FULL },
+-#endif
+-#ifdef ENOBUFS
+-	{ ENOBUFS, ERRDOS, ERRnomem, NT_STATUS_INSUFFICIENT_RESOURCES },
+-#endif
+-	{ 0, 0, 0, NT_STATUS_OK }
+-};
+-
+-/*********************************************************************
+- Map an NT error code from a Unix error code.
+-*********************************************************************/
+-
+-NTSTATUS map_nt_error_from_unix(int unix_error)
+-{
+-	int i = 0;
+-
+-	if (unix_error == 0)
+-		return NT_STATUS_OK;
+-
+-	/* Look through list */
+-	while(unix_dos_nt_errmap[i].unix_error != 0) {
+-		if (unix_dos_nt_errmap[i].unix_error == unix_error)
+-			return unix_dos_nt_errmap[i].nt_error;
+-		i++;
+-	}
+-
+-	/* Default return */
+-	return NT_STATUS_ACCESS_DENIED;
+-}
+-
+ #if defined(HAVE_GSSAPI)
+ /*******************************************************************************
+  Map between gssapi errors and NT status. I made these up :-(. JRA.
+
+Modified: branches/SAMBA_3_0_26/source/Makefile.in
+===================================================================
+--- branches/SAMBA_3_0_26/source/Makefile.in	2007-05-29 18:41:16 UTC (rev 23223)
++++ branches/SAMBA_3_0_26/source/Makefile.in	2007-05-29 19:09:38 UTC (rev 23224)
+@@ -261,7 +261,7 @@
+ 	  lib/util_unistr.o lib/util_file.o lib/data_blob.o \
+ 	  lib/util.o lib/util_sock.o lib/sock_exec.o lib/util_sec.o \
+ 	  lib/substitute.o lib/fsusage.o \
+-	  lib/ms_fnmatch.o lib/select.o \
++	  lib/ms_fnmatch.o lib/select.o lib/errmap_unix.o \
+ 	  lib/tallocmsg.o lib/dmallocmsg.o libsmb/smb_signing.o \
+ 	  lib/md5.o lib/hmacmd5.o lib/arc4.o lib/iconv.o \
+ 	  nsswitch/wb_client.o $(WBCOMMON_OBJ) \
+
+Added: branches/SAMBA_3_0_26/source/lib/errmap_unix.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/lib/errmap_unix.c	2007-05-29 18:41:16 UTC (rev 23223)
++++ branches/SAMBA_3_0_26/source/lib/errmap_unix.c	2007-05-29 19:09:38 UTC (rev 23224)
+@@ -0,0 +1,92 @@
++/* 
++ *  Unix SMB/CIFS implementation.
++ *  map unix to NT errors, an excerpt of libsmb/errormap.c
++ *  Copyright (C) Andrew Tridgell 2001
++ *  Copyright (C) Andrew Bartlett 2001
++ *  Copyright (C) Tim Potter 2000
++ *  Copyright (C) Jeremy Allison 2007
++ *  
++ *  This program is free software; you can redistribute it and/or modify
++ *  it under the terms of the GNU General Public License as published by
++ *  the Free Software Foundation; either version 2 of the License, or
++ *  (at your option) any later version.
++ *  
++ *  This program is distributed in the hope that it will be useful,
++ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ *  GNU General Public License for more details.
++ *  
++ *  You should have received a copy of the GNU General Public License
++ *  along with this program; if not, write to the Free Software
++ *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
++ */
++
++#include "includes.h"
++
++/* Mapping from Unix, to NT error numbers */
++
++const struct unix_error_map unix_dos_nt_errmap[] = {
++	{ EPERM, ERRDOS, ERRnoaccess, NT_STATUS_ACCESS_DENIED },
++	{ EACCES, ERRDOS, ERRnoaccess, NT_STATUS_ACCESS_DENIED },
++	{ ENOENT, ERRDOS, ERRbadfile, NT_STATUS_OBJECT_NAME_NOT_FOUND },
++	{ ENOTDIR, ERRDOS, ERRbadpath,  NT_STATUS_NOT_A_DIRECTORY },
++	{ EIO, ERRHRD, ERRgeneral, NT_STATUS_IO_DEVICE_ERROR },
++	{ EBADF, ERRSRV, ERRsrverror, NT_STATUS_INVALID_HANDLE },
++	{ EINVAL, ERRSRV, ERRsrverror, NT_STATUS_INVALID_HANDLE },
++	{ EEXIST, ERRDOS, ERRfilexists, NT_STATUS_OBJECT_NAME_COLLISION},
++	{ ENFILE, ERRDOS, ERRnofids, NT_STATUS_TOO_MANY_OPENED_FILES },
++	{ EMFILE, ERRDOS, ERRnofids, NT_STATUS_TOO_MANY_OPENED_FILES },
++	{ ENOSPC, ERRHRD, ERRdiskfull, NT_STATUS_DISK_FULL },
++	{ ENOMEM, ERRDOS, ERRnomem, NT_STATUS_NO_MEMORY },
++	{ EISDIR, ERRDOS, ERRnoaccess, NT_STATUS_FILE_IS_A_DIRECTORY},
++	{ EMLINK, ERRDOS, ERRgeneral, NT_STATUS_TOO_MANY_LINKS },
++	{ EINTR,  ERRHRD, ERRgeneral, NT_STATUS_RETRY },
++#ifdef EDQUOT
++	{ EDQUOT, ERRHRD, ERRdiskfull, NT_STATUS_DISK_FULL }, /* Windows apps need this, not NT_STATUS_QUOTA_EXCEEDED */
++#endif
++#ifdef ENOTEMPTY
++	{ ENOTEMPTY, ERRDOS, ERRnoaccess, NT_STATUS_DIRECTORY_NOT_EMPTY },
++#endif
++#ifdef EXDEV
++	{ EXDEV, ERRDOS, ERRdiffdevice, NT_STATUS_NOT_SAME_DEVICE },
++#endif
++#ifdef EROFS
++	{ EROFS, ERRHRD, ERRnowrite, NT_STATUS_ACCESS_DENIED },
++#endif
++#ifdef ENAMETOOLONG
++	{ ENAMETOOLONG, ERRDOS, 206, NT_STATUS_OBJECT_NAME_INVALID },
++#endif
++#ifdef EFBIG
++	{ EFBIG, ERRHRD, ERRdiskfull, NT_STATUS_DISK_FULL },
++#endif
++#ifdef ENOBUFS
++	{ ENOBUFS, ERRDOS, ERRnomem, NT_STATUS_INSUFFICIENT_RESOURCES },
++#endif
++	{ EAGAIN, ERRDOS, 111, NT_STATUS_NETWORK_BUSY },
++#ifdef EWOULDBLOCK
++	{ EWOULDBLOCK, ERRDOS, 111, NT_STATUS_NETWORK_BUSY },
++#endif
++	{ 0, 0, 0, NT_STATUS_OK }
++};
++
++/*********************************************************************
++ Map an NT error code from a Unix error code.
++*********************************************************************/
++
++NTSTATUS map_nt_error_from_unix(int unix_error)
++{
++	int i = 0;
++
++	if (unix_error == 0)
++		return NT_STATUS_OK;
++
++	/* Look through list */
++	while(unix_dos_nt_errmap[i].unix_error != 0) {
++		if (unix_dos_nt_errmap[i].unix_error == unix_error)
++			return unix_dos_nt_errmap[i].nt_error;
++		i++;
++	}
++
++	/* Default return */
++	return NT_STATUS_ACCESS_DENIED;
++}
+
+Modified: branches/SAMBA_3_0_26/source/libsmb/errormap.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/libsmb/errormap.c	2007-05-29 18:41:16 UTC (rev 23223)
++++ branches/SAMBA_3_0_26/source/libsmb/errormap.c	2007-05-29 19:09:38 UTC (rev 23224)
+@@ -1503,66 +1503,3 @@
+ 	/* a lame guess */
+ 	return W_ERROR(NT_STATUS_V(error) & 0xffff);
+ }
+-
+-/* Mapping between Unix, DOS and NT error numbers */
+-
+-const struct unix_error_map unix_dos_nt_errmap[] = {
+-	{ EPERM, ERRDOS, ERRnoaccess, NT_STATUS_ACCESS_DENIED },
+-	{ EACCES, ERRDOS, ERRnoaccess, NT_STATUS_ACCESS_DENIED },
+-	{ ENOENT, ERRDOS, ERRbadfile, NT_STATUS_OBJECT_NAME_NOT_FOUND },
+-	{ ENOTDIR, ERRDOS, ERRbadpath,  NT_STATUS_NOT_A_DIRECTORY },
+-	{ EIO, ERRHRD, ERRgeneral, NT_STATUS_IO_DEVICE_ERROR },
+-	{ EBADF, ERRSRV, ERRsrverror, NT_STATUS_INVALID_HANDLE },
+-	{ EINVAL, ERRSRV, ERRsrverror, NT_STATUS_INVALID_HANDLE },
+-	{ EEXIST, ERRDOS, ERRfilexists, NT_STATUS_OBJECT_NAME_COLLISION},
+-	{ ENFILE, ERRDOS, ERRnofids, NT_STATUS_TOO_MANY_OPENED_FILES },
+-	{ EMFILE, ERRDOS, ERRnofids, NT_STATUS_TOO_MANY_OPENED_FILES },
+-	{ ENOSPC, ERRHRD, ERRdiskfull, NT_STATUS_DISK_FULL },
+-	{ ENOMEM, ERRDOS, ERRnomem, NT_STATUS_NO_MEMORY },
+-	{ EISDIR, ERRDOS, ERRnoaccess, NT_STATUS_FILE_IS_A_DIRECTORY},
+-	{ EMLINK, ERRDOS, ERRgeneral, NT_STATUS_TOO_MANY_LINKS },
+-#ifdef EDQUOT
+-	{ EDQUOT, ERRHRD, ERRdiskfull, NT_STATUS_DISK_FULL }, /* Windows apps need this, not NT_STATUS_QUOTA_EXCEEDED */
+-#endif
+-#ifdef ENOTEMPTY
+-	{ ENOTEMPTY, ERRDOS, ERRnoaccess, NT_STATUS_DIRECTORY_NOT_EMPTY },
+-#endif
+-#ifdef EXDEV
+-	{ EXDEV, ERRDOS, ERRdiffdevice, NT_STATUS_NOT_SAME_DEVICE },
+-#endif
+-#ifdef EROFS
+-	{ EROFS, ERRHRD, ERRnowrite, NT_STATUS_ACCESS_DENIED },
+-#endif
+-#ifdef ENAMETOOLONG
+-	{ ENAMETOOLONG, ERRDOS, 206, NT_STATUS_OBJECT_NAME_INVALID },
+-#endif
+-#ifdef EFBIG
+-	{ EFBIG, ERRHRD, ERRdiskfull, NT_STATUS_DISK_FULL },
+-#endif
+-#ifdef ENOBUFS
+-	{ ENOBUFS, ERRDOS, ERRnomem, NT_STATUS_INSUFFICIENT_RESOURCES },
+-#endif
+-	{ 0, 0, 0, NT_STATUS_OK }
+-};
+-
+-/*********************************************************************
+- Map an NT error code from a Unix error code.
+-*********************************************************************/
+-
+-NTSTATUS map_nt_error_from_unix(int unix_error)
+-{
+-	int i = 0;
+-
+-	if (unix_error == 0)
+-		return NT_STATUS_OK;
+-
+-	/* Look through list */
+-	while(unix_dos_nt_errmap[i].unix_error != 0) {
+-		if (unix_dos_nt_errmap[i].unix_error == unix_error)
+-			return unix_dos_nt_errmap[i].nt_error;
+-		i++;
+-	}
+-
+-	/* Default return */
+-	return NT_STATUS_ACCESS_DENIED;
+-}
+

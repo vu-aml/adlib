@@ -1,0 +1,245 @@
+From r-help-bounces@stat.math.ethz.ch  Mon Jun 25 09:41:43 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5PDffL9029272
+	for <ktwarwic@flax9.uwaterloo.ca>; Mon, 25 Jun 2007 09:41:42 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5MFbcJm021249;
+	Fri, 22 Jun 2007 17:37:55 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=0.8 required=5.0 tests=AWL, BAYES_50,
+	DKIM_POLICY_SIGNSOME, HTML_MESSAGE,
+	SARE_URI_EQUALS autolearn=no version=3.2.0
+Received: from py-out-1112.google.com (py-out-1112.google.com [64.233.166.181])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5MFRita017591
+	for <r-help@stat.math.ethz.ch>; Fri, 22 Jun 2007 17:27:45 +0200
+Received: by py-out-1112.google.com with SMTP id p76so942039pyb
+	for <r-help@stat.math.ethz.ch>; Fri, 22 Jun 2007 08:27:43 -0700 (PDT)
+Received: by 10.35.42.18 with SMTP id u18mr2586262pyj.1182526062923;
+	Fri, 22 Jun 2007 08:27:42 -0700 (PDT)
+Received: by 10.35.34.4 with HTTP; Fri, 22 Jun 2007 08:27:42 -0700 (PDT)
+Message-ID: <dea6cb960706220827y4c281c31t493106eeaffedd4b@mail.gmail.com>
+Date: Fri, 22 Jun 2007 17:27:42 +0200
+From: "Christophe Pallier" <christophe@pallier.org>
+To: "Kevin E. Thorpe" <kevin.thorpe@utoronto.ca>
+In-Reply-To: <467BD504.4040705@utoronto.ca>
+MIME-Version: 1.0
+References: <874da0b40706071701m55cd42fem15f55a8fcde04f17@mail.gmail.com>
+	<dea6cb960706080127u2448b5e9v7e04b400b57fbded@mail.gmail.com>
+	<467BD504.4040705@utoronto.ca>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Content-Disposition: inline
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] Tools For Preparing Data For Analysis
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+If I understand correctly (from your Perl script)
+
+1. you count the number of occurences of each "(echo, muga)" pairs in the
+first file.
+
+2. you remove from the second file the lines that correspond to these
+occurences.
+
+If this is indeed your aim, here's a solution in R:
+
+cumcount <- function(x) {
+ y <- numeric(length(x))
+ for (i in 1:length(y)) {
+     y[i] = sum(x[1:i] == x[i])
+ }
+ y
+}
+
+both <- read.csv('both_echo.csv')
+v <- table(paste(both$echo, "_", both$muga, sep=""))
+
+semi <- read.csv('qual_echo.csv')
+s <- paste(semi$echo, "_", semi$muga, sep="")
+cs = cumcount(s)
+count = v[s]
+count[is.na(count)]=0
+
+semi2 <- data.frame(semi, s, cs, count, keep = cs > count)
+
+> semi2
+  echo muga quant     s cs count  keep
+1   10   20     0 10_20  1     0  TRUE
+2   10   20     0 10_20  2     0  TRUE
+3   10   21     0 10_21  1     1 FALSE
+4   10   21     0 10_21  2     1  TRUE
+5   10   24     0 10_24  1     0  TRUE
+6   10   25     0 10_25  1     2 FALSE
+7   10   25     0 10_25  2     2 FALSE
+8   10   25     0 10_25  3     2  TRUE
+
+
+My code is not very readable...
+Yet, the 'trick' of using an helper function like 'cumcount' might be
+instructive.
+
+Christophe Pallier
+
+
+On 6/22/07, Kevin E. Thorpe <kevin.thorpe@utoronto.ca> wrote:
+>
+> I am posting to this thread that has been quiet for some time because I
+> remembered the following question.
+>
+> Christophe Pallier wrote:
+> > Hi,
+> >
+> > Can you provide examples of data formats that are problematic to read
+> and
+> > clean with R ?
+>
+> Today I had a data manipulation problem that I don't know how to do in R
+> so I solved it with perl.  Since I'm always interested in learning more
+> about complex data manipulation in R I am posting my problem in the
+> hopes of receiving some hints for doing this in R.
+>
+> If anyone has nothing better to do than play with other people's data,
+> I would be happy to send the row files off-list.
+>
+> Background:
+>
+> I have been given data that contains two measurements of left
+> ventricular ejection fraction.  One of the methods is echocardiogram
+> which sometimes gives a true quantitative value and other times a
+> semi-quantitative value.  The desire is to compare echo with the
+> other method (MUGA).  In most cases, patients had either quantitative
+> or semi-quantitative.  Same patients had both.  The data came
+> to me in excel files with, basically, no patient identifiers to link
+> the "both" with the semi-quantitative patients (the "both" patients
+> were in multiple data sets).
+>
+> What I wanted to do was extract from the semi-quantitative data file
+> those patients with only semi-quantitative.  All I have to link with
+> are the semi-quantitative echo and the MUGA and these pairs of values
+> are not unique.
+>
+> To make this more concrete, here are some portions of the raw data.
+>
+> "Both"
+>
+> "ID NUM","ECHO","MUGA","Semiquant","Quant"
+> "B",12,37,10,12
+> "D",13,13,10,13
+> "E",13,26,10,15
+> "F",13,31,10,13
+> "H",15,15,10,15
+> "I",15,21,10,15
+> "J",15,22,10,15
+> "K",17,22,10,17
+> "N",17.5,4,10,17.5
+> "P",18,25,10,18
+> "R",19,25,10,19
+>
+> Seimi-quantitative
+>
+> "echo","muga","quant"
+> 10,20,0      <-- keep
+> 10,20,0      <-- keep
+> 10,21,0      <-- remove
+> 10,21,0      <-- keep
+> 10,24,0      <-- keep
+> 10,25,0      <-- remove
+> 10,25,0      <-- remove
+> 10,25,0      <-- keep
+>
+> Here is the perl program I wrote for this.
+>
+> #!/usr/bin/perl
+>
+> open(BOTH, "quant_qual_echo.csv") || die "Can't open quant_qual_echo.csv";
+> # Discard first row;
+> $_ = <BOTH>;
+> while(<BOTH>) {
+>     chomp;
+>     ($id, $e, $m, $sq, $qu) = split(/,/);
+>     $both{$sq,$m}++;
+> }
+> close(BOTH);
+>
+> open(OUT, "> qual_echo_only.csv") || die "Can't open qual_echo_only.csv";
+> print OUT "pid,echo,muga,quant\n";
+> $pid = 2001;
+>
+> open(QUAL, "qual_echo.csv") || die "Can't open qual_echo.csv";
+> # Discard first row
+> $_ = <QUAL>;
+> while(<QUAL>) {
+>     chomp;
+>     ($echo, $muga, $quant) = split(/,/);
+>     if ($both{$echo,$muga} > 0) {
+>         $both{$echo,$muga}--;
+>     }
+>     else {
+>         print OUT "$pid,$echo,$muga,$quant\n";
+>         $pid++;
+>     }
+> }
+> close(QUAL);
+> close(OUT);
+>
+> open(OUT, "> both_echo.csv") || die "Can't open both_echo.csv";
+> print OUT "pid,echo,muga,quant\n";
+> $pid = 3001;
+>
+> open(BOTH, "quant_qual_echo.csv") || die "Can't open quant_qual_echo.csv";
+> # Discard first row;
+> $_ = <BOTH>;
+> while(<BOTH>) {
+>     chomp;
+>     ($id, $e, $m, $sq, $qu) = split(/,/);
+>     print OUT "$pid,$sq,$m,0\n";
+>     print OUT "$pid,$qu,$m,1\n";
+>     $pid++;
+> }
+> close(BOTH);
+> close(OUT);
+>
+>
+> --
+> Kevin E. Thorpe
+> Biostatistician/Trialist, Knowledge Translation Program
+> Assistant Professor, Department of Public Health Sciences
+> Faculty of Medicine, University of Toronto
+> email: kevin.thorpe@utoronto.ca  Tel: 416.864.5776  Fax: 416.864.6057
+>
+> ______________________________________________
+> R-help@stat.math.ethz.ch mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-help
+> PLEASE do read the posting guide
+> http://www.R-project.org/posting-guide.html
+> and provide commented, minimal, self-contained, reproducible code.
+>
+
+
+
+-- 
+Christophe Pallier (http://www.pallier.org)
+
+	[[alternative HTML version deleted]]
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

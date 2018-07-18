@@ -1,0 +1,84 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun Jun 17 14:46:09 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5HIk9L9009523
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 17 Jun 2007 14:46:09 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id CD9801638C6
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 17 Jun 2007 18:46:07 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.4 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 3CF45162B6F; Sun, 17 Jun 2007 18:45:35 +0000 (GMT)
+Date: Mon, 18 Jun 2007 03:15:08 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070617184535.3CF45162B6F@lists.samba.org>
+Subject: Rev 548: run smbstatus every 10 minutes to scrub databases in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 548
+revision-id: tridge@samba.org-20070617171508-dshksshlnzdh2qfs
+parent: tridge@samba.org-20070617171050-2zkpq4tu68qqryfo
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Mon 2007-06-18 03:15:08 +1000
+message:
+  run smbstatus every 10 minutes to scrub databases
+modified:
+  config/events.d/50.samba       samba-20070601105340-vlcvnp6euoj3zdwy-3
+=== modified file 'config/events.d/50.samba'
+--- a/config/events.d/50.samba	2007-06-17 17:10:50 +0000
++++ b/config/events.d/50.samba	2007-06-17 17:15:08 +0000
+@@ -11,6 +11,20 @@
+ 
+ [ "$CTDB_MANAGES_SAMBA" = "yes" ] || exit 0
+ 
++# set default samba cleanup period - in minutes
++[ -z "$SAMBA_CLEANUP_PERIOD" ] && {
++    SAMBA_CLEANUP_PERIOD=10
++}
++
++###########################
++# periodic cleanup function
++periodic_cleanup() {
++    # running smbstatus scrubs any dead entries from the connections
++    # and sessionid database
++    echo "`date` Running periodic cleanup of samba databases"
++    smbstatus -n > /dev/null 2>&1
++}
++
+ case $cmd in 
+      startup)
+ 	# create the state directory for samba
+@@ -63,8 +77,9 @@
+ 	[ -f /etc/ctdb/state/samba/periodic_cleanup ] || {
+ 		touch /etc/ctdb/state/samba/periodic_cleanup
+ 	}
+-	[ `/usr/bin/find /etc/ctdb/state/samba/periodic_cleanup -mmin +1 | wc -l` -eq 1 ] && {
++	[ `/usr/bin/find /etc/ctdb/state/samba/periodic_cleanup -mmin +$SAMBA_CLEANUP_PERIOD | wc -l` -eq 1 ] && {
+ 		# Cleanup the databases
++	    	periodic_cleanup
+ 		touch /etc/ctdb/state/samba/periodic_cleanup
+ 	}
+ 
+

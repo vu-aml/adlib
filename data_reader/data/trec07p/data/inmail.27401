@@ -1,0 +1,501 @@
+From perl6-all-return-81070-ktwarwic=speedy.uwaterloo.ca@perl.org  Wed May  2 22:34:11 2007
+Return-Path: <perl6-all-return-81070-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l432Y9b9030030
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 2 May 2007 22:34:09 -0400
+Received: (qmail 18567 invoked by uid 514); 3 May 2007 02:34:07 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 18562 invoked from network); 3 May 2007 02:34:07 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-0.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,KARMA_CONNECT_NEGATIVE,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+Subject: [perl #42360] [TODO]:  Unit tests for Parrot::Revision 
+From: "James Keenan via RT" <parrotbug-followup@parrotcode.org>
+Reply-To: parrotbug-followup@parrotcode.org
+In-Reply-To: <0C4A186A-EA40-4DF9-BA2C-FEA15DEFF92A@verizon.net>
+References: <RT-Ticket-42360@perl.org> <0C4A186A-EA40-4DF9-BA2C-FEA15DEFF92A@verizon.net>
+Message-ID: <rt-3.6.HEAD-15879-1178159597-725.42360-15-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #42360
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: jkeen@verizon.net
+Cc: perl6-internals@perl.org
+To: "OtherRecipients of perl Ticket #42360": ;
+MIME-Version: 1.0
+X-RT-Original-Encoding: utf-8
+Content-type: multipart/mixed; boundary="----------=_1178159598-15879-11"
+Date: Wed, 02 May 2007 19:33:18 -0700
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+
+------------=_1178159598-15879-11
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+See attached patch revision.patch.txt.  Per discussion on list with particle, lib/Parrot/
+Revision.pm is revised to eliminate unassignable variable $svn_entries and one stanza of 
+code associated therewith.  Also eliminates unused variable $ent.  I also add 4 test files:  two 
+in t/configure/ and two in t/postconfigure/.  The latter tests are intended to be run after 
+Configure.pl has run because they presume the existence of lib/Parrot/Config/
+Generated.pm; they SKIP otherwise.
+
+I use Subversion as my local version control client, so I'm not currently able to write tests for 
+the svk-associated stanza.  Hence, testing coverage is lower than I would normally be 
+satisfied with.  Patches from svk users would be welcome.
+
+As with my other patch submissions, unless I hear screams I'll apply to trunk in 3 days or so.   
+They've already been applied and tested in the 'reconfigure' branch.
+
+Thank you very much.
+
+kid51
+
+------------=_1178159598-15879-11
+Content-Type: text/plain; charset="ascii"; name="revision.patch.txt"
+Content-Disposition: inline; filename="revision.patch.txt"
+Content-Transfer-Encoding: 7bit
+RT-Attachment: 42360/258378/112558
+
+Index: lib/Parrot/Revision.pm
+===================================================================
+--- lib/Parrot/Revision.pm	(revision 18401)
++++ lib/Parrot/Revision.pm	(working copy)
+@@ -24,11 +24,8 @@
+ use warnings;
+ use File::Spec;
+ 
+-our $svn_entries = undef;
+-
+ sub __get_revision {
+     return 0 unless ( -e 'DEVELOPING' );
+-    my $ent = ".svn/entries";
+ 
+     my $revision;
+ 
+@@ -39,16 +36,6 @@
+             ($revision) = $line =~ / (\d+)$/;
+         }
+     }
+-    elsif ( defined $svn_entries and -r $svn_entries ) {
+-        open FH, '<', $svn_entries
+-            or die "Unable to open file ($svn_entries). Aborting. Error returned was: $!";
+-        while (<FH>) {
+-            /^ *committed-rev=.(\d+)./ or next;
+-            $revision = $1;
+-            last;
+-        }
+-        close FH;
+-    }
+     elsif ( my @svk_info = qx/svk info 2>$nul/ and $? == 0 ) {
+         if ( my ($line) = grep /(?:file|svn|https?)\b/, @svk_info ) {
+             ($revision) = $line =~ / (\d+)$/;
+@@ -58,7 +45,7 @@
+ 
+                 # convert /svk/trunk to //svk/trunk or /depot/svk/trunk
+                 my ($depot_root) = map { m{Depot Path: (/[^/]*)} } @svk_info;
+-                $depot_root ||= '/';
++                $depot_root ||= q{/};
+                 $source_depot = $depot_root . $source_depot;
+                 if ( my @svk_info = qx/svk info $source_depot/ and $? == 0 ) {
+                     if ( my ($line) = grep /(?:file|svn|https?)\b/, @svk_info ) {
+Index: t/configure/17-revision_no_DEVELOPING.t
+===================================================================
+--- t/configure/17-revision_no_DEVELOPING.t	(revision 0)
++++ t/configure/17-revision_no_DEVELOPING.t	(revision 0)
+@@ -0,0 +1,82 @@
++#! perl
++# Copyright (C) 2007, The Perl Foundation.
++# $Id: 17-revision_no_DEVELOPING.t 18406 2007-05-03 02:15:18Z jkeenan $
++# 17-revision_no_DEVELOPING.t
++
++use strict;
++use warnings;
++
++use Test::More tests => 13;
++use Carp;
++use_ok( 'Cwd' );
++use_ok( 'File::Copy' );
++use_ok( 'File::Temp', qw| tempdir | );
++use lib qw( . lib ../lib ../../lib );
++
++my ($current, $config);
++
++# Case 2:  DEVELOPING's non-existence is faked;  Parrot::Config not yet available. #'
++my $cwd = cwd();
++my $reason =
++    'Either file DEVELOPING does not exist or configuration has completed (as evidenced by existence of Parrot::Config::Generated';
++
++SKIP: {
++    skip $reason,  9 if (
++        (not -e 'DEVELOPING')
++        or
++        ( -e q{lib/Parrot/Config/Generated.pm} )
++    );
++    my $tdir = tempdir();
++    ok(chdir $tdir, "Changed to temporary directory for testing");
++    ok((mkdir "lib"), "Able to make directory lib");
++    ok((mkdir "lib/Parrot"), "Able to make directory lib/Parrot");
++    ok(copy ("$cwd/lib/Parrot/Revision.pm", "lib/Parrot/"),
++        "Able to copy Parrot::Revision for testing");
++    unshift(@INC, "lib");
++    require Parrot::Revision;
++    no warnings qw(once);
++    $current = $Parrot::Revision::current;
++    like($current, qr/^\d+$/, "current revision is all numeric");
++    $config = $Parrot::Revision::config;
++    use warnings;
++    like($config, qr/^\d+$/, "current revision is all numeric");
++    is($current, $config, "current and config are identical");
++    is($current, 0, 'current is zero as expected');
++    ok(chdir $cwd, "Able to change back to directory after testing");
++}
++
++# Case 3:  DEVELOPING exists; Parrot::Config available.
++pass("Completed all tests in $0");
++
++################### DOCUMENTATION ###################
++
++=head1 NAME
++
++17-revision_no_DEVELOPING.t - test Parrot::Revision
++
++=head1 SYNOPSIS
++
++    % prove t/configure/17-revision_no_DEVELOPING.t
++
++=head1 DESCRIPTION
++
++The files in this directory test functionality used by F<Configure.pl>.
++
++The tests in this file test Parrot::Revision (F<lib/Parrot/Revision.pm>).
++
++=head1 AUTHOR
++
++James E Keenan
++
++=head1 SEE ALSO
++
++Parrot::Configure, F<Configure.pl>.
++
++=cut
++
++# Local Variables:
++#   mode: cperl
++#   cperl-indent-level: 4
++#   fill-column: 100
++# End:
++# vim: expandtab shiftwidth=4:
+Index: t/configure/18-revision.t
+===================================================================
+--- t/configure/18-revision.t	(revision 0)
++++ t/configure/18-revision.t	(revision 0)
+@@ -0,0 +1,68 @@
++#! perl
++# Copyright (C) 2007, The Perl Foundation.
++# $Id: 18-revision.t 18406 2007-05-03 02:15:18Z jkeenan $
++# 18-revision.t
++
++use strict;
++use warnings;
++
++use Test::More tests =>  7;
++use Carp;
++use_ok( 'Cwd' );
++use_ok( 'File::Copy' );
++use_ok( 'File::Temp', qw| tempdir | );
++use lib qw( . lib ../lib ../../lib );
++use Parrot::Revision;
++
++my ($current, $config);
++
++# Case 1:  DEVELOPING exists; Parrot::Config not yet available.
++my $reason =
++    'Either file DEVELOPING does not exist or configuration has completed (as evidenced by existence of Parrot::Config::Generated';
++SKIP: {
++    skip $reason, 3 if (
++        (not -e 'DEVELOPING')
++        or
++        ( -e q{lib/Parrot/Config/Generated.pm} )
++    );
++    $current = $Parrot::Revision::current;
++    like($current, qr/^\d+$/, "current revision is all numeric");
++    $config = $Parrot::Revision::config;
++    like($config, qr/^\d+$/, "current revision is all numeric");
++    is($current, $config, "current and config are identical");
++} # end SKIP block
++
++pass("Completed all tests in $0");
++
++################### DOCUMENTATION ###################
++
++=head1 NAME
++
++18-revision.t - test Parrot::Revision
++
++=head1 SYNOPSIS
++
++    % prove t/configure/18-revision.t
++
++=head1 DESCRIPTION
++
++The files in this directory test functionality used by F<Configure.pl>.
++
++The tests in this file test Parrot::Revision (F<lib/Parrot/Revision.pm>).
++
++=head1 AUTHOR
++
++James E Keenan
++
++=head1 SEE ALSO
++
++Parrot::Configure, F<Configure.pl>.
++
++=cut
++
++# Local Variables:
++#   mode: cperl
++#   cperl-indent-level: 4
++#   fill-column: 100
++# End:
++# vim: expandtab shiftwidth=4:
+Index: t/postconfigure/02-revision_no_DEVELOPING.t
+===================================================================
+--- t/postconfigure/02-revision_no_DEVELOPING.t	(revision 0)
++++ t/postconfigure/02-revision_no_DEVELOPING.t	(revision 0)
+@@ -0,0 +1,88 @@
++#! perl
++# Copyright (C) 2007, The Perl Foundation.
++# $Id: 02-revision_no_DEVELOPING.t 18406 2007-05-03 02:15:18Z jkeenan $
++# 02-revision_no_DEVELOPING.t
++
++use strict;
++use warnings;
++
++use Test::More tests => 16;
++use Carp;
++use_ok( 'Cwd' );
++use_ok( 'File::Copy' );
++use_ok( 'File::Temp', qw| tempdir | );
++use lib qw( . lib ../lib ../../lib );
++
++my ($current, $config);
++
++# Case 2:  DEVELOPING's non-existence is faked;  Parrot::Config available. #'
++my $cwd = cwd();
++my $reason =
++    'Either file DEVELOPING does not exist or configuration has not completed (as evidenced by non-existence of Parrot::Config::Generated'; 
++
++SKIP: {
++    skip $reason, 12 if (
++        (not -e 'DEVELOPING')
++        or
++        (not -e q{lib/Parrot/Config/Generated.pm} )
++    );
++    my $tdir = tempdir();
++    ok(chdir $tdir, "Changed to temporary directory for testing");
++    ok((mkdir "lib"), "Able to make directory lib");
++    ok((mkdir "lib/Parrot"), "Able to make directory lib/Parrot");
++    ok((mkdir "lib/Parrot/Config"),
++        "Able to make directory lib/Parrot/Config");
++    ok(copy ("$cwd/lib/Parrot/Revision.pm", "lib/Parrot/"),
++        "Able to copy Parrot::Revision for testing");
++    ok(copy ("$cwd/lib/Parrot/Config.pm", "lib/Parrot/"),
++        "Able to copy Parrot::Config for testing");
++    ok(copy ("$cwd/lib/Parrot/Config/Generated.pm", "lib/Parrot/Config/"),
++        "Able to copy Parrot::Config::Generated for testing");
++    unshift(@INC, "lib");
++    require Parrot::Revision;
++    no warnings qw(once);
++    $current = $Parrot::Revision::current;
++    like($current, qr/^\d+$/, "current revision is all numeric");
++    is($current, 0,
++        "If DEVELOPING does not exist (release version), \$current is set to zero.");
++    $config = $Parrot::Revision::config;
++    use warnings;
++    like($config, qr/^\d+$/, "current revision is all numeric");
++    isnt($current, $config, "current and config differ");
++    ok(chdir $cwd, "Able to change back to directory after testing");
++}
++
++pass("Completed all tests in $0");
++
++################### DOCUMENTATION ###################
++
++=head1 NAME
++
++02-revision_no_DEVELOPING.t - test Parrot::Revision
++
++=head1 SYNOPSIS
++
++    % prove t/postconfigure/02-revision_no_DEVELOPING.t
++
++=head1 DESCRIPTION
++
++The files in this directory test functionality used by F<Configure.pl>.
++
++The tests in this file test Parrot::Revision (F<lib/Parrot/Revision.pm>).
++
++=head1 AUTHOR
++
++James E Keenan
++
++=head1 SEE ALSO
++
++Parrot::Configure, F<Configure.pl>.
++
++=cut
++
++# Local Variables:
++#   mode: cperl
++#   cperl-indent-level: 4
++#   fill-column: 100
++# End:
++# vim: expandtab shiftwidth=4:
+Index: t/postconfigure/03-revision.t
+===================================================================
+--- t/postconfigure/03-revision.t	(revision 0)
++++ t/postconfigure/03-revision.t	(revision 0)
+@@ -0,0 +1,70 @@
++#! perl
++# Copyright (C) 2007, The Perl Foundation.
++# $Id: 03-revision.t 18406 2007-05-03 02:15:18Z jkeenan $
++# 03-revision.t
++
++use strict;
++use warnings;
++
++use Test::More tests =>  7;
++use Carp;
++use_ok( 'Cwd' );
++use_ok( 'File::Copy' );
++use_ok( 'File::Temp', qw| tempdir | );
++use lib qw( . lib ../lib ../../lib );
++use Parrot::Revision;
++
++my ($current, $config);
++
++# Case 1:  DEVELOPING exists; Parrot::Config available.
++my $reason =
++    'Either file DEVELOPING does not exist or configuration has not completed (as evidenced by non-existence of Parrot::Config::Generated';
++SKIP: {
++    skip $reason, 3 if (
++        (not -e 'DEVELOPING')
++        or
++        (not -e q{lib/Parrot/Config/Generated.pm} )
++    );
++    $current = $Parrot::Revision::current;
++    like($current, qr/^\d+$/, "current revision is all numeric");
++    $config = $Parrot::Revision::config;
++    like($config, qr/^\d+$/, "current revision is all numeric");
++    is($current, $config, "current and config are identical");
++} # end SKIP block
++
++pass("Completed all tests in $0");
++
++################### DOCUMENTATION ###################
++
++=head1 NAME
++
++03-revision.t - test Parrot::Revision
++
++=head1 SYNOPSIS
++
++    % prove t/postconfigure/03-revision.t
++
++=head1 DESCRIPTION
++
++The files in this directory test functionality used by F<Configure.pl>.
++
++The tests in this file test aspects of Parrot::Revision
++(F<lib/Parrot/Revision.pm>) which presume that configuration has been
++completed.
++
++=head1 AUTHOR
++
++James E Keenan
++
++=head1 SEE ALSO
++
++Parrot::Configure, F<Configure.pl>.
++
++=cut
++
++# Local Variables:
++#   mode: cperl
++#   cperl-indent-level: 4
++#   fill-column: 100
++# End:
++# vim: expandtab shiftwidth=4:
+Index: MANIFEST
+===================================================================
+--- MANIFEST	(revision 18405)
++++ MANIFEST	(working copy)
+@@ -1,7 +1,7 @@
+ # ex: set ro:
+ # $Id$
+ #
+-# generated by tools/dev/mk_manifest_and_skip.pl Wed May  2 05:53:44 2007 UT
++# generated by tools/dev/mk_manifest_and_skip.pl Thu May  3 02:19:29 2007 UT
+ #
+ # See tools/dev/install_files.pl for documentation on the
+ # format of this file.
+@@ -2805,6 +2805,8 @@
+ t/configure/14-params.t                                     []
+ t/configure/15-no_return.t                                  []
+ t/configure/16-no_return_but_result.t                       []
++t/configure/17-revision_no_DEVELOPING.t                     []
++t/configure/18-revision.t                                   []
+ t/configure/base.t                                          []
+ t/configure/config_steps.t                                  []
+ t/configure/data.t                                          []
+@@ -2816,7 +2818,6 @@
+ t/configure/testlib/init/foobar.pm                          []
+ t/configure/testlib/init/gamma.pm                           []
+ t/configure/testlib/init/zeta.pm                            []
+-t/postconfigure/01-data_slurp.t                             []
+ t/distro/file_metadata.t                                    []
+ t/distro/manifest.t                                         []
+ t/distro/manifest_skip.t                                    []
+@@ -3024,6 +3025,9 @@
+ t/pmc/unmanagedstruct.t                                     []
+ t/pmc/version.t                                             []
+ t/pmc/vtablecache.t                                         []
++t/postconfigure/01-data_slurp.t                             []
++t/postconfigure/02-revision_no_DEVELOPING.t                 []
++t/postconfigure/03-revision.t                               []
+ t/run/README                                                []
+ t/run/exit.t                                                []
+ t/run/options.t                                             []
+Index: MANIFEST.SKIP
+===================================================================
+--- MANIFEST.SKIP	(revision 18401)
++++ MANIFEST.SKIP	(working copy)
+@@ -1,6 +1,6 @@
+ # ex: set ro:
+ # $Id$
+-# generated by tools/dev/mk_manifest_and_skip.pl Tue May  1 14:25:10 2007 UT
++# generated by tools/dev/mk_manifest_and_skip.pl Thu May  3 02:19:29 2007 UT
+ #
+ # This file should contain a transcript of the svn:ignore properties
+ # of the directories in the Parrot subversion repository. (Needed for
+
+------------=_1178159598-15879-11--
+

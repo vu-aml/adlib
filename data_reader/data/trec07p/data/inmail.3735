@@ -1,0 +1,125 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Apr 12 06:25:54 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3CAPr0I028520
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 12 Apr 2007 06:25:53 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 846C916393A
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 12 Apr 2007 10:25:30 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.7 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 501)
+	id 20C0D162B6F; Thu, 12 Apr 2007 10:25:03 +0000 (GMT)
+To: samba-cvs@samba.org
+From: abartlet@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070412102503.20C0D162B6F@lists.samba.org>
+Date: Thu, 12 Apr 2007 10:25:03 +0000 (GMT)
+Subject: svn commit: samba r22187 - in branches/SAMBA_4_0:
+	source/auth/credentials source/script/tests testprogs/blackbox
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 3801
+Lines: 82
+
+Author: abartlet
+Date: 2007-04-12 10:25:01 +0000 (Thu, 12 Apr 2007)
+New Revision: 22187
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22187
+
+Log:
+Test kerberos logins in the smbclient blackbox tests, including with a
+machine account.
+
+Andrew Bartlett
+
+Modified:
+   branches/SAMBA_4_0/source/auth/credentials/credentials_krb5.c
+   branches/SAMBA_4_0/source/script/tests/mktestdc.sh
+   branches/SAMBA_4_0/source/script/tests/test_blackbox.sh
+   branches/SAMBA_4_0/testprogs/blackbox/test_smbclient.sh
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/auth/credentials/credentials_krb5.c
+===================================================================
+--- branches/SAMBA_4_0/source/auth/credentials/credentials_krb5.c	2007-04-12 10:19:02 UTC (rev 22186)
++++ branches/SAMBA_4_0/source/auth/credentials/credentials_krb5.c	2007-04-12 10:25:01 UTC (rev 22187)
+@@ -248,6 +248,10 @@
+ {
+ 	krb5_error_code ret;
+ 	
++	if (cred->machine_account_pending) {
++		cli_credentials_set_machine_account(cred);
++	}
++
+ 	if (cred->ccache_obtained >= (MAX(cred->principal_obtained, 
+ 					  cred->username_obtained))) {
+ 		*ccc = cred->ccache;
+
+Modified: branches/SAMBA_4_0/source/script/tests/mktestdc.sh
+===================================================================
+--- branches/SAMBA_4_0/source/script/tests/mktestdc.sh	2007-04-12 10:19:02 UTC (rev 22186)
++++ branches/SAMBA_4_0/source/script/tests/mktestdc.sh	2007-04-12 10:25:01 UTC (rev 22187)
+@@ -210,6 +210,11 @@
+   admin_server = 127.0.0.1:88
+   default_domain = $DNSNAME
+  }
++ $DNSNAME = {
++  kdc = 127.0.0.1:88
++  admin_server = 127.0.0.1:88
++  default_domain = $DNSNAME
++ }
+  $DOMAIN = {
+   kdc = 127.0.0.1:88
+   admin_server = 127.0.0.1:88
+
+Modified: branches/SAMBA_4_0/source/script/tests/test_blackbox.sh
+===================================================================
+--- branches/SAMBA_4_0/source/script/tests/test_blackbox.sh	2007-04-12 10:19:02 UTC (rev 22186)
++++ branches/SAMBA_4_0/source/script/tests/test_blackbox.sh	2007-04-12 10:25:01 UTC (rev 22187)
+@@ -16,5 +16,5 @@
+ incdir=`dirname $0`
+ . $incdir/test_functions.sh
+ 
+-plantest "blackbox.smbclient" dc $incdir/../../../testprogs/blackbox/test_smbclient.sh "\$SERVER" "\$USERNAME" "\$PASSWORD" "\$DOMAIN" "$PREFIX" "$ADDARGS"
+-plantest "blackbox.cifsdd" dc $incdir/../../../testprogs/blackbox/test_cifsdd.sh "\$SERVER" "\$USERNAME" "\$PASSWORD" "\$DOMAIN" "$ADDARGS"
++plantest "blackbox.smbclient" dc $incdir/../../../testprogs/blackbox/test_smbclient.sh "\$NETBIOSNAME" "\$USERNAME" "\$PASSWORD" "\$DOMAIN" "$PREFIX" "$ADDARGS"
++plantest "blackbox.cifsdd" dc $incdir/../../../testprogs/blackbox/test_cifsdd.sh "\$NETBIOSNAME" "\$USERNAME" "\$PASSWORD" "\$DOMAIN" "$ADDARGS"
+
+Modified: branches/SAMBA_4_0/testprogs/blackbox/test_smbclient.sh
+===================================================================
+--- branches/SAMBA_4_0/testprogs/blackbox/test_smbclient.sh	2007-04-12 10:19:02 UTC (rev 22186)
++++ branches/SAMBA_4_0/testprogs/blackbox/test_smbclient.sh	2007-04-12 10:25:01 UTC (rev 22187)
+@@ -96,8 +96,10 @@
+ echo ls | runcmd "List directory with LANMAN1" -m LANMAN1 || failed=`expr $failed + 1`
+ echo ls | runcmd "List directory with LANMAN2" -m LANMAN2 || failed=`expr $failed + 1`
+ 
+-echo ls | testit "Test login with --machine-pass" $VALGRIND bin/smbclient $CONFIGURATION //$SERVER/tmp --machine-pass  || failed=`expr $failed + 1`
++echo ls | testit "Test login with --machine-pass without kerberos" $VALGRIND bin/smbclient $CONFIGURATION //$SERVER/tmp --machine-pass -k no || failed=`expr $failed + 1`
+ 
++echo ls | testit "Test login with --machine-pass and kerberos" $VALGRIND bin/smbclient $CONFIGURATION //$SERVER/tmp --machine-pass -k yes || failed=`expr $failed + 1`
++
+ (
+     echo "password=$PASSWORD"
+     echo "username=$USERNAME"
+

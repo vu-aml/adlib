@@ -4,6 +4,7 @@ import numpy as np
 import cvxpy as cvx
 from cvxpy import Variable as Variable
 from cvxpy import mul_elemwise as mul
+from data_reader.dataset import EmailDataset
 from data_reader.binary_input import Instance
 from data_reader.operations import sparsify
 
@@ -30,6 +31,7 @@ class SVMRestrained(Learner):
         self.weight_vector = None
         self.bias = 0
         self.c_delta = 0.5
+        self.c = 1
         if params is not None:
             self.set_params(params)
         if training_instances is not None:
@@ -38,16 +40,17 @@ class SVMRestrained(Learner):
     def set_params(self, params: Dict):
         if 'c_delta' in params:
             self.c_delta = params['c_delta']
+        if 'c' in params:
+            self.c = params['c']
 
     def get_available_params(self) -> Dict:
-        params = {'c_delta': self.c_delta}
+        params = {'c_delta': self.c_delta, 'c': self.c}
         return params
 
     def train(self):
         '''Optimize the asymmetric dual problem and return optimal w and b.'''
         if not self.training_instances:
             raise ValueError('Must set training instances before training')
-        c = 10
 
         if isinstance(self.training_instances, List):
             y, X = sparsify(self.training_instances)
@@ -86,15 +89,17 @@ class SVMRestrained(Learner):
                        v >= 0]
 
         # objective
-        obj = cvx.Minimize(0.5 * (cvx.norm(w)) + c * cvx.sum_entries(xi0))
+        obj = cvx.Minimize(0.5 * (cvx.norm(w)) + self.c * cvx.sum_entries(xi0))
         prob = cvx.Problem(obj, constraints)
 
         if OPT_INSTALLED:
-            prob.solve(solver='CVXOPT')
+            prob.solve(solver='MOSEK')
         else:
             prob.solve()
 
-        self.weight_vector = [np.array(w.value).T][0]
+        self.weight_vector = np.asarray(w.value.T)[0]
+        print(
+            "weight vec calculated in svm restrained learner: {}".format(self.weight_vector.shape))
         self.bias = b.value
 
     def predict(self, instances):
@@ -125,17 +130,22 @@ class SVMRestrained(Learner):
                 return predictions[0]
         return predictions
 
-    def predict_instance(self, features: np.array):
-        return self.weight_vector.dot(features.T)[0][0] + self.bias
-
     def predict_proba(self, instances):
 
         return self.predict(instances)
 
-    def decision_function(self):
-        return self.weight_vector, self.bias
+    def predict_instance(self, instances: np.array):
+        return self.weight_vector.dot(instances.T)[0] + self.bias
+
+    # decision_function should be the distance to the hyperplane
+    def decision_function(self, instances):
+        predict_instances = self.weight_vector.dot(instances.T) + self.bias
+        # norm = np.linalg.norm(self.weight_vector)
+        return predict_instances
 
     def get_weight(self):
+        print("weight vec shape returned from Restrained learner: {}".format(
+            self.weight_vector.shape))
         return self.weight_vector
 
     def get_constant(self):

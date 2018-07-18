@@ -1,0 +1,170 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Fri May 25 21:20:52 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4Q1KpqD002263
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 25 May 2007 21:20:51 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 5AC38163875
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 26 May 2007 01:20:47 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.8 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 549)
+	id B47B9162BC1; Sat, 26 May 2007 01:19:52 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jra@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070526011952.B47B9162BC1@lists.samba.org>
+Date: Sat, 26 May 2007 01:19:52 +0000 (GMT)
+Subject: svn commit: samba r23150 - in branches: SAMBA_3_0/source/smbd
+	SAMBA_3_0_25/source/smbd SAMBA_3_0_26/source/smbd
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: jra
+Date: 2007-05-26 01:19:51 +0000 (Sat, 26 May 2007)
+New Revision: 23150
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23150
+
+Log:
+Fix Samba3 in the build farm again. In the case where the
+file was being created and we go into the race condition check,
+we were testing for compatible open modes, but were not breaking
+oplocks in the same way as if the file existed. This meant that
+we weren't going into the code path that sets fsp->oplock = FAKE_LEVEL_II_OPLOCK
+if the client didn't ask for an oplock on file create. We need
+to do this as internally it's what Windows does.
+Jeremy.
+
+Modified:
+   branches/SAMBA_3_0/source/smbd/open.c
+   branches/SAMBA_3_0_25/source/smbd/open.c
+   branches/SAMBA_3_0_26/source/smbd/open.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/smbd/open.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/open.c	2007-05-26 00:25:22 UTC (rev 23149)
++++ branches/SAMBA_3_0/source/smbd/open.c	2007-05-26 01:19:51 UTC (rev 23150)
+@@ -1650,6 +1650,15 @@
+ 			return NT_STATUS_SHARING_VIOLATION;
+ 		}
+ 
++		/* First pass - send break only on batch oplocks. */
++		if (delay_for_oplocks(lck, fsp, 1, oplock_request)) {
++			schedule_defer_open(lck, request_time);
++			TALLOC_FREE(lck);
++			fd_close(conn, fsp);
++			file_free(fsp);
++			return NT_STATUS_SHARING_VIOLATION;
++		}
++
+ 		status = open_mode_check(conn, fname, lck,
+ 					 access_mask, share_access,
+ 					 create_options, &file_existed);
+@@ -1677,6 +1686,14 @@
+ 			return status;
+ 		}
+ 
++		if (delay_for_oplocks(lck, fsp, 2, oplock_request)) {
++			schedule_defer_open(lck, request_time);
++			TALLOC_FREE(lck);
++			fd_close(conn, fsp);
++			file_free(fsp);
++			return NT_STATUS_SHARING_VIOLATION;
++		}
++
+ 		/*
+ 		 * We exit this block with the share entry *locked*.....
+ 		 */
+
+Modified: branches/SAMBA_3_0_25/source/smbd/open.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/smbd/open.c	2007-05-26 00:25:22 UTC (rev 23149)
++++ branches/SAMBA_3_0_25/source/smbd/open.c	2007-05-26 01:19:51 UTC (rev 23150)
+@@ -1652,6 +1652,15 @@
+ 			return NT_STATUS_SHARING_VIOLATION;
+ 		}
+ 
++		/* First pass - send break only on batch oplocks. */
++		if (delay_for_oplocks(lck, fsp, 1, oplock_request)) {
++			schedule_defer_open(lck, request_time);
++			TALLOC_FREE(lck);
++			fd_close(conn, fsp);
++			file_free(fsp);
++			return NT_STATUS_SHARING_VIOLATION;
++		}
++
+ 		status = open_mode_check(conn, fname, lck,
+ 					 access_mask, share_access,
+ 					 create_options, &file_existed);
+@@ -1679,6 +1688,14 @@
+ 			return status;
+ 		}
+ 
++		if (delay_for_oplocks(lck, fsp, 2, oplock_request)) {
++			schedule_defer_open(lck, request_time);
++			TALLOC_FREE(lck);
++			fd_close(conn, fsp);
++			file_free(fsp);
++			return NT_STATUS_SHARING_VIOLATION;
++		}
++
+ 		/*
+ 		 * We exit this block with the share entry *locked*.....
+ 		 */
+
+Modified: branches/SAMBA_3_0_26/source/smbd/open.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/smbd/open.c	2007-05-26 00:25:22 UTC (rev 23149)
++++ branches/SAMBA_3_0_26/source/smbd/open.c	2007-05-26 01:19:51 UTC (rev 23150)
+@@ -1654,6 +1654,15 @@
+ 			return NT_STATUS_SHARING_VIOLATION;
+ 		}
+ 
++		/* First pass - send break only on batch oplocks. */
++		if (delay_for_oplocks(lck, fsp, 1, oplock_request)) {
++			schedule_defer_open(lck, request_time);
++			TALLOC_FREE(lck);
++			fd_close(conn, fsp);
++			file_free(fsp);
++			return NT_STATUS_SHARING_VIOLATION;
++		}
++
+ 		status = open_mode_check(conn, fname, lck,
+ 					 access_mask, share_access,
+ 					 create_options, &file_existed);
+@@ -1681,6 +1690,14 @@
+ 			return status;
+ 		}
+ 
++		if (delay_for_oplocks(lck, fsp, 2, oplock_request)) {
++			schedule_defer_open(lck, request_time);
++			TALLOC_FREE(lck);
++			fd_close(conn, fsp);
++			file_free(fsp);
++			return NT_STATUS_SHARING_VIOLATION;
++		}
++
+ 		/*
+ 		 * We exit this block with the share entry *locked*.....
+ 		 */
+

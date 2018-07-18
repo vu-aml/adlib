@@ -1,0 +1,77 @@
+From perl6-all-return-80901-ktwarwic=speedy.uwaterloo.ca@perl.org  Thu Apr 26 15:45:57 2007
+Return-Path: <perl6-all-return-80901-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3QJju6w016302
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 26 Apr 2007 15:45:57 -0400
+Received: (qmail 11694 invoked by uid 514); 26 Apr 2007 19:45:54 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 11686 invoked from network); 26 Apr 2007 19:45:53 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: domain of spiehera@lafayette.edu designates 139.147.8.40 as permitted sender)
+Date: Thu, 26 Apr 2007 15:44:27 -0400 (EDT)
+From: Andy Spieherty <spiehera@lafayette.edu>
+X-X-Sender: spiehera@fractal.phys.lafayette.edu
+To: Perl6 Internals <perl6-internals@perl.org>
+Subject: Puzzling structure in <parrot/stacks.h>
+Message-ID: <Pine.LNX.4.62.0704261514050.20693@fractal.phys.lafayette.edu>
+MIME-Version: 1.0
+Content-Type: TEXT/PLAIN; charset=US-ASCII
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.4 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,DNS_FROM_RFC_ABUSE,SPF_HELO_PASS,SPF_PASS
+Status: O
+Content-Length: 1168
+Lines: 35
+
+Does anyone understand the 'dummy' element in 
+include/parrot/stacks.h?  Here is the relevant snippet:
+
+    typedef struct Stack_Chunk {
+        pobj_t obj;
+        int size;
+        const char * name;
+        struct Stack_Chunk *prev;
+    #if ! DISABLE_GC_DEBUG && defined(I386)
+        void * dummy;   /* force 8 byte align for mmx and sse moves */
+    #endif
+        union { /* force appropriate alignment of 'data' */
+            void *data;
+    #ifndef I386
+            double d_dummy;         /* align double values on stack */
+    #endif
+        } u;
+    } Stack_Chunk_t;
+
+(I assume that mmx and sse are some sort of i386-specific instructions.)
+
+Specifically, I'm wondering about two things:
+
+1.  Is the comment backwards?  If I count correctly, including the
+    void *dummy means that u.data will *NOT* be aligned on an 8-byte
+    boundary.  Is that the actual intent?  (Of course, compilers are
+    free to add in extra padding inside structures, and it may end up
+    aligned with some compilers but not aligned with others.)
+
+2.  Why is this dummy element only inserted used when 
+    ! DISABLE_GC_DEBUG ?
+
+-- 
+    Andy Spieherty		spiehera@lafayette.edu
+
+

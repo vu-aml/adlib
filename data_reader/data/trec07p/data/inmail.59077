@@ -1,0 +1,133 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sat Jun 16 21:04:34 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5H14YL9021236
+	for <ktwarwic@speedy.uwaterloo.ca>; Sat, 16 Jun 2007 21:04:34 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id B8F1E163845
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 17 Jun 2007 01:04:32 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.4 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 2FC4B162B70; Sun, 17 Jun 2007 01:04:03 +0000 (GMT)
+Date: Sun, 17 Jun 2007 10:56:47 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070617010403.2FC4B162B70@lists.samba.org>
+Subject: Rev 596: merged patch from ronnie to add winbind:ignore domains
+	option. This is used for sites where you have some domains
+	that you should never touch in http://samba.org/~tridge/3_0-ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 596
+revision-id: tridge@samba.org-20070617005644-hzr9y3f2g28asx9y
+parent: tridge@samba.org-20070616180634-t7eoiva1rd4694p8
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: s3-ctdb-tridge
+timestamp: Sun 2007-06-17 10:56:44 +1000
+message:
+  merged patch from ronnie to add winbind:ignore domains option. This is used for sites where you have some domains that you should never touch
+modified:
+  source/nsswitch/winbindd_util.c winbindd_util.c-20070210173807-1wjifrbwaz6xnmgl-754
+=== modified file 'source/nsswitch/winbindd_util.c'
+--- a/source/nsswitch/winbindd_util.c	2007-04-24 23:09:33 +0000
++++ b/source/nsswitch/winbindd_util.c	2007-06-17 00:56:44 +0000
+@@ -101,7 +101,16 @@
+ {
+ 	struct winbindd_domain *domain;
+ 	const char *alternative_name = NULL;
++	const char **ignored_domains, **dom;
+ 	
++	ignored_domains = lp_parm_string_list(-1, "winbind", "ignore domains", NULL);
++	for (dom=ignored_domains; *dom; dom++) {
++		if (gen_fnmatch(*dom, domain_name) != 0) {
++			DEBUG(2,("Ignoring domain '%s'\n", *dom));
++			return NULL;
++		}
++	}
++
+ 	/* ignore alt_name if we are not in an AD domain */
+ 	
+ 	if ( (lp_security() == SEC_ADS) && alt_name && *alt_name) {
+@@ -280,7 +289,9 @@
+ 			domain = add_trusted_domain(p, alternate_name,
+ 						    &cache_methods,
+ 						    &sid);
+-			setup_domain_child(domain, &domain->child, NULL);
++			if (domain) {
++				setup_domain_child(domain, &domain->child, NULL);
++			}
+ 		}
+ 		p=q;
+ 		if (p != NULL)
+@@ -507,32 +518,38 @@
+ 	
+ 		domain = add_trusted_domain( lp_workgroup(), lp_realm(),
+ 					     &cache_methods, &our_sid);
+-		domain->primary = True;
+-		setup_domain_child(domain, &domain->child, NULL);
++		if (domain) {
++			domain->primary = True;
++			setup_domain_child(domain, &domain->child, NULL);
+ 		
+-		/* Even in the parent winbindd we'll need to
+-		   talk to the DC, so try and see if we can
+-		   contact it. Theoretically this isn't neccessary
+-		   as the init_dc_connection() in init_child_recv()
+-		   will do this, but we can start detecting the DC
+-		   early here. */
+-		set_domain_online_request(domain);
++			/* Even in the parent winbindd we'll need to
++			   talk to the DC, so try and see if we can
++			   contact it. Theoretically this isn't neccessary
++			   as the init_dc_connection() in init_child_recv()
++			   will do this, but we can start detecting the DC
++			   early here. */
++			set_domain_online_request(domain);
++		}
+ 	}
+ 
+ 	/* Local SAM */
+ 
+ 	domain = add_trusted_domain(get_global_sam_name(), NULL,
+ 				    &passdb_methods, get_global_sam_sid());
+-	if ( role != ROLE_DOMAIN_MEMBER ) {
+-		domain->primary = True;
++	if (domain) {
++		if ( role != ROLE_DOMAIN_MEMBER ) {
++			domain->primary = True;
++		}
++		setup_domain_child(domain, &domain->child, NULL);
+ 	}
+-	setup_domain_child(domain, &domain->child, NULL);
+ 
+ 	/* BUILTIN domain */
+ 
+ 	domain = add_trusted_domain("BUILTIN", NULL, &passdb_methods,
+ 				    &global_sid_Builtin);
+-	setup_domain_child(domain, &domain->child, NULL);
++	if (domain) {
++		setup_domain_child(domain, &domain->child, NULL);
++	}
+ 
+ 	return True;
+ }
+

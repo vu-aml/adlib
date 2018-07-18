@@ -1,0 +1,156 @@
+From beginners-return-91701-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue May 15 14:23:46 2007
+Return-Path: <beginners-return-91701-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4FINjqD008202
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 15 May 2007 14:23:46 -0400
+Received: (qmail 24887 invoked by uid 514); 15 May 2007 18:23:30 -0000
+Mailing-List: contact beginners-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:beginners@perl.org>
+List-Help: <mailto:beginners-help@perl.org>
+List-Unsubscribe: <mailto:beginners-unsubscribe@perl.org>
+List-Subscribe: <mailto:beginners-subscribe@perl.org>
+List-Id: <beginners.perl.org>
+Delivered-To: mailing list beginners@perl.org
+Received: (qmail 24878 invoked from network); 15 May 2007 18:23:29 -0000
+Received: from x1a.develooper.com (HELO x1.develooper.com) (216.52.237.111)
+  by lists.develooper.com with SMTP; 15 May 2007 18:23:29 -0000
+Received: (qmail 11514 invoked by uid 225); 15 May 2007 18:23:29 -0000
+Delivered-To: beginners@perl.org
+Received: (qmail 11503 invoked by alias); 15 May 2007 18:23:28 -0000
+X-Spam-Status: No, hits=0.6 required=8.0
+	tests=BAYES_20,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,FH_HOST_EQ_D_D_D_D,RDNS_DYNAMIC,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+Received: from wsip-70-167-245-212.dc.dc.cox.net (HELO rabbit.burtnet) (70.167.245.212)
+    by la.mx.develooper.com (qpsmtpd/0.28) with ESMTP; Tue, 15 May 2007 11:23:20 -0700
+Received: from jameson by rabbit.burtnet with local (Exim 3.35 #1 (Debian))
+	id 1Ho1f4-00010z-00; Tue, 15 May 2007 14:22:14 -0400
+Date: Tue, 15 May 2007 14:22:14 -0400
+From: "Jameson C. Burt" <jameson@coost.com>
+To: Perl Beginners <beginners@perl.org>
+Subject: Re: qx() won't accept over (about) 128,000 characters
+Message-ID: <20070515182214.GA1972@coost.com>
+References: <20070515154941.GA28005@coost.com> <4649E17C.8020504@telus.net>
+Mime-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+In-Reply-To: <4649E17C.8020504@telus.net>
+User-Agent: Mutt/1.5.4i
+
+On Tue, May 15, 2007 at 09:36:12AM -0700, John W. Krahn wrote:
+> Jameson C. Burt wrote:
+> > Within Perl, I construct programs in other programming languages 
+> > and submit the result to a Unix (Linux or IBM AIX) operating system
+> > with 2GB to 8GB memory.
+> > I submit such a program to the operating system using Perl's
+> >   qx()
+> > Unfortunately, giving qx() over 128,420 characters (about and can vary
+> > by a few characters) then returns nothing.
+> > Yet, giving qx() 128,000 characters gets properly executed by the
+> > operating system.
+> > 
+> > Following is an example, 
+> > expedited from my original test that actually had 1270 lines.
+> > Only with fewer lines (eg, replace 1370 by 1269) will this program output
+> >    "Last line of large program!"
+> > Here's the program that constructs 
+> > and tries giving qx() over 128,000 characters of code:
+> >    #!/usr/bin/perl -w
+> >    $shorty = ' ' x 99   .   '#'   .   "\n" ;  #100/101 characters
+> >    #Repeat 1370 lines of $shorty into @manylines:
+> >    # foreach $i (0..1269)  {$manylines[$i] = $shorty} ;  #Succeeds
+> >    foreach $i (0..1370)    {$manylines[$i] = $shorty} ;
+> >    $manylines[$#manylines + 1] =  'echo "Last Line of large program!"' ;
+> 
+> You can simplify that to:
+> 
+> my @manylines = ( ( ' ' x 99 . "#\n" ) x 1371, 'echo "Last Line of large
+> program!"' );
+> 
+> 
+> >    print qx(@manylines) ;
+> >    # system(qq(@manylines)) ;   #Same problem.
+> 
+> Your line of code is a comment (The # character starts a comment in shell)
+> which is why nothing is returned:
+> 
+> $ perl -e'
+> my @manylines = ( ( " " x 99 . "#\n" ) x 1371, q[echo "Last Line of large
+> program!"] );
+> print qx[@manylines];
+> ' | wc
+>       0       0       0
+> $ perl -e'
+> my @manylines = ( ( " " x 99 . "\n" ) x 1371, q[echo "Last Line of large
+> program!"] );
+> print qx[@manylines];
+> ' | wc
+>       1       5      28
+> $ perl -e'
+> my @manylines = ( ( " " x 99 . "\n" ) x 1371, q[echo "Last Line of large
+> program!"] );
+> print qx[@manylines];
+> '
+> Last Line of large program!
+> 
+> 
+> > However, appending the following lines to the above code
+> > will properly execute those 1370  lines.  
+> >    open(OUTFILE, ">/tmp/zz.out") ;
+> >    print(OUTFILE  @manylines) ;
+> >    close(OUTFILE) ;
+> >    system("bash /tmp/zz.out") ;
+> > While I can run this latter code, it both adds more code 
+> > and adds a file to the operating system's filesystem.
+> > 
+> > Can qx() accept large numbers of characters,
+> > perhaps using some simple technique?
+> 
+> When it is saved as a file the shell (bash) ignores the comment lines.
+
+Your simplified code makes testing much easier -- thank you.
+
+I used "#" to increase the number of
+characters that qx() feeds into the Unix shell
+(my actual 1300 line SAS program program constructed by Perl 
+and fed into Unix with qx() does not enhance the underlying
+large-number-of-characters problem).
+With just blank lines (no "#"),  I suspect either Perl or the Unix shell drops those lines,
+so there is no large-number-of-characters problem.
+
+Let me drop each line's "#", but instead begin each line with ":" 
+(Unix ignores such lines) followed by 99 more characters of "A",
+
+$ perl -e'
+my @manylines = ( ( ": " . "A" x 99 . "\n" ) x 1257, q[echo "Last
+Line of large program!"] );
+print qx[@manylines];
+'  |wc
+      0       0       0
+
+yet using 1256 or fewer such lines,
+
+$ perl -e'
+my @manylines = ( ( ": " . "A" x 99 . "\n" ) x 1256, q[echo "Last
+Line of large program!"] );
+print qx[@manylines];
+'  |wc
+      2       5      28
+
+So, after a certain number of characters (101*1257 = 126957 here),
+qx() executions give no response.
+
+Letting my imagination loose,
+I ponder that  qx()  could have a fixed buffer size, which cannot be exceeded;
+or Unix takes in a block of size 2^16 but not of size 2^17.
+But I am probably only cluttering my mind with possibilities,
+when the problem is a simple looking  large-number-of-characters problem.
+Any ideas?
+
+-- 
+To unsubscribe, e-mail: beginners-unsubscribe@perl.org
+For additional commands, e-mail: beginners-help@perl.org
+http://learn.perl.org/
+
+

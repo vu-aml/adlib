@@ -1,0 +1,321 @@
+From perl6-all-return-80776-ktwarwic=speedy.uwaterloo.ca@perl.org  Sun Apr 22 09:32:58 2007
+Return-Path: <perl6-all-return-80776-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3MDWt0I020509
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 22 Apr 2007 09:32:56 -0400
+Received: (qmail 10607 invoked by uid 514); 22 Apr 2007 13:32:27 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 10602 invoked from network); 22 Apr 2007 13:32:26 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: domain of rutski89@gmail.com designates 209.85.132.246 as permitted sender)
+DKIM-Signature: a=rsa-sha1; c=relaxed/relaxed;
+        d=gmail.com; s=beta;
+        h=domainkey-signature:received:received:in-reply-to:references:mime-version:content-type:message-id:cc:content-transfer-encoding:from:subject:date:to:x-mailer;
+        b=qeOSbdSk7Fl6G4ELLJYkWGtgaBX9J7wrguzCTORsEQulqhR0sy4nQ98SqMfGC4bWeZ9PFBRk3owT/j3utfwz33FJIghxFctCqLbjS9e7ClsSxZn4VF+udQa4Dy4771/MHOTcOqf5cvXSv+Ibn3BaazF9TNGhzctsEBpLzpdWwpc=
+DomainKey-Signature: a=rsa-sha1; c=nofws;
+        d=gmail.com; s=beta;
+        h=received:in-reply-to:references:mime-version:content-type:message-id:cc:content-transfer-encoding:from:subject:date:to:x-mailer;
+        b=KW8EXo9eMeNby/L2gz0ZlpayxLKHvUaSkSrXaTMfGl2TZ4wQDuNsJq3zkgoIeDTMgQZCO5h3aDdDSH2Y5KP67HYuMpsLiv3zkXzBhdsHoZR/sZIgsmykIqBQn0CAunF51dno8DRA2N9fr0zydWb3i64tV//IwadZrihiNdNjihw=
+In-Reply-To: <ef04c7728061e200914c84b6cbbc987a@gmail.com>
+References: <200704211824.18554.chromatic@wgz.org> <ef04c7728061e200914c84b6cbbc987a@gmail.com>
+Mime-Version: 1.0 (Apple Message framework v752.2)
+Content-Type: text/plain; charset=US-ASCII; delsp=yes; format=flowed
+Message-Id: <8CC80EF5-5B9A-4B04-9CD6-1CA3C00A577B@gmail.com>
+Cc: chromatic <chromatic@wgz.org>, perl6-internals@perl.org
+Content-Transfer-Encoding: 7bit
+From: Patrick Rutkowski <rutski89@gmail.com>
+Subject: Re: I Don't Understand The Context Allocation/Destruction Code
+Date: Sun, 22 Apr 2007 09:31:54 -0400
+To: Joshua Isom <jrisom@gmail.com>
+X-Mailer: Apple Mail (2.752.2)
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_SIGNED,DKIM_VERIFIED,DK_POLICY_SIGNSOME,DK_SIGNED,SPF_PASS
+Status: O
+Content-Length: 8737
+Lines: 265
+
+This is in response to your being puzzled about the "*(void **)ptr"
+statement. I'm going to assume that you know about void/non-void
+context in C and that you're already comfortable with the standard
+uses of pointers and type casting.
+
+*(type **)ptr_to_type
+
+gives the same effect as:
+
+(type *)(*ptr_to_type)
+
+here's a test case that proves it:
+
+=== BEGIN CODE ===
+#include <stdio.h>
+
+void f(int *p) {
+      /* "%p\n" would be the 'proper' format string, but I think "%u\n"
+       * better illustrates the concept. */
+      printf("%u\n", p);
+}
+
+int
+main(int argc, char **argv)
+{
+      int x = 77;
+      int *ptr = &x;
+      f( *(int**)ptr );
+      f( (int*)(*ptr) );
+      return 0;
+}
+=== END CODE ===
+
+== BEGIN SHELL DUMP ===
+mini:~/Desktop rutski$ gcc test.c -o test && ./test
+77
+77
+mini:~/Desktop rutski$
+== END SHELL DUMP ===
+
+The second call to f() works only because the type we're dealing with
+is something other than void; in this case it's int. If you tried to
+do something like:
+
+f( (void*)(*ptr_to_void) )
+
+then your compiler would first yell at you for trying to dereference a
+void* and then it would die when you actually try to use the void
+value whcih you got out of it in non-void context:
+
+=== BEGIN CODE ===
+#include <stdio.h>
+void f(void *p) {
+      /* "%p\n" would be the 'proper' format string, but I think "%u\n"
+       * better illustrates the concept. */
+      printf("%u\n", p);
+}
+
+int
+main(int argc, char **argv)
+{
+      int x = 77;
+      void *ptr = &x;
+      f( *(void**)ptr );
+      f( (void*)(*ptr) );
+      return 0;
+}
+=== END CODE ===
+
+== BEGIN SHELL DUMP ===
+mini:~/Desktop rutski$ gcc test.c -o test && ./test
+test.c: In function 'main':
+test.c:13: warning: dereferencing 'void *' pointer
+test.c:13: error: void value not ignored as it ought to be
+mini:~/Desktop rutski$
+=== END SHELL DUMP ===
+
+However, notice the first use of f() on line 12 worked just fine! The
+first call does in fact compile and print 77; ok... so I didn't paste
+the output, but trust me, the first call to f() would print 77.
+
+This works because technically what you're doing is first casing the ptr
+to a void**, which is legal; then you dereference your shiny new
+void** to get a void* (who's value is 77), which again is completely
+legal. You then pass that void* to f(), and it prints it as 77.
+
+So basically you're cheating your way out of dereferencing a void* by
+casting ptr to a different type, namely a void**; and that's a perfectly
+dereference-able type and it's dereferenced value is perfectly usable.
+
+It's a pretty nifty trick if you ask me ;)
+
+Note that I did _not_ say that the thing pointed to by the void* is
+77, I said that the void*'s value is 77.
+
+"But how can the void*'s value be 77!?" you might ask. Well, ptr is a
+pointer to a an int value which holds the number 77. No matter how
+much you cast it around it will always be a pointer to the int holding
+77.
+
+There are two key things to remember. The first is that an object's
+type and it's value are two totally separate things. The second is:
+
+"when you dereference ptr, you _always_ get 77; period, end of
+paragraph".
+
+If it's still a bit much to wrap your head around then just keep
+re-reading the examples I gave while keeping the aforementioned two
+points in mind.
+
+-Patrick
+
+On Apr 22, 2007, at 2:18 AM, Joshua Isom wrote:
+
+>
+> On Apr 21, 2007, at 8:24 PM, chromatic wrote:
+>
+>> Parrot_alloc_context() performs some calculations about the number of
+>> registers used to determine how much memory to allocate:
+>>
+>>     const size_t size_n = sizeof (FLOATVAL) * n_regs_used[REGNO_NUM];
+>>     const size_t size_nip = size_n +
+>>         sizeof (INTVAL) *   n_regs_used[REGNO_INT] +
+>>         sizeof (PMC*) *     n_regs_used[REGNO_PMC];
+>>     size_t reg_alloc = size_nip +
+>>         sizeof (STRING*) *  n_regs_used[REGNO_STR];
+>>
+>> Then it calculates a slot value:
+>>
+>>     const int slot = (reg_alloc + 7) >> 3;
+>>     reg_alloc = slot << 3;
+>>
+>> This is where I start not to understand.  Why reg_alloc + 7?  Why  
+>> shift left
+>> and right by 3?
+>>
+>
+> I'm not sure if it is actually doing anything that needs to be that  
+> complicated to code that way.  It could be able to be written as:
+>
+>     const int slot = (reg_alloc + 7) / 8; /* divide by eight for  
+> some reason and round up on remainder */
+>     reg_alloc = slot * 8; /* reg_alloc is now evenly divisible by 8 */
+>
+> The difference is that if any of the last three bits are set, the  
+> +7 will let it round up, whereas without it it would round down.   
+> That's what it does, don't ask me why(other than maybe guaranteeing  
+> alignment?).  Might be using eight for an eight byte int, but if  
+> so, it should be using sizeof(void *) instead, I'm assuming would  
+> have been used.  Now, slot is multiplied by sizeof(void*) later on,  
+> which may be why it's divided by eight in the first place.
+>
+> The n = slot + 1 I find a little odd, because the number is already  
+> rounded up, so it's rounding up and then adding an extra place of  
+> memory.
+>
+>> It gets less clear.  The interpreter holds a structure for context  
+>> memory with
+>> a free list (an array of void pointers) and the number of free slots,
+>> presumably in this list.
+>>
+>> After all of that calculation of slot, the function uses it as an  
+>> index into
+>> the free list.
+>>
+>> I don't understand that at all.
+>>
+>> I do understand the purpose of the resizing code, but not how slot  
+>> relates to
+>> it:
+>>
+>>     if (slot >= interp->ctx_mem.n_free_slots) {
+>>         const int n = slot + 1;
+>>         int i;
+>>
+>>         interp->ctx_mem.free_list = (void **)mem_sys_realloc(
+>>                 interp->ctx_mem.free_list, n * sizeof (void*));
+>>
+>>         for (i = interp->ctx_mem.n_free_slots; i < n; ++i)
+>>             interp->ctx_mem.free_list[i] = NULL;
+>>         interp->ctx_mem.n_free_slots = n;
+>>     }
+>>
+>> This is doubly weird because when Parrot initializes the free list in
+>> create_initial_context(), it allocates a small number of free slots:
+>>
+>> #define INITIAL_FREE_SLOTS 8
+>>
+>>     interp->ctx_mem.n_free_slots = INITIAL_FREE_SLOTS;
+>>     interp->ctx_mem.free_list    =
+>>         (void **)mem_sys_allocate(INITIAL_FREE_SLOTS * sizeof  
+>> (void *));
+>>
+>>     for (i = 0; i < INITIAL_FREE_SLOTS; ++i)
+>>         interp->ctx_mem.free_list[i] = NULL;
+>>
+>> The result is that the free_list extends quite a bit over the initial
+>> allocation, but it's mostly just an array of null.  It's fairly  
+>> sparse apart
+>> from that.
+>>
+>> Here's another curious thing when allocating a context:
+>>
+>>     ptr = interp->ctx_mem.free_list[slot];
+>>     old = CONTEXT(interp->ctx);
+>>     if (ptr) {
+>>         interp->ctx_mem.free_list[slot] = *(void **) ptr;
+>>     }
+>>
+>> I wish I could tell you what the assignments to and from ptr do  
+>> here, but I
+>> can't, nor what they signify.  There's a similar form to free a  
+>> context:
+>>
+>>         ptr = ctxp;
+>>         slot = ctxp->regs_mem_size >> 3;
+>>
+>>         assert(slot < interp->ctx_mem.n_free_slots);
+>>         *(void **)ptr = interp->ctx_mem.free_list[slot];
+>>         interp->ctx_mem.free_list[slot] = ptr;
+>>
+>
+> The *(void **) has been confusing me for a long time.  It's also in  
+> smallobject.c where a seg fault sometimes happens.  But I've never  
+> been able to find out how to decipher it.  I can look at the dump  
+> of it with `objdump -dS src/gc/smallobject.c` but still get lost in  
+> it all(although looking at assembly, even intermixed with source  
+> code, requires a little too much of an understanding of the machine  
+> to figure out).
+>
+>> I originally thought the free_list was an array of recycled  
+>> contexts to avoid
+>> malloc() and free() pairs by reusing already-allocated-but-unused  
+>> memory, but
+>> now I can't tell what it's doing.  I tried to change this into a  
+>> linked list,
+>> but that failed with invalid reads.
+>>
+>
+> I thought it was a list of items to be freed, but that may be a  
+> different free_list sadly.  We have more than one in parrot.
+>
+>> My best guess is that this is an odd way to store contexts of a  
+>> specific size
+>> in an array structure so that they're reusable with our new  
+>> variable-sized
+>> register sets... but the code is unclear and undocumented.  I  
+>> think it's also
+>> leaking memory.
+>>
+>
+> Enable the context alloc and free, but probably change what's  
+> printed to make it easy to run through sort, and it might help, maybe.
+>
+>> I'd like to find a simpler scheme, if it's possible.  Otherwise,  
+>> I'd like to
+>> figure out what's going on so we can at least explain it somehow.
+>>
+>> -- c
+>>
+>>
+>
+> Rule one of writing in C for a project for many people to code,  
+> document the (you decide the explicative) out of it.
+>
+

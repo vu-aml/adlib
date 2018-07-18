@@ -1,0 +1,76 @@
+From perl6-all-return-80809-ktwarwic=speedy.uwaterloo.ca@perl.org  Mon Apr 23 12:06:48 2007
+Return-Path: <perl6-all-return-80809-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3NG6k0I003310
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 23 Apr 2007 12:06:46 -0400
+Received: (qmail 3341 invoked by uid 514); 23 Apr 2007 16:06:20 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 3336 invoked from network); 23 Apr 2007 16:06:20 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+Message-ID: <462CD9C6.2070605@jnthn.net>
+Date: Mon, 23 Apr 2007 17:07:34 +0100
+From: Jonathan Worthington <jonathan@jnthn.net>
+User-Agent: Thunderbird 1.5.0.10 (Windows/20070221)
+MIME-Version: 1.0
+To: chromatic <chromatic@wgz.org>
+CC: Alek Storm <alek.storm@gmail.com>, perl6-internals@perl.org,
+   bugs-bitbucket@netlabs.develooper.com
+Subject: Re: [perl #42408] Re: [PATCH] refactor vtable overriding, delegate.c
+ generation
+References: <RT-Ticket-42408@perl.org> <200704212200.15380.chromatic@wgz.org> <189adbd0704221757l838bdbft9fe56c48b5bdf59@mail.gmail.com> <200704222332.13701.chromatic@wgz.org>
+In-Reply-To: <200704222332.13701.chromatic@wgz.org>
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+Status: O
+Content-Length: 1318
+Lines: 28
+
+chromatic wrote:
+> Jonathan, can you help us figure out why deleting these lines out of init() fixes the problem?  Are they vestigial?
+>
+> 	    /* turn on marking of the class_data array */
+> 	    PObj_data_is_PMC_array_SET(self);
+>   
+I saw those before and thought they were very suspect; I only gave SMOP 
+a cursory glance for inspiration before digging into PDD15 
+implementation though. When you set this flag, I believe the GC assumes 
+the data pointer of the PMC points to a chunk of memory containing an 
+array of pointers. It then looks at the int in the pmc_ext structure to 
+say how many pointers there are. That way you don't have to write your 
+own mark routine for some aggregate types. I may have the specific 
+details wrong, but it's something like that.
+
+I think in the case of SMOP, the usage of it is bogus/wrong. I don't 
+remember the int in pmc_ext being set, and assuming that everything in a 
+struct is and always will be contiguous non-NULL PMCs or STRING pointers 
+is probably a fast way to segfaults when you change something about the 
+struct in the future, or if it's uninitialized.
+
+I expect custom mark and destroy are the flags that should be set, and 
+the mark and destroy vtable methods implemented. As for the more general 
+future of SMOP, I'm don't know.
+
+Hope this helps,
+
+Jonathan
+

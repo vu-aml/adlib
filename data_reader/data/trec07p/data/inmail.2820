@@ -1,0 +1,516 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Apr 11 08:33:49 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3BCXm0I016609
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 11 Apr 2007 08:33:48 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id A931B16386D
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 11 Apr 2007 12:33:25 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.5 required=3.8 tests=AWL,BAYES_50,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 540)
+	id 6FB1F162AC4; Wed, 11 Apr 2007 12:32:59 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jerry@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070411123259.6FB1F162AC4@lists.samba.org>
+Date: Wed, 11 Apr 2007 12:32:59 +0000 (GMT)
+Subject: svn commit: samba r22173 - in branches: SAMBA_3_0/source/nsswitch
+	SAMBA_3_0_25/source/nsswitch
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 12279
+Lines: 473
+
+Author: jerry
+Date: 2007-04-11 12:32:58 +0000 (Wed, 11 Apr 2007)
+New Revision: 22173
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22173
+
+Log:
+BUG 4491, 4501: Additional fixes for protecting against 
+crashes in allocate_id().  
+
+BUG 4501: Fix segv in idmap_ad caused by resetting the
+entry iterator when parsing search results.
+
+
+Modified:
+   branches/SAMBA_3_0/source/nsswitch/idmap.c
+   branches/SAMBA_3_0/source/nsswitch/idmap_ad.c
+   branches/SAMBA_3_0_25/source/nsswitch/idmap.c
+   branches/SAMBA_3_0_25/source/nsswitch/idmap_ad.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/nsswitch/idmap.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/idmap.c	2007-04-11 12:32:07 UTC (rev 22172)
++++ branches/SAMBA_3_0/source/nsswitch/idmap.c	2007-04-11 12:32:58 UTC (rev 22173)
+@@ -578,32 +578,32 @@
+ 
+ 	if ( alloc_backend ) {
+ 
+-	alloc_methods = get_alloc_methods(alloc_backends, alloc_backend);
+-	if ( ! alloc_methods) {
+-		ret = smb_probe_module("idmap", alloc_backend);
+-		if (NT_STATUS_IS_OK(ret)) {
+-			alloc_methods = get_alloc_methods(alloc_backends, alloc_backend);
++		alloc_methods = get_alloc_methods(alloc_backends, alloc_backend);
++		if ( ! alloc_methods) {
++			ret = smb_probe_module("idmap", alloc_backend);
++			if (NT_STATUS_IS_OK(ret)) {
++				alloc_methods = get_alloc_methods(alloc_backends, alloc_backend);
++			}
+ 		}
+-	}
+-	if ( alloc_methods) {
+-		ret = alloc_methods->init(compat_params);
+-		if ( ! NT_STATUS_IS_OK(ret)) {
+-			DEBUG(0, ("idmap_init: Initialization failed for alloc "
+-				  "backend %s\n", alloc_backend));
+-			ret = NT_STATUS_UNSUCCESSFUL;
+-			goto done;
++		if ( alloc_methods) {
++			ret = alloc_methods->init(compat_params);
++			if ( ! NT_STATUS_IS_OK(ret)) {
++				DEBUG(0, ("idmap_init: Initialization failed for alloc "
++					  "backend %s\n", alloc_backend));
++				ret = NT_STATUS_UNSUCCESSFUL;
++				goto done;
+ 		}
+-	} else {
+-		DEBUG(2, ("idmap_init: Unable to get methods for alloc backend %s\n", 
+-			  alloc_backend));
+-		/* certain compat backends are just readonly */
+-		if ( compat )
+-			ret = NT_STATUS_OK;
+-		else
+-			ret = NT_STATUS_UNSUCCESSFUL;
++		} else {
++			DEBUG(2, ("idmap_init: Unable to get methods for alloc backend %s\n", 
++				  alloc_backend));
++			/* certain compat backends are just readonly */
++			if ( compat )
++				ret = NT_STATUS_OK;
++			else
++				ret = NT_STATUS_UNSUCCESSFUL;
++		}
+ 	}
+-	}
+-
++	
+ 	/* cleanpu temporary strings */
+ 	TALLOC_FREE( compat_backend );
+ 	
+@@ -633,6 +633,9 @@
+ 		return ret;
+ 	}
+ 
++	if ( !alloc_methods )
++		return NT_STATUS_NOT_SUPPORTED;	
++
+ 	id->type = ID_TYPE_UID;
+ 	return alloc_methods->allocate_id(id);
+ }
+@@ -645,6 +648,9 @@
+ 		return ret;
+ 	}
+ 
++	if ( !alloc_methods )
++		return NT_STATUS_NOT_SUPPORTED;	
++
+ 	id->type = ID_TYPE_GID;
+ 	return alloc_methods->allocate_id(id);
+ }
+@@ -657,6 +663,9 @@
+ 		return ret;
+ 	}
+ 
++	if ( !alloc_methods )
++		return NT_STATUS_NOT_SUPPORTED;	
++
+ 	id->type = ID_TYPE_UID;
+ 	return alloc_methods->set_id_hwm(id);
+ }
+@@ -669,6 +678,9 @@
+ 		return ret;
+ 	}
+ 
++	if ( !alloc_methods )
++		return NT_STATUS_NOT_SUPPORTED;	
++
+ 	id->type = ID_TYPE_GID;
+ 	return alloc_methods->set_id_hwm(id);
+ }
+@@ -1321,16 +1333,18 @@
+ 		return;
+ 	}
+ 
+-	allid.type = ID_TYPE_UID;
+-	allid.id = 0;
+-	alloc_methods->get_id_hwm(&allid);
+-	fprintf(dump, "USER HWM %lu\n", (unsigned long)allid.id);
+-
+-	allid.type = ID_TYPE_GID;
+-	allid.id = 0;
+-	alloc_methods->get_id_hwm(&allid);
+-	fprintf(dump, "GROUP HWM %lu\n", (unsigned long)allid.id);
+-
++	if ( alloc_methods ) {		
++		allid.type = ID_TYPE_UID;
++		allid.id = 0;
++		alloc_methods->get_id_hwm(&allid);
++		fprintf(dump, "USER HWM %lu\n", (unsigned long)allid.id);
++		
++		allid.type = ID_TYPE_GID;
++		allid.id = 0;
++		alloc_methods->get_id_hwm(&allid);
++		fprintf(dump, "GROUP HWM %lu\n", (unsigned long)allid.id);
++	}
++	
+ 	maps = talloc(idmap_ctx, struct id_map);
+ 	num_maps = 0;
+ 
+
+Modified: branches/SAMBA_3_0/source/nsswitch/idmap_ad.c
+===================================================================
+--- branches/SAMBA_3_0/source/nsswitch/idmap_ad.c	2007-04-11 12:32:07 UTC (rev 22172)
++++ branches/SAMBA_3_0/source/nsswitch/idmap_ad.c	2007-04-11 12:32:58 UTC (rev 22173)
+@@ -166,7 +166,6 @@
+ 	char *config_option;
+ 	const char *range = NULL;
+ 	const char *schema_mode = NULL;	
+-	ADS_STRUCT *ads;
+ 
+ 	if ( (ctx = talloc_zero(dom, struct idmap_ad_context)) == NULL ) {
+ 		DEBUG(0, ("Out of memory!\n"));
+@@ -261,6 +260,7 @@
+ 				NULL, /* gidnumber */
+ 				NULL };
+ 	LDAPMessage *res = NULL;
++	LDAPMessage *entry = NULL;
+ 	char *filter = NULL;
+ 	int idx = 0;
+ 	int bidx = 0;
+@@ -339,7 +339,7 @@
+ 	}
+ 	filter = talloc_asprintf_append(filter, ")");
+ 	CHECK_ALLOC_DONE(filter);
+-	DEBUG(10, ("Filter: [%s]\n", filter));
++
+ 	rc = ads_search_retry(ads, &res, filter, attrs);
+ 	if (!ADS_ERR_OK(rc)) {
+ 		DEBUG(1, ("ERROR: ads search returned: %s\n", ads_errstr(rc)));
+@@ -351,8 +351,8 @@
+ 		DEBUG(10, ("No IDs found\n"));
+ 	}
+ 
+-	for (i = 0; i < count; i++) {
+-		LDAPMessage *entry = NULL;
++	entry = res;
++	for (i = 0; (i < count) && entry; i++) {
+ 		DOM_SID sid;
+ 		enum id_type type;
+ 		struct id_map *map;
+@@ -360,13 +360,14 @@
+ 		uint32_t atype;
+ 
+ 		if (i == 0) { /* first entry */
+-			entry = ads_first_entry(ads, res);
++			entry = ads_first_entry(ads, entry);
+ 		} else { /* following ones */
+ 			entry = ads_next_entry(ads, entry);
+ 		}
+-		if ( ! entry) {
++
++		if ( !entry ) {
+ 			DEBUG(2, ("ERROR: Unable to fetch ldap entries from results\n"));
+-			continue;
++			break;
+ 		}
+ 
+ 		/* first check if the SID is present */
+@@ -467,6 +468,7 @@
+ 				NULL, /* attr_gidnumber */
+ 				NULL };
+ 	LDAPMessage *res = NULL;
++	LDAPMessage *entry = NULL;
+ 	char *filter = NULL;
+ 	int idx = 0;
+ 	int bidx = 0;
+@@ -524,8 +526,8 @@
+ 		DEBUG(10, ("No IDs found\n"));
+ 	}
+ 
+-	for (i = 0; i < count; i++) {
+-		LDAPMessage *entry = NULL;
++	entry = res;	
++	for (i = 0; (i < count) && entry; i++) {
+ 		DOM_SID sid;
+ 		enum id_type type;
+ 		struct id_map *map;
+@@ -533,13 +535,14 @@
+ 		uint32_t atype;
+ 
+ 		if (i == 0) { /* first entry */
+-			entry = ads_first_entry(ads, res);
++			entry = ads_first_entry(ads, entry);
+ 		} else { /* following ones */
+ 			entry = ads_next_entry(ads, entry);
+ 		}
+-		if ( ! entry) {
++
++		if ( !entry ) {
+ 			DEBUG(2, ("ERROR: Unable to fetch ldap entries from results\n"));
+-			continue;
++			break;
+ 		}
+ 
+ 		/* first check if the SID is present */
+
+Modified: branches/SAMBA_3_0_25/source/nsswitch/idmap.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/nsswitch/idmap.c	2007-04-11 12:32:07 UTC (rev 22172)
++++ branches/SAMBA_3_0_25/source/nsswitch/idmap.c	2007-04-11 12:32:58 UTC (rev 22173)
+@@ -578,32 +578,32 @@
+ 
+ 	if ( alloc_backend ) {
+ 
+-	alloc_methods = get_alloc_methods(alloc_backends, alloc_backend);
+-	if ( ! alloc_methods) {
+-		ret = smb_probe_module("idmap", alloc_backend);
+-		if (NT_STATUS_IS_OK(ret)) {
+-			alloc_methods = get_alloc_methods(alloc_backends, alloc_backend);
++		alloc_methods = get_alloc_methods(alloc_backends, alloc_backend);
++		if ( ! alloc_methods) {
++			ret = smb_probe_module("idmap", alloc_backend);
++			if (NT_STATUS_IS_OK(ret)) {
++				alloc_methods = get_alloc_methods(alloc_backends, alloc_backend);
++			}
+ 		}
+-	}
+-	if ( alloc_methods) {
+-		ret = alloc_methods->init(compat_params);
+-		if ( ! NT_STATUS_IS_OK(ret)) {
+-			DEBUG(0, ("idmap_init: Initialization failed for alloc "
+-				  "backend %s\n", alloc_backend));
+-			ret = NT_STATUS_UNSUCCESSFUL;
+-			goto done;
++		if ( alloc_methods) {
++			ret = alloc_methods->init(compat_params);
++			if ( ! NT_STATUS_IS_OK(ret)) {
++				DEBUG(0, ("idmap_init: Initialization failed for alloc "
++					  "backend %s\n", alloc_backend));
++				ret = NT_STATUS_UNSUCCESSFUL;
++				goto done;
+ 		}
+-	} else {
+-		DEBUG(2, ("idmap_init: Unable to get methods for alloc backend %s\n", 
+-			  alloc_backend));
+-		/* certain compat backends are just readonly */
+-		if ( compat )
+-			ret = NT_STATUS_OK;
+-		else
+-			ret = NT_STATUS_UNSUCCESSFUL;
++		} else {
++			DEBUG(2, ("idmap_init: Unable to get methods for alloc backend %s\n", 
++				  alloc_backend));
++			/* certain compat backends are just readonly */
++			if ( compat )
++				ret = NT_STATUS_OK;
++			else
++				ret = NT_STATUS_UNSUCCESSFUL;
++		}
+ 	}
+-	}
+-
++	
+ 	/* cleanpu temporary strings */
+ 	TALLOC_FREE( compat_backend );
+ 	
+@@ -633,6 +633,9 @@
+ 		return ret;
+ 	}
+ 
++	if ( !alloc_methods )
++		return NT_STATUS_NOT_SUPPORTED;	
++
+ 	id->type = ID_TYPE_UID;
+ 	return alloc_methods->allocate_id(id);
+ }
+@@ -645,6 +648,9 @@
+ 		return ret;
+ 	}
+ 
++	if ( !alloc_methods )
++		return NT_STATUS_NOT_SUPPORTED;	
++
+ 	id->type = ID_TYPE_GID;
+ 	return alloc_methods->allocate_id(id);
+ }
+@@ -657,6 +663,9 @@
+ 		return ret;
+ 	}
+ 
++	if ( !alloc_methods )
++		return NT_STATUS_NOT_SUPPORTED;	
++
+ 	id->type = ID_TYPE_UID;
+ 	return alloc_methods->set_id_hwm(id);
+ }
+@@ -669,6 +678,9 @@
+ 		return ret;
+ 	}
+ 
++	if ( !alloc_methods )
++		return NT_STATUS_NOT_SUPPORTED;	
++
+ 	id->type = ID_TYPE_GID;
+ 	return alloc_methods->set_id_hwm(id);
+ }
+@@ -1321,16 +1333,18 @@
+ 		return;
+ 	}
+ 
+-	allid.type = ID_TYPE_UID;
+-	allid.id = 0;
+-	alloc_methods->get_id_hwm(&allid);
+-	fprintf(dump, "USER HWM %lu\n", (unsigned long)allid.id);
+-
+-	allid.type = ID_TYPE_GID;
+-	allid.id = 0;
+-	alloc_methods->get_id_hwm(&allid);
+-	fprintf(dump, "GROUP HWM %lu\n", (unsigned long)allid.id);
+-
++	if ( alloc_methods ) {		
++		allid.type = ID_TYPE_UID;
++		allid.id = 0;
++		alloc_methods->get_id_hwm(&allid);
++		fprintf(dump, "USER HWM %lu\n", (unsigned long)allid.id);
++		
++		allid.type = ID_TYPE_GID;
++		allid.id = 0;
++		alloc_methods->get_id_hwm(&allid);
++		fprintf(dump, "GROUP HWM %lu\n", (unsigned long)allid.id);
++	}
++	
+ 	maps = talloc(idmap_ctx, struct id_map);
+ 	num_maps = 0;
+ 
+
+Modified: branches/SAMBA_3_0_25/source/nsswitch/idmap_ad.c
+===================================================================
+--- branches/SAMBA_3_0_25/source/nsswitch/idmap_ad.c	2007-04-11 12:32:07 UTC (rev 22172)
++++ branches/SAMBA_3_0_25/source/nsswitch/idmap_ad.c	2007-04-11 12:32:58 UTC (rev 22173)
+@@ -166,7 +166,6 @@
+ 	char *config_option;
+ 	const char *range = NULL;
+ 	const char *schema_mode = NULL;	
+-	ADS_STRUCT *ads;
+ 
+ 	if ( (ctx = talloc_zero(dom, struct idmap_ad_context)) == NULL ) {
+ 		DEBUG(0, ("Out of memory!\n"));
+@@ -261,6 +260,7 @@
+ 				NULL, /* gidnumber */
+ 				NULL };
+ 	LDAPMessage *res = NULL;
++	LDAPMessage *entry = NULL;
+ 	char *filter = NULL;
+ 	int idx = 0;
+ 	int bidx = 0;
+@@ -339,7 +339,7 @@
+ 	}
+ 	filter = talloc_asprintf_append(filter, ")");
+ 	CHECK_ALLOC_DONE(filter);
+-	DEBUG(10, ("Filter: [%s]\n", filter));
++
+ 	rc = ads_search_retry(ads, &res, filter, attrs);
+ 	if (!ADS_ERR_OK(rc)) {
+ 		DEBUG(1, ("ERROR: ads search returned: %s\n", ads_errstr(rc)));
+@@ -351,8 +351,8 @@
+ 		DEBUG(10, ("No IDs found\n"));
+ 	}
+ 
+-	for (i = 0; i < count; i++) {
+-		LDAPMessage *entry = NULL;
++	entry = res;
++	for (i = 0; (i < count) && entry; i++) {
+ 		DOM_SID sid;
+ 		enum id_type type;
+ 		struct id_map *map;
+@@ -360,13 +360,14 @@
+ 		uint32_t atype;
+ 
+ 		if (i == 0) { /* first entry */
+-			entry = ads_first_entry(ads, res);
++			entry = ads_first_entry(ads, entry);
+ 		} else { /* following ones */
+ 			entry = ads_next_entry(ads, entry);
+ 		}
+-		if ( ! entry) {
++
++		if ( !entry ) {
+ 			DEBUG(2, ("ERROR: Unable to fetch ldap entries from results\n"));
+-			continue;
++			break;
+ 		}
+ 
+ 		/* first check if the SID is present */
+@@ -467,6 +468,7 @@
+ 				NULL, /* attr_gidnumber */
+ 				NULL };
+ 	LDAPMessage *res = NULL;
++	LDAPMessage *entry = NULL;
+ 	char *filter = NULL;
+ 	int idx = 0;
+ 	int bidx = 0;
+@@ -524,8 +526,8 @@
+ 		DEBUG(10, ("No IDs found\n"));
+ 	}
+ 
+-	for (i = 0; i < count; i++) {
+-		LDAPMessage *entry = NULL;
++	entry = res;	
++	for (i = 0; (i < count) && entry; i++) {
+ 		DOM_SID sid;
+ 		enum id_type type;
+ 		struct id_map *map;
+@@ -533,13 +535,14 @@
+ 		uint32_t atype;
+ 
+ 		if (i == 0) { /* first entry */
+-			entry = ads_first_entry(ads, res);
++			entry = ads_first_entry(ads, entry);
+ 		} else { /* following ones */
+ 			entry = ads_next_entry(ads, entry);
+ 		}
+-		if ( ! entry) {
++
++		if ( !entry ) {
+ 			DEBUG(2, ("ERROR: Unable to fetch ldap entries from results\n"));
+-			continue;
++			break;
+ 		}
+ 
+ 		/* first check if the SID is present */
+

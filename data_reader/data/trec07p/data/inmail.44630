@@ -1,0 +1,169 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun May 27 04:04:50 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4R84nqD019135
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 27 May 2007 04:04:49 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 52D5B162C2C
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 27 May 2007 08:04:45 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 5B346162AD7; Sun, 27 May 2007 08:04:15 +0000 (GMT)
+Date: Sun, 27 May 2007 16:56:13 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070527080415.5B346162AD7@lists.samba.org>
+Subject: Rev 359: fixed tcp data offset and checksum in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 359
+revision-id: tridge@samba.org-20070527065612-eru5ramnlqtgqkdy
+parent: tridge@samba.org-20070527054743-ldficagg4243oz4g
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Sun 2007-05-27 16:56:12 +1000
+message:
+  fixed tcp data offset and checksum
+modified:
+  takeover/ctdb_takeover.c       ctdb_takeover.c-20070525071636-a5n1ihghjtppy08r-2
+  takeover/system.c              system.c-20070525071636-a5n1ihghjtppy08r-3
+  tools/ctdb_control.c           ctdb_control.c-20070426122705-9ehj1l5lu2gn9kuj-1
+=== modified file 'takeover/ctdb_takeover.c'
+--- a/takeover/ctdb_takeover.c	2007-05-27 05:47:43 +0000
++++ b/takeover/ctdb_takeover.c	2007-05-27 06:56:12 +0000
+@@ -71,7 +71,7 @@
+ 			 (unsigned)ntohs(tcp->daddr.sin_port), 
+ 			 inet_ntoa(tcp->saddr.sin_addr),
+ 			 (unsigned)ntohs(tcp->saddr.sin_port)));
+-		ret = ctdb_sys_send_ack(&tcp->daddr, &tcp->saddr);
++		ret = ctdb_sys_send_ack(&tcp->saddr, &tcp->daddr);
+ 		if (ret != 0) {
+ 			DEBUG(0,(__location__ " Failed to send tcp tickle ack for %s\n",
+ 				 inet_ntoa(tcp->saddr.sin_addr)));
+
+=== modified file 'takeover/system.c'
+--- a/takeover/system.c	2007-05-27 05:47:43 +0000
++++ b/takeover/system.c	2007-05-27 06:56:12 +0000
+@@ -127,20 +127,42 @@
+ 	return 0;
+ }
+ 
++
+ /*
+-  simple IP checksum - assumes data is multiple of 2 bytes long
++  uint16 checksum for n bytes
+  */
+-static uint16_t ip_checksum(uint16_t *data, size_t n)
++static uint32_t uint16_checksum(uint16_t *data, size_t n)
+ {
+-	uint16_t sum=0;
+-	while (n--) {
+-		sum += ntohs(*data);
++	uint32_t sum=0;
++	while (n>=2) {
++		sum += (uint32_t)ntohs(*data);
+ 		data++;
+-	}
+-	if (sum == 0) {
++		n -= 2;
++	}
++	if (n == 1) {
++		sum += (uint32_t)ntohs(*(uint8_t *)data);
++	}
++	return sum;
++}
++
++/*
++  simple TCP checksum - assumes data is multiple of 2 bytes long
++ */
++static uint16_t tcp_checksum(uint16_t *data, size_t n, struct iphdr *ip)
++{
++	uint32_t sum = uint16_checksum(data, n);
++	uint16_t sum2;
++	sum += uint16_checksum((uint16_t *)&ip->saddr, sizeof(ip->saddr));
++	sum += uint16_checksum((uint16_t *)&ip->daddr, sizeof(ip->daddr));
++	sum += ip->protocol + n;
++	sum = (sum & 0xFFFF) + (sum >> 16);
++	sum = (sum & 0xFFFF) + (sum >> 16);
++	sum2 = htons(sum);
++	sum2 = ~sum2;
++	if (sum2 == 0) {
+ 		return 0xFFFF;
+ 	}
+-	return htons(sum);
++	return sum2;
+ }
+ 
+ /*
+@@ -185,20 +207,21 @@
+ 	ZERO_STRUCT(pkt);
+ 	pkt.ip.version  = 4;
+ 	pkt.ip.ihl      = sizeof(pkt.ip)/4;
+-	pkt.ip.tot_len  = sizeof(pkt);
++	pkt.ip.tot_len  = htons(sizeof(pkt));
+ 	pkt.ip.ttl      = 255;
+ 	pkt.ip.protocol = IPPROTO_TCP;
+ 	pkt.ip.saddr    = src->sin_addr.s_addr;
+ 	pkt.ip.daddr    = dest->sin_addr.s_addr;
+-	pkt.ip.check    = ip_checksum((uint16_t *)&pkt.ip, sizeof(pkt.ip)/2);
++	pkt.ip.check    = 0;
+ 
+ 	pkt.tcp.source   = src->sin_port;
+ 	pkt.tcp.dest     = dest->sin_port;
+ 	pkt.tcp.ack      = 1;
+-	pkt.tcp.check    = 0;
++	pkt.tcp.doff     = sizeof(pkt.tcp)/4;
++	pkt.tcp.check    = tcp_checksum((uint16_t *)&pkt.tcp, sizeof(pkt.tcp), &pkt.ip);
+ 
+ 	ret = sendto(s, &pkt, sizeof(pkt), 0, dest, sizeof(*dest));
+-	if (ret != 0) {
++	if (ret != sizeof(pkt)) {
+ 		DEBUG(0,(__location__ " failed sendto (%s)\n", strerror(errno)));
+ 	}
+ 	close(s);
+
+=== modified file 'tools/ctdb_control.c'
+--- a/tools/ctdb_control.c	2007-05-25 07:04:13 +0000
++++ b/tools/ctdb_control.c	2007-05-27 06:56:12 +0000
+@@ -1139,6 +1139,20 @@
+ 		{ "thaw", control_thaw },
+ 	};
+ 
++	{
++		struct sockaddr_in saddr, daddr;
++		inet_aton("192.168.115.128", &daddr.sin_addr);
++		inet_aton("192.168.115.1",   &saddr.sin_addr);
++		daddr.sin_port = htons(1234);
++		saddr.sin_port = htons(445);
++		daddr.sin_family = AF_INET;
++		saddr.sin_family = AF_INET;
++		ctdb_sys_send_ack(&daddr, &saddr);
++		exit(0);
++	}
++
++
++
+ 	pc = poptGetContext(argv[0], argc, argv, popt_options, POPT_CONTEXT_KEEP_FIRST);
+ 
+ 	while ((opt = poptGetNextOpt(pc)) != -1) {
+

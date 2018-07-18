@@ -1,0 +1,143 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue Jun 12 12:36:38 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5CGacL9029237
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 12 Jun 2007 12:36:38 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id F1158163903
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 12 Jun 2007 16:36:37 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.4 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 1017)
+	id 3357216387B; Tue, 12 Jun 2007 16:31:04 +0000 (GMT)
+To: samba-cvs@samba.org
+From: obnox@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070612163104.3357216387B@lists.samba.org>
+Date: Tue, 12 Jun 2007 16:31:04 +0000 (GMT)
+Subject: svn commit: samba r23444 - in
+	branches/SAMBA_3_0_26/source/registry: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: obnox
+Date: 2007-06-12 16:31:03 +0000 (Tue, 12 Jun 2007)
+New Revision: 23444
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23444
+
+Log:
+Merge r20210 from3_0:
+
+* registry_fetch_values is not needed anymore
+* fix comment typo
+
+Michael
+
+
+Modified:
+   branches/SAMBA_3_0_26/source/registry/reg_frontend.c
+   branches/SAMBA_3_0_26/source/registry/reg_printing.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0_26/source/registry/reg_frontend.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/registry/reg_frontend.c	2007-06-12 16:18:19 UTC (rev 23443)
++++ branches/SAMBA_3_0_26/source/registry/reg_frontend.c	2007-06-12 16:31:03 UTC (rev 23444)
+@@ -246,63 +246,6 @@
+ 	return result;
+ }
+ 
+-WERROR registry_fetch_values(TALLOC_CTX *mem_ctx, REGISTRY_KEY *key,
+-			     uint32 *pnum_values, char ***pnames,
+-			     struct registry_value ***pvalues)
+-{
+-	REGVAL_CTR *ctr;
+-	char **names;
+-	struct registry_value **values;
+-	uint32 i;
+-
+-	if (!(ctr = TALLOC_ZERO_P(mem_ctx, REGVAL_CTR))) {
+-		return WERR_NOMEM;
+-	}
+-
+-	if (fetch_reg_values(key, ctr) == -1) {
+-		TALLOC_FREE(ctr);
+-		return WERR_INVALID_PARAM;
+-	}
+-
+-	if (ctr->num_values == 0) {
+-		*pnum_values = 0;
+-		TALLOC_FREE(ctr);
+-		return WERR_OK;
+-	}
+-
+-	if ((!(names = TALLOC_ARRAY(ctr, char *, ctr->num_values))) ||
+-	    (!(values = TALLOC_ARRAY(ctr, struct registry_value *,
+-				     ctr->num_values)))) {
+-		TALLOC_FREE(ctr);
+-		return WERR_NOMEM;
+-	}
+-
+-	for (i=0; i<ctr->num_values; i++) {
+-		REGISTRY_VALUE *val = ctr->values[i];
+-		WERROR err;
+-
+-		if (!(names[i] = talloc_strdup(names, val->valuename))) {
+-			TALLOC_FREE(ctr);
+-			return WERR_NOMEM;
+-		}
+-
+-		err = registry_pull_value(values, &values[i],
+-					  val->type, val->data_p,
+-					  val->size, val->size);
+-		if (!W_ERROR_IS_OK(err)) {
+-			TALLOC_FREE(ctr);
+-			return err;
+-		}
+-	}
+-
+-	*pnum_values = ctr->num_values;
+-	*pnames = talloc_move(mem_ctx, &names);
+-	*pvalues = talloc_move(mem_ctx, &values);
+-
+-	TALLOC_FREE(ctr);
+-	return WERR_OK;
+-}
+-
+ /***********************************************************************
+  retreive a specific subkey specified by index.  Caller is 
+  responsible for freeing memory
+
+Modified: branches/SAMBA_3_0_26/source/registry/reg_printing.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/registry/reg_printing.c	2007-06-12 16:18:19 UTC (rev 23443)
++++ branches/SAMBA_3_0_26/source/registry/reg_printing.c	2007-06-12 16:31:03 UTC (rev 23444)
+@@ -478,7 +478,7 @@
+ 	/* top level key values stored in the registry has no values */
+ 	
+ 	if ( !printers_key ) {
+-		/* normalize to the 'HKLM\SOFTWARE\...\Print\Printers' ket */
++		/* normalize to the 'HKLM\SOFTWARE\...\Print\Printers' key */
+ 		return regdb_fetch_values( KEY_WINNT_PRINTERS, values );
+ 	}
+ 	
+

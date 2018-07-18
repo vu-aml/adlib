@@ -1,0 +1,80 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Tue May  1 21:15:54 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l421Frb9015503
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue, 1 May 2007 21:15:53 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 2FFD3163A88
+	for <ktwarwic@speedy.uwaterloo.ca>; Tue,  1 May 2007 17:44:08 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: *
+X-Spam-Status: No, score=1.1 required=3.8 tests=AWL,BAYES_20,RCVD_IN_DSBL 
+	autolearn=no version=3.1.7
+X-Original-To: samba-technical@samba.org
+Delivered-To: samba-technical@samba.org
+X-Greylist: delayed 783 seconds by postgrey-1.24 at dp.samba.org;
+	Tue, 01 May 2007 17:43:33 GMT
+Received: from seaxch05.isilon.com (seaxch05.isilon.com [70.103.106.43])
+	by lists.samba.org (Postfix) with ESMTP id DD865162BD9
+	for <samba-technical@samba.org>; Tue,  1 May 2007 17:43:33 +0000 (GMT)
+Received: from [10.8.5.188] ([10.8.5.188]) by seaxch05.isilon.com with
+	Microsoft SMTPSVC(6.0.3790.211); Tue, 1 May 2007 10:30:30 -0700
+Mime-Version: 1.0 (Apple Message framework v752.2)
+Content-Transfer-Encoding: 7bit
+Message-Id: <3B633E39-CC01-42DD-83D5-C383DCA0ADBC@isilon.com>
+Content-Type: text/plain; charset=US-ASCII; delsp=yes; format=flowed
+To: samba-technical@samba.org
+From: Tim Prouty <tim.prouty@isilon.com>
+Date: Tue, 1 May 2007 10:30:42 -0700
+X-Mailer: Apple Mail (2.752.2)
+X-OriginalArrivalTime: 01 May 2007 17:30:30.0059 (UTC)
+	FILETIME=[6A19BFB0:01C78C16]
+Subject: When sending a HUP signal isn't enough?
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Hi,
+
+On certain smb.conf parameter changes, sending a HUP to samba is  
+unsafe.  For example, if smbd is running with "security = user", and  
+a windows client sends a negotiate protocol request, smbd will reply  
+indicating that it is able to handle the security mode: USER.  The  
+windows client will then send a Session Setup AndX Request that has a  
+word count of 12, which indicates that this sesssetup should be  
+handled by the special case sesssetup_spnego code.  There is a race  
+that can happen between sending the negprot reply and receiving the  
+sesssetup request.  If during this period of time smb.conf is changed  
+to "security = share", and smbd is sent a HUP signal, smbd will panic  
+due to this check in register_vuid():
+
+	/* Paranoia check. */
+	if(lp_security() == SEC_SHARE) {
+		smb_panic("Tried to register uid in security=share\n");
+	}
+
+Also, when joining a new domain and changing the realm in smb.conf,  
+winbindd does not appear to correctly pick up the changes with a HUP  
+signal.  Ideally, sending a HUP signal would always be sufficient,  
+but as a workaround, we send a TERM signal when changing the security  
+mode or realm.
+
+Does anyone know of any other smb.conf parameters that a HUP signal  
+won't safely pick up the changes for?
+
+Thanks!
+
+-Tim
+

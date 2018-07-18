@@ -1,0 +1,164 @@
+From r-help-bounces@stat.math.ethz.ch  Sun Jun 10 17:15:19 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5ALFHL9006536
+	for <ktwarwic@flax9.uwaterloo.ca>; Sun, 10 Jun 2007 17:15:18 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5ALEoeB017931;
+	Sun, 10 Jun 2007 23:14:57 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: **
+X-Spam-Status: No, score=2.5 required=5.0 tests=AWL, BAYES_50,
+	DKIM_POLICY_SIGNSOME,
+	RCVD_NUMERIC_HELO autolearn=no version=3.2.0
+Received: from rutherford.zen.co.uk (rutherford.zen.co.uk [212.23.3.142])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5ALEhlw017877
+	for <r-help@stat.math.ethz.ch>; Sun, 10 Jun 2007 23:14:43 +0200
+Received: from [88.96.44.206] (helo=88.96.44.206)
+	by rutherford.zen.co.uk with esmtp (Exim 4.50)
+	id 1HxUkE-0002fJ-Lo; Sun, 10 Jun 2007 21:14:42 +0000
+Received: (from efh@localhost) by 88.96.44.206 (8.8.8/8.8.5) id WAA04858;
+	Sun, 10 Jun 2007 22:14:40 +0100
+Message-ID: <XFMail.070610221440.Ted.Harding@manchester.ac.uk>
+X-Mailer: XFMail 1.3-alpha-031298 [p0] on Linux
+X-Priority: 3 (Normal)
+MIME-Version: 1.0
+In-Reply-To: <82491.85523.qm@web39714.mail.mud.yahoo.com>
+Date: Sun, 10 Jun 2007 22:14:40 +0100 (BST)
+From: (Ted Harding) <Ted.Harding@manchester.ac.uk>
+To: r-help@stat.math.ethz.ch
+X-Originating-Rutherford-IP: [88.96.44.206]
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Subject: Re: [R] Tools For Preparing Data For Analysis
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+Reply-To: ted.harding@manchester.ac.uk
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+On 10-Jun-07 19:27:50, Stephen Tucker wrote:
+> 
+> Since R is supposed to be a complete programming language,
+> I wonder why these tools couldn't be implemented in R
+> (unless speed is the issue). Of course, it's a naive desire
+> to have a single language that does everything, but it seems
+> that R currently has most of the functions necessary to do
+> the type of data cleaning described.
+
+In principle that is certainly true. A couple of comments,
+though.
+
+1. R's rich data structures are likely to be superfluous.
+   Mostly, at the sanitisation stage, one is working with
+   "flat" files (row & column). This straightforward format
+   is often easier to handle using simple programs for the
+   kind of basic filtering needed, rather then getting into
+   the heavier programming constructs of R.
+
+2. As follow-on and contrast at the same time, very often
+   what should be a nice flat file with no rough edges is not.
+   If there are variable numbers of fields per line, R will
+   not handle it straightforwardly (you can force it in,
+   but it's more elaborate). There are related issues as well.
+
+a) If someone entering data into an Excel table lets their
+   cursor wander outside the row/col range of the table,
+   this can cause invisible entities to be planted in the
+   extraneous cells. When saved as a CSV, this file then
+   has variable numbers of fields per line, and possibly
+   also extra lines with arbitrary blank fields.
+
+   cat datafile.csv | awk 'BEGIN{FS=","}{n=NF;print n}'
+
+   will give you the numbers of fields in each line.
+
+   If you further pipe it into | sort -nu you will get
+   the distinct field-numbers. If you know (by now) how many
+   fields there should be (e.g. 10), then
+
+   cat datafile.csv | awk 'BEGIN{FS=","} (NF != 10){print NR ", " NF}'
+
+   will tell you which lines have the wrong number of fields,
+   and how many fields they have. You can similarly count how
+   many lines there are (e.g. pipe into wc -l).
+
+b) Poeple sometimes randomly use a blank space or a "." in a
+   cell to demote a missing value. Consistent use of either
+   is OK: ",," in a CSV will be treated as "NA" by R. The use
+   of "." can be more problematic. If for instance you try to
+   read the following CSV into R as a dataframe:
+
+   1,2,.,4
+   2,.,4,5
+   3,4,.,6
+
+   the "." in cols 2 and 3 is treated as the character ".",
+   with the result that something complicated happens to
+   the typing of the items.
+
+   typeeof(D[i,j]) is always integer. sum(D[1,1]=1, but
+   sum(D[1,2]) gives a type-error, even though the entry
+   is in fact 2. And so on , in various combinations.
+
+   And (as.nmatrix(D)) is of course a matrix of characters.
+
+   In fact, columns 2 and 3 of D are treated as factors!
+
+   for(i in (1:3)){ for(j in (1:4)){ print( (D[i,j]))}}
+   [1] 1
+   [1] 2
+   Levels: . 2 4
+   [1] .
+   Levels: . 4
+   [1] 4
+   [1] 2
+   [1] .
+   Levels: . 2 4
+   [1] 4
+   Levels: . 4
+   [1] 5
+   [1] 3
+   [1] 4
+   Levels: . 2 4
+   [1] .
+   Levels: . 4
+   [1] 6
+
+   This is getting altogether too complicated for the job
+   one wants to do!
+
+   And it gets worse when people mix ",," and ",.,"!
+
+   On the other hand, a simple brush with awk (or sed in
+   this case) can sort it once and for all, without waking
+   the sleeping dogs in R.
+
+I could go on. R undoubtedly has the power, but it can very
+quickly get over-complicated for simple jobs.
+
+Best wishes to all,
+Ted.
+
+--------------------------------------------------------------------
+E-Mail: (Ted Harding) <Ted.Harding@manchester.ac.uk>
+Fax-to-email: +44 (0)870 094 0861
+Date: 10-Jun-07                                       Time: 22:14:35
+------------------------------ XFMail ------------------------------
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

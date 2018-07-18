@@ -1,0 +1,244 @@
+From r-help-bounces@stat.math.ethz.ch  Thu Jun 14 05:42:53 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5E9goL9019744
+	for <ktwarwic@flax9.uwaterloo.ca>; Thu, 14 Jun 2007 05:42:52 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5E9fvQ0013414;
+	Thu, 14 Jun 2007 11:42:24 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: *
+X-Spam-Status: No, score=1.4 required=5.0 tests=BAYES_50, DKIM_SIGNED,
+	DKIM_VERIFIED, WEIRD_QUOTING autolearn=no version=3.2.0
+Received: from ug-out-1314.google.com (ug-out-1314.google.com [66.249.92.168])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5E9d3tu012162
+	for <r-help@stat.math.ethz.ch>; Thu, 14 Jun 2007 11:39:04 +0200
+Received: by ug-out-1314.google.com with SMTP id 36so598908uga
+	for <r-help@stat.math.ethz.ch>; Thu, 14 Jun 2007 02:39:03 -0700 (PDT)
+Received: by 10.78.170.6 with SMTP id s6mr588732hue.1181813943488;
+	Thu, 14 Jun 2007 02:39:03 -0700 (PDT)
+Received: by 10.78.183.10 with HTTP; Thu, 14 Jun 2007 02:39:03 -0700 (PDT)
+Message-ID: <551186a70706140239k7d4a854dl7dcf24668dc7e330@mail.gmail.com>
+Date: Thu, 14 Jun 2007 10:39:03 +0100
+From: "Gavin Kelly" <gavinpaulkelly@gmail.com>
+To: r-help@stat.math.ethz.ch
+MIME-Version: 1.0
+Content-Disposition: inline
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Subject: Re: [R] pretty report
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+Reply-To: gavin.kelly@cancer.org.uk
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+At 5:01 PM -0400 6/12/07, Weiwei Shi wrote:
+>Dear Listers:
+>
+>I have a couple of data frames to report and each corresponds to
+>different condtions, e.g. conditions=c(10, 15, 20, 25). In this
+>examples, four data frames need to be exported in a "pretty" report.
+>
+>I knew Perl has some module for exporting data to Excel and after
+>googling, I found R does not.
+
+Weiwei,
+
+If you (or the users who are opening your reports) are going to using
+a version of excel that supports the new Office XML formats, you can
+write multi-sheeted workbooks as below: simply give spreadsheetML a
+named list of dataframes.  You can add attributes to the components to
+add things such as comments, subheadings that span multiple columns,
+hyperlinks and named data-ranges.
+
+If you can't guarantee that the opener won't have a modern Excel (I
+don't believe Mac versions are yet at this stage), then you will need
+to have a windows box to open the file, and save as 'proper' excel.
+Below is a visual basic macro I have set up in a watched directory to
+do this on the fly.  I use the program "filenotify" to watch the
+directory.
+
+If any of the package developers want to incorporate this function,
+then please do get in touch.  It's probably not worth a package of
+it's own, but I think the ability to have multi-sheeted excel books,
+with the extra bits of formatting mentioned above might be useful.
+I'ts fairly straightforward to add extra styling (colours, typefaces,
+etc).
+
+Regards - Gavin
+
+###  The R function, and a demo
+spreadsheetML <- function(dat, fname, style=NULL) {
+  if (is.data.frame(dat))
+    dat <- list(Sheet1=dat)
+  if (is.null(names(dat)))
+    names(dat) <- paste("Sheet",1:length(dat), sep="")
+  names(dat)[names(dat)==""] <- paste("Sheet",1:length(dat),
+sep="")[names(dat)==""]
+  x <- xmlOutputDOM("Workbook", nameSpace="ss",
+                    nsURI=list(
+                      o="urn:schemas-microsoft-com:office:office",
+                      x="urn:schemas-microsoft-com:office:excel",
+                      ss="urn:schemas-microsoft-com:office:spreadsheet",
+                      html="http://www.w3.org/TR/REC-html40"))
+  if (!is.null(style))
+    x$addNode(style)
+### Annotate any named Ranges
+  if (any(!is.null(lapply(dat, attr, "range")))) {
+    x$addTag("Names", close=FALSE)
+    for (sheet in names(dat)) {
+      rngs <- attr(dat[[sheet]],"range")
+      offset <- ifelse(is.null(attr(dat[[sheet]],"subhead")), 1, 2)
+      for (i in names(rngs)) {
+        refersTo <- sprintf("=%s!R%iC%i:R%iC%i",
+                            sheet,
+                            rngs[[i]]$rowStart+offset,
+                            rngs[[i]]$colStart,
+                            rngs[[i]]$rowEnd+offset,
+                            rngs[[i]]$colEnd)
+        x$addTag("NamedRange", attrs=c("ss:Name"=i,
+                                 "ss:RefersTo"=refersTo))
+      }
+    }
+    x$closeTag() #Names
+  }
+  for (sheet in 1:length(dat)) {
+    ## For each dataframe, construct a worksheet
+    x$addTag("Worksheet", attrs=c("ss:Name"=names(dat)[[sheet]]), close=FALSE)
+    x$addTag("Table",close=FALSE)
+    x$addTag("Row", close=FALSE)
+    ## If there's a subheader, expand it, and remove entries from
+relevant header
+    headRow <- colnames(dat[[sheet]])
+    if (!is.null(subhead <- attr(dat[[sheet]],"subhead"))) {
+      subHeadRow <- rep("", length(headRow))
+      for (i in names(subhead)) {
+        start <- match(i, headRow)
+        subHeadRow[start:(start+length(subhead[[i]])-1)] <-
+          subhead[[i]]
+        headRow[(start+1):(start+length(subhead[[i]])-1)] <- ""
+      }
+    }
+    ## Create Header Row, with comments
+    for (i in headRow) {
+      x$addTag("Cell", close=FALSE)
+      x$addTag("Data",i , attrs=c("ss:Type"="String"))
+      if (!is.null(comment <- attr(dat[[sheet]],"xlComment")[[i]])) {
+        if (is.character(comment)) {
+          x$addTag("Comment", attrs=c("ss:Author"="BaBS"), close=FALSE)
+          x$addTag("Data", comment)
+          x$closeTag() #Comment
+        }
+      }
+      x$closeTag() # Header entry
+    }
+    x$closeTag() # Header Row
+    ## Create Sub-Header row, with comments
+    if (!is.null(subhead)) {
+      x$addTag("Row", close=FALSE)
+      for (i in 1:length(subHeadRow)) {
+        x$addTag("Cell", close=FALSE)
+        x$addTag("Data",subHeadRow[i] , attrs=c("ss:Type"="String"))
+        if (is.list(comment <- attr(dat[[sheet]],"xlComment")[[headRow[i]]])) {
+          if (!is.null(comment <- comment[[subHeadRow[i]]])) {
+            x$addTag("Comment", attrs=c("ss:Author"="BaBS"), close=FALSE)
+            x$addTag("Data", comment)
+            x$closeTag() #Comment
+          }
+        }
+        x$closeTag()
+      }
+      x$closeTag() # subHeader Row
+    }
+    coltypes <- rep("String", ncol(dat[[sheet]]))
+    coltypes[sapply(dat[[sheet]], is.numeric)] <- "Number"
+    href <- attributes(dat[[sheet]])$href
+    ## Enter the data row-wise
+    for (i in 1:nrow(dat[[sheet]])) {
+      x$addTag("Row", close=FALSE)
+      for (j in 1:ncol(dat[[sheet]])) {
+        ## Go through the row, expanding any hyperlinks
+        cellAttr <- NULL
+        if (!is.na(ind <- match(colnames(dat[[sheet]])[j], names(href))))
+          cellAttr <- c("ss:Href"=gsub(" ", dat[[sheet]][i,j], href[ind]))
+        x$addTag("Cell", attrs=cellAttr, close=FALSE)
+        x$addTag("Data", as.character(dat[[sheet]][i,j]),
+attrs=c("ss:Type"=coltypes[j]))
+        x$closeTag()
+      }
+      x$closeTag() # data row
+    }
+    x$closeTag() # table
+    x$closeTag() # Worksheet
+  }
+  x$closeTag() # Workbook
+  con = file(fname, "w")
+  saveXML(x$value(), file=con, prefix="<?xml
+version=\"1.0\"?>\n<?mso-application progid=\"Excel.Sheet\"?>\n")
+  close(con)
+  x$reset()
+}
+
+### Example Usage
+library(XML)
+dat <- list(a=data.frame(A=1:10, B=LETTERS[1:10], b=letters[1:10]),
+            b=data.frame(a=1:10, b=factor(LETTERS[1:2])))
+attr(dat$a, "range") <- list(data=list(rowStart=1,
+                               rowEnd=nrow(dat$a),
+                               colStart=1,
+                               colEnd=ncol(dat$a)))
+attr(dat$a, "subhead") <- list(B=c("Upper","Lower"))
+attr(dat$a, "xlComment") <- list(A="Hello",
+                               B=list(Upper="World"))
+attr(dat$b, "href") <- list(a="http://www.google.co.uk/search?q= ")
+#save as .xml if using the vba script
+spreadsheetML(dat, "tmp.xls")
+
+###  Prototype script to saveas xml to xls
+Dim appExcel
+Dim strSource
+Dim wbSource
+Dim ArgObj
+Set ArgObj = WScript.Arguments
+Dim objRegExpr
+Set objRegExpr = New regexp
+
+objRegExpr.Pattern = ".*\.xml$"
+objRegExpr.Global = True
+objRegExpr.IgnoreCase = True
+strSource = ArgObj(0)
+
+if (objRegExpr.Test(strSource)) Then
+  Set appExcel = CreateObject("Excel.Application")
+  appExcel.DisplayAlerts = False
+  Set wbSource = appExcel.Workbooks.Open(strSource)
+  wbSource.SaveAs "c:\converted\tmp.xls", 1
+  wbSource.Close False
+  Set wbSource = Nothing
+  appExcel.Quit
+  Set appExcel = Nothing
+End If
+
+
+-- 
+Gavin Kelly
+Senior Statistician, Bioinformatics & Biostatistics Group
+Cancer Research UK
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

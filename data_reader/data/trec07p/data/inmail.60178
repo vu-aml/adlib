@@ -1,0 +1,243 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Mon Jun 18 18:50:00 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5IMnxL9022741
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 18 Jun 2007 18:49:59 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id EE85416382F
+	for <ktwarwic@speedy.uwaterloo.ca>; Mon, 18 Jun 2007 22:49:57 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,
+	DATE_IN_PAST_03_06,NO_REAL_NAME,RCVD_IN_DSBL,SPF_PASS autolearn=no 
+	version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+X-Greylist: delayed 1875 seconds by postgrey-1.24 at dp.samba.org;
+	Mon, 18 Jun 2007 22:49:35 GMT
+Received: from mail.tridgell.net (mail.tridgell.net [220.233.226.134])
+	by lists.samba.org (Postfix) with ESMTP id 7D265162AE8
+	for <samba-cvs@samba.org>; Mon, 18 Jun 2007 22:49:35 +0000 (GMT)
+Received: by mail.tridgell.net (Postfix, from userid 148)
+	id 3B329B5040; Tue, 19 Jun 2007 08:18:18 +1000 (EST)
+Date: Tue, 19 Jun 2007 03:54:07 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070618221819.3B329B5040@mail.tridgell.net>
+Subject: Rev 549: added code to kill registered clients on a IP release in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 549
+revision-id: tridge@samba.org-20070618175406-aecnwij4nc2n4b1z
+parent: tridge@samba.org-20070617171508-dshksshlnzdh2qfs
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Tue 2007-06-19 03:54:06 +1000
+message:
+  added code to kill registered clients on a IP release
+modified:
+  include/ctdb_private.h         ctdb_private.h-20061117234101-o3qt14umlg9en8z0-13
+  server/ctdb_daemon.c           ctdb_daemon.c-20070409200331-3el1kqgdb9m4ib0g-1
+  server/ctdb_server.c           ctdb.c-20061127094323-t50f58d65iaao5of-2
+  server/ctdb_traverse.c         ctdb_traverse.c-20070503021550-ztfs5rwx8jfm8qqx-1
+  takeover/ctdb_takeover.c       ctdb_takeover.c-20070525071636-a5n1ihghjtppy08r-2
+=== modified file 'include/ctdb_private.h'
+--- a/include/ctdb_private.h	2007-06-17 13:31:44 +0000
++++ b/include/ctdb_private.h	2007-06-18 17:54:06 +0000
+@@ -101,6 +101,7 @@
+ 	int fd;
+ 	struct ctdb_queue *queue;
+ 	uint32_t client_id;
++	pid_t pid;
+ 	struct ctdb_tcp_list *tcp_list;
+ };
+ 
+@@ -267,7 +268,6 @@
+ 	TALLOC_CTX *last_ctx;
+ };
+ 
+-
+ /* main state of the ctdb daemon */
+ struct ctdb_context {
+ 	struct event_context *ev;
+@@ -306,6 +306,7 @@
+ 	struct ctdb_call_state *pending_calls;
+ 	struct ctdb_takeover takeover;
+ 	struct ctdb_tcp_list *tcp_list;
++	struct ctdb_client_ip *client_ip_list;
+ };
+ 
+ struct ctdb_db_context {
+@@ -926,7 +927,7 @@
+ 
+ int ctdb_start_recoverd(struct ctdb_context *ctdb);
+ 
+-uint32_t ctdb_get_num_enabled_nodes(struct ctdb_context *ctdb);
++uint32_t ctdb_get_num_active_nodes(struct ctdb_context *ctdb);
+ 
+ void ctdb_stop_monitoring(struct ctdb_context *ctdb);
+ void ctdb_start_monitoring(struct ctdb_context *ctdb);
+
+=== modified file 'server/ctdb_daemon.c'
+--- a/server/ctdb_daemon.c	2007-06-12 09:44:54 +0000
++++ b/server/ctdb_daemon.c	2007-06-18 17:54:06 +0000
+@@ -211,6 +211,14 @@
+ 		DEBUG(2,(__location__ " Registered message handler for srvid=%llu\n", 
+ 			 (unsigned long long)srvid));
+ 	}
++
++	/* this is a hack for Samba - we now know the pid of the Samba client */
++	if ((srvid & 0xFFFFFFFF) == srvid &&
++	    kill(srvid, 0) == 0) {
++		client->pid = srvid;
++		DEBUG(0,(__location__ " Registered PID %u for client %u\n",
++			 (unsigned)client->pid, client_id));
++	}
+ 	return res;
+ }
+ 
+
+=== modified file 'server/ctdb_server.c'
+--- a/server/ctdb_server.c	2007-06-09 11:58:50 +0000
++++ b/server/ctdb_server.c	2007-06-18 17:54:06 +0000
+@@ -193,15 +193,15 @@
+ 
+ 
+ /*
+-  return the number of enabled nodes
++  return the number of active nodes
+ */
+-uint32_t ctdb_get_num_enabled_nodes(struct ctdb_context *ctdb)
++uint32_t ctdb_get_num_active_nodes(struct ctdb_context *ctdb)
+ {
+ 	int i;
+ 	uint32_t count=0;
+ 	for (i=0;i<ctdb->vnn_map->size;i++) {
+ 		struct ctdb_node *node = ctdb->nodes[ctdb->vnn_map->map[i]];
+-		if (!(node->flags & (NODE_FLAGS_INACTIVE|NODE_FLAGS_DISABLED))) {
++		if (!(node->flags & NODE_FLAGS_INACTIVE)) {
+ 			count++;
+ 		}
+ 	}
+
+=== modified file 'server/ctdb_traverse.c'
+--- a/server/ctdb_traverse.c	2007-06-09 11:58:50 +0000
++++ b/server/ctdb_traverse.c	2007-06-18 17:54:06 +0000
+@@ -373,7 +373,7 @@
+ 
+ 	if (key.dsize == 0 && data.dsize == 0) {
+ 		state->null_count++;
+-		if (state->null_count != ctdb_get_num_enabled_nodes(ctdb)) {
++		if (state->null_count != ctdb_get_num_active_nodes(ctdb)) {
+ 			return 0;
+ 		}
+ 	}
+
+=== modified file 'takeover/ctdb_takeover.c'
+--- a/takeover/ctdb_takeover.c	2007-06-09 23:54:27 +0000
++++ b/takeover/ctdb_takeover.c	2007-06-18 17:54:06 +0000
+@@ -51,6 +51,16 @@
+ };
+ 
+ 
++/*
++  list of clients to kill on IP release
++ */
++struct ctdb_client_ip {
++	struct ctdb_client_ip *prev, *next;
++	struct ctdb_context *ctdb;
++	struct sockaddr_in ip;
++	uint32_t client_id;
++};
++
+ 
+ /*
+   send a gratuitous arp
+@@ -211,6 +221,27 @@
+ 	return 0;
+ }
+ 
++/*
++  kill any clients that are registered with a IP that is being released
++ */
++static void release_kill_clients(struct ctdb_context *ctdb, struct sockaddr_in *sin)
++{
++	struct ctdb_client_ip *ip;
++
++	for (ip=ctdb->client_ip_list; ip; ip=ip->next) {
++		if (ip->ip.sin_addr.s_addr == sin->sin_addr.s_addr) {
++			struct ctdb_client *client = ctdb_reqid_find(ctdb, 
++								     ip->client_id, 
++								     struct ctdb_client);
++			if (client->pid != 0) {
++				DEBUG(0,(__location__ " Killing client pid %u for IP %s on client_id %u\n",
++					 (unsigned)client->pid, inet_ntoa(sin->sin_addr),
++					      ip->client_id));
++				kill(client->pid, SIGKILL);
++			}
++		}
++	}
++}
+ 
+ /*
+   called when releaseip event finishes
+@@ -234,6 +265,10 @@
+ 
+ 	ctdb_daemon_send_message(ctdb, ctdb->vnn, CTDB_SRVID_RELEASE_IP, data);
+ 
++	/* kill clients that have registered with this IP */
++	release_kill_clients(ctdb, state->sin);
++	
++
+ 	/* tell other nodes about any tcp connections we were holding with this IP */
+ 	for (tcp=ctdb->tcp_list;tcp;tcp=tcp->next) {
+ 		if (tcp->vnn == ctdb->vnn && 
+@@ -528,6 +563,15 @@
+ 
+ 
+ /*
++  destroy a ctdb_client_ip structure
++ */
++static int ctdb_client_ip_destructor(struct ctdb_client_ip *ip)
++{
++	DLIST_REMOVE(ip->ctdb->client_ip_list, ip);
++	return 0;
++}
++
++/*
+   called by a client to inform us of a TCP connection that it is managing
+   that should tickled with an ACK when IP takeover is done
+  */
+@@ -540,6 +584,16 @@
+ 	struct ctdb_control_tcp_vnn t;
+ 	int ret;
+ 	TDB_DATA data;
++	struct ctdb_client_ip *ip;
++
++	ip = talloc(client, struct ctdb_client_ip);
++	CTDB_NO_MEMORY(ctdb, ip);
++
++	ip->ctdb = ctdb;
++	ip->ip = p->dest;
++	ip->client_id = client_id;
++	talloc_set_destructor(ip, ctdb_client_ip_destructor);
++	DLIST_ADD(ctdb->client_ip_list, ip);
+ 
+ 	tcp = talloc(client, struct ctdb_tcp_list);
+ 	CTDB_NO_MEMORY(ctdb, tcp);
+

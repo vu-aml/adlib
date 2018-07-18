@@ -1,0 +1,93 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Apr 18 19:58:38 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3INwb0I017696
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 18 Apr 2007 19:58:37 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 7654E162C4B
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 18 Apr 2007 23:58:13 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 89456162B00; Wed, 18 Apr 2007 23:57:49 +0000 (GMT)
+Date: Thu, 19 Apr 2007 09:58:24 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070418235749.89456162B00@lists.samba.org>
+Subject: Rev 156:  in http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 1871
+Lines: 53
+
+------------------------------------------------------------
+revno: 156
+revision-id: tridge@samba.org-20070418235823-f4d1ef1f0f3ac9d6
+parent: tridge@samba.org-20070418231425-4902f5acfc663227
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Thu 2007-04-19 09:58:23 +1000
+message:
+  
+  - use separate directories for the tdb files by default
+  - use TDB_CLEAR_IF_FIRST to ensure we don't use an old tdb
+modified:
+  common/cmdline.c               cmdline.c-20070416041216-w1zvz91bkdsgjckw-1
+  common/ctdb_ltdb.c             ctdb_ltdb.c-20061128065342-to93h6eejj5kon81-2
+=== modified file 'common/cmdline.c'
+--- a/common/cmdline.c	2007-04-18 23:14:25 +0000
++++ b/common/cmdline.c	2007-04-18 23:58:23 +0000
+@@ -37,7 +37,7 @@
+ 	.transport = "tcp",
+ 	.myaddress = NULL,
+ 	.self_connect = 0,
+-	.db_dir = "."
++	.db_dir = NULL
+ };
+ 
+ 
+
+=== modified file 'common/ctdb_ltdb.c'
+--- a/common/ctdb_ltdb.c	2007-04-18 14:36:22 +0000
++++ b/common/ctdb_ltdb.c	2007-04-18 23:58:23 +0000
+@@ -82,6 +82,13 @@
+ 		}
+ 	}
+ 
++	if (mkdir(ctdb->db_directory, 0700) == -1 && errno != EEXIST) {
++		DEBUG(0,(__location__ " Unable to create ctdb directory '%s'\n", 
++			 ctdb->db_directory));
++		talloc_free(ctdb_db);
++		return NULL;
++	}
++
+ 	/* add the node id to the database name, so when we run on loopback
+ 	   we don't conflict in the local filesystem */
+ 	name = talloc_asprintf(ctdb_db, "%s/%s", ctdb->db_directory, name);
+@@ -89,7 +96,7 @@
+ 	/* when we have a separate daemon this will need to be a real
+ 	   file, not a TDB_INTERNAL, so the parent can access it to
+ 	   for ltdb bypass */
+-	ctdb_db->ltdb = tdb_wrap_open(ctdb, name, 0, TDB_DEFAULT, open_flags, mode);
++	ctdb_db->ltdb = tdb_wrap_open(ctdb, name, 0, TDB_CLEAR_IF_FIRST, open_flags, mode);
+ 	if (ctdb_db->ltdb == NULL) {
+ 		ctdb_set_error(ctdb, "Failed to open tdb %s\n", name);
+ 		talloc_free(ctdb_db);
+

@@ -1,0 +1,132 @@
+From r-help-bounces@stat.math.ethz.ch  Tue Jul  3 13:55:02 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l63HsxL9031922
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 3 Jul 2007 13:55:00 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l63HriqU032468;
+	Tue, 3 Jul 2007 19:53:56 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.4 required=5.0 tests=AWL, BAYES_50, DKIM_SIGNED,
+	DKIM_VERIFIED autolearn=no version=3.2.0
+Received: from nz-out-0506.google.com (nz-out-0506.google.com [64.233.162.232])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l63HrZEt032424
+	for <r-help@stat.math.ethz.ch>; Tue, 3 Jul 2007 19:53:36 +0200
+Received: by nz-out-0506.google.com with SMTP id z31so1335655nzd
+	for <r-help@stat.math.ethz.ch>; Tue, 03 Jul 2007 10:53:35 -0700 (PDT)
+Received: by 10.142.107.1 with SMTP id f1mr450083wfc.1183485214637;
+	Tue, 03 Jul 2007 10:53:34 -0700 (PDT)
+Received: by 10.143.156.19 with HTTP; Tue, 3 Jul 2007 10:53:34 -0700 (PDT)
+Message-ID: <eb555e660707031053w4f853b5anb194bc7a9a1daf3d@mail.gmail.com>
+Date: Tue, 3 Jul 2007 10:53:34 -0700
+From: deepayan.sarkar@gmail.com
+To: "Michael Hoffman" <b3i4old02@sneakemail.com>
+In-Reply-To: <f6dpj7$3pa$1@sea.gmane.org>
+MIME-Version: 1.0
+Content-Disposition: inline
+References: <f6cc16$p0a$1@sea.gmane.org>
+	<eb555e660707022040qf4ec6d0p4479498600ceead2@mail.gmail.com>
+	<f6dpj7$3pa$1@sea.gmane.org>
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] Lattice: shifting strips to left of axes
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+On 7/3/07, Michael Hoffman <b3i4old02@sneakemail.com> wrote:
+> deepayan.sarkar@gmail.com wrote:
+> > On 7/2/07, Michael Hoffman <b3i4old02@sneakemail.com> wrote:
+> >> Consider this plot:
+> >>
+> >> xyplot(mpg ~ disp | cyl, mtcars, strip=F, strip.left=T, layout=c(1, 3),
+> >>         scales=list(relation="free"),
+> >>         par.settings=list(strip.background=list(col="transparent")))
+> >>
+> >> I want to have the "cyl" strip labels on the left side of the axis. Is
+> >> this possible?
+> >
+> > No. (It's possible to have a legend there, which could be used to put
+> > row-specific ylab-s, for example, but it will be hard to make it look
+> > like strips)
+>
+> Thanks for the response.
+>
+> Not looking like a real strip is fine. What I want is essentially a
+> secondary ylab for each row, and don't care about niceties such as
+> shingle markings (I should have made the conditional factor(cyl) in the
+> above plot).
+
+I thought this might be the case.
+
+> But it looks like the legend goes to the left of the plot's ylab, and
+> what I really want is for the secondary ylab to be between the primary
+> ylab and the panel. So looks like I would have to eliminate the primary
+> ylab from being drawn automatically and draw it myself in the legend?
+> And I think I would have to manually calculate the panel heights as
+> well, right? I don't see a way for the legend to get this out of the
+> trellis object.
+
+It's possible, although it requires some advanced grid features.
+Luckily, this has come up before (search the r-help archives for
+"myXlabGrob"). Basically, you can use the fact that 'ylab' can be a
+"grob" to get what you want (I think). Here is a modified version of
+the original function (adapted to include a 'primary' ylab):
+
+
+library(grid)
+library(lattice)
+
+myYlabGrob <-
+    function(..., main.ylab = "") ## ...is lab1, lab2, etc
+{
+    ## you can add arguments to textGrob for more control
+    ## in the next line
+    labs <- lapply(list(...), textGrob, rot=90)
+    main.ylab <- textGrob(main.ylab, rot = 90)
+    nlabs <- length(labs)
+    lab.heights <-
+        lapply(labs,
+               function(lab) unit(1, "grobheight",
+                                  data=list(lab)))
+    unit1 <- unit(1.2, "grobheight", data = list(main.ylab))
+    unit2 <- do.call(max, lab.heights)
+    lab.layout <-
+        grid.layout(ncol = 2, nrow = nlabs,
+                    heights = unit(1, "null"),
+                    widths = unit.c(unit1, unit2),
+                    respect = TRUE)
+    lab.gf <- frameGrob(layout=lab.layout)
+    for (i in seq_len(nlabs))
+    {
+        lab.gf <- placeGrob(lab.gf, labs[[i]], row = i, col = 2)
+    }
+    lab.gf <- placeGrob(lab.gf, main.ylab, col = 1)
+    lab.gf
+}
+
+xyplot(mpg ~ disp | cyl, mtcars, strip=F, strip.left=F, layout=c(1, 3),
+       scales=list(relation="free"),
+       ylab = myYlabGrob("4", "6", "8", main.ylab = "mpg"))
+
+-Deepayan
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

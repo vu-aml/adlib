@@ -1,0 +1,107 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May 23 20:16:10 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4O0GAqD031612
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 23 May 2007 20:16:10 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 8F1B416390F
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 24 May 2007 00:16:06 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 549)
+	id 682E3162AE4; Thu, 24 May 2007 00:13:27 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jra@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070524001327.682E3162AE4@lists.samba.org>
+Date: Thu, 24 May 2007 00:13:27 +0000 (GMT)
+Subject: svn commit: samba r23106 - in branches: SAMBA_3_0/source/smbd
+	SAMBA_3_0_26/source/smbd
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: jra
+Date: 2007-05-24 00:13:24 +0000 (Thu, 24 May 2007)
+New Revision: 23106
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=23106
+
+Log:
+Use lchown for symlinks.
+Jeremy.
+
+Modified:
+   branches/SAMBA_3_0/source/smbd/trans2.c
+   branches/SAMBA_3_0_26/source/smbd/trans2.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/smbd/trans2.c
+===================================================================
+--- branches/SAMBA_3_0/source/smbd/trans2.c	2007-05-23 23:55:12 UTC (rev 23105)
++++ branches/SAMBA_3_0/source/smbd/trans2.c	2007-05-24 00:13:24 UTC (rev 23106)
+@@ -5268,9 +5268,18 @@
+ 	 */
+ 
+ 	if ((set_owner != (uid_t)SMB_UID_NO_CHANGE) && (psbuf->st_uid != set_owner)) {
+-		DEBUG(10,("smb_set_file_unix_basic: SMB_SET_FILE_UNIX_BASIC changing owner %u for file %s\n",
++		int ret;
++
++		DEBUG(10,("smb_set_file_unix_basic: SMB_SET_FILE_UNIX_BASIC changing owner %u for path %s\n",
+ 			(unsigned int)set_owner, fname ));
+-		if (SMB_VFS_CHOWN(conn, fname, set_owner, (gid_t)-1) != 0) {
++
++		if (S_ISLNK(psbuf->st_mode)) {
++			ret = SMB_VFS_LCHOWN(conn, fname, set_owner, (gid_t)-1);
++		} else {
++			ret = SMB_VFS_CHOWN(conn, fname, set_owner, (gid_t)-1);
++		}
++
++		if (ret != 0) {
+ 			status = map_nt_error_from_unix(errno);
+ 			if (delete_on_fail) {
+ 				SMB_VFS_UNLINK(conn,fname);
+
+Modified: branches/SAMBA_3_0_26/source/smbd/trans2.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/smbd/trans2.c	2007-05-23 23:55:12 UTC (rev 23105)
++++ branches/SAMBA_3_0_26/source/smbd/trans2.c	2007-05-24 00:13:24 UTC (rev 23106)
+@@ -5214,9 +5214,18 @@
+ 	 */
+ 
+ 	if ((set_owner != (uid_t)SMB_UID_NO_CHANGE) && (psbuf->st_uid != set_owner)) {
+-		DEBUG(10,("smb_set_file_unix_basic: SMB_SET_FILE_UNIX_BASIC changing owner %u for file %s\n",
++		int ret;
++
++		DEBUG(10,("smb_set_file_unix_basic: SMB_SET_FILE_UNIX_BASIC changing owner %u for path %s\n",
+ 			(unsigned int)set_owner, fname ));
+-		if (SMB_VFS_CHOWN(conn, fname, set_owner, (gid_t)-1) != 0) {
++
++		if (S_ISLNK(psbuf->st_mode)) {
++			ret = SMB_VFS_LCHOWN(conn, fname, set_owner, (gid_t)-1);
++		} else {
++			ret = SMB_VFS_CHOWN(conn, fname, set_owner, (gid_t)-1);
++		}
++
++		if (ret != 0) {
+ 			status = map_nt_error_from_unix(errno);
+ 			if (delete_on_fail) {
+ 				SMB_VFS_UNLINK(conn,fname);
+

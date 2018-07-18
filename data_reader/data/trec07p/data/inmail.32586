@@ -1,0 +1,230 @@
+From perl6-all-return-81233-ktwarwic=speedy.uwaterloo.ca@perl.org  Wed May  9 16:24:59 2007
+Return-Path: <perl6-all-return-81233-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l49KOwqD001012
+	for <ktwarwic@flax9.uwaterloo.ca>; Wed, 9 May 2007 16:24:58 -0400
+Received: (qmail 2905 invoked by uid 514); 9 May 2007 20:24:56 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 2900 invoked from network); 9 May 2007 20:24:55 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: moderator for perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: pass (x1.develooper.com: local policy)
+From: Mark Glines (via RT) <parrotbug-followup@parrotcode.org>
+X-RT-NewTicket: yes
+To: bugs-bitbucket@netlabs.develooper.com
+Resent-To: perl6-internals@perl.org
+Mail-Followup-To: perl6-internals@perl.org
+Reply-To: perl6-internals@perl.org
+Date: Wed, 09 May 2007 10:51:02 -0700
+Subject: [perl #42916] [PATCH] codingstd/c_header_guards.t: detect copied header files 
+In-Reply-To: <20070509104846.3123b222@chirp>
+References: <RT-Ticket-42916@perl.org> <20070509104846.3123b222@chirp>
+Message-ID: <rt-3.6.HEAD-12281-1178733062-1417.42916-72-0@perl.org>
+X-RT-Loop-Prevention: perl
+RT-Ticket: perl #42916
+Managed-by: RT 3.6.HEAD (http://www.bestpractical.com/rt/)
+RT-Originator: mark@glines.org
+MIME-Version: 1.0
+X-RT-Original-Encoding: utf-8
+Content-type: multipart/mixed; boundary="----------=_1178733062-12281-50"
+Resent-Message-Id: <20070509175102.C70022AFD6@x3.develooper.com>
+Resent-Date: Wed,  9 May 2007 10:51:02 -0700 (PDT)
+Resent-From: rt-mark=glines.org@netlabs.develooper.com
+X-Virus-Checked: Checked
+X-Virus-Checked: Checked
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.6 required=8.0
+	tests=BAYES_00,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+
+------------=_1178733062-12281-50
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+# New Ticket Created by  Mark Glines 
+# Please include the string:  [perl #42916]
+# in the subject line of all future correspondence about this issue. 
+# <URL: http://rt.perl.org/rt3/Ticket/Display.html?id=42916 >
+
+
+c_header_guards.t determines its list of header files to check from the
+command line, if available, and by querying Parrot::Distribution
+otherwise.  It tries pretty hard to get a list of headers; it starts by
+calling c_header_files(), and then follows that up with entries from
+generated_files(), too.  But the resulting list is still missing a few
+entries, when compared to a "find -type f -name '*.h'" on my linux
+box.  A few things are generated yet not listed in generated_files(),
+and a few headers are simply copied from one directory to another.
+
+The copied files could theoretically trigger a guard-name collision
+failure, so that test was TODOed out.  But, with the list of files
+reported by Parrot::Distribution, c_header_guards.t passes all tests on
+my machine, so I'm not sure the TODO flag was actually necessary to
+begin with.  Either way, I have a fix for the test.
+
+Here's what the failures look like:
+
+paranoid@chirp ~/parrot-endif $ perl t/codingstd/c_header_guards.t
+`find -type f -name '*.h'`
+1..5
+not ok 1 - identical PARROT_*_GUARD macro names used in headers # TODO
+Need to account for headers copied between subdirs 
+#     Failed (TODO) test (t/codingstd/c_header_guards.t at line 121)
+# collisions: # ./src/exec_dep.h,
+# ./src/jit/i386/exec_dep.h,
+# ./src/jit_emit.h,
+# ./src/jit/i386/jit_emit.h
+ok 2 - multiple PARROT_*_GUARD macros found in headers
+
+These files are simply copies of eachother, verifiable with md5sum.  The
+first attached patch (check_header_file_duplicity.diff) cleans this
+test failure up - if the text from each file is identical, then I think
+it's safe to assume identical guard macros are not actually a problem,
+because you'll get the same namespace stuff no matter which one you
+included.  Now that this is cleaned up, I believe it is safe to un-TODO
+the collision test, so this patch removes the TODOness, too.
+
+
+
+As you can see below, there are *still* a couple of autogenerated
+headers which fail the guard checks.  These files are not reported by
+$DIST->c_header_files() or $DIST->generated_files(), which is why I
+didn't notice them until now.
+
+not ok 3 - missing or misspelled PARROT_*_GUARD ifndef in headers
+#     Failed test (t/codingstd/c_header_guards.t at line 130)
+# missing guard:
+# ./compilers/pge/PGE/pmc/pge.h,
+# ./src/dynpmc/match_group.h
+not ok 4 - missing or misspelled PARROT_*_GUARD define in headers
+#     Failed test (t/codingstd/c_header_guards.t at line 134)
+# missing define:
+# ./compilers/pge/PGE/pmc/pge.h,
+# ./src/dynpmc/match_group.h
+not ok 5 - missing or misspelled PARROT_*_GUARD comment after the endif
+in headers
+#     Failed test (t/codingstd/c_header_guards.t at line 138)
+# missing endif comment:
+# ./compilers/pge/PGE/pmc/pge.h,
+# ./src/dynpmc/match_group.h
+# Looks like you failed 3 tests of 5.
+
+The second attached patch (pmc2c_more_header_guards.diff) cleans these
+up.  With these two patches, c_header_guards.t passes on every .h file
+in the tree.  Or at least, every header that got generated for a
+default configuration on my i386-linux box.
+
+Whether Parrot::Distribution should have reported the extra headers or
+not is sort of an open question.  If someone thinks it's important, I'll
+work on it.
+
+Mark
+
+------------=_1178733062-12281-50
+Content-Type: text/x-patch;
+ charset="ascii";
+ name="check_header_file_duplicity.diff"
+Content-Disposition: inline; filename="check_header_file_duplicity.diff"
+Content-Transfer-Encoding: 7bit
+RT-Attachment: 42916/259160/113041
+
+Index: t/codingstd/c_header_guards.t
+===================================================================
+--- t/codingstd/c_header_guards.t	(revision 18488)
++++ t/codingstd/c_header_guards.t	(working copy)
+@@ -92,8 +92,11 @@
+                 $redundants{$file} = $1 if defined $ifndef;
+ 
+                 # check for the same guard-name in multiple files
+-                $collisions{$file} = $guardnames{$1}
+-                    if exists $guardnames{$1};
++                if(exists($guardnames{$1})) {
++                    if(!duplicate_files($file, $guardnames{$1})) {
++                        $collisions{$file} = $guardnames{$1};
++                    }
++                }
+ 
+                 $ifndef = $1;
+                 $guardnames{$1} = $file;
+@@ -115,13 +118,9 @@
+         $missing_comment{$file} = 1 unless defined $endif;
+     }
+ 
+-TODO: {
+-    local $TODO = "Need to account for headers copied between subdirs";
+-
+     ok(!(scalar %collisions), "identical PARROT_*_GUARD macro names used in headers");
+     diag("collisions: \n" . join(", \n", %collisions))
+         if scalar keys %collisions;
+-};
+ 
+     ok(!(scalar %redundants), "multiple PARROT_*_GUARD macros found in headers");
+     diag("redundants: \n" . join(", \n", keys %redundants))
+@@ -142,6 +141,18 @@
+     return 0;
+ }
+ 
++sub duplicate_files {
++    my ($file1, $file2) = @_;
++    open my $fh1, '<', $file1
++        or die "Cannot open '$file1' for reading!\n";
++    open my $fh2, '<', $file2
++        or die "Cannot open '$file2' for reading!\n";
++    local $/;
++    $file1 = <$fh1>;
++    $file2 = <$fh2>;
++    return $file1 eq $file2;
++}
++
+ # Local Variables:
+ #   mode: cperl
+ #   cperl-indent-level: 4
+
+------------=_1178733062-12281-50
+Content-Type: text/x-patch;
+ charset="ascii";
+ name="pmc2c_more_header_guards.diff"
+Content-Disposition: inline; filename="pmc2c_more_header_guards.diff"
+Content-Transfer-Encoding: 7bit
+RT-Attachment: 42916/259160/113042
+
+Index: lib/Parrot/Pmc2c/Library.pm
+===================================================================
+--- lib/Parrot/Pmc2c/Library.pm	(revision 18488)
++++ lib/Parrot/Pmc2c/Library.pm	(working copy)
+@@ -119,9 +119,17 @@
+     my ($self)     = @_;
+     my $hout       = dont_edit('various files');
+     my $lc_libname = lc $self->{opt}{library};
++    my $guardname  = uc(join('_', 'PARROT_LIB', $lc_libname, 'H_GUARD'));
+ 
+     $hout .= <<"EOH";
++
++#ifndef $guardname
++#define $guardname
++
+ Parrot_PMC Parrot_lib_${lc_libname}_load(Parrot_Interp interp);
++
++#endif /* $guardname */
++
+ EOH
+     $hout .= $self->c_code_coda;
+ 
+
+------------=_1178733062-12281-50--
+

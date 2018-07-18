@@ -1,0 +1,103 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu Jun  7 02:56:29 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l576uShB031189
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 7 Jun 2007 02:56:28 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 7C68E162AF4
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu,  7 Jun 2007 06:56:22 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 2A580162AC1; Thu,  7 Jun 2007 06:55:54 +0000 (GMT)
+Date: Thu, 07 Jun 2007 16:48:31 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070607065554.2A580162AC1@lists.samba.org>
+Subject: Rev 491: handle CTDB_CURRENT_NODE in ban commands in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 491
+revision-id: tridge@samba.org-20070607064831-cs6ed30jggx07qp9
+parent: tridge@samba.org-20070607063433-1twaia604wl2j5hj
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Thu 2007-06-07 16:48:31 +1000
+message:
+  handle CTDB_CURRENT_NODE in ban commands
+modified:
+  common/ctdb_recoverd.c         recoverd.c-20070503213540-bvxuyd9jm1f7ig90-1
+  tools/ctdb_control.c           ctdb_control.c-20070426122705-9ehj1l5lu2gn9kuj-1
+=== modified file 'common/ctdb_recoverd.c'
+--- a/common/ctdb_recoverd.c	2007-06-07 06:34:33 +0000
++++ b/common/ctdb_recoverd.c	2007-06-07 06:48:31 +0000
+@@ -54,6 +54,11 @@
+ {
+ 	struct ctdb_context *ctdb = rec->ctdb;
+ 
++	if (!ctdb_validate_vnn(ctdb, vnn)) {
++		DEBUG(0,("Bad vnn %u in ctdb_ban_node\n", vnn));
++		return;
++	}
++
+ 	if (rec->banned_nodes[vnn] == NULL) {
+ 		return;
+ 	}
+@@ -85,6 +90,11 @@
+ {
+ 	struct ctdb_context *ctdb = rec->ctdb;
+ 
++	if (!ctdb_validate_vnn(ctdb, vnn)) {
++		DEBUG(0,("Bad vnn %u in ctdb_ban_node\n", vnn));
++		return;
++	}
++
+ 	ctdb_ctrl_modflags(ctdb, CONTROL_TIMEOUT(), vnn, NODE_FLAGS_BANNED, 0);
+ 
+ 	rec->banned_nodes[vnn] = talloc(rec, struct ban_state);
+
+=== modified file 'tools/ctdb_control.c'
+--- a/tools/ctdb_control.c	2007-06-07 06:34:33 +0000
++++ b/tools/ctdb_control.c	2007-06-07 06:48:31 +0000
+@@ -462,6 +462,10 @@
+ 		usage();
+ 	}
+ 
++	if (options.vnn == CTDB_CURRENT_NODE) {
++		options.vnn = ctdb_ctrl_getvnn(ctdb, TIMELIMIT(), options.vnn);		
++	}
++
+ 	if (options.vnn == CTDB_BROADCAST_ALL) {
+ 		uint32_t *nodes;
+ 		uint32_t num_nodes;
+@@ -512,6 +516,10 @@
+ 	uint32_t recmaster;
+ 	TDB_DATA data;
+ 
++	if (options.vnn == CTDB_CURRENT_NODE) {
++		options.vnn = ctdb_ctrl_getvnn(ctdb, TIMELIMIT(), options.vnn);		
++	}
++
+ 	if (options.vnn == CTDB_BROADCAST_ALL) {
+ 		uint32_t *nodes;
+ 		uint32_t num_nodes;
+

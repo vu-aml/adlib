@@ -1,0 +1,124 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun Apr 22 13:01:51 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3MH1p0I022203
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 22 Apr 2007 13:01:51 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 83A40163A60
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 22 Apr 2007 17:01:26 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 620)
+	id 9A75F162C2E; Sun, 22 Apr 2007 17:00:58 +0000 (GMT)
+To: samba-cvs@samba.org
+From: metze@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070422170058.9A75F162C2E@lists.samba.org>
+Date: Sun, 22 Apr 2007 17:00:58 +0000 (GMT)
+Subject: svn commit: samba r22464 - in branches/SAMBA_3_0/source/rpc_client:
+	.
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 2338
+Lines: 81
+
+Author: metze
+Date: 2007-04-22 17:00:58 +0000 (Sun, 22 Apr 2007)
+New Revision: 22464
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22464
+
+Log:
+remove double code and use a function
+
+metze
+Modified:
+   branches/SAMBA_3_0/source/rpc_client/cli_samr.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0/source/rpc_client/cli_samr.c
+===================================================================
+--- branches/SAMBA_3_0/source/rpc_client/cli_samr.c	2007-04-22 16:45:03 UTC (rev 22463)
++++ branches/SAMBA_3_0/source/rpc_client/cli_samr.c	2007-04-22 17:00:58 UTC (rev 22464)
+@@ -1193,11 +1193,6 @@
+ 				    const char *newpassword, 
+ 				    const char *oldpassword )
+ {
+-	prs_struct qbuf, rbuf;
+-	SAMR_Q_CHGPASSWD_USER q;
+-	SAMR_R_CHGPASSWD_USER r;
+-	NTSTATUS result = NT_STATUS_UNSUCCESSFUL;
+-
+ 	uchar new_nt_password[516];
+ 	uchar new_lm_password[516];
+ 	uchar old_nt_hash[16];
+@@ -1208,13 +1203,8 @@
+ 	uchar new_nt_hash[16];
+ 	uchar new_lanman_hash[16];
+ 
+-	char *srv_name_slash = talloc_asprintf(mem_ctx, "\\\\%s", cli->cli->desthost);
+-
+ 	DEBUG(10,("rpccli_samr_chgpasswd_user\n"));
+ 
+-	ZERO_STRUCT(q);
+-	ZERO_STRUCT(r);
+-
+ 	/* Calculate the MD4 hash (NT compatible) of the password */
+ 	E_md4hash(oldpassword, old_nt_hash);
+ 	E_md4hash(newpassword, new_nt_hash);
+@@ -1241,30 +1231,11 @@
+ 	SamOEMhash( new_nt_password, old_nt_hash, 516);
+ 	E_old_pw_hash( new_nt_hash, old_nt_hash, old_nt_hash_enc);
+ 
+-	/* Marshall data and send request */
+-
+-	init_samr_q_chgpasswd_user(&q, srv_name_slash, username, 
+-				   new_nt_password, 
+-				   old_nt_hash_enc, 
+-				   new_lm_password,
+-				   old_lanman_hash_enc);
+-
+-	CLI_DO_RPC(cli, mem_ctx, PI_SAMR, SAMR_CHGPASSWD_USER,
+-		q, r,
+-		qbuf, rbuf,
+-		samr_io_q_chgpasswd_user,
+-		samr_io_r_chgpasswd_user,
+-		NT_STATUS_UNSUCCESSFUL); 
+-
+-	/* Return output parameters */
+-
+-	if (!NT_STATUS_IS_OK(result = r.status)) {
+-		goto done;
+-	}
+-
+- done:
+-
+-	return result;
++	return rpccli_samr_chng_pswd_auth_crap(cli, mem_ctx, username,
++					       data_blob_const(new_nt_password,sizeof(new_nt_password)),
++					       data_blob_const(old_nt_hash_enc,sizeof(old_nt_hash_enc)),
++					       data_blob_const(new_lm_password,sizeof(new_lm_password)),
++					       data_blob_const(old_lanman_hash_enc,sizeof(old_lanman_hash_enc)));
+ }
+ 
+ /* User change passwd with auth crap */
+

@@ -1,0 +1,91 @@
+From samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed May  2 08:31:35 2007
+Return-Path: <samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l42CVZb9021925
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 2 May 2007 08:31:35 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 8B484163A14
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed,  2 May 2007 12:31:34 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.2 required=3.8 tests=AWL,BAYES_20,RCVD_IN_DSBL 
+	autolearn=no version=3.1.7
+X-Original-To: samba-technical@lists.samba.org
+Delivered-To: samba-technical@lists.samba.org
+X-Greylist: delayed 640 seconds by postgrey-1.24 at dp.samba.org;
+	Wed, 02 May 2007 12:31:06 GMT
+Received: from relay23.bu.edu (relay23.bu.edu [128.197.26.156])
+	by lists.samba.org (Postfix) with ESMTP id 09AA3162AF1
+	for <samba-technical@lists.samba.org>;
+	Wed,  2 May 2007 12:31:05 +0000 (GMT)
+X-Envelope-From: nik@bu.edu
+Received: from [128.197.24.75] (it3-dhcp075.bu.edu [128.197.24.75])
+	by relay23.bu.edu (8.13.1/8.13.1) with ESMTP id l42CJd5w001868
+	for <samba-technical@lists.samba.org>; Wed, 2 May 2007 08:19:39 -0400
+Mime-Version: 1.0 (Apple Message framework v752.2)
+Content-Transfer-Encoding: 7bit
+Message-Id: <6B138B39-DA56-4580-B8BA-36059D5FA2BD@bu.edu>
+Content-Type: text/plain; charset=US-ASCII; delsp=yes; format=flowed
+To: samba-technical@lists.samba.org
+From: Nik Conwell <nik@bu.edu>
+Date: Wed, 2 May 2007 08:19:38 -0400
+X-Mailer: Apple Mail (2.752.2)
+Subject: Inconsistency between groupmap "Domain Admins" and
+	_lsa_add_acct_rights() checking
+X-BeenThere: samba-technical@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+List-Id: "Discussions on Samba internals. For general questions please
+	subscribe to the list samba@samba.org"
+	<samba-technical.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>, 
+	<mailto:samba-technical-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-technical>
+List-Post: <mailto:samba-technical@lists.samba.org>
+List-Help: <mailto:samba-technical-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-technical>,
+	<mailto:samba-technical-request@lists.samba.org?subject=subscribe>
+Sender: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-technical-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+(I guess this could be a HOWTO bug as well.)
+
+I'm part of an AD domain.
+
+To be considered an admin on the samba box, the howto
+http://www.samba.org/samba/docs/man/Samba-HOWTO-Collection/ 
+groupmapping.html
+says:
+
+   net groupmap add ntgroup="Domain Admins" unixgroup=domadm rid=512  
+type=d
+
+When I do that net groupmap list shows:
+
+Domain Admins ([LOCALSID]-512) -> domadm
+
+
+But, when assigning privs by a member of the unix group domadm via:
+
+   net -Unik rpc rights grant joe SePrintOperatorPrivilege
+
+it ends up checking Domain Admins with the [DOMAINSID]-512.
+
+In _lsa_add_acct_rights() if you're not root it calls  
+nt_token_check_domain_rid(), which ends up using the domain_sid.   
+But, since my account sid includes [LOCALSID]-512 and not  
+[DOMAINSID]-512 I never get a good sid match and so get denied.
+
+Certainly, adding my groupmap "Domain Admins" with sid  
+[DOMAINSID]-512 is enough to get the net rpc rights grant working.
+
+I don't know enough to stipulate that groupmap add type=d should use  
+the DOMAINSID, but it seems that way.  Or, should _lsa_add_acct_rights 
+() but updated to also check the [LOCALSID]-512 sid as well as the  
+[DOMAINSID]-512 sid?
+
+-nik
+
+Nik Conwell     Boston University
+nik@bu.edu
+

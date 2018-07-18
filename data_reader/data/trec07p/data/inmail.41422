@@ -1,0 +1,319 @@
+From beginners-return-91843-ktwarwic=speedy.uwaterloo.ca@perl.org  Tue May 22 06:47:09 2007
+Return-Path: <beginners-return-91843-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4MAl7qD011289
+	for <ktwarwic@flax9.uwaterloo.ca>; Tue, 22 May 2007 06:47:07 -0400
+Received: (qmail 9486 invoked by uid 514); 22 May 2007 10:46:57 -0000
+Mailing-List: contact beginners-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:beginners@perl.org>
+List-Help: <mailto:beginners-help@perl.org>
+List-Unsubscribe: <mailto:beginners-unsubscribe@perl.org>
+List-Subscribe: <mailto:beginners-subscribe@perl.org>
+List-Id: <beginners.perl.org>
+Delivered-To: mailing list beginners@perl.org
+Received: (qmail 9477 invoked from network); 22 May 2007 10:46:56 -0000
+Received: from x1a.develooper.com (HELO x1.develooper.com) (216.52.237.111)
+  by lists.develooper.com with SMTP; 22 May 2007 10:46:56 -0000
+Received: (qmail 6239 invoked by uid 225); 22 May 2007 10:46:56 -0000
+Delivered-To: beginners@perl.org
+Received: (qmail 6193 invoked by alias); 22 May 2007 10:46:55 -0000
+X-Spam-Status: No, hits=3.1 required=8.0
+	tests=BAYES_50,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,FH_HAS_XID,SPF_NEUTRAL
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: neutral (x1.develooper.com: local policy)
+Received: from mailout08.sul.t-online.com (HELO mailout08.sul.t-online.com) (194.25.134.20)
+    by la.mx.develooper.com (qpsmtpd/0.28) with ESMTP; Tue, 22 May 2007 03:46:46 -0700
+Received: from fwd27.aul.t-online.de 
+	by mailout08.aul.t-online.de with smtp 
+	id 1HqRt2-0004EC-00; Tue, 22 May 2007 12:46:40 +0200
+Received: from SONNE.gw.bringe.net (r9rm+EZlQeNh0J0Q1ceqt4Y12LwHGmcpo0dqjEXjIkGfKKUgUSu-EV@[84.163.249.193]) by fwd27.sul.t-online.de
+	with smtp id 1HqRsr-1HLz3A0; Tue, 22 May 2007 12:46:29 +0200
+Subject: RE: Query an IP from file
+MIME-Version: 1.0
+Content-Type: text/plain;
+	charset="iso-8859-1"
+Content-class: urn:content-classes:message
+Date: Tue, 22 May 2007 12:46:25 +0200
+X-MimeOLE: Produced By Microsoft Exchange V6.5
+Message-ID: <E350C77ABFDBD242BDD51F5DA07905C10188768E@SONNE.gw.bringe.net>
+X-MS-Has-Attach: 
+X-MS-TNEF-Correlator: 
+Thread-Topic: Query an IP from file
+thread-index: AcecVza/2PktboBzQtWZBvIGCCBIugAAQ64g
+From: =?iso-8859-1?Q?Thomas_B=E4tzler?= <t.baetzler@bringe.com>
+To: <beginners@perl.org>
+X-ID: r9rm+EZlQeNh0J0Q1ceqt4Y12LwHGmcpo0dqjEXjIkGfKKUgUSu-EV@t-dialin.net
+X-TOI-MSGID: de5eac84-e448-4fe9-9d88-46bbd0c5f2e6
+X-Virus-Checked: Checked
+Content-Transfer-Encoding: 8bit
+X-MIME-Autoconverted: from quoted-printable to 8bit by flax9.uwaterloo.ca id l4MAl7qD011289
+
+Hi, 
+
+Jeff Pang <pangj@earthlink.net> asked:
+
+> I have a text file which contains lots of IPs,like:
+> 
+> 58.253.0.0/16;
+> 58.254.0.0/16;
+> 58.255.0.0/16;
+> 60.0.0.0/16;
+> 60.1.0.0/16;
+> 60.10.0.0/16;
+> 60.16.0.0/16;
+> 60.17.0.0/16;
+> 60.18.0.0/16;
+> 60.19.0.0/16;
+> 60.2.0.0/16;
+> 60.20.0.0/16;
+> 60.21.0.0/16;
+> 60.22.0.0/16;
+> 60.23.0.0/16;
+> 60.3.0.0/16;
+> 
+> My question is,given an IP,ie 59.32.232.33,how can I know it 
+> exists in this file or not?
+> Is there a module already?thanks.
+
+It's not a module, but here's some of my code that
+might be useful if you want to test many ip adresses
+against a fixed set of networks.
+
+It is built on the facts that IP adresses can be 
+converted to integers that retain the ordering
+of the adresses and that networks are a range of
+ip adresses - so your problem is really figuring
+out whether a number x falls into one of n discrete
+intervals.
+
+The method of choice for this kind of problem is
+doing a binary search.
+
+I've tested several approaches and settled for
+dynamically creating an unrolled variant of an
+iterative binary search.
+
+HTH,
+Thomas
+
+#!/usr/bin/perl -w
+
+use strict;
+use Socket; # we need Socket.pm for inet_aton()
+
+#
+# list of local networks, i.e. contents of your file
+#
+
+my %localnets = (
+	'58.253.0.0/16' => 1,
+	'58.254.0.0/16' => 1,
+	'58.255.0.0/16' => 1,
+	'60.0.0.0/16' => 1,
+	'60.1.0.0/16' => 1,
+	'60.10.0.0/16' => 1,
+	'60.16.0.0/16' => 1,
+	'60.17.0.0/16' => 1,
+	'60.18.0.0/16' => 1,
+	'60.19.0.0/16' => 1,
+	'60.2.0.0/16' => 1,
+	'60.20.0.0/16' => 1,
+	'60.21.0.0/16' => 1,
+	'60.22.0.0/16' => 1,
+	'60.23.0.0/16' => 1,
+	'60.3.0.0/16' => 1,
+);
+
+# used to build the binary search tree
+my @netdata;
+
+
+#
+# number of mask bits => inverted Bit mask
+#
+# converts the xx number of mask bits (in ip.ip.ip.ip/xx) to an
+# inverted bit mask, i.e. 24 becomes 0x000000FF
+#
+
+sub make_mask {
+
+  if( $_[0] < 0 || $_[0] > 32 ){
+    die "Illegal mask /$_[0]";
+  } else {
+    return( 2 ** ( 32 - $_[0] ) - 1);
+  }
+}
+
+
+
+#
+# ip.ip.ip.ip => 0x????????
+#
+# convert a dottect decimal IP address to an unsigned long number
+# in host byte order.
+#
+
+sub ip_to_number {
+
+  if( defined ( my $nl = inet_aton( $_[0] ) ) ){
+    # convert network to host byte order
+    return( unpack( 'N', $nl ) );
+  } else {
+    die "Invalid IP address '$_[0]'!\n";
+  }
+
+}
+
+
+
+#
+# Here's a different approach to binary searching intervals for a
+# number: We dynmically create a subroutine that is a completely
+# unrolled binary search over all intervals using nested if statements.
+#
+# This requires that we first create a text representation of our
+# code which is then eval()'ed to create the subroutine. This adds
+# some startup overhead, but it is also significantly faster than the
+# other methods.
+#
+# The code is created using a recursive subroutine.
+#
+# Most of the "complexity" here is added by the design goal to create
+# properly indented code that can easily be inspected visually.
+#
+
+sub create_binsearchcode_recursion {
+  my( $start_index, $end_index, $iter ) = @_;
+
+  # we use the $iter depth marker specifically to create a nice
+  # indentation using the string repeat operator 'x'.
+
+  # further subdivision is neither necessary nor possible
+  return "  "x$iter . "  return 0;\n" if $start_index > $end_index;
+
+  # no further recursion necessary if we have just 1 interval to check.
+  if( $start_index == $end_index ){
+
+    return "  "x$iter . "if( $netdata[$start_index]->[0] <= \$num && \$num <= $netdata[$start_index]->[1] ){\n" .
+           "  "x$iter . "  return( $netdata[$start_index]->[2] );\n" .
+           "  "x$iter . "} else {\n" .
+           "  "x$iter . "  return( 0 );\n" .
+           "  "x$iter . "}\n";
+  }
+
+  # compute "median" point between start and end indices.
+  my $partition = $start_index + int(($end_index - $start_index) / 2);
+
+  # write code to handle hits, misses and use recursion to
+  # fill out "upper" and "lower" branches of the search tree.
+  return "  "x$iter . "if( $netdata[$partition]->[0] <= \$num && \$num <= $netdata[$partition]->[1] ){\n" .
+         "  "x$iter . "  return( $netdata[$partition]->[2] );\n" .
+         "  "x$iter . "} else {\n" .
+         "  "x$iter . "  if( $netdata[$partition]->[0] > \$num ){\n" .
+         create_binsearchcode_recursion( $start_index, $partition - 1, $iter+2) .
+         "  "x$iter . "  } else {\n" .
+         create_binsearchcode_recursion( $partition + 1, $end_index, $iter+2) .
+         "  "x$iter . "  }\n" .
+         "  "x$iter . "}\n";
+}
+
+
+
+#
+# This subroutine is the stub that contains all of the "unique" code
+# parts of the subroutine constructs. It calls the recursive sub defined
+# above to fill in the search tree. After that is done, it evaluates the
+# code it created to add the subroutine dynamically to the program code.
+#
+# The die() statement at the end of the sub isn't really necessary but
+# a nice early warning if something is wrong with the code we created.
+#
+# Please note that the code snippet ends with a 1; statement - this is
+# since eval() always returns the value of the last statement.
+#
+
+sub setup_unrolled_binsearch {
+
+  # Just the wrapper for the search tree:
+  my $code = "sub unrolled_binsearch {\n" .
+             "  my \$num = shift;\n\n" .
+             create_binsearchcode_recursion( 0, $#netdata, 1 ) .
+             "\n  die \"Error in unrolled_binsearch(): unhandled input: \$num\"\n" .
+             "}\n\n" .
+             "1;\n";
+
+  ## print $code for visual inspection
+  print "\n===[dynamically created code]===\n\n$code================================\n\n";
+
+  # wipe previous function definition so we are not warned
+  # about a redefinition of this function
+  undef &unrolled_binsearch;
+
+  # eval the code we just created to instantiate our subroutine
+  eval( $code ) or die "eval() failed: $@";
+}
+
+
+
+#
+# Initialize the data structures used by is_local_ip()
+#
+# e.g. the binary search mechanism shown above
+#
+
+sub parse_localnets {
+
+  foreach my $network ( keys %localnets ){
+    my( $netnum, $mask ) = split( /\//, $network);
+
+    # Convert dotted decimal IP network address and number of mask bits
+    # to numbers representing those values. Please not that we operate
+    # with host byte order, not network byte order.
+    $netnum = ip_to_number( $netnum );
+    $mask = make_mask( $mask );
+
+    # Sanity check: Network number ANDed to the host mask must be 0
+    die "IP is not a network number in '$network'!\n" if $netnum & $mask;
+
+    push @netdata, [ $netnum, $netnum + $mask, $localnets{ $network } ];
+  }
+
+  # sort the networks, since our binary search requires that the
+  # local ip ranges be sorted in ascending order.
+  @netdata = sort { $a->[0] <=> $b->[0] } @netdata;
+
+  setup_unrolled_binsearch();
+}
+
+
+
+#
+# Check wether a particular IP is part of the local network
+#
+
+sub is_local_ip {
+  return( unrolled_binsearch( ip_to_number( $_[0] ) ) ? 1 : 0 );
+}
+
+
+# initialize locality search tree
+parse_localnets();
+
+# search
+while( my $ip = <DATA> ){
+  chomp( $ip );
+  print "$ip is " . ( is_local_ip( $ip ) ? '' : 'not ' ) . "in a local network range.\n";
+}
+
+__DATA__
+59.32.232.33
+60.1.1.1
+
+-- 
+To unsubscribe, e-mail: beginners-unsubscribe@perl.org
+For additional commands, e-mail: beginners-help@perl.org
+http://learn.perl.org/
+
+
+

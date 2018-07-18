@@ -1,0 +1,222 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Wed Apr 18 10:03:33 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3IE3X0I011440
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 18 Apr 2007 10:03:33 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 00347163ACF
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 18 Apr 2007 14:03:08 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.9 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 620)
+	id A35E21638B3; Wed, 18 Apr 2007 14:02:26 +0000 (GMT)
+To: samba-cvs@samba.org
+From: metze@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070418140226.A35E21638B3@lists.samba.org>
+Date: Wed, 18 Apr 2007 14:02:26 +0000 (GMT)
+Subject: svn commit: samba r22337 - in
+	branches/SAMBA_4_0/source/script/tests: .
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 4838
+Lines: 179
+
+Author: metze
+Date: 2007-04-18 14:02:26 +0000 (Wed, 18 Apr 2007)
+New Revision: 22337
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22337
+
+Log:
+print out the smbd log output after each test
+
+metze
+Modified:
+   branches/SAMBA_4_0/source/script/tests/Samba3.pm
+   branches/SAMBA_4_0/source/script/tests/Samba4.pm
+   branches/SAMBA_4_0/source/script/tests/selftest.pl
+
+
+Changeset:
+Modified: branches/SAMBA_4_0/source/script/tests/Samba3.pm
+===================================================================
+--- branches/SAMBA_4_0/source/script/tests/Samba3.pm	2007-04-18 13:28:04 UTC (rev 22336)
++++ branches/SAMBA_4_0/source/script/tests/Samba3.pm	2007-04-18 14:02:26 UTC (rev 22337)
+@@ -39,6 +39,14 @@
+ 	return 0;
+ }
+ 
++sub getlog_env($$)
++{
++	my ($self, $envvars) = @_;
++
++	# TODO...
++	return "";
++}
++
+ sub setup_env($$$)
+ {
+ 	my ($self, $envname, $path) = @_;
+@@ -292,6 +300,8 @@
+ 	print "wait for smbd\n";
+ 	system($self->binpath("smbclient") ." $envvars->{CONFIGURATION} -L $envvars->{SERVER_IP} -U% -p 139 | head -2");
+ 	system($self->binpath("smbclient") ." $envvars->{CONFIGURATION} -L $envvars->{SERVER_IP} -U% -p 139 | head -2");
++
++	print $self->getlog_env($envvars);
+ }
+ 
+ 1;
+
+Modified: branches/SAMBA_4_0/source/script/tests/Samba4.pm
+===================================================================
+--- branches/SAMBA_4_0/source/script/tests/Samba4.pm	2007-04-18 13:28:04 UTC (rev 22336)
++++ branches/SAMBA_4_0/source/script/tests/Samba4.pm	2007-04-18 14:02:26 UTC (rev 22337)
+@@ -141,6 +141,8 @@
+ 	system("bin/nmblookup $testenv_vars->{CONFIGURATION} -U $testenv_vars->{SERVER} $testenv_vars->{NETBIOSNAME}");
+ 	system("bin/nmblookup $testenv_vars->{CONFIGURATION} $testenv_vars->{NETBIOSNAME}");
+ 	system("bin/nmblookup $testenv_vars->{CONFIGURATION} -U $testenv_vars->{SERVER} $testenv_vars->{NETBIOSNAME}");
++
++	print $self->getlog_env($testenv_vars);
+ }
+ 
+ sub write_ldb_file($$$)
+@@ -596,6 +598,7 @@
+ 
+ 	$ret->{SMBD_TEST_FIFO} = "$prefix/smbd_test.fifo";
+ 	$ret->{SMBD_TEST_LOG} = "$prefix/smbd_test.log";
++	$ret->{SMBD_TEST_LOG_POS} = 0;
+ 	return $ret;
+ }
+ 
+@@ -612,6 +615,7 @@
+ 
+ 	$ret->{SMBD_TEST_FIFO} = "$prefix/smbd_test.fifo";
+ 	$ret->{SMBD_TEST_LOG} = "$prefix/smbd_test.log";
++	$ret->{SMBD_TEST_LOG_POS} = 0;
+ 	return $ret;
+ }
+ 
+@@ -651,10 +655,30 @@
+ 	return $failed;
+ }
+ 
++sub getlog_env($$)
++{
++	my ($self, $envvars) = @_;
++	my $title = "SMBD LOG of: $envvars->{NETBIOSNAME}\n";
++	my $out = $title;
++
++	open(LOG, "<$envvars->{SMBD_TEST_LOG}");
++
++	seek(LOG, $envvars->{SMBD_TEST_LOG_POS}, SEEK_SET);
++	while (<LOG>) {
++		$out .= $_;
++	}
++	$envvars->{SMBD_TEST_LOG_POS} = tell(LOG);
++	close(LOG);
++
++	return "" if $out eq $title;
++ 
++	return $out;
++}
++
+ sub setup_env($$$)
+ {
+ 	my ($self, $envname, $path) = @_;
+-	
++
+ 	if ($envname eq "dc") {
+ 		return $self->setup_dc("$path/dc");
+ 	} elsif ($envname eq "member") {
+
+Modified: branches/SAMBA_4_0/source/script/tests/selftest.pl
+===================================================================
+--- branches/SAMBA_4_0/source/script/tests/selftest.pl	2007-04-18 13:28:04 UTC (rev 22336)
++++ branches/SAMBA_4_0/source/script/tests/selftest.pl	2007-04-18 14:02:26 UTC (rev 22337)
+@@ -174,6 +174,8 @@
+ 	return 0;
+ }
+ 
++sub getlog_env($);
++
+ my $test_output = {};
+ 
+ sub buildfarm_start_msg($)
+@@ -212,6 +214,8 @@
+ 		$out .= $test_output->{$state->{NAME}};
+ 	}
+ 
++	$out .= getlog_env($state->{ENVNAME});
++
+ 	$out .= "==========================================\n";
+ 	if ($ret == $expected_ret) {
+ 		$out .= "TEST PASSED: $state->{NAME}\n";
+@@ -269,6 +273,8 @@
+ 	if ($ret != $expected_ret and ($opt_immediate or $opt_one) and not $opt_verbose) {
+ 		print $test_output->{$state->{NAME}}."\n";
+ 	}
++
++	print getlog_env($state->{ENVNAME});
+ }
+ 
+ my $plain_msg_ops = {
+@@ -277,10 +283,11 @@
+ 	end_msg		=> \&plain_end_msg
+ };
+ 
+-sub run_test($$$$$)
++sub run_test($$$$$$)
+ {
+-	my ($name, $cmd, $i, $totalsuites, $msg_ops) = @_;
++	my ($envname, $name, $cmd, $i, $totalsuites, $msg_ops) = @_;
+ 	my $msg_state = {
++		ENVNAME	=> $envname,
+ 		NAME	=> $name,
+ 		CMD	=> $cmd,
+ 		INDEX	=> $i,
+@@ -644,6 +651,13 @@
+ 	return $testenv_vars;
+ }
+ 
++sub getlog_env($)
++{
++	my ($envname) = @_;
++	return "" if ($envname eq "none");
++	return $target->getlog_env($running_envs{$envname});
++}
++
+ sub teardown_env($)
+ {
+ 	my ($envname) = @_;
+@@ -690,9 +704,9 @@
+ 		SocketWrapper::setup_pcap($pcap_file) if ($opt_socket_wrapper_pcap);
+ 		my $result;
+ 		if ($from_build_farm) {
+-			$result = run_test($name, $cmd, $i, $suitestotal, $buildfarm_msg_ops);
++			$result = run_test($envname, $name, $cmd, $i, $suitestotal, $buildfarm_msg_ops);
+ 		} else {
+-			$result = run_test($name, $cmd, $i, $suitestotal, $plain_msg_ops);
++			$result = run_test($envname, $name, $cmd, $i, $suitestotal, $plain_msg_ops);
+ 		}
+ 
+ 		if ($opt_socket_wrapper_pcap and $result and 
+

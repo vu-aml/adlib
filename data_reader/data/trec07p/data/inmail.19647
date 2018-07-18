@@ -1,0 +1,175 @@
+From r-help-bounces@stat.math.ethz.ch  Wed Apr 25 04:32:53 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3P8Wq6w027982
+	for <ktwarwic@speedy.uwaterloo.ca>; Wed, 25 Apr 2007 04:32:52 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3P8VivL019467;
+	Wed, 25 Apr 2007 10:32:04 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: *
+X-Spam-Status: No, score=1.5 required=5.0 tests=AWL, BAYES_50, FORGED_RCVD_HELO,
+	RCVD_NUMERIC_HELO autolearn=no version=3.1.8
+Received: from pythagoras.zen.co.uk (pythagoras.zen.co.uk [212.23.3.140])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l3P8Vc6k019431
+	for <r-help@stat.math.ethz.ch>; Wed, 25 Apr 2007 10:31:38 +0200
+Received: from [88.96.44.206] (helo=88.96.44.206)
+	by pythagoras.zen.co.uk with esmtp (Exim 4.50)
+	id 1HgcuX-0005eD-Cm; Wed, 25 Apr 2007 08:31:37 +0000
+Received: (from efh@localhost) by 88.96.44.206 (8.8.8/8.8.5) id JAA08165;
+	Wed, 25 Apr 2007 09:31:34 +0100
+Message-ID: <XFMail.070425093134.ted.harding@nessie.mcc.ac.uk>
+X-Mailer: XFMail 1.3-alpha-031298 [p0] on Linux
+X-Priority: 3 (Normal)
+MIME-Version: 1.0
+In-Reply-To: <10175603.post@talk.nabble.com>
+Date: Wed, 25 Apr 2007 09:31:34 +0100 (BST)
+From: (Ted Harding) <ted.harding@nessie.mcc.ac.uk>
+To: r-help@stat.math.ethz.ch
+X-Originating-Pythagoras-IP: [88.96.44.206]
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Subject: Re: [R] How to solve difficult equations?
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+Reply-To: ted.harding@manchester.ac.uk
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+Status: O
+Content-Length: 3147
+Lines: 123
+
+On 25-Apr-07 07:15:55, francogrex wrote:
+> 
+> This below is not solvable with uniroot to find "a":
+> fn=function(a){
+> b=(0.7/a)-a
+> (1/(a+b+1))-0.0025
+> }
+> uniroot(fn,c(-500,500))  gives
+> "Error in uniroot(fn, c(-500, 500)) : f() values at end points
+> not of opposite sign"
+> 
+> I read R-help posts and someone wrote a function:
+> http://finzi.psych.upenn.edu/R/Rhelp02a/archive/92407.html
+> but it is not very precise. Is there any '"standard" function
+> in R that can solve this? thanks.
+
+Two answers: Yes, and No.
+
+
+First, "No":
+
+Let alpha denote 0.0025, and beta 0.7 (in your function "fn").
+Then
+
+  fna <- function(alpha,beta){ beta*alpha/(1 - alpha) }
+
+solves it. But this is not a standard R function.
+
+
+Second, "Yes":
+
+and the standard R function is uniroot(). But you can only apply
+it usefully if you first study the behaviour of your function fn(),
+in rather careful detail.
+
+Over your range (-500,500):
+
+  a<-10*(-50:50)
+  plot(a,fn(a),pch="+")
+
+Clearly something extreme happens just to the left of a=0. So:
+
+  a <- 0.025*(-100:0)
+  plot(a,fn(a),pch="+")
+
+and so for this set of values of 'a' the previous behaviour
+cannot be seen. So:
+
+  a <- 0.01*(-100:100)+0.001
+  plot(a,fn(a),pch="+")
+
+so the function goes very negative somewhere around a = -0.7.
+But
+
+  fn(500)
+  [1] 0.996102
+
+so it is positive for a=500. Now find (inspired by the latest
+plot):
+
+  a[which(fn(a) < (-100))]
+  [1] -0.699
+
+and now you can use uniroot:
+
+  uniroot(fn,c(-0.699,500))
+  $root
+  [1] 0.001771128
+  $f.root
+  [1] 2.379763e-05
+  $iter
+  [1] 16
+  $estim.prec
+  [1] 6.103516e-05
+
+and, if that doesn't look precise enough:
+
+  uniroot(fn,c(-0.699,500),tol=1e-10)
+  $root
+  [1] 0.001754386
+  $f.root
+  [1] 1.354602e-14
+  $iter
+  [1] 18
+  $estim.prec
+  [1] 5e-11
+
+
+Now compare with the function fna() that solves it directly:
+
+  fna(0.0025,0.7)
+  [1] 0.001754386
+
+(so in fact it was worth increasing the precision for uniroot).
+
+
+But the lesson to be drawn from all this is that for functions
+like fn(), which have singularities (here at a = -0.7), the
+blind application of root-finding functions may not work, since
+they are not set up to explore the function is the kind of way
+illustrated above. While there are procedures in the numerical
+analysis world to handle this kind of thing, they tend to be
+written for particular classes of function, and again you will
+have to do a bit of exploration to find out which function to use.
+
+And (while someone more knowledgeable may well disagree with me)
+I suspect that these are not "standard" R funnctions.
+
+Hoping this is helpful,
+Ted.
+
+
+--------------------------------------------------------------------
+E-Mail: (Ted Harding) <ted.harding@nessie.mcc.ac.uk>
+Fax-to-email: +44 (0)870 094 0861
+Date: 25-Apr-07                                       Time: 09:31:29
+------------------------------ XFMail ------------------------------
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

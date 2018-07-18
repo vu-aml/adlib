@@ -1,0 +1,147 @@
+From sugar-bounces@lists.laptop.org  Fri Jun  1 05:57:45 2007
+Return-Path: <sugar-bounces@lists.laptop.org>
+Received: from mail.laptop.org (pedal.laptop.org [18.85.2.148])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l519vjhB008139
+	for <ktwarwic@speedy.uwaterloo.ca>; Fri, 1 Jun 2007 05:57:45 -0400
+Received: from [127.0.1.1] (localhost [127.0.0.1])
+	by mail.laptop.org (Postfix) with ESMTP id 97A2A58BC7BE;
+	Fri,  1 Jun 2007 05:57:36 -0400 (EDT)
+Received: from www2a.your-server.co.za (www2a.your-server.co.za [196.7.147.2])
+	(using TLSv1 with cipher EDH-RSA-DES-CBC3-SHA (168/168 bits))
+	(No client certificate requested)
+	by mail.laptop.org (Postfix) with ESMTP id BC05758BC7BE
+	for <sugar@lists.laptop.org>; Fri,  1 Jun 2007 05:57:35 -0400 (EDT)
+Received: from dsl-240-68-255.telkomadsl.co.za ([41.240.68.255]
+	helo=[192.168.1.125])
+	by www2a.your-server.co.za with esmtpa (Exim 4.63)
+	(envelope-from <morgan.collett@collabora.co.uk>)
+	id 1Hu3t1-0007Ud-K9; Fri, 01 Jun 2007 11:57:35 +0200
+Message-ID: <465FED88.4050307@collabora.co.uk>
+Date: Fri, 01 Jun 2007 11:57:28 +0200
+From: Morgan Collett <morgan.collett@collabora.co.uk>
+User-Agent: Thunderbird 1.5.0.10 (X11/20070403)
+MIME-Version: 1.0
+To: Simon McVittie <simon.mcvittie@collabora.co.uk>, sugar@lists.laptop.org
+References: <20070528165911.GA26201@celebrin.pseudorandom.co.uk>
+	<465E8B0E.5030801@collabora.co.uk>
+	<20070531144031.GA19725@celebrin.pseudorandom.co.uk>
+In-Reply-To: <20070531144031.GA19725@celebrin.pseudorandom.co.uk>
+X-Enigmail-Version: 0.94.2.0
+X-Authenticated-Sender: morgan@mcode.co.za
+X-Virus-Scanned: Clear (ClamAV 0.90.1/3335/Thu May 31 12:16:21 2007)
+Subject: Re: [sugar] key IDs
+X-BeenThere: sugar@lists.laptop.org
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Discussion of OLPC design,
+	desktop platform and user experience" <sugar.lists.laptop.org>
+List-Unsubscribe: <http://lists.laptop.org/listinfo/sugar>,
+	<mailto:sugar-request@lists.laptop.org?subject=unsubscribe>
+List-Archive: <http://lists.laptop.org/pipermail/sugar>
+List-Post: <mailto:sugar@lists.laptop.org>
+List-Help: <mailto:sugar-request@lists.laptop.org?subject=help>
+List-Subscribe: <http://lists.laptop.org/listinfo/sugar>,
+	<mailto:sugar-request@lists.laptop.org?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: sugar-bounces@lists.laptop.org
+Errors-To: sugar-bounces@lists.laptop.org
+
+Simon McVittie wrote:
+> Impersonating another child would require a preimage attack, as I understand it
+> (i.e. the ability to construct a key with a desired hash). It seems
+> reasonable that we don't defend against preimage attacks.
+
+I agree. I don't think anyone can, at this stage...
+
+>> For the unique identifier stuff, could we at some future point do a
+>> 'keyid2/' (or some other prefix) meaning that this is an identifier in a
+>> different space?
+> 
+> OK, here's a proposal:
+> 
+> * The generated JIDs have a prefix ending with a dot, which is the algorithm
+>   by which they were generated.
+> 
+> * No prefix means hex(SHA-1(Base64(key material))) as we currently do.
+>   This is deprecated and support will be removed before we ship.
+
+:)
+
+> * We define a prefix to switch to now, perhaps "sha1." meaning
+>   hex(SHA1(key material)). We could consider switching from hex to Base32
+>   (which would give us JIDs half as long for the same hash length), or to a
+>   stronger hash algorithm, straight away. The Base32 pad character would have
+>   to be changed from "=" to "_" to be valid in both JIDs and object-paths, but
+>   that's easy. Base64 is unsuitable since the user part of a JID is
+>   case-insensitive.
+> 
+> * Everything else containing a dot is reserved for future expansion.
+
+Sounds good.
+
+> * The object ID inside PS is one of xmpp/some.jid@example.com (as
+>   currently, used for "foreign" and unidentifiable buddies),
+>   keyid/hexhexhexhex (for an unprefixed key, deprecated), or
+>   keyid/prefix/whateverwhatever (for a key with that prefix, e.g.
+>   keyid/sha1/hexhexhexhex).
+> 
+> * When coalescing contacts into buddy objects we assume the buddy will
+>   rarely be visible on more than one server at the same time with different
+>   key-hash algorithms, so continue to treat the key-hash as a unique ID.
+>   The failure mode if this assumption fails is that there might be two
+>   Buddy objects in the mesh representing the same person, but the PS as it
+>   exists at the moment will never cause this (it only ever connects to
+>   one server at a time), so I don't think we need to care.
+> 
+> * When we discover a buddy's full key, we hash it repeatedly, and add
+>   their Buddy object to the dict PresenceService._buddies once per known
+>   hash/encoding algorithm. Note that on Salut (link-local) we expect to either
+>   have someone's full key, or discover that they don't have a key, before we
+>   can interact with them at all.
+> 
+> * The server component that does the key-based authentication (which
+>   we haven't written yet) always has to be upgraded earlier than the XOs are,
+>   so it will let new XOs register with new hash/encoding algorithms.
+
+Hmm. I wonder about the scenario where an OLPC person visits a school in
+ Ogbomoso, toting their newest hardware with a dev build which is newer
+than the school server build...
+
+Once it's out there, it has to work resiliently, and degrade gracefully.
+
+It will be up the the people on the ground to upgrade, as and when they
+choose to. Despite some sort of internets, they may very well not bother
+to touch a working installation... (I keep encountering people running
+old versions of Ubuntu for no good reason :) So this scenario may also
+be triggered by a school swapping out a faulty XO for a new one which
+comes preloaded with a newer build... It has to still Just Work.
+
+Hypothetical at this stage but we may want to put in a fall-back on the
+XO when we do implement the next algorithm.
+
+> * After the XO registers on the server, instead of storing a boolean
+>   "registered", it stores the JID it used. In future, it'll always log
+>   in with that JID.
+> 
+> * Should there be a process by which XOs whose JIDs use a weak hash try to
+>   upgrade to a better hash, by creating a new account? If so, we can avoid
+>   the "two Buddies" issue by making sure we log out of the old account
+>   before attempting to create the new one; if creation fails we can log
+>   back in as the old account.
+
+Sounds good.
+
+> * When looking up a buddy by complete public key, we try all
+>   non-obsolete hash/encoding algorithms (so there's value in keeping the
+>   number supported as small as possible).
+
+I'm sure the number will be very small :)
+
+Regards
+Morgan
+_______________________________________________
+Sugar mailing list
+Sugar@lists.laptop.org
+http://lists.laptop.org/listinfo/sugar
+

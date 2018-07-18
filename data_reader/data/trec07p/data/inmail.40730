@@ -1,0 +1,127 @@
+From r-help-bounces@stat.math.ethz.ch  Mon May 21 08:40:51 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4LCenqD031385
+	for <ktwarwic@flax9.uwaterloo.ca>; Mon, 21 May 2007 08:40:49 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l4LCdxVF009368;
+	Mon, 21 May 2007 14:40:06 +0200
+X-Spam-Checker-Version: SpamAssassin 3.1.8 (2007-02-13) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=5.0 tests=AWL autolearn=no version=3.1.8
+Received: from mail.gmx.net (mail.gmx.net [213.165.64.20])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with SMTP id l4LCdoIC009316
+	for <r-help@lists.R-project.org>; Mon, 21 May 2007 14:39:50 +0200
+Received: (qmail 31838 invoked by uid 0); 21 May 2007 12:39:49 -0000
+Received: from 153.1.43.81 by www064.gmx.net with HTTP;
+	Mon, 21 May 2007 14:39:49 +0200 (CEST)
+Date: Mon, 21 May 2007 14:39:49 +0200
+From: "Klaus Nordhausen" <klausch@gmx.de>
+Message-ID: <20070521123949.86960@gmx.net>
+MIME-Version: 1.0
+To: r-help@stat.math.ethz.ch
+X-Authenticated: #1985208
+X-Flags: 0001
+X-Mailer: WWW-Mail 6100 (Global Message Exchange)
+X-Priority: 3
+X-Provags-ID: V01U2FsdGVkX1/1W6wsuJH1l5O4d/gJnP6tXMcgIZqdUBOecQbLJg
+	6BHsasNt5OzsHL5Tglnh/FRCSHe4VA6YbfsQ== 
+X-GMX-UID: I6Zjfs8SPjl+GY1+KDU2Kao7MTE2NYmX
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Subject: [R] Questions about bwplot
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+Dear R-experts,
+
+I have some questions about boxplots with lattice.
+My data is similar as in the example below, I have two factors
+(Goodness of Fit and Algorithms) and data values but in each panels the scales are quite different, therefore the normal boxplots produced by
+
+set.seed(1)
+GOF <- factor(rep(c("GOF1","GOF2","GOF3"),each=40))
+Alg <- rep(factor(rep(c("A1","A2","A3","R1"),each=10)),3)
+Value <- c(runif(40),rnorm(40),rnorm(30,10,3),rnorm(10,20,3))
+test.data <- data.frame(Alg=Alg,GOF=GOF,Value=Value)
+
+library(lattice)
+bwplot(Value ~ Alg | GOF, data = test.data, as.table=T, layout=c(1,3))
+
+are not very informative.
+
+Then I used
+
+bwplot(Value ~ Alg | GOF, data = test.data, scale=list(relation="free"), as.table=T, layout=c(1,3))
+
+from which my first question arises:
+
+Is it possible to have no vertical space between the panels though they have different y-scales when using the
+argument scale=list(relation="free")?
+
+Then I would like to modify the boxplot - actually I'm not interested so much in the boxes of factor R1 (=random guess)
+but would rather have a horizontal line in each panel at the median of R1 for the given panel, and only the boxes for levels
+A1, A2 and A3 - and the horizontal line I would like only if it would fall in the plotting area when only plotting the boxes
+for the levels A1, A2 and A3 (this means in the third panel the line should not be there).
+
+My attempt 
+
+test.data$ind <- ifelse(Alg=="R1",1,0)
+my.boxpanel <- function(x, y, subscripts, groups, ...) {
+                orig <- groups[subscripts] == 0
+                panel.bwplot(x[orig], y[orig], ...)
+                panel.abline(h=median(y[!orig]))
+                  }
+bwplot(Value ~ Alg | GOF, data = test.data, scale=list(relation="free"),
+        as.table=T, groups=ind, layout=c(1,3),panel=my.boxpanel, 		        drop.unused.levels=T,
+        xlim=c("A1","A2","A3"),
+        ylim=list(c(0,1),c(-2,2),c(0,17)))
+
+requires that I know the range of the yaxis and at the xaxis leaves space for the box of R1. Can that be avoided?
+
+Then my last question - I would like to emphasise the best factor=algorithm in each panel by coloring its box.
+However "best" means in the first two panels lowest median and in the last panel highest median. Can this be done?
+I managed it only when in all panels the lowest median box should be filled with color.
+
+trellis.device(color = FALSE)
+my.boxpanel2 <- function(x, y, subscripts, groups, ...) {
+                orig <- groups[subscripts] == 0
+                medians<-tapply(y[orig],x[orig],median)
+                medians2<-medians[!is.na(medians)]
+                cols<-grey((1-as.numeric(medians2==min(medians2))/3))
+                z<-x[orig]
+                levels(z)<-c("A1","A2","A3",NA)
+                w<-y[orig]
+                panel.bwplot(z, w, fill=cols, ...)
+                panel.abline(h=median(y[!orig]))
+                  }  
+
+bwplot(Value ~ Alg | GOF, data = test.data, scale=list(relation="free"),
+        as.table=T, groups=ind, layout=c(1,3),panel=my.boxpanel2, drop.unused.levels=T, xlim=c("A1","A2","A3"),
+        ylim=list(c(0,1),c(-2,2),c(0,17)))
+
+It would be great if you could help me with this plot!
+
+Thanks in advance,
+
+Klaus
+--
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

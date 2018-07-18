@@ -1,0 +1,133 @@
+From r-help-bounces@stat.math.ethz.ch  Mon Jun 25 08:29:33 2007
+Return-Path: <r-help-bounces@stat.math.ethz.ch>
+Received: from hypatia.math.ethz.ch (hypatia.math.ethz.ch [129.132.145.15])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l5PCJKLn027849
+	for <ktwarwic@flax9.uwaterloo.ca>; Mon, 25 Jun 2007 08:29:32 -0400
+Received: from hypatia.math.ethz.ch (hypatia [129.132.145.15])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5MFRwSQ017667;
+	Fri, 22 Jun 2007 17:28:18 +0200
+X-Spam-Checker-Version: SpamAssassin 3.2.0 (2007-05-01) on hypatia.math.ethz.ch
+X-Spam-Level: 
+X-Spam-Status: No, score=-1.0 required=5.0 tests=AWL, BAYES_50,
+	DKIM_POLICY_SIGNSOME autolearn=no version=3.2.0
+Received: from markov.stats.ox.ac.uk (markov.stats.ox.ac.uk [163.1.210.1])
+	by hypatia.math.ethz.ch (8.13.6/8.13.6) with ESMTP id l5MFR42O017379
+	for <r-help@stat.math.ethz.ch>; Fri, 22 Jun 2007 17:27:04 +0200
+Received: from gannet.stats.ox.ac.uk (gannet.stats [163.1.211.17])
+	by markov.stats.ox.ac.uk (8.13.6/8.13.6) with ESMTP id l5MFQvnB027962; 
+	Fri, 22 Jun 2007 16:26:57 +0100 (BST)
+Date: Fri, 22 Jun 2007 16:26:57 +0100 (BST)
+From: Prof Brian Ripley <ripley@stats.ox.ac.uk>
+To: Karl Knoblick <karlknoblich@yahoo.de>
+In-Reply-To: <393002.75525.qm@web26513.mail.ukl.yahoo.com>
+Message-ID: <Pine.LNX.4.64.0706221617190.11817@gannet.stats.ox.ac.uk>
+References: <393002.75525.qm@web26513.mail.ukl.yahoo.com>
+MIME-Version: 1.0
+X-Virus-Scanned: by amavisd-new at stat.math.ethz.ch
+Cc: r-help@stat.math.ethz.ch
+Subject: Re: [R] Result depends on order of factors in unbalanced designs
+ (lme, anova)?
+X-BeenThere: r-help@stat.math.ethz.ch
+X-Mailman-Version: 2.1.9
+Precedence: list
+List-Id: "Main R Mailing List: Primary help" <r-help.stat.math.ethz.ch>
+List-Unsubscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=unsubscribe>
+List-Archive: <https://stat.ethz.ch/pipermail/r-help>
+List-Post: <mailto:r-help@stat.math.ethz.ch>
+List-Help: <mailto:r-help-request@stat.math.ethz.ch?subject=help>
+List-Subscribe: <https://stat.ethz.ch/mailman/listinfo/r-help>,
+	<mailto:r-help-request@stat.math.ethz.ch?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Sender: r-help-bounces@stat.math.ethz.ch
+Errors-To: r-help-bounces@stat.math.ethz.ch
+
+'anova' is rather a misnomer here.  In terms of the description in 
+?anova.lme, you have
+
+      When only one fitted model object is present, a data frame with
+      the sums of squares, numerator degrees of freedom, denominator
+      degrees of freedom, F-values, and P-values for Wald tests for the
+      terms in the model ...
+
+but there are no 'sums of squares' shown.  However, the crucial part of 
+that help page is
+
+     type: an optional character string specifying the type of sum of
+           squares to be used in F-tests for the terms in the model. If
+           '"sequential"', the sequential sum of squares obtained by
+           including the terms in the order they appear in the model is
+           used; else, if '"marginal"', the marginal sum of squares
+           obtained by deleting a term from the model at a time is used.
+           This argument is only used when a single fitted object is
+           passed to the function. Partial matching of arguments is
+           used, so only the first character needs to be provided.
+           Defaults to '"sequential"'.
+
+so these are sequential fits (just like anova for an lm fit), and yes, 
+sequential fits do in general depend on the sequence of terms.
+
+The issues of interpretation are exactly those of unbalanced linear 
+models, and you will find advice on that in many places, e.g. in MASS.
+
+
+On Thu, 21 Jun 2007, Karl Knoblick wrote:
+
+> Dear R-Community!
+>
+> For example I have a study with 4 treatment groups (10 subjects per group) and 4 visits. Additionally, the gender is taken into account. I think - and hope this is a goog idea (!) - this data can be analysed using lme as below.
+>
+> In a balanced design everything is fine, but in an unbalanced design there are differences depending on fitting y~visit*treat*gender or y~gender*visit*treat - at least with anova (see example). Does this make sense? Which ordering might be the correct one?
+>
+> Here the example script:
+> library(nlme)
+> set.seed(123)
+> # Random generation of data:
+> NSubj<-40 # No. of subjects
+> set.seed(1234)
+> id<-factor(rep(c(1:NSubj),4)) # ID of subjects
+> treat<-factor(rep(rep(1:4,each=5),4)) # Treatment 4 Levels
+> gender<-factor(rep(rep(1:2, each=20),4))
+> visit<-factor(rep(1:4, each=NSubj))
+> y<-runif(4*NSubj) # Results
+> # Add effects
+> y<-y+0.01*as.integer(visit)
+> y<-y+0.02*as.integer(gender)
+> y<-y+0.024*as.integer(treat)
+> df<-data.frame(id, treat, gender, visit, y)
+> # groupedData object for lme
+> gdat<-groupedData(y ~ visit|id, data=df)
+> # fits - different ordering of factors
+> fit1<-lme(y ~ visit*treat*gender, data=gdat, random = ~visit|id)
+> anova(fit1)
+> fit2<-lme(y ~ gender*treat*visit, data=gdat, random = ~visit|id)
+> anova(fit2)
+> # Result: identical (balanced design so far), ok
+> # Now change gender of subject 1
+> gdat$gender[c(1,41,81,121)]<-2
+> # onece more fits with different ordering of factors
+> fit1<-lme(y ~ visit*treat*gender, data=gdat, random = ~visit|id)
+> anova(fit1)
+> fit2<-lme(y ~ gender*treat*visit, data=gdat, random = ~visit|id)
+> anova(fit2)
+> # Result: There are differences!!
+>
+> Hope anybody can help or give me advice how to interpret these results correctly or how to avoid this problem! Is there a better possibility to analyse these data than lme?
+>
+> Thanks!
+> Karl
+
+-- 
+Brian D. Ripley,                  ripley@stats.ox.ac.uk
+Professor of Applied Statistics,  http://www.stats.ox.ac.uk/~ripley/
+University of Oxford,             Tel:  +44 1865 272861 (self)
+1 South Parks Road,                     +44 1865 272866 (PA)
+Oxford OX1 3TG, UK                Fax:  +44 1865 272595
+
+______________________________________________
+R-help@stat.math.ethz.ch mailing list
+https://stat.ethz.ch/mailman/listinfo/r-help
+PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+and provide commented, minimal, self-contained, reproducible code.
+

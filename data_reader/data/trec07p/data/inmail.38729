@@ -1,0 +1,176 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu May 17 18:29:05 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l4HMT5qD005396
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 17 May 2007 18:29:05 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id B60A51638E4
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 17 May 2007 22:29:02 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.3 required=3.8 tests=AWL,BAYES_00,
+	DATE_IN_PAST_06_12,NO_REAL_NAME,NO_RELAYS,RCVD_IN_DSBL autolearn=no 
+	version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 6902F16384D; Thu, 17 May 2007 22:28:27 +0000 (GMT)
+Date: Thu, 17 May 2007 23:23:43 +1000
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070517222827.6902F16384D@lists.samba.org>
+Subject: Rev 315: - don't try to send controls to dead nodes in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+------------------------------------------------------------
+revno: 315
+revision-id: tridge@samba.org-20070517132341-3syo9kztm9ckwpbs
+parent: tridge@samba.org-20070517075402-8uppvsgamxi878c5
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Thu 2007-05-17 23:23:41 +1000
+message:
+  - don't try to send controls to dead nodes
+  - use only connected nodes in a traverse
+modified:
+  common/ctdb.c                  ctdb.c-20061127094323-t50f58d65iaao5of-2
+  common/ctdb_control.c          ctdb_control.c-20070426122724-j6gkpiofhbwdin63-1
+  common/ctdb_recoverd.c         recoverd.c-20070503213540-bvxuyd9jm1f7ig90-1
+  common/ctdb_traverse.c         ctdb_traverse.c-20070503021550-ztfs5rwx8jfm8qqx-1
+  include/ctdb.h                 ctdb.h-20061117234101-o3qt14umlg9en8z0-11
+  include/ctdb_private.h         ctdb_private.h-20061117234101-o3qt14umlg9en8z0-13
+=== modified file 'common/ctdb.c'
+--- a/common/ctdb.c	2007-05-12 09:54:40 +0000
++++ b/common/ctdb.c	2007-05-17 13:23:41 +0000
+@@ -217,6 +217,21 @@
+ 	return ctdb->num_nodes;
+ }
+ 
++/*
++  return the number of connected nodes
++*/
++uint32_t ctdb_get_num_connected_nodes(struct ctdb_context *ctdb)
++{
++	int i;
++	uint32_t count=0;
++	for (i=0;i<ctdb->vnn_map->size;i++) {
++		if (ctdb->nodes[i]->flags & NODE_FLAGS_CONNECTED) {
++			count++;
++		}
++	}
++	return count;
++}
++
+ 
+ /*
+   called by the transport layer when a packet comes in
+
+=== modified file 'common/ctdb_control.c'
+--- a/common/ctdb_control.c	2007-05-17 04:10:38 +0000
++++ b/common/ctdb_control.c	2007-05-17 13:23:41 +0000
+@@ -395,6 +395,15 @@
+ 		return -1;
+ 	}
+ 
++	if (destnode != CTDB_BROADCAST_VNNMAP && destnode != CTDB_BROADCAST_VNNMAP && 
++	    (!ctdb_validate_vnn(ctdb, destnode) || 
++	     !(ctdb->nodes[destnode]->flags & NODE_FLAGS_CONNECTED))) {
++		if (!(flags & CTDB_CTRL_FLAG_NOREPLY)) {
++			callback(ctdb, -1, tdb_null, "ctdb_control to disconnected node", private_data);
++		}
++		return 0;
++	}
++
+ 	/* the state is made a child of private_data if possible. This means any reply
+ 	   will be discarded if the private_data goes away */
+ 	state = talloc(private_data?private_data:ctdb, struct ctdb_control_state);
+
+=== modified file 'common/ctdb_recoverd.c'
+--- a/common/ctdb_recoverd.c	2007-05-16 01:12:28 +0000
++++ b/common/ctdb_recoverd.c	2007-05-17 13:23:41 +0000
+@@ -447,6 +447,8 @@
+ 		return -1;
+ 	}
+ 
++	/* send a message to all clients telling them that the cluster has been reconfigured */
++	ctdb_send_message(ctdb, CTDB_BROADCAST_ALL, CTDB_SRVID_RECONFIGURE, tdb_null);
+ 
+ 	DEBUG(0, (__location__ " Recovery complete\n"));
+ 	return 0;
+@@ -465,7 +467,6 @@
+ 	uint64_t srvid;
+ 	
+ 	srvid = CTDB_SRVTYPE_RECOVERY;
+-	srvid <<= 32;
+ 
+ 	emsg.vnn = vnn;
+ 
+@@ -857,7 +858,6 @@
+ 
+ 	/* register a message port for recovery elections */
+ 	srvid = CTDB_SRVTYPE_RECOVERY;
+-	srvid <<= 32;
+ 	ctdb_set_message_handler(ctdb, srvid, election_handler, NULL);
+ 
+ 	monitor_cluster(ctdb);
+
+=== modified file 'common/ctdb_traverse.c'
+--- a/common/ctdb_traverse.c	2007-05-10 07:43:45 +0000
++++ b/common/ctdb_traverse.c	2007-05-17 13:23:41 +0000
+@@ -365,7 +365,7 @@
+ 
+ 	if (key.dsize == 0 && data.dsize == 0) {
+ 		state->null_count++;
+-		if (state->null_count != ctdb_get_num_nodes(ctdb)) {
++		if (state->null_count != ctdb_get_num_connected_nodes(ctdb)) {
+ 			return 0;
+ 		}
+ 	}
+
+=== modified file 'include/ctdb.h'
+--- a/include/ctdb.h	2007-05-17 02:07:29 +0000
++++ b/include/ctdb.h	2007-05-17 13:23:41 +0000
+@@ -56,10 +56,16 @@
+    a message handler ID meaning "give me all messages"
+  */
+ #define CTDB_SRVID_ALL (~(uint64_t)0)
++
+ /*
+   srvid type : RECOVERY
+ */
+-#define CTDB_SRVTYPE_RECOVERY	0x64766372
++#define CTDB_SRVTYPE_RECOVERY	0xF100000000000000LL
++
++/* 
++   a message handler ID meaning that the cluster has been reconfigured
++ */
++#define CTDB_SRVID_RECONFIGURE 0xF200000000000000LL
+ 
+ struct event_context;
+ 
+
+=== modified file 'include/ctdb_private.h'
+--- a/include/ctdb_private.h	2007-05-17 04:10:38 +0000
++++ b/include/ctdb_private.h	2007-05-17 13:23:41 +0000
+@@ -802,4 +802,6 @@
+ 
+ int ctdb_start_recoverd(struct ctdb_context *ctdb);
+ 
++uint32_t ctdb_get_num_connected_nodes(struct ctdb_context *ctdb);
++
+ #endif
+

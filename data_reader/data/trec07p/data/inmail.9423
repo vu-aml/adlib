@@ -1,0 +1,110 @@
+From perl6-all-return-80617-ktwarwic=speedy.uwaterloo.ca@perl.org  Sun Apr 15 14:03:07 2007
+Return-Path: <perl6-all-return-80617-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l3FI350I027997
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 15 Apr 2007 14:03:06 -0400
+Received: (qmail 6526 invoked by uid 514); 15 Apr 2007 18:02:41 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 6521 invoked from network); 15 Apr 2007 18:02:41 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-language-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-language
+List-Id: <perl6-language.perl.org>
+Delivered-To: mailing list perl6-language@perl.org
+Delivered-To: perl6-language@perl.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+X-ORBL: [71.139.5.161]
+Date: Sun, 15 Apr 2007 10:27:00 -0700
+From: Larry Wall <larry@wall.org>
+To: p6l <perl6-language@perl.org>
+Subject: Re: Should a dirhandle be a filehandle-like iterator?
+Message-ID: <20070415172700.GA29369@wall.org>
+Mail-Followup-To: p6l <perl6-language@perl.org>
+References: <130420071943232288%brian.d.foy@gmail.com> <ef30550b0704131808w791c236dp641f6f034d0833d1@mail.gmail.com> <ef30550b0704131900h47655784h225d629c69754872@mail.gmail.com> <1176520482.5022.145.camel@beast.home.broadwell.org> <20070415171632.GD2899@lupus.perlwolf.com>
+Mime-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+In-Reply-To: <20070415171632.GD2899@lupus.perlwolf.com>
+User-Agent: Mutt/1.4.2.2i
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=-2.5 required=8.0
+	tests=BAYES_00,DK_POLICY_SIGNSOME,FORGED_RCVD_HELO
+Status: O
+Content-Length: 2754
+Lines: 63
+
+On Sun, Apr 15, 2007 at 01:16:32PM -0400, John Macdonald wrote:
+: On Fri, Apr 13, 2007 at 08:14:42PM -0700, Geoffrey Broadwell wrote:
+: > [...] -- so non-dwimmy open
+: > variants are a good idea to keep around.
+: > 
+: > This could be as simple as 'open(:!dwim)' I guess, or whatever the
+: > negated boolean adverb syntax is these days ....
+: 
+: open(:file), open(:dir), open(:url), ... could be the non-dwimmy
+: versions.  If you don't specify an explicit non-dwimmy base
+: variant, the dwim magic makes a (preferrably appropriate) choice.
+
+I suspect that since we have a type system now we should probably use it
+for the non-dwimmy versions.
+
+    my $io = IO::File.open($str)
+    my $io = IO::Pipe.open($str)
+    my $io = IO::Socket.open($str)
+    my $io = IO::Dir.open($str)
+    my $io = IO::URI.open($str)
+
+etc.  And of course different kinds of objects can have different
+defaults.  I'd guess the default for directories is to take a snapshot
+and sort the entries, for instance.  Certainly the open is the only
+place we have to distinguish the type, and $io.close will close
+any of them.
+
+To me the interesting question is, when do we assume that a string
+is a filename or uri?  I can argue that for historical and security
+reasons bare open() should always assume the provided string is a
+normal filename.  However, given that the existence of feed operators
+removes most of my objections to Ingy's io() interface, we could make
+that default to uri processing:
+
+    io('http://www.wall.org/~larry') ==> my @homepage;
+
+Though we have a bit of a semantic problem insofar as
+
+    @source ==> io('file:foo')
+
+is going to want to supply more arguments to io() rather than send
+the feed to some method of the IO object, unless io() is some kind of
+a context-sensitive macro, or at least has a signature that doesn't
+allow slurpies.  And currently feed ops are considered statement
+terminators, which makes it odd to think about overloading them.
+More of a problem is that multiple dispatch based on argument type
+depends on eager evaluation of dynamic types, while feeds are basically
+lazy.  We don't know how "hard" to call io() without recognizing it
+as special, or specifying the actual method:
+
+    @source ==> io('file:foo').print
+
+Maybe that's good enough, but it seems like we could do a little
+better.  Hmm, type coercions tend to be unary, or at least not
+"listy", so maybe we can just recognize types as returning source
+and sink objects, which feeds automatically call with an appropriate
+variadic method (.lines, .print, .tap) depending on pointiness:
+
+    IO('http://www.wall.org/~larry') ==> my @homepage;	# implicit .lines
+    @source ==> IO('file:foo')				# implicit .print
+    @source ==> IO($debuglog) ==> @sink			# implicit .tap
+
+Larry
+

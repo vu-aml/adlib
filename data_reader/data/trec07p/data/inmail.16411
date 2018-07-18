@@ -1,0 +1,227 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Sun Apr 22 03:24:42 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by speedy.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l3M7Og0I003890
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 22 Apr 2007 03:24:42 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 05C33162C44
+	for <ktwarwic@speedy.uwaterloo.ca>; Sun, 22 Apr 2007 07:24:17 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=-0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 603)
+	id 07B71162AD4; Sun, 22 Apr 2007 07:23:59 +0000 (GMT)
+Date: Sun, 22 Apr 2007 09:24:28 +0200
+To: samba-cvs@samba.org
+From: tridge@samba.org
+Message-Id: <20070422072359.07B71162AD4@lists.samba.org>
+Subject: Rev 177: added a useful tool for dumping a ctdb in
+	http://samba.org/~tridge/ctdb
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Status: O
+Content-Length: 5521
+Lines: 186
+
+------------------------------------------------------------
+revno: 177
+revision-id: tridge@samba.org-20070422072427-3687afmjkdro3it4
+parent: tridge@samba.org-20070421212439-2d1ex491g730wizc
+committer: Andrew Tridgell <tridge@samba.org>
+branch nick: tridge
+timestamp: Sun 2007-04-22 09:24:27 +0200
+message:
+  added a useful tool for dumping a ctdb
+added:
+  tools/ctdb_dump.c              ctdb_dump.c-20070422072106-vavpof4y9zz8z2lh-1
+modified:
+  Makefile.in                    makefile.in-20061117234101-o3qt14umlg9en8z0-1
+  common/util.c                  util.c-20061117234101-o3qt14umlg9en8z0-20
+  include/includes.h             includes.h-20061117234101-o3qt14umlg9en8z0-17
+=== added file 'tools/ctdb_dump.c'
+--- a/tools/ctdb_dump.c	1970-01-01 00:00:00 +0000
++++ b/tools/ctdb_dump.c	2007-04-22 07:24:27 +0000
+@@ -0,0 +1,112 @@
++/* 
++   ctdb status tool
++
++   Copyright (C) Andrew Tridgell  2007
++
++   This library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2 of the License, or (at your option) any later version.
++
++   This library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with this library; if not, write to the Free Software
++   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++*/
++
++#include "includes.h"
++#include "lib/events/events.h"
++#include "system/filesys.h"
++#include "popt.h"
++#include "cmdline.h"
++#include "../include/ctdb_private.h"
++#include "db_wrap.h"
++
++
++/*
++  show usage message
++ */
++static void usage(void)
++{
++	printf("Usage: ctdb_dump <path>\n");
++	exit(1);
++}
++
++static int traverse_fn(struct tdb_context *tdb, TDB_DATA key, TDB_DATA data, void *p)
++{
++	struct id {
++		dev_t dev;
++		ino_t inode;
++	} *id;
++	struct ctdb_ltdb_header *h = (struct ctdb_ltdb_header *)data.dptr;
++	char *keystr;
++	id = (struct id *)key.dptr;
++	if (key.dsize == sizeof(*id)) {
++		keystr = talloc_asprintf(NULL, "%llu:%llu", 
++					 (uint64_t)id->dev, (uint64_t)id->inode);
++	} else {
++		keystr = hex_encode(NULL, key.dptr, key.dsize);
++	}
++	printf("  rec %s dmaster=%u\n", keystr, h->dmaster);
++	talloc_free(keystr);
++	return 0;
++}
++
++/*
++  main program
++*/
++int main(int argc, const char *argv[])
++{
++	struct poptOption popt_options[] = {
++		POPT_AUTOHELP
++		POPT_CTDB_CMDLINE
++		POPT_TABLEEND
++	};
++	int opt;
++	const char **extra_argv;
++	int i, extra_argc = 0;
++	poptContext pc;
++	struct tdb_wrap *db;
++
++	pc = poptGetContext(argv[0], argc, argv, popt_options, POPT_CONTEXT_KEEP_FIRST);
++
++	while ((opt = poptGetNextOpt(pc)) != -1) {
++		switch (opt) {
++		default:
++			fprintf(stderr, "Invalid option %s: %s\n", 
++				poptBadOption(pc, 0), poptStrerror(opt));
++			exit(1);
++		}
++	}
++
++	/* setup the remaining options for the main program to use */
++	extra_argv = poptGetArgs(pc);
++	if (extra_argv) {
++		extra_argv++;
++		while (extra_argv[extra_argc]) extra_argc++;
++	}
++
++	if (extra_argc < 1) {
++		usage();
++	}
++
++	for (i=0;i<extra_argc;i++) {
++		db = tdb_wrap_open(NULL, extra_argv[i], 0, TDB_DEFAULT, O_RDONLY, 0);
++		if (db == NULL) {
++			printf("Failed to open %s - %s\n", 
++			       extra_argv[i], strerror(errno));
++			exit(1);
++		}
++
++		printf("db %s\n", extra_argv[i]);
++		tdb_traverse(db->tdb, traverse_fn, NULL);
++		
++		talloc_free(db);
++	}
++
++	return 0;
++}
+
+=== modified file 'Makefile.in'
+--- a/Makefile.in	2007-04-20 10:07:47 +0000
++++ b/Makefile.in	2007-04-22 07:24:27 +0000
+@@ -30,7 +30,7 @@
+ 
+ OBJS = @TDBOBJ@ @TALLOCOBJ@ @LIBREPLACEOBJ@ @INFINIBAND_WRAPPER_OBJ@ $(EXTRA_OBJ) $(EVENTS_OBJ) $(CTDB_OBJ)
+ 
+-BINS = bin/ctdbd bin/ctdbd_test bin/ctdb_test bin/ctdb_bench bin/ctdb_messaging bin/ctdb_fetch bin/ctdb_fetch1 bin/lockwait bin/ctdb_status @INFINIBAND_BINS@
++BINS = bin/ctdbd bin/ctdbd_test bin/ctdb_test bin/ctdb_bench bin/ctdb_messaging bin/ctdb_fetch bin/ctdb_fetch1 bin/lockwait bin/ctdb_status bin/ctdb_dump @INFINIBAND_BINS@
+ 
+ DIRS = lib bin
+ 
+@@ -61,6 +61,10 @@
+ 	@echo Linking $@
+ 	@$(CC) $(CFLAGS) -o $@ tools/ctdb_status.o $(OBJS) $(LIB_FLAGS)
+ 
++bin/ctdb_dump: $(OBJS) tools/ctdb_dump.o 
++	@echo Linking $@
++	@$(CC) $(CFLAGS) -o $@ tools/ctdb_dump.o $(OBJS) $(LIB_FLAGS)
++
+ bin/ctdbd_test: $(OBJS) direct/ctdbd_test.o
+ 	@echo Linking $@
+ 	@$(CC) $(CFLAGS) -o $@ direct/ctdbd_test.o 
+
+=== modified file 'common/util.c'
+--- a/common/util.c	2007-04-16 06:01:37 +0000
++++ b/common/util.c	2007-04-22 07:24:27 +0000
+@@ -194,3 +194,16 @@
+ 
+ 	return file_lines_parse(p, size, numlines, mem_ctx);
+ }
++
++char *hex_encode(TALLOC_CTX *mem_ctx, const unsigned char *buff_in, size_t len)
++{
++	int i;
++	char *hex_buffer;
++
++	hex_buffer = talloc_array(mem_ctx, char, (len*2)+1);
++
++	for (i = 0; i < len; i++)
++		slprintf(&hex_buffer[i*2], 3, "%02X", buff_in[i]);
++
++	return hex_buffer;
++}
+
+=== modified file 'include/includes.h'
+--- a/include/includes.h	2007-04-17 15:59:39 +0000
++++ b/include/includes.h	2007-04-22 07:24:27 +0000
+@@ -35,3 +35,5 @@
+ _PUBLIC_ struct timeval timeval_current_ofs(uint32_t secs, uint32_t usecs);
+ double timeval_elapsed(struct timeval *tv);
+ char **file_lines_load(const char *fname, int *numlines, TALLOC_CTX *mem_ctx);
++char *hex_encode(TALLOC_CTX *mem_ctx, const unsigned char *buff_in, size_t len);
++
+

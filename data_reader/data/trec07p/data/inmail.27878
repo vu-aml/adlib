@@ -1,0 +1,271 @@
+From samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org  Thu May  3 13:02:51 2007
+Return-Path: <samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org>
+Received: from lists.samba.org (mail.samba.org [66.70.73.150])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with ESMTP id l43H2pqD005521
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu, 3 May 2007 13:02:51 -0400
+Received: from dp.samba.org (localhost [127.0.0.1])
+	by lists.samba.org (Postfix) with ESMTP id 78D8516384C
+	for <ktwarwic@speedy.uwaterloo.ca>; Thu,  3 May 2007 17:02:50 +0000 (GMT)
+X-Spam-Checker-Version: SpamAssassin 3.1.7 (2006-10-05) on dp.samba.org
+X-Spam-Level: 
+X-Spam-Status: No, score=0.1 required=3.8 tests=AWL,BAYES_00,NO_REAL_NAME,
+	NO_RELAYS,RCVD_IN_DSBL,UPPERCASE_25_50 autolearn=no version=3.1.7
+X-Original-To: samba-cvs@samba.org
+Delivered-To: samba-cvs@samba.org
+Received: by lists.samba.org (Postfix, from userid 540)
+	id 1792B162AE9; Thu,  3 May 2007 17:02:13 +0000 (GMT)
+To: samba-cvs@samba.org
+From: jerry@samba.org
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Message-Id: <20070503170213.1792B162AE9@lists.samba.org>
+Date: Thu,  3 May 2007 17:02:13 +0000 (GMT)
+Subject: svn commit: samba r22652 - in branches/SAMBA_3_0_26/source: include
+	smbd
+X-BeenThere: samba-cvs@lists.samba.org
+X-Mailman-Version: 2.1.5
+Precedence: list
+Reply-To: samba-technical@lists.samba.org
+List-Id: Samba CVS and subversion commit messages <samba-cvs.lists.samba.org>
+List-Unsubscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=unsubscribe>
+List-Archive: <http://lists.samba.org/archive/samba-cvs>
+List-Post: <mailto:samba-cvs@lists.samba.org>
+List-Help: <mailto:samba-cvs-request@lists.samba.org?subject=help>
+List-Subscribe: <https://lists.samba.org/mailman/listinfo/samba-cvs>,
+	<mailto:samba-cvs-request@lists.samba.org?subject=subscribe>
+Sender: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+Errors-To: samba-cvs-bounces+ktwarwic=speedy.uwaterloo.ca@lists.samba.org
+
+Author: jerry
+Date: 2007-05-03 17:02:12 +0000 (Thu, 03 May 2007)
+New Revision: 22652
+
+WebSVN: http://websvn.samba.org/cgi-bin/viewcvs.cgi?view=rev&root=samba&rev=22652
+
+Log:
+re-add Jeremy objectID changes
+Modified:
+   branches/SAMBA_3_0_26/source/include/ntioctl.h
+   branches/SAMBA_3_0_26/source/smbd/nttrans.c
+   branches/SAMBA_3_0_26/source/smbd/trans2.c
+
+
+Changeset:
+Modified: branches/SAMBA_3_0_26/source/include/ntioctl.h
+===================================================================
+--- branches/SAMBA_3_0_26/source/include/ntioctl.h	2007-05-03 16:59:58 UTC (rev 22651)
++++ branches/SAMBA_3_0_26/source/include/ntioctl.h	2007-05-03 17:02:12 UTC (rev 22652)
+@@ -47,7 +47,7 @@
+ #define FSCTL_SET_REPARSE_POINT      0x000900A4
+ #define FSCTL_GET_REPARSE_POINT      0x000900A8
+ #define FSCTL_DELETE_REPARSE_POINT   0x000900AC
+-#define FSCTL_0x000900C0	     0x000900C0
++#define FSCTL_CREATE_OR_GET_OBJECT_ID 0x000900C0
+ #define FSCTL_SET_SPARSE             0x000900C4
+ #define FSCTL_SET_ZERO_DATA          0x000900C8
+ #define FSCTL_SET_ENCRYPTION         0x000900D7
+
+Modified: branches/SAMBA_3_0_26/source/smbd/nttrans.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/smbd/nttrans.c	2007-05-03 16:59:58 UTC (rev 22651)
++++ branches/SAMBA_3_0_26/source/smbd/nttrans.c	2007-05-03 17:02:12 UTC (rev 22652)
+@@ -2279,15 +2279,29 @@
+ 				0);
+ 		return -1;
+ 	
+-	case FSCTL_0x000900C0:
+-		/* pretend this succeeded - don't know what this really is
+-		   but works ok like this --metze
++	case FSCTL_CREATE_OR_GET_OBJECT_ID:
++	{
++		unsigned char objid[16];
++
++		/* This should return the object-id on this file.
++ 		 * I think I'll make this be the inode+dev. JRA.
+ 		 */
+ 
+-		DEBUG(10,("FSCTL_0x000900C0: called on FID[0x%04X](but not implemented)\n",fidnum));
+-		send_nt_replies(outbuf, bufsize, NT_STATUS_OK, NULL, 0, NULL,
+-				0);
++		DEBUG(10,("FSCTL_CREATE_OR_GET_OBJECT_ID: called on FID[0x%04X]\n",fidnum));
++
++		data_count = 64;
++		pdata = nttrans_realloc(ppdata, data_count);
++		if (pdata == NULL) {
++			return ERROR_NT(NT_STATUS_NO_MEMORY);
++		}		
++		SINO_T_VAL(pdata,0,fsp->inode);
++		SDEV_T_VAL(pdata,8,fsp->dev);
++		memcpy(pdata+16,create_volume_objectid(conn,objid),16);
++		SINO_T_VAL(pdata,32,fsp->inode);
++		SDEV_T_VAL(pdata,40,fsp->dev);
++		send_nt_replies(outbuf, bufsize, NT_STATUS_OK, NULL, 0, pdata, data_count);
+ 		return -1;
++	}
+ 
+ 	case FSCTL_GET_REPARSE_POINT:
+ 		/* pretend this fail - my winXP does it like this
+@@ -2295,9 +2309,7 @@
+ 		 */
+ 
+ 		DEBUG(10,("FSCTL_GET_REPARSE_POINT: called on FID[0x%04X](but not implemented)\n",fidnum));
+-		send_nt_replies(outbuf, bufsize, NT_STATUS_NOT_A_REPARSE_POINT,
+-				NULL, 0, NULL, 0);
+-		return -1;
++		return ERROR_NT(NT_STATUS_NOT_A_REPARSE_POINT);
+ 
+ 	case FSCTL_SET_REPARSE_POINT:
+ 		/* pretend this fail - I'm assuming this because of the FSCTL_GET_REPARSE_POINT case.
+@@ -2305,9 +2317,7 @@
+ 		 */
+ 
+ 		DEBUG(10,("FSCTL_SET_REPARSE_POINT: called on FID[0x%04X](but not implemented)\n",fidnum));
+-		send_nt_replies(outbuf, bufsize, NT_STATUS_NOT_A_REPARSE_POINT,
+-				NULL, 0, NULL, 0);
+-		return -1;
++		return ERROR_NT(NT_STATUS_NOT_A_REPARSE_POINT);
+ 			
+ 	case FSCTL_GET_SHADOW_COPY_DATA: /* don't know if this name is right...*/
+ 	{
+
+Modified: branches/SAMBA_3_0_26/source/smbd/trans2.c
+===================================================================
+--- branches/SAMBA_3_0_26/source/smbd/trans2.c	2007-05-03 16:59:58 UTC (rev 22651)
++++ branches/SAMBA_3_0_26/source/smbd/trans2.c	2007-05-03 17:02:12 UTC (rev 22652)
+@@ -2219,6 +2219,12 @@
+ 	return(-1);
+ }
+ 
++unsigned char *create_volume_objectid(connection_struct *conn, unsigned char objid[16])
++{
++	E_md4hash(lp_servicename(SNUM(conn)),objid);
++	return objid;
++}
++
+ /****************************************************************************
+  Reply to a TRANS2_QFSINFO (query filesystem info).
+ ****************************************************************************/
+@@ -2326,6 +2332,8 @@
+ 
+ 			SIVAL(pdata,0,FILE_CASE_PRESERVED_NAMES|FILE_CASE_SENSITIVE_SEARCH|
+ 				(lp_nt_acl_support(SNUM(conn)) ? FILE_PERSISTENT_ACLS : 0)|
++				FILE_SUPPORTS_OBJECT_IDS|
++				FILE_UNICODE_ON_DISK|
+ 				quota_flag); /* FS ATTRIBUTES */
+ 
+ 			SIVAL(pdata,4,255); /* Max filename component length */
+@@ -2507,8 +2515,12 @@
+ 		}
+ #endif /* HAVE_SYS_QUOTAS */
+ 		case SMB_FS_OBJECTID_INFORMATION:
++		{
++			unsigned char objid[16];
++			memcpy(pdata,create_volume_objectid(conn, objid),16);
+ 			data_len = 64;
+ 			break;
++		}
+ 
+ 		/*
+ 		 * Query the version and capabilities of the CIFS UNIX extensions
+@@ -3142,6 +3154,68 @@
+ }
+ 
+ /****************************************************************************
++ Reply to a TRANSACT2_QFILEINFO on a PIPE !
++****************************************************************************/
++
++static int call_trans2qpipeinfo(connection_struct *conn, char *inbuf, char *outbuf, int length, int bufsize,
++					unsigned int tran_call,
++					char **pparams, int total_params, char **ppdata, int total_data,
++					unsigned int max_data_bytes)
++{
++	char *params = *pparams;
++	char *pdata = *ppdata;
++	unsigned int data_size = 0;
++	unsigned int param_size = 2;
++	uint16 info_level;
++	smb_np_struct *p_pipe = NULL;
++
++	if (!params) {
++		return ERROR_NT(NT_STATUS_INVALID_PARAMETER);
++	}
++
++	if (total_params < 4) {
++		return ERROR_NT(NT_STATUS_INVALID_PARAMETER);
++	}
++
++	p_pipe = get_rpc_pipe_p(params,0);
++	if (p_pipe == NULL) {
++		return ERROR_NT(NT_STATUS_INVALID_HANDLE);
++	}
++
++	info_level = SVAL(params,2);
++
++	*pparams = (char *)SMB_REALLOC(*pparams,2);
++	if (*pparams == NULL) {
++		return ERROR_NT(NT_STATUS_NO_MEMORY);
++	}
++	params = *pparams;
++	SSVAL(params,0,0);
++	data_size = max_data_bytes + DIR_ENTRY_SAFETY_MARGIN;
++	*ppdata = (char *)SMB_REALLOC(*ppdata, data_size); 
++	if (*ppdata == NULL ) {
++		return ERROR_NT(NT_STATUS_NO_MEMORY);
++	}
++	pdata = *ppdata;
++
++	switch (info_level) {
++		case SMB_FILE_STANDARD_INFORMATION:
++			memset(pdata,24,0);
++			SOFF_T(pdata,0,4096LL);
++			SIVAL(pdata,16,1);
++			SIVAL(pdata,20,1);
++			data_size = 24;
++			break;
++
++		default:
++			return ERROR_NT(NT_STATUS_INVALID_LEVEL);
++	}
++
++	send_trans2_replies(outbuf, bufsize, params, param_size, *ppdata, data_size, max_data_bytes);
++
++	return(-1);
++}
++
++/****************************************************************************
+  Reply to a TRANS2_QFILEPATHINFO or TRANSACT2_QFILEINFO (query file info by
+  file name or file id).
+ ****************************************************************************/
+@@ -3186,6 +3260,20 @@
+ 			return ERROR_NT(NT_STATUS_INVALID_PARAMETER);
+ 		}
+ 
++		if (IS_IPC(conn)) {
++			return call_trans2qpipeinfo(conn,
++							inbuf,
++							outbuf,
++							length,
++							bufsize,
++							tran_call,
++							pparams,
++							total_params,
++							ppdata,
++							total_data,
++							max_data_bytes);
++		}
++
+ 		fsp = file_fsp(params,0);
+ 		info_level = SVAL(params,2);
+ 
+@@ -6474,7 +6562,8 @@
+ 	}
+ 
+ 	if (IS_IPC(conn) && (tran_call != TRANSACT2_OPEN)
+-            && (tran_call != TRANSACT2_GET_DFS_REFERRAL)) {
++            && (tran_call != TRANSACT2_GET_DFS_REFERRAL)
++            && (tran_call != TRANSACT2_QFILEINFO)) {
+ 		END_PROFILE(SMBtrans2);
+ 		return ERROR_DOS(ERRSRV,ERRaccess);
+ 	}
+

@@ -57,8 +57,8 @@ class FeatureDeletion(Learner):
         C = self.hinge_loss_multiplier
         print("current C value(hinge loss multipler): {}".format(C))
         print("current K(maximum feature deletion): {}".format(self.max_feature_deletion))
-        print(X.shape)
-        print(y.shape)
+        # print(X.shape)
+        # print(y.shape)
         K = self.max_feature_deletion
         w = Variable(self.num_features + 1)  # weight vector
         # b = Variable()  # bias term
@@ -74,7 +74,8 @@ class FeatureDeletion(Learner):
         constraints.extend([z[i] + v[i, :] >=
                             y[i] * mul_elemwise(X_prime[i], w).T for i in range(num_instances)])
         constraints.extend([loss_f[i] >= 0 for i in range(num_instances)])
-        constraints.extend([loss_f[i] >= (1 - y[i] * (X_prime[i] * w) + t[i]) for i in range(num_instances)])
+        constraints.extend([loss_f[i] >= (1 - y[i] * (X_prime[i] * w) + t[i])
+                            for i in range(num_instances)])
         obj = Minimize(0.5 * (sum_squares(w[:-1])) + C * sum_entries(loss_f))
 
         #  constraints = [t >= K * z + sum_entries(v, axis=1),v >= 0]
@@ -120,7 +121,7 @@ class FeatureDeletion(Learner):
         # single instance
         elif type(instances) == Instance:
             predictions = np.sign(self.predict_instance(
-                            instances.get_feature_vector().get_csr_matrix().toarray()))
+                instances.get_feature_vector().get_csr_matrix().toarray()))
         else:
             predictions = []
             for i in range(0, instances.features.shape[0]):
@@ -142,8 +143,8 @@ class FeatureDeletion(Learner):
     # decision_function should be the distance to the hyperplane
     def decision_function(self, instances):
         predict_instances = self.weight_vector.dot(instances.T) + self.bias
-        norm = np.linalg.norm(self.weight_vector)
-        return predict_instances / norm
+        # norm = np.linalg.norm(self.weight_vector)
+        return predict_instances
 
     def get_weight(self):
         return self.weight_vector

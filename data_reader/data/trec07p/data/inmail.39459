@@ -1,0 +1,136 @@
+From perl6-all-return-81471-ktwarwic=speedy.uwaterloo.ca@perl.org  Fri May 18 23:14:30 2007
+Return-Path: <perl6-all-return-81471-ktwarwic=speedy.uwaterloo.ca@perl.org>
+Received: from lists.develooper.com (x6.develooper.com [63.251.223.186])
+	by flax9.uwaterloo.ca (8.12.8/8.12.5) with SMTP id l4J3ETqD021350
+	for <ktwarwic@flax9.uwaterloo.ca>; Fri, 18 May 2007 23:14:29 -0400
+Received: (qmail 29372 invoked by uid 514); 19 May 2007 03:14:25 -0000
+Mailing-List: contact perl6-all-help@perl.org; run by ezmlm
+Precedence: bulk
+List-Post: <mailto:perl6-all@perl.org>
+List-Help: <mailto:perl6-all-help@perl.org>
+List-Unsubscribe: <mailto:perl6-all-unsubscribe@perl.org>
+List-Subscribe: <mailto:perl6-all-subscribe@perl.org>
+List-Id: <perl6-all.perl.org>
+Delivered-To: mailing list perl6-all@perl.org
+Received: (qmail 29367 invoked from network); 19 May 2007 03:14:24 -0000
+Delivered-To: perl6-all-poster@perl.org
+X-Spam-Status: No, hits=-1.1 required=8.0
+	tests=BAYES_05,DKIM_POLICY_SIGNSOME,DK_POLICY_SIGNSOME,SPF_PASS
+X-Spam-Check-By: la.mx.develooper.com
+Received-SPF: pass (x1.develooper.com: local policy)
+X-Mailing-List: contact perl6-internals-help@perl.org; run by ezmlm
+X-Mailing-List-Name: perl6-internals
+List-Id: <perl6-internals.perl.org>
+Delivered-To: mailing list perl6-internals@perl.org
+Delivered-To: perl6-internals@perl.org
+Received-SPF: neutral (x1.develooper.com: local policy)
+Message-ID: <464E6AC1.6030801@perl.org>
+Date: Fri, 18 May 2007 20:10:57 -0700
+From: Allison Randal <allison@perl.org>
+User-Agent: Thunderbird 1.5.0.10 (Macintosh/20070221)
+MIME-Version: 1.0
+To: tewk <tewk@tewk.com>
+Cc: perl6-internals@perl.org
+Subject: Re: Initial patch for pdd15 testing.
+References: <4641604F.5000001@tewk.com> <464164DA.3080505@perl.org> <4641E8D1.4040102@tewk.com>
+In-Reply-To: <4641E8D1.4040102@tewk.com>
+Content-Type: text/plain; charset=ISO-8859-1; format=flowed
+Content-Transfer-Encoding: 7bit
+X-Virus-Scanned: by amavisd-new at wgz.org
+X-Old-Spam-Check-By: la.mx.develooper.com
+X-Old-Spam-Status: No, hits=0.5 required=8.0
+	tests=BAYES_40,SPF_NEUTRAL
+
+Another one wiped out by Thunderbird crash.
+
+tewk wrote:
+> 
+> Allison Randal wrote:
+>> tewk wrote:
+>>> Patch was to large to attach so: http://tewk.com/pdd15_testing.diff
+>>>
+>>> Tests currently fail because they use the "new" opcode to instantiate 
+>>> objects.
+>>
+>> Fixing the 'new' opcode is the first change we need to make to get 
+>> both object models working simultaneously. Pick one:
+>>
+>> - The 'new' opcode can no longer lookup string class names by type 
+>> number (eventually true).
+>>
+> I'd really like to work on permanent solutions.  
+
+We are working on permanent solutions, we're just moving there by a 
+process of refactoring. Removing the type number system from Parrot is 
+too extensive a change to be the first step in integrating the new 
+object system. (This is what we'll need to do to make this 
+implementation path work.)
+
+So, for now we go with:
+
+ >> - The PDD 15 object implementation needs to register a type number for
+ >> its classes (as a temporary measure to smooth over integration).
+
+> So how should we 
+> implement option one?
+> Should we have a pmc lookup resolution order of current namespace, hll 
+> namespace,  parrot namespace, and finally root namespace.
+> Then all current, non-hll pmcs should be placed in the parrot namespace.
+> 
+> Nope that won't work, the parrot and root namespaces can't blead into 
+> hll namespaces' visibility.
+> 
+> We really need independent opcodes which segment the current namespace, 
+> hll namespaces, and the root parrot namespace.
+> 
+> I think we should have:
+> new_cur  - resolves using the current namespace
+> new_hll   - resolves pmcs and classes using the hll namespace
+> new         - resolves using the parrot namespace.
+> 
+> we probably need the same thing for newclass.
+> 
+> newclass_cur
+> newclass_hll
+> newclass
+
+I'm more inclined to stick with new and newclass, and just provide 
+namespace options as flags.
+
+> Second issue:
+> 
+> PDD15 registers methods in the class.  So methods defined using :method 
+> in the class namespace aren't found by the find_method.
+> So:
+> 1: We force compiler writers to make add_method calls for every method 
+> and drop :method
+
+Definitely not.
+
+> 2: After running :init and :load subs we auto-call add_method for 
+> methods defined in pir with :method. (this has nasty corner cases)
+>       What do we do about evaled :methods, repeat the same auto-call 
+> technique after ever eval?
+
+Close.
+
+> 3: We modify the Class PMC's find_method to look in the namespace for 
+> method and lazily call add_method.
+
+Not really desirable.
+
+4: The call to newclass checks the namespace associated with the class 
+to see if it contains any :methods or :vtables. If it does, it 
+automatically adds them to the class. (This covers the case where the 
+methods were loaded before the class was created.)
+
+Also, the code that installs subs in a namespace checks to see if that 
+namespace is associated with a class, and if it is installs any :method 
+or :vtable entries in the class. (This handles methods loaded after the 
+class is created, and evals.)
+
+There will still be some methods that need to be manually installed with 
+add_method.
+
+Allison
+

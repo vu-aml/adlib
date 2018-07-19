@@ -7,7 +7,7 @@ Game-theoretic adversarial machine learning library providing a set of learner a
 
 ### Installation
 To install the dependencies for `adlib` do `pip install -r requirements.txt`. See below for a list of dependencies.
-To install `adlib`, run `python3 setup.py install`. For development, do `python3 setup.py develop`.
+To install `adlib`, run `pip3 install adlib` or `python3 setup.py install`. For development, do `python3 setup.py develop`.
 
 #### Dependencies
 * Python3 

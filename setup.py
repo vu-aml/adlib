@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 
 setup(
     name='adlib',
-    version='1.0.0',
+    version='1.0.2',
     description='Game-theoretic adversarial machine learning library providing '
                 'a set of learner and adversary modules.',
     url='https://github.com/vu-aml/adlib',

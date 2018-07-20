@@ -50,17 +50,7 @@ class OutlierRemovalLearner(Learner):
         iteration = 0
 
         while cutoff < max_cutoff:
-            try:
-                fvs, labels = self._remove_outliers(fvs, labels, cutoff)
-            except:  # Failure - usually when there are no instances left (removes all)
-                if self.verbose:
-                    print('\nORL Iteration:', iteration, '- factor:', factor,
-                          '- cutoff:', cutoff, '- FAILURE\n')
-
-                factor += 1
-                cutoff = base_cutoff * factor
-                fvs, labels = deepcopy(orig_fvs), deepcopy(orig_labels)
-                iteration += 1
+            fvs, labels = self._remove_outliers(fvs, labels, cutoff)
 
             self.w = np.full(fvs.shape[1], 0.0)
             for i, fv in enumerate(fvs):
@@ -107,7 +97,7 @@ class OutlierRemovalLearner(Learner):
         while old_number_of_instances != len(labels):
             # Assume at least 50% are non-poisonous instances
             if iteration > 0 and old_number_of_instances < 0.5 * original_num_instances:
-                raise ValueError()
+                break
 
             if self.verbose:
                 print('Iteration:', iteration, '- num_instances:', len(labels))

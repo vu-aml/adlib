@@ -1,7 +1,5 @@
 import os
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn import preprocessing
-import sklearn.utils
 import scipy
 from scipy.sparse import csr_matrix
 import sklearn
@@ -10,7 +8,6 @@ import csv
 import pickle
 from collections import namedtuple
 from copy import deepcopy
-from typing import Dict
 
 
 class Dataset(object):
@@ -50,10 +47,9 @@ class EmailDataset(Dataset):
         binary (boolean, optional): Feature type, continuous (False) by default
     """
 
-    def __init__(self, path=None, raw=True, features=None, labels=None, norm='l1',
-                 binary=False, strip_accents_=None, ngram_range_=(1, 1),
-                 max_df_=1.0, min_df_=1, max_features_=1000, num_instances=0,
-                 standardization=False):
+    def __init__(self, path=None, raw=True, features=None, labels=None,
+                 binary=True, strip_accents_=None, ngram_range_=(1, 1),
+                 max_df_=1.0, min_df_=1, max_features_=1000, num_instances=0):
         super(EmailDataset, self).__init__()
         self.num_instances = num_instances
         self.binary = binary
@@ -64,21 +60,15 @@ class EmailDataset(Dataset):
                 self.labels, self.corpus = self._create_corpus(path)
                 # Sklearn module to fit/transform data and resulting feature matrix
                 # Maybe optionally pass this in as a parameter instead.
-                # stop words?
                 self.vectorizer = \
                     TfidfVectorizer(analyzer='word',
                                     strip_accents=strip_accents_,
                                     ngram_range=ngram_range_, max_df=max_df_,
                                     min_df=min_df_, max_features=max_features_,
-                                    binary=self.binary, stop_words='english',
-                                    use_idf=True, norm=norm)
+                                    binary=False, stop_words='english',
+                                    use_idf=True, norm=None)
                 self.vectorizer = self.vectorizer.fit(self.corpus)
                 self.features = self.vectorizer.transform(self.corpus)
-                if standardization:
-                    dense_feature = self.features.todense()
-                    scaler = preprocessing.StandardScaler(with_mean=False)
-                    scaler.fit(dense_feature)
-                    self.features = csr_matrix(scaler.transform(dense_feature))
             else:
                 self.labels, self.features = \
                     self._load(path, os.path.splitext(path)[1][1:])
@@ -239,26 +229,18 @@ class EmailDataset(Dataset):
                     serialize.writerow(instance)
         else:
             # TODO: throw exception if FileNotFoundError
-            if self.binary:
-                data = np.genfromtxt(outfile, delimiter=',')
-                self.num_instances = data.shape[0]
-                labels = data[:, :1]
-                feats = data[:, 1:]
-                mask = ~np.isnan(feats)
-                col = feats[mask]
-                row = np.concatenate([np.ones_like(x) * i
-                                      for i, x in enumerate(feats)])[mask.flatten()]
-                features = csr_matrix((np.ones_like(col), (row, col)),
-                                      shape=(feats.shape[0],
-                                             int(np.max(feats[mask])) + 1))
-                return np.squeeze(labels), features
-            else:
-                data = np.genfromtxt(outfile, delimiter=',')
-                self.num_instances = data.shape[0]
-                labels = data[:, :1]
-                feats = data[:, 1:]
-                features = csr_matrix(feats)
-                return np.squeeze(labels), features
+            data = np.genfromtxt(outfile, delimiter=',')
+            self.num_instances = data.shape[0]
+            labels = data[:, :1]
+            feats = data[:, 1:]
+            mask = ~np.isnan(feats)
+            col = feats[mask]
+            row = np.concatenate([np.ones_like(x) * i
+                                  for i, x in enumerate(feats)])[mask.flatten()]
+            features = csr_matrix((np.ones_like(col), (row, col)),
+                                  shape=(feats.shape[0],
+                                         int(np.max(feats[mask])) + 1))
+            return np.squeeze(labels), features
 
     def _pickle(self, outfile, save=True):
         """A fast method for saving and loading datasets as python objects.
@@ -320,62 +302,37 @@ class EmailDataset(Dataset):
             raise AttributeError('The given load format is not currently \
                                  supported.')
 
-    def split(self, fraction=0.5, seed=None, random=True):
+    def split(self, split={'test': 50, 'train': 50}):
         """Split the dataset into test and train sets using
             `sklearn.utils.shuffle()`.
 
         Args:
-            fraction (float/int, optional): fraction of training data in split
+            split (Dict, optional): A dictionary specifying the splits between
+                test and trainset.  The values can be floats or ints.
+
         Returns:
             trainset, testset (namedtuple, namedtuple): Split tuples containing
                 share of shuffled data instances.
 
         """
-
-        if isinstance(fraction, Dict):
-            fraction = fraction['train'] / 100
-        if fraction < 0:
-            raise ValueError('Split percentages must be positive values')
-        if fraction > 1.0:
-            fraction /= 100
-        pivot = int(self.__len__() * fraction)
-        if random:
-            if seed:
-                s_feats, s_labels = sklearn.utils.shuffle(self.features, self.labels,
-                                                          random_state=seed)
-            else:
-                s_feats, s_labels = sklearn.utils.shuffle(self.features, self.labels,
-                                                          random_state=scipy.random.seed())
-
-            return (self.__class__(raw=False, features=s_feats[:pivot, :],
-                                   labels=s_labels[:pivot], num_instances=pivot,
-                                   binary=self.binary),
-                    self.__class__(raw=False, features=s_feats[pivot:, :],
-                                   labels=s_labels[pivot:],
-                                   num_instances=self.num_instances - pivot,
-                                   binary=self.binary))
+        splits = list(split.values())
+        for s in splits:
+            if s < 0:
+                raise ValueError('Split percentages must be positive values')
+        # data = self.features.toarray()
+        frac = 0
+        if splits[0] < 1.0:
+            frac = splits[0]
         else:
-            return (self.__class__(raw=False, features=self.features[:pivot, :],
-                                   labels=self.labels[:pivot], num_instances=pivot,
-                                   binary=self.binary),
-                    self.__class__(raw=False, features=self.features[pivot:, :],
-                                   labels=self.labels[pivot:],
-                                   num_instances=self.num_instances - pivot,
-                                   binary=self.binary))
-
-    def report(self):
-        """
-        return a string that contains information about data set shape, size
-        and positive/negative instance count and percentage
-        """
-        s = "number of instances: {0}\n".format(self.num_instances)
-        s += "instance feature length: {0}\n".format(self.shape[1])
-        pos_cnt = self.labels.tolist().count(1)
-        neg_cnt = self.labels.tolist().count(-1)
-        s += "positive instance count and percentage: {0}, {1}%\n".format(pos_cnt,
-                                                                          100 * pos_cnt / len(
-                                                                              self.labels))
-        s += "negative instance count and percentage: {0}, {1}%\n".format(neg_cnt,
-                                                                          100 * neg_cnt / len(
-                                                                              self.labels))
-        return s
+            frac = splits[0] / 100
+        pivot = int(self.__len__() * frac)
+        s_feats, s_labels = sklearn.utils.shuffle(self.features, self.labels)
+        return (self.__class__(raw=False, features=s_feats[:pivot, :],
+                               labels=s_labels[:pivot], num_instances=pivot,
+                               binary=self.binary),
+                self.__class__(raw=False, features=s_feats[pivot:, :],
+                               labels=s_labels[pivot:],
+                               num_instances=self.num_instances - pivot,
+                               binary=self.binary))
+        # return (self.Data(s_feats[:pivot, :], s_labels[:pivot]),
+        #         self.Data(s_feats[pivot:, :], s_labels[pivot:]))

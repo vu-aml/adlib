@@ -11,7 +11,7 @@ def get_requirements():
 
 setup(
     name='adlib',
-    version='1.0.4',
+    version='1.1.0',
     description='Game-theoretic adversarial machine learning library providing '
                 'a set of learner and adversary modules.',
     url='https://github.com/vu-aml/adlib',

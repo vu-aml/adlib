@@ -127,13 +127,13 @@ class GradientDescent(Adversary):
 
         index_lst = []
         iter_time = 0
+        total_iter= 0
         attacker_score = self.get_score(attack_instance.get_csr_matrix().toarray())
         closer_neg_instances, dist, grad_update = self.compute_gradient(attack_instance.get_csr_matrix().toarray(), neg_instances)
         obj_value = attacker_score + self.lambda_val * dist
 
-        while iter_time < self.max_iter:
-            #print(iter_time)
-            #print(self.max_iter)
+        while iter_time < self.max_iter and total_iter <= 100:
+            total_iter += 1
             if index_lst is not []:
                 # eliminate the index we have already modified
                 for i in index_lst:

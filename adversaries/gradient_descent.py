@@ -61,7 +61,7 @@ class GradientDescent(Adversary):
                 'learn_model': self.learn_model,
                 'stp_constant': self.epsilon,
                 'mimicry': self.minicry,
-                'max_iteration': self.max_iteration,
+                'max_iter': self.max_iter,
                 'mimicry_params': self.mimicry_params,
                 'bound' : self.bound,
                 'binary':self.binary}
@@ -77,8 +77,8 @@ class GradientDescent(Adversary):
             self.learn_model = params['learn_model']
         if 'self.minicry' in params.keys():
             self.minicry = params['minicry']
-        if 'max_iteration' in params.keys():
-            self.max_iteration = params['max_iteration']
+        if 'max_iter' in params.keys():
+            self.max_iter = params['max_iter']
         if 'mimicry_params' in params.keys():
             self.mimicry_params = params['mimicry_params']
         if  'bound' in params.keys():
@@ -111,10 +111,50 @@ class GradientDescent(Adversary):
             if instance.label < 0:
                 transformed_instances.append(instance)
             else:
-                transformed_instances.append(self.gradient_descent(instance, X))
+                if self.binary:
+                    transformed_instances.append(self.binary_gradient_descent(instance,X))
+                else:
+                    transformed_instances.append(self.gradient_descent(instance, X))
 
         #plt.show()
         return transformed_instances
+
+
+    def binary_gradient_descent(self,instance:Instance, neg_instances):
+        attack_instance = instance
+        root_instance = attack_instance
+        obj_function_value_lst = []
+
+        index_lst = []
+        iter_time = 0
+        attacker_score = self.get_score(attack_instance.get_csr_matrix().toarray())
+        closer_neg_instances, dist, grad_update = self.compute_gradient(attack_instance.get_csr_matrix().toarray(), neg_instances)
+        obj_value = attacker_score + self.lambda_val * dist
+
+        while iter_time < self.max_iter:
+            #print(iter_time)
+            #print(self.max_iter)
+            if index_lst is not []:
+                # eliminate the index we have already modified
+                for i in index_lst:
+                    grad_update[0][i] = 0
+            change_index = np.argmax(np.absolute(grad_update))
+            new_attack_instance = deepcopy(attack_instance)
+            new_attack_instance.get_feature_vector().flip_bit(change_index)
+            index_lst.append(change_index)
+
+            new_attacker_score = self.get_score(new_attack_instance.get_csr_matrix().toarray())
+            closer_neg_instances, dist, grad_update = self.compute_gradient(attack_instance.get_csr_matrix().toarray()
+                                                                            , closer_neg_instances)
+            new_obj_value = new_attacker_score + self.lambda_val * dist
+
+            if  new_obj_value < obj_value:
+                attack_instance = new_attack_instance
+                obj_value = new_obj_value
+                iter_time += 1
+        #print("attack successfully")
+        return attack_instance
+
 
 
 

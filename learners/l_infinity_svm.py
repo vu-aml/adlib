@@ -19,13 +19,15 @@ class L_infSVM(learner):
     """
 
 
-    def __init__(self, training_instances=None, coef=0.25, params= None):
+    def __init__(self, training_instances=None, coef=0.25, params= None, pre_trained= False, weight_vector = None,
+                 bias = None):
 
         learner.__init__(self)
-        self.weight_vector = None  # type: np.array(shape=(1))
+        self.weight_vector = weight_vector  # type: np.array(shape=(1))
         self.num_features = 0  # type: int
         self.coef = coef  # type: float
-        self.bias = 0  # type: int
+        self.bias = bias # type: int
+        self.pre_trained = pre_trained
 
         if training_instances is not None:
             self.set_training_instances(training_instances)
@@ -50,6 +52,8 @@ class L_infSVM(learner):
         :param y: corresponding labels in array
         :return: None
         """
+        if self.pre_trained:
+            return
         if isinstance(self.training_instances, List):
             y_list, X_list = sparsify(self.training_instances)
             num_instances = len(y_list)

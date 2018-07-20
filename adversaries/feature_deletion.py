@@ -17,7 +17,7 @@ from sklearn.metrics import pairwise
 """
 
 class AdversaryFeatureDeletion(Adversary):
-    def __init__(self, learner=None, num_deletion=100, all_malicious=False,random = False):
+    def __init__(self, learner=None, num_deletion=100, all_malicious=True,random = False, weight_vector= None):
         """
         :param learner: Learner from learners
         :param num_deletion: the max number that will be deleted in the attack
@@ -34,7 +34,7 @@ class AdversaryFeatureDeletion(Adversary):
         if self.learn_model is not None:
             self.weight_vector = self.learn_model.get_weight()
         else:
-            self.weight_vector = None  # type: np.array
+            self.weight_vector = weight_vector  # type: np.array
 
     def set_adversarial_params(self, learner, train_instances):
         self.learn_model = learner

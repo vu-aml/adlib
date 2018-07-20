@@ -8,6 +8,7 @@ import cvxpy as cvx
 from cvxpy import Variable as Variable
 from cvxpy import mul_elemwise as mul
 from data_reader.dataset import EmailDataset
+from data_reader.operations import find_max,find_min
 
 OPT_INSTALLED = True
 try:
@@ -32,18 +33,23 @@ class SVMFreeRange(learner):
 
     """
 
-    def __init__(self, params=None, training_instances=None):
+    def __init__(self, params=None, training_instances=None,c_f = 0.5, slack_variable= 1, pre_trained = False):
         learner.__init__(self)
         self.weight_vector = None
         self.bias = 0
-        self.c_f = 0.5
+        self.c_f = c_f
         self.xmin = 0.0
         self.xmax = 1.0
-        self.c = 0.1
+        self.c = slack_variable
+        self.pre_train = pre_trained
         if params is not None:
             self.set_params(params)
         if training_instances is not None:
             self.set_training_instances(training_instances)
+        if training_instances is not None:
+            self.xmax = max(find_max(training_instances))
+            self.xmin = min(find_min(training_instances))
+
 
     def set_params(self, params: Dict):
         if 'c_f' in params:
@@ -53,16 +59,18 @@ class SVMFreeRange(learner):
         if 'xmax' in params:
             self.xmax = params['xmax']
         if 'c' in params:
-            self.c = params['c']
+            self.c = params['slack_variable']
 
     def get_available_params(self) -> Dict:
         params = {'c_f': self.c_f,
                   'xmin': self.xmin,
                   'xmax': self.xmax,
-                  'c': self.c}
+                  'slack_variable': self.c}
         return params
 
     def train(self):
+        if self.pre_train:
+            return
         '''Optimize the asymmetric dual problem and return optimal w and b.'''
         if not self.training_instances:
             raise ValueError('Must set training instances before training')
@@ -107,7 +115,7 @@ class SVMFreeRange(learner):
         prob = cvx.Problem(obj, constraints)
 
         if OPT_INSTALLED:
-            prob.solve(solver='MOSEK')
+            prob.solve(solver='SCS')
         else:
             prob.solve()
 

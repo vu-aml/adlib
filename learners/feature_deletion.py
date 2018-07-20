@@ -7,14 +7,17 @@ from cvxpy import *
 
 
 class FeatureDeletion(learner):
-    def __init__(self, training_instances=None, params=None):
-
+    def __init__(self, training_instances=None, params=None, weight_vector= None, bias= None, pre_trained= False):
+        #update weight_vector, bias
+        #so the learner can be used fro pre-trained models
+        #and allow quick save/load
         learner.__init__(self)
-        self.weight_vector = None  # type: np.array(shape=1)
+        self.pre_train = pre_trained
+        self.weight_vector = weight_vector  # type: np.array(shape=1)
         self.num_features = 0  # type: int
         self.hinge_loss_multiplier = 0.5  # type: float
         self.max_feature_deletion = 30  # type: int
-        self.bias = 0  # type: int
+        self.bias = bias  # type: int
         if params is not None:
             self.set_params(params)
         if training_instances is not None:
@@ -40,6 +43,8 @@ class FeatureDeletion(learner):
          Returns: optimized weight vector
 
          """
+        if self.pre_train:
+            return
         if isinstance(self.training_instances, List):
             y_list, X_list = sparsify(self.training_instances)
             num_instances = len(y_list)

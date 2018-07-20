@@ -22,7 +22,7 @@ class SimpleLearner(Learner):
 
     def set_params(self, params: Dict):
         if 'model' in params:
-            self.model = self.set_model(params['model'])
+            self.set_model(params['model'])
         self.model.set_params(params)
 
     def train(self):
@@ -60,10 +60,6 @@ class SimpleLearner(Learner):
     def decision_function(self, X):
         return self.model.learner.decision_function(X)
 
-    def set_params(self, params: Dict):
-        if params['model'] is not None:
-            self.model = self.set_model(params['model'])
-
     def get_weight(self):
         if self.model.learner.kernel == 'rbf':
             return None
@@ -75,6 +71,3 @@ class SimpleLearner(Learner):
 
     def get_constant(self):
         return self.model.learner.intercept_
-
-    def decision_function(self, X):
-        return self.model.learner.decision_function(X)

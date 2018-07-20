@@ -121,7 +121,7 @@ class TestDataPoisoningLearner:
                       list(self.dp_learner_testing_pred_labels),
                       end - begin)
 
-            self.results.append(result)
+            self.results.append(deepcopy(result))
 
         if self.verbose:
             print('\nEND', self.learner_names[0] if len(self.learner_names) == 1 else 'learner',
@@ -201,7 +201,7 @@ class TestDataPoisoningLearner:
     def _retrain(self):
         # Retrain the model with poisoned data
         learning_model = svm.SVC(probability=True, kernel='linear')
-        self.attack_learner = SimpleLearner(learning_model, self.attack_instances)
+        self.attack_learner = SimpleLearner(learning_model, deepcopy(self.attack_instances))
         self.attack_learner.train()
 
         self.attack_training_pred_labels = self.attack_learner.predict(self.training_instances)

@@ -40,7 +40,7 @@ class OutlierRemovalLearner(Learner):
 
         base_cutoff = cutoff
         factor = 1
-        max_cutoff = cutoff * 100
+        max_cutoff = cutoff * 200
 
         if self.verbose:
             print('\nBase cutoff:', cutoff, '\nMax cutoff:', max_cutoff, '\n')

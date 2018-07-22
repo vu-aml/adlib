@@ -41,6 +41,7 @@ class IterativeRetrainingLearner(Learner):
         if len(self.training_instances) < 2:
             raise ValueError('Must have at least 2 instances to train.')
 
+        self.irl_selection = np.full(len(self.training_instances), 1)
         self.lnr.set_training_instances(self.training_instances)
         self.lnr.train()
         self.lnr.redo_problem_on_train = False
@@ -101,6 +102,7 @@ class IterativeRetrainingLearner(Learner):
         self.lnr = TRIMLearner(best_lnr[0], best_lnr[1], best_lnr[2], best_lnr[3])
         self.lnr.w, self.lnr.b = best_lnr[4], best_lnr[5]
         self.lnr.irl_selection = best_lnr[6]
+        self.irl_selection = best_lnr[6]
 
     def _train_helper(self):
         """

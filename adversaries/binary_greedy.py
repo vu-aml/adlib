@@ -4,6 +4,8 @@ from typing import List, Dict
 from random import shuffle
 import numpy as np
 from copy import deepcopy
+from learners import SimpleLearner
+from sklearn.svm import SVC
 
 
 # import matplotlib.pyplot as plt
@@ -12,7 +14,7 @@ from copy import deepcopy
 
 class BinaryGreedy(Adversary):
     def __init__(self, learner=None, max_change=200,
-                 lambda_val=0.05, epsilon=0.0002, step_size=0.05):
+                 lambda_val=0.05, epsilon=0.00000001, step_size=0.05, cost_function = "quadratic"):
         """
         :param learner: Learner(from learners)
         :param max_change: max times allowed to change the feature
@@ -26,6 +28,7 @@ class BinaryGreedy(Adversary):
         self.step_size = step_size
         self.num_features = 0
         self.learn_model = learner
+        self.cost_function = cost_function
         self.max_change = max_change
         if self.learn_model is not None:
             self.weight_vector = self.learn_model.get_weight()
@@ -33,10 +36,24 @@ class BinaryGreedy(Adversary):
             self.weight_vector = None  # type: np.array
 
     def get_available_params(self) -> Dict:
-        raise NotImplementedError
+        return {"lambda_val":self.lambda_val,
+                "epsilon":self.epsilon,
+                "step_size": self.step_size,
+                "max_change":self.max_change,
+                "cost_function":self.cost
+                }
 
     def set_params(self, params: Dict):
-        raise NotImplementedError
+        if "lambda_val" in params.keys():
+            self.lambda_val = params["lambda_val"]
+        if "epsilon" in params.keys():
+            self.epsilon = params["epsilon"]
+        if "step_size" in params.keys():
+            self.step_size = params["step_size"]
+        if "max_change" in params.keys():
+            self.max_change = params["max_change"]
+        if "cost_function" in params.keys():
+            self.cost_function = params["cost_function"]
 
     def set_adversarial_params(self, learner, train_instances: List[Instance]):
         self.learn_model = learner
@@ -129,16 +146,26 @@ class BinaryGreedy(Adversary):
         return xk
 
     def transform_cost(self, x: np.array, xi: np.array):
-        return self.weight_vector.dot(x) + self.quadratic_cost(x, xi)
+        if self.cost_function == "quadratic":
+            return self.learner_predict(x) + self.quadratic_cost(x, xi)
+        elif self.cost_function == "exponential":
+            return self.learner_predict(x) + self.exponential_cost(x,xi)
 
     def quadratic_cost(self, x: np.array, xi: np.array):
         return self.lambda_val / 2 * sum((x - xi) ** 2)
 
-        # def transform_cost_part_deriv(self, i, x:np.array,xi:np.array):
-        #     return self.decision_func_part_deriv(i)+self.quad_cost_part_deriv(x,xi)
-        #
-        # def decision_func_part_deriv(self, i):
-        #     return self.weight_vector[i]
-        #
-        # def quad_cost_part_deriv(self, j, x:np.array, xi: np.array):
-        #     return self.lambda_val*(x[j]-xi[j])
+
+    def exponential_cost(self, x:np.array, xi: np.array):
+        return np.exp(self.lambda_val * np.sqrt(np.sum((x - xi) **2) + 1))
+
+
+    def learner_predict(self,attack_instance):
+        if self.learn_model == SimpleLearner and self.learn_model.model.learner == SVC:
+            param_map = self.learn_model.get_params()
+            attribute_map = self.learn_model.get_attributes()
+            if param_map["kernel"] == "rbf":
+               return self.learn_model.model.learner.decision_function(attack_instance.reshape(1,-1))
+            if param_map["kernel"] == "linear":
+                return attribute_map["coef_"][0].dot(attack_instance) + attribute_map["intercept_"]
+        else:
+            return self.learn_model.get_weight().dot(attack_instance) + self.learn_model.get_constant()

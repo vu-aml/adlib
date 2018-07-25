@@ -75,7 +75,7 @@ class GradientDescent(Adversary):
             self.epsilon = params['stp_constant']
         if 'learn_model' in params.keys():
             self.learn_model = params['learn_model']
-        if 'self.minicry' in params.keys():
+        if 'minicry' in params.keys():
             self.minicry = params['minicry']
         if 'max_iter' in params.keys():
             self.max_iter = params['max_iter']
@@ -290,7 +290,7 @@ class GradientDescent(Adversary):
         support sklearn.svc rbr/linear and robust learner classes
         :return:
         """
-        if type(self.learn_model) == SimpleLearner and type(self.learn_model.model.learner) == SVC:
+        if self.learn_model == SimpleLearner and self.learn_model.model.learner == SVC:
             param_map = self.learn_model.get_params()
             attribute_map = self.learn_model.get_attributes()
             if param_map["kernel"] == "rbf":

@@ -207,7 +207,7 @@ class CoordinateGreedy(Adversary):
 
 
     def compute_gradient(self, attack_instance, index):
-        if type(self.learn_model == SimpleLearner) and type(self.learn_model.model.learner) == SVC:
+        if self.learn_model == SimpleLearner and self.learn_model.model.learner == SVC:
             param_map = self.learn_model.get_params()
             attribute_map = self.learn_model.get_attributes()
             if param_map["kernel"] == "rbf":

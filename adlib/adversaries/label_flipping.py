@@ -77,7 +77,7 @@ class LabelFlipping(Adversary):
         q = np.concatenate([q, q_add_inv])
 
         self.q = deepcopy(q)
-        q_dist = 0
+        q_dist = self.alpha + 1
         iteration = 0
 
         while iteration < self.max_iter and q_dist > self.alpha:

@@ -14,7 +14,7 @@ from sklearn.svm import SVC
 
 class BinaryGreedy(Adversary):
     def __init__(self, learner=None, max_change=200,
-                 lambda_val=0.05, epsilon=0.00000001, step_size=0.05, cost_function = "quadratic"):
+                 lambda_val=0.05, epsilon=0.00000001, step_size=0.05, cost_function = "quadratic",random_start= 5):
         """
         :param learner: Learner(from learners)
         :param max_change: max times allowed to change the feature
@@ -30,6 +30,7 @@ class BinaryGreedy(Adversary):
         self.learn_model = learner
         self.cost_function = cost_function
         self.max_change = max_change
+        self.random_start = random_start
         if self.learn_model is not None:
             self.weight_vector = self.learn_model.get_weight()
         else:
@@ -40,7 +41,8 @@ class BinaryGreedy(Adversary):
                 "epsilon":self.epsilon,
                 "step_size": self.step_size,
                 "max_change":self.max_change,
-                "cost_function":self.cost
+                "cost_function":self.cost,
+                "random_start":self.random_start
                 }
 
     def set_params(self, params: Dict):
@@ -54,6 +56,8 @@ class BinaryGreedy(Adversary):
             self.max_change = params["max_change"]
         if "cost_function" in params.keys():
             self.cost_function = params["cost_function"]
+        if "random_start" in params.keys():
+            self.random_start = params["random_start"]
 
     def set_adversarial_params(self, learner, train_instances: List[Instance]):
         self.learn_model = learner
@@ -71,10 +75,30 @@ class BinaryGreedy(Adversary):
         transformed_instances = []
         for instance in Instances:
             if instance.label > 0:
-                transformed_instances.append(self.coordinate_greedy(instance))
+                transformed_instances.append(self.random_start_coordinate_greedy(instance))
             else:
                 transformed_instances.append(instance)
         return transformed_instances
+
+
+    def random_start_coordinate_greedy(self,instance: Instance):
+        """
+        implement the n random start algorithm by performing CG for n times.
+        The minimized Q and x is used as new attack instance.
+        :param instance:
+        :return:
+        """
+        instance_lst = []
+        q_value_lst = []
+        old_x = instance.get_csr_matrix().toarray()[0]
+        for i in range(self.random_start):
+            new_attacked_instance = self.coordinate_greedy(instance)
+            x = new_attacked_instance.get_csr_matrix().toarray()[0]
+            q = self.transform_cost(x, old_x)
+            instance_lst.append(new_attacked_instance)
+            q_value_lst.append(q)
+        return min(zip(instance_lst,q_value_lst),key=lambda x:x[1])[0]
+
 
     def coordinate_greedy(self, instance: Instance) -> Instance:
         indices = [i for i in range(0, self.num_features)]

@@ -19,7 +19,7 @@ class LabelFlipping(Adversary):
     """
 
     def __init__(self, learner, cost: List[float], total_cost: float,
-                 gamma=0.1, alpha=5e-7, verbose=False):
+                 gamma=0.1, alpha=5e-7, max_iter=50, verbose=False):
         """
         :param learner: the previously-trained SVM learner
         :param cost: the cost vector, has length of size of instances
@@ -36,6 +36,7 @@ class LabelFlipping(Adversary):
         self.total_cost = total_cost
         self.gamma = gamma
         self.alpha = alpha
+        self.max_iter = max_iter
         self.verbose = verbose
         self.q = None
         self.epsilon = None
@@ -79,7 +80,7 @@ class LabelFlipping(Adversary):
         q_dist = 0
         iteration = 0
 
-        while iteration == 0 or q_dist > self.alpha:
+        while iteration < self.max_iter and q_dist > self.alpha:
             print('\nIteration:', iteration, '- q_dist:', q_dist, '- q:')
             print(self.q, '\n')
 
@@ -224,6 +225,8 @@ class LabelFlipping(Adversary):
             self.gamma = params['gamma']
         if params['alpha'] is not None:
             self.alpha = params['alpha']
+        if params['max_iter'] is not None:
+            self.max_iter = params['max_iter']
         if params['verbose'] is not None:
             self.verbose = params['verbose']
 
@@ -237,7 +240,9 @@ class LabelFlipping(Adversary):
                   'total_cost': self.total_cost,
                   'gamma': self.gamma,
                   'alpha': self.alpha,
+                  'max_iter': self.max_iter,
                   'verbose': self.verbose}
+
         return params
 
     def set_adversarial_params(self, learner, train_instances):

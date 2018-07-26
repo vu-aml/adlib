@@ -6,7 +6,7 @@ import numpy as np
 import math
 
 """
-Based on the Adversarial learning by Daniel Loaw and Christopher Meek.
+Based on the Adversarial learning by Daniel Lowd and Christopher Meek.
 Implementation of the adversarial classifier reverse engineering (ACRE) learning problem that
 can solve input data of real value instances and binary instances.
 """

@@ -3,6 +3,7 @@ from adversaries.adversary import Adversary
 from data_reader.binary_input import Instance, BinaryFeatureVector
 from learners.learner import learner
 from copy import deepcopy
+from random import shuffle
 from itertools import filterfalse
 
 '''Good Word Attack based on Good Word Attacks on Statistical Spam Filters by 
@@ -67,14 +68,14 @@ class GoodWord(Adversary):
     def set_adversarial_params(self, learner, train_instances):
         self.learn_model = learner
         instances = train_instances # type: List[Instance]
-        self.positive_instance = next(
-            (x for x in instances if x.get_label() == learner.positive_classification),
-            None
-        )
-        self.negative_instance = next(
-            (x for x in instances if x.get_label() == learner.negative_classification),
-            None
-        )
+
+        pos_list = [x for x in instances if x.get_label() == learner.positive_classification]
+        shuffle(pos_list)
+        neg_list = [x for x in instances if x.get_label() == learner.negative_classification]
+        shuffle(neg_list)
+        self.positive_instance = pos_list[0]
+        self.negative_instance = neg_list[0]
+
         self.feature_space = set()
         for instance in train_instances:
           self.feature_space.update(instance.get_feature_vector())

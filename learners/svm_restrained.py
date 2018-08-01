@@ -26,10 +26,11 @@ class SVMRestrained(learner):
         c_delta: aggressiveness assumption c_delta ∈ [0.0,1.0]. Default:0.5
     """
 
-    def __init__(self, params=None, training_instances=None):
+    def __init__(self, params=None, training_instances=None,weight = None, bias = 0, pre_trained = False):
         learner.__init__(self)
-        self.weight_vector = None
-        self.bias = 0
+        self.weight_vector = weight
+        self.bias = bias
+        self.pre_trained = pre_trained
         self.c_delta = 0.5
         self.c = 1
         if params is not None:
@@ -48,6 +49,8 @@ class SVMRestrained(learner):
         return params
 
     def train(self):
+        if self.pre_trained:
+            return
         '''Optimize the asymmetric dual problem and return optimal w and b.'''
         if not self.training_instances:
             raise ValueError('Must set training instances before training')

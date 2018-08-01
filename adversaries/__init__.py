@@ -6,3 +6,5 @@ from .good_word import GoodWord
 from .simple_optimize import SimpleOptimize
 from .binary_greedy import BinaryGreedy
 from .coordinate_greedy import CoordinateGreedy
+from .gradient_descent import GradientDescent
+from .simple_gradient_descent import SimpleGradientDescent

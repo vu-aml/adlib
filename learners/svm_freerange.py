@@ -33,20 +33,21 @@ class SVMFreeRange(learner):
 
     """
 
-    def __init__(self, params=None, training_instances=None,c_f = 0.5, slack_variable= 1, pre_trained = False):
+    def __init__(self, params=None, training_instances=None,c_f = 0.5, slack_variable= 1, pre_trained = False,
+                 weight_vector = None, bias = 0):
         learner.__init__(self)
-        self.weight_vector = None
-        self.bias = 0
         self.c_f = c_f
         self.xmin = 0.0
         self.xmax = 1.0
         self.c = slack_variable
         self.pre_train = pre_trained
+        self.weight_vector = weight_vector
+        self.bias = bias
         if params is not None:
             self.set_params(params)
         if training_instances is not None:
             self.set_training_instances(training_instances)
-        if training_instances is not None:
+        if not pre_trained and training_instances is not None:
             self.xmax = max(find_max(training_instances))
             self.xmin = min(find_min(training_instances))
 

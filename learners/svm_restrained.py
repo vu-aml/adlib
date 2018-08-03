@@ -26,9 +26,9 @@ class SVMRestrained(learner):
         c_delta: aggressiveness assumption c_delta ∈ [0.0,1.0]. Default:0.5
     """
 
-    def __init__(self, params=None, training_instances=None,weight = None, bias = 0, pre_trained = False):
+    def __init__(self, params=None, training_instances=None,weight_vector = None, bias = 0, pre_trained = False):
         learner.__init__(self)
-        self.weight_vector = weight
+        self.weight_vector = weight_vector
         self.bias = bias
         self.pre_trained = pre_trained
         self.c_delta = 0.5

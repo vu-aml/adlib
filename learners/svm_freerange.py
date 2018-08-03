@@ -59,7 +59,7 @@ class SVMFreeRange(learner):
             self.xmin = params['xmin']
         if 'xmax' in params:
             self.xmax = params['xmax']
-        if 'c' in params:
+        if 'slack_variable' in params:
             self.c = params['slack_variable']
 
     def get_available_params(self) -> Dict:

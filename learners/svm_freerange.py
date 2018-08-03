@@ -116,9 +116,9 @@ class SVMFreeRange(learner):
         prob = cvx.Problem(obj, constraints)
 
         if OPT_INSTALLED:
-            prob.solve(solver='SCS')
+            prob.solve(solver='MOSEK')
         else:
-            prob.solve()
+            prob.solve(solver='SCS')
 
         self.weight_vector = np.asarray(w.value.T)[0]
         self.bias = b.value

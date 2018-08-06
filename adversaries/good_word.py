@@ -31,6 +31,7 @@ class GoodWord(Adversary):
         self.n = n
         self.num_queries = 0
         self.attack_model_type = attack_model_type
+        self.train_instances = None
 
     def attack(self, instances: List[Instance]) -> List[Instance]:
         word_indices = self.get_n_words()
@@ -65,16 +66,24 @@ class GoodWord(Adversary):
     def is_valid_attack_model_type(self, model_type):
         return (model_type in [GoodWord.BEST_N, GoodWord.FIRST_N])
 
-    def set_adversarial_params(self, learner, train_instances):
-        self.learn_model = learner
-        instances = train_instances # type: List[Instance]
 
-        pos_list = [x for x in instances if x.get_label() == learner.positive_classification]
+
+    def set_pos_neg_instance(self):
+        pos_list = [x for x in self.train_instances if x.get_label() == learner.positive_classification]
         shuffle(pos_list)
-        neg_list = [x for x in instances if x.get_label() == learner.negative_classification]
+        neg_list = [x for x in self.train_instances if x.get_label() == learner.negative_classification]
         shuffle(neg_list)
         self.positive_instance = pos_list[0]
         self.negative_instance = neg_list[0]
+
+
+
+    def set_adversarial_params(self, learner, train_instances):
+        self.learn_model = learner
+        instances = train_instances # type: List[Instance]
+        self.train_instances = instances
+
+        self.set_pos_neg_instance()
 
         self.feature_space = set()
         for instance in train_instances:
@@ -90,6 +99,8 @@ class GoodWord(Adversary):
         return C_y
 
     def add_words_to_instance(self, instance, word_indices):
+        if word_indices is None:
+            return instance
         feature_vector = instance.get_feature_vector()
         for index in word_indices:
             if index not in feature_vector:
@@ -125,13 +136,26 @@ class GoodWord(Adversary):
                     break
             # curr_message and prev_message will not change for any more iterations
             if not word_added:
-                raise Exception('Could not find witness')
+                print('Could not find witness')
+                return None
         return (curr_message, prev_message)
 
     def first_n_words(self, spam_message, legit_message):
         if not self.n: raise ValueError('Must specify n')
+
         negative_weight_word_indices = set()
-        spam_message, _ = self.find_witness()
+        return_message = self.find_witness()
+        count = 1
+        while return_message is None and count <= 20:
+            self.set_pos_neg_instance()
+            count += 1
+            return_message = self.find_witness()
+        if return_message is None:
+            print("Cannot find witness after a few iterations")
+            print("Attack fails")
+            return None
+
+        spam_message  = return_message[0]
         # use the feature vector of the negative instance just to iterate over all the indices in a
         # feature vector, the actual values do not matter
 
@@ -150,7 +174,18 @@ class GoodWord(Adversary):
         return negative_weight_word_indices
 
     def best_n_words(self, spam_message, legit_message):
-        barely_spam_message, barely_legit_message = self.find_witness()
+        return_message = self.find_witness()
+        count = 1
+        while return_message is None and count <= 20:
+            self.set_pos_neg_instance()
+            count += 1
+            return_message = self.find_witness()
+        if return_message is None:
+            print("Cannot find witness")
+            print("Attack fails")
+            return None
+
+        barely_spam_message, barely_legit_message = return_message[0], return_message[1]
         positive_weight_word_indices = self.build_word_set(barely_legit_message, learner.positive_classification)
         negative_weight_word_indices = self.build_word_set(barely_spam_message, learner.negative_classification)
         best_n_word_indices = set()

@@ -144,14 +144,22 @@ class GoodWord(Adversary):
         if not self.n: raise ValueError('Must specify n')
 
         negative_weight_word_indices = set()
+
         return_message = self.find_witness()
         count = 1
-        while return_message is None and count <= 20:
+        while count <= 20:
             self.set_pos_neg_instance()
             count += 1
             return_message = self.find_witness()
+            if return_message is not None:
+                if return_message[0] is not None and return_message[1] is not None:
+                    break
         if return_message is None:
-            print("Cannot find witness after a few iterations")
+            print("Cannot find witness")
+            print("Attack fails")
+            return None
+        if return_message[0] is None or return_message[1] is None:
+            print("Cannot find witness")
             print("Attack fails")
             return None
 
@@ -176,11 +184,18 @@ class GoodWord(Adversary):
     def best_n_words(self, spam_message, legit_message):
         return_message = self.find_witness()
         count = 1
-        while return_message is None and count <= 20:
+        while count <= 20:
             self.set_pos_neg_instance()
             count += 1
             return_message = self.find_witness()
+            if return_message is not None:
+                if return_message[0] is not None and return_message[1] is not None:
+                    break
         if return_message is None:
+            print("Cannot find witness")
+            print("Attack fails")
+            return None
+        if return_message[0] is None or return_message[1] is None:
             print("Cannot find witness")
             print("Attack fails")
             return None

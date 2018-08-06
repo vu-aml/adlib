@@ -32,6 +32,7 @@ class SVMRestrained(learner):
         self.bias = bias
         self.pre_trained = pre_trained
         self.c_delta = 0.5
+        self.c_epsilon = 0.5
         self.c = 1
         if params is not None:
             self.set_params(params)
@@ -41,11 +42,14 @@ class SVMRestrained(learner):
     def set_params(self, params: Dict):
         if 'c_delta' in params:
             self.c_delta = params['c_delta']
-        if 'c' in params:
-            self.c = params['c']
+        if 'c_epsilon' in params:
+            self.c_epsilon = params['c_epsilon']
+        if 'slack_variable' in params:
+            self.c = params['slack_variable']
 
     def get_available_params(self) -> Dict:
-        params = {'c_delta': self.c_delta, 'c': self.c}
+        params = {'c_delta': self.c_delta, 'slack_variable': self.c,
+                  'c_epsilon':self.c_epsilon}
         return params
 
     def train(self):
@@ -65,7 +69,7 @@ class SVMRestrained(learner):
         i_pos = np.array([ins[1] for ins in zip(y, X) if ins[0] == self.positive_classification])
         # centroid can be computed in multiple ways
         n_centroid = np.mean(i_neg)
-        Mk = ((1 - self.c_delta * np.fabs(n_centroid - i_pos) /
+        Mk = self.c_epsilon * ((1 - self.c_delta * np.fabs(n_centroid - i_pos) /
                (np.fabs(n_centroid) + np.fabs(i_pos))) *
               ((n_centroid - i_pos) ** 2))
         Zks = np.zeros_like(i_neg)
@@ -98,7 +102,7 @@ class SVMRestrained(learner):
         if OPT_INSTALLED:
             prob.solve(solver='MOSEK')
         else:
-            prob.solve()
+            prob.solve(solver= 'SCS')
 
         self.weight_vector = np.asarray(w.value.T)[0]
         print("weight vec calculated in svm restrained learner: {}".format(self.weight_vector.shape))
@@ -133,7 +137,6 @@ class SVMRestrained(learner):
         return predictions
 
     def predict_proba(self, instances):
-
         return self.predict(instances)
 
     def predict_instance(self, instances: np.array):

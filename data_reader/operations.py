@@ -118,7 +118,7 @@ def csr_mat_to_instances(csr_mat, labels, binary= False):
     instance_lst = []
     for i in range(instance_len):
         label = labels[i]
-        instance_data = data[indptr[i]:indptr[i+1]]
+        instance_data = list(data[indptr[i]:indptr[i+1]])
         instance_indices = list(indices[indptr[i]:indptr[i+1]])
         if binary:
             instance_lst.append(Instance(label, BinaryFeatureVector(num_features, instance_indices)))

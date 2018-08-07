@@ -83,9 +83,10 @@ class Restrained(Adversary):
                 (x for x in train_instances if x.get_label() == -1),
                 None)
         elif type == 'centroid':
-            target = find_centroid(train_instances)
+            benign_train_instances = [instance for instance in train_instances if instance.get_label() == -1]
+            target = find_centroid(benign_train_instances)
             if learner.predict(target) == 1:
-                print("Fail to find centroid of from estimated training data")
+                print("Fail to find centroidfrom estimated training data")
                 self.innocuous_target = next(
                     (x for x in train_instances if x.get_label() == -1),
                     None)

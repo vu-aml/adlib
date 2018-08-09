@@ -9,10 +9,7 @@ import learners as learners
 from copy import deepcopy
 from sklearn.svm import SVC
 from sklearn.metrics import pairwise
-from collections import deque
-from data_reader.operations import sparsify
-import operator
-import matplotlib.pyplot as plt
+
 
 
 """ A simpler gradient descent based evasion attack.

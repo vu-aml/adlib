@@ -17,7 +17,8 @@ Concept: A generalized attacker algorithm that attempts to move the instances' f
 
 
 class Restrained(Adversary):
-    def __init__(self, f_attack=0.5, binary=True, discount_factor=1, type='centroid', learn_model=None):
+    def __init__(self, f_attack=0.5, binary=True, discount_factor=1, type='centroid', learn_model=None,
+                 params = None):
         """
 
         :param f_attack:  float (between 0 and 1),determining the agressiveness
@@ -34,6 +35,8 @@ class Restrained(Adversary):
         self.binary = binary
         self.learn_model = learn_model  # type: Classifier
         self.type = type
+        if params is not None:
+            self.set_params(params)
 
     def set_params(self, params: Dict):
         if 'f_attack' in params.keys():
@@ -86,7 +89,7 @@ class Restrained(Adversary):
             benign_train_instances = [instance for instance in train_instances if instance.get_label() == -1]
             target = find_centroid(benign_train_instances)
             if learner.predict(target) == 1:
-                print("Fail to find centroidfrom estimated training data")
+                print("Fail to find centroid from estimated training data")
                 self.innocuous_target = next(
                     (x for x in train_instances if x.get_label() == -1),
                     None)

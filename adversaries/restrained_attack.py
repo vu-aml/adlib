@@ -38,6 +38,7 @@ class Restrained(Adversary):
         if params is not None:
             self.set_params(params)
 
+
     def set_params(self, params: Dict):
         if 'f_attack' in params.keys():
             self.f_attack = params['f_attack']

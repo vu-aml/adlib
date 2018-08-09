@@ -44,6 +44,7 @@ class FreeRange(Adversary):
         self.binary = binary
         self.learn_model = learn_model  # type: Classifier
         self.distribution = distribution
+        self.attack_type = "minmax"
 
     def set_adversarial_params(self, learn_model, train_instances: List[Instance]):
         self.learn_model = learn_model
@@ -76,6 +77,8 @@ class FreeRange(Adversary):
         return params
 
     def attack(self, instances: List[Instance]) -> List[Instance]:
+        benign_instances = [instance for instance in instances if instance.get_label() == -1]
+        self.innocuous_target = find_centroid(benign_instances)
         transformed_instances = []
         if self.f_attack == 0:
             return instances
@@ -96,9 +99,9 @@ class FreeRange(Adversary):
         """
 
         # warning: find_min and find_max currently not working as intended
-        self.x_min = find_min(train_instances)
-        self.x_max = find_max(train_instances)
-
+        benign_train_instances = [instance for instance in train_instances if instance.get_label() == -1]
+        self.x_min = find_min(benign_train_instances)
+        self.x_max = find_max(benign_train_instances)
 
     def transform(self, instance: Instance):
         '''
@@ -121,12 +124,17 @@ class FreeRange(Adversary):
         else:
             for i in range(0, self.num_features):
                 xij = instance.get_feature_vector().get_feature(i)
+                goal_xij = self.innocuous_target.get_feature_vector().get_feature(i)
                 if not self.manual:
                     lower_bound = self.f_attack * (self.x_min[i] - xij)
                     upper_bound = self.f_attack * (self.x_max[i] - xij)
                 else:
-                    lower_bound = self.f_attack * (self.xj_min - xij)
-                    upper_bound = self.f_attack * (self.xj_max - xij)
-                delta_ij = random.uniform(lower_bound, upper_bound)
-                instance.flip(i, xij + delta_ij)
+                    lower_bound = self.f_attack * (self.x_min - xij)
+                    upper_bound = self.f_attack * (self.x_max - xij)
+                if self.attack_type == "centroid":
+                    delta_ij = random.uniform(0, goal_xij - xij) * self.f_attack
+                    instance.flip(index=i, value= delta_ij)
+                elif self.attack_type == "minmax":
+                    delta_ij = random.uniform(lower_bound,upper_bound) * self.f_attack
+                    instance.flip(index=i , value = delta_ij)
         return instance
